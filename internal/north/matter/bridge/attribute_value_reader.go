@@ -224,10 +224,18 @@ func primitiveAttributeValue(el tlv.Element, dec *tlv.Decoder) (im.AttributeValu
 		return im.AttributeValue{Value: string(el.Octets)}, nil
 	case tlv.TypeOctetStr1, tlv.TypeOctetStr2, tlv.TypeOctetStr4, tlv.TypeOctetStr8:
 		return im.AttributeValue{Value: append([]byte(nil), el.Octets...)}, nil
+	case tlv.TypeSignedInt1, tlv.TypeSignedInt2, tlv.TypeSignedInt4, tlv.TypeSignedInt8:
+		// Signed integers carry their sign-extended value in el.Int.
+		// Returning el.Uint (the old fall-through) dropped every signed
+		// attribute write — e.g. a Thermostat setpoint — to 0, because the
+		// decoder only fills el.Int for signed types. The cluster server
+		// narrows int64 to its native width.
+		return im.AttributeValue{Value: el.Int}, nil
+	case tlv.TypeFloat4, tlv.TypeFloat8:
+		return im.AttributeValue{Value: el.Float}, nil
 	default:
-		// Numeric / enum / float fall-through: surface as uint64 (caller
-		// downcasts to the cluster's native width). Adequate for the v1.1
-		// writable surface; richer typing is a follow-up.
+		// Unsigned integers / enums surface as uint64; the cluster server
+		// narrows to its native width (e.g. enum8 SystemMode → uint8).
 		return im.AttributeValue{Value: el.Uint}, nil
 	}
 }

@@ -297,9 +297,9 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 		if s.features&ThermostatFeatureHEAT == 0 {
 			return fmt.Errorf("thermostat: OccupiedHeatingSetpoint not supported (no HEAT feature)")
 		}
-		v, ok := value.(int16)
+		v, ok := cluster.AsInt16(value)
 		if !ok {
-			return fmt.Errorf("thermostat: OccupiedHeatingSetpoint: expected int16, got %T", value)
+			return fmt.Errorf("thermostat: OccupiedHeatingSetpoint: expected numeric, got %T", value)
 		}
 		// Reject values outside [minHeat, maxHeat] per matter.js
 		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 911-924).
@@ -315,9 +315,9 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 		if s.features&ThermostatFeatureCOOL == 0 {
 			return fmt.Errorf("thermostat: OccupiedCoolingSetpoint not supported (no COOL feature)")
 		}
-		v, ok := value.(int16)
+		v, ok := cluster.AsInt16(value)
 		if !ok {
-			return fmt.Errorf("thermostat: OccupiedCoolingSetpoint: expected int16, got %T", value)
+			return fmt.Errorf("thermostat: OccupiedCoolingSetpoint: expected numeric, got %T", value)
 		}
 		// Reject values outside [minCool, maxCool] per matter.js
 		// ThermostatServer.ts:#assertSetpointWithinLimits (lines 911-924).
@@ -330,9 +330,9 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 		s.occupCool = v
 		return nil
 	case thermoAttrSystemMode:
-		v, ok := value.(uint8)
+		v, ok := cluster.AsUint8(value)
 		if !ok {
-			return fmt.Errorf("thermostat: SystemMode: expected uint8, got %T", value)
+			return fmt.Errorf("thermostat: SystemMode: expected numeric, got %T", value)
 		}
 		// Validate mode against ControlSequenceOfOperation per matter.js
 		// ThermostatServer.ts:#assertSystemModeChanging (lines 615-634):
