@@ -81,7 +81,7 @@ func TestSetStateChangedBusCallsNotifyCallbackOnConnected(t *testing.T) {
 		t.Fatal("LastCallbackAt must be zero before any callback")
 	}
 
-	ic.SetStateChangedBus(bus)
+	ic.SetStateChangedBus(bus, "")
 
 	// Force transition to CONNECTED via force=true.
 	err := ic.TransitionTo(hmenum.ClientStateConnected, "test", true, hmenum.FailureReasonNone)
@@ -114,7 +114,7 @@ func TestSetStateChangedBusEmitsEvent(t *testing.T) {
 	})
 	defer unsub()
 
-	ic.SetStateChangedBus(bus)
+	ic.SetStateChangedBus(bus, "")
 
 	// Advance to INITIALIZING.
 	_ = ic.TransitionTo(hmenum.ClientStateInitializing, "go", true, hmenum.FailureReasonNone)
@@ -137,6 +137,35 @@ func TestSetStateChangedBusEmitsEvent(t *testing.T) {
 	}
 }
 
+// TestSetStateChangedBusUsesProvidedWireID locks the fix for the
+// "central stuck DEGRADED after connect" bug: the published event must
+// carry the supplied wire ID (e.g. "OttoGo-HmIP-RF") as InterfaceID so
+// the health tracker / device-availability records land on the same
+// component key the client coordinator uses — not the bare interface
+// name.
+func TestSetStateChangedBusUsesProvidedWireID(t *testing.T) {
+	t.Parallel()
+	ic := newMinimalIC(t)
+	bus := events.NewBus()
+
+	var received []hmevent.ClientStateChangedEvent
+	unsub := events.Subscribe(bus, func(ev hmevent.ClientStateChangedEvent) {
+		received = append(received, ev)
+	})
+	defer unsub()
+
+	ic.SetStateChangedBus(bus, "test-HmIP-RF")
+	_ = ic.TransitionTo(hmenum.ClientStateInitializing, "go", true, hmenum.FailureReasonNone)
+	time.Sleep(5 * time.Millisecond)
+
+	if len(received) == 0 {
+		t.Fatal("no ClientStateChangedEvent received after state transition")
+	}
+	if got := received[0].InterfaceID; got != "test-HmIP-RF" {
+		t.Errorf("event.InterfaceID = %q; want the supplied wire ID %q", got, "test-HmIP-RF")
+	}
+}
+
 func TestSetStateChangedBusNilRemovesPublisher(t *testing.T) {
 	t.Parallel()
 	ic := newMinimalIC(t)
@@ -148,8 +177,8 @@ func TestSetStateChangedBusNilRemovesPublisher(t *testing.T) {
 	})
 	defer unsub()
 
-	ic.SetStateChangedBus(bus)
-	ic.SetStateChangedBus(nil) // remove
+	ic.SetStateChangedBus(bus, "")
+	ic.SetStateChangedBus(nil, "") // remove
 
 	_ = ic.TransitionTo(hmenum.ClientStateInitializing, "", true, hmenum.FailureReasonNone)
 	time.Sleep(5 * time.Millisecond)

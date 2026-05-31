@@ -140,6 +140,14 @@ func wireCUxDInterface(
 		unit.MetricsClients.Register(ic)
 	}
 
+	// Publish ClientStateChangedEvent on state transitions (keyed by
+	// wireID) so the health tracker + device-availability wiring learn
+	// when CUxD connects — otherwise the central stays DEGRADED after a
+	// successful startup connect. See the matching call in ccu_wiring.go.
+	if unit.EventBus != nil {
+		ic.SetStateChangedBus(unit.EventBus, wireID)
+	}
+
 	WirePingPongBus(unit, ic, wireID, unit.Recovery)
 
 	// Register BIN-RPC callback handlers so CUxD push events land.

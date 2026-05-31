@@ -965,14 +965,22 @@ func (c *InterfaceClient) OnSystemStatusRestored() {
 // SetStateChangedBus installs an event bus so that every state-machine
 // transition emits a [hmevent.ClientStateChangedEvent]. Pass nil to remove
 // the hook.
-func (c *InterfaceClient) SetStateChangedBus(bus *events.Bus) {
+func (c *InterfaceClient) SetStateChangedBus(bus *events.Bus, interfaceID string) {
 	if bus == nil {
 		c.sm.SetStateChangedPublisher(nil)
 		return
 	}
 	centralName := c.cfg.CentralName
 	iface := c.cfg.Interface
-	interfaceID := string(iface)
+	// interfaceID is the central-prefixed wire ID (e.g. "OttoGo-HmIP-RF").
+	// It MUST match the key the client coordinator + health tracker use,
+	// otherwise health/device-availability records land on a phantom
+	// component and the central never leaves DEGRADED after connecting.
+	// Empty falls back to the bare interface name for single-central /
+	// test callers.
+	if interfaceID == "" {
+		interfaceID = string(iface)
+	}
 	c.sm.SetStateChangedPublisher(func(from, to hmenum.ClientState, reason string, failureReason hmenum.FailureReason) {
 		events.Publish(bus, hmevent.ClientStateChangedEvent{
 			Base:        hmevent.Base{},

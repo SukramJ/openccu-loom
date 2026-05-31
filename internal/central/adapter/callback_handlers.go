@@ -164,7 +164,13 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 			h.logger.Debug("callback.event.coerce_failed",
 				slog.String("interface", interfaceID),
 				slog.String("channel", channelAddress),
-				slog.String("parameter", parameter))
+				slog.String("parameter", parameter),
+				// Capture the decoded wire type + value so the exact
+				// mismatch is identifiable (e.g. go_type=<nil> ⇒ a
+				// NilValue "absent" push, go_type=string ⇒ a non-numeric
+				// payload for a numeric descriptor).
+				slog.String("go_type", fmt.Sprintf("%T", goValue)),
+				slog.Any("value", goValue))
 			// Self-reload: the wire value did not coerce — most commonly because the
 			// descriptor's expected type and the CCU's serialised payload disagree
 			// (e.g. CCU shipped a string for an integer field). A single direct
@@ -261,7 +267,9 @@ func (h *CallbackHandlers) dispatchCombined(interfaceID, channelAddress, paramet
 			h.logger.Debug("callback.event.combined.coerce_failed",
 				slog.String("interface", interfaceID),
 				slog.String("channel", channelAddress),
-				slog.String("parameter", subParam))
+				slog.String("parameter", subParam),
+				slog.String("go_type", fmt.Sprintf("%T", subValue)),
+				slog.Any("value", subValue))
 		}
 	}
 }

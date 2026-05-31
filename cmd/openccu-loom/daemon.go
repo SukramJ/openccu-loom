@@ -662,6 +662,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// diagnostics dump's `clients[]` array permanently empty.
 	for _, c := range reg.List() {
 		_ = adapter.WireHealth(c)
+		// WireCentrals connected the interfaces BEFORE WireHealth
+		// subscribed, so the startup ClientStateChanged transitions fired
+		// with no health subscriber and the central kept the FAILED
+		// evaluation taken at boot (before any interface was connected) —
+		// surfacing as a permanently "degraded" CCU even though the
+		// interfaces are connected and callbacks are flowing. Re-evaluate
+		// now that the InterfaceClient registry reflects the connected
+		// clients so the central state matches reality.
+		c.EvaluateCentralState("post_wire", true)
 	}
 
 	// Register a post-stop hook on each central so the shared registry

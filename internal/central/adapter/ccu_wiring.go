@@ -547,6 +547,18 @@ func wireInterface(
 		unit.MetricsClients.Register(ic)
 	}
 
+	// Publish a ClientStateChangedEvent on every state-machine transition
+	// so WireHealth (health tracker → central-state re-evaluation) and
+	// WireDeviceAvailability learn when the client connects. Keyed by
+	// wireID to match the Clients registry + health component names.
+	// Without this the startup connect (created→…→connected) is silent:
+	// the health tracker never sees the client become healthy and the
+	// central stays DEGRADED even though the interface is connected and
+	// receiving callbacks.
+	if unit.EventBus != nil {
+		ic.SetStateChangedBus(unit.EventBus, wireID)
+	}
+
 	// W6: wire the IC's PingPong tracker to the central event bus and
 	// the connection-recovery coordinator so threshold-crossing events
 	// are published and false-alarm PING tracking is suppressed during
