@@ -118,6 +118,19 @@ const CSRF_HEADER = "X-CSRF-Token";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+// onUnauthorized is invoked whenever a non-auth REST call returns 401 —
+// i.e. the session cookie went stale (typically after a daemon restart,
+// since auth sessions live in memory). The auth store registers a handler
+// that flips the SPA back to the login view; without it the background
+// pollers (install-mode every 5s, the event stream) would keep hammering
+// 401s instead of recovering. Auth-flow endpoints opt out via the guard
+// in request() so a bad-credentials /auth/login does not self-trigger.
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
+}
+
 function csrfToken(): string {
   const prefix = `${CSRF_COOKIE}=`;
   for (const part of document.cookie.split(";")) {
@@ -149,6 +162,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers,
   });
   if (!res.ok) {
+    // A 401 on any non-login call means the session is no longer valid;
+    // notify the auth store so the SPA returns to the login view (which
+    // unmounts the app shell and stops its background pollers). /auth/login
+    // is excluded — a 401 there is a bad-credentials response shown inline.
+    if (res.status === 401 && path !== "/auth/login") {
+      onUnauthorized?.();
+    }
     // Read the body once as text, then try to parse as JSON. Calling
     // res.json() first and falling back to res.text() fails because
     // the body stream is already consumed by the failed json() call.

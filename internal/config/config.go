@@ -4,10 +4,14 @@
 package config
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -411,6 +415,63 @@ type NorthMatterCommissioning struct {
 	// ConcurrentPairings = false (the singleton adapter path is the
 	// only one that supports a clean revert on close).
 	EphemeralWindow bool `yaml:"ephemeral_window" json:"ephemeral_window" cfg:"basic"`
+}
+
+// UnmarshalJSON tolerates a JSON string for `passcode` in addition to a
+// number. Config UIs render the Matter setup code as a secret text field
+// (it is an 8-digit code where leading zeros are significant), so the
+// REST section-PUT body arrives with the passcode quoted; decoding that
+// straight into a uint32 otherwise fails with "cannot unmarshal string
+// ... of type uint32". Every other field keeps strict decoding, including
+// rejection of unknown keys, to match the section-validation contract.
+//
+// JSON only: YAML loading is unaffected (yaml.v3 does not call this), so
+// config.yaml continues to use a plain numeric passcode.
+func (c *NorthMatterCommissioning) UnmarshalJSON(data []byte) error {
+	type alias NorthMatterCommissioning
+	aux := &struct {
+		Passcode flexUint32 `json:"passcode"`
+		*alias
+	}{alias: (*alias)(c)}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(aux); err != nil {
+		return err
+	}
+	c.Passcode = uint32(aux.Passcode)
+	return nil
+}
+
+// flexUint32 decodes a uint32 from either a JSON number or a numeric
+// JSON string. An empty string or null decodes to 0.
+type flexUint32 uint32
+
+func (f *flexUint32) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		if s = strings.TrimSpace(s); s == "" {
+			*f = 0
+			return nil
+		}
+		n, err := strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return fmt.Errorf("invalid numeric string %q: %w", s, err)
+		}
+		*f = flexUint32(n)
+		return nil
+	}
+	var n uint32
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*f = flexUint32(n)
+	return nil
 }
 
 // NorthMatterCASE configures the CASE (operational-session)

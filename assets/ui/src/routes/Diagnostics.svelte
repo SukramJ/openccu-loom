@@ -42,7 +42,6 @@
   // Capture form state
   let captureDuration = $state(300);
   let captureAnonymise = $state(true);
-  let captureStarting = $state(false);
   let captureStopping = $state<string | null>(null);
 
   // RPC recording state
@@ -150,22 +149,6 @@
     }
   }
 
-  async function startCapture() {
-    captureStarting = true;
-    banner = null;
-    try {
-      await api.startCapture({
-        duration_seconds: captureDuration,
-        anonymise: captureAnonymise,
-      });
-      captures = await api.listCaptures();
-    } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
-    } finally {
-      captureStarting = false;
-    }
-  }
-
   async function stopCapture(id: string) {
     captureStopping = id;
     banner = null;
@@ -203,16 +186,6 @@
       rpcRecordings = await api.listRpcRecordings();
     } catch {
       // silent — banner already set by start/stop callers
-    }
-  }
-
-  async function startRpcRecording(scope?: string) {
-    banner = null;
-    try {
-      rpcRecordings = await api.startRpcRecording(scope ? [scope] : undefined, captureDuration, captureAnonymise);
-      banner = t("diagnostics.rpc_recording.started");
-    } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
     }
   }
 

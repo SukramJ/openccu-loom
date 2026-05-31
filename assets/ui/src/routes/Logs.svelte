@@ -2,7 +2,6 @@
   import { onMount, onDestroy, tick } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { LogRecord } from "$lib/api/types";
-  import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
