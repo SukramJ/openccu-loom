@@ -1,0 +1,43 @@
+{
+  "name": "multi_ccu__cross_central_isolation",
+  "description": "Locks multi-CCU isolation at scenario level: openccu-loom's two_centrals topology lays out two bridged OnOff endpoints, one on CCU A and one on CCU B. The harness subscribes one session to BOTH endpoints' OnOff attributes. Firing CCU A's notifier MUST emit exactly one AttributeReport (for CCU A's endpoint). Without proper cross-central isolation the dirty-mark callback registered for CCU A's notifier would fire for CCU B's endpoint too — Apple Home would then see ghost reports from a CCU that never raised the event, and the user-visible cause would be 'my switch reading shows the wrong device's state'.",
+  "tags": ["matter", "subscribe", "multi-ccu", "isolation"],
+  "given": {
+    "topology": "two_centrals",
+    "fire_source_key": "ccuA/ONOFFA01:1/STATE",
+    "subscriptions": [
+      {
+        "session_id": 263,
+        "peer_subscribe_exchange_id": 269,
+        "paths": [
+          { "endpoint": 2, "cluster": 6, "attribute": 0 },
+          { "endpoint": 3, "cluster": 6, "attribute": 0 }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "attribute_reports_count": 1,
+      "bind_exchange_id_to": "$exch_a"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$exch_a",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_no_tx",
+      "timeout_millis": 800
+    }
+  ]
+}

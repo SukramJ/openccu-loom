@@ -1,0 +1,56 @@
+{
+  "name": "dataversion__monotonic_per_cluster",
+  "description": "Locks Matter §10.6.5 DataVersion semantics: every CCU-confirmed attribute change MUST advance the owning cluster's per-cluster monotonic DataVersion. Without the advance Apple Home's MTRDevice projection dedupes consecutive reports as 'cache still valid' and external state changes go invisible. The scenario fires the OnOff source twice, extracts the wire DataVersion from each ReportData's first AttributeDataIB, and asserts strictly-increasing. Locks the 29 OnConfirmedUpdate hooks added across custom-DP types at behavior level.",
+  "tags": ["matter", "subscribe", "dataversion", "monotonic", "switch"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 139,
+        "peer_subscribe_exchange_id": 149,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "bind_exchange_id_to": "$exch1",
+      "bind_data_version_to": "$dv1"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$exch1",
+      "status": "Success"
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "bind_exchange_id_to": "$exch2",
+      "bind_data_version_to": "$dv2"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$exch2",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "assert_gt",
+      "gt": { "lhs": "$dv2", "rhs": "$dv1" }
+    }
+  ]
+}

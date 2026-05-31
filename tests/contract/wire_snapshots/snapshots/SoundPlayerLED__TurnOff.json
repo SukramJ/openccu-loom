@@ -1,0 +1,20 @@
+{
+  "dp_type": "SoundPlayerLED",
+  "setter": "TurnOff",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "MP3P0001:6",
+          "put_values": {
+            "COLOR": "BLACK",
+            "ON_TIME": 0
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+# Minimal openccu-loom daemon config for the chip-tool Matter smoke.
+#
+# Goal: stand the Matter bridge up on a fixed UDP port with a known
+# passcode/discriminator so chip-tool's `pairing already-discovered`
+# completes against it. No CCU backends — the smoke exercises the
+# Matter wiring (PASE, IM, clusters), not the southbound transport.
+#
+# Test passcode/discriminator are the defaults chip-tool ships with
+# (0xF00 = 3840, passcode 20202021). Never reuse in production.
+
+locale: en
+data_dir: /tmp/openccu-loom-matter-smoke
+
+logging:
+  level: debug
+  format: text
+
+# Empty centrals: Matter bridge runs without southbound CCU connections.
+centrals: []
+
+north:
+  rest:
+    enabled: false
+  ui:
+    enabled: false
+  mqtt:
+    enabled: false
+
+  matter:
+    enabled: true
+    listen: ":5540"
+    vendor_id: 0xFFF1
+    product_id: 0x8001
+    node_label: openccu-loom-smoke
+    discriminator: 0xF00          # 3840
+    mdns_advertise: zeroconf      # multicast records on host network
+
+    commissioning:
+      passcode: 20202021
+      # 16-byte fixed dev salt — never ship.
+      salt: "U1BBS0UyUF9TQUxUMTIz"
+      iterations: 1000
+
+    case:
+      # Disabled for the PASE-focused smoke. Full commissioning incl.
+      # CASE pickup is exercised separately once we have a fabric
+      # identity fixture under compose/fixtures/.
+      node_id: 0

@@ -1,0 +1,18 @@
+# tests/e2e/wsapi_skip.txt
+#
+# WS commands the E2E walker cannot drive cleanly today.
+# Format: <command_name> -- <reason>
+# Empty lines and # comments are ignored.
+#
+# Acceptance rules live in tests/e2e/api_ws_test.go::classifyWSResult.
+# Prefer fixing the underlying issue (handler bug or args contract
+# gap) over extending this file. See docs/e2e-testplan.md §11.3 for
+# the bug-discovery log.
+
+# --- godevccu lacks ReGa.runScript so any command that hits the
+# CCU's ReGa endpoint receives "no connection" from the JSON-RPC
+# transport and surfaces as internal_error. Real CCUs handle these
+# fine; godevccu does not implement the legacy Tcl/ReGa surface.
+backup.status               -- godevccu has no ReGa.runScript; live CCU returns ok
+backup.trigger              -- godevccu has no ReGa.runScript; live CCU returns ok
+firmware.update             -- godevccu has no ReGa.runScript; live CCU returns ok

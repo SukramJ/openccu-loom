@@ -1,0 +1,38 @@
+!# openccu-loom — set_device_functions
+!# Params: ##address## (channel or device address), ##functions## (\n-
+!#         separated function names; empty string clears every existing
+!#         assignment)
+!# Output: count of assignments after the update.
+!#
+!# Replaces the device's function (Gewerk) assignments with the given
+!# set. Functions not found on the CCU are silently skipped — the
+!# caller refreshes the device list afterwards to pick up the canonical
+!# state.
+
+string sAddress = "##address##";
+string sFunctions = "##functions##";
+integer iCount = 0;
+
+object oChan = dom.GetObject(sAddress);
+if (oChan) {
+    string sId = oChan.ID();
+    object oFuncList = dom.GetObject(ID_FUNCTIONS);
+    string sFuncId;
+    foreach (sFuncId, oFuncList.EnumIDs()) {
+        object oFunc = dom.GetObject(sFuncId);
+        if (oFunc) {
+            oFunc.Remove(sId);
+        }
+    }
+    string sFuncName;
+    foreach (sFuncName, sFunctions.Split("\n")) {
+        if (sFuncName != "") {
+            object oFunc = oFuncList.Get(sFuncName);
+            if (oFunc) {
+                oFunc.Add(sId);
+                iCount = iCount + 1;
+            }
+        }
+    }
+}
+Write(iCount);

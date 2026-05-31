@@ -1,0 +1,20 @@
+{
+  "dp_type": "IrrigationValve",
+  "setter": "Open",
+  "inputs": [
+    {
+      "label": "duration=120s",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "WHS0001:1",
+          "put_values": {
+            "ON_TIME": 120,
+            "STATE": true
+          }
+        }
+      ]
+    }
+  ]
+}

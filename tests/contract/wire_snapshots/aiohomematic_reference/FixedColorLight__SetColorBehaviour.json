@@ -1,0 +1,41 @@
+{
+  "dp_type": "FixedColorLight",
+  "setter": "SetColorBehaviour",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "DO_NOT_CARE",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR_BEHAVIOUR",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "OLD_VALUE",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR_BEHAVIOUR",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "label": "ON",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR_BEHAVIOUR",
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+[
+  {
+    "label": "ietf_draft01_compute_X",
+    "description": "matter.js Spake2pTest.ts:14-39 — IETF draft-bar-cfrg-spake2plus-01 test vectors. Verifies that X = x*G + w0*M with the published w0, x scalars produces the known X point. context='SPAKE2+-P256-SHA256-HKDF draft-01'.",
+    "input": {
+      "w0": "e6887cf9bdfb7579c69bf47928a84514b5e355ac034863f7ffaf4390e67d798c",
+      "x":  "5b478619804f4938d361fbba3a20648725222f0a54cc4c876139efe7d9a21786"
+    },
+    "expected": {
+      "X": "04a6db23d001723fb01fcfc9d08746c3c2a0a3feff8635d29cad2853e7358623425cf39712e928054561ba71e2dc11f300f1760e71eb177021a8f85e78689071cd"
+    }
+  },
+  {
+    "label": "ietf_draft01_compute_Y",
+    "description": "matter.js Spake2pTest.ts:14-45 — IETF draft-bar-cfrg-spake2plus-01 test vectors. Verifies that Y = y*G + w0*N with the published w0, y scalars produces the known Y point.",
+    "input": {
+      "w0": "e6887cf9bdfb7579c69bf47928a84514b5e355ac034863f7ffaf4390e67d798c",
+      "y":  "766770dad8c8eecba936823c0aed044b8c3c4f7655e8beec44a15dcbcaf78e5e"
+    },
+    "expected": {
+      "Y": "04390d29bf185c3abf99f150ae7c13388c82b6be0c07b1b8d90d26853e84374bbdc82becdb978ca3792f472424106a2578012752c11938fcf60a41df75ff7cf947"
+    }
+  },
+  {
+    "label": "ietf_draft01_shared_secret_and_verifiers",
+    "description": "matter.js Spake2pTest.ts:47-61 — IETF draft-bar-cfrg-spake2plus-01 test vectors. Verifies the full shared-secret + key-confirmation computation from both sides produces the same Ke, hAY (=cA in Matter), hBX (=cB in Matter). context='SPAKE2+-P256-SHA256-HKDF draft-01'.",
+    "input": {
+      "w0": "e6887cf9bdfb7579c69bf47928a84514b5e355ac034863f7ffaf4390e67d798c",
+      "w1": "24b5ae4abda868ec9336ffc3b78ee31c5755bef1759227ef5372ca139b94e512",
+      "L":  "0495645cfb74df6e58f9748bb83a86620bab7c82e107f57d6870da8cbcb2ff9f7063a14b6402c62f99afcb9706a4d1a143273259fe76f1c605a3639745a92154b9",
+      "x":  "5b478619804f4938d361fbba3a20648725222f0a54cc4c876139efe7d9a21786",
+      "y":  "766770dad8c8eecba936823c0aed044b8c3c4f7655e8beec44a15dcbcaf78e5e",
+      "X":  "04a6db23d001723fb01fcfc9d08746c3c2a0a3feff8635d29cad2853e7358623425cf39712e928054561ba71e2dc11f300f1760e71eb177021a8f85e78689071cd",
+      "Y":  "04390d29bf185c3abf99f150ae7c13388c82b6be0c07b1b8d90d26853e84374bbdc82becdb978ca3792f472424106a2578012752c11938fcf60a41df75ff7cf947",
+      "context_ascii": "SPAKE2+-P256-SHA256-HKDF draft-01"
+    },
+    "expected": {
+      "Ke":  "ea3276d68334576097e04b19ee5a3a8b",
+      "hAY": "71d9412779b6c45a2c615c9df3f1fd93dc0aaf63104da8ece4aa1b5a3a415fea",
+      "hBX": "095dc0400355cc233fde7437811815b3c1524aae80fd4e6810cf531cf11d20e3"
+    }
+  },
+  {
+    "label": "pase_leading_zero_w0_pbkdf",
+    "description": "matter.js PasePairingTest.ts:56-61 — PBKDF2 derivation where the resulting w0 has a leading zero byte. Regression test for an elliptic-library bug that produced wrong verifier values when w0 started with 0x00. passcode=20202021, iterations=1000. Note: matter.js emits w0.toString(16) which strips the leading zero byte producing a 63-nibble string; the canonical 32-byte big-endian encoding used here is '00177867...' (64 nibbles).",
+    "input": {
+      "passcode_le32_hex": "614e3401",
+      "salt":       "03959ebc20b8fcbda262d97f9a7a9e76e32d7a1b9c5166b6a3721e88acad8808",
+      "iterations": "1000"
+    },
+    "expected": {
+      "w0": "00177867f1e564cc4d9f347edfc28263ee5a50f1e21177cfb9a7dc2504437ccb",
+      "L":  "04cf26d253cae2dd44c6954d443c7badc1e8811b8484eaae2d7bf43ec2f7e3173527877ea4a554513063036f55d2871e87e294dfdc18cd39edd6519fb4dfcde976"
+    }
+  },
+  {
+    "label": "pase_successful_process_pbkdf",
+    "description": "matter.js PasePairingTest.ts:108-116 — PBKDF2 derivation for a full successful PASE process. passcode=20202021, iterations=1000.",
+    "input": {
+      "passcode_le32_hex": "614e3401",
+      "salt":       "2bb41e9d75f30c2e6b2f059410c56965717cc2bf14ed6c73a169435326a89652",
+      "iterations": "1000"
+    },
+    "expected": {
+      "w0": "501f85a83d1da77983ff6f0c1f742d6d98f6d0ab0ba740a38032200099c8981f",
+      "L":  "0463e7f225296bcd9b100e605d636a3d2c84524665cbd9b8b75e737d04bca1241486b37bdba74284de76f2db9df271d2c5bda21b8e26bc0943dcbf0542665c3aa8"
+    }
+  },
+  {
+    "label": "pase_successful_process_verifier",
+    "description": "matter.js PasePairingTest.ts:108-158 — Full verifier (hBX) computation in a successful PASE process. y and w0 are pinned; X is supplied. Verifies the receiver-side transcript-hash + HMAC chain. passcode=20202021, iterations=1000, salt from pase_successful_process_pbkdf.",
+    "input": {
+      "w0":      "501f85a83d1da77983ff6f0c1f742d6d98f6d0ab0ba740a38032200099c8981f",
+      "L":       "0463e7f225296bcd9b100e605d636a3d2c84524665cbd9b8b75e737d04bca1241486b37bdba74284de76f2db9df271d2c5bda21b8e26bc0943dcbf0542665c3aa8",
+      "y":       "fee695b4972a4f620951010c87390d3fe1313efce399fbc2c9c7cdc04d22b4c6",
+      "X":       "04db4f7c7f4dbf478440753d578825da01ae177c89dad6637f9c91ef86880e8d67571b2fdc0e0564985cd6b2cbbee82ab5655b0fbae7254ff4b13f88a30076612c",
+      "context_hash_hex": "context is SHA-256([SPAKE_CONTEXT_bytes, requestPayload, responsePayload]) — value requires runtime computation; see description",
+      "note": "The context for this test is SHA-256(SPAKE_CONTEXT || requestPayload || responsePayload) where requestPayload=15300120913cc0622eca85f8d4c132c89663c5d7afa780667be930e5c11bec865479c6172502e68b240300280418 and responsePayload=15300120913cc0622eca85f8d4c132c89663c5d7afa780667be930e5c11bec865479c6173002205682c0732b37c045ebeb416904c187a58b5341088e0172123becfb855f94a72c2503844235042501e8033002202bb41e9d75f30c2e6b2f059410c56965717cc2bf14ed6c73a169435326a896521818"
+    },
+    "expected": {
+      "Y":   "04cd3a2937c598cfd46e197e786e4194e65164ed1a0bf23f224947b4f4c140f72b4742792b86ae6c427ae9d4a6d345cd6e1f9ae0f950d5399d38c8031d7975ca82",
+      "hBX": "52b9b5cb79dafd150b8729102ede22795d0f522ad884d29452818d8c54ca7508"
+    }
+  }
+]

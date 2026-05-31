@@ -1,0 +1,38 @@
+{
+  "name": "subscribe__keepalive_deterministic",
+  "description": "Deterministic counterpart to subscribe__max_interval_keepalive: instead of waiting for the heartbeat to fire by wall-clock, the harness drives the engine via engine_tick_at to a synthetic clock 2000 ms past subscription admission. With MaxIntervalCeiling=2 the matter.js-aligned sendInterval formula produces a 1.6 s heartbeat (max(MinIntervalFloor, maxInterval × 0.8)); the engine then ships an empty-payload ReportData. Locks the same heartbeat cadence as Phase P but in <50 ms of test time, demonstrating the clock-injection seam.",
+  "tags": ["matter", "subscribe", "cadence", "keepalive", "clock-injection"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 277,
+        "peer_subscribe_exchange_id": 281,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "min_interval_floor_seconds": 0,
+        "max_interval_ceiling_seconds": 2,
+        "engine_manual_only": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "bridge",
+      "kind": "engine_tick_at",
+      "at_millis": 2000
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "attribute_reports_count": 0,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$exch",
+      "status": "Success"
+    }
+  ]
+}

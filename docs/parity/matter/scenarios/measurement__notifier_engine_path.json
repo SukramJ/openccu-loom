@@ -1,0 +1,43 @@
+{
+  "name": "measurement__notifier_engine_path",
+  "description": "Locks the production measurement-notifier callback wiring end-to-end: a fake Temperature source's OnMatterValueChanged fires → wireMeasurementListeners' callback dirty-marks the subscription via mgr.OnAttributeChanged → engine drain → reportSubscription ships ReportData on a fresh exchange → peer acks → status_ack logs. Catches any regression in the wireMeasurementListenersLocked → notifier.OnMatterValueChanged → manager.OnAttributeChanged chain, which sits between the model layer's value events and the bridge's wire output. F2's per-cluster narrowing is exercised at unit level (filterPathsByNotifierCluster) — measurement-source notifiers intentionally fall through to the full path set per the design comment in subscribe.go.",
+  "tags": ["matter", "subscribe", "f4", "measurement", "notifier-wiring", "engine-tick"],
+  "given": {
+    "topology": "single_temp_sensor",
+    "subscriptions": [
+      {
+        "session_id": 71,
+        "peer_subscribe_exchange_id": 73,
+        "subscription": { "endpoint": 2, "cluster": 1026, "attribute": 0 }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

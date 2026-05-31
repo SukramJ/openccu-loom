@@ -1,0 +1,42 @@
+{
+  "name": "siren__alarm_via_engine",
+  "description": "F4 fresh-exchange invariant holds for OnOff cluster (0x0006) on a Siren endpoint. A CCU-driven alarm-active flip must propagate via a fresh bridge-initiated exchange so Apple's HMOutlet projection trusts the report; same regression pattern as switch__ccu_echo but on the alarm projection's endpoint and cluster.",
+  "tags": ["matter", "subscribe", "f4", "engine-tick", "siren"],
+  "given": {
+    "session_id": 53,
+    "peer_subscribe_exchange_id": 67,
+    "subscription": {
+      "endpoint": 9,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

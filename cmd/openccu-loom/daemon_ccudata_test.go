@@ -1,0 +1,162 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"log/slog"
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/config"
+)
+
+// ── loadTranslations ──────────────────────────────────────────────────────────
+
+func TestLoadTranslations_DefaultEmbedded_ReturnsNonNil(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.CCUData.TranslationsPath = "" // use embedded
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadTranslations(cfg, logger)
+	if got == nil {
+		t.Fatal("expected non-nil translations from embedded data")
+	}
+}
+
+func TestLoadTranslations_InvalidPath_FallsBackToEmbedded(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.CCUData.TranslationsPath = "/nonexistent/translations.json"
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadTranslations(cfg, logger)
+	// Even with an invalid path, falls back to embedded → non-nil.
+	if got == nil {
+		t.Fatal("expected non-nil translations (fallback to embedded)")
+	}
+	// Should have logged a warning about the bad path.
+	if !bytes.Contains(buf.Bytes(), []byte("ccudata.translations.load")) {
+		t.Errorf("expected load warning in log; got:\n%s", buf.String())
+	}
+}
+
+// ── loadEasymode ──────────────────────────────────────────────────────────────
+
+func TestLoadEasymode_Embedded_ReturnsNonNil(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadEasymode(logger)
+	if got == nil {
+		t.Fatal("expected non-nil easymode from embedded data")
+	}
+}
+
+// ── loadProfiles ──────────────────────────────────────────────────────────────
+
+func TestLoadProfiles_Embedded_ReturnsNonNil(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadProfiles(logger)
+	if got == nil {
+		t.Fatal("expected non-nil profile store from embedded data")
+	}
+}
+
+// ── buildMatterAdvertiser ─────────────────────────────────────────────────────
+
+func TestBuildMatterAdvertiser_EmptyValue_ReturnsNoop(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	mc := config.NorthMatter{MDNSAdvertise: ""}
+	got := buildMatterAdvertiser(mc, logger)
+	if got == nil {
+		t.Fatal("expected non-nil advertiser for empty MDNSAdvertise")
+	}
+}
+
+func TestBuildMatterAdvertiser_NoopValue_ReturnsNoop(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	mc := config.NorthMatter{MDNSAdvertise: "noop"}
+	got := buildMatterAdvertiser(mc, logger)
+	if got == nil {
+		t.Fatal("expected non-nil advertiser for noop MDNSAdvertise")
+	}
+}
+
+func TestBuildMatterAdvertiser_UnknownValue_FallsBackToNoop(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	mc := config.NorthMatter{MDNSAdvertise: "invalid-backend"}
+	got := buildMatterAdvertiser(mc, logger)
+	if got == nil {
+		t.Fatal("expected non-nil fallback advertiser")
+	}
+	// Should log a warning about the unknown value.
+	if !bytes.Contains(buf.Bytes(), []byte("matter.bridge.mdns.unknown")) {
+		t.Errorf("expected mdns.unknown warning; got:\n%s", buf.String())
+	}
+}
+
+// ── applyVisibilityUnIgnore ───────────────────────────────────────────────────
+
+func TestApplyVisibilityUnIgnore_NilConfig_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	got := applyVisibilityUnIgnore(context.Background(), nil, nil, nil, nil, logger)
+	if got != 0 {
+		t.Errorf("expected 0, got %d", got)
+	}
+}
+
+func TestApplyVisibilityUnIgnore_NilReg_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	cfg := config.Default()
+	got := applyVisibilityUnIgnore(context.Background(), cfg, nil, nil, nil, logger)
+	if got != 0 {
+		t.Errorf("expected 0 when reg is nil, got %d", got)
+	}
+}
+
+func TestApplyVisibilityUnIgnore_NilStore_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	cfg := config.Default()
+	reg := buildTestRegistry(t, "ccu-one")
+	got := applyVisibilityUnIgnore(context.Background(), cfg, reg, nil, nil, logger)
+	if got != 0 {
+		t.Errorf("expected 0 when store is nil, got %d", got)
+	}
+}
+
+func TestApplyVisibilityUnIgnore_EmptyRegistry_NoPatterns_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{{Name: "ccu-one"}}
+	// No UnIgnore patterns in config.
+	reg := buildTestRegistry(t, "ccu-one")
+
+	// Use an in-memory SQLite store from the test helper.
+	mgr := buildTestOperationalManager(t)
+	store := matterStoreFromManager(t, mgr)
+	_ = store // the visibility store is a different type — we need a nil here to trigger the early return
+	// Pass nil store to hit the nil guard.
+	got := applyVisibilityUnIgnore(context.Background(), cfg, reg, nil, nil, logger)
+	if got != 0 {
+		t.Errorf("expected 0, got %d", got)
+	}
+}

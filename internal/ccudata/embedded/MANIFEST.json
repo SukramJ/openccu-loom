@@ -1,0 +1,15 @@
+{
+  "snapshot_date": "2026-04-27",
+  "files": [
+    {
+      "path": "translation_extract.json.gz",
+      "size": 282145,
+      "sha256": "f025cac92851e80c0ade3013030826104ade21dec0ef181287e6bfd12eac9371"
+    },
+    {
+      "path": "easymode_extract.json.gz",
+      "size": 151508,
+      "sha256": "ed3e169b049ca06e01ec29b45d3515acb6825afa3aa9ff81de215899f341bad2"
+    }
+  ]
+}

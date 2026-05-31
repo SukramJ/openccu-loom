@@ -1,0 +1,53 @@
+{
+  "dp_type": "SoundPlayer",
+  "setter": "PlaySound",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "file=1,rep=0",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:2",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "LEVEL": 0.8,
+            "REPETITIONS": "NO_REPETITION",
+            "SOUNDFILE": "SOUNDFILE_001"
+          }
+        }
+      ]
+    },
+    {
+      "label": "file=3,rep=2",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:2",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "LEVEL": 0.5,
+            "REPETITIONS": "REPETITIONS_002",
+            "SOUNDFILE": "SOUNDFILE_003"
+          }
+        }
+      ]
+    },
+    {
+      "label": "file=5,loop",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:2",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "LEVEL": 1.0,
+            "REPETITIONS": "INFINITE_REPETITIONS",
+            "SOUNDFILE": "SOUNDFILE_005"
+          }
+        }
+      ]
+    }
+  ]
+}

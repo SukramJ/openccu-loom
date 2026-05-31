@@ -1,0 +1,72 @@
+{
+  "name": "switch__consecutive_echoes_monotonic_exchange",
+  "description": "Two back-to-back CCU STATE echoes on the same OnOff subscription each emit ReportData on a fresh bridge-initiated exchange distinct from the commissioner-opened Subscribe exchange. The harness verifies each report round-trips independently (fire → expect_tx → status_response → status_ack log). The monotonic-allocator guarantee (consecutive nextOutboundExchangeID calls produce strictly increasing IDs) is locked by TestSendInitiatedIM_MonotonicallyIncreasing; this scenario locks the observable corollary: neither report reuses the Subscribe exchange. Cross-step ordering (exchange1 < exchange2) is not yet assertable in Phase C — that comparison moves to Phase D fault-injection extensions.",
+  "tags": ["matter", "subscribe", "f4", "exchange-allocator", "switch"],
+  "given": {
+    "session_id": 3,
+    "peer_subscribe_exchange_id": 13,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_attribute_change",
+      "value": true
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$first_exch",
+      "bind_counter_to": "$first_counter"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$first_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$first_exch"
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_attribute_change",
+      "value": false
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$second_exch",
+      "bind_counter_to": "$second_counter"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$second_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$second_exch"
+    }
+  ]
+}

@@ -1,0 +1,231 @@
+name: 🐞 Bug report (English)
+description: Report a problem with OpenCCU-Loom
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form is for **bug reports only**.
+        For questions, ideas and feature requests please use
+        [Discussions](https://github.com/SukramJ/openccu-loom/discussions).
+
+        ⚠️ **Meaningful support is only possible when all required information is provided** —
+        in particular the **diagnostics dump (`.json`)** and a **log file (DEBUG preferred)**.
+        Issues without this data may be closed without comment.
+
+        💡 Every diagnostic file can be **drag-and-dropped directly into the fields below** —
+        it is then attached to the issue as a file. Please do not paste pages of logs into the text.
+
+  - type: checkboxes
+    attributes:
+      label: I confirm
+      options:
+        - label: I am running the latest OpenCCU-Loom version (see [Releases](https://github.com/SukramJ/openccu-loom/releases)).
+          required: true
+        - label: I have read the [user guide](https://github.com/SukramJ/openccu-loom/blob/main/docs/user-guide.md) and tried to narrow down the problem myself.
+          required: true
+        - label: The backend (CCU/OpenCCU/Homegear/…) works on its own — devices are controllable through its own interface.
+          required: true
+        - label: I searched for existing, similar issues.
+          required: true
+
+  - type: textarea
+    id: problem
+    validations:
+      required: true
+    attributes:
+      label: The problem
+      description: >-
+        Please answer:
+
+        1. **What happens?** (actual behaviour)
+
+        2. **When/how does it occur?** (after a restart, specific devices/interfaces, specific times …)
+
+        3. **What did you expect?** (expected behaviour)
+
+        4. **What have you already tried?** (restart, reconnect, re-pairing …)
+
+        No logs here — they belong in the log field further down.
+      placeholder: Describe the problem …
+
+  - type: markdown
+    attributes:
+      value: |
+        ## System environment
+
+  - type: input
+    id: version
+    validations:
+      required: true
+    attributes:
+      label: OpenCCU-Loom version
+      placeholder: 0.1.0
+      description: >-
+        Obtain it via `openccu-loom version` (binary/Docker: `docker exec <container> openccu-loom version`),
+        the **`/about`** page, or the footer/about in the Config UI.
+
+  - type: input
+    id: last_working
+    attributes:
+      label: Last working version (if known)
+      placeholder: 0.0.x
+
+  - type: dropdown
+    id: deployment
+    validations:
+      required: true
+    attributes:
+      label: How do you run OpenCCU-Loom?
+      options:
+        - Docker (linux/amd64)
+        - Docker (linux/arm64)
+        - Docker (linux/armv7)
+        - Static binary (Linux)
+        - Static binary (macOS)
+        - Static binary (Windows)
+        - systemd service
+        - Other (please note under "Additional information")
+
+  - type: input
+    id: host
+    attributes:
+      label: Host / hardware / OS
+      placeholder: "e.g. Proxmox VM, Raspberry Pi 4, Debian 12, Synology …"
+
+  - type: dropdown
+    id: backend
+    validations:
+      required: true
+    attributes:
+      label: Which Homematic backend?
+      options:
+        - OpenCCU
+        - CCU3
+        - RaspberryMatic
+        - piVCCU / debmatic
+        - CCU2
+        - Homegear
+        - Other
+
+  - type: input
+    id: backend_version
+    attributes:
+      label: Backend version (if known)
+      placeholder: "e.g. 3.x.x / RaspberryMatic 3.7x"
+
+  - type: input
+    id: central_count
+    validations:
+      required: true
+    attributes:
+      label: How many CCUs (centrals) are configured?
+      placeholder: "1"
+      description: OpenCCU-Loom is multi-CCU capable — state the count.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Details
+
+  - type: checkboxes
+    id: interfaces
+    attributes:
+      label: Which interfaces are in use?
+      options:
+        - label: HmIP-RF (Homematic IP)
+        - label: BidCos-RF (Homematic wireless)
+        - label: BidCos-Wired (HM-Wired)
+        - label: HmIP-Wired
+        - label: VirtualDevices (groups / heating groups)
+        - label: CUxD (BIN-RPC)
+
+  - type: checkboxes
+    id: northbound
+    attributes:
+      label: Which output/bridge features do you use?
+      options:
+        - label: MQTT (Home Assistant Discovery)
+        - label: MQTT (raw topics)
+        - label: REST / WebSocket API
+        - label: Config UI (web interface)
+        - label: Matter bridge
+
+  - type: checkboxes
+    id: config_details
+    attributes:
+      label: Relevant configuration details
+      options:
+        - label: TLS / HTTPS enabled
+        - label: "Dynamic callback ports (`rpc_callback.port: 0` or range)"
+        - label: OIDC / token / basic auth enabled
+        - label: Behind a reverse proxy
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration (redacted)
+      render: yaml
+      placeholder: |
+        # Relevant excerpt from config.yaml — redact passwords/tokens/hostnames!
+      description: >-
+        Relevant excerpt of your `config.yaml`.
+        **Please remove passwords, tokens and any internal hostnames.**
+
+  - type: textarea
+    id: diagnostics
+    validations:
+      required: true
+    attributes:
+      label: Diagnostics dump (`.json`) — no logs here!
+      placeholder: "Drag and drop the .json diagnostics file here."
+      description: >-
+        ⚠️ Upload only the **`.json` diagnostics file** — no log content (that goes in the field below).
+
+
+        **How to obtain the diagnostics dump:**
+
+        - **Config UI:** the **Diagnostics** page → **"Download diagnostics"** button (anonymises operator-identifying fields by default).
+
+        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics" -o diagnostics.json`
+          (raw, un-anonymised: append `?anonymize=0`). The dump bundles health, interfaces, incidents and log-level overrides.
+
+  - type: textarea
+    id: logs
+    validations:
+      required: true
+    attributes:
+      label: Log (DEBUG preferred)
+      placeholder: "Drag and drop the log file (.ndjson / .gz) here."
+      description: >-
+        **Recommended:** set DEBUG level, then reproduce the problem, then download.
+
+
+        **How to obtain the log:**
+
+        - **Enable DEBUG:** Config UI → **Logs** (`#/logs`) → level dropdown to `debug`
+          (or REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8080/api/v1/diagnostics/log-level`).
+
+        - **Record a window (recommended):** Config UI → **Diagnostics & Recording** → start "New recording: Debug log",
+          reproduce, stop → download the archive (`.gz`).
+
+        - **Export the last lines:** Config UI → **Logs** → "download last N", or
+          `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
+
+  - type: textarea
+    id: rpc_recording
+    attributes:
+      label: RPC traffic recording (optional, `.json`)
+      placeholder: "For reproducible CCU/wire issues: drop the .json here."
+      description: >-
+        Only for reproducible CCU traffic problems (XML/JSON/BIN-RPC) — very helpful for deterministic replay.
+
+
+        **How to obtain it:** Config UI → **Diagnostics & Recording** → start "New recording: RPC traffic"
+        (optionally set duration/anonymise), trigger the problem, stop → download per CCU as **map** or **golden**.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional information
+      description: Screenshots, reproduction steps, affected device addresses/channels, anything else.

@@ -1,0 +1,22 @@
+{
+  "dp_type": "Switch",
+  "setter": "TurnOnFor",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "duration=60s",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "VCU0001:3",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "ON_TIME": 60.0,
+            "STATE": true
+          }
+        }
+      ]
+    }
+  ]
+}

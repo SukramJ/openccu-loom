@@ -1,0 +1,21 @@
+{
+  "dp_type": "SoundPlayer",
+  "setter": "StopSound",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "MP3P0001:2",
+          "put_values": {
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "LEVEL": 0
+          }
+        }
+      ]
+    }
+  ]
+}

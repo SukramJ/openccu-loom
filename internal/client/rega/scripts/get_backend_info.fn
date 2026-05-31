@@ -1,0 +1,46 @@
+!# openccu-loom — get_backend_info
+!# Output: {"version":"<ver>","product":"<CCU|OpenCCU>",
+!#          "hostname":"<host>","is_ha_app":<bool>}
+!#
+!# Reads /VERSION for firmware version + product label, classifies
+!# anything that is not a real CCU/debmatic backend as "OpenCCU",
+!# resolves the hostname, and reports whether the daemon is executing
+!# inside a Home-Assistant-App environment.
+
+string sVersion = "";
+string sProduct = "";
+string sHostname = "";
+string sIsHaApp = "false";
+
+system.Exec("grep VERSION= /VERSION | tr -d '[:space:]' | cut -d= -f2", &sVersion);
+sVersion = sVersion.Trim();
+
+system.Exec("grep PRODUCT= /VERSION | tr -d '[:space:]' | cut -d= -f2", &sProduct);
+sProduct = sProduct.Trim();
+if ((!sProduct.Contains("ccu")) && (!sProduct == "debmatic")) {
+    sProduct = "OpenCCU";
+} else {
+    sProduct = "CCU";
+}
+
+system.Exec("hostname", &sHostname);
+sHostname = sHostname.Trim();
+
+string sHaFlag = "";
+system.Exec("printenv HM_RUNNING_IN_HA 2>/dev/null || true", &sHaFlag);
+sHaFlag = sHaFlag.Trim();
+if (sHaFlag == "1") {
+    sIsHaApp = "true";
+} else {
+    string sSupervisorToken = "";
+    system.Exec("printenv SUPERVISOR_TOKEN 2>/dev/null || true", &sSupervisorToken);
+    sSupervisorToken = sSupervisorToken.Trim();
+    if (sSupervisorToken.Length() > 0) {
+        sIsHaApp = "true";
+    }
+}
+
+Write('{"version":"' # sVersion # '",');
+Write('"product":"' # sProduct # '",');
+Write('"hostname":"' # sHostname # '",');
+Write('"is_ha_app":' # sIsHaApp # '}');

@@ -1,0 +1,28 @@
+!# openccu-loom — get_serial
+!# Output: {"serial":"<10-char serial or 'unknown'>"}
+!#
+!# Tries three filesystem locations in order; uses whichever yields a
+!# non-empty value. Output is compressed to the trailing 10 chars so
+!# callers treat it as an opaque identifier.
+
+string sSerial = "";
+string sErr = "";
+
+system.Exec("/bin/sh -c 'cat /var/board_sgtin'", &sSerial, &sErr);
+if (sSerial) { sSerial = sSerial.Trim(); }
+
+if (!sSerial) {
+    system.Exec("/bin/sh -c 'cat /var/board_serial'", &sSerial, &sErr);
+    if (sSerial) { sSerial = sSerial.Trim(); }
+}
+
+if (!sSerial) {
+    system.Exec("/bin/sh -c 'cat /sys/module/plat_eq3ccu2/parameters/board_serial'", &sSerial, &sErr);
+    if (sSerial) { sSerial = sSerial.Trim(); }
+}
+
+if (!sSerial) {
+    sSerial = "unknown";
+}
+
+Write('{"serial":"' # sSerial # '"}');

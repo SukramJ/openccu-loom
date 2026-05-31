@@ -1,0 +1,26 @@
+!# openccu-loom — get_program_descriptions
+!# Output: [{"id":"<program-id>","description":"<uri-encoded info>"}...]
+!#
+!# Walks every registered program and emits its description. URL
+!# encoding is used because .PrgInfo() strings may contain quotes,
+!# backslashes, or newlines.
+
+string sProgramId;
+boolean bFirst = true;
+
+Write('[');
+foreach (sProgramId, dom.GetObject(ID_PROGRAMS).EnumIDs()) {
+    object oProgram = dom.GetObject(sProgramId);
+    if (oProgram) {
+        string sDescription = oProgram.PrgInfo().UriEncode();
+
+        if (bFirst) {
+            bFirst = false;
+        } else {
+            WriteLine(',');
+        }
+
+        Write('{"id":"' # sProgramId # '","description":"' # sDescription # '"}');
+    }
+}
+Write(']');

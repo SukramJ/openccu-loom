@@ -1,0 +1,64 @@
+name: e2e
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26"
+  NODE_VERSION: "20"
+
+jobs:
+  e2e:
+    name: black-box e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: setup Node (for Vite SPA build)
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: assets/ui/package-lock.json
+
+      - name: setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: install SPA dependencies
+        working-directory: assets/ui
+        run: npm ci
+
+      - name: build SPA bundle (embedded into the daemon binary)
+        working-directory: assets/ui
+        run: npm run build
+
+      - name: build daemon + hmcli binaries
+        run: make build-all
+
+      - name: e2e test suite
+        # `make e2e` would re-trigger build-all; we already built
+        # both binaries above, so call go test directly to avoid
+        # the redundant compile.
+        run: go test -tags=e2e -timeout=180s ./tests/e2e/...
+
+      - name: dump daemon stdout on failure
+        if: failure()
+        run: |
+          echo "::group::E2E binary versions"
+          ./bin/openccu-loom version || true
+          ./bin/hmcli version || true
+          echo "::endgroup::"

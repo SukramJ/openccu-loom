@@ -1,0 +1,59 @@
+!# openccu-loom — create_system_variable
+!# Params: ##name## (sysvar name), ##type## (BOOL|FLOAT|INTEGER|STRING|ENUM),
+!#         ##unit## (optional unit string), ##min## / ##max## (FLOAT/INTEGER bounds)
+!#         ##values## (semicolon-separated ENUM keys, ignored otherwise)
+!# Output: the new sysvar's serial id, or an empty string on failure.
+!#
+!# Creates a system variable on the CCU. Silent no-op if a sysvar with
+!# the same name already exists — the caller checks the existing value
+!# afterwards via getSysVar.
+
+string sName = "##name##";
+string sType = "##type##";
+string sUnit = "##unit##";
+string sMin = "##min##";
+string sMax = "##max##";
+string sValues = "##values##";
+
+object oSv = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
+if (oSv) {
+    Write(oSv.ID());
+    quit;
+}
+
+object oNew = dom.CreateObject(OT_VARDP);
+if (oNew) {
+    oNew.Name(sName);
+    if (sType == "BOOL") {
+        oNew.ValueType(ivtBinary);
+        oNew.ValueSubType(istBool);
+        oNew.ValueName0("false");
+        oNew.ValueName1("true");
+    }
+    if (sType == "INTEGER") {
+        oNew.ValueType(ivtInteger);
+        oNew.ValueSubType(istGeneric);
+        if (sMin != "") { oNew.ValueMin(sMin); }
+        if (sMax != "") { oNew.ValueMax(sMax); }
+    }
+    if (sType == "FLOAT") {
+        oNew.ValueType(ivtFloat);
+        oNew.ValueSubType(istGeneric);
+        if (sMin != "") { oNew.ValueMin(sMin); }
+        if (sMax != "") { oNew.ValueMax(sMax); }
+    }
+    if (sType == "STRING") {
+        oNew.ValueType(ivtString);
+        oNew.ValueSubType(istChar8859);
+    }
+    if (sType == "ENUM") {
+        oNew.ValueType(ivtInteger);
+        oNew.ValueSubType(istEnum);
+        oNew.ValueList(sValues);
+    }
+    if (sUnit != "") { oNew.ValueUnit(sUnit); }
+    oNew.Internal(false);
+    oNew.Visible(true);
+    dom.GetObject(ID_SYSTEM_VARIABLES).Add(oNew.ID());
+    Write(oNew.ID());
+}

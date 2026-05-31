@@ -1,0 +1,17 @@
+{
+  "name": "OpenCCU-Loom",
+  "short_name": "OpenCCU-Loom",
+  "description": "Standalone daemon bridging Homematic CCUs to MQTT, REST/WebSocket, a Config UI and Matter.",
+  "start_url": "/app/",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#475569",
+  "icons": [
+    { "src": "/app/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/app/favicon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/app/favicon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/app/apple-touch-icon-180.png", "type": "image/png", "sizes": "180x180", "purpose": "any" },
+    { "src": "/app/mark-loom-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}

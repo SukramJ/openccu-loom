@@ -1,0 +1,19 @@
+{
+  "dp_type": "Light",
+  "setter": "TurnOn",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "default-brightness",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DIM0001:1",
+          "parameter": "LEVEL",
+          "value": 1.0
+        }
+      ]
+    }
+  ]
+}

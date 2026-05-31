@@ -1,0 +1,46 @@
+{
+  "name": "switch__apple_write_success",
+  "description": "Apple writes OnOff=true on a real cluster server (single_onoff_endpoint_source topology). The bridge dispatches the write through MatterWrite, the fake source flips its boolean and bumps DataVersion, and the bridge replies with a WriteResponse on the same exchange. A subsequent CCU-side notifier fire then ships a ReportData carrying a DataVersion strictly greater than the pre-write value — locks the contract that 'Apple-driven writes advance the cluster's DataVersion the same way CCU-driven echoes do' (Matter §10.6.5).",
+  "tags": ["matter", "write", "apple-write", "dataversion", "switch"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 151,
+        "peer_subscribe_exchange_id": 157,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_write_request",
+      "value": true,
+      "peer_exchange_id": 163
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "WriteResponse",
+      "initiator": false
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "bind_data_version_to": "$dv_after_write",
+      "bind_exchange_id_to": "$rep_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$rep_exch",
+      "status": "Success"
+    }
+  ]
+}

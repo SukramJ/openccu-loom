@@ -1,0 +1,50 @@
+{
+  "dp_type": "TextDisplay",
+  "setter": "WriteRows",
+  "inputs": [
+    {
+      "label": "3-rows",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "SDV0001:1",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_SCROLLING": "NONE",
+            "DISPLAY_DATA_STRING": "Line one"
+          }
+        },
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "SDV0001:2",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_SCROLLING": "NONE",
+            "DISPLAY_DATA_STRING": "Line two"
+          }
+        },
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "SDV0001:3",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "LEFT",
+            "DISPLAY_DATA_ICON": "NONE",
+            "DISPLAY_DATA_SCROLLING": "NONE",
+            "DISPLAY_DATA_STRING": "Line three"
+          }
+        },
+        {
+          "method": "SetValue",
+          "address": "SDV0001:1",
+          "parameter": "DISPLAY_DATA_COMMIT",
+          "value": true
+        }
+      ]
+    }
+  ]
+}

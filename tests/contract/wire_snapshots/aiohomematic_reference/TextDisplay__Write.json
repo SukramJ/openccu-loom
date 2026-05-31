@@ -1,0 +1,65 @@
+{
+  "dp_type": "TextDisplay",
+  "setter": "Write",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "row1-text",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "SDV0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
+            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ID": 1,
+            "DISPLAY_DATA_STRING": "Hello",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
+          }
+        }
+      ]
+    },
+    {
+      "label": "row2-text",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "SDV0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
+            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ID": 2,
+            "DISPLAY_DATA_STRING": "World",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
+          }
+        }
+      ]
+    },
+    {
+      "label": "row3-empty",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "SDV0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
+            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ID": 3,
+            "DISPLAY_DATA_STRING": "",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+!# openccu-loom — get_system_update_info
+!# Output: {"current_firmware":"<ver>","available_firmware":"<ver>",
+!#          "update_available":<bool>,"check_script_available":<bool>}
+!#
+!# Runs /bin/checkFirmwareUpdate.sh. Its exit code encodes the outcome:
+!#   0 → up to date
+!#   1 → update available
+!#   ≥5 → script missing or internal error
+!#
+!# On "update available" the script's stdout contains the new version
+!# on the second double-newline-separated block, space-separated, where
+!# the fourth field is the version we report.
+
+string sCurrent = "";
+string sAvailable = "";
+string sResult = "";
+boolean bUpdateAvailable = false;
+boolean bCheckScriptAvailable = false;
+integer iPos;
+integer iExit;
+
+system.Exec("grep VERSION= /VERSION | tr -d '[:space:]' | cut -d= -f2", &sCurrent);
+sCurrent = sCurrent.Trim();
+
+system.Exec("/bin/checkFirmwareUpdate.sh 2>/dev/null; echo \"EXIT_CODE=$?\"", &sResult);
+sResult = sResult.Trim();
+iPos = sResult.Find("EXIT_CODE=");
+iExit = (sResult.Substr(iPos + 10, sResult.Length())).ToInteger();
+
+if (iExit < 5) {
+    bCheckScriptAvailable = true;
+    if (iExit == 1) {
+        bUpdateAvailable = true;
+        sResult = sResult.Replace("\n\n", ";");
+        sResult = sResult.StrValueByIndex(";", 1);
+        sResult = sResult.Replace(" ", ";");
+        sAvailable = sResult.StrValueByIndex(";", 3);
+    }
+}
+
+Write('{"current_firmware":"' # sCurrent # '",');
+Write('"available_firmware":"' # sAvailable # '",');
+Write('"update_available":' # bUpdateAvailable # ',');
+Write('"check_script_available":' # bCheckScriptAvailable # '}');

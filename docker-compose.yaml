@@ -1,0 +1,129 @@
+# OpenCCU-Loom — Docker Compose template.
+#
+# Quick start:
+#   1. docker compose up -d
+#   2. open http://<host>:8081/setup   (first run: create the admin user)
+#   3. add your CCUs, MQTT, auth, … in the Config UI at http://<host>:8080
+#
+# NO config.yaml is required. The daemon runs on defaults and EVERYTHING
+# operational — centrals, MQTT, auth, north-bound bridges — is configured
+# through the UI / /setup wizard and stored in the SQLite database under
+# data_dir. config.yaml only ever carries the handful of "bootstrap"
+# settings the daemon needs *before* the database is open, and they all
+# have sane defaults (see the optional config mount below):
+#   - data_dir              (where the DB + state live; default ./var)
+#   - listen.rest / listen.ui  (bind addresses; default :8080 / :8081)
+#   - logging               (level + format; default info / json)
+#   - bootstrap.allow_first_run_setup  (gates the /setup surface; default true)
+#   - env_file              (path to the secrets file; default .env)
+#
+# This is a TEMPLATE — read the comments and adapt it to your setup.
+
+services:
+  openccu-loom:
+    image: ghcr.io/sukramj/openccu-loom:latest
+    # --- or build from source instead of pulling the published image ---
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: openccu-loom
+    restart: unless-stopped
+
+    # Runs on built-in defaults — no config file needed (the daemon has
+    # compiled-in defaults; everything else is set up via the UI). To pin
+    # bootstrap settings, mount a tiny config.yaml (see volumes) and switch to:
+    #   command: ["run", "--config", "/config/config.yaml"]
+    command: ["run"]
+
+    # =====================================================================
+    # IMPORTANT — Homematic callback networking
+    # ---------------------------------------------------------------------
+    # The CCU pushes events back into the daemon on the XML-RPC callback
+    # port (8120) and CUxD on the BIN-RPC callback port (8129). The CCU must
+    # be able to REACH those ports.
+    #
+    # With the bridge networking + published ports below, set the callback
+    # host in config.yaml to THIS Docker host's LAN IP (not the container's
+    # internal IP) so the CCU dials back to a reachable address:
+    #     centrals:
+    #       - name: ccu1
+    #         rpc_callback:
+    #           host: 192.168.1.50   # <- this Docker host on the CCU's LAN
+    #
+    # Simpler for Homematic: use host networking so callbacks "just work"
+    # (the daemon binds directly on the host interfaces). Then DELETE the
+    # `ports:` block below and uncomment:
+    #   network_mode: host
+    # =====================================================================
+
+    ports:
+      - "8080:8080"   # REST API + Config UI (Svelte SPA)
+      - "8081:8081"   # first-run /setup wizard + bootstrap UI (pre-auth)
+      - "8120:8120"   # XML-RPC callback  (CCU  -> daemon)
+      - "8129:8129"   # BIN-RPC callback  (CUxD -> daemon)
+
+    volumes:
+      # Persistent state: the SQLite DB (openccu-loom.db) + filesystem state.
+      # /app/var is the daemon's default data_dir (WORKDIR is /app), so this
+      # works with NO config.yaml. THIS volume holds your entire configuration
+      # (centrals, MQTT, users, …) — it must survive restarts.
+      - loom-data:/app/var
+      # --- optional: pin bootstrap settings via a tiny read-only config ---
+      # ONLY the bootstrap tier belongs here (data_dir, listen.rest/ui,
+      # logging, bootstrap.allow_first_run_setup, env_file). Do NOT put
+      # centrals / MQTT / auth here — those are UI-managed. The daemon
+      # AUTO-DISCOVERS a config at /app/config.yaml (the WORKDIR) or
+      # /etc/openccu-loom/config.yaml — no --config needed. See
+      # config.example.yaml.
+      # - ./config.yaml:/app/config.yaml:ro
+
+    # Secrets kept out of config.yaml / the image. Optional; the daemon
+    # tolerates a missing file. Keys use the OPENCCU_LOOM_ prefix, e.g.
+    #   OPENCCU_LOOM_MQTT_PASSWORD=…
+    #   OPENCCU_LOOM_OIDC_CLIENT_SECRET=…
+    env_file:
+      - path: .env
+        required: false
+
+    # The image runs as the non-root user 65532 (distroless:nonroot).
+    # A fresh named volume is root-owned, so the daemon cannot write its
+    # database. Initialise the volume's ownership ONCE:
+    #   docker run --rm -v openccu-loom_loom-data:/v busybox \
+    #     chown -R 65532:65532 /v
+    # (or use a host bind mount `./var:/app/var` and `chown 65532:65532 ./var`).
+
+    # No in-container healthcheck: the distroless image ships no shell/curl.
+    # Monitor http://<host>:8080/health from outside instead.
+
+    # Optional log rotation so a chatty daemon can't fill the disk.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  loom-data:
+
+# =====================================================================
+# Optional: a self-contained MQTT broker (Home Assistant Discovery /
+# raw topics). Uncomment to run it alongside the daemon, then point
+# config.yaml's north.mqtt at  mqtt://mosquitto:1883 . If you already
+# have a broker, leave this out and use its address instead.
+# ---------------------------------------------------------------------
+#  mosquitto:
+#    image: eclipse-mosquitto:2
+#    container_name: mosquitto
+#    restart: unless-stopped
+#    ports:
+#      - "1883:1883"
+#    volumes:
+#      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+#      - mosquitto-data:/mosquitto/data
+#    # Minimal mosquitto/mosquitto.conf for a LAN-only broker:
+#    #   listener 1883
+#    #   allow_anonymous true
+#
+# volumes:
+#   mosquitto-data:
+# =====================================================================

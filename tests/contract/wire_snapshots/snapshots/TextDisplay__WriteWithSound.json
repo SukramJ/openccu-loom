@@ -1,0 +1,26 @@
+{
+  "dp_type": "TextDisplay",
+  "setter": "WriteWithSound",
+  "inputs": [
+    {
+      "label": "row1-sound=LONG_SHORT",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "SDV0001:1",
+          "put_values": {
+            "ACOUSTIC_NOTIFICATION_SELECTION": "LONG_SHORT",
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
+            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ID": 1,
+            "DISPLAY_DATA_STRING": "Alert",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
+          }
+        }
+      ]
+    }
+  ]
+}

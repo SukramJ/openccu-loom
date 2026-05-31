@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package textdisplay
+
+import (
+	"context"
+
+	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// Compile-time guarantee that *TextDisplay satisfies the universal
+// Source contract and the HA-Discovery payload builder contract
+// (ADR 0010). ADR-0007 step 5.
+var (
+	_ payload.Source                    = (*TextDisplay)(nil)
+	_ payload.HADiscoveryPayloadBuilder = (*TextDisplay)(nil)
+)
+
+// Info returns identity-level fields for a TextDisplay.
+func (t *TextDisplay) Info() payload.InfoPayload {
+	if t == nil {
+		return nil
+	}
+	return &payload.TextDisplayInfo{
+		Address:  t.Address,
+		Key:      t.key.String(),
+		Category: "text_display",
+	}
+}
+
+// Config returns the text display static configuration.
+// The display is write-only — there are no runtime-variable capabilities.
+func (t *TextDisplay) Config() payload.ConfigPayload {
+	if t == nil {
+		return nil
+	}
+	return &payload.TextDisplayConfig{
+		WriteOnly: true,
+	}
+}
+
+// State returns the live text display state. The HmIP-SDV*
+// family is write-only: no state is readable back from the device.
+// Per-device availability rides on its own MQTT topic
+// (eventbridge.markAvailability), not on the state JSON.
+//
+// available_icons and available_sounds are static device-capability
+// Lists included so that MQTT consumers (e.g.
+// Home Assistant automations) know which icon / sound values the device
+// accepts without a separate capability query. Mirrors the
+// `_hm_payload_state` property.
+// (platforms/text_display.py: `state["available_icons"]` /
+// `state["available_sounds"]`).
+func (t *TextDisplay) State() payload.StatePayload {
+	if t == nil {
+		return nil
+	}
+	st := &payload.TextDisplayState{}
+	if icons := t.AvailableIcons(); len(icons) > 0 {
+		out := make([]any, len(icons))
+		for i, v := range icons {
+			out[i] = v
+		}
+		st.AvailableIcons = out
+	}
+	if sounds := t.AvailableSounds(); len(sounds) > 0 {
+		out := make([]any, len(sounds))
+		for i, v := range sounds {
+			out[i] = v
+		}
+		st.AvailableSounds = out
+	}
+	return st
+}
+
+// HADiscoveryPayload returns the HA Text-platform-specific payload
+// skeleton for a TextDisplay (HmIP-WRCD). write is a distinct service
+// method → service-method command topic. State from the aggregated
+// topic via value_json.text with default("") since the device is
+// write-only and has no readable text state.
+//
+// Per ADR 0010: write is unambiguous (single service method) →
+// service-method command topic.
+func (t *TextDisplay) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
+	if t == nil || ctx == nil {
+		return "", nil
+	}
+	stateTopic := ctx.CustomDPStateTopic()
+	body = map[string]any{
+		// write is a distinct service method → service-method topic.
+		"command_topic": ctx.ServiceMethodCommandTopic("write"),
+		// mode=text signals HA free-form text input (not a number).
+		"mode": "text",
+		// Max characters per row matches [MaxRowLength] (24).
+		"min": 0,
+		"max": MaxRowLength,
+		// State from aggregated topic — text field with fallback default.
+		"state_topic":    stateTopic,
+		"value_template": `{{ value_json.text | default("") }}`,
+	}
+	return "text", body
+}
+
+// registerTextDisplayServices wires the text display write operations
+// onto the embedded ServiceRegistry. Service-method names mirror
+// (write, write_with_sound).
+func (t *TextDisplay) registerTextDisplayServices() {
+	t.RegisterService("write", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		id, err := payload.ParamInt32(params, "id")
+		if err != nil {
+			return err
+		}
+		r := Row{ID: id}
+		if s, err := payload.ParamString(params, "text"); err == nil {
+			r.Text = s
+		}
+		if s, err := payload.ParamString(params, "icon"); err == nil {
+			r.Icon = s
+		}
+		// "color" accepts a string label (e.g. "RED") forwarded as
+		// text_color.
+		if s, err := payload.ParamString(params, "color"); err == nil {
+			r.TextColor = &s
+		}
+		if s, err := payload.ParamString(params, "text_color"); err == nil {
+			r.TextColor = &s
+		}
+		if s, err := payload.ParamString(params, "background_color"); err == nil {
+			r.BackgroundColor = &s
+		}
+		if s, err := payload.ParamString(params, "alignment"); err == nil {
+			r.Alignment = &s
+		}
+		return t.Write(ctx, r, priority)
+	})
+	t.RegisterService("write_with_sound", func(ctx context.Context, params map[string]any, priority hmenum.CommandPriority) error {
+		id, err := payload.ParamInt32(params, "id")
+		if err != nil {
+			return err
+		}
+		r := Row{ID: id}
+		if s, err := payload.ParamString(params, "text"); err == nil {
+			r.Text = s
+		}
+		if s, err := payload.ParamString(params, "icon"); err == nil {
+			r.Icon = s
+		}
+		opts := SoundOptions{}
+		if s, err := payload.ParamString(params, "sound"); err == nil {
+			opts.Sound = s
+		}
+		// "repetitions" accepts a string label directly (e.g.
+		// "REPETITIONS_003") or a numeric count via "repeat" which is
+		// converted to the CCU label string.
+		if s, err := payload.ParamString(params, "repetitions"); err == nil {
+			opts.Repetitions = s
+		} else if n, err := payload.ParamInt32(params, "repeat"); err == nil {
+			opts.Repetitions = convertRepetitions(int(n))
+		}
+		if s, err := payload.ParamString(params, "interval"); err == nil {
+			opts.Interval = s
+		}
+		return t.WriteWithSound(ctx, r, opts, priority)
+	})
+}

@@ -1,0 +1,42 @@
+{
+  "dp_type": "ClimateRF",
+  "setter": "SetMode",
+  "inputs": [
+    {
+      "label": "HEAT",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "MANU_MODE",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "AUTO",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "AUTO_MODE",
+          "value": true
+        }
+      ]
+    },
+    {
+      "label": "OFF",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "RFTHR0001:1",
+          "put_values": {
+            "MANU_MODE": 5,
+            "SET_TEMPERATURE": 5
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "switch__apple_write_unsupported",
+  "description": "Apple ships an IM:WriteRequestMessage targeting an OnOff cluster on an endpoint with no Switch cluster server (empty wbEmptySnapshotter topology). The bridge MUST still reply with a WriteResponse on the same exchange — silent drops or panics break Apple's MTRDevice write timer and cause UI hangs. The scenario locks 'WriteRequest always elicits a WriteResponse' regardless of whether the dispatcher could resolve the path; failure status codes live inside the response, not in its absence.",
+  "tags": ["matter", "write", "apple-write", "switch"],
+  "given": {
+    "session_id": 79,
+    "peer_subscribe_exchange_id": 83,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_write_request",
+      "value": true,
+      "peer_exchange_id": 89
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "WriteResponse",
+      "initiator": false
+    }
+  ]
+}

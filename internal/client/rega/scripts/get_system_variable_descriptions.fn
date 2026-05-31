@@ -1,0 +1,27 @@
+!# openccu-loom — get_system_variable_descriptions
+!# Output: [{"id":"<sysvar-id>","description":"<uri-encoded info>"}...]
+!#
+!# Walks the system-variable collection and emits a JSON array. The
+!# description is URL-encoded because sysvar .DPInfo() strings may
+!# contain quotes, backslashes, or newlines that would otherwise break
+!# our framing.
+
+string sVarId;
+boolean bFirst = true;
+
+Write('[');
+foreach (sVarId, dom.GetObject(ID_SYSTEM_VARIABLES).EnumIDs()) {
+    object oVar = dom.GetObject(sVarId);
+    if (oVar) {
+        string sDescription = oVar.DPInfo().UriEncode();
+
+        if (bFirst) {
+            bFirst = false;
+        } else {
+            WriteLine(',');
+        }
+
+        Write('{"id":"' # sVarId # '","description":"' # sDescription # '"}');
+    }
+}
+Write(']');

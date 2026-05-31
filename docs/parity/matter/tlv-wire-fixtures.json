@@ -1,0 +1,252 @@
+[
+  {
+    "label": "uint_anon_0",
+    "description": "PutUint(AnonymousTag, 0) → TypeUnsignedInt1, control=0x04, payload=00",
+    "bytesHex": "0400"
+  },
+  {
+    "label": "uint_anon_255",
+    "description": "PutUint(AnonymousTag, 0xFF) → TypeUnsignedInt1, control=0x04, payload=FF",
+    "bytesHex": "04ff"
+  },
+  {
+    "label": "uint_anon_256",
+    "description": "PutUint(AnonymousTag, 0x0100) → TypeUnsignedInt2, control=0x05, payload=00 01 (LE)",
+    "bytesHex": "050001"
+  },
+  {
+    "label": "uint_anon_65535",
+    "description": "PutUint(AnonymousTag, 0xFFFF) → TypeUnsignedInt2, control=0x05, payload=FF FF",
+    "bytesHex": "05ffff"
+  },
+  {
+    "label": "uint_anon_65536",
+    "description": "PutUint(AnonymousTag, 0x10000) → TypeUnsignedInt4, control=0x06, payload=00 00 01 00 (LE)",
+    "bytesHex": "0600000100"
+  },
+  {
+    "label": "uint_anon_specversion",
+    "description": "PutUint(AnonymousTag, 0x01050100) — Matter SpecificationVersion field",
+    "bytesHex": "0600010501"
+  },
+  {
+    "label": "uint_anon_max32",
+    "description": "PutUint(AnonymousTag, 0xFFFFFFFF) → TypeUnsignedInt4 boundary",
+    "bytesHex": "06ffffffff"
+  },
+  {
+    "label": "uint64_anon_2_to_32",
+    "description": "PutUint64(AnonymousTag, 4294967296) → TypeUnsignedInt8 — least value that needs 8 bytes",
+    "bytesHex": "070000000001000000"
+  },
+  {
+    "label": "uint16_explicit_1",
+    "description": "PutUint16(AnonymousTag, 1) — explicit 2-byte width regardless of magnitude",
+    "bytesHex": "050100"
+  },
+  {
+    "label": "uint32_explicit_1",
+    "description": "PutUint32(AnonymousTag, 1) — explicit 4-byte width regardless of magnitude",
+    "bytesHex": "0601000000"
+  },
+  {
+    "label": "uint64_explicit_1",
+    "description": "PutUint64(AnonymousTag, 1) — explicit 8-byte width regardless of magnitude",
+    "bytesHex": "070100000000000000"
+  },
+  {
+    "label": "int_anon_minus1",
+    "description": "PutInt(AnonymousTag, -1) → TypeSignedInt1, payload=FF (two's complement)",
+    "bytesHex": "00ff"
+  },
+  {
+    "label": "int_anon_minus128",
+    "description": "PutInt(AnonymousTag, -128) → TypeSignedInt1, payload=80",
+    "bytesHex": "0080"
+  },
+  {
+    "label": "int_anon_minus129",
+    "description": "PutInt(AnonymousTag, -129) → TypeSignedInt2",
+    "bytesHex": "017fff"
+  },
+  {
+    "label": "bool_anon_true",
+    "description": "PutBool(AnonymousTag, true) → control=0x09",
+    "bytesHex": "09"
+  },
+  {
+    "label": "bool_anon_false",
+    "description": "PutBool(AnonymousTag, false) → control=0x08",
+    "bytesHex": "08"
+  },
+  {
+    "label": "null_anon",
+    "description": "PutNull(AnonymousTag) → TypeNull, control=0x14",
+    "bytesHex": "14"
+  },
+  {
+    "label": "utf8_anon_empty",
+    "description": "PutUTF8(AnonymousTag, '') → length-prefixed empty string, control=0x0C 00",
+    "bytesHex": "0c00"
+  },
+  {
+    "label": "utf8_anon_openccu-loom",
+    "description": "PutUTF8(AnonymousTag, 'openccu-loom')",
+    "bytesHex": "0c0c6f70656e6363752d6c6f6f6d"
+  },
+  {
+    "label": "octets_anon_empty",
+    "description": "PutOctets(AnonymousTag, []) → empty length-prefixed octet string",
+    "bytesHex": "1000"
+  },
+  {
+    "label": "octets_anon_3bytes",
+    "description": "PutOctets(AnonymousTag, 0x010203)",
+    "bytesHex": "1003010203"
+  },
+  {
+    "label": "uint_ctx0_1",
+    "description": "PutUint(ContextTag(0), 1) — single-octet context tag, payload=01",
+    "bytesHex": "240001"
+  },
+  {
+    "label": "uint_ctx7_42",
+    "description": "PutUint(ContextTag(7), 42) — single-octet context tag form",
+    "bytesHex": "24072a"
+  },
+  {
+    "label": "int16_explicit_minus1",
+    "description": "PutInt16(AnonymousTag, -1) → TypeSignedInt2, control=0x01, payload=FFFF (LE two's-complement)",
+    "bytesHex": "01ffff"
+  },
+  {
+    "label": "int32_explicit_minus1",
+    "description": "PutInt32(AnonymousTag, -1) → TypeSignedInt4, control=0x02, payload=FFFFFFFF (LE two's-complement)",
+    "bytesHex": "02ffffffff"
+  },
+  {
+    "label": "int64_explicit_minus1",
+    "description": "PutInt64(AnonymousTag, -1) → TypeSignedInt8, control=0x03, payload=FFFFFFFFFFFFFFFF (LE two's-complement)",
+    "bytesHex": "03ffffffffffffffff"
+  },
+  {
+    "label": "float32_anon_1",
+    "description": "PutFloat32(AnonymousTag, 1.0) → TypeFloat4, control=0x0A, IEEE-754 LE 0x3F800000",
+    "bytesHex": "0a0000803f"
+  },
+  {
+    "label": "float64_anon_1",
+    "description": "PutFloat64(AnonymousTag, 1.0) → TypeFloat8, control=0x0B, IEEE-754 LE 0x3FF0000000000000",
+    "bytesHex": "0b000000000000f03f"
+  },
+  {
+    "label": "struct_empty",
+    "description": "StartStruct(AnonymousTag) + EndContainer → TypeStructure(0x15) + TypeEndContainer(0x18)",
+    "bytesHex": "1518"
+  },
+  {
+    "label": "array_one_anon_uint8",
+    "description": "StartArray(AnonymousTag) + PutUint(AnonymousTag, 42) + EndContainer → 0x16 0x04 0x2A 0x18",
+    "bytesHex": "16042a18"
+  },
+  {
+    "label": "list_empty",
+    "description": "StartList(AnonymousTag) + EndContainer → TypeList(0x17) + TypeEndContainer(0x18)",
+    "bytesHex": "1718"
+  },
+  {
+    "label": "common_tag_0001_uint8_42",
+    "description": "PutUint(CommonTag(0x0001), 42) → TagKindCommonProfile2(2), control=0x44, tag=0100 (LE uint16), value=2A",
+    "bytesHex": "4401002a"
+  },
+  {
+    "label": "null_ctx0",
+    "description": "PutNull(ContextTag(0)) → TypeNull(0x14) with context tag 0: control=0x34, tag=0x00",
+    "bytesHex": "3400"
+  },
+  {
+    "label": "decoder_roundtrip_uint_ctx1",
+    "description": "PutUint(ContextTag(1), 0xFF) encode then decode roundtrip — control=0x24, tag=01, value=FF",
+    "bytesHex": "2401ff"
+  },
+  {
+    "label": "decoder_roundtrip_int16_ctx2",
+    "description": "PutInt16(ContextTag(2), -100) → control=0x21, tag=02, value=9cff (LE two's-complement of -100)",
+    "bytesHex": "21029cff"
+  },
+  {
+    "label": "fq6_profile_12345678_id_abcd_uint8_42",
+    "description": "FullyQualifiedTag(profile=0x12345678,id=0xABCD) PutUint(_, 42) → control=0xC4, profile uint32 LE + id uint16 LE — verified against matter.js TlvCodec.writeTag (FullyQualified48)",
+    "bytesHex": "c478563412cdab2a"
+  },
+  {
+    "label": "fq8_profile_12345678_id_deadbeef_uint8_42",
+    "description": "FullyQualifiedTag(profile=0x12345678,id=0xDEADBEEF) PutUint(_, 42) → control=0xE4, profile uint32 LE + id uint32 LE — verified against matter.js TlvCodec.writeTag (FullyQualified64)",
+    "bytesHex": "e478563412efbeadde2a"
+  },
+  {
+    "label": "implicit2_id_1234_uint8_42",
+    "description": "ImplicitTag(0x1234) PutUint(_, 42) → control=0x84, id uint16 LE (0x1234), value 0x2A. matter.js encoder does not emit (TlvCodec.writeTag has no ImplicitProfile branch); spec-derived bytes per Matter Core §A.7.2 — see docs/parity/by_design.md.",
+    "bytesHex": "8434122a"
+  },
+  {
+    "label": "implicit4_id_12345678_uint8_42",
+    "description": "ImplicitTag(0x12345678) PutUint(_, 42) → control=0xA4, id uint32 LE (0x12345678), value 0x2A. matter.js encoder does not emit (TlvCodec.writeTag has no ImplicitProfile branch); spec-derived bytes per Matter Core §A.7.2 — see docs/parity/by_design.md.",
+    "bytesHex": "a4785634122a"
+  },
+  {
+    "label": "utf8_anon_len300",
+    "description": "PutUTF8(AnonymousTag, 'a' x 300) — exercises the 2-byte-length prefix (TypeUtf8Str2, control 0x0D), length 300 = 0x012C LE, body 300 'a' bytes. Verified against matter.js TlvCodec.",
+    "bytesHex": "0d2c01616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161616161"
+  },
+  {
+    "label": "uint8_ctx0_FF_nullable_sentinel",
+    "description": "PutUint(ContextTag(0), 0xFF) — locks the matter.js encoding for the uint8 nullable sentinel (the value chosen by Matter as 'null' for nullable uint8 attributes). control=0x24, tag=0x00, value=0xFF.",
+    "bytesHex": "2400ff"
+  },
+  {
+    "label": "uint16_ctx0_FFFF_nullable_sentinel",
+    "description": "PutUint(ContextTag(0), 0xFFFF) — locks the matter.js encoding for the uint16 nullable sentinel. control=0x25, tag=0x00, value=FF FF.",
+    "bytesHex": "2500ffff"
+  },
+  {
+    "label": "float32_ctx0_1",
+    "description": "PutFloat32(ContextTag(0), 1.0) — locks float32 with a context tag. control=(TagKindContext<<5)|TypeFloat4=0x2A, tag=0x00, IEEE-754 LE 0x3F800000. Mirrors matter.js TlvCodec.writeTag ContextTag + writeFloat.",
+    "bytesHex": "2a000000803f"
+  },
+  {
+    "label": "float64_ctx1_1",
+    "description": "PutFloat64(ContextTag(1), 1.0) — locks float64 with a context tag. control=(TagKindContext<<5)|TypeFloat8=0x2B, tag=0x01, IEEE-754 LE 0x3FF0000000000000. Mirrors matter.js TlvCodec.writeTag ContextTag + writeDouble.",
+    "bytesHex": "2b01000000000000f03f"
+  },
+  {
+    "label": "int_anon_0",
+    "description": "PutInt(AnonymousTag, 0) — int8 auto-width, smallest signed magnitude. control=TypeSignedInt1=0x00, payload=0x00.",
+    "bytesHex": "0000"
+  },
+  {
+    "label": "int_anon_42",
+    "description": "PutInt(AnonymousTag, 42) — int8 auto-width, positive mid-range. control=TypeSignedInt1=0x00, payload=0x2A.",
+    "bytesHex": "002a"
+  },
+  {
+    "label": "int_anon_127",
+    "description": "PutInt(AnonymousTag, 127) — int8 auto-width, signed int8 maximum. control=TypeSignedInt1=0x00, payload=0x7F.",
+    "bytesHex": "007f"
+  },
+  {
+    "label": "int8_ctx0_nullable_sentinel",
+    "description": "PutInt(ContextTag(0), -128) — int8 nullable sentinel per Matter §6.6.4.5 Table 26. control=(TagKindContext<<5)|TypeSignedInt1=0x20, tag=0x00, payload=0x80 (two's-complement). PutInt8Bounded must REJECT this value.",
+    "bytesHex": "200080"
+  },
+  {
+    "label": "int16_ctx0_nullable_sentinel",
+    "description": "PutInt16(ContextTag(0), -32768) — int16 nullable sentinel per Matter §6.6.4.5 Table 26. control=(TagKindContext<<5)|TypeSignedInt2=0x21, tag=0x00, payload=0x00 0x80 (LE two's-complement). PutInt16Bounded must REJECT this value.",
+    "bytesHex": "21000080"
+  },
+  {
+    "label": "int32_ctx0_nullable_sentinel",
+    "description": "PutInt32(ContextTag(0), -2147483648) — int32 nullable sentinel per Matter §6.6.4.5 Table 26. control=(TagKindContext<<5)|TypeSignedInt4=0x22, tag=0x00, payload=0x00 0x00 0x00 0x80 (LE two's-complement). PutInt32Bounded must REJECT this value.",
+    "bytesHex": "220000000080"
+  }
+]

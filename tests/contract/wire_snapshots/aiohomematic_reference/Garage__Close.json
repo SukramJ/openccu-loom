@@ -1,0 +1,19 @@
+{
+  "dp_type": "Garage",
+  "setter": "Close",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "MOHO0001:1",
+          "parameter": "DOOR_COMMAND",
+          "value": "CLOSE"
+        }
+      ]
+    }
+  ]
+}

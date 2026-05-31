@@ -1,0 +1,15 @@
+!# openccu-loom — set_program_state
+!# Params: ##id## (program ID), ##state## (0 or 1)
+!# Output: final active state (bare ReGa boolean literal)
+!#
+!# Toggles whether a CCU program is active. Silent no-op if the ID does
+!# not resolve to a program object.
+
+string sProgramId = "##id##";
+integer iActive = ##state##;
+
+object oProgram = dom.GetObject(ID_PROGRAMS).Get(sProgramId);
+if (oProgram) {
+    oProgram.Active(iActive);
+    Write(oProgram.Active());
+}

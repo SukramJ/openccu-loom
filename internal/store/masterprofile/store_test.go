@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package masterprofile
+
+import (
+	"errors"
+	"strings"
+	"testing"
+)
+
+func TestStoreDeviceTypesNonEmpty(t *testing.T) {
+	s := New()
+	types, err := s.DeviceTypes()
+	if err != nil {
+		t.Fatalf("DeviceTypes() err = %v", err)
+	}
+	if len(types) < 50 {
+		t.Fatalf("expected >50 embedded device types, got %d", len(types))
+	}
+	// must be sorted ascending
+	for i := 1; i < len(types); i++ {
+		if types[i-1] >= types[i] {
+			t.Fatalf("device types not sorted: %s >= %s", types[i-1], types[i])
+		}
+	}
+}
+
+func TestStoreLookupBlindGeneric(t *testing.T) {
+	s := New()
+	profiles, err := s.Profiles("BLIND", "")
+	if err != nil {
+		t.Fatalf("Profiles(BLIND, '') err = %v", err)
+	}
+	if len(profiles) == 0 {
+		t.Fatalf("BLIND/KEY returned no profiles")
+	}
+	// First profile should be id=0 (Expert).
+	if profiles[0].ID != 0 {
+		t.Fatalf("expected id=0 first, got %d", profiles[0].ID)
+	}
+	if name := profiles[0].LocalisedName("de"); name == "" {
+		t.Fatalf("expected localised de name, got empty")
+	}
+}
+
+func TestStoreLocalisedFallback(t *testing.T) {
+	s := New()
+	p, err := s.Profile("BLIND", "", 0)
+	if err != nil {
+		t.Fatalf("Profile err: %v", err)
+	}
+	if got := p.LocalisedName("xx"); got == "" {
+		t.Fatalf("expected fallback name for unknown locale, got empty")
+	}
+}
+
+func TestStoreUnknownDeviceTypeReturnsNotFound(t *testing.T) {
+	s := New()
+	_, err := s.Profiles("DOES_NOT_EXIST", "")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
+func TestStoreEmptyDeviceTypeRejected(t *testing.T) {
+	s := New()
+	_, err := s.Profiles("", "")
+	if err == nil || !strings.Contains(err.Error(), "empty device type") {
+		t.Fatalf("expected empty-device-type error, got %v", err)
+	}
+}
+
+func TestStoreChannelTypesIncludeKey(t *testing.T) {
+	s := New()
+	cts, err := s.ChannelTypes("ACTOR_SECURITY")
+	if err != nil {
+		t.Fatalf("ChannelTypes err: %v", err)
+	}
+	hasKey := false
+	for _, c := range cts {
+		if c == "KEY" {
+			hasKey = true
+		}
+	}
+	if !hasKey {
+		t.Fatalf("expected KEY in channel types of ACTOR_SECURITY, got %v", cts)
+	}
+}
+
+func TestStoreCaching(t *testing.T) {
+	s := New()
+	if _, err := s.Profiles("BLIND", ""); err != nil {
+		t.Fatalf("first lookup err: %v", err)
+	}
+	// Second call hits cache (no error possible from re-decode failure).
+	if _, err := s.Profiles("BLIND", "KEY"); err != nil {
+		t.Fatalf("cached lookup err: %v", err)
+	}
+}

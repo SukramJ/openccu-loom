@@ -1,0 +1,36 @@
+!# openccu-loom — set_device_rooms
+!# Params: ##address## (channel or device address), ##rooms## (\n-separated
+!#         room names; empty string clears every existing assignment)
+!# Output: count of assignments after the update.
+!#
+!# Replaces the device's room assignments with the given set. Rooms not
+!# found on the CCU are silently skipped — the caller refreshes the
+!# device list afterwards to pick up the canonical state.
+
+string sAddress = "##address##";
+string sRooms = "##rooms##";
+integer iCount = 0;
+
+object oChan = dom.GetObject(sAddress);
+if (oChan) {
+    string sId = oChan.ID();
+    object oRoomList = dom.GetObject(ID_ROOMS);
+    string sRoomId;
+    foreach (sRoomId, oRoomList.EnumIDs()) {
+        object oRoom = dom.GetObject(sRoomId);
+        if (oRoom) {
+            oRoom.Remove(sId);
+        }
+    }
+    string sRoomName;
+    foreach (sRoomName, sRooms.Split("\n")) {
+        if (sRoomName != "") {
+            object oRoom = oRoomList.Get(sRoomName);
+            if (oRoom) {
+                oRoom.Add(sId);
+                iCount = iCount + 1;
+            }
+        }
+    }
+}
+Write(iCount);

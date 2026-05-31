@@ -1,0 +1,42 @@
+{
+  "name": "cover__level_via_engine",
+  "description": "WindowCovering cluster (0x0102) attribute CurrentPositionLiftPercent100ths (0x000E) on endpoint 3 emits ReportData on a fresh bridge-initiated exchange when the subscription engine drains a dirty mark. Locks the cluster-agnostic invariant: F4 holds regardless of which cluster ID drives the subscription — if reportSubscription regresses to reusing the peer-opened Subscribe exchange, this scenario fails with the same ExchangeID-equals-Subscribe diagnostic as switch__ccu_echo_via_engine.",
+  "tags": ["matter", "subscribe", "f4", "cover", "engine-tick"],
+  "given": {
+    "session_id": 5,
+    "peer_subscribe_exchange_id": 19,
+    "subscription": {
+      "endpoint": 3,
+      "cluster": 258,
+      "attribute": 14
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

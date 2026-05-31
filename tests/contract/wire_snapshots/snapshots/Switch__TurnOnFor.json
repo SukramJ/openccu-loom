@@ -1,0 +1,20 @@
+{
+  "dp_type": "Switch",
+  "setter": "TurnOnFor",
+  "inputs": [
+    {
+      "label": "duration=60s",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "VCU0001:3",
+          "put_values": {
+            "ON_TIME": 60,
+            "STATE": true
+          }
+        }
+      ]
+    }
+  ]
+}

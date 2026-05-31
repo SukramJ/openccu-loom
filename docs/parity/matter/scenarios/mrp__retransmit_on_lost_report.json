@@ -1,0 +1,43 @@
+{
+  "name": "mrp__retransmit_on_lost_report",
+  "description": "Locks the MRP retransmit pump per Matter §4.12.6: when a peer fails to ACK an outbound Reliable Report (NeedsAck=true) within MRPBackoffBase, the bridge MUST re-ship the same datagram. The harness ships one CCU echo, drops the first outbound on the peer side, and asserts a retransmit lands on the same exchange. If MRP wiring breaks (tracker not engaged, retransmit pump stopped, backoff misconfigured) the second expect_tx times out.",
+  "tags": ["matter", "mrp", "reliability", "retransmit", "fault-injection"],
+  "given": {
+    "session_id": 9,
+    "peer_subscribe_exchange_id": 37,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_attribute_change"
+    },
+    {
+      "actor": "peer",
+      "kind": "drop_next_tx"
+    },
+    {
+      "actor": "bridge",
+      "kind": "tick_retransmit"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "bind_exchange_id_to": "$retx_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$retx_exch",
+      "status": "Success"
+    }
+  ]
+}

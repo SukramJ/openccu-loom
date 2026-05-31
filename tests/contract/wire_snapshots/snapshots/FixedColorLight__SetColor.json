@@ -1,0 +1,83 @@
+{
+  "dp_type": "FixedColorLight",
+  "setter": "SetColor",
+  "inputs": [
+    {
+      "label": "WHITE",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "WHITE"
+        }
+      ]
+    },
+    {
+      "label": "RED",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "RED"
+        }
+      ]
+    },
+    {
+      "label": "GREEN",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "GREEN"
+        }
+      ]
+    },
+    {
+      "label": "BLUE",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "BLUE"
+        }
+      ]
+    },
+    {
+      "label": "CYAN",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "TURQUOISE"
+        }
+      ]
+    },
+    {
+      "label": "YELLOW",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "YELLOW"
+        }
+      ]
+    },
+    {
+      "label": "MAGENTA",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "FC0001:1",
+          "parameter": "COLOR",
+          "value": "PURPLE"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "dp_type": "ClimateRF",
+  "setter": "SetProfile",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "WeekProgram1",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RFTHR0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 1"
+          }
+        }
+      ]
+    },
+    {
+      "label": "WeekProgram2",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RFTHR0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 2"
+          }
+        }
+      ]
+    },
+    {
+      "label": "WeekProgram3",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RFTHR0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 3"
+          }
+        }
+      ]
+    }
+  ]
+}

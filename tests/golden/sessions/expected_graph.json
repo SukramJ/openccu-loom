@@ -1,0 +1,14 @@
+{
+  "devices": [
+    {
+      "address": "0001ABCD",
+      "model": "HmIP-STH",
+      "firmware": "2.0.4",
+      "channels": [
+        "0001ABCD:0",
+        "0001ABCD:1",
+        "0001ABCD:2"
+      ]
+    }
+  ]
+}

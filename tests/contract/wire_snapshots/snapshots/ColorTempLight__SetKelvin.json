@@ -1,0 +1,39 @@
+{
+  "dp_type": "ColorTempLight",
+  "setter": "SetKelvin",
+  "inputs": [
+    {
+      "label": "kelvin=2700",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "CT0001:1",
+          "parameter": "COLOR_TEMPERATURE",
+          "value": 2700
+        }
+      ]
+    },
+    {
+      "label": "kelvin=4000",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "CT0001:1",
+          "parameter": "COLOR_TEMPERATURE",
+          "value": 4000
+        }
+      ]
+    },
+    {
+      "label": "kelvin=6500",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "CT0001:1",
+          "parameter": "COLOR_TEMPERATURE",
+          "value": 6500
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+!# openccu-loom — get_alarm_messages
+!# Output: array of alarm-message records with trigger and location info
+!#
+!# Walks ID_SYSTEM_VARIABLES, emits one record per ALARMDP whose
+!# AlState == 1. Each record includes:
+!#   id, name, description, device_name, timestamp, last_timestamp,
+!#   counter, last_trigger, rooms
+!# Text fields go through UriEncode() because alarm and device names
+!# may contain arbitrary user input.
+!#
+!# Service messages live in ID_SERVICES and are produced by the
+!# companion script get_service_messages.fn.
+
+string sVarId;
+boolean bFirst = true;
+
+Write('[');
+
+object oSysvars = dom.GetObject(ID_SYSTEM_VARIABLES);
+if (oSysvars) {
+    foreach (sVarId, oSysvars.EnumIDs()) {
+        object oVar = dom.GetObject(sVarId);
+        if (oVar && (oVar.TypeName() == "ALARMDP") && (oVar.AlState() == 1)) {
+
+            string sName = "";
+            if (oVar.Name()) {
+                sName = oVar.Name().UriEncode();
+            }
+
+            string sDescription = "";
+            if (oVar.DPInfo()) {
+                sDescription = oVar.DPInfo().UriEncode();
+            }
+
+            string sTimestamp = "";
+            time tStamp = oVar.Timestamp();
+            if (tStamp) {
+                sTimestamp = tStamp.ToString();
+            }
+
+            !# Resolve optional trigger data point → device + rooms.
+            string sTriggerName = "";
+            string sDeviceName = "";
+            string sRooms = "";
+            integer iTriggerDP = oVar.AlTriggerDP();
+            if (iTriggerDP > 0) {
+                object oTrigger = dom.GetObject(iTriggerDP);
+                if (oTrigger) {
+                    if (oTrigger.Name()) {
+                        sTriggerName = oTrigger.Name().UriEncode();
+                    }
+
+                    integer iChnId = oTrigger.Channel();
+                    if (iChnId) {
+                        object oChannel = dom.GetObject(iChnId);
+                        if (oChannel) {
+                            if (oChannel.Name()) {
+                                sDeviceName = oChannel.Name().UriEncode();
+                            }
+                            boolean bFirstRoom = true;
+                            string sRoomId;
+                            foreach (sRoomId, oChannel.ChnRoom()) {
+                                object oRoom = dom.GetObject(sRoomId);
+                                if (oRoom) {
+                                    if (bFirstRoom) {
+                                        bFirstRoom = false;
+                                    } else {
+                                        sRooms = sRooms # "\t";
+                                    }
+                                    sRooms = sRooms # oRoom.Name().UriEncode();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (bFirst) {
+                bFirst = false;
+            } else {
+                Write(',');
+            }
+
+            Write('{"id":"' # oVar.ID() # '",');
+            Write('"name":"' # sName # '",');
+            Write('"description":"' # sDescription # '",');
+            Write('"device_name":"' # sDeviceName # '",');
+            Write('"timestamp":"' # sTimestamp # '",');
+            Write('"last_timestamp":"' # sTimestamp # '",');
+            Write('"counter":0,');
+            Write('"last_trigger":"' # sTriggerName # '",');
+            Write('"rooms":"' # sRooms # '"}');
+        }
+    }
+}
+
+Write(']');

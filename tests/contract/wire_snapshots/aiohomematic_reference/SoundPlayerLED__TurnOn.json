@@ -1,0 +1,26 @@
+{
+  "dp_type": "SoundPlayerLED",
+  "setter": "TurnOn",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "brightness=128,flash=500ms,rep=3",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:6",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "COLOR": "WHITE",
+            "LEVEL": 0.5019607843137255,
+            "ON_TIME": 0,
+            "ON_TIME_LIST_1": "500MS",
+            "RAMP_TIME": 0,
+            "REPETITIONS": "REPETITIONS_003"
+          }
+        }
+      ]
+    }
+  ]
+}

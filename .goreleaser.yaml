@@ -1,0 +1,170 @@
+# SPDX-License-Identifier: MIT
+# Goreleaser v2 configuration for openccu-loom.
+# Exit criteria Phase 0: `goreleaser --snapshot` produces a binary.
+version: 2
+
+project_name: openccu-loom
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: openccu-loom
+    main: ./cmd/openccu-loom
+    binary: openccu-loom
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/SukramJ/openccu-loom/internal/build.Version={{.Version}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64, arm]
+    goarm: ["7"]
+    ignore:
+      - goos: darwin
+        goarch: arm
+      - goos: windows
+        goarch: arm
+      - goos: windows
+        goarch: arm64
+
+  - id: hmcli
+    main: ./cmd/hmcli
+    binary: hmcli
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/SukramJ/openccu-loom/internal/build.Version={{.Version}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
+      - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: openccu-loom
+    ids: [openccu-loom]
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+      - assets/openapi.yaml
+  - id: hmcli
+    ids: [hmcli]
+    formats: [tar.gz]
+    name_template: >-
+      hmcli_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+# Container images. The release workflow builds the SPA before goreleaser
+# runs, so the `openccu-loom` binary copied here has the Config UI embedded.
+# One single-platform image per arch, combined into a multi-arch manifest
+# below. The Dockerfile only COPYs (no RUN), so arm images need no QEMU
+# emulation at build time.
+dockers:
+  - id: amd64
+    ids: [openccu-loom]
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
+      - "--label=org.opencontainers.image.licenses=MIT"
+    extra_files:
+      - assets/openapi.yaml
+  - id: arm64
+    ids: [openccu-loom]
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
+      - "--label=org.opencontainers.image.licenses=MIT"
+    extra_files:
+      - assets/openapi.yaml
+  - id: armv7
+    ids: [openccu-loom]
+    goos: linux
+    goarch: arm
+    goarm: "7"
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
+    build_flag_templates:
+      - "--platform=linux/arm/v7"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
+      - "--label=org.opencontainers.image.licenses=MIT"
+    extra_files:
+      - assets/openapi.yaml
+
+docker_manifests:
+  - name_template: "ghcr.io/sukramj/openccu-loom:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-amd64"
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
+  # `latest` only for stable releases — skip_push: auto skips prereleases.
+  - name_template: "ghcr.io/sukramj/openccu-loom:latest"
+    skip_push: auto
+    image_templates:
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-amd64"
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
+      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+
+release:
+  github:
+    owner: SukramJ
+    name: openccu-loom
+  draft: true
+  prerelease: auto

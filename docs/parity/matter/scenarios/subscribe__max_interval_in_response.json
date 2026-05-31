@@ -1,0 +1,41 @@
+{
+  "name": "subscribe__max_interval_in_response",
+  "description": "Locks the negotiated cadence value the bridge advertises to the peer. The peer's SubscribeRequest carries MinIntervalFloor + MaxIntervalCeiling; the bridge's SubscribeResponse carries the negotiated MaxInterval (Matter §10.6.5 MaxInterval field of SubscribeResponseMessage). The scenario asserts the bridge's response carries MaxInterval=60 — matching the harness's hard-coded ceiling for peer-driven subscribes. Catches a regression where the bridge writes a smaller value (clamp regression) or omits the field entirely (Apple Home falls back to its internal default, the heartbeat cadence drifts).",
+  "tags": ["matter", "subscribe", "negotiation", "max-interval", "spec-compliance"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 251,
+        "peer_subscribe_exchange_id": 257,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_subscribe_request"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "bind_exchange_id_to": "$initial_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$initial_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "SubscribeResponse",
+      "expect_max_interval": 60,
+      "bind_max_interval_to": "$mi"
+    }
+  ]
+}

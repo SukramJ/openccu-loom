@@ -1,0 +1,218 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package adapter
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
+)
+
+// DeviceAdminDomain is the live implementation of handlers.DeviceAdmin.
+// It walks the central registry, locates the device's owning backend
+// and dispatches the operation. Most calls are XML-RPC bound; the
+// renaming path is handled in-memory until the JSON-RPC bridge for
+// `Interface.setName` lands
+type DeviceAdminDomain struct {
+	registry *central.Registry
+	writer   *client.ValueWriter
+}
+
+// NewDeviceAdminDomain wires the live adapter.
+func NewDeviceAdminDomain(r *central.Registry, w *client.ValueWriter) *DeviceAdminDomain {
+	return &DeviceAdminDomain{registry: r, writer: w}
+}
+
+// ErrNoDeviceBackend bubbles when the CCU backend cannot be resolved.
+var ErrNoDeviceBackend = errors.New("device-admin: no backend for device")
+
+// resolve walks every central, finds the owning device + backend.
+// Returns the backend so callers can issue XML-RPC operations
+// against the device's interface.
+func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, error) {
+	if a.registry == nil || a.writer == nil {
+		return nil, ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		dev, ok := c.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, c.Name(), dev.InterfaceID)
+		}
+		return backend, nil
+	}
+	return nil, fmt.Errorf("%w: device %s", ErrNoDeviceBackend, deviceAddress)
+}
+
+// UnpairDevice asks the CCU to unpair the device. Maps to the CCU's
+// XML-RPC `deleteDevice(address, 0)` call via the backend's
+// [backends.Operations.DeleteDevice].
+//
+// On success the in-memory caches (paramset, description, model
+// registry) drop the device so the SPA does not see a stale entry
+// while the CCU's `deleteDevices` callback catches up. Several
+// backends do not expose unpair (CUxD, JSON-only) — they surface
+// ErrUnsupported through the underlying Operations contract; the
+// handler returns 422 in that case.
+func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) error {
+	if a.registry == nil || a.writer == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		dev, ok := c.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+		if !ok {
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, c.Name(), dev.InterfaceID)
+		}
+		if err := backend.DeleteDevice(ctx, address); err != nil {
+			return err
+		}
+		// Drop the local caches. The CCU's `deleteDevices` callback
+		// will re-publish the deletion event; doing it eagerly here
+		// keeps the SPA snappy.
+		c.RemoveDevice(address)
+		c.DeviceRegistry.Remove(dev.Interface, address)
+		c.DescRegistry.Delete(dev.Interface, address)
+		c.ParamsetReg.DeleteChannel(dev.Interface, address)
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// RenameDevice updates the device name. The CCU stores names via
+// `Interface.setMetadata` (XML-RPC) — until that wire surface lands
+// the rename is in-memory only and bubbles through the device model.
+func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name string) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		dev, ok := c.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		dev.Name = name
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// AcceptInboxDevice promotes a pending device from the hub inbox
+// into the running registry. The Rega script flips the device's
+// `ReadyConfig` flag; the periodic ListDevices sweep picks the new
+// pairing up afterwards. We additionally call ListDevices once
+// here so the SPA sees the registry update without having to wait
+// for the sweep.
+func (a *DeviceAdminDomain) AcceptInboxDevice(ctx context.Context, address string) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		if c.HubModel == nil {
+			continue
+		}
+		if err := c.HubModel.AcceptInboxDeviceRemote(ctx, address); err != nil {
+			// Try the next central — the inbox may live on another CCU.
+			continue
+		}
+		// Refresh device list on the matching central. Best-effort:
+		// errors here are non-fatal because the periodic sweep will
+		// eventually pick up the new device anyway.
+		if a.writer == nil {
+			return nil
+		}
+		dev, ok := c.ModelRegistry.Get(address)
+		if !ok {
+			return nil
+		}
+		if backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID); ok {
+			_, _ = backend.ListDevices(ctx)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// UpdateFirmware triggers an OTA update on the CCU. Maps to
+// `Interface.updateFirmware` (XML-RPC). The CCU runs the transfer
+// asynchronously; this call returns once the request was accepted.
+func (a *DeviceAdminDomain) UpdateFirmware(ctx context.Context, address string) error {
+	backend, err := a.resolve(address)
+	if err != nil {
+		return err
+	}
+	return backend.UpdateFirmware(ctx, address)
+}
+
+// SetInstallMode opens a per-device pairing window via the backend's
+// XML-RPC `setInstallMode(true, durationSecs, mode=1, address)` call.
+// `mode=1` is the CCU's "normal" install mode (mode=2 means "ready
+// for re-pairing"); 0.1.0 only exposes the normal mode.
+func (a *DeviceAdminDomain) SetInstallMode(ctx context.Context, address string, durationSecs int) error {
+	backend, err := a.resolve(address)
+	if err != nil {
+		return err
+	}
+	return backend.SetInstallMode(ctx, true, durationSecs, 1, address)
+}
+
+// SetRooms replaces the device's room assignments via the central's
+// hub-writer (Rega `set_device_rooms`).
+func (a *DeviceAdminDomain) SetRooms(
+	ctx context.Context, address string, rooms []string,
+) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		dev, ok := c.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if c.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, c.Name())
+		}
+		if err := c.HubModel.SetDeviceRoomsRemote(ctx, address, rooms); err != nil {
+			return err
+		}
+		dev.Rooms = append([]string(nil), rooms...)
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}
+
+// SetFunctions replaces the device's function (Gewerk) assignments
+// via the central's hub-writer (Rega `set_device_functions`).
+func (a *DeviceAdminDomain) SetFunctions(
+	ctx context.Context, address string, functions []string,
+) error {
+	if a.registry == nil {
+		return ErrNoDeviceBackend
+	}
+	for _, c := range a.registry.List() {
+		dev, ok := c.ModelRegistry.Get(address)
+		if !ok {
+			continue
+		}
+		if c.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, c.Name())
+		}
+		if err := c.HubModel.SetDeviceFunctionsRemote(ctx, address, functions); err != nil {
+			return err
+		}
+		dev.Functions = append([]string(nil), functions...)
+		return nil
+	}
+	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
+}

@@ -1,0 +1,44 @@
+{
+  "dp_type": "ClimateRF",
+  "setter": "SetMode",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "HEAT",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "MANU_MODE",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "AUTO",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "AUTO_MODE",
+          "value": true
+        }
+      ]
+    },
+    {
+      "label": "OFF",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RFTHR0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "MANU_MODE": 5,
+            "SET_TEMPERATURE": 5
+          }
+        }
+      ]
+    }
+  ]
+}

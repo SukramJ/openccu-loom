@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package handlers
+
+import (
+	"context"
+	"errors"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
+)
+
+// CentralAdminService is the DI surface for the /api/v1/admin/centrals
+// endpoints. The router wires a [*sqlite.CentralsStore] underneath.
+type CentralAdminService interface {
+	// Put creates or replaces a central row.
+	Put(ctx context.Context, row sqlite.CentralRow) error
+	// Get returns one central by name. Returns [sqlite.ErrCentralNotFound]
+	// when the name is unknown.
+	Get(ctx context.Context, name string) (sqlite.CentralRow, error)
+	// Delete removes a central by name. Returns [sqlite.ErrCentralNotFound]
+	// when the name is unknown.
+	Delete(ctx context.Context, name string) error
+	// List returns every central sorted by name.
+	List(ctx context.Context) ([]sqlite.CentralRow, error)
+}
+
+// ListCentrals handles GET /admin/centrals. Returns every central row
+// sorted by name.
+func ListCentrals(svc CentralAdminService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		rows, err := svc.List(r.Context())
+		if err != nil {
+			problem.Write(w, http.StatusInternalServerError,
+				problem.New(problem.TypeInternal, r, "Central list failed", err.Error()))
+			return
+		}
+		if rows == nil {
+			rows = []sqlite.CentralRow{}
+		}
+		JSON(w, http.StatusOK, rows)
+	}
+}
+
+// GetCentral handles GET /admin/centrals/{name}. Returns 404 when the
+// central is unknown.
+func GetCentral(svc CentralAdminService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		if name == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
+			return
+		}
+		row, err := svc.Get(r.Context(), name)
+		if errors.Is(err, sqlite.ErrCentralNotFound) {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Central not found", name))
+			return
+		}
+		if err != nil {
+			problem.Write(w, http.StatusInternalServerError,
+				problem.New(problem.TypeInternal, r, "Central lookup failed", err.Error()))
+			return
+		}
+		JSON(w, http.StatusOK, row)
+	}
+}
+
+// CreateCentral handles POST /admin/centrals. The request body is a
+// [sqlite.CentralRow] JSON object. Returns 201 on success.
+func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var row sqlite.CentralRow
+		if err := DecodeJSON(r, &row); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
+			return
+		}
+		if row.Name == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing name", "central name is required"))
+			return
+		}
+		if row.Host == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
+			return
+		}
+		if err := svc.Put(r.Context(), row); err != nil {
+			problem.Write(w, http.StatusInternalServerError,
+				problem.New(problem.TypeInternal, r, "Central creation failed", err.Error()))
+			return
+		}
+		actor := identityFromCtx(r.Context())
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   actor,
+				Action: audit.ActionCentralCreate,
+				Note:   "name=" + row.Name,
+			})
+		}
+		JSON(w, http.StatusCreated, row)
+	}
+}
+
+// UpdateCentral handles PUT /admin/centrals/{name}. Performs a
+// full-replace upsert. Returns 204 on success.
+func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		if name == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
+			return
+		}
+		var row sqlite.CentralRow
+		if err := DecodeJSON(r, &row); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
+			return
+		}
+		// URL path name takes precedence so the body name field cannot
+		// accidentally create a different central.
+		row.Name = name
+		if row.Host == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
+			return
+		}
+		if err := svc.Put(r.Context(), row); err != nil {
+			problem.Write(w, http.StatusInternalServerError,
+				problem.New(problem.TypeInternal, r, "Central update failed", err.Error()))
+			return
+		}
+		actor := identityFromCtx(r.Context())
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   actor,
+				Action: audit.ActionCentralUpdate,
+				Note:   "name=" + name,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// DeleteCentral handles DELETE /admin/centrals/{name}. Returns 404
+// when the central is unknown.
+func DeleteCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		name := chi.URLParam(r, "name")
+		if name == "" {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Missing name", "name path parameter is required"))
+			return
+		}
+		err := svc.Delete(r.Context(), name)
+		if errors.Is(err, sqlite.ErrCentralNotFound) {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Central not found", name))
+			return
+		}
+		if err != nil {
+			problem.Write(w, http.StatusInternalServerError,
+				problem.New(problem.TypeInternal, r, "Central deletion failed", err.Error()))
+			return
+		}
+		actor := identityFromCtx(r.Context())
+		if rec != nil {
+			rec.Record(audit.Entry{
+				User:   actor,
+				Action: audit.ActionCentralDelete,
+				Note:   "name=" + name,
+			})
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

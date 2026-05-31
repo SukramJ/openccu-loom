@@ -1,0 +1,151 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package adapter
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+)
+
+// ScheduleQueryAdapter wraps a [SchedulesDomain] in the
+// `map[string]any` shape that the WebSocket command set
+// (`internal/north/rest/ws.ScheduleQuery`) expects.
+//
+// The adapter exists because the SPA WS API is JSON-shaped while the
+// REST handler layer uses typed `*handlers.ClimateSchedule` DTOs. The
+// translation is a JSON round-trip — cheap and deterministic.
+type ScheduleQueryAdapter struct {
+	domain *SchedulesDomain
+}
+
+// NewScheduleQueryAdapter wires the adapter.
+func NewScheduleQueryAdapter(domain *SchedulesDomain) *ScheduleQueryAdapter {
+	return &ScheduleQueryAdapter{domain: domain}
+}
+
+// GetClimateSchedule resolves the channel from `<addr>:<no>`-shaped
+// channelAddress and returns the schedule as a JSON-able map.
+func (a *ScheduleQueryAdapter) GetClimateSchedule(ctx context.Context, channelAddress string) (map[string]any, error) {
+	if a.domain == nil {
+		return nil, fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	deviceAddress, channelNo := splitChannelAddress(channelAddress)
+	dto, err := a.domain.GetClimateSchedule(ctx, deviceAddress, channelNo)
+	if err != nil {
+		return nil, err
+	}
+	return scheduleToMap(dto)
+}
+
+// SetClimateSchedule decodes the payload into a *handlers.ClimateSchedule
+// and writes it back via the domain.
+func (a *ScheduleQueryAdapter) SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) error {
+	if a.domain == nil {
+		return fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	deviceAddress, channelNo := splitChannelAddress(channelAddress)
+	dto, err := mapToSchedule(profile)
+	if err != nil {
+		return err
+	}
+	return a.domain.PutClimateSchedule(ctx, deviceAddress, channelNo, dto)
+}
+
+// SetActiveProfile maps the int profile index (1..6) onto the "P<n>"
+// string the domain expects.
+func (a *ScheduleQueryAdapter) SetActiveProfile(ctx context.Context, channelAddress string, profileIndex int) error {
+	if a.domain == nil {
+		return fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	deviceAddress, channelNo := splitChannelAddress(channelAddress)
+	return a.domain.SetActiveProfile(ctx, deviceAddress, channelNo, fmt.Sprintf("P%d", profileIndex))
+}
+
+// GetDeviceSchedule auto-resolves the schedule channel and returns the
+// schedule.
+func (a *ScheduleQueryAdapter) GetDeviceSchedule(ctx context.Context, deviceAddress string) (map[string]any, error) {
+	if a.domain == nil {
+		return nil, fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	dto, err := a.domain.GetClimateScheduleAuto(ctx, deviceAddress)
+	if err != nil {
+		return nil, err
+	}
+	return scheduleToMap(dto)
+}
+
+// SetDeviceSchedule auto-resolves the schedule channel and writes the
+// schedule.
+func (a *ScheduleQueryAdapter) SetDeviceSchedule(ctx context.Context, deviceAddress string, profile map[string]any) error {
+	if a.domain == nil {
+		return fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	dto, err := mapToSchedule(profile)
+	if err != nil {
+		return err
+	}
+	return a.domain.PutClimateScheduleAuto(ctx, deviceAddress, dto)
+}
+
+// SetDeviceActiveProfile auto-resolves the schedule channel and sets
+// the active profile.
+func (a *ScheduleQueryAdapter) SetDeviceActiveProfile(ctx context.Context, deviceAddress, profile string) error {
+	if a.domain == nil {
+		return fmt.Errorf("schedule_query_adapter: nil domain")
+	}
+	return a.domain.SetActiveProfileAuto(ctx, deviceAddress, profile)
+}
+
+// splitChannelAddress separates "<dev>:<chn>" into its components.
+// Returns (channelAddress, 0) when the suffix is missing.
+func splitChannelAddress(channelAddress string) (device string, channelIdx int) {
+	for i := len(channelAddress) - 1; i >= 0; i-- {
+		if channelAddress[i] == ':' {
+			n := 0
+			for j := i + 1; j < len(channelAddress); j++ {
+				c := channelAddress[j]
+				if c < '0' || c > '9' {
+					return channelAddress, 0
+				}
+				n = n*10 + int(c-'0')
+			}
+			return channelAddress[:i], n
+		}
+	}
+	return channelAddress, 0
+}
+
+// scheduleToMap turns a typed ClimateSchedule DTO into the JSON shape
+// the WS layer hands clients. We round-trip through JSON so the field
+// names (camelCase / snake_case) match the OpenAPI contract.
+func scheduleToMap(dto *handlers.ClimateSchedule) (map[string]any, error) {
+	if dto == nil {
+		return map[string]any{}, nil
+	}
+	raw, err := json.Marshal(dto)
+	if err != nil {
+		return nil, fmt.Errorf("schedule encode: %w", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("schedule decode: %w", err)
+	}
+	return out, nil
+}
+
+// mapToSchedule is the inverse of scheduleToMap.
+func mapToSchedule(profile map[string]any) (*handlers.ClimateSchedule, error) {
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		return nil, fmt.Errorf("profile encode: %w", err)
+	}
+	var dto handlers.ClimateSchedule
+	if err := json.Unmarshal(raw, &dto); err != nil {
+		return nil, fmt.Errorf("profile decode: %w", err)
+	}
+	return &dto, nil
+}

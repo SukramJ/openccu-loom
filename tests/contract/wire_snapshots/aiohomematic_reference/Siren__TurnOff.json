@@ -1,0 +1,24 @@
+{
+  "dp_type": "Siren",
+  "setter": "TurnOff",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "ASIR0001:3",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "ACOUSTIC_ALARM_SELECTION": "DISABLE_ACOUSTIC_SIGNAL",
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "OPTICAL_ALARM_SELECTION": "DISABLE_OPTICAL_SIGNAL"
+          }
+        }
+      ]
+    }
+  ]
+}

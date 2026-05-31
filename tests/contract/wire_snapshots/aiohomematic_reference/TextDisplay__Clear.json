@@ -1,0 +1,27 @@
+{
+  "dp_type": "TextDisplay",
+  "setter": "Clear",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "row1",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "SDV0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "DISPLAY_DATA_ALIGNMENT": "CENTER",
+            "DISPLAY_DATA_BACKGROUND_COLOR": "WHITE",
+            "DISPLAY_DATA_COMMIT": true,
+            "DISPLAY_DATA_ICON": "OFF",
+            "DISPLAY_DATA_ID": 1,
+            "DISPLAY_DATA_STRING": "",
+            "DISPLAY_DATA_TEXT_COLOR": "BLACK"
+          }
+        }
+      ]
+    }
+  ]
+}

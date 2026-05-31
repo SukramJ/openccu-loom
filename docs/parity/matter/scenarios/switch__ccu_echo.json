@@ -1,0 +1,44 @@
+{
+  "name": "switch__ccu_echo",
+  "description": "External CCU STATE flip on an OnOff cluster emits ReportData on a fresh bridge-initiated exchange, Apple acknowledges with IM:StatusResponse, the bridge logs status_ack on the same fresh exchange. Locks the F4 fix against regression — any return to reusing the commissioner-opened Subscribe exchange for ongoing attribute reports breaks this scenario.",
+  "tags": ["matter", "subscribe", "f4", "ccu-echo", "switch"],
+  "given": {
+    "session_id": 1,
+    "peer_subscribe_exchange_id": 7,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_attribute_change",
+      "value": true
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch",
+      "bind_counter_to": "$counter"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

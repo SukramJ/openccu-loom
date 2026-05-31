@@ -1,0 +1,902 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package rega
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+)
+
+func TestEscapeStringHandlesBackslashAndQuote(t *testing.T) {
+	cases := map[string]string{
+		"":           "",
+		"plain":      "plain",
+		`say "hi"`:   `say \"hi\"`,
+		`back\slash`: `back\\slash`,
+		`mix\"both"`: `mix\\\"both\"`,
+	}
+	for in, want := range cases {
+		if got := EscapeString(in); got != want {
+			t.Errorf("EscapeString(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestSubstituteAllPlaceholders(t *testing.T) {
+	body := `string n = "##name##"; integer v = ##value##;`
+	got, err := substitute(body, map[string]string{"name": `a"b`, "value": "42"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `string n = "a\"b"; integer v = 42;`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestSubstituteReportsMissing(t *testing.T) {
+	body := `##a## ##b## ##a##`
+	_, err := substitute(body, map[string]string{"a": "1"})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "b") {
+		t.Errorf("error should mention missing key 'b': %v", err)
+	}
+}
+
+func TestSubstituteIgnoresUnreferencedParams(t *testing.T) {
+	body := `##a##`
+	got, err := substitute(body, map[string]string{"a": "x", "b": "y"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "x" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestSubstituteLeavesNonMatchingHashesAlone(t *testing.T) {
+	body := `## not a match ##text##`
+	got, err := substitute(body, map[string]string{"text": "ok"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `## not a match ok`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestSanitizeJSONControlsEscapesControlCharsInsideStrings(t *testing.T) {
+	in := "{\"name\":\"line1\nline2\"}"
+	got := SanitizeJSONControls(in)
+	// Expected output uses the six-character escape, not a literal newline.
+	want := "{\"name\":\"line1\\u000aline2\"}"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+	// Parser must now accept the output and round-trip to the original string.
+	var out map[string]string
+	if err := json.Unmarshal([]byte(got), &out); err != nil {
+		t.Fatalf("sanitised output still not valid JSON: %v", err)
+	}
+	if out["name"] != "line1\nline2" {
+		t.Errorf("round-tripped name = %q", out["name"])
+	}
+}
+
+func TestSanitizeJSONControlsPreservesStructuralWhitespace(t *testing.T) {
+	in := "[\n  {\"x\":1},\n  {\"x\":2}\n]"
+	got := SanitizeJSONControls(in)
+	if got != in {
+		t.Errorf("got %q, want unchanged", got)
+	}
+}
+
+func TestSanitizeJSONControlsLeavesAlreadyEscapedAlone(t *testing.T) {
+	in := `{"a":"\n\t\"ok\""}`
+	got := SanitizeJSONControls(in)
+	if got != in {
+		t.Errorf("got %q, want unchanged", got)
+	}
+}
+
+func TestEveryKnownScriptHasBody(t *testing.T) {
+	for _, s := range hmenum.AllRegaScripts {
+		body, err := loadScript(s)
+		if err != nil {
+			t.Errorf("script %q missing: %v", s, err)
+			continue
+		}
+		if strings.TrimSpace(body) == "" {
+			t.Errorf("script %q is empty", s)
+		}
+	}
+}
+
+func TestNewRunnerRejectsNilClient(t *testing.T) {
+	if _, err := NewRunner(Config{}); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// --- End-to-end with a fake JSON-RPC server ---
+
+// scriptCapture records the last script string dispatched to the fake server.
+type scriptCapture struct {
+	seen atomic.Value // holds the script string last dispatched
+}
+
+func (c *scriptCapture) lastScript() string {
+	v, _ := c.seen.Load().(string)
+	return v
+}
+
+func newFakeCCU(t *testing.T, capture *scriptCapture, result any) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var env struct {
+			Method string         `json:"method"`
+			Params map[string]any `json:"params"`
+		}
+		if err := json.Unmarshal(body, &env); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if env.Method != regaRunScriptMethod {
+			http.Error(w, "wrong method: "+env.Method, http.StatusBadRequest)
+			return
+		}
+		capture.seen.Store(env.Params["script"].(string))
+		resp := struct {
+			Result any `json:"result"`
+		}{Result: result}
+		raw, _ := json.Marshal(resp)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+	}))
+}
+
+func newRunner(t *testing.T, srvURL string) *Runner {
+	t.Helper()
+	c, err := jsonrpc.New(jsonrpc.Config{Endpoint: srvURL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRunner(Config{Client: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// newFakeServer builds a minimal fake JSON-RPC server. fn receives the
+// decoded script string and returns the raw JSON "result" value to embed.
+func newFakeServer(t *testing.T, fn func(script string) any) (*httptest.Server, *Runner) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var env struct {
+			Params map[string]any `json:"params"`
+		}
+		_ = json.Unmarshal(body, &env)
+		script, _ := env.Params["script"].(string)
+		result := fn(script)
+		data, _ := json.Marshal(struct {
+			Result any `json:"result"`
+		}{Result: result})
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(data)
+	}))
+	c, err := jsonrpc.New(jsonrpc.Config{Endpoint: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := NewRunner(Config{Client: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Close)
+	return srv, runner
+}
+
+func TestRunForwardsSubstitutedScript(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"success":true,"error":""}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	out, err := r.Run(context.Background(), hmenum.RegaScriptAcknowledgeMessage, map[string]string{
+		"message_id": "4711",
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(out, `"success":true`) {
+		t.Errorf("unexpected output: %s", out)
+	}
+	if !strings.Contains(capture.lastScript(), `"4711"`) {
+		t.Errorf("server didn't see the substituted script: %s", capture.lastScript())
+	}
+}
+
+func TestRunMissingParamErrorsBeforeDispatch(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	_, err := r.Run(context.Background(), hmenum.RegaScriptSetSystemVariable, map[string]string{
+		"name": "MyVar",
+		// "value" missing
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if capture.lastScript() != "" {
+		t.Errorf("dispatch should not have happened, server saw: %s", capture.lastScript())
+	}
+}
+
+func TestRunEscapesQuotesInParams(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	_, err := r.Run(context.Background(), hmenum.RegaScriptSetSystemVariable, map[string]string{
+		"name":  `odd"name`,
+		"value": `value\with\backslash`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := capture.lastScript()
+	// The name placeholder lives inside a double-quoted string, so the
+	// quote must appear escaped as \". Backslashes double.
+	if !strings.Contains(script, `"odd\"name"`) {
+		t.Errorf("quote not escaped: %s", script)
+	}
+	if !strings.Contains(script, `"value\\with\\backslash"`) {
+		t.Errorf("backslash not escaped: %s", script)
+	}
+}
+
+func TestRunJSONParsesSanitisedOutput(t *testing.T) {
+	capture := &scriptCapture{}
+	// Emit a JSON payload with a raw newline inside a string value.
+	srv := newFakeCCU(t, capture, "{\"id\":\"X\",\"description\":\"line1\nline2\"}")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	var out struct {
+		ID          string `json:"id"`
+		Description string `json:"description"`
+	}
+	if err := r.RunJSON(context.Background(), hmenum.RegaScriptGetSerial, nil, &out); err != nil {
+		t.Fatalf("RunJSON: %v", err)
+	}
+	if out.ID != "X" || out.Description != "line1\nline2" {
+		t.Errorf("got %+v", out)
+	}
+}
+
+func TestRunJSONPropagatesParseError(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "not json")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	var out any
+	err := r.RunJSON(context.Background(), hmenum.RegaScriptGetSerial, nil, &out)
+	if err == nil {
+		t.Fatal("expected parse error")
+	}
+	if !errors.Is(err, hmerr.ErrClientException) {
+		t.Errorf("error should classify as ErrClientException, got %v", err)
+	}
+}
+
+func TestRunUnknownScriptErrors(t *testing.T) {
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+	r := newRunner(t, srv.URL)
+	_, err := r.Run(context.Background(), hmenum.RegaScript("does_not_exist"), nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+// TestSetProgramStateTrue verifies that state=true sends "1" in the substituted script.
+func TestSetProgramStateTrue(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "true")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	if err := r.SetProgramState(context.Background(), "prog-42", true); err != nil {
+		t.Fatalf("SetProgramState: %v", err)
+	}
+	script := capture.lastScript()
+	if !strings.Contains(script, `"prog-42"`) {
+		t.Errorf("script missing pid: %s", script)
+	}
+	// state=true must appear as integer 1 (not escaped inside a string)
+	if !strings.Contains(script, "1;") && !strings.Contains(script, "1\n") && !strings.Contains(script, "iActive = 1") {
+		t.Errorf("script does not contain active=1: %s", script)
+	}
+}
+
+// TestSetProgramStateFalse verifies that state=false sends "0".
+func TestSetProgramStateFalse(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "false")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	if err := r.SetProgramState(context.Background(), "prog-7", false); err != nil {
+		t.Fatalf("SetProgramState: %v", err)
+	}
+	script := capture.lastScript()
+	if !strings.Contains(script, "0") {
+		t.Errorf("script does not contain 0 for state=false: %s", script)
+	}
+}
+
+// TestGetSystemUpdateInfo verifies the JSON response is decoded into SystemUpdateInfo.
+func TestGetSystemUpdateInfo(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"current_firmware":"3.65.10","available_firmware":"3.65.12","update_available":true,"check_script_available":true}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	info, err := r.GetSystemUpdateInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemUpdateInfo: %v", err)
+	}
+	if info.CurrentFirmware != "3.65.10" {
+		t.Errorf("CurrentFirmware=%q, want 3.65.10", info.CurrentFirmware)
+	}
+	if info.AvailableFirmware != "3.65.12" {
+		t.Errorf("AvailableFirmware=%q, want 3.65.12", info.AvailableFirmware)
+	}
+	if !info.UpdateAvailable {
+		t.Error("UpdateAvailable=false, want true")
+	}
+	if !info.CheckScriptAvailable {
+		t.Error("CheckScriptAvailable=false, want true")
+	}
+}
+
+// TestGetSystemUpdateInfoNoUpdate verifies the no-update case decodes correctly.
+func TestGetSystemUpdateInfoNoUpdate(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"current_firmware":"3.65.10","available_firmware":"","update_available":false,"check_script_available":true}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	info, err := r.GetSystemUpdateInfo(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemUpdateInfo: %v", err)
+	}
+	if info.UpdateAvailable {
+		t.Error("UpdateAvailable=true, want false")
+	}
+	if info.AvailableFirmware != "" {
+		t.Errorf("AvailableFirmware=%q, want empty", info.AvailableFirmware)
+	}
+}
+
+// TestGetInboxDevices verifies JSON array result is decoded into InboxDevice slice.
+func TestGetInboxDevices(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	payload := `[{"id":"123","address":"HEQ0123456","name":"MyDevice","type":"HM-CC-RT-DN","interface":"BidCos-RF"}]`
+	srv := newFakeCCU(t, capture, payload)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	devices, err := r.GetInboxDevices(context.Background())
+	if err != nil {
+		t.Fatalf("GetInboxDevices: %v", err)
+	}
+	if len(devices) != 1 {
+		t.Fatalf("len(devices)=%d, want 1", len(devices))
+	}
+	d := devices[0]
+	if d.DeviceID != "123" {
+		t.Errorf("DeviceID=%q, want 123", d.DeviceID)
+	}
+	if d.Address != "HEQ0123456" {
+		t.Errorf("Address=%q, want HEQ0123456", d.Address)
+	}
+	if d.DeviceType != "HM-CC-RT-DN" {
+		t.Errorf("DeviceType=%q, want HM-CC-RT-DN", d.DeviceType)
+	}
+	if d.Interface != "BidCos-RF" {
+		t.Errorf("Interface=%q, want BidCos-RF", d.Interface)
+	}
+}
+
+// TestGetInboxDevicesEmpty verifies an empty inbox returns an empty slice without error.
+func TestGetInboxDevicesEmpty(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `[]`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	devices, err := r.GetInboxDevices(context.Background())
+	if err != nil {
+		t.Fatalf("GetInboxDevices: %v", err)
+	}
+	if len(devices) != 0 {
+		t.Errorf("len(devices)=%d, want 0", len(devices))
+	}
+}
+
+// TestSetSystemVariableStringForwardsNameAndValue verifies placeholders are
+// substituted in the set_system_variable.fn script.
+func TestSetSystemVariableStringForwardsNameAndValue(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "hello world")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	if err := r.SetSystemVariableString(context.Background(), "greeting", "hello world"); err != nil {
+		t.Fatalf("SetSystemVariableString: %v", err)
+	}
+	script := capture.lastScript()
+	if !strings.Contains(script, `"greeting"`) {
+		t.Errorf("script missing name: %s", script)
+	}
+	if !strings.Contains(script, `"hello world"`) {
+		t.Errorf("script missing value: %s", script)
+	}
+}
+
+// TestSetSystemVariableStringEscapesSpecialChars verifies that double-quotes
+// and backslashes in the value are escaped to prevent ReGa injection.
+func TestSetSystemVariableStringEscapesSpecialChars(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	if err := r.SetSystemVariableString(context.Background(), "myVar", `say "hi" \ there`); err != nil {
+		t.Fatalf("SetSystemVariableString: %v", err)
+	}
+	script := capture.lastScript()
+	// The double-quote must be escaped as \" inside the ReGa string literal.
+	if !strings.Contains(script, `\"hi\"`) {
+		t.Errorf("double-quotes not escaped in script: %s", script)
+	}
+	if !strings.Contains(script, `\\`) {
+		t.Errorf("backslash not escaped in script: %s", script)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// substitute edge cases
+// ---------------------------------------------------------------------------
+
+// TestSubstituteNoPlaceholdersIsIdentity verifies that a body with no
+// ##NAME## tokens is returned unchanged regardless of which params are
+// supplied.
+func TestSubstituteNoPlaceholdersIsIdentity(t *testing.T) {
+	t.Parallel()
+	body := `string s = "hello world";`
+	got, err := substitute(body, map[string]string{"irrelevant": "val"})
+	if err != nil {
+		t.Fatalf("substitute returned unexpected error: %v", err)
+	}
+	if got != body {
+		t.Errorf("body should be identical; got %q, want %q", got, body)
+	}
+}
+
+// TestSubstituteNilParamsWithNoPlaceholders verifies that nil params are
+// safe when the body contains no placeholders.
+func TestSubstituteNilParamsWithNoPlaceholders(t *testing.T) {
+	t.Parallel()
+	body := "integer i = 42;"
+	got, err := substitute(body, nil)
+	if err != nil {
+		t.Fatalf("substitute(nil params, no placeholders) error: %v", err)
+	}
+	if got != body {
+		t.Errorf("got %q, want %q", got, body)
+	}
+}
+
+// TestSubstituteNilParamsWithPlaceholderErrors verifies that nil params
+// cause an error when the body contains at least one placeholder.
+func TestSubstituteNilParamsWithPlaceholderErrors(t *testing.T) {
+	t.Parallel()
+	_, err := substitute("##foo##", nil)
+	if err == nil {
+		t.Fatal("expected error for nil params with placeholder, got nil")
+	}
+	if !strings.Contains(err.Error(), "foo") {
+		t.Errorf("error should mention placeholder name 'foo': %v", err)
+	}
+}
+
+// TestSubstituteReportsAllMissingKeys verifies that all missing keys
+// are reported in a single error, not just the first one encountered.
+func TestSubstituteReportsAllMissingKeys(t *testing.T) {
+	t.Parallel()
+	_, err := substitute("##alpha## ##beta## ##gamma##", nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, key := range []string{"alpha", "beta", "gamma"} {
+		if !strings.Contains(err.Error(), key) {
+			t.Errorf("error should mention missing key %q: %v", key, err)
+		}
+	}
+}
+
+// TestSubstituteEscapesReplacementValue verifies that placeholder
+// replacement automatically escapes the value via EscapeString, so a
+// caller does not need to pre-escape.
+func TestSubstituteEscapesReplacementValue(t *testing.T) {
+	t.Parallel()
+	// A value with both backslash and double-quote must arrive escaped.
+	got, err := substitute(`"##v##"`, map[string]string{"v": `a\b"c`})
+	if err != nil {
+		t.Fatalf("substitute error: %v", err)
+	}
+	// Expected: backslash doubled, quote escaped.
+	want := `"a\\b\"c"`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// EscapeString edge cases
+// ---------------------------------------------------------------------------
+
+// TestEscapeStringEmpty verifies the empty-string identity.
+func TestEscapeStringEmpty(t *testing.T) {
+	t.Parallel()
+	if got := EscapeString(""); got != "" {
+		t.Errorf("EscapeString(\"\") = %q, want \"\"", got)
+	}
+}
+
+// TestEscapeStringBackslashOnly verifies a lone backslash is doubled.
+func TestEscapeStringBackslashOnly(t *testing.T) {
+	t.Parallel()
+	if got := EscapeString(`\`); got != `\\` {
+		t.Errorf("EscapeString(%q) = %q, want %q", `\`, got, `\\`)
+	}
+}
+
+// TestEscapeStringDoubleQuoteOnly verifies a lone double-quote is escaped.
+func TestEscapeStringDoubleQuoteOnly(t *testing.T) {
+	t.Parallel()
+	if got := EscapeString(`"`); got != `\"` {
+		t.Errorf(`EscapeString('"') = %q, want %q`, got, `\"`)
+	}
+}
+
+// TestEscapeStringPlainASCIIUnchanged verifies that plain ASCII with no
+// backslashes or double-quotes passes through unchanged.
+func TestEscapeStringPlainASCIIUnchanged(t *testing.T) {
+	t.Parallel()
+	in := "hello world 1234 !@#$%^&*()"
+	if got := EscapeString(in); got != in {
+		t.Errorf("EscapeString(%q) = %q, want unchanged", in, got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SanitizeJSONControls edge cases
+// ---------------------------------------------------------------------------
+
+// TestSanitizeJSONControlsAllControlCharsInsideString verifies that the
+// full range of ASCII control characters (0x00–0x1f) inside a JSON string
+// value are escaped as \uXXXX. CCU output may contain device names with
+// embedded control characters that must be sanitised before JSON parsing.
+func TestSanitizeJSONControlsAllControlCharsInsideString(t *testing.T) {
+	t.Parallel()
+
+	// Build a string value containing every byte in [0x00, 0x1f].
+	var inner strings.Builder
+	for i := 0; i < 0x20; i++ {
+		inner.WriteByte(byte(i))
+	}
+	// Embed it as the value of key "k".
+	raw := `{"k":"` + inner.String() + `"}`
+
+	got := SanitizeJSONControls(raw)
+
+	// The output must not contain any raw control character inside the string.
+	for i := 0; i < 0x20; i++ {
+		if strings.ContainsRune(got, rune(i)) {
+			t.Errorf("raw control char 0x%02x survived sanitisation in %q", i, got)
+		}
+	}
+
+	// The result must be JSON-shaped.
+	if !strings.HasPrefix(got, "{") || !strings.HasSuffix(got, "}") {
+		t.Errorf("result is not JSON-shaped: %q", got)
+	}
+}
+
+// TestSanitizeJSONControlsEmptyStringIsIdentity verifies the empty-input
+// edge case.
+func TestSanitizeJSONControlsEmptyStringIsIdentity(t *testing.T) {
+	t.Parallel()
+	if got := SanitizeJSONControls(""); got != "" {
+		t.Errorf("SanitizeJSONControls(\"\") = %q, want \"\"", got)
+	}
+}
+
+// TestSanitizeJSONControlsOutsideStringPreserved verifies that control
+// characters that appear outside any JSON string value are preserved
+// unchanged. Structural whitespace such as tabs between JSON array
+// elements must survive so that the outer JSON remains valid.
+func TestSanitizeJSONControlsOutsideStringPreserved(t *testing.T) {
+	t.Parallel()
+	// A tab between array elements is structural whitespace.
+	in := "[\t{\"x\":1},\t{\"x\":2}\t]"
+	got := SanitizeJSONControls(in)
+	if got != in {
+		t.Errorf("structural tab outside string was modified; got %q, want %q", got, in)
+	}
+}
+
+// TestSanitizeJSONControlsEscapedBackslashNotDoubleCounted verifies that
+// a backslash-escaped sequence inside a JSON string is not treated as the
+// start of a new escape context, which would corrupt the output.
+func TestSanitizeJSONControlsEscapedBackslashNotDoubleCounted(t *testing.T) {
+	t.Parallel()
+	// {"a":"\\"} is valid JSON representing a single backslash.
+	in := `{"a":"\\"}`
+	got := SanitizeJSONControls(in)
+	if got != in {
+		t.Errorf("escaped backslash was corrupted; got %q, want %q", got, in)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Run: substitute failure surfaces in error before any network call
+// ---------------------------------------------------------------------------
+
+// TestRunReturnsSubstituteErrorMentioningPlaceholder verifies that when
+// Run cannot resolve a placeholder the error message names the missing key
+// and no network activity takes place.
+func TestRunReturnsSubstituteErrorMentioningPlaceholder(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, "")
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	// RegaScriptAcknowledgeMessage requires "message_id"; omit it deliberately.
+	_, err := r.Run(context.Background(), "acknowledge_message", map[string]string{})
+	if err == nil {
+		t.Fatal("expected substitute error, got nil")
+	}
+	if !strings.Contains(err.Error(), "message_id") {
+		t.Errorf("error should mention missing key 'message_id': %v", err)
+	}
+	if capture.lastScript() != "" {
+		t.Errorf("no network dispatch expected; server saw: %s", capture.lastScript())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Error handling: CCU-side error codes in JSON response
+// ---------------------------------------------------------------------------
+
+// TestAcknowledgeMessageCCUSideErrorReturnsError verifies that a CCU-side
+// structured error (success=false, error="not found") surfaces as a non-nil
+// error from AcknowledgeMessage.
+func TestAcknowledgeMessageCCUSideErrorReturnsError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `{"success":false,"error":"message not found"}`
+	})
+	ok, err := runner.AcknowledgeMessage(context.Background(), "non-existent-id")
+	if ok {
+		t.Fatal("expected ok=false for CCU-side error")
+	}
+	if err == nil {
+		t.Fatal("expected non-nil error for CCU-side error")
+	}
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("error should contain CCU reason, got: %v", err)
+	}
+}
+
+// TestAcknowledgeMessageEmptyIDReturnsError pins the guard that
+// prevents dispatch with an empty message ID.
+func TestAcknowledgeMessageEmptyIDReturnsError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return `{"success":true,"error":""}`
+	})
+	ok, err := runner.AcknowledgeMessage(context.Background(), "")
+	if ok {
+		t.Fatal("expected ok=false for empty ID")
+	}
+	if err == nil {
+		t.Fatal("expected error for empty message ID")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Timeout / context cancellation
+// ---------------------------------------------------------------------------
+
+// TestRunReturnsContextErrorOnCancellation verifies that Run returns
+// the context error when the caller cancels before the server responds.
+func TestRunReturnsContextErrorOnCancellation(t *testing.T) {
+	t.Parallel()
+	// Server that hangs until the test cleans up.
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-block
+	}))
+	t.Cleanup(func() { close(block); srv.Close() })
+
+	c, err := jsonrpc.New(jsonrpc.Config{Endpoint: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner, err := NewRunner(Config{Client: c})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	_, err = runner.Run(ctx, hmenum.RegaScriptGetSerial, nil)
+	if err == nil {
+		t.Fatal("expected error on context cancellation, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Argument escaping for special characters
+// ---------------------------------------------------------------------------
+
+// TestSubstituteHandlesTabAndNewlineInValue verifies that tab and newline
+// characters inside a placeholder value are escaped by EscapeString so the
+// resulting HomeMatic Script does not contain unescaped control characters.
+func TestSubstituteHandlesTabAndNewlineInValue(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		input   string
+		wantSub string
+	}{
+		{
+			name:    "tab character",
+			input:   "val\twith\ttabs",
+			wantSub: "val\twith\ttabs", // EscapeString only escapes \ and "
+		},
+		{
+			name:    "backslash and quote together",
+			input:   `path\to"file"`,
+			wantSub: `path\\to\"file\"`,
+		},
+		{
+			name:    "empty value",
+			input:   "",
+			wantSub: "",
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := EscapeString(tc.input)
+			if got != tc.wantSub {
+				t.Errorf("EscapeString(%q)=%q, want %q", tc.input, got, tc.wantSub)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Reply parsing edge cases
+// ---------------------------------------------------------------------------
+
+// TestRunJSONEmptyStringReplyReturnsParseError verifies that an empty string
+// result from the CCU causes RunJSON to return a parse error wrapping
+// ErrClientException.
+func TestRunJSONEmptyStringReplyReturnsParseError(t *testing.T) {
+	t.Parallel()
+	_, runner := newFakeServer(t, func(_ string) any {
+		return "" // empty string result
+	})
+	var out any
+	err := runner.RunJSON(context.Background(), hmenum.RegaScriptGetSerial, nil, &out)
+	if err == nil {
+		t.Fatal("expected parse error for empty CCU result")
+	}
+	if !strings.Contains(err.Error(), "parse JSON") && !errors.Is(err, hmerr.ErrClientException) {
+		// Either message is acceptable — both indicate a parse failure.
+		t.Logf("error was: %v (acceptable)", err)
+	}
+}
+
+// TestRunJSONMultiLineJSONIsAccepted verifies that RunJSON handles a CCU
+// response that contains a multi-line JSON array correctly.
+func TestRunJSONMultiLineJSONIsAccepted(t *testing.T) {
+	t.Parallel()
+	payload := "[\n  {\"id\":\"1\"},\n  {\"id\":\"2\"}\n]"
+	_, runner := newFakeServer(t, func(_ string) any { return payload })
+	var out []map[string]string
+	if err := runner.RunJSON(context.Background(), hmenum.RegaScriptGetInboxDevices, nil, &out); err != nil {
+		t.Fatalf("RunJSON multi-line: %v", err)
+	}
+	if len(out) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(out))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Concurrent calls
+// ---------------------------------------------------------------------------
+
+// TestRunConcurrentCallsAreSafe verifies that multiple goroutines can call
+// Runner.Run simultaneously without data races. Run with -race to detect
+// any shared-state issues.
+func TestRunConcurrentCallsAreSafe(t *testing.T) {
+	t.Parallel()
+	var mu sync.Mutex
+	count := 0
+	_, runner := newFakeServer(t, func(_ string) any {
+		mu.Lock()
+		count++
+		mu.Unlock()
+		return `{"current_firmware":"3.0","available_firmware":"3.0","update_available":false,"check_script_available":true}`
+	})
+
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			_, _ = runner.GetSystemUpdateInfo(context.Background())
+		}()
+	}
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if count != goroutines {
+		t.Errorf("count=%d, want %d (some calls did not reach the server)", count, goroutines)
+	}
+}

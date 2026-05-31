@@ -1,0 +1,20 @@
+{
+  "dp_type": "Siren",
+  "setter": "TurnOn",
+  "inputs": [
+    {
+      "label": "acoustic=FREQUENCY_RISING,optical=BLINKING_RED",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "ASIR0001:3",
+          "put_values": {
+            "ACOUSTIC_ALARM_SELECTION": "FREQUENCY_RISING",
+            "OPTICAL_ALARM_SELECTION": "BLINKING_RED"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "dp_type": "Hood",
+  "setter": "SetFanSpeed",
+  "inputs": [
+    {
+      "label": "OFF",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "COOK0001:1",
+          "parameter": "LEVEL",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "LOW",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "COOK0001:1",
+          "parameter": "LEVEL",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "MEDIUM",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "COOK0001:1",
+          "parameter": "LEVEL",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "label": "HIGH",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "COOK0001:1",
+          "parameter": "LEVEL",
+          "value": 3
+        }
+      ]
+    }
+  ]
+}

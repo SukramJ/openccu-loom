@@ -1,0 +1,27 @@
+{
+  "name": "subscribe__min_interval_gates_initial_drain",
+  "description": "Locks the Matter §10.6.5 MinIntervalFloor gate: after Subscribe stamps lastReport=admission-time (subscription.Manager.Subscribe), the engine MUST withhold dirty-path drains for at least MinIntervalFloor seconds. The scenario picks a deliberately long floor (3 s) and fires the engine immediately; expect_no_tx then asserts the bridge stays silent for the first 1500 ms after fire. Without the gate the engine would ship a report on every 250 ms tick, drowning Apple Home's MTRDevice in same-value bursts and triggering duplicate-suppression.",
+  "tags": ["matter", "subscribe", "cadence", "min-interval"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 103,
+        "peer_subscribe_exchange_id": 107,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "min_interval_floor_seconds": 3,
+        "max_interval_ceiling_seconds": 120
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_no_tx",
+      "timeout_millis": 1500
+    }
+  ]
+}

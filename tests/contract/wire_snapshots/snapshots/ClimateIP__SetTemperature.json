@@ -1,0 +1,39 @@
+{
+  "dp_type": "ClimateIP",
+  "setter": "SetTemperature",
+  "inputs": [
+    {
+      "label": "temp=5",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "SET_POINT_TEMPERATURE",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "temp=20",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "SET_POINT_TEMPERATURE",
+          "value": 20
+        }
+      ]
+    },
+    {
+      "label": "temp=30",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BWTH0001:1",
+          "parameter": "SET_POINT_TEMPERATURE",
+          "value": 30
+        }
+      ]
+    }
+  ]
+}

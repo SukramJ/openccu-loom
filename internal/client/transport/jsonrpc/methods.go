@@ -1,0 +1,961 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package jsonrpc
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+)
+
+// backupDownloadTimeout is the per-request HTTP timeout for the CCU backup
+// download. The CCU must create the archive before serving it, which can take
+// up to five minutes on a loaded unit.
+const backupDownloadTimeout = 5 * time.Minute
+
+// firmwareDownloadTimeout is the per-request HTTP timeout for the CCU
+// firmware download initiated via the maintenance CGI.
+const firmwareTransportDownloadTimeout = 10 * time.Minute
+
+// The methods in this file are typed wrappers around [Client.Call] for the
+// most frequently used CCU JSON-RPC operations. Wire-method names and
+// Parameter keys mirror py (lines cited per method).
+//
+// Each wrapper:
+// - Takes exactly the parameters the CCU expects on the wire.
+// - Returns a typed result (or just an error for void operations).
+// - Passes a nil out pointer when the CCU result is not needed.
+//
+// Adding a wrapper here is preferred over calling [Client.Call] directly from
+// higher-level code because it keeps the wire coupling in one place.
+
+// SystemInformation holds the result of [Client.GetSystemInformation].
+// Wire shape: map with string fields from System.getSystemInformation.
+type SystemInformation struct {
+	// Serial is the CCU serial number (e.g. "MEQ1234567").
+	Serial string `json:"SERIAL_NUMBER"`
+	// SoftwareVersion is the installed firmware version string.
+	SoftwareVersion string `json:"VERSION"`
+	// HardwareVersion is the hardware revision string.
+	HardwareVersion string `json:"HARDWARE_VERSION"`
+}
+
+// DeviceDetail holds a single entry returned by [Client.GetDeviceDetails].
+// Wire shape from Device.listAllDetail: map of device address → detail map.
+// We decode the outer result as a map[string]any for flexibility.
+type DeviceDetail = map[string]any
+
+// GetSystemInformation calls System.getSystemInformation and returns typed
+// system-level metadata for the CCU.
+//
+// Wire: System.getSystemInformation (no params).
+func (c *Client) GetSystemInformation(ctx context.Context) (SystemInformation, error) {
+	var info SystemInformation
+	if err := c.Call(ctx, "System.getSystemInformation", nil, &info); err != nil {
+		return SystemInformation{}, err
+	}
+	return info, nil
+}
+
+// DeleteSystemVariable removes the system variable identified by name.
+//
+// Wire: SysVar.deleteSysVarByName, params: {name: name}.
+func (c *Client) DeleteSystemVariable(ctx context.Context, name string) error {
+	return c.Call(ctx, "SysVar.deleteSysVarByName", map[string]any{
+		"name": name,
+	}, nil)
+}
+
+// RenameChannel sets the display name of the channel identified by its
+// ISE-ID.
+//
+// Wire: Channel.setName, params: {id: iseID, name: newName}.
+func (c *Client) RenameChannel(ctx context.Context, iseID, newName string) error {
+	return c.Call(ctx, "Channel.setName", map[string]any{
+		"id":   iseID,
+		"name": newName,
+	}, nil)
+}
+
+// RenameDevice sets the display name of the device identified by its ISE-ID.
+//
+// Wire: Device.setName, params: {id: iseID, name: newName}.
+func (c *Client) RenameDevice(ctx context.Context, iseID, newName string) error {
+	return c.Call(ctx, "Device.setName", map[string]any{
+		"id":   iseID,
+		"name": newName,
+	}, nil)
+}
+
+// SetLinkInfo updates the name and description of a direct-link between two
+// channels on the given interface.
+//
+// Wire: Interface.setLinkInfo, params: {interface, senderAddress,
+// receiverAddress, name, description}.
+func (c *Client) SetLinkInfo(ctx context.Context, iface, sender, receiver, name, description string) error {
+	return c.Call(ctx, "Interface.setLinkInfo", map[string]any{
+		"interface":       iface,
+		"senderAddress":   sender,
+		"receiverAddress": receiver,
+		"name":            name,
+		"description":     description,
+	}, nil)
+}
+
+// SetInstallModeHMIP enters or leaves HmIP pairing mode on the given
+// interface. duration is the pairing window in seconds (0 to exit
+// immediately). deviceAddress limits pairing to one SGTIN (pass "" for all
+// devices). on must be the string "true" or "false" as required by the CCU
+// wire protocol; installMode is the mode selector ("ALL" for all devices).
+//
+// Wire: Interface.setInstallModeHMIP,
+//
+// params: {interface, on, time, installMode, address, key, keymode}.
+func (c *Client) SetInstallModeHMIP(ctx context.Context, iface string, on bool, duration int, deviceAddress string) error {
+	onStr := "false"
+	if on {
+		onStr = "true"
+	}
+	return c.Call(ctx, "Interface.setInstallModeHMIP", map[string]any{
+		"interface":   iface,
+		"on":          onStr,
+		"time":        duration,
+		"installMode": "ALL",
+		"address":     deviceAddress,
+		"key":         "",
+		"keymode":     "",
+	}, nil)
+}
+
+// GetDeviceDetails returns the full detail map for all known devices. The
+// returned slice contains one map per device; keys are CCU-defined (e.g.
+// "ADDRESS", "TYPE", "FIRMWARE_VERSION").
+//
+// Wire: Device.listAllDetail (no params).
+func (c *Client) GetDeviceDetails(ctx context.Context) ([]DeviceDetail, error) {
+	var result []DeviceDetail
+	if err := c.Call(ctx, "Device.listAllDetail", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetAllDeviceData returns a bulk snapshot of all channel values for the
+// given interface. The CCU returns a map keyed by channel address.
+//
+// Wire: Interface.listDevices, params: {interface: iface}.
+func (c *Client) GetAllDeviceData(ctx context.Context, iface string) (map[string]any, error) {
+	var result map[string]any
+	if err := c.Call(ctx, "Interface.listDevices", map[string]any{
+		"interface": iface,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// SuppressServiceMessage sets or clears the suppression flag on a service
+// message for the given channel parameter.
+//
+// Wire: Interface.suppressServiceMessages,
+//
+// params: {interface, channelAddress, parameterId, suppress}.
+func (c *Client) SuppressServiceMessage(ctx context.Context, iface, channelAddress, parameterID string, suppress bool) error {
+	return c.Call(ctx, "Interface.suppressServiceMessages", map[string]any{
+		"interface":      iface,
+		"channelAddress": channelAddress,
+		"parameterId":    parameterID,
+		"suppress":       suppress,
+	}, nil)
+}
+
+// HasProgramIDs checks whether the CCU program identified by iseID exists and
+// is reachable. Returns true when the program is present.
+//
+// Wire: Channel.hasProgramIds, params: {id: iseID}.
+func (c *Client) HasProgramIDs(ctx context.Context, iseID string) (bool, error) {
+	var result bool
+	if err := c.Call(ctx, "Channel.hasProgramIds", map[string]any{
+		"id": iseID,
+	}, &result); err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+// SetInstallModeBidCos enters or leaves BidCos pairing mode on the given
+// interface. duration is the pairing window in seconds (0 to exit
+// immediately). mode selects the learning mode (0 = normal, 1 = set, 2 =
+// unset).
+//
+// Wire: Interface.setInstallMode,
+//
+// params: {interface, on, duration, mode}.
+func (c *Client) SetInstallModeBidCos(ctx context.Context, iface string, on bool, duration, mode int) error {
+	return c.Call(ctx, "Interface.setInstallMode", map[string]any{
+		"interface": iface,
+		"on":        on,
+		"duration":  duration,
+		"mode":      mode,
+	}, nil)
+}
+
+// AssignProgramIDs assigns one or more program ISE-IDs to a channel.
+//
+// Wire: Program.assignProgramIDs, params: {id: iseID, channelId: channelID}.
+func (c *Client) AssignProgramIDs(ctx context.Context, iseID, channelID string) error {
+	return c.Call(ctx, "Program.assignProgramIDs", map[string]any{
+		"id":        iseID,
+		"channelId": channelID,
+	}, nil)
+}
+
+// DeleteProgramID removes the CCU program identified by iseID.
+//
+// Wire: Program.deleteProgramID, params: {id: iseID}.
+func (c *Client) DeleteProgramID(ctx context.Context, iseID string) error {
+	return c.Call(ctx, "Program.deleteProgramID", map[string]any{
+		"id": iseID,
+	}, nil)
+}
+
+// ReadProgram reads the script/logic body of the CCU program identified by
+// iseID. The raw JSON result is returned as-is for the caller to decode.
+//
+// Wire: Program.readProgram, params: {id: iseID}.
+func (c *Client) ReadProgram(ctx context.Context, iseID string) (map[string]any, error) {
+	var result map[string]any
+	if err := c.Call(ctx, "Program.readProgram", map[string]any{
+		"id": iseID,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// UpdateProgram updates the script/logic body of the CCU program identified
+// by iseID. body contains the program fields to overwrite.
+//
+// Wire: Program.updateProgram, params: body ∪ {id: iseID}.
+func (c *Client) UpdateProgram(ctx context.Context, iseID string, body map[string]any) error {
+	params := make(map[string]any, len(body)+1)
+	for k, v := range body {
+		params[k] = v
+	}
+	params["id"] = iseID
+	return c.Call(ctx, "Program.updateProgram", params, nil)
+}
+
+// SetMetadata stores an arbitrary metadata value for the object identified by
+// objectID.
+//
+// Wire: Metadata.setMetadata, params: {objectId, dataId, value}.
+func (c *Client) SetMetadata(ctx context.Context, objectID, dataID string, value any) error {
+	return c.Call(ctx, "Metadata.setMetadata", map[string]any{
+		"objectId": objectID,
+		"dataId":   dataID,
+		"value":    value,
+	}, nil)
+}
+
+// GetMetadata retrieves the metadata value stored under dataID for objectID.
+// The raw value is returned for the caller to type-assert.
+//
+// Wire: Metadata.getMetadata, params: {objectId, dataId}.
+func (c *Client) GetMetadata(ctx context.Context, objectID, dataID string) (any, error) {
+	var result any
+	if err := c.Call(ctx, "Metadata.getMetadata", map[string]any{
+		"objectId": objectID,
+		"dataId":   dataID,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// DeleteMetadata removes the metadata entry stored under dataID for objectID.
+//
+// Wire: Metadata.deleteMetadata, params: {objectId, dataId}.
+func (c *Client) DeleteMetadata(ctx context.Context, objectID, dataID string) error {
+	return c.Call(ctx, "Metadata.deleteMetadata", map[string]any{
+		"objectId": objectID,
+		"dataId":   dataID,
+	}, nil)
+}
+
+// InterfaceGetLinks returns the direct-link list for the channel identified
+// by channelAddress on the given interface.
+//
+// Wire: Interface.getLinks,
+//
+// params: {interface, address, flags}.
+func (c *Client) InterfaceGetLinks(ctx context.Context, iface, channelAddress string, flags int) ([]map[string]any, error) {
+	var result []map[string]any
+	if err := c.Call(ctx, "Interface.getLinks", map[string]any{
+		"interface": iface,
+		"address":   channelAddress,
+		"flags":     flags,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+
+// ExecuteProgram triggers the CCU automation program identified by its
+// ISE-ID. The CCU executes the program asynchronously.
+//
+// Wire: Program.execute, params: {id: iseID}.
+func (c *Client) ExecuteProgram(ctx context.Context, iseID string) error {
+	return c.Call(ctx, "Program.execute", map[string]any{
+		"id": iseID,
+	}, nil)
+}
+
+// GetAllChannelISEIDsRoom returns a map from room ISE-ID to the list of
+// channel ISE-IDs assigned to that room.
+//
+// Wire: Room.getChannelIDs (no params).
+func (c *Client) GetAllChannelISEIDsRoom(ctx context.Context) (map[string][]string, error) {
+	var result map[string][]string
+	if err := c.Call(ctx, "Room.getChannelIDs", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetAllChannelISEIDsFunction returns a map from function (trade-group)
+// ISE-ID to the list of channel ISE-IDs assigned to that function.
+//
+// Wire: Function.getChannelIDs (no params).
+func (c *Client) GetAllChannelISEIDsFunction(ctx context.Context) (map[string][]string, error) {
+	var result map[string][]string
+	if err := c.Call(ctx, "Function.getChannelIDs", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// RoomEntry is the typed shape returned by [Client.GetAllRoomsRaw].
+// Mirrors the CCU's `Room.getAll` response: each entry carries the
+// room's ISE-ID, the operator-assigned name, and the list of channel
+// ISE-IDs assigned to it.
+type RoomEntry struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	ChannelIDs []string `json:"channelIds"`
+}
+
+// SubsectionEntry is the same envelope as [RoomEntry] but for
+// "Gewerke" / functions. The CCU treats rooms and functions as
+// parallel taxonomies.
+type SubsectionEntry struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	ChannelIDs []string `json:"channelIds"`
+}
+
+// GetAllRoomsRaw returns every room with its name and member channels.
+// The DeviceDetailsCache loader uses this to populate per-channel
+// room sets — `GetAllChannelISEIDsRoom` only returns ISE-ID maps and
+// would need a second `Room.getName` round-trip per entry.
+//
+// Wire: Room.getAll (no params).
+func (c *Client) GetAllRoomsRaw(ctx context.Context) ([]RoomEntry, error) {
+	var result []RoomEntry
+	if err := c.Call(ctx, "Room.getAll", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetAllFunctionsRaw returns every function (Subsection) with its name and
+// member channels.
+//
+// Wire: Subsection.getAll (no params).
+func (c *Client) GetAllFunctionsRaw(ctx context.Context) ([]SubsectionEntry, error) {
+	var result []SubsectionEntry
+	if err := c.Call(ctx, "Subsection.getAll", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetIseIDByAddress resolves a device or channel address to its internal CCU
+// ISE-ID. Returns the ISE-ID as a string.
+//
+// Wire: Device.getIseIDByAddress, params: {address: address}.
+func (c *Client) GetIseIDByAddress(ctx context.Context, address string) (string, error) {
+	var result string
+	if err := c.Call(ctx, "Device.getIseIDByAddress", map[string]any{
+		"address": address,
+	}, &result); err != nil {
+		return "", err
+	}
+	return result, nil
+}
+
+// IsInterfacePresent reports whether the given interface is currently
+// reachable / registered on the CCU.
+//
+// Wire: Interface.isPresent, params: {interface: iface}.
+func (c *Client) IsInterfacePresent(ctx context.Context, iface string) (bool, error) {
+	var result bool
+	if err := c.Call(ctx, "Interface.isPresent", map[string]any{
+		"interface": iface,
+	}, &result); err != nil {
+		return false, err
+	}
+	return result, nil
+}
+
+// ---------------------------------------------------------------------------
+// Batch 2: JSON-RPC typed write-wrappers
+// ---------------------------------------------------------------------------
+
+// SetSystemVariableBool sets a boolean system variable on the CCU. The CCU
+// requires the value as an integer (0/1), not a native bool.
+//
+// Wire: SysVar.setBool, params: {name, value}.
+func (c *Client) SetSystemVariableBool(ctx context.Context, name string, value bool) error {
+	intVal := 0
+	if value {
+		intVal = 1
+	}
+	return c.Call(ctx, "SysVar.setBool", map[string]any{
+		"name":  name,
+		"value": intVal,
+	}, nil)
+}
+
+// SetSystemVariableFloat sets a numeric (float or enum-index) system
+// variable. Both float and integer/enum sysvars use the same SysVar.setFloat
+// wire call.
+//
+// Wire: SysVar.setFloat, params: {name, value}.
+func (c *Client) SetSystemVariableFloat(ctx context.Context, name string, value float64) error {
+	return c.Call(ctx, "SysVar.setFloat", map[string]any{
+		"name":  name,
+		"value": value,
+	}, nil)
+}
+
+// CreateSystemVariableBool creates a new boolean system variable on the CCU.
+// initVal is the initial state (false = 0, true = 1).
+//
+// Wire: SysVar.createBool, params: {name, init_val, internal, chnID}.
+func (c *Client) CreateSystemVariableBool(ctx context.Context, name string, initVal bool) (map[string]any, error) {
+	iv := 0
+	if initVal {
+		iv = 1
+	}
+	var result map[string]any
+	if err := c.Call(ctx, "SysVar.createBool", map[string]any{
+		"name":     name,
+		"init_val": iv,
+		"internal": 0,
+		"chnID":    -1,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateSystemVariableEnum creates a new enum system variable on the CCU.
+// valueList is joined as a semicolon-separated string (CCU wire format).
+//
+// Wire: SysVar.createEnum, params: {name, valueList, internal, chnID}.
+func (c *Client) CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error) {
+	var result map[string]any
+	if err := c.Call(ctx, "SysVar.createEnum", map[string]any{
+		"name":      name,
+		"valueList": joinSemicolon(valueList),
+		"internal":  0,
+		"chnID":     -1,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateSystemVariableFloat creates a new float system variable on the CCU.
+// minValue and maxValue define the allowed range (CCU defaults: 0–65000).
+//
+// Wire: SysVar.createFloat, params: {name, minValue, maxValue, internal,
+// chnID}.
+func (c *Client) CreateSystemVariableFloat(ctx context.Context, name string, minValue, maxValue float64) (map[string]any, error) {
+	var result map[string]any
+	if err := c.Call(ctx, "SysVar.createFloat", map[string]any{
+		"name":     name,
+		"minValue": minValue,
+		"maxValue": maxValue,
+		"internal": 0,
+		"chnID":    -1,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetAllSystemVariables fetches the raw list of all system variables from the
+// CCU. Marker-based filtering is the caller's responsibility.
+//
+// Wire: SysVar.getAll (no params).
+func (c *Client) GetAllSystemVariables(ctx context.Context) ([]map[string]any, error) {
+	var result []map[string]any
+	if err := c.Call(ctx, "SysVar.getAll", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetAllPrograms fetches the raw list of all automation programs from the
+// CCU. Marker-based filtering is the caller's responsibility.
+//
+// Wire: Program.getAll (no params).
+func (c *Client) GetAllPrograms(ctx context.Context) ([]map[string]any, error) {
+	var result []map[string]any
+	if err := c.Call(ctx, "Program.getAll", nil, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetValue reads a single parameter value from the CCU. When paramsetKey is
+// "MASTER" the Interface.getMasterValue method is used; for all other keys
+// (e.g. "VALUES") Interface.getValue is used.
+//
+// Wire: Interface.getValue or Interface.getMasterValue,
+//
+// params: {interface, address, valueKey}.
+func (c *Client) GetValue(ctx context.Context, iface, address, paramsetKey, parameter string) (any, error) {
+	method := "Interface.getValue"
+	if paramsetKey == "MASTER" {
+		method = "Interface.getMasterValue"
+	}
+	var result any
+	if err := c.Call(ctx, method, map[string]any{
+		"interface": iface,
+		"address":   address,
+		"valueKey":  parameter,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// PutParamset writes a set of key/value pairs to a paramset on the CCU.
+// values is the slice of parameter maps to apply (CCU "set" field).
+//
+// Wire: Interface.putParamset, params: {interface, address, paramsetKey,
+// set}.
+func (c *Client) PutParamset(ctx context.Context, iface, address, paramsetKey string, values []map[string]any) error {
+	return c.Call(ctx, "Interface.putParamset", map[string]any{
+		"interface":   iface,
+		"address":     address,
+		"paramsetKey": paramsetKey,
+		"set":         values,
+	}, nil)
+}
+
+// SetValue writes a single parameter to the CCU. valueType is the CCU type
+// string (e.g. "FLOAT", "BOOL", "INTEGER"). This lets the CCU coerce the
+// value correctly when the raw JSON type is ambiguous.
+//
+// Wire: Interface.setValue, params: {interface, address, valueKey, type,
+// value}.
+func (c *Client) SetValue(ctx context.Context, iface, address, parameter, valueType string, value any) error {
+	return c.Call(ctx, "Interface.setValue", map[string]any{
+		"interface": iface,
+		"address":   address,
+		"valueKey":  parameter,
+		"type":      valueType,
+		"value":     value,
+	}, nil)
+}
+
+// SetSystemVariable sets a system variable on the CCU with automatic type
+// dispatch. The CCU requires different wire methods for boolean, float/enum,
+// and string types: - bool → [Client.SetSystemVariableBool] (SysVar.setBool)
+// - float64 → [Client.SetSystemVariableFloat] (SysVar.setFloat) - string →
+// ReGa script (not handled here; use the rega.Runner)
+//
+// Returns [hmerr.ErrUnsupported] for string values because string sysvars
+// require the ReGa layer.
+func (c *Client) SetSystemVariable(ctx context.Context, name string, value any) error {
+	switch v := value.(type) {
+	case bool:
+		return c.SetSystemVariableBool(ctx, name, v)
+	case float64:
+		return c.SetSystemVariableFloat(ctx, name, v)
+	case float32:
+		return c.SetSystemVariableFloat(ctx, name, float64(v))
+	case int:
+		return c.SetSystemVariableFloat(ctx, name, float64(v))
+	case int32:
+		return c.SetSystemVariableFloat(ctx, name, float64(v))
+	case int64:
+		return c.SetSystemVariableFloat(ctx, name, float64(v))
+	default:
+		// String sysvars use the ReGa layer; callers that need them
+		// should go through rega.Runner.SetSystemVariable instead.
+		return fmt.Errorf("jsonrpc.SetSystemVariable: unsupported value type %T for sysvar %q: %w", value, name, hmerr.ErrUnsupported)
+	}
+}
+
+// SetProgramState enables or disables the CCU automation program identified
+// by iseID. state=true activates the program; state=false deactivates it.
+//
+// Wire: Program.setActive, params: {id: iseID, active: state}.
+func (c *Client) SetProgramState(ctx context.Context, iseID string, state bool) error {
+	return c.Call(ctx, "Program.setActive", map[string]any{
+		"id":     iseID,
+		"active": state,
+	}, nil)
+}
+
+// AcceptDeviceInInbox accepts a pairing-inbox device into the CCU.
+//
+// Wire: Interface.acceptNewDevice, params: {interface, address}.
+func (c *Client) AcceptDeviceInInbox(ctx context.Context, iface, address string) error {
+	return c.Call(ctx, "Interface.acceptNewDevice", map[string]any{
+		"interface": iface,
+		"address":   address,
+	}, nil)
+}
+
+// AcknowledgeMessage acknowledges an alarm or service message by its CCU
+// message-ID. After acknowledgement the CCU marks the message as read and
+// removes it from the active-alarms list.
+//
+// Wire: Alarm.acknowledge, params: {id: messageID}.
+func (c *Client) AcknowledgeMessage(ctx context.Context, messageID string) error {
+	return c.Call(ctx, "Alarm.acknowledge", map[string]any{
+		"id": messageID,
+	}, nil)
+}
+
+// IsServiceAvailable performs a lightweight availability check against the
+// CCU JSON-RPC endpoint by calling System.getSystemInformation. Returns true
+// when the call succeeds, false when the CCU is not reachable or returns an
+// error.
+//
+// Callers should prefer the circuit-breaker state for routine health checks;
+// this method is for explicit on-demand probes (e.g. before initiating a CCU
+// backup download).
+func (c *Client) IsServiceAvailable(ctx context.Context) bool {
+	_, err := c.GetSystemInformation(ctx)
+	return err == nil
+}
+
+// TriggerFirmwareUpdate triggers a CCU-initiated firmware update for all
+// devices that have a pending update.
+//
+// Wire: Interface.triggerFirmwareUpdate (no params).
+func (c *Client) TriggerFirmwareUpdate(ctx context.Context) error {
+	return c.Call(ctx, "Interface.triggerFirmwareUpdate", nil, nil)
+}
+
+// GetSuppressedServiceMessages returns the list of currently suppressed
+// service messages for the given channel parameter.
+//
+// Wire: Interface.getSuppressedServiceMessages,
+//
+// params: {interface, channel}.
+func (c *Client) GetSuppressedServiceMessages(ctx context.Context, iface, channelAddress string) ([]map[string]any, error) {
+	var result []map[string]any
+	if err := c.Call(ctx, "Interface.getSuppressedServiceMessages", map[string]any{
+		"interface": iface,
+		"channel":   channelAddress,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetInstallMode returns the current pairing mode for the given interface (0
+// = off, >0 = remaining seconds).
+//
+// Wire: Interface.getInstallMode, params: {interface: iface}.
+func (c *Client) GetInstallMode(ctx context.Context, iface string) (int, error) {
+	var result int
+	if err := c.Call(ctx, "Interface.getInstallMode", map[string]any{
+		"interface": iface,
+	}, &result); err != nil {
+		return 0, err
+	}
+	return result, nil
+}
+
+// GetLinkInfo returns the name and description of the direct link between two
+// channels on the given interface.
+//
+// Wire: Interface.getLinkInfo,
+//
+// params: {interface, sender, receiver}.
+func (c *Client) GetLinkInfo(ctx context.Context, iface, sender, receiver string) (map[string]any, error) {
+	var result map[string]any
+	if err := c.Call(ctx, "Interface.getLinkInfo", map[string]any{
+		"interface": iface,
+		"sender":    sender,
+		"receiver":  receiver,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetSystemVariable reads the current value of the named CCU system variable.
+// The return type is CCU-typed: bool, float64, or string depending on the
+// sysvar type. Returns nil when the variable is not set or has no value.
+//
+// Wire: SysVar.getValueByName, params: {name: name}.
+func (c *Client) GetSystemVariable(ctx context.Context, name string) (any, error) {
+	var result any
+	if err := c.Call(ctx, "SysVar.getValueByName", map[string]any{
+		"name": name,
+	}, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// DownloadBackup downloads a fresh CCU config backup from the CCU's
+// cp_security.cgi endpoint. The CCU creates the archive on demand and streams
+// it back. Returns the raw archive bytes (typically a few MB).
+//
+// The call requires an active JSON-RPC session because the CCU's CGI uses the
+// session ID for authentication — the session ID is embedded in the URL in
+// the @sid@ form required by the CCU.
+//
+// Wire: GET
+// {baseURL}/config/cp_security.cgi?sid=@{session_id}@&action=create_backup
+// (5-minute timeout).
+func (c *Client) DownloadBackup(ctx context.Context) ([]byte, error) {
+	c.mu.Lock()
+	sid := c.sessionID
+	c.mu.Unlock()
+	if sid == "" {
+		return nil, c.wrap("download_backup", fmt.Errorf("no active JSON-RPC session: %w", hmerr.ErrAuthFailure))
+	}
+
+	base := c.backupBaseURL()
+	if base == "" {
+		return nil, c.wrap("download_backup", fmt.Errorf("cannot derive base URL from endpoint %q: %w", c.cfg.Endpoint, hmerr.ErrUnsupported))
+	}
+
+	downloadURL := base + "/config/cp_security.cgi?sid=@" + url.QueryEscape(sid) + "@&action=create_backup"
+
+	hc := c.httpClient
+	if hc == nil {
+		hc = &http.Client{Timeout: backupDownloadTimeout}
+	} else {
+		// Override timeout for this large download regardless of the shared client.
+		hc = &http.Client{
+			Transport: hc.Transport,
+			Timeout:   backupDownloadTimeout,
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, http.NoBody)
+	if err != nil {
+		return nil, c.wrap("download_backup", fmt.Errorf("build request: %w", err))
+	}
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, c.wrap("download_backup", fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return nil, c.wrap("download_backup", fmt.Errorf("CCU returned HTTP %d: %w", resp.StatusCode, hmerr.ErrInternalBackendException))
+	}
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, c.wrap("download_backup", fmt.Errorf("read response body: %w", err))
+	}
+	return data, nil
+}
+
+// DownloadFirmware instructs the CCU to fetch firmware from the given URL via
+// an HTTP POST to the maintenance CGI. Only "http://" and "https://" scheme
+// URLs are accepted; others return [hmerr.ErrUnsupported].
+//
+// Wire: POST {baseURL}/config/cp_maintenance.cgi (form params: sid, action,
+// url) (10-minute timeout).
+func (c *Client) DownloadFirmware(ctx context.Context, firmwareURL string) error {
+	if !strings.HasPrefix(firmwareURL, "http://") && !strings.HasPrefix(firmwareURL, "https://") {
+		return c.wrap("download_firmware", fmt.Errorf("only http/https scheme allowed, got %q: %w", firmwareURL, hmerr.ErrUnsupported))
+	}
+
+	c.mu.Lock()
+	sid := c.sessionID
+	c.mu.Unlock()
+	if sid == "" {
+		return c.wrap("download_firmware", fmt.Errorf("no active JSON-RPC session: %w", hmerr.ErrAuthFailure))
+	}
+
+	base := c.backupBaseURL()
+	if base == "" {
+		return c.wrap("download_firmware", fmt.Errorf("cannot derive base URL from endpoint %q: %w", c.cfg.Endpoint, hmerr.ErrUnsupported))
+	}
+
+	uploadURL := base + "/config/cp_maintenance.cgi"
+
+	form := url.Values{
+		"sid":    {sid},
+		"action": {"download_firmware"},
+		"url":    {firmwareURL},
+	}
+
+	hc := c.httpClient
+	if hc == nil {
+		hc = &http.Client{Timeout: firmwareTransportDownloadTimeout}
+	} else {
+		hc = &http.Client{
+			Transport: hc.Transport,
+			Timeout:   firmwareTransportDownloadTimeout,
+		}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return c.wrap("download_firmware", fmt.Errorf("build request: %w", err))
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := hc.Do(req)
+	if err != nil {
+		return c.wrap("download_firmware", fmt.Errorf("%w: %w", hmerr.ErrNoConnection, err))
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return c.wrap("download_firmware", fmt.Errorf("CCU returned HTTP %d: %w", resp.StatusCode, hmerr.ErrInternalBackendException))
+	}
+	return nil
+}
+
+// GetHTTPSRedirectEnabled queries the CCU for its current HTTPS-redirect flag.
+// Returns (false, nil) when the CCU responds with a nil result (feature not
+// configured).
+//
+// Wire: CCU.getHttpsRedirectEnabled (no params).
+func (c *Client) GetHTTPSRedirectEnabled(ctx context.Context) (bool, error) {
+	var result any
+	if err := c.Call(ctx, "CCU.getHttpsRedirectEnabled", nil, &result); err != nil {
+		return false, err
+	}
+	if result == nil {
+		return false, nil
+	}
+	if b, ok := result.(bool); ok {
+		return b, nil
+	}
+	return false, nil
+}
+
+// GetAuthEnabled queries the CCU for whether authentication is required.
+// Returns (false, nil) when the CCU responds with a nil result (auth not
+// configured or the method is unavailable on this firmware).
+//
+// Wire: CCU.getAuthEnabled (no params).
+func (c *Client) GetAuthEnabled(ctx context.Context) (bool, error) {
+	var result any
+	if err := c.Call(ctx, "CCU.getAuthEnabled", nil, &result); err != nil {
+		return false, err
+	}
+	if result == nil {
+		return false, nil
+	}
+	if b, ok := result.(bool); ok {
+		return b, nil
+	}
+	return false, nil
+}
+
+// InterfaceEntry is one entry returned by [Client.ListInterfaces].
+type InterfaceEntry struct {
+	// Type is the CCU interface type string (e.g. "HmIP-RF", "BidCos-RF").
+	Type string `json:"type"`
+	// Address is the CCU interface identifier (same as the interface ID
+	// the CCU uses in XML-RPC callbacks, e.g. "HmIP-RF").
+	Address string `json:"address"`
+	// Port is the XML-RPC port on which the interface listens.
+	Port int `json:"port"`
+	// URL is the full XML-RPC endpoint URL reported by the CCU.
+	URL string `json:"url"`
+}
+
+// ListInterfaces enumerates all CCU interfaces currently registered on
+// the CCU. The return value includes both RF and wired interface adapters.
+//
+// Wire: Interface.listInterfaces (no params).
+func (c *Client) ListInterfaces(ctx context.Context) ([]InterfaceEntry, error) {
+	var raw []map[string]any
+	if err := c.Call(ctx, "Interface.listInterfaces", nil, &raw); err != nil {
+		return nil, err
+	}
+	out := make([]InterfaceEntry, 0, len(raw))
+	for _, m := range raw {
+		entry := InterfaceEntry{}
+		if v, ok := m["type"].(string); ok {
+			entry.Type = v
+		}
+		if v, ok := m["address"].(string); ok {
+			entry.Address = v
+		}
+		if v, ok := m["port"].(float64); ok {
+			entry.Port = int(v)
+		}
+		if v, ok := m["url"].(string); ok {
+			entry.URL = v
+		}
+		out = append(out, entry)
+	}
+	return out, nil
+}
+
+// backupBaseURL derives the CCU base URL from the configured JSON-RPC endpoint
+// By stripping the "/api/homematic.cgi" suffix (
+// constant, const.py:315). Returns an empty string when the endpoint does not
+// contain the expected suffix and cannot be safely trimmed.
+func (c *Client) backupBaseURL() string {
+	const jsonRPCPath = "/api/homematic.cgi"
+	ep := strings.TrimRight(c.cfg.Endpoint, "/")
+	if strings.HasSuffix(ep, jsonRPCPath) {
+		return strings.TrimSuffix(ep, jsonRPCPath)
+	}
+	// Fallback: try to use the URL up to the path root.
+	u, err := url.Parse(ep)
+	if err != nil {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
+}
+
+// joinSemicolon joins a string slice with semicolons. Used to format the
+// valueList parameter for SysVar.createEnum (CCU wire format).
+func joinSemicolon(s []string) string {
+	result := ""
+	for i, v := range s {
+		if i > 0 {
+			result += ";"
+		}
+		result += v
+	}
+	return result
+}

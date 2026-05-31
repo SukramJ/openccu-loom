@@ -1,0 +1,21 @@
+# tests/e2e/openapi_skip.txt
+#
+# OpenAPI operations the E2E walker cannot drive cleanly today.
+# Format: <operationId> -- <reason>
+# Empty lines and # comments are ignored.
+#
+# Each entry must carry a rationale so future contributors know why
+# the gap exists and when it can be removed. Prefer fixing the
+# underlying issue (spec drift or handler bug) over extending this
+# file. See docs/e2e-testplan.md §11.2 for the bug-discovery log.
+
+# systemRestart would terminate the daemon under test. The endpoint is also
+# opt-in (EnableRestartEndpoint: false in E2E harness), so the route is not
+# mounted and the walker sees 404 rather than the documented 202.
+systemRestart -- terminates the daemon; route not mounted in E2E harness
+
+# logout is exercised by TestRESTSessionLifecycle. The mutation walker uses
+# Basic-Auth headers so session state does not affect walker correctness,
+# but calling logout mid-run clears the cookie jar and produces a misleading
+# 204 in the mutation coverage table.
+logout -- covered by TestRESTSessionLifecycle; side-effects disrupt walker

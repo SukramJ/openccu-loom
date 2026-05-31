@@ -1,0 +1,22 @@
+{
+  "dp_type": "SoundPlayerLED",
+  "setter": "TurnOff",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:6",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "COLOR": "BLACK",
+            "ON_TIME": 0
+          }
+        }
+      ]
+    }
+  ]
+}

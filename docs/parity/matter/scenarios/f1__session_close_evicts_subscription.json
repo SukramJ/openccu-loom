@@ -1,0 +1,29 @@
+{
+  "name": "f1__session_close_evicts_subscription",
+  "description": "F1 regression guard: when a CASE session closes (RemoveFabric / commissioner-side teardown / fabric-reload race), every subscription on that session must evict so the engine stops ticking a dead subscription whose decryption keys are gone. Without the daemon's opMgr.SetOnSessionClose(subMgr.CloseSession) hook the bridge accumulates one ghost subscription per reconnect and ships duplicate ReportData to a peer whose keys were destroyed — Apple Home deprioritizes the burst as redundant noise and the HMOutlet UI freezes. The harness drives the cascade directly via subMgr.CloseSession and asserts the bridge stays silent on any subsequent dirty-mark.",
+  "tags": ["matter", "subscribe", "f1", "session-close", "fault-injection"],
+  "given": {
+    "session_id": 8,
+    "peer_subscribe_exchange_id": 31,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "bridge",
+      "kind": "close_session"
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_no_tx",
+      "timeout_millis": 1500
+    }
+  ]
+}

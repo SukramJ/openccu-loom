@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package generic
+
+import (
+	"strconv"
+	"strings"
+)
+
+// coerceWire converts v into T when a lossless (or culturally-lossless
+// for strings) conversion exists. It powers [DataPoint.OnWireValue]
+// and thereby the initial seeding flow: Rega/JSON-RPC deliver values
+// as untyped JSON scalars, while each data point owns a specific T.
+//
+// Covered conversions:
+//   - bool:   bool passthrough; string "true"/"false"/"1"/"0"; any numeric
+//   - int32:  int, int32, int64, float64 (truncating); numeric string
+//   - float64: every numeric type; numeric string
+//   - string:  string passthrough; everything else stringified
+//
+// Unknown type parameters fall through to (zero, false).
+func coerceWire[T any](v any) (T, bool) {
+	var zero T
+	switch any(zero).(type) {
+	case bool:
+		if b, ok := toBool(v); ok {
+			return any(b).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+		}
+	case int32:
+		if n, ok := toInt64(v); ok {
+			return any(int32(n)).(T), true //nolint:errcheck,forcetypeassert,gosec // range-narrowing is tolerated for wire seeding
+		}
+	case int:
+		if n, ok := toInt64(v); ok {
+			return any(int(n)).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+		}
+	case int64:
+		if n, ok := toInt64(v); ok {
+			return any(n).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+		}
+	case float64:
+		if f, ok := toFloat64(v); ok {
+			return any(f).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+		}
+	case string:
+		return any(toString(v)).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+	}
+	return zero, false
+}
+
+func toBool(v any) (value, ok bool) { //nolint:nonamedreturns // documents return intent
+	switch x := v.(type) {
+	case bool:
+		return x, true
+	case string:
+		switch strings.ToLower(strings.TrimSpace(x)) {
+		case "true", "1", "on", "yes":
+			return true, true
+		case "false", "0", "off", "no", "":
+			return false, true
+		}
+	case int:
+		return x != 0, true
+	case int32:
+		return x != 0, true
+	case int64:
+		return x != 0, true
+	case float32:
+		return x != 0, true
+	case float64:
+		return x != 0, true
+	}
+	return false, false
+}
+
+func toInt64(v any) (int64, bool) {
+	switch x := v.(type) {
+	case int:
+		return int64(x), true
+	case int32:
+		return int64(x), true
+	case int64:
+		return x, true
+	case float32:
+		return int64(x), true
+	case float64:
+		return int64(x), true
+	case bool:
+		if x {
+			return 1, true
+		}
+		return 0, true
+	case string:
+		if n, err := strconv.ParseInt(strings.TrimSpace(x), 10, 64); err == nil {
+			return n, true
+		}
+		if f, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil {
+			return int64(f), true
+		}
+	}
+	return 0, false
+}
+
+func toFloat64(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case bool:
+		if x {
+			return 1, true
+		}
+		return 0, true
+	case string:
+		if f, err := strconv.ParseFloat(strings.TrimSpace(x), 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+func toString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	switch x := v.(type) {
+	case bool:
+		if x {
+			return "true"
+		}
+		return "false"
+	case int:
+		return strconv.Itoa(x)
+	case int32:
+		return strconv.FormatInt(int64(x), 10)
+	case int64:
+		return strconv.FormatInt(x, 10)
+	case float32:
+		return strconv.FormatFloat(float64(x), 'f', -1, 32)
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	}
+	return ""
+}

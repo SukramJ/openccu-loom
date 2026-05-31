@@ -1,0 +1,64 @@
+{
+  "name": "multi_session__close_one_does_not_evict_other",
+  "description": "Locks subscription-isolation across sessions: closing CASE session A must evict subscription A but leave subscription B untouched. The bridge wires two subscriptions on two different sessions (mirroring Apple Home + chip-tool both pairing the same accessory). Step 1 closes the first session. Steps 2-3 verify subscription 0 is silent (any outbound would be a regression where the manager closed all subscriptions on close_session). Steps 4-6 verify subscription 1 still ships a fresh-exchange ReportData on the F4 path, proving the close was scoped correctly.",
+  "tags": ["matter", "subscribe", "multi-session", "fault-injection", "isolation"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 41,
+        "peer_subscribe_exchange_id": 53,
+        "subscription": { "endpoint": 6, "cluster": 6, "attribute": 0 }
+      },
+      {
+        "session_id": 43,
+        "peer_subscribe_exchange_id": 59,
+        "subscription": { "endpoint": 7, "cluster": 6, "attribute": 0 }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "bridge",
+      "kind": "close_session",
+      "subscription_idx": 0
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine",
+      "subscription_idx": 0
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_no_tx",
+      "timeout_millis": 1500
+    },
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine",
+      "subscription_idx": 1
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$sub1_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$sub1_exch",
+      "status": "Success",
+      "subscription_idx": 1
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$sub1_exch"
+    }
+  ]
+}

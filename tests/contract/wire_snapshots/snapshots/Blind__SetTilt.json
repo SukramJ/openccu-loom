@@ -1,0 +1,39 @@
+{
+  "dp_type": "Blind",
+  "setter": "SetTilt",
+  "inputs": [
+    {
+      "label": "tilt=0.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BBL0001:1",
+          "parameter": "COMBINED_PARAMETER",
+          "value": "L2=0,L=0"
+        }
+      ]
+    },
+    {
+      "label": "tilt=0.5",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BBL0001:1",
+          "parameter": "COMBINED_PARAMETER",
+          "value": "L2=50,L=0"
+        }
+      ]
+    },
+    {
+      "label": "tilt=1.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BBL0001:1",
+          "parameter": "COMBINED_PARAMETER",
+          "value": "L2=100,L=0"
+        }
+      ]
+    }
+  ]
+}

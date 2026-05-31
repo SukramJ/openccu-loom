@@ -1,0 +1,27 @@
+{
+  "name": "read__simple_request_response",
+  "description": "Locks the IM:Read code path at scenario level: peer ships ReadRequestMessage on a fresh exchange, the bridge resolves the requested paths through the dispatcher and replies with a ReportData on the same exchange. The scenario uses the empty topology so the path is unresolved and the bridge replies with an UnsupportedCluster ReportData — that's still a valid IM-contract-honoring response (envelope shape locked, status inside). Catches regressions where the bridge silently drops Read or panics on an unknown path. Fabric-scoped variants (FabricFiltered=true with two fabric indexes) stay queued — they need a topology recipe that exposes a FabricScopedReader server.",
+  "tags": ["matter", "read", "phase-l"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 109,
+        "peer_subscribe_exchange_id": 113,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_read_request",
+      "peer_exchange_id": 127
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData"
+    }
+  ]
+}

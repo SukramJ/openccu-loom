@@ -1,0 +1,28 @@
+{
+  "dp_type": "RGBWLight",
+  "setter": "SetEffect",
+  "inputs": [
+    {
+      "label": "BLINKING_SLOW",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RGBW0001:1",
+          "parameter": "EFFECT",
+          "value": "BLINKING_SLOW"
+        }
+      ]
+    },
+    {
+      "label": "FLASH_SHORT",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RGBW0001:1",
+          "parameter": "EFFECT",
+          "value": "FLASH_SHORT"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Daemon (config.yaml)" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="openccu-loom" />
+    <working_directory value="$PROJECT_DIR$" />
+    <parameters value="run --config $PROJECT_DIR$/config.yaml" />
+    <envs>
+      <env name="CGO_ENABLED" value="0" />
+    </envs>
+    <kind value="PACKAGE" />
+    <package value="github.com/SukramJ/openccu-loom/cmd/openccu-loom" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/cmd/openccu-loom/main.go" />
+    <output_directory value="$PROJECT_DIR$/bin" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,42 @@
+{
+  "name": "lock__state_via_engine",
+  "description": "F4 fresh-exchange invariant holds for DoorLock cluster (0x0101) attribute LockState (0x0000). External lock-state changes on the CCU (key-pad, manual turn, ReGa) must propagate to Apple Home via a bridge-initiated exchange so the IM:StatusResponse handshake closes — without that, Apple's MTRDevice projection for Lock accessories rubber-bands stale state on the home tile.",
+  "tags": ["matter", "subscribe", "f4", "engine-tick", "lock"],
+  "given": {
+    "session_id": 47,
+    "peer_subscribe_exchange_id": 61,
+    "subscription": {
+      "endpoint": 8,
+      "cluster": 257,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

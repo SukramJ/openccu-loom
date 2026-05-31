@@ -1,0 +1,41 @@
+{
+  "dp_type": "DRGDaliLight",
+  "setter": "SetEffect",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "effect=Off",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DALI0001:1",
+          "parameter": "EFFECT",
+          "value": "Off"
+        }
+      ]
+    },
+    {
+      "label": "effect=Flash",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DALI0001:1",
+          "parameter": "EFFECT",
+          "value": "Flash"
+        }
+      ]
+    },
+    {
+      "label": "effect=Smooth_fast",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DALI0001:1",
+          "parameter": "EFFECT",
+          "value": "Smooth_fast"
+        }
+      ]
+    }
+  ]
+}

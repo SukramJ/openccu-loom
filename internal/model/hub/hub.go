@@ -1,0 +1,529 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package hub
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"sync"
+
+	"github.com/SukramJ/openccu-loom/internal/payload"
+)
+
+// RoomMutator is the optional CCU-side write-path for room
+// assignments. Implementations dispatch a Rega script.
+type RoomMutator interface {
+	SetDeviceRooms(ctx context.Context, deviceAddress string, rooms []string) error
+}
+
+// FunctionMutator is the optional CCU-side write-path for function
+// (Gewerk) assignments. Implementations dispatch a Rega script.
+type FunctionMutator interface {
+	SetDeviceFunctions(ctx context.Context, deviceAddress string, functions []string) error
+}
+
+// SysvarMutator is the optional CCU-side write-path for sysvars.
+// Implementations dispatch ReGa scripts; nil leaves the hub in
+// in-memory-only mode (Create/Delete return ErrNoSysvarMutator).
+type SysvarMutator interface {
+	CreateSysvar(
+		ctx context.Context,
+		name, valueType, unit, vmin, vmax string,
+		valueList []string,
+	) error
+	UpdateSysvar(
+		ctx context.Context,
+		name, unit, vmin, vmax, description string,
+		valueList []string,
+	) error
+	DeleteSysvar(ctx context.Context, name string) error
+}
+
+// ErrNoSysvarMutator is returned by Hub.Create/DeleteSysvar when no
+// CCU-side mutator is wired. The REST handler surfaces this as a
+// 503 so the SPA can show "feature not configured" instead of a
+// generic upstream error.
+var ErrNoSysvarMutator = errors.New("hub: no sysvar mutator configured")
+
+// ErrNoRoomMutator is the room-side analogue.
+var ErrNoRoomMutator = errors.New("hub: no room mutator configured")
+
+// ErrNoFunctionMutator is the function-side analogue.
+var ErrNoFunctionMutator = errors.New("hub: no function mutator configured")
+
+// ErrNoBackupTrigger is returned by TriggerBackupRemote / RestoreBackupRemote
+// when the CCU-side bridge is missing.
+var ErrNoBackupTrigger = errors.New("hub: no backup trigger configured")
+
+// ErrNoFirmwareUpdater is returned when global firmware-update
+// orchestration was not wired.
+var ErrNoFirmwareUpdater = errors.New("hub: no firmware updater configured")
+
+// ErrNoInboxAccepter is returned when the CCU-side inbox path was
+// not wired.
+var ErrNoInboxAccepter = errors.New("hub: no inbox accepter configured")
+
+// BackupTrigger initiates a CCU backup. Implementations dispatch
+// `create_backup_start` / `create_backup_status` Rega scripts.
+type BackupTrigger interface {
+	TriggerBackup(ctx context.Context) error
+	BackupStatus(ctx context.Context) (string, error)
+}
+
+// FirmwareUpdater is the CCU-global update trigger. Per-device
+// firmware updates run through the device backend.
+type FirmwareUpdater interface {
+	TriggerFirmwareUpdate(ctx context.Context) error
+}
+
+// InboxAccepter promotes an inbox device into the registry.
+type InboxAccepter interface {
+	AcceptDeviceInInbox(ctx context.Context, deviceAddress string) error
+}
+
+// DataFetcher is the interface for fetching hub-level data from the
+// CCU backend. Coordinators implement this; the Hub delegates fetch
+// operations to it so the model layer stays backend-agnostic.
+type DataFetcher interface {
+	// FetchAlarmMessages retrieves the current alarm message list.
+	FetchAlarmMessages(ctx context.Context) ([]AlarmMessage, error)
+	// FetchInboxDevices retrieves devices waiting in the inbox.
+	FetchInboxDevices(ctx context.Context) ([]InboxDevice, error)
+}
+
+// Hub aggregates all CCU-level entities for one central: programs,
+// system variables, messages, metrics, inbox, install-mode state,
+// connectivity sensors, and update entities. The north-bound
+// adapters read from Hub to present a unified "gateway" view.
+type Hub struct {
+	// ServiceRegistry implements the write-half of [payload.Source].
+	// Hub is read-only from the Source perspective; write operations
+	// delegate to sub-aggregates (Programs, Sysvars, Messages, …) or
+	// to the mutator interfaces wired on the Hub itself.
+	payload.ServiceRegistry
+
+	CentralName     string
+	Messages        *AlarmMessages
+	ServiceMessages *ServiceMessages
+	Metrics         *Metrics
+	Inbox           *Inbox
+	// Update holds firmware-update state for the central.
+	Update *Update
+	// SysvarMutator wires the CCU-side create/delete path. Optional;
+	// the daemon assigns it after constructing the hub.
+	SysvarMutator SysvarMutator
+	// RoomMutator dispatches CCU-side room assignment writes.
+	RoomMutator RoomMutator
+	// FunctionMutator dispatches CCU-side function (Gewerk)
+	// assignment writes.
+	FunctionMutator FunctionMutator
+	// BackupTrigger initiates a CCU backup; nil → "feature unavailable".
+	BackupTrigger BackupTrigger
+	// FirmwareUpdater triggers global OpenCCU firmware update flows.
+	FirmwareUpdater FirmwareUpdater
+	// InboxAccepter promotes an inbox device.
+	InboxAccepter InboxAccepter
+
+	mu             sync.RWMutex
+	programs       map[string]*Program
+	sysvars        map[string]*Sysvar
+	installModeDPs map[string]*InstallMode // keyed by InterfaceID
+	// connectivity holds the per-interface reachability aggregate.
+	// Populated via [Hub.SetConnectivity] once the adapter layer creates it.
+	connectivity *Connectivity
+
+	// Registration observers. The HubMQTTPublisher subscribes once at
+	// daemon start and reacts to every later PutSysvar/PutProgram so
+	// sysvars/programs loaded by the first ReGa refresh — which runs
+	// AFTER the publisher's Start — still get discovery+state topics.
+	// Slots are sparse: an unsubscribed entry is nil, the next
+	// registration appends rather than reusing the slot.
+	sysvarObservers  []func(*Sysvar)
+	programObservers []func(*Program)
+}
+
+// NewHub constructs a Hub keyed by centralName. Aggregates are
+// initialised empty; callers wire acknowledgers by assigning
+// `Messages.Ack` / `ServiceMessages.Ack` after construction.
+func NewHub(centralName string) *Hub {
+	return &Hub{
+		CentralName:     centralName,
+		Messages:        NewAlarmMessages(nil),
+		ServiceMessages: NewServiceMessages(nil),
+		Metrics:         NewMetrics(),
+		Inbox:           NewInbox(),
+		Update:          NewUpdate(),
+		programs:        make(map[string]*Program),
+		sysvars:         make(map[string]*Sysvar),
+		installModeDPs:  make(map[string]*InstallMode),
+	}
+}
+
+// --- Programs ---
+
+// PutProgram registers (or replaces) a program under its ID. Fires
+// every observer registered via [Hub.OnProgramRegistered] after the
+// insert so late-bound consumers (MQTT publisher, UI cache) can wire
+// per-program subscriptions.
+func (h *Hub) PutProgram(p *Program) {
+	if p == nil || p.ID == "" {
+		return
+	}
+	h.mu.Lock()
+	h.programs[p.ID] = p
+	observers := append([]func(*Program){}, h.programObservers...)
+	h.mu.Unlock()
+	for _, cb := range observers {
+		if cb != nil {
+			cb(p)
+		}
+	}
+}
+
+// OnProgramRegistered subscribes cb to every [Hub.PutProgram] call.
+// Returns an idempotent unsubscribe closure. The hook does NOT fire
+// retroactively for programs already present — callers that need the
+// existing set must read [Hub.Programs] themselves once after
+// registering.
+func (h *Hub) OnProgramRegistered(cb func(*Program)) func() {
+	if cb == nil {
+		return func() {}
+	}
+	h.mu.Lock()
+	h.programObservers = append(h.programObservers, cb)
+	idx := len(h.programObservers) - 1
+	h.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			if idx < len(h.programObservers) {
+				h.programObservers[idx] = nil
+			}
+		})
+	}
+}
+
+// Program returns a program by ID.
+func (h *Hub) Program(id string) (*Program, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	p, ok := h.programs[id]
+	return p, ok
+}
+
+// Programs returns every registered program sorted by ID.
+func (h *Hub) Programs() []*Program {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make([]*Program, 0, len(h.programs))
+	for _, p := range h.programs {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// ClearPrograms drops all registered programs atomically. Used by
+// [HubCoordinator.Clear] on stop / reconnect to reset hub state.
+func (h *Hub) ClearPrograms() {
+	h.mu.Lock()
+	h.programs = make(map[string]*Program)
+	h.mu.Unlock()
+}
+
+// RemoveProgram drops the program and reports whether one existed. Fires the
+// program's [Program.NotifyRemoved] hooks before the entry is deleted so
+// subscribers (MQTT discovery, UI state) can clean up.
+func (h *Hub) RemoveProgram(id string) bool {
+	h.mu.Lock()
+	prog, ok := h.programs[id]
+	if !ok {
+		h.mu.Unlock()
+		return false
+	}
+	delete(h.programs, id)
+	h.mu.Unlock()
+	if prog != nil {
+		prog.NotifyRemoved()
+	}
+	return true
+}
+
+// --- System variables ---
+
+// PutSysvar registers (or replaces) a sysvar under its Name. Fires
+// every observer registered via [Hub.OnSysvarRegistered] after the
+// insert so late-bound consumers (MQTT publisher, UI cache) can wire
+// per-sysvar subscriptions.
+func (h *Hub) PutSysvar(s *Sysvar) {
+	if s == nil || s.Name == "" {
+		return
+	}
+	h.mu.Lock()
+	h.sysvars[s.Name] = s
+	observers := append([]func(*Sysvar){}, h.sysvarObservers...)
+	h.mu.Unlock()
+	for _, cb := range observers {
+		if cb != nil {
+			cb(s)
+		}
+	}
+}
+
+// OnSysvarRegistered subscribes cb to every [Hub.PutSysvar] call.
+// Returns an idempotent unsubscribe closure. The hook does NOT fire
+// retroactively for sysvars already present — callers that need the
+// existing set must read [Hub.Sysvars] themselves once after
+// registering.
+func (h *Hub) OnSysvarRegistered(cb func(*Sysvar)) func() {
+	if cb == nil {
+		return func() {}
+	}
+	h.mu.Lock()
+	h.sysvarObservers = append(h.sysvarObservers, cb)
+	idx := len(h.sysvarObservers) - 1
+	h.mu.Unlock()
+
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			if idx < len(h.sysvarObservers) {
+				h.sysvarObservers[idx] = nil
+			}
+		})
+	}
+}
+
+// Sysvar returns a sysvar by Name.
+func (h *Hub) Sysvar(name string) (*Sysvar, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	s, ok := h.sysvars[name]
+	return s, ok
+}
+
+// Sysvars returns every registered sysvar sorted by Name.
+func (h *Hub) Sysvars() []*Sysvar {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make([]*Sysvar, 0, len(h.sysvars))
+	for _, s := range h.sysvars {
+		out = append(out, s)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+// ClearSysvars drops all registered sysvars atomically. Used by
+// [HubCoordinator.Clear] on stop / reconnect to reset hub state.
+func (h *Hub) ClearSysvars() {
+	h.mu.Lock()
+	h.sysvars = make(map[string]*Sysvar)
+	h.mu.Unlock()
+}
+
+// RemoveSysvar drops a sysvar from the in-memory cache and reports
+// whether one existed. Use DeleteSysvarRemote for full CCU-side
+// removal — this method is the local-only path used during
+// re-snapshots.
+func (h *Hub) RemoveSysvar(name string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if _, ok := h.sysvars[name]; !ok {
+		return false
+	}
+	delete(h.sysvars, name)
+	return true
+}
+
+// CreateSysvarRemote provisions a sysvar on the CCU. The hub mirror
+// is updated lazily by the periodic sysvar refresh; the REST handler
+// returns 202 once the call lands.
+func (h *Hub) CreateSysvarRemote(
+	ctx context.Context,
+	name, valueType, unit, vmin, vmax string,
+	valueList []string,
+) error {
+	if h.SysvarMutator == nil {
+		return ErrNoSysvarMutator
+	}
+	return h.SysvarMutator.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, valueList)
+}
+
+// DeleteSysvarRemote removes a sysvar on the CCU and drops it from
+// the in-memory cache once the call succeeded.
+func (h *Hub) DeleteSysvarRemote(ctx context.Context, name string) error {
+	if h.SysvarMutator == nil {
+		return ErrNoSysvarMutator
+	}
+	if err := h.SysvarMutator.DeleteSysvar(ctx, name); err != nil {
+		return err
+	}
+	h.RemoveSysvar(name)
+	return nil
+}
+
+// UpdateSysvarRemote patches a sysvar's metadata (unit, bounds,
+// value list, description) without changing its type. Type
+// changes are unsafe at the CCU level — callers wanting that
+// must delete + recreate.
+func (h *Hub) UpdateSysvarRemote(
+	ctx context.Context,
+	name, unit, vmin, vmax, description string,
+	valueList []string,
+) error {
+	if h.SysvarMutator == nil {
+		return ErrNoSysvarMutator
+	}
+	return h.SysvarMutator.UpdateSysvar(ctx, name, unit, vmin, vmax, description, valueList)
+}
+
+// SetDeviceRoomsRemote replaces the device's room assignments via
+// the wired RoomMutator. The hub mirror picks up the new state on
+// the next device-list refresh.
+func (h *Hub) SetDeviceRoomsRemote(
+	ctx context.Context, deviceAddress string, rooms []string,
+) error {
+	if h.RoomMutator == nil {
+		return ErrNoRoomMutator
+	}
+	return h.RoomMutator.SetDeviceRooms(ctx, deviceAddress, rooms)
+}
+
+// SetDeviceFunctionsRemote replaces the device's function
+// assignments via the wired FunctionMutator.
+func (h *Hub) SetDeviceFunctionsRemote(
+	ctx context.Context, deviceAddress string, functions []string,
+) error {
+	if h.FunctionMutator == nil {
+		return ErrNoFunctionMutator
+	}
+	return h.FunctionMutator.SetDeviceFunctions(ctx, deviceAddress, functions)
+}
+
+// TriggerBackupRemote runs the CCU backup script.
+func (h *Hub) TriggerBackupRemote(ctx context.Context) error {
+	if h.BackupTrigger == nil {
+		return ErrNoBackupTrigger
+	}
+	return h.BackupTrigger.TriggerBackup(ctx)
+}
+
+// BackupStatusRemote polls the CCU backup script status.
+func (h *Hub) BackupStatusRemote(ctx context.Context) (string, error) {
+	if h.BackupTrigger == nil {
+		return "", ErrNoBackupTrigger
+	}
+	return h.BackupTrigger.BackupStatus(ctx)
+}
+
+// TriggerFirmwareUpdateRemote kicks off the global CCU firmware
+// update flow.
+func (h *Hub) TriggerFirmwareUpdateRemote(ctx context.Context) error {
+	if h.FirmwareUpdater == nil {
+		return ErrNoFirmwareUpdater
+	}
+	return h.FirmwareUpdater.TriggerFirmwareUpdate(ctx)
+}
+
+// AcceptInboxDeviceRemote flips the device's ReadyConfig flag.
+func (h *Hub) AcceptInboxDeviceRemote(
+	ctx context.Context, deviceAddress string,
+) error {
+	if h.InboxAccepter == nil {
+		return ErrNoInboxAccepter
+	}
+	return h.InboxAccepter.AcceptDeviceInInbox(ctx, deviceAddress)
+}
+
+// --- InstallMode data points ---
+
+// PutInstallMode registers (or replaces) an InstallMode keyed by its
+// InterfaceID.
+func (h *Hub) PutInstallMode(m *InstallMode) {
+	if m == nil || m.InterfaceID == "" {
+		return
+	}
+	h.mu.Lock()
+	h.installModeDPs[m.InterfaceID] = m
+	h.mu.Unlock()
+}
+
+// InstallModeDP returns the InstallMode for a given interfaceID.
+func (h *Hub) InstallModeDP(interfaceID string) (*InstallMode, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	m, ok := h.installModeDPs[interfaceID]
+	return m, ok
+}
+
+// InstallModeDPs returns all registered install-mode data points. Returns a
+// snapshot slice; the caller must not modify the elements.
+func (h *Hub) InstallModeDPs() []*InstallMode {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	out := make([]*InstallMode, 0, len(h.installModeDPs))
+	for _, m := range h.installModeDPs {
+		out = append(out, m)
+	}
+	return out
+}
+
+// --- Connectivity ---
+
+// SetConnectivity wires the per-interface reachability tracker to the Hub.
+// Called by the adapter layer once the connectivity aggregate is initialised.
+// Nil detaches. Returns the Hub for chaining.
+func (h *Hub) SetConnectivity(c *Connectivity) *Hub {
+	h.mu.Lock()
+	h.connectivity = c
+	h.mu.Unlock()
+	return h
+}
+
+// ConnectivityDataPoints returns the connectivity aggregate or nil when it
+// has not been wired via [Hub.SetConnectivity].
+func (h *Hub) ConnectivityDataPoints() *Connectivity {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.connectivity
+}
+
+// --- Hub-level data fetch delegates ---
+
+// FetchAlarmMessagesData retrieves alarm messages from the backend via the
+// supplied [DataFetcher] and updates the hub's [Messages] aggregate. Returns
+// an error only when the fetcher call fails.
+func (h *Hub) FetchAlarmMessagesData(ctx context.Context, fetcher DataFetcher) error {
+	if fetcher == nil {
+		return errors.New("hub: nil data fetcher")
+	}
+	msgs, err := fetcher.FetchAlarmMessages(ctx)
+	if err != nil {
+		return err
+	}
+	h.Messages.Replace(msgs)
+	return nil
+}
+
+// FetchInboxData retrieves inbox devices from the backend via the supplied
+// [DataFetcher] and updates the hub's [Inbox] aggregate. Returns an error
+// only when the fetcher call fails.
+func (h *Hub) FetchInboxData(ctx context.Context, fetcher DataFetcher) error {
+	if fetcher == nil {
+		return errors.New("hub: nil data fetcher")
+	}
+	devices, err := fetcher.FetchInboxDevices(ctx)
+	if err != nil {
+		return err
+	}
+	h.Inbox.Replace(devices)
+	return nil
+}

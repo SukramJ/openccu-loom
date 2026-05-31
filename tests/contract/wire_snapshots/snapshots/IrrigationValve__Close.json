@@ -1,0 +1,17 @@
+{
+  "dp_type": "IrrigationValve",
+  "setter": "Close",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "WHS0001:1",
+          "parameter": "STATE",
+          "value": false
+        }
+      ]
+    }
+  ]
+}

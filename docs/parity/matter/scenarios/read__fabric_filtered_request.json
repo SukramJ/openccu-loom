@@ -1,0 +1,29 @@
+{
+  "name": "read__fabric_filtered_request",
+  "description": "Locks the FabricFiltered=true ReadRequest path at scenario level: peer ships a ReadRequestMessage with the FabricFiltered flag set (Matter §10.6.3), the bridge stamps the FabricFiltered+FabricIndex into the dispatch context (im.WithFabricFilter), and replies with a ReportData on the same exchange. Cluster servers that implement [interfaces.FabricScopedReader] then project per-fabric. The scenario exercises the wire-level path against the single_onoff_endpoint_source topology — the OnOff cluster is not fabric-scoped, but the bridge MUST still honor the request flag and reply rather than dropping or panicking. Per-fabric output verification (different fabric indexes yielding different attribute payloads) stays queued behind a real FabricScopedReader fake in topology.",
+  "tags": ["matter", "read", "fabric-filtered"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 191,
+        "peer_subscribe_exchange_id": 193,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_read_request",
+      "fabric_filtered": true,
+      "peer_exchange_id": 197
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData"
+    }
+  ]
+}

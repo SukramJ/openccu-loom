@@ -1,0 +1,28 @@
+{
+  "name": "subscribe__wildcard_against_real_topology",
+  "description": "Drives the IM:Subscribe negotiation with an all-wildcard AttributePath (HasEndpoint=HasCluster=HasAttribute=false) against the single_onoff_endpoint_source topology. The dispatcher's wildcard-expansion path produces one AttributeReport per (endpoint × cluster × attribute) match — exercising the cross-endpoint enumeration logic that hides behind every Apple-side initial Subscribe. The scenario asserts the negotiation completes with an initial ReportData → per-chunk StatusResponse → SubscribeResponse. Multi-chunk burst variants (one MoreChunkedMessages=true intermediate, one MoreChunkedMessages=false final) stay queued behind a larger topology recipe that overflows the 1100-byte chunk budget.",
+  "tags": ["matter", "subscribe", "negotiation", "wildcard"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 167,
+        "peer_subscribe_exchange_id": 173,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_subscribe_request",
+      "wildcard": true
+    },
+    {
+      "actor": "bridge",
+      "kind": "drain_subscribe_chunks",
+      "bind_exchange_id_to": "$sub_resp_exch"
+    }
+  ]
+}

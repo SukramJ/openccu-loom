@@ -1,0 +1,17 @@
+{
+  "dp_type": "Switch",
+  "setter": "TurnOff",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "VCU0001:3",
+          "parameter": "STATE",
+          "value": false
+        }
+      ]
+    }
+  ]
+}

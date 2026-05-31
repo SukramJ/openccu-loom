@@ -1,0 +1,55 @@
+# Pre-release Matter conformance smoke against chip-tool.
+#
+# Linux-only by design — Matter discovery rides on UDP/IPv6 multicast
+# (mDNS), and Docker Desktop on macOS / Windows does not bridge the
+# host's multicast domain into containers. Run this on a Linux host
+# (CI runner or a Linux VM); on macOS use a UTM/Multipass guest.
+#
+# The chip-tool image is the official CSA build that publishes
+# `connectedhomeip/chip-cert-bins` on Docker Hub. Pin is the master
+# commit hash that produced the binary (see docs/contributor/matter-smoke.md
+# for the bump procedure). It tracks the upstream Matter spec; pinning
+# stops drift between local + CI smoke.
+
+services:
+  openccu-loom:
+    image: openccu-loom-matter-smoke:local
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    network_mode: host
+    volumes:
+      - ./fixtures/matter-smoke-cfg.yaml:/etc/openccu-loom/config.yaml:ro
+      - matter-smoke-data:/tmp/openccu-loom-matter-smoke
+    command: ["run", "--config", "/etc/openccu-loom/config.yaml"]
+    healthcheck:
+      # No HTTP surface in the smoke config — probe the UDP listen
+      # port instead. /dev/udp is a bash builtin; distroless lacks it,
+      # so we instead wait for the daemon's structured-log line via
+      # `docker compose logs --tail=20` from the Makefile target.
+      test: ["CMD", "/app/openccu-loom", "version"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  chip-tool:
+    image: connectedhomeip/chip-cert-bins:6feac778f196483b6355d35fc529f183b293b71f
+    network_mode: host
+    # Matter mDNS lookup goes through the host's avahi-daemon when
+    # available. Mounting the system bus lets chip-tool's discovery
+    # backend resolve `_matter._tcp.local` via the host resolver
+    # instead of doing its own SRV browse.
+    volumes:
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      - chip-tool-storage:/root/.chip
+    # Idle entrypoint — the Makefile target execs the actual chip-tool
+    # invocation via `docker compose exec`. Keeps storage persistent
+    # across multiple commissioning attempts in a single smoke run.
+    entrypoint: ["sleep", "infinity"]
+    depends_on:
+      openccu-loom:
+        condition: service_healthy
+
+volumes:
+  matter-smoke-data:
+  chip-tool-storage:

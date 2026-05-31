@@ -1,0 +1,377 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package main
+
+import (
+	"bytes"
+	"context"
+	"log/slog"
+	"math/big"
+	"sync"
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
+	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
+)
+
+// ── deriveOperationalIPK ──────────────────────────────────────────────────────
+
+func TestDeriveOperationalIPK_ValidInput(t *testing.T) {
+	t.Parallel()
+	rawIPK := make([]byte, 16)
+	for i := range rawIPK {
+		rawIPK[i] = byte(i + 1)
+	}
+	var compressedID [8]byte
+	compressedID[0] = 0xCA
+	compressedID[7] = 0xFE
+
+	out, err := deriveOperationalIPK(rawIPK, compressedID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Must be 16 bytes and non-zero.
+	allZero := true
+	for _, b := range out {
+		if b != 0 {
+			allZero = false
+			break
+		}
+	}
+	if allZero {
+		t.Error("expected non-zero derived IPK")
+	}
+}
+
+func TestDeriveOperationalIPK_WrongLength_Errors(t *testing.T) {
+	t.Parallel()
+	// 15 bytes → should error.
+	_, err := deriveOperationalIPK(make([]byte, 15), [8]byte{})
+	if err == nil {
+		t.Fatal("expected error for 15-byte raw IPK")
+	}
+}
+
+func TestDeriveOperationalIPK_Deterministic(t *testing.T) {
+	t.Parallel()
+	rawIPK := bytes.Repeat([]byte{0xAB}, 16)
+	var id [8]byte
+	id[0] = 0x11
+
+	a, err := deriveOperationalIPK(rawIPK, id)
+	if err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	b, err := deriveOperationalIPK(rawIPK, id)
+	if err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	if a != b {
+		t.Errorf("not deterministic: %x != %x", a, b)
+	}
+}
+
+// ── privKeyFromScalar ─────────────────────────────────────────────────────────
+
+func TestPrivKeyFromScalar_ValidInput(t *testing.T) {
+	t.Parallel()
+	// Build a random-ish scalar (non-zero, < curve order for P-256).
+	// Use a fixed value so the test is deterministic.
+	scalar := make([]byte, 32)
+	for i := range scalar {
+		scalar[i] = byte(i + 1)
+	}
+	priv, err := privKeyFromScalar(scalar)
+	if err != nil {
+		t.Fatalf("privKeyFromScalar: %v", err)
+	}
+	if priv == nil {
+		t.Fatal("expected non-nil private key")
+	}
+	if priv.D == nil || priv.D.Cmp(new(big.Int).SetBytes(scalar)) != 0 { //nolint:staticcheck // priv.D deprecated in Go 1.26; test-only direct scalar verification until we migrate to crypto/ecdh
+		t.Error("priv.D does not match input scalar")
+	}
+	if priv.PublicKey.X == nil || priv.PublicKey.Y == nil { //nolint:staticcheck // priv.PublicKey.X/Y deprecated in Go 1.26; test-only coordinate check until we migrate to crypto/ecdh
+		t.Error("expected non-nil public key coordinates")
+	}
+}
+
+func TestPrivKeyFromScalar_WrongLength_Errors(t *testing.T) {
+	t.Parallel()
+	_, err := privKeyFromScalar(make([]byte, 31))
+	if err == nil {
+		t.Fatal("expected error for 31-byte scalar")
+	}
+}
+
+func TestPrivKeyFromScalar_ZeroScalar_IsAccepted(t *testing.T) {
+	t.Parallel()
+	// P-256 accepts scalar=0 (maps to point at infinity — not a valid
+	// cryptographic key, but privKeyFromScalar only checks length, not
+	// validity).
+	priv, err := privKeyFromScalar(make([]byte, 32))
+	if err != nil {
+		t.Fatalf("zero scalar: unexpected error: %v", err)
+	}
+	if priv == nil {
+		t.Fatal("expected non-nil private key from zero scalar")
+	}
+}
+
+// ── pickFabric ────────────────────────────────────────────────────────────────
+
+func TestPickFabric_WantFabricIDMatch(t *testing.T) {
+	t.Parallel()
+	fabrics := []matterstore.FabricRecord{
+		{FabricID: 0xCAFE, FabricIndex: 3},
+		{FabricID: 0xBEEF, FabricIndex: 1},
+		{FabricID: 0xDEAD, FabricIndex: 2},
+	}
+	got := pickFabric(fabrics, 0xBEEF)
+	if got == nil || got.FabricID != 0xBEEF {
+		t.Errorf("pickFabric: got %+v, want FabricID=0xBEEF", got)
+	}
+}
+
+func TestPickFabric_WantFabricIDNoMatch_FallsBackToLowest(t *testing.T) {
+	t.Parallel()
+	fabrics := []matterstore.FabricRecord{
+		{FabricID: 0xCAFE, FabricIndex: 3},
+		{FabricID: 0xBEEF, FabricIndex: 1},
+		{FabricID: 0xDEAD, FabricIndex: 2},
+	}
+	// 0x9999 is not in the list → lowest FabricIndex (1 → FabricID 0xBEEF).
+	got := pickFabric(fabrics, 0x9999)
+	if got == nil || got.FabricIndex != 1 {
+		t.Errorf("pickFabric fallback: got FabricIndex=%d, want 1", got.FabricIndex)
+	}
+}
+
+func TestPickFabric_WantFabricIDZero_FallsBackToLowest(t *testing.T) {
+	t.Parallel()
+	fabrics := []matterstore.FabricRecord{
+		{FabricID: 0xCAFE, FabricIndex: 5},
+		{FabricID: 0xBEEF, FabricIndex: 2},
+	}
+	// 0 → always picks lowest FabricIndex.
+	got := pickFabric(fabrics, 0)
+	if got == nil || got.FabricIndex != 2 {
+		t.Errorf("pickFabric zero: got FabricIndex=%d, want 2", got.FabricIndex)
+	}
+}
+
+func TestPickFabric_SingleEntry(t *testing.T) {
+	t.Parallel()
+	fabrics := []matterstore.FabricRecord{
+		{FabricID: 0xDEAD, FabricIndex: 7},
+	}
+	got := pickFabric(fabrics, 0)
+	if got == nil || got.FabricID != 0xDEAD {
+		t.Errorf("pickFabric single: got %+v", got)
+	}
+}
+
+// ── loadFabricRootPublicKey ───────────────────────────────────────────────────
+
+func TestLoadFabricRootPublicKey_NilStore_Errors(t *testing.T) {
+	t.Parallel()
+	_, err := loadFabricRootPublicKey(context.Background(), nil, 1)
+	if err == nil {
+		t.Fatal("expected error for nil store")
+	}
+}
+
+func TestLoadFabricRootPublicKey_LiveStore_UnknownFabric_Errors(t *testing.T) {
+	t.Parallel()
+	mgr := buildTestOperationalManager(t)
+	store := matterStoreFromManager(t, mgr)
+	// FabricIndex 99 doesn't exist.
+	_, err := loadFabricRootPublicKey(context.Background(), store, 99)
+	if err == nil {
+		t.Fatal("expected error for unknown fabric index")
+	}
+}
+
+// ── loadAdditionalFabricsForCase ──────────────────────────────────────────────
+
+func TestLoadAdditionalFabricsForCase_NilStore_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	caseFabrics := map[uint8]*caseFabricEntry{}
+	var mu sync.RWMutex
+	got := loadAdditionalFabricsForCase(context.Background(), nil, 1, caseFabrics, &mu, logger)
+	if got != 0 {
+		t.Errorf("expected 0 for nil store, got %d", got)
+	}
+}
+
+func TestLoadAdditionalFabricsForCase_EmptyStore_ReturnsZero(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, nil))
+	mgr := buildTestOperationalManager(t)
+	store := matterStoreFromManager(t, mgr)
+	caseFabrics := map[uint8]*caseFabricEntry{}
+	var mu sync.RWMutex
+	// Empty store → no fabrics to load.
+	got := loadAdditionalFabricsForCase(context.Background(), store, 1, caseFabrics, &mu, logger)
+	if got != 0 {
+		t.Errorf("expected 0 for empty store, got %d", got)
+	}
+}
+
+// ── caseDestinationResolver.ResolveSigma1Destination ─────────────────────────
+
+func TestCaseDestinationResolver_NilFabrics_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: nil,
+		logger:  slog.Default(),
+	}
+	var dest [32]byte
+	var random [32]byte
+	_, _, ok := resolver.ResolveSigma1Destination(dest, random)
+	if ok {
+		t.Error("expected ok=false for nil fabrics map")
+	}
+}
+
+func TestCaseDestinationResolver_EmptyFabrics_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	empty := map[uint8]*caseFabricEntry{}
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &empty,
+		logger:  slog.Default(),
+	}
+	var dest [32]byte
+	var random [32]byte
+	_, _, ok := resolver.ResolveSigma1Destination(dest, random)
+	if ok {
+		t.Error("expected ok=false for empty fabrics map")
+	}
+}
+
+func TestCaseDestinationResolver_NilEntryInMap_Skipped(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	m := map[uint8]*caseFabricEntry{
+		1: nil, // nil entry — must be skipped without panic
+	}
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  slog.Default(),
+	}
+	var dest [32]byte
+	var random [32]byte
+	_, _, ok := resolver.ResolveSigma1Destination(dest, random)
+	if ok {
+		t.Error("expected ok=false when only entry is nil")
+	}
+}
+
+// TestCaseDestinationResolver_MatchingDestination exercises the
+// cand == destinationID success path and the `r.logger != nil` debug log.
+func TestCaseDestinationResolver_MatchingDestination_ReturnsTrue(t *testing.T) {
+	t.Parallel()
+
+	// Build a synthetic caseFabricEntry whose ComputeDestinationID output
+	// we can precompute so we can pass the matching dest to ResolveSigma1Destination.
+	var opIPK [16]byte
+	for i := range opIPK {
+		opIPK[i] = byte(i + 1)
+	}
+	var initiatorRandom [sigma.RandomSize]byte
+	for i := range initiatorRandom {
+		initiatorRandom[i] = byte(i + 0x10)
+	}
+	// Use a 65-byte uncompressed P-256 point (0x04 || 32 zero bytes || 32 zero bytes).
+	rootPub := make([]byte, 65)
+	rootPub[0] = 0x04
+
+	const fabricID uint64 = 0x1122334455667788
+	const nodeID uint64 = 0xAABBCCDDEEFF0011
+
+	expectedDest := sigma.ComputeDestinationID(opIPK, initiatorRandom, rootPub, fabricID, nodeID)
+
+	identity := &sigma.Identity{
+		IPK:      opIPK,
+		FabricID: fabricID,
+		NodeID:   nodeID,
+	}
+	entry := &caseFabricEntry{
+		identity:      identity,
+		rootPublicKey: rootPub,
+		fabricIndex:   1,
+	}
+
+	var mu sync.RWMutex
+	m := map[uint8]*caseFabricEntry{1: entry}
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  logger,
+	}
+
+	retIdentity, _, ok := resolver.ResolveSigma1Destination(expectedDest, initiatorRandom)
+	if !ok {
+		t.Fatal("expected ok=true for matching destination")
+	}
+	if retIdentity != identity {
+		t.Error("returned identity mismatch")
+	}
+	// The logger.Debug call should have fired — check for the key.
+	if !bytes.Contains(buf.Bytes(), []byte("matter.bridge.case.identity_resolved")) {
+		t.Errorf("expected identity_resolved debug log; got:\n%s", buf.String())
+	}
+}
+
+// TestCaseDestinationResolver_NoMatchingDestination_LogsUnresolved exercises
+// the `r.logger != nil` unresolved debug log at the end.
+func TestCaseDestinationResolver_NoMatchingDestination_LogsUnresolved(t *testing.T) {
+	t.Parallel()
+
+	// Create a real entry with wrong destination so the loop ends without match.
+	var opIPK [16]byte
+	opIPK[0] = 0xAB
+	rootPub := make([]byte, 65)
+	rootPub[0] = 0x04
+	identity := &sigma.Identity{
+		IPK:      opIPK,
+		FabricID: 0x1,
+		NodeID:   0x2,
+	}
+	entry := &caseFabricEntry{
+		identity:      identity,
+		rootPublicKey: rootPub,
+		fabricIndex:   1,
+	}
+
+	var mu sync.RWMutex
+	m := map[uint8]*caseFabricEntry{1: entry}
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  logger,
+	}
+
+	var wrongDest [32]byte
+	var random [sigma.RandomSize]byte
+	_, _, ok := resolver.ResolveSigma1Destination(wrongDest, random)
+	if ok {
+		t.Error("expected ok=false for non-matching destination")
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("matter.bridge.case.identity_unresolved")) {
+		t.Errorf("expected identity_unresolved debug log; got:\n%s", buf.String())
+	}
+}

@@ -1,0 +1,231 @@
+name: 🐞 Fehler melden (Deutsch)
+description: Melde ein Problem mit OpenCCU-Loom
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dieses Formular dient ausschließlich der **Fehlermeldung**.
+        Für Fragen, Ideen und Funktionswünsche nutze bitte die
+        [Diskussionen](https://github.com/SukramJ/openccu-loom/discussions).
+
+        ⚠️ **Sinnvoller Support ist nur möglich, wenn alle erforderlichen Informationen bereitgestellt werden.**
+        Insbesondere: der **Diagnose-Dump (`.json`)** und eine **Protokolldatei (am besten DEBUG)**.
+        Issues ohne diese Daten können kommentarlos geschlossen werden.
+
+        💡 Alle Diagnose-Dateien lassen sich **per Drag-and-Drop direkt in die Felder unten** hochladen —
+        sie werden als Datei an das Issue angehängt. Bitte keine seitenlangen Logs in den Text einfügen.
+
+  - type: checkboxes
+    attributes:
+      label: Ich bestätige
+      options:
+        - label: Ich verwende die neueste OpenCCU-Loom-Version (siehe [Releases](https://github.com/SukramJ/openccu-loom/releases)).
+          required: true
+        - label: Ich habe das [Benutzerhandbuch](https://github.com/SukramJ/openccu-loom/blob/main/docs/user-guide.md) gelesen und versucht, das Problem selbst einzugrenzen.
+          required: true
+        - label: Das Backend (CCU/OpenCCU/Homegear/…) funktioniert eigenständig — Geräte sind über dessen eigene Oberfläche steuerbar.
+          required: true
+        - label: Ich habe nach bestehenden, gleichartigen Issues gesucht.
+          required: true
+
+  - type: textarea
+    id: problem
+    validations:
+      required: true
+    attributes:
+      label: Das Problem
+      description: >-
+        Bitte beantworte:
+
+        1. **Was passiert?** (tatsächliches Verhalten)
+
+        2. **Wann/Wie tritt es auf?** (nach Neustart, bestimmte Geräte/Interfaces, bestimmte Zeiten …)
+
+        3. **Was hast Du erwartet?** (erwartetes Verhalten)
+
+        4. **Was hast Du bereits versucht?** (Neustart, Reconnect, Neu-Anlernen …)
+
+        Keine Protokolle hier — die gehören in das Log-Feld weiter unten.
+      placeholder: Beschreibung des Problems …
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Systemumgebung
+
+  - type: input
+    id: version
+    validations:
+      required: true
+    attributes:
+      label: OpenCCU-Loom-Version
+      placeholder: 0.1.0
+      description: >-
+        Ermitteln über `openccu-loom version` (Binary/Docker: `docker exec <container> openccu-loom version`),
+        die Seite **`/about`**, oder das Footer/About in der Config-UI.
+
+  - type: input
+    id: last_working
+    attributes:
+      label: Letzte funktionierende Version (falls bekannt)
+      placeholder: 0.0.x
+
+  - type: dropdown
+    id: deployment
+    validations:
+      required: true
+    attributes:
+      label: Wie betreibst Du OpenCCU-Loom?
+      options:
+        - Docker (linux/amd64)
+        - Docker (linux/arm64)
+        - Docker (linux/armv7)
+        - Statisches Binary (Linux)
+        - Statisches Binary (macOS)
+        - Statisches Binary (Windows)
+        - systemd-Service
+        - Sonstiges (bitte unter „Weitere Informationen" angeben)
+
+  - type: input
+    id: host
+    attributes:
+      label: Host / Hardware / OS
+      placeholder: "z. B. Proxmox-VM, Raspberry Pi 4, Debian 12, Synology …"
+
+  - type: dropdown
+    id: backend
+    validations:
+      required: true
+    attributes:
+      label: Welches Homematic-Backend?
+      options:
+        - OpenCCU
+        - CCU3
+        - RaspberryMatic
+        - piVCCU / debmatic
+        - CCU2
+        - Homegear
+        - Sonstiges
+
+  - type: input
+    id: backend_version
+    attributes:
+      label: Backend-Version (falls bekannt)
+      placeholder: "z. B. 3.x.x / RaspberryMatic 3.7x"
+
+  - type: input
+    id: central_count
+    validations:
+      required: true
+    attributes:
+      label: Wie viele CCUs (Centrals) sind konfiguriert?
+      placeholder: "1"
+      description: OpenCCU-Loom ist Multi-CCU-fähig — gib die Anzahl an.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Details
+
+  - type: checkboxes
+    id: interfaces
+    attributes:
+      label: Welche Schnittstellen werden verwendet?
+      options:
+        - label: HmIP-RF (Homematic IP)
+        - label: BidCos-RF (Homematic Funk)
+        - label: BidCos-Wired (HM-Wired)
+        - label: HmIP-Wired
+        - label: VirtualDevices (Gruppen / Heizgruppen)
+        - label: CUxD (BIN-RPC)
+
+  - type: checkboxes
+    id: northbound
+    attributes:
+      label: Welche Ausgabe-/Bridge-Funktionen nutzt Du?
+      options:
+        - label: MQTT (Home Assistant Discovery)
+        - label: MQTT (Raw-Topics)
+        - label: REST- / WebSocket-API
+        - label: Config-UI (Web-Oberfläche)
+        - label: Matter-Bridge
+
+  - type: checkboxes
+    id: config_details
+    attributes:
+      label: Relevante Konfigurations-Details
+      options:
+        - label: TLS / HTTPS aktiv
+        - label: "Dynamische Callback-Ports (`rpc_callback.port: 0` oder Range)"
+        - label: OIDC- / Token- / Basic-Auth aktiv
+        - label: Reverse-Proxy vorgeschaltet
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Konfiguration (redigiert)
+      render: yaml
+      placeholder: |
+        # Relevanter Ausschnitt aus config.yaml — Passwörter/Token/Hostnamen schwärzen!
+      description: >-
+        Relevanter Ausschnitt der `config.yaml`.
+        **Bitte Passwörter, Token und ggf. interne Hostnamen entfernen.**
+
+  - type: textarea
+    id: diagnostics
+    validations:
+      required: true
+    attributes:
+      label: Diagnose-Dump (`.json`) — keine Logs hier!
+      placeholder: "Ziehe die .json-Diagnosedatei per Drag-and-Drop hierher."
+      description: >-
+        ⚠️ Nur die **`.json`-Diagnosedatei** hochladen — keine Log-Inhalte (die gehören ins Feld darunter).
+
+
+        **So erhältst Du den Diagnose-Dump:**
+
+        - **Config-UI:** Seite **Diagnose** → Button **„Diagnose herunterladen"** (anonymisiert standardmäßig geräte-/betreiberidentifizierende Felder).
+
+        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics" -o diagnostics.json`
+          (roh, unanonymisiert: `?anonymize=0` anhängen). Der Dump bündelt Health, Interfaces, Incidents und Log-Level-Overrides.
+
+  - type: textarea
+    id: logs
+    validations:
+      required: true
+    attributes:
+      label: Protokoll (am besten DEBUG)
+      placeholder: "Ziehe die Log-Datei (.ndjson / .gz) per Drag-and-Drop hierher."
+      description: >-
+        **Empfohlen:** DEBUG-Level setzen, dann das Problem reproduzieren, dann herunterladen.
+
+
+        **So erhältst Du das Log:**
+
+        - **DEBUG aktivieren:** Config-UI → **Logdaten** (`#/logs`) → Level-Dropdown auf `debug`
+          (oder REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8080/api/v1/diagnostics/log-level`).
+
+        - **Zeitfenster aufzeichnen (empfohlen):** Config-UI → **Diagnose & Aufzeichnen** → „Neue Aufzeichnung: Debug-Log" starten,
+          Problem reproduzieren, beenden → Archiv (`.gz`) herunterladen.
+
+        - **Letzte Zeilen exportieren:** Config-UI → **Logdaten** → „letzte N herunterladen", oder
+          `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
+
+  - type: textarea
+    id: rpc_recording
+    attributes:
+      label: RPC-Verkehrs-Aufzeichnung (optional, `.json`)
+      placeholder: "Bei reproduzierbaren CCU-/Wire-Problemen: .json hier ablegen."
+      description: >-
+        Nur bei Problemen im CCU-Verkehr (XML-/JSON-/BIN-RPC), die sich reproduzieren lassen — sehr hilfreich für deterministisches Replay.
+
+
+        **So erhältst Du sie:** Config-UI → **Diagnose & Aufzeichnen** → „Neue Aufzeichnung: RPC-Verkehr" starten
+        (optional Dauer/Anonymisieren), Problem auslösen, beenden → je CCU als **map** oder **golden** herunterladen.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Weitere Informationen
+      description: Screenshots, Reproduktionsschritte, betroffene Geräteadressen/Kanäle, alles Weitere.

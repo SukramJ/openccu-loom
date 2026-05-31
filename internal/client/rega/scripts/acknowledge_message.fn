@@ -1,0 +1,52 @@
+!# openccu-loom — acknowledge_message
+!# Params: ##message_id##
+!# Output: {"success":<bool>,"error":"<reason>"}
+!#
+!# Acknowledges a service message (ID_SERVICES) or alarm message
+!# (ID_SYSTEM_VARIABLES). Service messages require the trigger
+!# datapoint to have the OPERATION_WRITE bit set; alarm messages
+!# are acknowledged unconditionally.
+!#
+!# Invariant: exactly one of (success:true) or (success:false + error)
+!# is produced.
+
+string sMessageId = "##message_id##";
+boolean bSuccess = false;
+string sError = "";
+
+object oAlarm = dom.GetObject(sMessageId);
+if (oAlarm) {
+    boolean bIsService = false;
+    object oServices = dom.GetObject(ID_SERVICES);
+    if (oServices) {
+        string sCandidate;
+        foreach (sCandidate, oServices.EnumIDs()) {
+            if (sCandidate == sMessageId) {
+                bIsService = true;
+            }
+        }
+    }
+
+    if (bIsService) {
+        object oTrigger = dom.GetObject(oAlarm.AlTriggerDP());
+        if (oTrigger && (oTrigger.Operations() & 2)) {
+            oAlarm.AlReceipt();
+            bSuccess = true;
+        } else {
+            sError = "Message is not acknowledgeable";
+        }
+    } else {
+        oAlarm.AlReceipt();
+        bSuccess = true;
+    }
+} else {
+    sError = "Message not found";
+}
+
+Write('{"success":');
+if (bSuccess) {
+    Write('true');
+} else {
+    Write('false');
+}
+Write(',"error":"' # sError # '"}');

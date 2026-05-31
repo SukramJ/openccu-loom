@@ -1,0 +1,386 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package bridge
+
+// White-box tests for the AckPump subsystem:
+// owedInboundAck, dischargeOwedAck, emitStandaloneAck, RunAckPumpOnce,
+// and AttachAckTracker.
+// Lives in package bridge (not bridge_test) to access unexported methods.
+// Helpers from receive_test.go (newStartedBridge, loopbackSrc) are
+// available because they share the same compilation unit.
+
+import (
+	"net"
+	"testing"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
+)
+
+// buildNeedsAckProto builds a ProtocolHeader for the SecureChannel
+// protocol with NeedsAck=true so owedInboundAck records an obligation.
+func buildNeedsAckProto(exchangeID uint16, msgCounter uint32) message.ProtocolHeader {
+	return message.ProtocolHeader{
+		ProtocolID: mrp.SecureChannelProtocolID,
+		Opcode:     mrp.SCOpcodePake1,
+		ExchangeID: exchangeID,
+		NeedsAck:   true,
+	}
+}
+
+// buildMsgHdr builds a minimal message.Header with the given counter.
+func buildMsgHdr(counter uint32) *message.Header {
+	return &message.Header{SessionID: 0, MessageCounter: counter}
+}
+
+// openPeerSocket opens a real loopback UDP socket and returns it plus its
+// address. The caller owns the socket and must close it after the test.
+func openPeerSocket(t *testing.T) (*net.UDPConn, *net.UDPAddr) {
+	t.Helper()
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		t.Fatalf("openPeerSocket: ListenUDP: %v", err)
+	}
+	addr, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		conn.Close()
+		t.Fatalf("openPeerSocket: unexpected addr type %T", conn.LocalAddr())
+	}
+	return conn, addr
+}
+
+// TestAckPump_NoTrackerNoOp verifies that without AttachAckTracker,
+// owedInboundAck does not panic and RunAckPumpOnce returns 0.
+func TestAckPump_NoTrackerNoOp(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	// No AttachAckTracker call — tracker is nil.
+	proto := buildNeedsAckProto(42, 1)
+	hdr := buildMsgHdr(1)
+	src := loopbackSrc()
+	// Must not panic.
+	b.owedInboundAck(src, hdr, proto)
+	// No tracker → nothing due.
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Errorf("RunAckPumpOnce without tracker: want 0, got %d", n)
+	}
+}
+
+// TestAckPump_OweAndEmit verifies that after wiring a tracker (delay=0),
+// owedInboundAck records an obligation and RunAckPumpOnce emits exactly
+// one StandaloneAck datagram to the peer socket.
+func TestAckPump_OweAndEmit(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0) // delay=0 → immediately due
+	b.AttachAckTracker(tracker)
+
+	// Open a peer socket that will receive the StandaloneAck.
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 7
+		msgCounter uint32 = 0xABCD
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := buildMsgHdr(msgCounter)
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+
+	n := b.RunAckPumpOnce(time.Now())
+	if n != 1 {
+		t.Fatalf("RunAckPumpOnce: want 1, got %d", n)
+	}
+
+	// Receive the datagram from the peer socket.
+	if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	nRead, _, err := peerConn.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v (no StandaloneAck datagram received)", err)
+	}
+	datagram := buf[:nRead]
+
+	// Parse the Message Header.
+	rxHdr, hdrLen, err := message.UnmarshalHeader(datagram)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	if rxHdr.SessionID != 0 {
+		t.Errorf("SessionID = %d, want 0", rxHdr.SessionID)
+	}
+
+	// Parse the Protocol Header.
+	rxProto, _, err := message.UnmarshalProtocolHeader(datagram[hdrLen:])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rxProto.Opcode != mrp.StandaloneAckOpcode {
+		t.Errorf("Opcode = 0x%02X, want StandaloneAckOpcode (0x%02X)", rxProto.Opcode, mrp.StandaloneAckOpcode)
+	}
+	if rxProto.ProtocolID != mrp.SecureChannelProtocolID {
+		t.Errorf("ProtocolID = 0x%04X, want SecureChannelProtocolID (0x%04X)", rxProto.ProtocolID, mrp.SecureChannelProtocolID)
+	}
+	if !rxProto.HasAck {
+		t.Error("HasAck = false, want true")
+	}
+	if rxProto.AckCounter != msgCounter {
+		t.Errorf("AckCounter = %d, want %d", rxProto.AckCounter, msgCounter)
+	}
+}
+
+// TestAckPump_EchoesPeerSourceNodeID verifies that when the inbound
+// reliable message carried HasSourceNodeID=true, the synthesised
+// StandaloneAck echoes the value as DestNodeID (Matter §4.4.1.2 —
+// chip-tool's commissioner rejects unsecured replies that omit the
+// echo). Same rule sendReply enforces for piggybacked ACKs.
+func TestAckPump_EchoesPeerSourceNodeID(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 21
+		msgCounter uint32 = 0xDEAD
+		peerNodeID uint64 = 0xE6834AF097E578C1 // chip-tool-style ephemeral
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := &message.Header{
+		SessionID:       0,
+		MessageCounter:  msgCounter,
+		HasSourceNodeID: true,
+		SourceNodeID:    peerNodeID,
+	}
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+	if n := b.RunAckPumpOnce(time.Now()); n != 1 {
+		t.Fatalf("RunAckPumpOnce: want 1, got %d", n)
+	}
+
+	if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	nRead, _, err := peerConn.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v", err)
+	}
+	rxHdr, _, err := message.UnmarshalHeader(buf[:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	if rxHdr.DestSize != message.DestNodeID {
+		t.Errorf("DestSize = %d, want DestNodeID(%d)", rxHdr.DestSize, message.DestNodeID)
+	}
+	if rxHdr.DestNodeID != peerNodeID {
+		t.Errorf("DestNodeID = 0x%X, want 0x%X", rxHdr.DestNodeID, peerNodeID)
+	}
+}
+
+// TestAckPump_NoEchoWhenPeerHadNoSourceNodeID verifies that absent
+// HasSourceNodeID on the inbound message, the StandaloneAck stays
+// bare-header (DestSize=DestNone). Matches the sendReply behaviour
+// for plain unsecured replies.
+func TestAckPump_NoEchoWhenPeerHadNoSourceNodeID(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 22
+		msgCounter uint32 = 0xBEEF
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := buildMsgHdr(msgCounter)
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+	if n := b.RunAckPumpOnce(time.Now()); n != 1 {
+		t.Fatalf("RunAckPumpOnce: want 1, got %d", n)
+	}
+
+	if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	nRead, _, err := peerConn.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v", err)
+	}
+	rxHdr, _, err := message.UnmarshalHeader(buf[:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	if rxHdr.DestSize != message.DestNone {
+		t.Errorf("DestSize = %d, want DestNone(%d)", rxHdr.DestSize, message.DestNone)
+	}
+}
+
+// TestAckPump_Discharge verifies that after dischargeOwedAck removes an
+// obligation, RunAckPumpOnce returns 0 (nothing to emit).
+func TestAckPump_Discharge(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 11
+		msgCounter uint32 = 99
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := buildMsgHdr(msgCounter)
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+	// Discharge before pump fires — simulates a piggybacked ACK on a reply.
+	b.dischargeOwedAck(exchangeID)
+
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Errorf("RunAckPumpOnce after Discharge: want 0, got %d", n)
+	}
+}
+
+// TestAckPump_MultipleExchanges verifies that two distinct obligations
+// produce two emissions from RunAckPumpOnce.
+func TestAckPump_MultipleExchanges(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	for i, exchangeID := range []uint16{1, 2} {
+		proto := buildNeedsAckProto(exchangeID, uint32(100+i))
+		hdr := buildMsgHdr(uint32(100 + i))
+		b.owedInboundAck(peerAddr, hdr, proto)
+	}
+
+	if n := b.RunAckPumpOnce(time.Now()); n != 2 {
+		t.Errorf("RunAckPumpOnce with two exchanges: want 2, got %d", n)
+	}
+}
+
+// TestAckPump_NoSrcDropsObligation verifies that an obligation added
+// directly to the tracker (without a src in exchangeSrcs) is drained by
+// RunAckPumpOnce but no UDP datagram is sent.
+func TestAckPump_NoSrcDropsObligation(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	// Open a peer socket purely to detect any unexpected datagrams.
+	peerConn, _ := openPeerSocket(t)
+	defer peerConn.Close()
+
+	// Add an obligation directly to the tracker — no src in exchangeSrcs.
+	const (
+		exchangeID uint16 = 77
+		msgCounter uint32 = 1234
+	)
+	tracker.Owe(msgCounter, exchangeID, false, time.Now())
+
+	// Pump should drain the obligation (returns 1) but not send to any peer.
+	n := b.RunAckPumpOnce(time.Now())
+	if n != 1 {
+		t.Errorf("RunAckPumpOnce: want 1 (drained), got %d", n)
+	}
+
+	// Verify no datagram arrives at the peer socket.
+	if err := peerConn.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	_, _, err := peerConn.ReadFromUDP(buf)
+	if err == nil {
+		t.Error("unexpected datagram received; emitStandaloneAck should have dropped for missing src")
+	}
+	// A deadline-exceeded or "i/o timeout" error is the expected outcome.
+}
+
+// TestTickOutboundReliable_NilListener verifies that tickOutboundReliable
+// is a no-op when the bridge's listener is nil (not yet started).
+func TestTickOutboundReliable_NilListener(t *testing.T) {
+	t.Parallel()
+	// Build an unstarted bridge — listener is nil.
+	b, err := New(
+		NewFakeStore(),
+		wbEmptySnapshotter,
+		nil,
+		Config{
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "wb-test",
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// Attach the outbound reliable tracker via AttachAckTracker which
+	// also creates the outboundReliable field inside AttachAckTracker.
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	// Direct call to tickOutboundReliable with nil listener must not panic.
+	if b.outboundReliable != nil {
+		b.tickOutboundReliable(b.outboundReliable, time.Now())
+	}
+	// Nothing to assert beyond no panic.
+}
+
+// TestAckPump_AttachAckTrackerAlsoSetsAckHandler verifies that after
+// AttachAckTracker, the bridge's AckHandler (wired via AttachAckHandler
+// internally) discharges through the same tracker when dispatchSecureChannel
+// receives a datagram with HasAck=true.
+func TestAckPump_AttachAckTrackerAlsoSetsAckHandler(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	const (
+		exchangeID uint16 = 55
+		msgCounter uint32 = 500
+	)
+
+	// Plant an obligation so Discharge has something to clear.
+	tracker.Owe(msgCounter, exchangeID, false, time.Now())
+	if tracker.Pending() != 1 {
+		t.Fatalf("pre-condition: tracker.Pending() = %d, want 1", tracker.Pending())
+	}
+
+	// Send a StandaloneAck with HasAck=true targeting the exchange.
+	proto := message.ProtocolHeader{
+		ProtocolID: mrp.SecureChannelProtocolID,
+		Opcode:     mrp.StandaloneAckOpcode,
+		ExchangeID: exchangeID,
+		HasAck:     true,
+		AckCounter: msgCounter,
+	}
+	hdr := buildMsgHdr(1)
+	_ = b.dispatchSecureChannel(loopbackSrc(), hdr, proto, nil)
+
+	// The AckHandler wired by AttachAckTracker should have discharged the obligation.
+	if tracker.Pending() != 0 {
+		t.Errorf("tracker.Pending() = %d after dispatchSecureChannel with HasAck=true; want 0 (discharged)", tracker.Pending())
+	}
+}

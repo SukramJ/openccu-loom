@@ -1,0 +1,14 @@
+{{define "body"}}
+<section class="card">
+  <p class="step-progress">{{t "setup.step.progress" | printf "%s"}}</p>
+  <h1>{{t "setup.step1.title"}}</h1>
+  {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
+  <form method="post" action="/setup/admin">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>{{t "setup.username"}}<input type="text" name="username" required autofocus value="{{.Data.State.AdminUsername}}"></label>
+    <label>{{t "setup.password"}}<input type="password" name="password" required minlength="8"></label>
+    <label>{{t "setup.confirm"}}<input type="password" name="confirm" required minlength="8"></label>
+    <button type="submit">{{t "setup.submit"}}</button>
+  </form>
+</section>
+{{end}}

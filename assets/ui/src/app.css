@@ -1,0 +1,110 @@
+/*
+ * Tailwind CSS v4 uses the CSS-first @import path — no config file
+ * required for the basics. Custom theme tokens go into @theme blocks
+ * below the import.
+ *
+ * Token structure mirrors Home Assistant's CSS-variable conventions
+ * (--primary-color, --secondary-background-color, --divider-color,
+ * --card-background-color, --primary-text-color, --secondary-text-color)
+ * so the SPA sits visually next to HA panels without re-skinning.
+ * Values are tuned for both light and dark mode — the `.dark` class
+ * on <html> flips them.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas;
+
+  /* Accent palette — keep in sync with the daemon's hm-themed blue */
+  --color-brand-50: oklch(0.98 0.02 240);
+  --color-brand-500: oklch(0.63 0.18 245);
+  --color-brand-700: oklch(0.48 0.17 245);
+  --color-brand-900: oklch(0.30 0.12 245);
+}
+
+/* Default dark-mode preference comes from the user-agent; we also
+ * expose a manual switch by adding a `.dark` class on <html>. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* HA-style semantic CSS variables. Components prefer these tokens
+ * over hard-coded slate utility classes so a future theme picker
+ * can re-skin the SPA without touching component markup. */
+:root {
+  --ha-primary-color: oklch(0.63 0.18 245);
+  --ha-primary-color-hover: oklch(0.48 0.17 245);
+  --ha-card-background-color: #ffffff;
+  --ha-secondary-background-color: #fafafa;
+  --ha-divider-color: #e0e0e0;
+  --ha-primary-text-color: #1f2937;
+  --ha-secondary-text-color: #64748b;
+  --ha-disabled-text-color: #9ca3af;
+  --ha-error-color: #dc2626;
+  --ha-warning-color: #d97706;
+  --ha-success-color: #059669;
+  --ha-info-color: oklch(0.63 0.18 245);
+  --ha-elevation-card: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --ha-elevation-modal: 0 10px 25px -5px rgb(0 0 0 / 0.15);
+  --ha-radius-card: 12px;
+  --ha-radius-control: 8px;
+}
+
+html.dark {
+  --ha-primary-color: oklch(0.70 0.15 245);
+  --ha-primary-color-hover: oklch(0.78 0.13 245);
+  --ha-card-background-color: #0f172a;
+  --ha-secondary-background-color: #111827;
+  --ha-divider-color: #1f2937;
+  --ha-primary-text-color: #e5e7eb;
+  --ha-secondary-text-color: #94a3b8;
+  --ha-disabled-text-color: #475569;
+  --ha-error-color: #f87171;
+  --ha-warning-color: #fbbf24;
+  --ha-success-color: #34d399;
+  --ha-info-color: oklch(0.78 0.13 245);
+  --ha-elevation-card: 0 1px 2px 0 rgb(0 0 0 / 0.30);
+  --ha-elevation-modal: 0 10px 25px -5px rgb(0 0 0 / 0.50);
+}
+
+/* Reusable utility classes that bind the semantic tokens to elements
+ * — keeps templates concise. Components can also use the tokens
+ * directly via inline style or arbitrary-value Tailwind utilities. */
+.ha-card {
+  background-color: var(--ha-card-background-color);
+  border: 1px solid var(--ha-divider-color);
+  border-radius: var(--ha-radius-card);
+  box-shadow: var(--ha-elevation-card);
+  overflow: hidden;
+}
+.ha-card-header {
+  background-color: var(--ha-secondary-background-color);
+  border-bottom: 1px solid var(--ha-divider-color);
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ha-primary-text-color);
+}
+.ha-card-body {
+  padding: 12px 16px;
+  color: var(--ha-primary-text-color);
+}
+.ha-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  padding: 12px 16px;
+}
+.ha-status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ha-secondary-text-color);
+  font-size: 13px;
+}
+.ha-divider {
+  border-top: 1px solid var(--ha-divider-color);
+}
+.ha-text-secondary {
+  color: var(--ha-secondary-text-color);
+}

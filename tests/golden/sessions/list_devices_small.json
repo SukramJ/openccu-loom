@@ -1,0 +1,11 @@
+[
+  {
+    "ADDRESS": "0001ABCD",
+    "TYPE": "HmIP-STH",
+    "FIRMWARE": "2.0.4",
+    "CHILDREN": ["0001ABCD:0", "0001ABCD:1", "0001ABCD:2"]
+  },
+  { "ADDRESS": "0001ABCD:0", "PARENT": "0001ABCD" },
+  { "ADDRESS": "0001ABCD:1", "PARENT": "0001ABCD" },
+  { "ADDRESS": "0001ABCD:2", "PARENT": "0001ABCD" }
+]

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & Feature requests / Fragen & Funktionswünsche
+    url: https://github.com/SukramJ/openccu-loom/discussions
+    about: "Please use Discussions for questions, ideas and feature requests. / Bitte nutze die Diskussionen für Fragen, Ideen und Funktionswünsche."
+  - name: 🔒 Security vulnerability / Sicherheitslücke
+    url: https://github.com/SukramJ/openccu-loom/blob/main/docs/SECURITY.md
+    about: "Do not file public issues for security problems — follow the security policy instead. / Sicherheitsprobleme bitte nicht öffentlich melden — der Security-Policy folgen."

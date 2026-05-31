@@ -1,0 +1,19 @@
+{
+  "dp_type": "SmokeSiren",
+  "setter": "TurnOff",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "INTRUSION_ALARM_OFF",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "SWSD0001:1",
+          "parameter": "SMOKE_DETECTOR_COMMAND",
+          "value": "INTRUSION_ALARM_OFF"
+        }
+      ]
+    }
+  ]
+}

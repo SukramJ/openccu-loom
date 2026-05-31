@@ -1,0 +1,42 @@
+{
+  "name": "climate__setpoint_via_engine",
+  "description": "Thermostat cluster (0x0201) attribute OccupiedHeatingSetpoint (0x0012) on endpoint 5 emits ReportData on a fresh bridge-initiated exchange when the subscription engine drains a dirty mark. Extends the cluster-coverage matrix for F4 into the HVAC domain: a thermostat setpoint change arriving from the CCU must not reuse the Subscribe exchange regardless of cluster family.",
+  "tags": ["matter", "subscribe", "f4", "climate", "engine-tick"],
+  "given": {
+    "session_id": 7,
+    "peer_subscribe_exchange_id": 29,
+    "subscription": {
+      "endpoint": 5,
+      "cluster": 513,
+      "attribute": 18
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

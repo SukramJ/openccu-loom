@@ -1,0 +1,17 @@
+{
+  "scenario": "lock__state_via_engine",
+  "matter_js_pinned_at": "e3c1108a3adad78ecbc3b93ed816d5a2a3f770e3",
+  "references": {
+    "1": {
+      "type": "ReportData",
+      "description": "matter.js DataReport envelope for lock__state_via_engine step[1]. Bridge-runtime fields (subscriptionId, attributeReports payload, counter, exchange ID) are bound via $variables in the scenario.",
+      "input": {
+        "subscriptionId": 4294967295,
+        "attributeReports": [],
+        "suppressResponse": false,
+        "interactionModelRevision": 11
+      },
+      "bytesHex": "152600ffffffff360118280424ff0b18"
+    }
+  }
+}

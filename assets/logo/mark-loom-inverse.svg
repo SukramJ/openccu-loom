@@ -1,0 +1,18 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenCCU-Loom">
+  <title>OpenCCU-Loom — Mark (inverse, for dark surfaces)</title>
+  <!-- 4 horizontal strands in white -->
+  <g stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" fill="none">
+    <line x1="22" y1="56" x2="178" y2="56"/>
+    <line x1="22" y1="84" x2="178" y2="84"/>
+    <line x1="22" y1="112" x2="178" y2="112"/>
+    <line x1="22" y1="140" x2="178" y2="140"/>
+  </g>
+  <!-- Bundling band in lighter teal so it pops on dark bg -->
+  <rect x="85" y="40" width="30" height="116" rx="8" fill="#2DD4BF"/>
+  <!-- Band notch markings, white -->
+  <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.5">
+    <line x1="92" y1="60" x2="108" y2="60"/>
+    <line x1="92" y1="100" x2="108" y2="100"/>
+    <line x1="92" y1="136" x2="108" y2="136"/>
+  </g>
+</svg>

@@ -1,0 +1,165 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26"
+  NODE_VERSION: "20"
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: gofumpt
+        run: |
+          go install mvdan.cc/gofumpt@latest
+          diff=$(gofumpt -l .)
+          if [ -n "$diff" ]; then
+            echo "::error::gofumpt found unformatted files:"
+            echo "$diff"
+            exit 1
+          fi
+      # Install golangci-lint v2 from source with the Go toolchain set up
+      # above (1.26), same pattern as the gofumpt step. The prebuilt
+      # binary ships built with an older Go and refuses to run against a
+      # module targeting a newer Go; and golangci-lint-action@v6 installs
+      # a v1 binary that rejects this repo's v2 config (version/formatters/
+      # linters.default keys). A direct `go install` of the /v2/ module
+      # avoids both problems.
+      - name: golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+          golangci-lint config verify
+          golangci-lint run --timeout=5m ./...
+
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        # Force bash on all OSes (Windows runners default to PowerShell,
+        # which mis-parses `-coverprofile=coverage.out ./...` and feeds go
+        # a spurious `.out` package → "FAIL .out [setup failed]"). bash
+        # parses the command identically to Linux/macOS.
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: coverage threshold (total)
+        if: matrix.os == 'ubuntu-latest'
+        run: ./script/coverage_threshold.sh 65 coverage.out
+      # The per-package tier gate runs in the integration workflow, not
+      # here: its thresholds are calibrated against the integration-
+      # inclusive coverage profile (make coverage). This unit job runs
+      # without -tags=integration, so packages exercised mainly by the
+      # godevccu integration suite would fall short of their tiers.
+      - name: upload coverage
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: ignore
+
+  bench:
+    name: bench (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: bench
+        run: make bench
+
+  fuzz:
+    name: fuzz (smoke 5s/target)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: fuzz
+        run: make fuzz
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: build
+        run: make build
+      - name: smoke
+        run: ./bin/openccu-loom version
+
+  contract:
+    name: contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: contract tests
+        run: make contract
+      - name: wire-compare (reference snapshots are committed; no Python venv needed)
+        run: make wire-compare
+      - name: reachability
+        run: make reachability
+
+  spa:
+    name: spa (typecheck + vitest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: assets/ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: assets/ui/package-lock.json
+      - name: install dependencies
+        run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: vitest
+        run: npm run test

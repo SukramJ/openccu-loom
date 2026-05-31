@@ -1,0 +1,811 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package endpoint
+
+import (
+	"context"
+	"errors"
+	"sort"
+	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
+)
+
+// clusterDataVersion returns the current DataVersion for srv by
+// type-asserting to [interfaces.MatterClusterDataVersion]. Falls back
+// to 0 when the cluster does not implement the capability — the IM
+// layer then encodes 1 (the spec-minimum) per AttributeDataIB rules.
+func clusterDataVersion(srv interfaces.MatterClusterServer) uint32 {
+	if dv, ok := srv.(interfaces.MatterClusterDataVersion); ok {
+		return dv.MatterDataVersion()
+	}
+	return 0
+}
+
+// TopologyDispatcher bridges the assembled [Topology] to the
+// Interaction-Model [im.Dispatcher] surface. Each Read / Write /
+// Invoke call resolves the addressed endpoint via the topology, then
+// the cluster server via [ClusterServers], then the attribute /
+// command on the server.
+//
+// Concurrency: TopologyDispatcher is safe for concurrent calls from
+// multiple IM workers. The underlying Topology is treated as
+// immutable for the dispatcher's lifetime — when the model changes,
+// the bridge constructs a fresh Topology via [Assembler.Assemble]
+// and swaps the dispatcher's reference.
+type TopologyDispatcher struct {
+	topology *Topology
+	acl      ACLLister
+}
+
+// ACLLister is the subset of the Matter ACL store [TopologyDispatcher.CheckACL]
+// consults. Production daemons wire the SQLite-backed `matter/store.Store`;
+// tests may pass a fake or leave it nil (which disables enforcement).
+type ACLLister interface {
+	ListACL(ctx context.Context, fabricIndex uint8) ([]store.ACLEntry, error)
+}
+
+// NewTopologyDispatcher wraps t. Returns nil when t is nil so the
+// caller can short-circuit before dispatching.
+func NewTopologyDispatcher(t *Topology) *TopologyDispatcher {
+	if t == nil {
+		return nil
+	}
+	return &TopologyDispatcher{topology: t}
+}
+
+// SetACLLister wires the ACL source that [TopologyDispatcher.CheckACL]
+// enforces against. With no lister set CheckACL fails open (every request
+// allowed) so unwired tests and dev setups behave as before; production
+// daemons MUST wire it (see Bridge.AttachACLLister).
+func (d *TopologyDispatcher) SetACLLister(l ACLLister) {
+	if d != nil {
+		d.acl = l
+	}
+}
+
+// Compile-time assertion: TopologyDispatcher satisfies im.Dispatcher
+// and the optional im.DataVersionReader + im.AttributeReadPrivilegeProvider
+// + im.ACLChecker interfaces.
+var (
+	_ im.Dispatcher                     = (*TopologyDispatcher)(nil)
+	_ im.DataVersionReader              = (*TopologyDispatcher)(nil)
+	_ im.AttributeReadPrivilegeProvider = (*TopologyDispatcher)(nil)
+	_ im.ACLChecker                     = (*TopologyDispatcher)(nil)
+)
+
+// Read implements [im.Dispatcher]. Wildcards expand as follows:
+//
+//   - HasEndpoint=false  → iterate every endpoint in the topology.
+//   - HasCluster=false   → iterate every cluster server on the endpoint.
+//   - HasAttribute=false → globals (FeatureMap + ClusterRevision)
+//     PLUS every attribute the cluster server advertises via the
+//     [interfaces.MatterClusterAttributeLister] optional interface.
+//     Cluster servers that do not implement that interface fall back
+//     to globals-only — that is the v1.1 baseline preserved for
+//     backwards compatibility.
+//
+// Concrete (non-wildcard) reads return exactly one ReadResult.
+//
+// ctx carries the FabricFiltered flag + FabricIndex via
+// [im.WithFabricFilter] / [im.FabricFilterFromContext]. Cluster servers
+// that implement [interfaces.FabricScopedReader] receive MatterReadFiltered
+// instead of MatterRead so they can project fabric-sensitive list
+// attributes (OperationalCredentials.Fabrics, AccessControl.ACL) down
+// to the requesting fabric. Mirrors matter.js InteractionServer.ts:
+// startReadInteraction → OnlineContext.forFabricFilteredRead.
+func (d *TopologyDispatcher) Read(ctx context.Context, path im.ConcreteAttributePath) []im.ReadResult {
+	endpoints := d.resolveEndpoints(path)
+	if len(endpoints) == 0 {
+		return []im.ReadResult{{Path: path, Status: im.StatusUnsupportedEndpoint}}
+	}
+	wildcardEndpoint := !path.HasEndpoint
+	var results []im.ReadResult
+	for _, ep := range endpoints {
+		ePath := path
+		ePath.Endpoint = ep.ID
+		ePath.HasEndpoint = true
+
+		servers := d.serversFor(ep, path)
+		if len(servers) == 0 {
+			// Wildcard endpoint expansion (Matter §4.5.4 "Path
+			// Generation"): paths that match no concrete cluster on
+			// this endpoint are SILENTLY SKIPPED, not surfaced as
+			// UnsupportedCluster — the spec says the generator only
+			// emits paths where the cluster/attribute actually
+			// exists. Concrete endpoints (operator named the EP
+			// explicitly) keep the error surface so callers see why
+			// their read returned nothing.
+			if wildcardEndpoint {
+				continue
+			}
+			results = append(results, im.ReadResult{Path: ePath, Status: im.StatusUnsupportedCluster})
+			continue
+		}
+		for _, srv := range servers {
+			cPath := ePath
+			cPath.Cluster = srv.MatterClusterID()
+			cPath.HasCluster = true
+
+			attrs := d.attributesFor(srv, path)
+			for _, attrID := range attrs {
+				aPath := cPath
+				aPath.Attribute = attrID
+				aPath.HasAttribute = true
+				results = append(results, readOne(ctx, srv, aPath))
+			}
+		}
+	}
+	return results
+}
+
+// Write implements [im.Dispatcher]. Wildcards expand the same way as
+// Read, but every match is dispatched separately and one
+// [im.WriteResult] is returned per match.
+func (d *TopologyDispatcher) Write(ctx context.Context, path im.ConcreteAttributePath, value im.AttributeValue) []im.WriteResult {
+	endpoints := d.resolveEndpoints(path)
+	if len(endpoints) == 0 {
+		return []im.WriteResult{{Path: path, Status: im.StatusUnsupportedEndpoint}}
+	}
+	wildcardEndpoint := !path.HasEndpoint
+	var results []im.WriteResult
+	for _, ep := range endpoints {
+		ePath := path
+		ePath.Endpoint = ep.ID
+		ePath.HasEndpoint = true
+
+		servers := d.serversFor(ep, path)
+		if len(servers) == 0 {
+			// Wildcard endpoint expansion: skip endpoints that don't
+			// host the requested cluster (Matter §4.5.4). Concrete
+			// endpoint addressing keeps the explicit error surface.
+			if wildcardEndpoint {
+				continue
+			}
+			results = append(results, im.WriteResult{Path: ePath, Status: im.StatusUnsupportedCluster})
+			continue
+		}
+		for _, srv := range servers {
+			cPath := ePath
+			cPath.Cluster = srv.MatterClusterID()
+			cPath.HasCluster = true
+
+			attrs := d.attributesFor(srv, path)
+			for _, attrID := range attrs {
+				aPath := cPath
+				aPath.Attribute = attrID
+				aPath.HasAttribute = true
+				results = append(results, writeOne(ctx, srv, aPath, value))
+			}
+		}
+	}
+	return results
+}
+
+// Invoke implements [im.Dispatcher]. CommandPath has no wildcard
+// fields in our supported subset (Matter §10.6.7 lets EndpointID
+// wildcard for InvokeRequest only when the cluster is universally
+// addressable — none of ours are), so this is always a concrete
+// dispatch returning exactly one [im.InvokeResult].
+func (d *TopologyDispatcher) Invoke(ctx context.Context, path im.ConcreteCommandPath, fields any) im.InvokeResult {
+	if !path.HasEndpoint {
+		return im.InvokeResult{Path: path, Status: im.StatusUnsupportedEndpoint}
+	}
+	ep := d.topology.FindByID(path.Endpoint)
+	if ep == nil {
+		return im.InvokeResult{Path: path, Status: im.StatusUnsupportedEndpoint}
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != path.Cluster {
+			continue
+		}
+		resp, err := srv.MatterInvoke(ctx, path.Command, fields, hmenum.CommandPriorityHigh)
+		if err != nil {
+			status, cs, hasCS := classifyError(err, invokeErrorStatus)
+			return im.InvokeResult{Path: path, Response: resp, Status: status, ClusterStatus: cs, HasClusterStatus: hasCS}
+		}
+		return im.InvokeResult{Path: path, Response: resp, Status: im.StatusSuccess}
+	}
+	return im.InvokeResult{Path: path, Status: im.StatusUnsupportedCluster}
+}
+
+// resolveEndpoints expands the wildcard-aware endpoint selector. A
+// concrete endpoint that does not exist returns an empty slice so
+// the caller can synthesise an UnsupportedEndpoint status. Wildcard
+// endpoint includes the root (endpoint 0) — Apple Home's
+// post-CommissioningComplete wildcard subscribe needs Endpoint 0
+// reports (BasicInformation.VendorID/ProductID/NodeLabel, …) to
+// build its HAP service map. Without them Apple shows
+// `<MTRDevice ... VID: Unknown, PID: Unknown>` and aborts pairing
+// at HMMTRAccessoryPairingStep_BuildingHAPServicesAndCharacteristicsFromCHIP
+// with HAPErrorDomain Code 24.
+func (d *TopologyDispatcher) resolveEndpoints(path im.ConcreteAttributePath) []*Endpoint {
+	if path.HasEndpoint {
+		ep := d.topology.FindByID(path.Endpoint)
+		if ep == nil {
+			return nil
+		}
+		return []*Endpoint{ep}
+	}
+	// All endpoints, root first so wildcard reports surface
+	// device-identity attributes (VendorID/ProductID/UniqueID on the
+	// root) before the bridged endpoints. The aggregator endpoint
+	// (EP 1) MUST be included between root and the bridged endpoints:
+	// Apple Home reads Aggregator.Descriptor.{DeviceTypeList, PartsList,
+	// ServerList} from the Subscribe-Initial cache during HAP service
+	// rebuild — a missing aggregator report makes
+	// `_attributeValueDictionaryForAttributePath` log "PartsList absent
+	// from cache" and Apple aborts the pair with HAPErrorDomain Code 14
+	// ("Could not construct any of the services of node ...").
+	// `Topology.Bridged()` excludes both root and aggregator, so we
+	// surface the aggregator explicitly here.
+	out := make([]*Endpoint, 0, len(d.topology.Endpoints))
+	if root := d.topology.FindByID(0); root != nil {
+		out = append(out, root)
+	}
+	if agg := d.topology.FindByID(1); agg != nil {
+		out = append(out, agg)
+	}
+	out = append(out, d.topology.Bridged()...)
+	return out
+}
+
+// serversFor narrows the cluster-server set for ep based on the
+// path's cluster selector. Returns a slice (possibly empty) of cluster
+// servers; an empty slice on a concrete cluster means the endpoint
+// exists but the cluster is absent.
+func (d *TopologyDispatcher) serversFor(ep *Endpoint, path im.ConcreteAttributePath) []interfaces.MatterClusterServer {
+	all := ClusterServers(ep)
+	if !path.HasCluster {
+		return all
+	}
+	for _, srv := range all {
+		if srv.MatterClusterID() == path.Cluster {
+			return []interfaces.MatterClusterServer{srv}
+		}
+	}
+	return nil
+}
+
+// attributesFor selects the attribute IDs for a Read / Write across
+// the cluster server. Concrete attribute → single-element slice.
+// Wildcard attribute → the universal globals merged with the
+// cluster's full attribute surface.
+//
+// Cluster servers expose their attribute set via the optional
+// [interfaces.MatterClusterAttributeLister] interface. When a cluster
+// does not implement it, we fall back to [interfaces.MatterClusterServer.MatterReportable]
+// — that is at least the subscribable attribute surface, which gives
+// Apple Home / matter.js something to bind to. The strict spec
+// behaviour (every defined attribute) is achieved by implementing
+// MatterAttributes on every cluster; the fallback is the safety net
+// for cluster servers that have not been migrated yet.
+func (d *TopologyDispatcher) attributesFor(srv interfaces.MatterClusterServer, path im.ConcreteAttributePath) []uint32 {
+	if path.HasAttribute {
+		return []uint32{path.Attribute}
+	}
+	// All six global attributes per Matter Core Spec §7.13.2 are
+	// mandatory on every cluster server. matter.js's behaviour layer
+	// auto-generates them at the cluster level; we synthesize them in
+	// the dispatcher (see [synthesizeGlobalRead]) when the cluster
+	// itself does not return a value. Apple Home's HAP service rebuild
+	// reads `AttributeList` (0xFFFB) on every cluster — without it the
+	// build fails with HAPErrorDomain Code=24 even when every other
+	// cluster surface is correct.
+	// EventList (0xFFFA) is a Matter 1.4 global attribute. Apple Home's
+	// iOS Matter SDK (still on Matter 1.3 baseline as of iOS 26.4)
+	// rejects it with `MTRErrorDomain Code=12 "No known schema for
+	// decoding attribute value."` on every cluster that exposes it,
+	// then drops the entire ReportData stream — the post-Subscribe-
+	// Initial Descriptor.PartsList read returns empty, HAP-Service-
+	// Build aborts with HAPErrorDomain Code=14 "No Endpoints In Use",
+	// and the controller fires RemoveFabric ~5 s later. Spec §7.13.2
+	// allows omitting unsupported global attributes; we drop EventList
+	// from wildcard expansion (chip-tool / matter.js controllers do
+	// not require it). Re-enable when Apple advances to Matter 1.4.
+	out := []uint32{
+		cluster.AttrGlobalGeneratedCommandList,
+		cluster.AttrGlobalAcceptedCommandList,
+		cluster.AttrGlobalAttributeList,
+		cluster.AttrGlobalFeatureMap,
+		cluster.AttrGlobalClusterRevision,
+	}
+	var extra []uint32
+	if lister, ok := srv.(interfaces.MatterClusterAttributeLister); ok {
+		extra = lister.MatterAttributes()
+	} else {
+		// Fallback: subscribable attribute surface. Better than
+		// globals-only for wildcard reads — Apple Home builds its
+		// HAP service map from these reports.
+		extra = srv.MatterReportable()
+	}
+	if len(extra) == 0 {
+		return out
+	}
+	seen := make(map[uint32]struct{}, len(out)+len(extra))
+	for _, id := range out {
+		seen[id] = struct{}{}
+	}
+	for _, id := range extra {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
+
+// readOne dispatches a single Read against srv and packages the
+// outcome. Global attributes (Matter §7.13.2) that the cluster server
+// does not implement directly fall through to [synthesizeGlobalRead],
+// so every cluster surfaces a consistent global-attribute set without
+// each cluster server having to repeat the boilerplate.
+//
+// ctx carries the FabricFiltered flag + FabricIndex. When srv
+// implements [interfaces.FabricScopedReader], MatterReadFiltered is
+// called in preference to MatterRead so the server can project
+// fabric-sensitive lists (e.g. OperationalCredentials.Fabrics) to
+// the requesting fabric. Mirrors matter.js InteractionServer.ts:
+// startReadInteraction → OnlineContext.forFabricFilteredRead.
+//
+// DataVersion: when srv implements [interfaces.MatterClusterDataVersion]
+// its current DataVersion is stamped on the ReadResult. The IM layer
+// uses this in HandleReadRequest for DataVersionFilter evaluation.
+// Mirrors matter.js InteractionServer.ts attributeReportPayload building.
+func readOne(ctx context.Context, srv interfaces.MatterClusterServer, path im.ConcreteAttributePath) im.ReadResult {
+	dv := clusterDataVersion(srv)
+	// Fabric-scoped attributes: prefer MatterReadFiltered when the
+	// cluster server opts in by implementing FabricScopedReader.
+	if fsr, ok := srv.(interfaces.FabricScopedReader); ok {
+		v, ok := fsr.MatterReadFiltered(ctx, path.Attribute)
+		if ok {
+			if v == nil {
+				return im.ReadResult{Path: path, Value: im.AttributeValue{IsNull: true}, Status: im.StatusSuccess, DataVersion: dv}
+			}
+			return im.ReadResult{Path: path, Value: im.AttributeValue{Value: v}, Status: im.StatusSuccess, DataVersion: dv}
+		}
+		// FabricScopedReader returned (nil, false) — fall through to
+		// the universal MatterRead path so non-fabric attributes on
+		// the same server are still served.
+	}
+	v, ok := srv.MatterRead(path.Attribute)
+	if ok {
+		if v == nil {
+			return im.ReadResult{Path: path, Value: im.AttributeValue{IsNull: true}, Status: im.StatusSuccess, DataVersion: dv}
+		}
+		return im.ReadResult{Path: path, Value: im.AttributeValue{Value: v}, Status: im.StatusSuccess, DataVersion: dv}
+	}
+	// Cluster did not handle the read. Try synthesising the value if
+	// it is a global-attribute ID — this lets every cluster expose
+	// AttributeList / AcceptedCommandList / GeneratedCommandList /
+	// EventList automatically. The cluster-internal MatterRead still
+	// wins when it returns a value (so clusters that want a richer
+	// AcceptedCommandList can override).
+	if synth, synthOK := synthesizeGlobalRead(srv, path.Attribute); synthOK {
+		return im.ReadResult{Path: path, Value: im.AttributeValue{Value: synth}, Status: im.StatusSuccess, DataVersion: dv}
+	}
+	return im.ReadResult{Path: path, Status: im.StatusUnsupportedAttribute}
+}
+
+// synthesizeGlobalRead returns the default value for a Matter global
+// attribute (Spec §7.13.2) when the cluster server does not handle it
+// itself. Returns (value, true) for handled IDs; (nil, false) for any
+// non-global attribute. The synthesized values are computed from the
+// optional [interfaces.MatterClusterAttributeLister] /
+// [interfaces.MatterClusterCommandLister] /
+// [interfaces.MatterClusterEventLister] surfaces — clusters that don't
+// implement those lister interfaces get an empty list, which is the
+// spec-compliant minimum (a cluster with no commands legitimately
+// reports `AcceptedCommandList = []`).
+//
+// AttributeList includes both the cluster's own attributes (via
+// MatterAttributes / MatterReportable) and the six global IDs, per
+// Matter §7.13.2.4 ("AttributeList SHALL include the IDs of every
+// attribute the cluster server implements, including the global
+// attributes").
+func synthesizeGlobalRead(srv interfaces.MatterClusterServer, attrID uint32) (any, bool) {
+	switch attrID {
+	case cluster.AttrGlobalAttributeList:
+		// EventList (0xFFFA) intentionally omitted — see comment in
+		// expandWildcardForCluster. Apple's iOS Matter SDK rejects the
+		// whole ReportData stream when AttributeList advertises
+		// EventList but the SDK lacks the Matter 1.4 schema for it.
+		seen := map[uint32]struct{}{
+			cluster.AttrGlobalGeneratedCommandList: {},
+			cluster.AttrGlobalAcceptedCommandList:  {},
+			cluster.AttrGlobalAttributeList:        {},
+			cluster.AttrGlobalFeatureMap:           {},
+			cluster.AttrGlobalClusterRevision:      {},
+		}
+		out := []uint32{
+			cluster.AttrGlobalGeneratedCommandList,
+			cluster.AttrGlobalAcceptedCommandList,
+			cluster.AttrGlobalAttributeList,
+			cluster.AttrGlobalFeatureMap,
+			cluster.AttrGlobalClusterRevision,
+		}
+		var clusterAttrs []uint32
+		if lister, ok := srv.(interfaces.MatterClusterAttributeLister); ok {
+			clusterAttrs = lister.MatterAttributes()
+		} else {
+			clusterAttrs = srv.MatterReportable()
+		}
+		for _, id := range clusterAttrs {
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			out = append(out, id)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		return out, true
+	case cluster.AttrGlobalAcceptedCommandList:
+		if lister, ok := srv.(interfaces.MatterClusterCommandLister); ok {
+			return lister.MatterAcceptedCommands(), true
+		}
+		return []uint32{}, true
+	case cluster.AttrGlobalGeneratedCommandList:
+		if lister, ok := srv.(interfaces.MatterClusterCommandLister); ok {
+			return lister.MatterGeneratedCommands(), true
+		}
+		return []uint32{}, true
+	case cluster.AttrGlobalEventList:
+		// Apple's iOS 26 Matter SDK does not yet ship a schema for
+		// the Matter 1.4 EventList attribute. Returning [] (or any
+		// other value) makes Apple drop the whole ReportData stream
+		// with `MTRErrorDomain Code=12 "No known schema for decoding
+		// attribute value."` and abort the pair via HAPErrorDomain
+		// Code=14. Treat the attribute as unsupported (return false)
+		// so the dispatcher emits StatusUnsupportedAttribute, which
+		// Apple's IM-Decoder handles cleanly. matter.js / chip-tool
+		// tolerate the absence; re-enable once Apple advances to
+		// Matter 1.4 SDK schema.
+		return nil, false
+	}
+	return nil, false
+}
+
+// writeOne dispatches a single Write against srv. Errors are mapped
+// to spec-coded status values where the cluster surfaces them
+// distinctly; the catch-all is StatusFailure.
+func writeOne(ctx context.Context, srv interfaces.MatterClusterServer, path im.ConcreteAttributePath, value im.AttributeValue) im.WriteResult {
+	v := value.Value
+	if value.IsNull {
+		v = nil
+	}
+	if err := srv.MatterWrite(ctx, path.Attribute, v, hmenum.CommandPriorityHigh); err != nil {
+		status, cs, hasCS := classifyError(err, writeErrorStatus)
+		return im.WriteResult{Path: path, Status: status, ClusterStatus: cs, HasClusterStatus: hasCS}
+	}
+	return im.WriteResult{Path: path, Status: im.StatusSuccess}
+}
+
+// classifyError inspects err first for a [im.MatterClusterStatusError]
+// (so the cluster-specific code surfaces into StatusIB.ClusterStatus
+// per Matter §10.6.2.2) and falls back to the supplied IM-status
+// classifier for the generic Status byte. Returns (status, clusterStatus,
+// hasClusterStatus).
+func classifyError(err error, classify func(error) im.StatusCode) (im.StatusCode, uint8, bool) {
+	if err == nil {
+		return im.StatusSuccess, 0, false
+	}
+	var cse im.MatterClusterStatusError
+	if errors.As(err, &cse) {
+		return cse.MatterStatusCode(), cse.MatterClusterStatus(), true
+	}
+	return classify(err), 0, false
+}
+
+// writeErrorStatus maps a cluster-server write error to a Matter IM
+// StatusCode. The type-assert against [im.StatusCodeError] takes
+// priority — it lets cluster packages carry an exact status code
+// without the dispatcher importing their error types. The string
+// heuristic below is the legacy fallback for callers that have not
+// yet been migrated to the typed interface.
+func writeErrorStatus(err error) im.StatusCode {
+	if err == nil {
+		return im.StatusSuccess
+	}
+	// Type-assert first: StatusCodeError carries an exact code.
+	var sce im.StatusCodeError
+	if errors.As(err, &sce) {
+		return sce.MatterStatusCode()
+	}
+	// Legacy string-heuristic fallback — migrate callers to StatusCodeError.
+	msg := err.Error()
+	switch {
+	case containsAny(msg, "read-only", "read only"):
+		return im.StatusUnsupportedWrite
+	case containsAny(msg, "unknown attribute"):
+		return im.StatusUnsupportedAttribute
+	case containsAny(msg, "resource exhausted"):
+		// Mirrors matter.js StatusResponseError(ResourceExhausted) used
+		// by AccessControlServer.ts when AccessControlEntriesPerFabric /
+		// SubjectsPerAccessControlEntry / TargetsPerAccessControlEntry
+		// caps are exceeded.
+		return im.StatusResourceExhausted
+	case containsAny(msg, "constraint"):
+		return im.StatusConstraintError
+	}
+	return im.StatusFailure
+}
+
+// invokeErrorStatus mirrors writeErrorStatus for command dispatch.
+// Type-asserts against [im.StatusCodeError] first; falls back to
+// the string-heuristic for legacy callers.
+func invokeErrorStatus(err error) im.StatusCode {
+	if err == nil {
+		return im.StatusSuccess
+	}
+	// Type-assert first: StatusCodeError carries an exact code.
+	var sce im.StatusCodeError
+	if errors.As(err, &sce) {
+		return sce.MatterStatusCode()
+	}
+	// Legacy string-heuristic fallback — migrate callers to StatusCodeError.
+	msg := err.Error()
+	switch {
+	case containsAny(msg, "unknown command", "no commands"):
+		return im.StatusUnsupportedCommand
+	case containsAny(msg, "constraint"):
+		return im.StatusConstraintError
+	case containsAny(msg, "invalid command argument"):
+		// Mirrors matter.js StatusResponseError(InvalidCommand) — used
+		// by cluster handlers (e.g. GroupKeyManagement.KeySetRemove(0))
+		// to surface a "command supported but argument rejected" path
+		// distinct from UnsupportedCommand (cluster does not implement
+		// the command).
+		return im.StatusInvalidCommand
+	}
+	return im.StatusFailure
+}
+
+// containsAny reports whether any of subs is present in s.
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// MinReadPrivilege implements [im.AttributeReadPrivilegeProvider]. It
+// looks up the cluster server for (endpoint, clusterID) and consults
+// the server's [interfaces.MatterClusterAttributeReadPrivilege] optional
+// interface for the given attrID. Returns 1 (View) when the cluster is
+// not found, does not implement the interface, or reports no elevated
+// requirement for the attribute. Returns the server-reported value (e.g.
+// 5 = Administer for AccessControl ACL/Extension) otherwise. Mirrors the
+// per-cluster read-access annotations in chip
+// src/app/clusters/access-control-server/access-control-server.cpp and
+// matter.js packages/model/src/standard/elements/access-control.element.ts.
+func (d *TopologyDispatcher) MinReadPrivilege(endpoint uint16, clusterID, attrID uint32) uint8 {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 1
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		priv, ok := srv.(interfaces.MatterClusterAttributeReadPrivilege)
+		if !ok {
+			return 1
+		}
+		return priv.MinReadPrivilege(attrID)
+	}
+	return 1
+}
+
+// CheckACL implements [im.ACLChecker] (Matter §9.10). It grants the request
+// when the requesting fabric holds a CASE ACL entry whose subject covers
+// (subjectNodeID, subjectCATs), whose target covers (endpoint, clusterID),
+// and whose privilege is at least requiredPrivilege; otherwise it returns
+// UnsupportedAccess (0x7e). PASE sessions (fabricIndex 0) are already
+// bypassed by the IM gate before this is called.
+//
+// Mirrors connectedhomeip/src/access/AccessControl.cpp:441-559 — the
+// chip iterator walks every ACE on the fabric and applies the AuthMode →
+// Privilege → Subjects → Targets filter chain in that order. Subjects with
+// an empty list match any subject on the fabric (wildcard); otherwise each
+// entry-subject is interpreted per chip src/lib/core/NodeId.h:
+// operational node IDs match equality, CAT subjects (range
+// 0xFFFF'FFFD'0000'0000..0xFFFF'FFFD'FFFF'FFFF) match via
+// [matchesCATSubject] against the requester's CAT set.
+func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, subjectNodeID uint64, subjectCATs []uint32, endpoint uint16, clusterID uint32, requiredPrivilege uint8) im.StatusCode {
+	if d == nil || d.acl == nil {
+		return im.StatusSuccess // enforcement not wired — fail open
+	}
+	if fabricIndex == 0 {
+		return im.StatusSuccess // PASE / no fabric — commissioning
+	}
+	entries, err := d.acl.ListACL(ctx, fabricIndex)
+	if err != nil {
+		// Fail closed: an ACL that cannot be evaluated must not grant access.
+		return im.StatusUnsupportedAccess
+	}
+	var best store.Privilege
+	for _, e := range entries {
+		// Operational unicast sessions are CASE-authenticated; only CASE
+		// entries apply (Group = multicast, PASE = commissioning).
+		if e.AuthMode != store.AuthModeCASE {
+			continue
+		}
+		if !aclSubjectMatches(e.Subjects, subjectNodeID, subjectCATs) {
+			continue
+		}
+		if !aclTargetMatches(e.Targets, endpoint, clusterID) {
+			continue
+		}
+		if e.Privilege > best {
+			best = e.Privilege
+		}
+	}
+	if privilegeRank(uint8(best)) >= privilegeRank(requiredPrivilege) {
+		return im.StatusSuccess
+	}
+	return im.StatusUnsupportedAccess
+}
+
+// aclSubjectMatches reports whether an ACL entry's Subjects list covers
+// the requesting (subjectNodeID, subjectCATs). An empty list means
+// "any subject on this fabric" (Matter §9.10.5.6).
+//
+// Mirrors connectedhomeip/src/access/AccessControl.cpp:463-509 — for each
+// listed subject:
+//   - operational node id (0x0000'0000'0000'0001..0xFFFF'FFEF'FFFF'FFFF):
+//     match when the requester's node id equals it exactly.
+//   - CAT (0xFFFF'FFFD'0000'0000..0xFFFF'FFFD'FFFF'FFFF): unpack to
+//     identifier+version per CASEAuthTag.h:46-49 and match via
+//     [matchesCATSubject] against the requester's CATs.
+//
+// A non-empty Subjects list that contains no covering entry denies the
+// request even when the target+privilege would otherwise grant.
+func aclSubjectMatches(subjects []uint64, subjectNodeID uint64, subjectCATs []uint32) bool {
+	if len(subjects) == 0 {
+		return true
+	}
+	for _, s := range subjects {
+		if isCASEAuthTagSubject(s) {
+			if matchesCATSubject(uint32(s&kMaskCASEAuthTag), subjectCATs) {
+				return true
+			}
+			continue
+		}
+		// Operational node id: exact match. Group ids cannot appear under
+		// AuthMode=CASE — chip src/access/AccessControl.cpp:492 enforces
+		// the AuthMode-vs-subject coupling; we conservatively drop them.
+		if subjectNodeID != 0 && s == subjectNodeID {
+			return true
+		}
+	}
+	return false
+}
+
+// Matter CASEAuthTag NodeID encoding (chip src/lib/core/NodeId.h:47-49):
+// node IDs 0xFFFF'FFFD'0000'0000..0xFFFF'FFFD'FFFF'FFFF are reserved as
+// CASE Authenticated Tag subjects; the low 32 bits split into a 16-bit
+// identifier (upper) and a 16-bit version (lower) — see
+// src/lib/core/CASEAuthTag.h:32-34.
+const (
+	kMinCASEAuthTag    uint64 = 0xFFFFFFFD00000000
+	kMaxCASEAuthTag    uint64 = 0xFFFFFFFDFFFFFFFF
+	kMaskCASEAuthTag   uint64 = 0x00000000FFFFFFFF
+	kCATIdentifierMask uint32 = 0xFFFF0000
+	kCATVersionMask    uint32 = 0x0000FFFF
+)
+
+func isCASEAuthTagSubject(s uint64) bool {
+	return s >= kMinCASEAuthTag && s <= kMaxCASEAuthTag
+}
+
+// matchesCATSubject reports whether any CAT in subjectCATs is granted by
+// the entry's CAT subject. Mirrors
+// connectedhomeip/src/lib/core/CASEAuthTag.h:174-190
+// (CATValues::CheckSubjectAgainstCATs): identifiers must match exactly,
+// and the requester's CAT version must be present (>0) and at least the
+// entry's version (so a v1 grant covers a v1-NOC holder but a v2 grant
+// does not cover a v1-NOC holder).
+func matchesCATSubject(entryCAT uint32, subjectCATs []uint32) bool {
+	entryID := uint16((entryCAT & kCATIdentifierMask) >> 16) //nolint:gosec // CAT identifier is a 16-bit field by spec
+	entryVer := uint16(entryCAT & kCATVersionMask)           //nolint:gosec // CAT version is a 16-bit field by spec
+	for _, sub := range subjectCATs {
+		if sub == 0 {
+			continue
+		}
+		subID := uint16((sub & kCATIdentifierMask) >> 16) //nolint:gosec // CAT identifier is a 16-bit field by spec
+		subVer := uint16(sub & kCATVersionMask)           //nolint:gosec // CAT version is a 16-bit field by spec
+		if subID != entryID {
+			continue
+		}
+		if subVer == 0 {
+			continue // chip CASEAuthTag.h:184 — only present versions match
+		}
+		if subVer >= entryVer {
+			return true
+		}
+	}
+	return false
+}
+
+// aclTargetMatches reports whether an ACL entry's target list covers
+// (endpoint, cluster). An empty list means "all targets" (Matter §9.10.4.5).
+func aclTargetMatches(targets []store.ACLTarget, endpoint uint16, clusterID uint32) bool {
+	if len(targets) == 0 {
+		return true
+	}
+	for _, t := range targets {
+		if t.Cluster != nil && *t.Cluster != clusterID {
+			continue
+		}
+		if t.Endpoint != nil && *t.Endpoint != endpoint {
+			continue
+		}
+		// A DeviceType-only target (no cluster, no endpoint) is not matched
+		// here — the dispatcher has no per-target device-type index, and
+		// conservatively not broadening access is the safe choice.
+		if t.Cluster == nil && t.Endpoint == nil && t.DeviceType != nil {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// privilegeRank maps a Matter privilege to its hierarchy rank so a higher
+// privilege satisfies a lower requirement (Administer > Manage > Operate >
+// View; ProxyView grants View-level access). Matter §9.10.5.3.
+func privilegeRank(p uint8) int {
+	switch store.Privilege(p) {
+	case store.PrivilegeAdminister:
+		return 4
+	case store.PrivilegeManage:
+		return 3
+	case store.PrivilegeOperate:
+		return 2
+	case store.PrivilegeView, store.PrivilegeProxyView:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// CurrentDataVersion implements [im.DataVersionReader]. It looks up the
+// cluster server for (endpoint, clusterID) and returns its current
+// DataVersion when the server implements [interfaces.MatterClusterDataVersion].
+//
+// Mirrors matter.js packages/node/src/node/server/InteractionServer.ts
+// DataVersion check before write dispatch. Returns (0, false) when the
+// cluster is not found or does not implement version tracking — callers
+// treat (0, false) as "version not constrained, proceed with the write".
+func (d *TopologyDispatcher) CurrentDataVersion(_ context.Context, endpoint uint16, clusterID uint32) (uint32, bool) {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 0, false
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		dv, ok := srv.(interfaces.MatterClusterDataVersion)
+		if !ok {
+			return 0, false
+		}
+		v := dv.MatterDataVersion()
+		if v == 0 {
+			// Cluster implements the interface but version is 0 (initial /
+			// untracked). Return (0, false) — callers treat 0 as "unconstrained".
+			return 0, false
+		}
+		return v, true
+	}
+	return 0, false
+}

@@ -1,0 +1,42 @@
+{
+  "name": "switch__ccu_echo_via_engine",
+  "description": "Same regression guard as switch__ccu_echo but the trigger routes through the production dirty-mark → subscription engine → reportSubscription path. Exercises the full ship pipeline, not just the wire-shape boundary. Without F4 the engine still ships a report but on the peer-opened Subscribe exchange — the harness catches that as Initiator=false and ExchangeID=PeerSubscribeExchangeID.",
+  "tags": ["matter", "subscribe", "f4", "ccu-echo", "engine-tick", "switch"],
+  "given": {
+    "session_id": 2,
+    "peer_subscribe_exchange_id": 11,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "dp_type": "ClimateIP",
+  "setter": "SetMode",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "mode=auto",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "BWTH0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "CONTROL_MODE": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "mode=heat",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "BWTH0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "CONTROL_MODE": 1,
+            "SET_POINT_TEMPERATURE": 5
+          }
+        }
+      ]
+    },
+    {
+      "label": "mode=off",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "BWTH0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "CONTROL_MODE": 1,
+            "SET_POINT_TEMPERATURE": 4.5
+          }
+        }
+      ]
+    }
+  ]
+}

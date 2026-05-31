@@ -1,0 +1,29 @@
+# Normalise line endings to LF in the working tree across all platforms.
+# Without this, Windows checkouts apply core.autocrlf=true and rewrite LF→CRLF,
+# which breaks byte-exact golden-file comparisons in tests/golden.
+* text=auto eol=lf
+
+# Source files and fixtures: explicit LF.
+*.go    text eol=lf
+*.json  text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+*.sql   text eol=lf
+*.sh    text eol=lf
+
+# Binary assets: never modify line endings.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.eot    binary
+*.zip    binary
+*.gz     binary
+*.tar    binary
+*.tgz    binary
+*.bin    binary

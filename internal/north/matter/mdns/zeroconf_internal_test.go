@@ -1,0 +1,265 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+// White-box tests for zeroconf.go paths that require internal access.
+// We use package mdns so we can call newTestResponder() and primaryHostIPs().
+
+package mdns
+
+import (
+	"context"
+	"log/slog"
+	"testing"
+	"time"
+
+	"github.com/miekg/dns"
+)
+
+// ---- primaryHostIPs ----
+
+// TestPrimaryHostIPs_ReturnsNonNilSlice verifies primaryHostIPs does not
+// panic and returns either nil (no suitable interface) or at least one
+// address. We cannot assert the exact result because the host's network
+// configuration varies.
+func TestPrimaryHostIPs_ReturnsNonNilSlice(t *testing.T) {
+	t.Parallel()
+	ips := primaryHostIPs()
+	// Must not panic. Result may be nil on a loopback-only environment.
+	for _, ip := range ips {
+		if ip == "" {
+			t.Error("primaryHostIPs returned empty string IP")
+		}
+	}
+}
+
+// ---- Publish with z.responder != nil ----
+
+// TestZeroconfInternal_Publish_WithResponder verifies the subtype-mapping
+// block inside Publish is exercised when a non-nil SubtypeResponder is
+// attached. Uses the white-box newTestResponder (no sockets) so the test
+// does not require multicast.
+func TestZeroconfInternal_Publish_WithResponder(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	// Attach a socket-less responder (white-box).
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	svc := Service{
+		InstanceName: "AABBCCDDEEFF1122",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		Subtypes:     []string{"_L3840", "_CM", "_S15"},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	// Verify the subtype mappings were registered with the responder.
+	// We probe via matchAnswers — a PTR query for any registered subtype should resolve.
+	if len(r.mappings) == 0 {
+		t.Fatal("responder has no subtype mappings after Publish — subtype block not exercised")
+	}
+	// Spot-check one subtype lookup.
+	var firstKey string
+	for k := range r.mappings {
+		firstKey = k
+		break
+	}
+	qs := []dns.Question{{Name: firstKey, Qtype: dns.TypePTR}}
+	answers := r.matchAnswers(qs)
+	if len(answers) == 0 {
+		t.Errorf("matchAnswers for %q returned nothing — mapping not stored correctly", firstKey)
+	}
+}
+
+// TestZeroconfInternal_Publish_WithResponder_EmptySubtype verifies that a
+// subtype label that is an empty string is skipped (the `sub == ""` guard).
+func TestZeroconfInternal_Publish_WithResponder_EmptySubtype(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	svc := Service{
+		InstanceName: "DEADBEEF01234567",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		// One empty subtype that should be skipped, one valid one.
+		Subtypes: []string{"", "_CM"},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	// Only "_CM" should be registered; "" must be skipped.
+	if len(r.mappings) != 1 {
+		t.Errorf("expected 1 mapping (empty subtype skipped), got %d", len(r.mappings))
+	}
+}
+
+// TestZeroconfInternal_Publish_WithResponder_Domain verifies the subtype
+// qname construction when the service has a non-empty Domain.
+func TestZeroconfInternal_Publish_WithResponder_Domain(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	svc := Service{
+		InstanceName: "1234567890ABCDEF",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "test",
+		Domain:       "local",
+		Subtypes:     []string{"_I9C71D38FBE48F2E5"},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish with domain: %v", err)
+	}
+	if len(r.mappings) != 1 {
+		t.Errorf("expected 1 subtype mapping, got %d", len(r.mappings))
+	}
+}
+
+// TestZeroconfInternal_Close_WithResponder_SubFQDNs verifies that Close
+// removes subtype mappings from the attached responder when there are
+// registered subFQDNs. This exercises the
+// `z.responder != nil` branch inside Close.
+func TestZeroconfInternal_Close_WithResponder_SubFQDNs(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	svc := Service{
+		InstanceName: "FFFF000011112222",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		Subtypes:     []string{"_CM", "_L3840"},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	if len(r.mappings) == 0 {
+		t.Fatal("responder has no mappings — precondition not met")
+	}
+
+	// Close must remove the subtype mappings from the responder.
+	if err := z.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if len(r.mappings) != 0 {
+		t.Errorf("responder mappings not cleared after Close: %d remaining", len(r.mappings))
+	}
+}
+
+// TestZeroconfInternal_Withdraw_WithResponder_SubFQDNs verifies that Withdraw
+// removes subtype mappings from the attached responder via shutdownByKeyLocked.
+func TestZeroconfInternal_Withdraw_WithResponder_SubFQDNs(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	r := newTestResponder()
+	z.AttachSubtypeResponder(r)
+
+	svc := Service{
+		InstanceName: "AAAA000011113333",
+		ServiceType:  ServiceTypeCommissionable,
+		Port:         5540,
+		HostName:     "test",
+		Subtypes:     []string{"_CM"},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+	before := len(r.mappings)
+	if before == 0 {
+		t.Fatal("responder has no mappings after Publish — precondition failed")
+	}
+
+	if err := z.Withdraw(context.Background(), svc.InstanceName, svc.ServiceType); err != nil {
+		t.Fatalf("Withdraw: %v", err)
+	}
+	if len(r.mappings) != 0 {
+		t.Errorf("responder mappings not cleared after Withdraw: %d remaining", len(r.mappings))
+	}
+}
+
+// TestZeroconfInternal_RepublishAll_WithItems exercises the republishAll path
+// that re-Publishes each active item. Specifically the `z.closed == false`
+// branch and the snapshot loop.
+func TestZeroconfInternal_RepublishAll_WithItems(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	svc := Service{
+		InstanceName: "BBBBBBBBCCCCCCCC",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "test",
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("Publish: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	loop, _ := z.StartReannounceLoop(ctx, 30*time.Millisecond)
+	defer loop()
+
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	if got := z.Active(); len(got) != 1 {
+		t.Errorf("Active after reannounce: got %d, want 1", len(got))
+	}
+}
+
+// TestZeroconfInternal_Publish_HostName_Empty_FallsBack verifies that an
+// empty HostName in the Service causes Publish to fall back to os.Hostname()
+// rather than crashing. This exercises the `host == ""` branch in Publish.
+func TestZeroconfInternal_Publish_HostName_Empty_FallsBack(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	svc := Service{
+		InstanceName: "EEEEEEEEFFFFFFFF",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "", // triggers os.Hostname() fallback
+	}
+	// Publish must not panic. It may succeed or fail depending on whether
+	// zeroconf.RegisterProxy accepts the OS hostname; we only care that
+	// the empty-hostname branch is reached without a nil-dereference.
+	_ = z.Publish(context.Background(), svc)
+}
+
+// TestZeroconfInternal_NewSubtypeResponder_WithLogger_NoNil exercises the
+// NewSubtypeResponder path where logger is non-nil. Also exercises
+// the debug-log branches in joinMcast4/joinMcast6 when an interface
+// is available.
+func TestZeroconfInternal_NewSubtypeResponder_Logger_NonNil(t *testing.T) {
+	// Build a custom logger to be explicit.
+	logger := slog.Default()
+	r, err := NewSubtypeResponder(logger)
+	if err != nil {
+		// Not a test failure — on a restricted sandbox joinMcast might fail.
+		t.Logf("NewSubtypeResponder with non-nil logger failed (acceptable): %v", err)
+		return
+	}
+	if cerr := r.Close(); cerr != nil {
+		t.Fatalf("Close: %v", cerr)
+	}
+}

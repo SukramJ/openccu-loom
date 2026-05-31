@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Contract Tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="openccu-loom" />
+    <working_directory value="$PROJECT_DIR$" />
+    <envs>
+      <env name="CGO_ENABLED" value="0" />
+    </envs>
+    <kind value="DIRECTORY" />
+    <package value="github.com/SukramJ/openccu-loom/tests/contract" />
+    <directory value="$PROJECT_DIR$/tests/contract" />
+    <filePath value="$PROJECT_DIR$/tests/contract" />
+    <framework value="gotest" />
+    <pattern value="^Test.*" />
+    <method v="2" />
+  </configuration>
+</component>

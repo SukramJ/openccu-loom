@@ -1,0 +1,41 @@
+{
+  "dp_type": "ModulatingValve",
+  "setter": "SetLevel",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "level=0.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "MOD0001:1",
+          "parameter": "LEVEL",
+          "value": 0.0
+        }
+      ]
+    },
+    {
+      "label": "level=0.5",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "MOD0001:1",
+          "parameter": "LEVEL",
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "label": "level=1.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "MOD0001:1",
+          "parameter": "LEVEL",
+          "value": 1.0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "dp_type": "Siren",
+  "setter": "TurnOn",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "acoustic=FREQUENCY_RISING,optical=BLINKING_RED",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "ASIR0001:3",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "ACOUSTIC_ALARM_SELECTION": "FREQUENCY_RISING",
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "OPTICAL_ALARM_SELECTION": "BLINKING_RED"
+          }
+        }
+      ]
+    }
+  ]
+}

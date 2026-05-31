@@ -1,0 +1,4509 @@
+openapi: 3.1.0
+info:
+  title: openccu-loom REST API
+  version: 1.0.0
+  description: |
+    North-bound REST + WebSocket surface of the openccu-loom daemon.
+    Errors follow RFC 9457 problem+json.
+  license:
+    name: MIT
+    url: https://opensource.org/license/mit/
+servers:
+  - url: /api/v1
+security:
+  - basicAuth: []
+  - bearerAuth: []
+  - openIdConnect: [viewer]
+tags:
+  - name: core
+  - name: devices
+  - name: paramsets
+  - name: config
+    description: Channel configuration export / import (portable snapshots)
+  - name: hub
+  - name: interfaces
+  - name: messages
+  - name: events
+  - name: auth
+  - name: schedules
+  - name: links
+  - name: backup
+  - name: sessions
+  - name: audit
+  - name: diagnostics
+  - name: matter
+  - name: config-admin
+    description: Live config section read / write / delete + schema introspection
+  - name: user-admin
+    description: Local user management (create, update, delete)
+  - name: token-admin
+    description: API token management v2 (fingerprint-keyed)
+  - name: central-admin
+    description: Central (CCU) CRUD — DB-backed multi-CCU registry
+
+paths:
+  /info:
+    get:
+      tags: [core]
+      summary: Daemon build + runtime info
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Info" }
+
+  /health:
+    get:
+      tags: [core]
+      summary: Aggregated health snapshot
+      security: []
+      responses:
+        "200":
+          description: Healthy / degraded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        "503":
+          description: Any component unhealthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /config:
+    get:
+      tags: [core]
+      summary: Sanitized effective configuration
+      description: |
+        Read-only view of the effective daemon configuration. Carries
+        feature flags (`features`), per-central wiring (`centrals`),
+        callback ports, and static behaviour policies (`policies`).
+
+        The `policies` object documents daemon-side defaults that
+        external clients ask about — currently always-on values:
+
+        - `hub.programs.include_all` — daemon surfaces every CCU
+          program; HA-side marker filtering
+          (`DEFAULT_PROGRAM_MARKERS`) stays a client-side decision.
+        - `hub.sysvars.include_all` — daemon surfaces every system
+          variable; HA-side marker filtering
+          (`DEFAULT_SYSVAR_MARKERS`) is client-side.
+        - `hub.devices.include_hidden` — daemon hides devices the
+          CCU flags as invisible; flipping this requires a config
+          change in a future revision.
+
+        Schema is forward-compatible: future revisions may add new
+        policy keys and feature flags without removing existing
+        ones.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigSnapshot" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /ui/event:
+    post:
+      tags: [core]
+      summary: SPA telemetry sink (fire-and-forget)
+      description: |
+        Anonymous endpoint the SPA uses to log UI events
+        (view-selector toggle, etc.). The daemon writes a
+        structured slog line and returns 204 — no event is
+        persisted server-side. Downstream log aggregation
+        handles counting and slicing. See ADR 0016.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UIEventRequest" }
+      responses:
+        "204": { description: Accepted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /devices:
+    get:
+      tags: [devices]
+      summary: Paginated device list
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceList" }
+
+  /devices/{addr}:
+    get:
+      tags: [devices]
+      summary: Single device detail
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceDetail" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteDevice
+      summary: Remove a device from the registry (admin)
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "202":
+          description: Unpair dispatched asynchronously
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    patch:
+      operationId: patchDevice
+      summary: Update mutable device metadata (name, room assignment)
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+      responses:
+        "202":
+          description: Update accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/{addr}/channels:
+    get:
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChannelSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/{addr}/channels/{no}:
+    get:
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChannelSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/{addr}/channels/{no}/data-points:
+    get:
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DataPointSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/{addr}/channels/{no}/data-points/{param}:
+    get:
+      tags: [devices]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+        - $ref: "#/components/parameters/Parameter"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataPointSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/{addr}/channels/{no}/data-points/{param}/value:
+    put:
+      tags: [devices]
+      summary: Set a data point value on the CCU
+      description: |
+        Headers:
+          - `Idempotency-Key` (optional): supply a client-side UUID
+            to deduplicate retries. The daemon caches the response
+            per `(method, path, key)` for 5 minutes and returns the
+            cached response with `Idempotent-Replay: true` on
+            retry. Recommended for HA-style flows that retry on
+            network glitches and must not double-actuate the
+            actuator.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+        - $ref: "#/components/parameters/Parameter"
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string }
+          description: Optional UUID for retry deduplication. See description.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetValueRequest" }
+      responses:
+        "202":
+          description: Accepted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /devices/{addr}/paramsets/{key}:
+    parameters:
+      - $ref: "#/components/parameters/Address"
+      - name: key
+        in: path
+        required: true
+        schema: { type: string, enum: [VALUES, MASTER, LINK] }
+    get:
+      operationId: getParamset
+      tags: [paramsets]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      tags: [paramsets]
+      summary: Write a paramset atomically (one wire call)
+      description: |
+        Writes every key in the request body to the CCU as a single
+        `setParamsetValues` XML-RPC call. The CCU applies the values
+        together or rejects them together — there is no per-parameter
+        partial-success semantics on this path. Use a session
+        (`config.session.*` WS commands) when you need transactional
+        rollback across multiple writes.
+
+        The CCU does not return per-parameter status on success; the
+        202 response carries no body. On failure the daemon surfaces
+        the upstream error as 502 problem+json with `code: upstream_unavailable`.
+
+        Headers:
+          - `Idempotency-Key` (optional): client-supplied UUID. The
+            daemon caches the response per `(method, path, key)` for
+            5 minutes; a retry with the same key within that window
+            returns the cached response and sets the
+            `Idempotent-Replay: true` response header so clients
+            can distinguish a deduplicated retry from a fresh write.
+            Keys older than 5 minutes (or evicted under memory
+            pressure) flow through as fresh requests. The cache key
+            does NOT include the request body — a retry MUST use
+            the same body as the original; the daemon trusts the
+            client's key choice.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string }
+          description: Optional UUID for client-side retry de-duplication. See description.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "202":
+          description: Accepted (atomic write dispatched to CCU)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /programs:
+    get:
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProgramSummary" }
+
+  /programs/{id}/execute:
+    post:
+      tags: [hub]
+      description: |
+        Triggers a CCU program. Programs typically drive actuators or
+        scenes, so a double-execution under client retry can produce
+        observable side effects. Supply the optional `Idempotency-Key`
+        header to suppress that risk.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Accepted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /sysvars:
+    get:
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SysvarSummary" }
+    post:
+      operationId: createSysvar
+      summary: Create sysvar on the CCU (Rega create_system_variable)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /sysvars/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SysvarSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: putSysvar
+      summary: Set the sysvar runtime value. Idempotent — body carries {value} only.
+      description: |
+        Sysvars can fire CCU programs and scenes when their value
+        changes. A retry without deduplication can re-trigger those
+        cascades. Supply the optional `Idempotency-Key` header to make
+        the write safe under client-side retry.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SysvarSetRequest" }
+      responses:
+        "202":
+          description: Accepted — runtime value written to CCU.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Value type not supported for this sysvar.
+        "502": { $ref: "#/components/responses/BadGateway" }
+    patch:
+      operationId: patchSysvar
+      summary: >
+        Update the sysvar metadata (description, unit, value_list, min, max).
+        Triggers the Rega update_system_variable script via JSON-RPC.
+        All fields are optional — omitted fields leave CCU metadata unchanged.
+        Type changes are not supported; delete and recreate the sysvar instead.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description:
+                  type: string
+                  description: Human-readable label shown in the CCU UI.
+                unit:
+                  type: string
+                  description: Physical unit string (e.g. "°C", "%").
+                min:
+                  type: string
+                  description: Minimum value (as string, CCU convention).
+                max:
+                  type: string
+                  description: Maximum value (as string, CCU convention).
+                value_list:
+                  type: array
+                  items: { type: string }
+                  description: Ordered list of enum labels for ENUM-type sysvars.
+      responses:
+        "202":
+          description: Accepted — Rega script dispatched asynchronously.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteSysvar
+      summary: Delete sysvar on the CCU (Rega delete_system_variable)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /alarm-messages:
+    get:
+      tags: [messages]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AlarmMessage" }
+
+  /service-messages:
+    get:
+      tags: [messages]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ServiceMessage" }
+
+  /install-mode:
+    get:
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstallModeState" }
+    post:
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallModeState" }
+      responses:
+        "202":
+          description: Accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /interfaces:
+    get:
+      tags: [interfaces]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InterfaceState" }
+
+  /interfaces/{id}:
+    get:
+      tags: [interfaces]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InterfaceState" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /interfaces/{id}/reconnect:
+    post:
+      tags: [interfaces]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "202":
+          description: Accepted
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/ccu:
+    get:
+      operationId: listSystemCCU
+      summary: Per-central CCU metadata
+      description: |
+        Returns one entry per CCU configured on the daemon. Surfaces
+        identity (name, host, central-id), software (model, version),
+        and the configured-interface list HA's Repair-Flows need to
+        validate that the daemon manages the same CCU the user
+        expects.
+
+        Centrals that have not yet completed their first connect
+        round have empty `model` / `version` / `serial` / `hostname`
+        / `url` and `available: false`; the configured-interface
+        list is still populated from static config.
+      tags: [core]
+      responses:
+        "200":
+          description: List of CCU metadata entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries]
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/SystemCCUEntry" }
+
+  /system/status:
+    get:
+      operationId: listSystemStatus
+      summary: Recent system-status events
+      description: |
+        Returns a bounded ring buffer of the most recent
+        SystemStatusChangedEvents observed on the central event bus.
+        Each entry carries the per-component health snapshot at the
+        moment the event fired (central state, connection state,
+        degraded interfaces, freeform issues). The endpoint returns
+        a 200 with an empty array when no events have been buffered
+        yet — the buffer is wired only when a SystemStatusBuffer is
+        installed in the REST router.
+      tags: [core]
+      responses:
+        "200":
+          description: Ring buffer of recent system-status events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      required: [central, component, healthy, event_at]
+                      properties:
+                        central: { type: string }
+                        component: { type: string }
+                        healthy: { type: boolean }
+                        reason: { type: string }
+                        interface_id: { type: string }
+                        error_code: { type: integer }
+                        central_state: { type: string }
+                        connection_state: { type: string }
+                        degraded_interfaces:
+                          type: array
+                          items: { type: string }
+                        issues:
+                          type: array
+                          items: { type: string }
+                        event_at: { type: string, format: date-time }
+
+  /snapshot:
+    get:
+      tags: [snapshot]
+      summary: One-shot dump of structural daemon state
+      description: |
+        Returns devices, programs, sysvars, rooms, functions and
+        interface state in a single JSON envelope. Use this for
+        cold-restore tooling, periodic external backups, or
+        debugging session replays. Sources that are not wired
+        contribute empty arrays rather than failing the request.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Snapshot" }
+
+  /events:
+    get:
+      tags: [events]
+      summary: Upgrade to the WebSocket event stream
+      description: |
+        Clients must request an RFC 6455 upgrade (Upgrade: websocket,
+        Connection: Upgrade, Sec-WebSocket-Version: 13). Once
+        connected the client exchanges JSON frames:
+
+        ```
+        {"op":"subscribe","topics":["device.*","hub.*"]}
+        {"op":"unsubscribe","topics":["hub.*"]}
+        {"op":"pong"}
+        ```
+
+        Server frames follow the [WsEnvelope](#/components/schemas/WsEnvelope)
+        shape. The envelope's `type` field discriminates which payload
+        schema applies. The full broadcast catalogue (event name → topic
+        pattern → payload schema) lives in `assets/wsapi.json` under
+        commands where `kind == "broadcast"`. The topic-hierarchy
+        reference at `docs/external-clients/topic-hierarchy.md`
+        documents the wildcard semantics.
+
+        Currently emitted broadcasts (and the schema each one carries):
+
+        - `datapoint.value_changed` → [DataPointValueChangedPayload](#/components/schemas/DataPointValueChangedPayload)
+        - `custom_data_point.state_changed` → [CustomDataPointStateChangedPayload](#/components/schemas/CustomDataPointStateChangedPayload)
+        - `central.state_changed` → [CentralStateChangedPayload](#/components/schemas/CentralStateChangedPayload)
+        - `system.status_changed` → [SystemStatusChangedPayload](#/components/schemas/SystemStatusChangedPayload)
+        - `hub.sysvar_changed` → [SysvarChangedPayload](#/components/schemas/SysvarChangedPayload)
+        - `hub.program_executed` → [ProgramExecutedPayload](#/components/schemas/ProgramExecutedPayload)
+        - `hub.install_mode_changed` → [InstallModeChangedPayload](#/components/schemas/InstallModeChangedPayload)
+        - `device.created` → [DeviceCreatedPayload](#/components/schemas/DeviceCreatedPayload)
+        - `device.removed` → [DeviceRemovedPayload](#/components/schemas/DeviceRemovedPayload)
+        - `matter.*` broadcasts: see `wsapi.json` (payload schemas TBD).
+      responses:
+        "101":
+          description: Switching Protocols
+        "400":
+          description: |
+            Plain HTTP request without a valid WebSocket upgrade — the
+            server rejects the connection rather than serving HTML.
+
+  # ---- Auth ----
+  /auth/login:
+    post:
+      operationId: login
+      summary: Issue session cookie
+      tags: [auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Session issued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke current session
+      tags: [auth]
+      responses:
+        "204":
+          description: Logged out
+  /auth/me:
+    get:
+      operationId: me
+      summary: Current identity probe
+      tags: [auth]
+      responses:
+        "200":
+          description: Identity
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Identity" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/users:
+    get:
+      operationId: listUsers
+      summary: List configured Basic-auth users (admin)
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UserListEntry" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/tokens:
+    get:
+      operationId: listTokens
+      summary: List API tokens with elided fingerprints (admin)
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TokenListEntry" }
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      operationId: createToken
+      summary: Issue a new bearer token (admin)
+      description: |
+        Generates a fresh bearer token bound to the supplied subject
+        and role. The raw token value is returned exactly once in
+        the 201 response — the daemon stores only an opaque
+        fingerprint thereafter, so the client MUST capture the
+        `token` field on creation. Use the returned `id` for
+        subsequent management (`DELETE /auth/tokens/{id}`).
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subject, role]
+              properties:
+                subject:
+                  type: string
+                  description: Logical owner of the token (e.g. "homeassistant", "ci-runner").
+                role:
+                  type: string
+                  enum: [viewer, operator, admin]
+      responses:
+        "201":
+          description: Token created — raw value visible exactly once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateTokenResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Validation error (missing subject, invalid role)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/tokens/{id}:
+    delete:
+      operationId: deleteToken
+      summary: Revoke an API token (admin)
+      description: |
+        Removes the token identified by the path segment (the `id`
+        field returned from `POST /auth/tokens` or `GET /auth/tokens`).
+        The token immediately stops authenticating; in-flight requests
+        finish under the previous identity.
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Token removed
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/oidc/start:
+    get:
+      operationId: oidcStart
+      summary: Initiate OIDC authorization code flow (redirect to IdP)
+      tags: [auth]
+      security: []
+      responses:
+        "302":
+          description: Redirect to identity provider
+        "404":
+          description: OIDC not configured (route not registered)
+        "503":
+          description: OIDC configured but provider unreachable
+  /auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC authorization code callback — exchanges code for session
+      tags: [auth]
+      security: []
+      parameters:
+        - { in: query, name: code, required: true, schema: { type: string } }
+        - { in: query, name: state, required: true, schema: { type: string } }
+      responses:
+        "302":
+          description: Redirect to / on success
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: OIDC not configured (route not registered)
+        "503":
+          description: OIDC configured but provider unreachable
+
+  # ---- Devices: lifecycle, channels, schedule, links ----
+  /devices/values:batch:
+    post:
+      operationId: valuesBatch
+      summary: Batch-read data-point values in one round trip
+      description: |
+        Returns the requested data-point summaries in a single
+        request — avoids the N-roundtrips initial-sync penalty
+        external clients (HA, dashboards, monitoring) hit when
+        loading 80k DPs over per-DP GETs.
+
+        Per-query errors (missing device, channel, parameter, or
+        visibility-hidden parameter) surface inside the response
+        body so one bad address does not abort the rest of the
+        batch. Envelope-level problems (malformed JSON, empty
+        queries, exceeding the per-request cap) yield problem+json.
+
+        The per-request query cap is currently 1000.
+      tags: [devices]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ValuesBatchRequest" }
+      responses:
+        "200":
+          description: Per-query results (success or error)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValuesBatchResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          description: Empty queries / oversized batch
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/refresh:
+    post:
+      operationId: refreshDevices
+      summary: Force CCU re-pull on every backend
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "202":
+          description: Refresh dispatched
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/accept:
+    post:
+      operationId: acceptInboxDevice
+      summary: Promote a pending pairing into the registry
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202":
+          description: Accept dispatched
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/firmware/update:
+    post:
+      operationId: updateFirmware
+      summary: Trigger OTA firmware update for the device
+      description: |
+        Starts an OTA flash. The CCU does not handle duplicate
+        update requests gracefully — a retry mid-flight can leave the
+        radio in an undefined state. Supply the optional
+        `Idempotency-Key` header so client-side retries collapse into
+        a single update attempt.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Update scheduled
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/ui-schema:
+    get:
+      operationId: getUiSchema
+      summary: Renderable form descriptor for a channel paramset
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: query, name: paramset, schema: { type: string, enum: [VALUES, MASTER, LINK], default: VALUES } }
+        - { in: query, name: peer, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string, default: en } }
+        - { in: query, name: expert, schema: { type: boolean } }
+      responses:
+        "200":
+          description: UI schema
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/config/export:
+    get:
+      operationId: exportChannelConfig
+      summary: Export a channel's paramset as a portable JSON snapshot
+      description: |
+        Returns an ExportedConfiguration snapshot for the specified channel.
+        The `paramset` query parameter selects which paramset to snapshot
+        (default: MASTER). The snapshot is suitable for archival, migration,
+        and import via POST .../config/import.
+      tags: [config]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer, minimum: 0 } }
+        - in: query
+          name: paramset
+          schema: { type: string, enum: [MASTER, VALUES], default: MASTER }
+          description: Paramset to export. MASTER is the default (persistent channel settings).
+      responses:
+        "200":
+          description: Exported configuration snapshot
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExportedConfiguration" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          description: Export failed (CCU read error)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/{addr}/channels/{no}/config/import:
+    post:
+      operationId: importChannelConfig
+      summary: Import a previously-exported channel paramset snapshot
+      description: |
+        Applies an ExportedConfiguration payload to the CCU. The body must
+        have been produced by GET .../config/export (or the Python
+        aiohomematic-config exporter). Version mismatch and missing required
+        fields are rejected with 400. CCU write errors surface as 500.
+      tags: [config]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer, minimum: 0 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportedConfiguration" }
+      responses:
+        "200":
+          description: Import applied successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          description: Apply failed (CCU write error)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/{addr}/cdps:
+    get:
+      operationId: listCustomDataPoints
+      summary: List all custom data points of a device
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Custom DP list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomDPSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/cdps/{name}:
+    get:
+      operationId: getCustomDataPoint
+      summary: Get a single custom data point by name
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Custom DP detail }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/cdps/{name}/{operation}:
+    post:
+      operationId: invokeCustomDataPoint
+      summary: "Invoke an operation on a custom data point (turn_on, set_temperature, open, …)"
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: name, required: true, schema: { type: string } }
+        - in: path
+          name: operation
+          required: true
+          schema:
+            type: string
+            description: "Operation name, e.g. turn_on, turn_off, set_temperature, open, close, …"
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomDPInvokeRequest" }
+      responses:
+        "204": { description: Accepted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/calc-dps:
+    get:
+      operationId: listCalculatedDataPoints
+      summary: List all calculated data points on a channel
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Calculated DP list }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/calc-dps/{name}:
+    get:
+      operationId: getCalculatedDataPoint
+      summary: Get a single calculated data point by name
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: path, name: name, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Calculated DP detail }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/linkable-channels:
+    get:
+      operationId: linkableChannels
+      summary: Eligible link partners for the channel
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+        - { in: query, name: role, required: true, schema: { type: string, enum: [sender, receiver] } }
+        - { in: query, name: interface, required: true, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string, default: en } }
+      responses:
+        "200":
+          description: Channel list
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/week_profile:
+    get:
+      operationId: getChannelWeekProfile
+      summary: Week-profile metadata for one channel
+      description: |
+        Returns the week-profile descriptor (schedule type, temperature
+        range, available profiles, per-day enabled flags) for the given
+        channel. Returns 404 when the channel exists but has no
+        attached week profile.
+      tags: [schedules]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Week-profile metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [address, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]
+                properties:
+                  address: { type: string }
+                  schedule_type: { type: string, enum: [default, climate] }
+                  min_temp: { type: number }
+                  max_temp: { type: number }
+                  profile_count: { type: integer }
+                  current_profile: { type: string }
+                  available_profiles:
+                    type: array
+                    items: { type: string }
+                  schedule_enabled:
+                    type: object
+                    additionalProperties: { type: boolean }
+                  has_climate_schedule: { type: boolean }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/schedule:
+    get:
+      operationId: getChannelSchedule
+      summary: Climate or simple schedule of one channel
+      tags: [schedules]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Schedule }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putChannelSchedule
+      summary: Replace channel schedule
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/schedule/active-profile:
+    post:
+      operationId: setChannelActiveProfile
+      summary: Pick the active climate profile (P1..P6)
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/schedule:
+    get:
+      operationId: getDeviceSchedule
+      summary: Auto-resolves schedule channel from the device
+      tags: [schedules]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Schedule }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putDeviceSchedule
+      summary: Replace device schedule (auto-resolves channel)
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/schedule/active-profile:
+    post:
+      operationId: setDeviceActiveProfile
+      summary: Pick the active climate profile (auto-resolves channel)
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/links:
+    get:
+      operationId: listLinks
+      summary: List direct links of the device
+      tags: [links]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: query, name: locale, schema: { type: string, default: en } }
+      responses:
+        "200": { description: Links }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: addLink
+      summary: Add a direct link (sender → receiver)
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: removeLink
+      summary: Remove a direct link
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: query, name: sender, required: true, schema: { type: string } }
+        - { in: query, name: receiver, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/link-ps/{peer}:
+    get:
+      operationId: getLinkParamset
+      summary: LINK paramset between this channel and a peer
+      tags: [links]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: peer, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Paramset }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putLinkParamset
+      summary: Write LINK paramset to a peer
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: peer, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/central-links:
+    get:
+      operationId: getCentralLinksStatus
+      summary: PRESS-event forwarding status for the device
+      tags: [links]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Status }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createCentralLinks
+      summary: Enable central click-event forwarding
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Report }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: removeCentralLinks
+      summary: Disable central click-event forwarding
+      tags: [links]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Report }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  # ---- Hub: inbox, rooms, sysvar/program lifecycle, ACK ----
+  /inbox:
+    get:
+      operationId: listInbox
+      summary: Pending pairing candidates
+      tags: [hub]
+      responses: { "200": { description: Inbox list } }
+  /rooms:
+    get:
+      operationId: listRooms
+      summary: Aggregated room index with device counts
+      tags: [hub]
+      responses: { "200": { description: Room list } }
+  /functions:
+    get:
+      operationId: listFunctions
+      summary: Aggregated function-group index with device counts
+      tags: [hub]
+      responses: { "200": { description: Function list } }
+  /programs/{id}:
+    parameters:
+      - { in: path, name: id, required: true, schema: { type: string } }
+    patch:
+      operationId: setProgramEnabled
+      summary: Toggle program active flag
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [active]
+              properties:
+                active: { type: boolean }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /alarm-messages/{id}/ack:
+    post:
+      operationId: ackAlarm
+      summary: Acknowledge alarm message
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /service-messages/{id}/ack:
+    post:
+      operationId: ackService
+      summary: Acknowledge service message
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Scheduled }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  # ---- Backups ----
+  /backups:
+    post:
+      operationId: triggerBackup
+      summary: Trigger CCU backup (Rega create_backup_start)
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "202": { description: Job id returned }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    get:
+      operationId: listBackups
+      summary: Locally stored CCU backups
+      tags: [backup]
+      responses:
+        "200": { description: Backup list }
+        "502": { $ref: "#/components/responses/BadGateway" }
+  /backups/{id}/download:
+    get:
+      operationId: downloadBackup
+      summary: Stream a backup .sbk
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: SBK bytes
+          content:
+            application/octet-stream: { schema: { type: string, format: binary } }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          $ref: "#/components/responses/BadGateway"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /backups/{id}/restore:
+    post:
+      operationId: restoreBackup
+      summary: Restore a CCU backup from a previously stored snapshot
+      tags: [backup]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "202": { description: Restore dispatched asynchronously }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  # ---- Edit-session locks ----
+  /sessions/edit:
+    post:
+      operationId: openEditSession
+      summary: Acquire a 5-min edit lock on a resource key
+      tags: [sessions]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key: { type: string }
+                subject: { type: string }
+      responses:
+        "200": { description: Lock acquired }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "423": { description: Locked by another session }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: closeEditSession
+      summary: Release an edit lock
+      tags: [sessions]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "204": { description: Released }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /sessions/edit/heartbeat:
+    post:
+      operationId: heartbeatEditSession
+      summary: Refresh an edit lock's TTL
+      tags: [sessions]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      responses:
+        "200": { description: Refreshed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "410": { description: Session expired }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /sessions/edit/take-over:
+    post:
+      operationId: forceCloseEditSession
+      summary: Force-close another user's edit lock (operator)
+      tags: [sessions]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key]
+              properties:
+                key: { type: string }
+      responses:
+        "204": { description: Lock released }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  # ---- Audit + diagnostics ----
+  /audit:
+    get:
+      operationId: listAudit
+      summary: Recent change history (FIFO buffer)
+      tags: [audit]
+      parameters:
+        - in: query
+          name: device
+          schema: { type: string }
+          description: >
+            Filter by device address prefix (case-insensitive).
+            E.g. ?device=0001 returns entries whose DeviceAddress starts with "0001".
+        - in: query
+          name: op
+          schema: { type: string }
+          description: >
+            Filter by action/source tag substring (case-insensitive).
+            E.g. ?op=paramset matches paramset_write, link_paramset_write, etc.
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+          description: >
+            Only return entries with timestamp >= this value (inclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+          description: >
+            Only return entries with timestamp < this value (exclusive, RFC3339).
+            Returns 400 if the value cannot be parsed.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 1000 }
+          description: >
+            Maximum entries to return. 0 or absent uses the default (1000).
+            Values above 10000 are capped to 10000.
+      responses:
+        "200":
+          description: Filtered list of audit entries (newest first).
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /incidents:
+    get:
+      operationId: listIncidents
+      summary: Diagnostic incidents
+      tags: [diagnostics]
+      responses: { "200": { description: Incidents } }
+  /metrics:
+    get:
+      operationId: metrics
+      summary: Prometheus metrics (also at /metrics)
+      tags: [diagnostics]
+      responses: { "200": { description: Prometheus text } }
+
+  /diagnostics:
+    get:
+      operationId: diagnosticsDump
+      summary: Composite diagnostics dump (health + interfaces + incidents + log-levels)
+      description: |
+        Single ship-the-state artefact for support / agent escalation
+        (ADR 0017). One JSON envelope carrying build info, health
+        components + score, per-client detail, configured-interface
+        list, recent incidents, system-status ring buffer, and
+        log-level overrides.
+
+        **Two consumer planes — disjoint:**
+
+        - `GET /diagnostics` returns a momentary structured JSON
+          snapshot. Right for support escalations, HA Repair-Flows,
+          and any client that needs a coherent point-in-time view
+          with one call.
+        - `GET /metrics` returns Prometheus exposition format,
+          right for time-series scraping (Grafana, Alertmanager).
+          Continuous monitoring uses this; diagnostics-on-demand
+          uses the JSON endpoint above.
+
+        The two surfaces are not interchangeable: the JSON envelope
+        carries fields (recent incidents, log-overrides, system-status
+        ring) that have no useful Prometheus representation; the
+        Prometheus surface emits time-series that the JSON envelope
+        does not aggregate.
+
+        Hashes device-address-shaped fields with a 12-hex sha256
+        prefix by default; pass `?anonymize=0` explicitly when
+        absolute fidelity is required.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: query
+          name: anonymize
+          schema: { type: string, enum: ["0", "1"], default: "1" }
+      responses:
+        "200":
+          description: Diagnostics envelope
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+  /diagnostics/log-levels:
+    get:
+      operationId: listLogLevels
+      summary: Active per-subsystem log-level overrides
+      tags: [diagnostics]
+      responses:
+        "200":
+          description: Override list
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagnostics/log-levels/{path}:
+    put:
+      operationId: putLogLevel
+      summary: Install a per-subsystem log-level override (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "204":
+          description: Override applied
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteLogLevel
+      summary: Remove a per-subsystem log-level override (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Removed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/log-level:
+    get:
+      operationId: getDefaultLogLevel
+      summary: Current global default log level
+      tags: [diagnostics]
+      responses:
+        "200":
+          description: Default level
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putDefaultLogLevel
+      summary: Change the global default log level (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Default level updated
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/logs:
+    get:
+      operationId: listLogs
+      summary: Backfill / download recent log records (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer }
+          description: Max records (default 500, capped at the ring size).
+        - in: query
+          name: min_level
+          schema: { type: string, enum: [debug, info, warn, error] }
+        - in: query
+          name: format
+          schema: { type: string, enum: [json, ndjson] }
+        - in: query
+          name: download
+          schema: { type: string, enum: ["1"] }
+          description: When "1", sets a Content-Disposition attachment header.
+      responses:
+        "200":
+          description: Recent log records
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+            application/x-ndjson:
+              schema: { type: string }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/logs/stream:
+    get:
+      operationId: streamLogs
+      summary: Server-Sent-Events live log tail (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: query
+          name: since
+          schema: { type: integer }
+          description: Resume after this record sequence number.
+        - in: query
+          name: min_level
+          schema: { type: string, enum: [debug, info, warn, error] }
+      responses:
+        "200":
+          description: "SSE stream of log records (event: log, id: <seq>)."
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/capture:
+    post:
+      operationId: startCapture
+      summary: Start a RAM-buffered log capture (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "202":
+          description: Capture accepted — poll GET .../capture/{id} for progress
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    get:
+      operationId: listCaptures
+      summary: List active + archived captures (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Capture list
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+  /diagnostics/capture/{id}:
+    get:
+      operationId: getCapture
+      summary: Capture metadata (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Capture metadata
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagnostics/capture/{id}/stop:
+    post:
+      operationId: stopCapture
+      summary: Stop a running capture (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Capture stopped
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /admin/values-cache/stats:
+    get:
+      operationId: getValuesCacheStats
+      summary: Persistent VALUES-cache statistics (admin-only)
+      description: |
+        Snapshot of the wire-DP VALUES cache: row count, JSON byte
+        size, and the cumulative restore/cast/gc/flush counters since
+        process start. See ADR 0018.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Current cache statistics.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ValuesCacheStats" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: cache feature disabled or store unwired.
+
+  /admin/mqtt/reload:
+    post:
+      operationId: reloadMQTT
+      summary: Tear down + rebuild the MQTT stack (admin-only)
+      description: |
+        Triggers an atomic MQTT-stack reload using the current
+        configuration. The new broker connection is established
+        before the previous one is torn down; on failure the
+        previous stack continues unchanged and a 503 is returned.
+
+        Operators use this after editing MQTT settings in the UI
+        when they do not want to wait for the file-watcher poll
+        cycle (≤ 5 s) or when an external state — broker DNS,
+        TLS certificate, authentication — changed without a
+        config edit.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: MQTT stack reloaded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MQTTReloadResponse" }
+        "503":
+          description: Reload failed; previous stack still active.
+
+  /admin/values-cache/reset:
+    post:
+      operationId: resetValuesCacheGlobal
+      summary: Drop every row from the persistent VALUES cache (admin-only)
+      description: |
+        Removes ALL cached wire-DP values. The next cold boot starts
+        with `source=unobserved` on every data point until live
+        events repopulate them.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: cache cleared.
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: cache feature disabled or store unwired.
+
+  /devices/{addr}/values-cache/reset:
+    post:
+      operationId: resetValuesCacheDevice
+      summary: Drop the VALUES-cache rows for one device (admin-only)
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: addr
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: device rows cleared.
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          description: device address unknown.
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: cache feature disabled or store unwired.
+
+  /diagnostics/capture/{id}/download:
+    get:
+      operationId: downloadCapture
+      summary: Download capture archive (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: tar.gz archive
+          content:
+            application/gzip:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/rpc-recording:
+    post:
+      operationId: startRpcRecording
+      summary: Start the XML/JSON-RPC session recorder (replay capture, admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "202":
+          description: Recording started — per-central status
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    get:
+      operationId: listRpcRecordings
+      summary: Current RPC-recorder status per central
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Per-central recorder status
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+  /diagnostics/rpc-recording/stop:
+    post:
+      operationId: stopRpcRecording
+      summary: Stop the RPC session recorder (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Per-central recorder status after stop
+          content:
+            application/json:
+              schema: { type: array, items: { type: object, additionalProperties: true } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /diagnostics/rpc-recording/{central}/download:
+    get:
+      operationId: downloadRpcRecording
+      summary: Download a central's recorded RPC trace as JSON (admin-only)
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: path
+          name: central
+          required: true
+          schema: { type: string }
+        - in: query
+          name: format
+          schema: { type: string, enum: [map, golden] }
+          description: "map (default) = keyed slot map; golden = ordered replay slice."
+      responses:
+        "200":
+          description: Recorded trace (replay map or golden slice)
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/startup-capture:
+    get:
+      operationId: getStartupCapture
+      summary: Read the persisted startup-capture toggle (admin-only)
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Current toggle state
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+    put:
+      operationId: putStartupCapture
+      summary: Persist the startup-capture toggle (admin-only)
+      tags: [system]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StartupCaptureConfig" }
+
+  /system/restart:
+    post:
+      operationId: systemRestart
+      summary: Trigger a graceful daemon shutdown (admin-only)
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      description: |
+        Sends SIGTERM to the daemon's own process. In supervised
+        deployments (systemd, Docker restart-policy) the process
+        comes back automatically; in development the operator
+        starts it manually after observing the shutdown.
+      tags: [system]
+      responses:
+        "202":
+          description: Shutdown signalled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+                  at: { type: string, format: date-time }
+
+  /matter/status:
+    get:
+      operationId: matterStatus
+      summary: Bridge runtime state (endpoint count, fabric count, advertise on/off)
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterStatus" }
+
+  /matter/fabrics:
+    get:
+      operationId: listMatterFabrics
+      summary: List Matter fabrics commissioned to the bridge
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterFabricList" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/fabrics/{id}:
+    delete:
+      operationId: revokeMatterFabric
+      summary: Unpair a Matter fabric (admin)
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 254 }
+      responses:
+        "204":
+          description: Fabric revoked
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /visibility/unignore:
+    get:
+      operationId: listVisibilityUnIgnore
+      summary: List currently-active un-ignore patterns per central
+      tags: [visibility]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnIgnoreListResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: updateVisibilityUnIgnore
+      summary: Replace the un-ignore pattern list for a central (admin)
+      tags: [visibility]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnIgnoreUpdateRequest" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnIgnoreUpdateResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /visibility/unignore/candidates:
+    get:
+      operationId: listVisibilityUnIgnoreCandidates
+      summary: List parameter names that are currently hidden but could be un-ignored
+      description: |-
+        Returns the candidate set for the UI's multi-select picker. The
+        `include_master` query flag controls whether MASTER paramset
+        parameters are included — MASTER candidates are off by default
+        because the search space is wider and the typical use case is
+        promoting VALUES parameters (LOW_BAT, RSSI_PEER, …).
+      tags: [visibility]
+      parameters:
+        - name: include_master
+          in: query
+          required: false
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnIgnoreCandidateList" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /matter/exposable:
+    get:
+      operationId: listMatterExposable
+      summary: List every candidate source with current allowlist state + mappable verdict
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterExposureList" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+    put:
+      operationId: updateMatterExposable
+      summary: Update one allowlist row (admin)
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatterExposureUpdate" }
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/exposable/bulk:
+    post:
+      operationId: bulkUpdateMatterExposable
+      summary: Apply multiple allowlist updates at once (admin)
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatterExposureBulkUpdate" }
+      responses:
+        "200":
+          description: Bulk applied
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [applied]
+                properties:
+                  applied: { type: integer }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "204":
+          description: No content — all updates failed or zero applied
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /matter/commissioning/window/close:
+    post:
+      operationId: closeMatterCommissioningWindow
+      summary: Close an open Matter commissioning window early (admin)
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Window closed
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/share:
+    post:
+      operationId: shareMatterBridge
+      summary: Open a commissioning window for a second Matter controller (admin)
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatterCommissioningWindowRequest" }
+      responses:
+        "200":
+          description: Sharing window opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterCommissioningWindowResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409":
+          description: Commissioning window already open
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/setup-payload:
+    get:
+      operationId: matterSetupPayload
+      summary: Bridge's QR + manual pairing code
+      tags: [matter]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterSetupPayload" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter commissioning not configured (passcode = 0)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /matter/commissioning/window:
+    post:
+      operationId: openMatterCommissioningWindow
+      summary: Open a Matter commissioning window
+      tags: [matter]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MatterCommissioningWindowRequest" }
+      responses:
+        "200":
+          description: Window opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MatterCommissioningWindowResponse" }
+        "400":
+          description: duration_seconds out of range (180..900)
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "409":
+          description: Commissioning window already open
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503":
+          description: Matter bridge not enabled
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  # ---- Config live-edit (Wave-C) ----
+  /config/schema:
+    get:
+      operationId: getConfigSchema
+      summary: Config field schema — section list + typed field descriptors
+      description: |
+        Returns the static descriptor of every config field the daemon
+        exposes: which sections exist, the Go type of each field, and
+        whether changing a field requires a daemon restart. No
+        authentication required — the schema carries no secret values.
+      tags: [config-admin]
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SchemaResponse" }
+
+  /config/effective:
+    get:
+      operationId: getConfigEffective
+      summary: Effective merged configuration with source annotations (admin)
+      description: |
+        Returns the current effective daemon configuration with every
+        secret field redacted as "***". The `sources` map shows which
+        layer supplied each path (bootstrap, db, env, or default).
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConfigSnapshotResponse" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /config/sections/{section}:
+    parameters:
+      - name: section
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getConfigSection
+      summary: Read one config section (admin)
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Section value as JSON object
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    put:
+      operationId: putConfigSection
+      summary: Replace one config section (admin)
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        "200":
+          description: Section updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [section, version, updated_at, restart_required]
+                properties:
+                  section: { type: string }
+                  version: { type: integer, format: int64 }
+                  updated_at: { type: string, format: date-time }
+                  restart_required: { type: boolean }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: deleteConfigSection
+      summary: Delete one config section (admin)
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Deleted (idempotent — 204 even if section was absent)
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  # ---- User management (Wave-C) ----
+  /users:
+    get:
+      operationId: listUsersV2
+      summary: List all users (admin)
+      tags: [user-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/UserSummary" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createUser
+      summary: Create a new user (admin)
+      tags: [user-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserSummary" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /users/{subject}:
+    parameters:
+      - name: subject
+        in: path
+        required: true
+        schema: { type: string }
+    patch:
+      operationId: patchUser
+      summary: Update user password or role (admin)
+      tags: [user-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteUser
+      summary: Delete a user (admin)
+      description: |
+        Returns 409 Conflict when the deletion would remove the last
+        admin account. The daemon enforces at least one admin at all
+        times.
+      tags: [user-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Cannot remove the last admin account
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  # ---- Token management v2 (Wave-C) ----
+  /auth/tokens/v2:
+    get:
+      operationId: listTokensV2
+      summary: List API tokens with fingerprint + metadata (admin)
+      tags: [token-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TokenSummary" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createTokenV2
+      summary: Issue a new bearer token (admin) — plaintext shown exactly once
+      description: |
+        Generates a fresh bearer token bound to the supplied subject
+        and role. The raw token value is returned exactly once in the
+        201 response — the daemon stores only an opaque fingerprint
+        thereafter. Clients MUST capture the `token` field on creation.
+      tags: [token-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenCreate" }
+      responses:
+        "201":
+          description: Token created — raw value visible exactly once
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TokenCreated" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /auth/tokens/v2/{fingerprint}:
+    delete:
+      operationId: deleteTokenV2
+      summary: Revoke an API token by fingerprint (admin)
+      tags: [token-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: fingerprint
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Token revoked
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  # ---- Centrals CRUD (Wave-C) ----
+  /centrals:
+    get:
+      operationId: listCentrals
+      summary: List all configured centrals
+      tags: [central-admin]
+      responses:
+        "200":
+          description: Central list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CentralRow" }
+        "500": { $ref: "#/components/responses/InternalError" }
+    post:
+      operationId: createCentral
+      summary: Create a new central (admin)
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralRow" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralRow" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500": { $ref: "#/components/responses/InternalError" }
+
+  /centrals/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      operationId: getCentral
+      summary: Get a single central by name
+      tags: [central-admin]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralRow" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500": { $ref: "#/components/responses/InternalError" }
+    put:
+      operationId: putCentral
+      summary: Replace a central (admin)
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CentralRow" }
+      responses:
+        "204":
+          description: Updated
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500": { $ref: "#/components/responses/InternalError" }
+    delete:
+      operationId: deleteCentral
+      summary: Delete a central (admin)
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Deleted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500": { $ref: "#/components/responses/InternalError" }
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        Username + password (operator-grade or above for mutations).
+        The role hierarchy (viewer ⊂ operator ⊂ admin) is enforced
+        server-side regardless of authentication scheme.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        API token issued via the auth tokens surface (admin-only
+        provisioning). Token's stored role determines authorisation.
+    openIdConnect:
+      type: openIdConnect
+      description: |
+        OpenID Connect authentication. The operator configures the
+        OIDC discovery URL; the placeholder below is the standard
+        well-known path. Per-operation `security:` blocks express
+        the **minimum role** the daemon enforces via OIDC-style
+        scopes — the same enforcement applies when the client
+        authenticates via basicAuth or bearerAuth, but those schemes
+        cannot natively express scopes in OpenAPI 3.x.
+
+        Scope vocabulary mirrors `Identity.role`:
+          - `viewer` — read-only operations
+          - `operator` — mutations (write data points, manage links,
+            edit schedules, run config-import, trigger refresh)
+          - `admin` — dangerous operations (delete device, edit log
+            levels, list users/tokens, trigger backup, manage
+            interfaces, edit Matter fabrics)
+      openIdConnectUrl: /.well-known/openid-configuration
+  parameters:
+    Address:
+      name: addr
+      in: path
+      required: true
+      schema: { type: string }
+    ChannelNo:
+      name: no
+      in: path
+      required: true
+      schema: { type: integer, minimum: 0 }
+    Parameter:
+      name: param
+      in: path
+      required: true
+      schema: { type: string }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PerPage:
+      name: per_page
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 500, default: 50 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string }
+      description: |
+        Optional client-supplied UUID for retry deduplication on
+        mutating requests. The daemon caches the response per
+        `(method, path, key)` for 5 minutes; a retry with the same key
+        within that window replays the cached response and sets the
+        `Idempotent-Replay: true` response header. Keys older than 5
+        minutes (or evicted under memory pressure) flow through as
+        fresh requests. The cache key does NOT include the request
+        body — a retry MUST use the same body as the original; the
+        daemon trusts the client's key choice.
+  responses:
+    BadRequest:
+      description: Validation or parsing failure
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Forbidden:
+      description: Authenticated but forbidden for the current role
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NotFound:
+      description: Resource not found
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    BadGateway:
+      description: Upstream error (CCU unavailable, write failed)
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ServiceUnavailable:
+      description: Backend not wired
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflict:
+      description: Request conflicts with current server state
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    UnprocessableEntity:
+      description: Semantic validation failure
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+  schemas:
+    StartupCaptureConfig:
+      type: object
+      required: [enabled, duration_seconds, anonymise]
+      properties:
+        enabled:
+          type: boolean
+          description: When true, the daemon opens a diagnostics capture at boot.
+        duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 1800
+          description: Duration of the boot-time capture. Zero falls back to the default (300 s).
+        anonymise:
+          type: boolean
+          description: Whether to hash device-address-shaped values in the recorded archive.
+
+    ExportedConfiguration:
+      type: object
+      required:
+        - version
+        - exported_at
+        - device_address
+        - model
+        - channel_address
+        - channel_type
+        - paramset_key
+        - values
+      description: |
+        Portable snapshot of one channel's paramset. Compatible with the
+        Python aiohomematic-config exporter (identical JSON tag names).
+      properties:
+        version:
+          type: string
+          description: Serialisation format version. Always "1.0".
+          example: "1.0"
+        exported_at:
+          type: string
+          format: date-time
+          description: UTC instant at which the snapshot was taken.
+        central_name:
+          type: string
+          description: >
+            CCU name that owns this channel (multi-CCU safe). Empty
+            for single-CCU setups.
+        device_address:
+          type: string
+          description: Serial / address of the parent device, e.g. "0001ABCD".
+        model:
+          type: string
+          description: Device model string, e.g. "HmIP-eTRV-2".
+        channel_address:
+          type: string
+          description: Full channel address including channel index, e.g. "0001ABCD:1".
+        channel_type:
+          type: string
+          description: Functional type of the channel, e.g. "CLIMATE_TRANSCEIVER".
+        paramset_key:
+          type: string
+          description: Name of the exported paramset, typically "MASTER" or "VALUES".
+        values:
+          type: object
+          additionalProperties: true
+          description: Parameter name → value mapping captured at export time.
+    CustomDPInvokeRequest:
+      type: object
+      description: "Body for POST /cdps/{name}/{operation}. The operation is in the URL path."
+      properties:
+        params:
+          type: object
+          additionalProperties: true
+          description: "Operation-specific parameters (category-dependent)."
+        priority:
+          type: string
+          enum: [critical, high, default, low]
+    CustomDPSummary:
+      type: object
+      required: [name, category, channel_no, supported_operations]
+      properties:
+        name: { type: string }
+        category: { type: string }
+        channel_no: { type: integer }
+        supported_operations:
+          type: array
+          items: { type: string }
+        kind:
+          type: string
+          description: |
+            Stable widget hint derived from the concrete Custom-DP
+            type — e.g. `light`, `light_color`, `light_color_temp`,
+            `light_fixed_color`, `light_rgbw`, `cover_blind`,
+            `cover_garage`, `climate_hmip`, `climate_rf`,
+            `climate_simple`, `lock`, `siren`, `switch`,
+            `text_display`. Drives the SPA's CDP-aware widget
+            selection (ADR 0016). Empty when the kind classifier
+            does not recognise the Custom-DP type.
+        channels:
+          type: array
+          items: { type: integer }
+          description: |
+            CCU channels this Custom-DP is materialised on. The
+            current implementation always contains exactly the
+            primary channel (matching `channel_no`); future
+            iterations may expand to include sibling channels
+            pulled in via the `RebasedChannelGroupConfig`
+            mechanism.
+        capabilities:
+          type: object
+          additionalProperties: { type: boolean }
+          description: |
+            Flat string→bool map of optional features the device
+            supports — e.g. `dimmable`, `color`, `color_temp`,
+            `effects`, `tilt`, `boost`, `away`. Mirrors the
+            per-category Capability struct from
+            `internal/model/custom/mixins.go`.
+    Problem:
+      type: object
+      description: |
+        RFC 9457 problem detail. The `type` URI selects one of the
+        canonical problem kinds the daemon emits; the `code` member
+        carries the short tag (also surfaced as the `X-Problem-Code`
+        response header). Clients should switch on `code` for typed
+        error handling — the `type` URI is the human-readable form.
+
+        **Rate-limiting:** when the daemon emits `code: rate_limited`
+        (HTTP 429) it sets the `Retry-After` response header per
+        RFC 9110 §10.2.3 with the integer number of seconds the
+        client should wait before retrying. Clients that respect
+        the header are immune to the throttle; clients that don't
+        will see repeated 429s with the same `Retry-After` value
+        until the throttle window expires.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: |
+            Stable URI for one of the canonical problem kinds. All
+            URIs share the base `https://openccu-loom.dev/errors/`
+            and the trailing segment matches the `code` enum below.
+            The base URI is a stable identifier, not a fetchable
+            resource — it is not guaranteed to resolve to a document.
+          enum:
+            - https://openccu-loom.dev/errors/validation
+            - https://openccu-loom.dev/errors/not_found
+            - https://openccu-loom.dev/errors/conflict
+            - https://openccu-loom.dev/errors/unauthorized
+            - https://openccu-loom.dev/errors/forbidden
+            - https://openccu-loom.dev/errors/unsupported
+            - https://openccu-loom.dev/errors/rate_limited
+            - https://openccu-loom.dev/errors/internal
+            - https://openccu-loom.dev/errors/bad_request
+            - https://openccu-loom.dev/errors/service_unready
+            - https://openccu-loom.dev/errors/upstream_unavailable
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          description: Short tag (also surfaced as the `X-Problem-Code` response header).
+          enum:
+            - validation
+            - not_found
+            - conflict
+            - unauthorized
+            - forbidden
+            - unsupported
+            - rate_limited
+            - internal
+            - bad_request
+            - service_unready
+            - upstream_unavailable
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              reason: { type: string }
+              min: {}
+              max: {}
+    Info:
+      type: object
+      required: [version, commit, build_date, uptime, started_at, api_version, capabilities]
+      description: |
+        Daemon build + runtime info plus a wire-contract version and a
+        capability list. External clients should switch on
+        `capabilities` for feature gating rather than parsing
+        `version` (the daemon build version) — capabilities can be
+        added or removed independently of build version.
+      properties:
+        version: { type: string, description: "Daemon build version (semver)." }
+        commit: { type: string }
+        build_date: { type: string }
+        uptime: { type: string }
+        started_at: { type: string, format: date-time }
+        api_version:
+          type: string
+          description: |
+            North-bound contract version (semver). Bumps independently
+            of `version`. Minor bumps add backwards-compatible
+            capabilities; major bumps remove or rename existing
+            payload fields, scopes, or capabilities.
+        capabilities:
+          type: array
+          description: |
+            Runtime feature set. Always-on entries:
+            `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
+            Conditional entries surface only when configured:
+            `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`.
+          items:
+            type: string
+            enum:
+              - rest.v1
+              - ws.broadcasts.v1
+              - errors.problem_details.v1
+              - mqtt.discovery.v1
+              - matter.bridge.v1
+              - auth.oidc.v1
+    SystemCCUEntry:
+      type: object
+      required: [name, host, available, is_ha_app, configured_interfaces]
+      description: |
+        One CCU as known to the daemon. `name` is the daemon-local
+        identifier (config-driven, multi-CCU-safe). The other fields
+        either come from the static config (`host`, `configured_interfaces`)
+        or from the CCU's reported SystemInformation block
+        (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`)
+        — the latter set may be empty before the first successful
+        connect.
+      properties:
+        name: { type: string }
+        host: { type: string }
+        available: { type: boolean }
+        model: { type: string }
+        version: { type: string }
+        hostname: { type: string }
+        serial: { type: string }
+        url: { type: string, format: uri }
+        is_ha_app: { type: boolean }
+        configured_interfaces:
+          type: array
+          items: { type: string }
+
+    Health:
+      type: object
+      required: [status, components]
+      properties:
+        status: { type: string, enum: [healthy, degraded, unhealthy, unknown] }
+        components:
+          type: array
+          items:
+            type: object
+            required: [name, status, recorded_at]
+            properties:
+              name: { type: string }
+              status: { type: string }
+              note: { type: string }
+              recorded_at: { type: string, format: date-time }
+    ConfigSnapshot:
+      type: object
+      properties:
+        locale: { type: string }
+        centrals:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              host: { type: string }
+              interfaces:
+                type: array
+                items: { type: string }
+        callback_ports:
+          type: object
+          properties:
+            xmlrpc: { type: integer }
+            binrpc: { type: integer }
+        features:
+          type: object
+          additionalProperties: { type: boolean }
+        extras:
+          type: object
+          additionalProperties: { type: string }
+        policies:
+          type: object
+          description: |
+            Static daemon-side behaviour switches. Keys are stable;
+            values reflect the current effective policy. See the
+            `/config` path-level description for the canonical key
+            catalogue.
+          additionalProperties: { type: boolean }
+    DeviceSummary:
+      type: object
+      required: [address, interface, model, name, available, channels_count]
+      properties:
+        address: { type: string }
+        interface: { type: string }
+        interface_id: { type: string }
+        model: { type: string }
+        sub_model: { type: string }
+        name: { type: string }
+        manufacturer: { type: string }
+        product_group: { type: string }
+        available: { type: boolean }
+        channels_count: { type: integer }
+        updatable: { type: boolean }
+        rooms:
+          type: array
+          items: { type: string }
+    DeviceList:
+      type: object
+      required: [items, page, per_page, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DeviceSummary" }
+        page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+    DeviceDetail:
+      allOf:
+        - $ref: "#/components/schemas/DeviceSummary"
+        - type: object
+          properties:
+            firmware:
+              type: object
+              properties:
+                Current: { type: string }
+                Available: { type: string }
+                Updatable: { type: boolean }
+                UpdateState: { type: string }
+            availability:
+              type: object
+              properties:
+                IsReachable: { type: boolean }
+                LastUpdated: { type: string, format: date-time }
+                BatteryLevel: { type: integer, nullable: true }
+                LowBattery: { type: boolean, nullable: true }
+                SignalStrength: { type: integer, nullable: true }
+            channels:
+              type: array
+              items: { $ref: "#/components/schemas/ChannelSummary" }
+    ChannelSummary:
+      type: object
+      required: [address, number, paramset_key, data_points_count]
+      properties:
+        address: { type: string }
+        number: { type: integer }
+        paramset_key: { type: string }
+        data_points_count: { type: integer }
+        custom_dp_name:
+          type: string
+          description: |
+            Stable name of the Custom-DP this channel is attached to.
+            Empty when the channel is not owned by any CDP. Lets the
+            SPA's CDP-first Übersicht view (ADR 0016) filter channels
+            that are already represented by a CDP tile.
+    MQTTReloadResponse:
+      type: object
+      required: [reloaded, took_ms]
+      properties:
+        reloaded: { type: boolean, description: "Always true on success; the 503 path returns a problem+json document instead." }
+        took_ms: { type: integer, format: int64, description: "Wall-clock duration of the swap in milliseconds." }
+
+    ValuesCacheStats:
+      type: object
+      required: [rows, value_json_bytes, restored_rows, cast_failures, gc_rows_deleted, flush_batches, flushed_entries]
+      properties:
+        rows: { type: integer, format: int64, description: "Current row count in the cache." }
+        value_json_bytes: { type: integer, format: int64, description: "Sum of value_json byte sizes across all rows." }
+        restored_rows: { type: integer, format: int64, description: "Cumulative rows successfully restored since process start." }
+        cast_failures: { type: integer, format: int64, description: "Cumulative entries whose cached value could not be coerced into the data point's static type." }
+        gc_rows_deleted: { type: integer, format: int64, description: "Cumulative rows removed by the dead-row GC since process start." }
+        flush_batches: { type: integer, format: int64, description: "Cumulative SaveBatch transactions committed since process start." }
+        flushed_entries: { type: integer, format: int64, description: "Cumulative entries written across all SaveBatch transactions." }
+
+    DataPointSummary:
+      type: object
+      required: [parameter, observed, operations]
+      properties:
+        parameter: { type: string }
+        parameter_label: { type: string }
+        value: {}
+        observed: { type: boolean }
+        modified_at:
+          type: string
+          format: date-time
+          description: |
+            When the value last changed on the CCU. RFC3339Nano,
+            UTC. Equivalent to `last_changed_at` (kept for
+            cache-friendly naming alongside `last_seen_at`).
+        source:
+          type: string
+          enum: [unobserved, cache, live, stale]
+          description: |
+            Wire-side lifecycle token. See ADR 0018.
+            - unobserved: never seen any value
+            - cache: restored from persistent cache at boot, awaiting live event
+            - live: last value confirmed by CCU push / fetch_all, connection healthy
+            - stale: connection lost; value is the last known good
+        last_seen_at:
+          type: string
+          format: date-time
+          description: |
+            When the data point was last observed via any push or
+            fetch_all event (cyclic info telegrams included). Advances
+            even when the value did not change.
+        last_changed_at:
+          type: string
+          format: date-time
+          description: |
+            When the value actually changed last. Alias of modified_at
+            kept under the cache-friendly name.
+        value_age_seconds:
+          type: integer
+          format: int64
+          description: |
+            Pre-computed seconds between last_seen_at and the response
+            time, so the browser does not need to parse the timestamp
+            on every render.
+        operations:
+          type: object
+          required: [read, write, event]
+          properties:
+            read: { type: boolean }
+            write: { type: boolean }
+            event: { type: boolean }
+        control:
+          type: string
+          description: |
+            CCU paramset descriptor's CONTROL attribute of the form
+            WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT").
+            Drives the SPA's CONTROL-aware widget resolver. See
+            docs/ui/control-widget-concept.md. Empty when the
+            descriptor carries no CONTROL.
+        type:
+          type: string
+          description: |
+            CCU descriptor TYPE (BOOL, INTEGER, FLOAT, ENUM, STRING, ACTION).
+            Surfaced so the SPA can pick the right widget primitive
+            without re-reading the paramset descriptor.
+        value_list:
+          type: array
+          items: { type: string }
+          description: |
+            Ordered enum labels for ENUM-typed parameters
+            (e.g. ["BLACK","BLUE","GREEN","TURQUOISE","RED","PURPLE",
+            "YELLOW","WHITE"] on HmIP-BSL COLOR). Empty for non-ENUM.
+        unit:
+          type: string
+          description: |
+            Descriptor UNIT string ("°C", "% rF", "lx", "Wh", ...)
+            as the CCU declares it. Empty when none.
+        min: {}
+        max: {}
+        default: {}
+        ui_hint:
+          type: object
+          description: |
+            Daemon-computed UI classification envelope. The SPA's
+            AutoTile composer reads the fields verbatim — no JS-side
+            classification runs. See docs/ui/auto-tile-concept.md.
+            Resolution order in the backend: parameter substring →
+            ENUM-shape rules → unit table → type fallback. Never
+            empty.
+          required: [icon, semantic]
+          properties:
+            icon:
+              type: string
+              description: Material Design Icons token, e.g. "mdi:thermometer".
+            semantic:
+              type: string
+              description: |
+                Stable token used by the composer to group readouts
+                of the same physical quantity into one bucket
+                (e.g. "temperature", "particulate", "motion").
+            state_color_rule:
+              type: string
+              description: |
+                Named threshold rule the SPA looks up in its rule
+                registry to colour the readout (e.g. "temp_heat",
+                "alarm_active", "signal_weak"). Empty when no rule.
+    UIEventRequest:
+      type: object
+      description: |
+        Body of `POST /ui/event` — anonymous fire-and-forget
+        telemetry sink. The daemon writes a structured slog line
+        under the `ui.event` channel; downstream log aggregation
+        does any counting. See ADR 0016 follow-ups.
+      required: [event]
+      properties:
+        event:
+          type: string
+          description: Event name (e.g. `device_detail.view_selector`).
+        properties:
+          type: object
+          additionalProperties: true
+          description: Optional event-specific key/value attributes.
+    SetValueRequest:
+      type: object
+      required: [value]
+      properties:
+        value: {}
+        priority:
+          type: string
+          enum: [critical, high, default, low]
+    ProgramSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        active: { type: boolean, nullable: true }
+    SysvarSummary:
+      type: object
+      required: [name, value_type, observed]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        unit: { type: string }
+        value_type: { type: string }
+        value: {}
+        observed: { type: boolean }
+        value_list:
+          type: array
+          items: { type: string }
+    SysvarSetRequest:
+      type: object
+      required: [value]
+      properties:
+        value: {}
+    AuditEntry:
+      type: object
+      required: [timestamp, action]
+      description: One recorded user-initiated configuration change.
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC time at which the change was recorded.
+        user:
+          type: string
+          description: Authenticated user who triggered the change (empty if unauthenticated).
+        action:
+          type: string
+          description: >
+            Stable action tag, e.g. paramset_write, link_add, data_point_write.
+            New values may be added in future releases.
+        device_address:
+          type: string
+          description: Primary device or channel address, if applicable.
+        channel_no:
+          type: integer
+          description: Channel number within the device, if applicable.
+        paramset:
+          type: string
+          description: Paramset type (MASTER, VALUES, LINK), if applicable.
+        peer:
+          type: string
+          description: Peer address for link operations.
+        parameter:
+          type: string
+          description: Parameter name for single-parameter writes.
+        note:
+          type: string
+          description: Free-form context (e.g. profile ID for active_profile changes).
+        changes:
+          type: array
+          description: Per-parameter before/after pairs for paramset writes.
+          items:
+            type: object
+            required: [parameter]
+            properties:
+              parameter: { type: string }
+              before: {}
+              after: {}
+    AlarmMessage:
+      type: object
+      required: [id, name, timestamp, counter]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        device_name: { type: string }
+        timestamp: { type: string, format: date-time }
+        counter: { type: integer }
+        last_trigger: { type: string }
+        rooms:
+          type: array
+          items: { type: string }
+    ServiceMessage:
+      type: object
+      required: [id, name, timestamp, counter]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        address: { type: string }
+        device_name: { type: string }
+        type: { type: string }
+        timestamp: { type: string, format: date-time }
+        counter: { type: integer }
+        quittable: { type: boolean }
+    InstallModeState:
+      type: object
+      required: [active]
+      properties:
+        active: { type: boolean }
+        seconds: { type: integer, minimum: 0 }
+    InterfaceState:
+      type: object
+      required: [id, name, connected, interface]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        connected: { type: boolean }
+        interface: { type: string }
+        central_id: { type: string }
+        host: { type: string }
+        note: { type: string }
+    Snapshot:
+      type: object
+      required: [generated_at, devices]
+      properties:
+        generated_at: { type: string, format: date-time }
+        devices:
+          type: array
+          items: { $ref: "#/components/schemas/DeviceSummary" }
+        programs:
+          type: array
+          items: { $ref: "#/components/schemas/ProgramSummary" }
+        sysvars:
+          type: array
+          items: { $ref: "#/components/schemas/SysvarSummary" }
+        rooms:
+          type: array
+          items:
+            type: object
+            required: [name, device_count]
+            properties:
+              name: { type: string }
+              device_count: { type: integer }
+        functions:
+          type: array
+          items:
+            type: object
+            required: [name, device_count]
+            properties:
+              name: { type: string }
+              device_count: { type: integer }
+        interfaces:
+          type: array
+          items: { $ref: "#/components/schemas/InterfaceState" }
+    Identity:
+      type: object
+      required: [subject, role]
+      properties:
+        subject: { type: string }
+        role: { type: string, enum: [admin, operator, viewer] }
+        scheme: { type: string, enum: [basic, bearer, session, oidc] }
+    UserListEntry:
+      type: object
+      required: [username, role]
+      properties:
+        username: { type: string }
+        role: { type: string, enum: [admin, operator, viewer] }
+    TokenListEntry:
+      type: object
+      required: [id, fingerprint, subject, role]
+      properties:
+        id: { type: string, description: "Stable management identifier (16 hex chars from sha256 of the token)." }
+        fingerprint: { type: string, description: "Last six characters of the token; full value is never exposed" }
+        subject: { type: string }
+        role: { type: string, enum: [admin, operator, viewer] }
+
+    ValuesBatchRequest:
+      type: object
+      required: [queries]
+      properties:
+        queries:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            required: [address, channel, parameter]
+            properties:
+              address: { type: string }
+              channel: { type: integer, minimum: 0 }
+              parameter: { type: string }
+
+    ValuesBatchResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            required: [address, channel, parameter]
+            properties:
+              address: { type: string }
+              channel: { type: integer, minimum: 0 }
+              parameter: { type: string }
+              summary: { $ref: "#/components/schemas/DataPointSummary" }
+              error:
+                type: string
+                description: |
+                  Per-query failure. Set when `summary` is absent.
+                  Stable values: `device not found`,
+                  `channel not found`, `parameter not found`,
+                  `parameter hidden`.
+
+    CreateTokenResponse:
+      type: object
+      description: |
+        Returned by `POST /auth/tokens`. The `token` field carries the
+        raw secret and is exposed exactly once on creation — neither
+        `GET /auth/tokens` nor any other endpoint will surface it
+        again. Clients MUST capture it at this point.
+      required: [id, token, fingerprint, subject, role]
+      properties:
+        id: { type: string, description: "Stable management identifier." }
+        token: { type: string, description: "Raw bearer token. URL-safe base64 (~43 chars)." }
+        fingerprint: { type: string }
+        subject: { type: string }
+        role: { type: string, enum: [admin, operator, viewer] }
+
+    MatterFabric:
+      type: object
+      required: [fabric_index, fabric_id, node_id, vendor_id, compressed_id, root_public_key]
+      properties:
+        fabric_index:
+          type: integer
+          minimum: 1
+          maximum: 254
+          description: "Stack-assigned fabric index per Matter Core Spec §11.18.5"
+        fabric_id: { type: integer, format: int64 }
+        node_id: { type: integer, format: int64 }
+        vendor_id: { type: integer, minimum: 0, maximum: 65535 }
+        label: { type: string }
+        compressed_id:
+          type: string
+          description: "8-byte compressed fabric identifier, hex-encoded"
+        root_public_key:
+          type: string
+          description: "Issuing root CA public key (uncompressed P-256, 65 bytes), hex-encoded"
+
+    MatterFabricList:
+      type: object
+      required: [fabrics]
+      properties:
+        fabrics:
+          type: array
+          items: { $ref: "#/components/schemas/MatterFabric" }
+
+    MatterSetupPayload:
+      type: object
+      required: [discriminator, passcode, vendor_id, product_id, qr_code, manual_code]
+      properties:
+        discriminator: { type: integer, minimum: 0, maximum: 4095 }
+        passcode: { type: integer, minimum: 1, maximum: 99999998 }
+        vendor_id: { type: integer, minimum: 0, maximum: 65535 }
+        product_id: { type: integer, minimum: 0, maximum: 65535 }
+        qr_code:
+          type: string
+          description: "Onboarding payload prefixed with `MT:` per Matter §5.7.4"
+        manual_code:
+          type: string
+          description: "11-digit decimal code with Verhoeff check digit per Matter §5.1.4"
+
+    MatterCommissioningWindowRequest:
+      type: object
+      properties:
+        duration_seconds:
+          type: integer
+          minimum: 180
+          maximum: 900
+          description: "Commissioning window duration in seconds. Default 900 (15 minutes)."
+
+    MatterCommissioningWindowResponse:
+      type: object
+      required: [discriminator, passcode, duration_seconds, qr_code, manual_code]
+      properties:
+        discriminator: { type: integer, minimum: 0, maximum: 4095 }
+        passcode: { type: integer, minimum: 1, maximum: 99999998 }
+        duration_seconds: { type: integer, minimum: 180, maximum: 900 }
+        qr_code: { type: string }
+        manual_code: { type: string }
+
+    MatterStatus:
+      type: object
+      required: [enabled, listening, endpoint_count, fabric_count, enabled_count, advertising, commissioning_window_open]
+      properties:
+        enabled: { type: boolean, description: "Bridge feature flag" }
+        listening: { type: boolean, description: "UDP listener bound" }
+        listen_addr: { type: string, description: "Effective UDP listen address" }
+        endpoint_count: { type: integer, description: "Bridged-endpoint count (excluding root)" }
+        fabric_count: { type: integer, description: "Commissioned fabrics" }
+        enabled_count: { type: integer, description: "Allowlist entries with enabled=true" }
+        advertising: { type: boolean, description: "mDNS records emitted" }
+        commissioning_window_open: { type: boolean }
+        commissioning_window_duration_seconds:
+          type: integer
+          minimum: 0
+          maximum: 900
+
+    MatterExposure:
+      type: object
+      required: [central_name, device_address, channel_no, dp_kind, dp_key, mappable, enabled]
+      properties:
+        central_name: { type: string }
+        device_address: { type: string }
+        channel_no: { type: integer }
+        dp_kind:
+          type: string
+          enum: [custom, generic, calculated, combined, measurement]
+        dp_key: { type: string }
+        display_name: { type: string }
+        enabled: { type: boolean }
+        friendly_name: { type: string }
+        mappable:
+          type: string
+          enum: [mappable, partially_mappable, unmappable]
+        device_type: { type: integer, minimum: 0, maximum: 65535 }
+        clusters:
+          type: array
+          items: { type: integer }
+        reason: { type: string }
+
+    MatterExposureList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MatterExposure" }
+
+    MatterExposureUpdate:
+      type: object
+      required: [central_name, device_address, channel_no, dp_kind, dp_key, enabled]
+      properties:
+        central_name: { type: string }
+        device_address: { type: string }
+        channel_no: { type: integer }
+        dp_kind:
+          type: string
+          enum: [custom, generic, calculated, combined, measurement]
+        dp_key: { type: string }
+        enabled: { type: boolean }
+        friendly_name: { type: string }
+
+    MatterExposureBulkUpdate:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MatterExposureUpdate" }
+
+    UnIgnoreEntry:
+      type: object
+      required: [pattern]
+      properties:
+        pattern: { type: string }
+        updated_at: { type: string, format: date-time }
+        updated_by: { type: string }
+
+    UnIgnoreListResponse:
+      type: object
+      required: [centrals]
+      properties:
+        centrals:
+          type: array
+          items:
+            type: object
+            required: [central_name, patterns]
+            properties:
+              central_name: { type: string }
+              patterns:
+                type: array
+                items: { $ref: "#/components/schemas/UnIgnoreEntry" }
+
+    UnIgnoreUpdateRequest:
+      type: object
+      required: [central_name, patterns]
+      properties:
+        central_name: { type: string }
+        patterns:
+          type: array
+          items: { type: string, description: "MODEL:CHANNEL:PARAMETER pattern; bare names map to *:*:NAME" }
+
+    UnIgnoreUpdateResponse:
+      type: object
+      required: [applied_count]
+      properties:
+        applied_count: { type: integer }
+        parse_errors:
+          type: array
+          items: { type: string, description: "human-readable parse error per offending pattern" }
+        affected_devices: { type: integer }
+        patterns:
+          type: array
+          items: { $ref: "#/components/schemas/UnIgnoreEntry" }
+
+    UnIgnoreCandidateList:
+      type: object
+      required: [candidates]
+      properties:
+        candidates:
+          type: array
+          items: { type: string, description: "parameter name (bare) or MODEL:CHANNEL:PARAMETER full-form" }
+        include_master: { type: boolean }
+
+    # ─── WebSocket push surface ───────────────────────────────────────
+    # The schemas below describe the WebSocket broadcast envelope and
+    # each per-event payload. wsapi.json (the WS command catalogue)
+    # references the per-event payload schemas by name via the
+    # `payload` field on broadcast entries.
+
+    WsEnvelope:
+      type: object
+      description: |
+        Shape of every WebSocket frame the daemon emits. Broadcast
+        frames carry the `topic` field; command-reply frames omit
+        `topic`. The `type` field is the discriminator that selects
+        which payload schema applies — see wsapi.json `commands[?(@.kind=='broadcast')]`
+        for the type → payload mapping.
+
+        `seq` is the monotonic cursor a client passes back as
+        `since` on its next subscribe to resume the stream after a
+        reconnect (see ADR 0022). `kind` tags the event family:
+        `initial` for the first observation of a data point,
+        `change` for a delta, `refresh` for a periodic re-emit.
+        Producers that do not distinguish these cases emit
+        `kind: "change"`; clients MUST treat unknown `kind` values
+        as `change` for forward-compatibility.
+      required: [seq, kind, type, ts, payload]
+      properties:
+        seq:
+          type: integer
+          format: int64
+          minimum: 1
+          description: |
+            Monotonic, daemon-assigned sequence number. Strictly
+            increasing across the daemon's lifetime (resets to 0
+            on restart). Clients store the last received `seq` and
+            reconnect with `{op:"subscribe", topics:[...], since:N}`
+            to resume the stream.
+        kind:
+          type: string
+          enum: [initial, change, refresh]
+          description: |
+            Event-family discriminator. `change` is the default
+            and dominant case; `initial` is set on the first
+            observation of a data point (e.g. during cold-start
+            replay); `refresh` is reserved for periodic re-emits.
+        topic:
+          type: string
+          description: Routing key the client subscribed to. Absent on command replies.
+        type:
+          type: string
+          description: Event-type discriminator (e.g. `datapoint.value_changed`).
+        ts:
+          type: string
+          format: date-time
+          description: RFC3339Nano timestamp (UTC) of when the event was emitted.
+        payload:
+          description: One of the payload schemas listed below.
+
+    DataPointValueChangedPayload:
+      type: object
+      description: |
+        Payload of a `datapoint.value_changed` broadcast. Topic
+        pattern `device.{address}.channels.{channel}.data_points.{parameter}`.
+      required: [central, device_address, channel, parameter, paramset_key, value, modified_at]
+      properties:
+        central: { type: string }
+        interface: { type: string }
+        device_address: { type: string }
+        channel: { type: integer, minimum: 0 }
+        parameter: { type: string }
+        paramset_key: { type: string, description: "VALUES, MASTER, or LINK" }
+        value:
+          description: New value in its native CCU type (bool/int/float/string/list/null).
+        previous:
+          description: |
+            Prior value. Omitted when no prior value was tracked (initial
+            push). Future revisions may surface a `kind: "initial"|"change"|"refresh"`
+            discriminator on the envelope; see docs/external-clients/asks.md (B2).
+        modified_at:
+          type: string
+          format: date-time
+          description: RFC3339Nano timestamp the CCU observed the change at.
+
+    CustomDataPointStateChangedPayload:
+      type: object
+      description: |
+        Payload of a `custom_data_point.state_changed` broadcast. Topic
+        pattern `device.{address}.cdps.{name}`. Aggregates a CDP's
+        composed state (one event per CDP rather than one per wire-DP).
+      required: [central, device_address, channel, name, state]
+      properties:
+        central: { type: string }
+        device_address: { type: string }
+        channel: { type: integer, minimum: 0 }
+        name: { type: string }
+        kind:
+          type: string
+          description: "Widget hint matching CustomDPSummary.kind (e.g. `light`, `cover_blind`)."
+        state:
+          type: object
+          additionalProperties: true
+          description: Composed state snapshot — keys depend on the CDP category.
+
+    CentralStateChangedPayload:
+      type: object
+      description: |
+        Payload of a `central.state_changed` broadcast. Topic pattern
+        `central.{name}.state`. Reflects CentralUnit lifecycle.
+      required: [central, old_state, new_state]
+      properties:
+        central: { type: string }
+        old_state: { type: string }
+        new_state: { type: string }
+
+    SystemStatusChangedPayload:
+      type: object
+      description: |
+        Payload of a `system.status_changed` broadcast. Topic pattern
+        `system.{central}.status`. Surfaces aggregated component
+        health, connectivity, callback state, and degraded interface
+        list (for the central-scoped system-status ring buffer).
+      required: [central, component, healthy, event_at]
+      properties:
+        central: { type: string }
+        component: { type: string }
+        healthy: { type: boolean }
+        reason: { type: string }
+        interface_id: { type: string }
+        error_code: { type: integer }
+        central_state: { type: string, description: "hmenum.CentralState string form" }
+        connection_state: { type: string }
+        client_state: { type: string, description: "hmenum.ClientState string form" }
+        callback_state: { type: string }
+        degraded_interfaces:
+          type: array
+          items: { type: string }
+        issues:
+          type: array
+          items: { type: string }
+        event_at:
+          type: string
+          format: date-time
+
+    SysvarChangedPayload:
+      type: object
+      description: |
+        Payload of a `hub.sysvar_changed` broadcast. Topic pattern
+        `hub.{central}.sysvars.{name}`.
+      required: [central, name, value]
+      properties:
+        central: { type: string }
+        name: { type: string }
+        value_type:
+          type: string
+          description: "hmenum.HubValueType (BOOL, FLOAT, INTEGER, STRING, …)."
+        value:
+          description: New sysvar value in its native CCU type.
+        previous:
+          description: Prior sysvar value; omitted when no prior value was tracked.
+
+    ProgramExecutedPayload:
+      type: object
+      description: |
+        Payload of a `hub.program_executed` broadcast. Topic pattern
+        `hub.{central}.programs.{id}`. Fires every time a CCU
+        program completes execution (Zentralenprogramm).
+      required: [central, program_id, success]
+      properties:
+        central: { type: string }
+        program_id: { type: string }
+        trigger:
+          type: string
+          description: "hmenum.ProgramTrigger (MANUAL, SCHEDULE, EVENT, …)."
+        success: { type: boolean }
+
+    InstallModeChangedPayload:
+      type: object
+      description: |
+        Payload of a `hub.install_mode_changed` broadcast. Topic pattern
+        `hub.{central}.install_mode`. Fires whenever the CCU install-mode
+        (pairing window) is toggled on or off.
+      required: [central, enabled, remaining_s]
+      properties:
+        central: { type: string }
+        enabled: { type: boolean }
+        remaining_s:
+          type: integer
+          description: Seconds remaining before the pairing window closes; 0 when disabled.
+
+    DeviceCreatedPayload:
+      type: object
+      description: |
+        Payload of a `device.created` broadcast. Topic pattern
+        `device.{address}.lifecycle`. Fires when the registry
+        observes a new device (CCU pairing, cache reload, or
+        initial-snapshot import). The `source` field discriminates
+        which path created the entry — see hmenum.SourceOfDeviceCreation.
+      required: [central, interface_id, device_address, model]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        model: { type: string }
+        source:
+          type: string
+          description: "hmenum.SourceOfDeviceCreation (CACHE, INIT, NEW_DEVICE, …)."
+
+    DeviceRemovedPayload:
+      type: object
+      description: |
+        Payload of a `device.removed` broadcast. Topic pattern
+        `device.{address}.lifecycle` — same topic as
+        `device.created`; subscribers route by the envelope `type`
+        field.
+      required: [central, interface_id, device_address]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+
+    # ─── Matter broadcast payloads ────────────────────────────────────
+    # The 6 matter.* broadcasts in wsapi.json reference these schemas
+    # via their `payload` field. The bridge publishes them through
+    # ws.Hub on the documented topics so SPA + external clients can
+    # react to commissioning + topology changes without polling.
+
+    MatterCommissioningProgressPayload:
+      type: object
+      description: |
+        Payload of `matter.commissioning_progress`. Free-form progress
+        update during a commissioning session (PASE handshake → CASE
+        pickup → AddNOC → completion). Fields are intentionally
+        sparse — the bridge emits whatever stage information is
+        available at the moment.
+      required: [stage]
+      properties:
+        stage: { type: string, description: "Stage label (e.g. `pase_session_open`, `add_noc`, `case_session_first`)." }
+        message: { type: string, description: "Human-readable detail; may be empty." }
+
+    MatterFabricRemovedPayload:
+      type: object
+      description: |
+        Payload of `matter.fabric_removed`. Emitted after a fabric is
+        revoked via `DELETE /api/v1/matter/fabrics/{id}` or by the
+        commissioner cluster command.
+      required: [fabric_index]
+      properties:
+        fabric_index:
+          type: integer
+          minimum: 1
+          maximum: 254
+          description: "Stack-assigned fabric index of the removed fabric."
+
+    MatterEndpointAssembledPayload:
+      type: object
+      description: |
+        Payload of `matter.endpoint_assembled`. Fires after the
+        bridge's endpoint topology has been reassembled (e.g. after
+        an allowlist update). Carries the new endpoint count so the
+        SPA can refresh its bridge view without re-fetching the full
+        fabric list.
+      required: [endpoint_count]
+      properties:
+        endpoint_count:
+          type: integer
+          minimum: 0
+          description: "Number of endpoints in the assembled topology, including the root + Aggregator."
+
+    # ─── Wave-C live-edit schemas ─────────────────────────────────────
+
+    SchemaField:
+      type: object
+      required: [path, class, go_type, restart_required]
+      description: Descriptor for one config field exposed by the schema endpoint.
+      properties:
+        path:
+          type: string
+          description: Dot-separated field path, e.g. "north.rest.listen".
+        class:
+          type: string
+          enum: [basic, expert, secret]
+          description: |
+            Visibility class from the cfg struct tag. `basic` fields are
+            shown in the default UI view; `expert` requires the expert
+            toggle; `secret` values are always redacted in responses.
+        go_type:
+          type: string
+          description: Go type name for the field (e.g. "string", "bool", "int", "time.Duration").
+        restart_required:
+          type: boolean
+          description: Whether changing this field requires a daemon restart to take effect.
+
+    SchemaResponse:
+      type: object
+      required: [sections, fields]
+      properties:
+        sections:
+          type: array
+          items: { type: string }
+          description: Top-level config section names (e.g. ["logging", "north", "centrals"]).
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/SchemaField" }
+
+    ConfigSnapshotResponse:
+      type: object
+      required: [config, sources]
+      description: |
+        Effective merged configuration with secret fields redacted and
+        per-path source annotations.
+      properties:
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Full effective config tree with secret fields replaced by
+            "***". Shape mirrors the daemon's Config struct.
+        sources:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [bootstrap, db, env, default]
+          description: |
+            Map from dot-separated config path to the layer that supplied
+            the value. Known layers: bootstrap (YAML file), db (SQLite),
+            env (environment variable), default (hardcoded default).
+
+    UserCreate:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          description: Login name; must be unique.
+        password:
+          type: string
+          description: Plaintext password; the daemon hashes it before storage.
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+
+    UserUpdate:
+      type: object
+      description: All fields optional; omitted fields leave the user unchanged.
+      properties:
+        password:
+          type: string
+          description: New plaintext password. Omit to leave unchanged.
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+          description: New role. Omit to leave unchanged.
+
+    UserSummary:
+      type: object
+      required: [subject, role, created_at]
+      properties:
+        subject:
+          type: string
+          description: Login name / stable identity key.
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Last successful authentication time. Absent when never authenticated.
+
+    TokenCreate:
+      type: object
+      required: [subject, role]
+      properties:
+        subject:
+          type: string
+          description: Logical owner of the token (e.g. "homeassistant", "ci-runner").
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+
+    TokenCreated:
+      type: object
+      required: [token, fingerprint]
+      description: |
+        Returned by `POST /auth/tokens/v2`. The `token` field carries the
+        raw secret and is exposed exactly once on creation.
+      properties:
+        token:
+          type: string
+          description: Raw bearer token. URL-safe base64. Shown EXACTLY ONCE — store it immediately.
+        fingerprint:
+          type: string
+          description: Stable opaque identifier derived from the token (sha256-based).
+
+    TokenSummary:
+      type: object
+      required: [fingerprint, subject, role, created_at]
+      properties:
+        fingerprint:
+          type: string
+          description: Stable opaque identifier used as the delete key.
+        subject:
+          type: string
+        role:
+          type: string
+          enum: [viewer, operator, admin]
+        created_at:
+          type: string
+          format: date-time
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Last successful authentication time. Absent when never used.
+
+    InterfaceSpec:
+      type: object
+      required: [name]
+      description: One Homematic interface attached to a central.
+      properties:
+        name:
+          type: string
+          description: Homematic interface identifier, e.g. "HmIP-RF", "BidCos-RF", "CUxD".
+        port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Overrides the default XML-RPC/BIN-RPC port. 0 or absent means "use backend default".
+        remote_path:
+          type: string
+          description: URL path override for XML-RPC requests. Empty means "use backend default".
+        rpc_type:
+          type: string
+          enum: ["", xmlrpc, binrpc, jsonrpc]
+          description: Transport selector. Empty means "derive from interface name".
+
+    VisibilityConfig:
+      type: object
+      description: Per-central visibility overrides.
+      properties:
+        un_ignore:
+          type: array
+          items: { type: string }
+          description: |
+            MODEL:CHANNEL:PARAMETER patterns (with `*` wildcards) that
+            promote parameters from the default-hidden set into the
+            visible data-point surface. Bare parameter names are
+            treated as *:*:PARAMETER.
+
+    CentralRow:
+      type: object
+      required: [name, host, interfaces, enabled]
+      description: One CCU connection record persisted in the centrals store.
+      properties:
+        name:
+          type: string
+          description: Daemon-local identifier; must be unique.
+        host:
+          type: string
+          description: CCU hostname or IP address.
+        port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Legacy single-port override applied to all interfaces when ports map is absent.
+        json_rpc_port:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: HTTP port for JSON-RPC and web endpoints. 0 defaults to 80 (plain) / 443 (TLS).
+        username:
+          type: string
+        password_env:
+          type: string
+          description: Environment variable name whose value is the CCU password (preferred).
+        password_plain:
+          type: string
+          description: |
+            Plaintext password fallback. Only populated when
+            allow_plaintext_secrets is enabled.
+        tls:
+          type: boolean
+        tls_insecure_skip_verify:
+          type: boolean
+        primary_interface:
+          type: string
+          description: Pins the primary interface for health aggregation. Empty uses the HmIP-RF heuristic.
+        interfaces:
+          type: array
+          items: { $ref: "#/components/schemas/InterfaceSpec" }
+          description: At least one interface must be listed.
+        ports:
+          type: object
+          additionalProperties: { type: integer }
+          description: Per-interface port overrides; keys are interface name strings.
+        visibility:
+          $ref: "#/components/schemas/VisibilityConfig"
+        enabled:
+          type: boolean
+          description: Whether the daemon should connect to this CCU at startup.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

@@ -1,0 +1,19 @@
+{
+  "dp_type": "Blind",
+  "setter": "SetCombined",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "level=0.5,tilt=0.25",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BBL0001:1",
+          "parameter": "COMBINED_PARAMETER",
+          "value": "L2=25,L=50"
+        }
+      ]
+    }
+  ]
+}

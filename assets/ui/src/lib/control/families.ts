@@ -1,0 +1,104 @@
+// CCU CONTROL widget-family registry. The 84-family inventory lives in
+// docs/ui/control-inventory.md; this file types the family names so
+// per-family widgets can switch exhaustively without typos.
+
+export type ControlFamily =
+  | "ACCELERATION_TRANSCEIVER"
+  | "ACCESSPOINT_GENERIC_RECEIVER"
+  | "ACCESS_RECEIVER"
+  | "ACCESS_TRANSCEIVER"
+  | "ACOUSTIC_DISPLAY_RECEIVER"
+  | "ACOUSTIC_SIGNAL_TRANSMITTER"
+  | "ACOUSTIC_SIGNAL_VIRTUAL_RECEIVER"
+  | "ALARM_SWITCH_VIRTUAL_RECEIVER"
+  | "_ALARM_SWITCH_VIRTUAL_RECEIVER"
+  | "ANALOG_INPUT"
+  | "ARMING"
+  | "AUTO_RELOCK_TRANSCEIVER"
+  | "BACKLIGHTING_RECEIVER"
+  | "BATTERIE"
+  | "BLIND"
+  | "BLIND_TRANSMITTER"
+  | "BLIND_VIRTUAL_RECEIVER"
+  | "BRIGHTNESS_TRANSMITTER"
+  | "BTN_SHORT_ONLY"
+  | "BUTTON"
+  | "CAPACITIVE_FILLING_LEVEL_SENSOR"
+  | "CARBON_DIOXIDE_RECEIVER"
+  | "CLIMATECONTROL_FLOOR_TRANSCEIVER"
+  | "CLIMATE_TRANSCEIVER"
+  | "COLORTEMP"
+  | "COND_SWITCH_TRANSMITTER_TEMPERATURE"
+  | "DANGER"
+  | "DEVICE"
+  | "DIGITAL_ANALOG_OUTPUT"
+  | "DIGITAL_STATE"
+  | "DIMMER"
+  | "DIMMER_REAL"
+  | "DISTANCE_TRANSMITTER"
+  | "DOOROPENER"
+  | "DOOR_LOCK_STATE_TRANSCEIVER"
+  | "DOOR_LOCK_STATE_TRANSMITTER"
+  | "DOOR_LOCK_TRANSCEIVER"
+  | "DOOR_RECEIVER"
+  | "DOOR_SENSOR"
+  | "DOOR_STATE_TRANSCEIVER"
+  | "DUAL_WHITE_BRIGHTNESS"
+  | "DUAL_WHITE_COLOR"
+  | "EVENT_INTERFACE"
+  | "FLOW_METER_TRANSMITTER"
+  | "GENERIC_INPUT_TRANSMITTER"
+  | "GENERIC_MEASURING_TRANSMITTER"
+  | "HEATING_CONTROL"
+  | "HEATING_CONTROL_HMIP"
+  | "IDENTIFICATION"
+  | "JALOUSIE"
+  | "LOCK"
+  | "MAINTENANCE"
+  | "MOTIONDETECTOR_TRANSCEIVER"
+  | "OPTICAL_SIGNAL_RECEIVER"
+  | "POWERMETER"
+  | "POWERMETER_IEC"
+  | "POWERMETER_IGL"
+  | "POWERMETER_PSM"
+  | "RAIN_DETECTION_TRANSMITTER"
+  | "RC"
+  | "RGBW_AUTOMATIC"
+  | "RGBW_COLOR"
+  | "RGB_COLOR"
+  | "RHS"
+  | "SERVO_TRANSMITTER"
+  | "SERVO_VIRTUAL_RECEIVER"
+  | "SHUTTER_TRANSMITTER"
+  | "SHUTTER_VIRTUAL_RECEIVER"
+  | "SIMPLE_SWITCH_RECEIVER"
+  | "SMOKE_DETECTOR"
+  | "SOIL_MOISTURE_TRANSMITTER"
+  | "SWITCH"
+  | "SWITCH_TRANSMITTER"
+  | "TEMP"
+  | "TEMP_HUM_PARTICLE_MATTER_TRANSMITTER"
+  | "UNIVERSAL_LIGHT_RECEIVER"
+  | "WATER_DETECTION_TRANSMITTER"
+  | "WATER_SWITCH"
+  | "WEATHER_TRANSMIT"
+  | "WEEK_PROFILE"
+  | "WINDOW"
+  | "WINDOW_DRIVE_RECEIVER"
+  | "WIN_SC"
+  | "WIN_SC_SECURE"
+  | "WIN_SC_SENSOR";
+
+/**
+ * Split a CONTROL attribute "FAMILY.SLOT" into its components.
+ * Returns null when the attribute is empty or malformed.
+ */
+export function parseControl(control: string | undefined): { family: ControlFamily; slot: string } | null {
+  if (!control) return null;
+  const idx = control.indexOf(".");
+  if (idx <= 0 || idx === control.length - 1) return null;
+  return {
+    family: control.slice(0, idx) as ControlFamily,
+    slot: control.slice(idx + 1),
+  };
+}

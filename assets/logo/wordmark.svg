@@ -1,0 +1,21 @@
+<svg viewBox="0 0 720 140" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenCCU-Loom" font-family="Inter, system-ui, sans-serif">
+  <title>OpenCCU-Loom — Wordmark</title>
+  <!-- Mark on left, scaled to ~120px -->
+  <g transform="translate(10,10) scale(0.6)">
+    <g stroke="#475569" stroke-width="14" stroke-linecap="round" fill="none">
+      <line x1="22" y1="56" x2="178" y2="56"/>
+      <line x1="22" y1="84" x2="178" y2="84"/>
+      <line x1="22" y1="112" x2="178" y2="112"/>
+      <line x1="22" y1="140" x2="178" y2="140"/>
+    </g>
+    <rect x="85" y="40" width="30" height="116" rx="8" fill="#0F766E"/>
+    <g stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.4">
+      <line x1="92" y1="60" x2="108" y2="60"/>
+      <line x1="92" y1="100" x2="108" y2="100"/>
+      <line x1="92" y1="136" x2="108" y2="136"/>
+    </g>
+  </g>
+  <!-- Wordmark text: "OpenCCU" in slate, "-Loom" in teal -->
+  <text x="150" y="93" font-size="62" font-weight="800" fill="#475569" letter-spacing="-1">OpenCCU</text>
+  <text x="439" y="93" font-size="62" font-weight="800" fill="#0F766E" letter-spacing="-1">-Loom</text>
+</svg>

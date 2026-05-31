@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package adapter
+
+import (
+	"log/slog"
+	"runtime/debug"
+)
+
+// SafeGo starts fn in a new goroutine and ensures that any panic does not
+// tear down the whole program: the stack trace is logged at slog.LevelError
+// and the goroutine exits cleanly.
+//
+// Used by adapter background tasks (`auto_refresh.go`,
+// `callback_handlers.go`, `eventbridge.go`, `unobserved_sweep_job.go`)
+// that would otherwise run as bare `go func()` calls with no panic recovery.
+// The wrapper centralises goroutine lifetime hygiene.
+//
+// `name` identifies the goroutine in the log and should be a static
+// identifier (e.g. the function name or a job tag).
+// fn may be nil — in that case nothing happens.
+//
+// loom:reachable:reason="utility wrapper for panic-safe goroutines; callers in adapter background tasks are added incrementally"
+func SafeGo(name string, fn func()) {
+	if fn == nil {
+		return
+	}
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Default().Error(
+					"adapter goroutine panicked",
+					slog.String("name", name),
+					slog.Any("panic", r),
+					slog.String("stack", string(debug.Stack())),
+				)
+			}
+		}()
+		fn()
+	}()
+}

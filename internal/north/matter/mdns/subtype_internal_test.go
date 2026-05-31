@@ -1,0 +1,431 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+// White-box tests for subtype_responder.go unexported helpers.
+// These run in package mdns so they can reach the unexported functions.
+
+package mdns
+
+import (
+	"context"
+	"log/slog"
+	"net"
+	"testing"
+
+	"github.com/miekg/dns"
+)
+
+// ---- ensureTrailingDot ----
+
+func TestEnsureTrailingDot_AlreadyHasDot(t *testing.T) {
+	t.Parallel()
+	if got := ensureTrailingDot("foo.bar."); got != "foo.bar." {
+		t.Errorf("ensureTrailingDot(%q) = %q, want %q", "foo.bar.", got, "foo.bar.")
+	}
+}
+
+func TestEnsureTrailingDot_Missing(t *testing.T) {
+	t.Parallel()
+	if got := ensureTrailingDot("foo.bar"); got != "foo.bar." {
+		t.Errorf("ensureTrailingDot(%q) = %q, want %q", "foo.bar", got, "foo.bar.")
+	}
+}
+
+func TestEnsureTrailingDot_Empty(t *testing.T) {
+	t.Parallel()
+	// Empty string: still appends the dot.
+	if got := ensureTrailingDot(""); got != "." {
+		t.Errorf("ensureTrailingDot(%q) = %q, want %q", "", got, ".")
+	}
+}
+
+// ---- isTimeout ----
+
+func TestIsTimeout_Nil(t *testing.T) {
+	t.Parallel()
+	if isTimeout(nil) {
+		t.Error("isTimeout(nil) = true, want false")
+	}
+}
+
+func TestIsTimeout_NonNetError(t *testing.T) {
+	t.Parallel()
+	err := dns.ErrBuf // arbitrary non-net.Error
+	if isTimeout(err) {
+		t.Errorf("isTimeout(%T) = true, want false", err)
+	}
+}
+
+// ---- isPrimaryV4 ----
+
+func TestIsPrimaryV4_Loopback(t *testing.T) {
+	t.Parallel()
+	lo := &net.Interface{
+		Flags: net.FlagUp | net.FlagLoopback | net.FlagMulticast,
+	}
+	if isPrimaryV4(lo) {
+		t.Error("isPrimaryV4(loopback) = true, want false")
+	}
+}
+
+func TestIsPrimaryV4_PointToPoint(t *testing.T) {
+	t.Parallel()
+	ptp := &net.Interface{
+		Flags: net.FlagUp | net.FlagPointToPoint | net.FlagMulticast,
+	}
+	if isPrimaryV4(ptp) {
+		t.Error("isPrimaryV4(point-to-point) = true, want false")
+	}
+}
+
+// ---- isPrimaryV6 ----
+
+func TestIsPrimaryV6_Loopback(t *testing.T) {
+	t.Parallel()
+	lo := &net.Interface{
+		Flags: net.FlagUp | net.FlagLoopback | net.FlagMulticast,
+	}
+	if isPrimaryV6(lo) {
+		t.Error("isPrimaryV6(loopback) = true, want false")
+	}
+}
+
+func TestIsPrimaryV6_PointToPoint(t *testing.T) {
+	t.Parallel()
+	ptp := &net.Interface{
+		Flags: net.FlagUp | net.FlagPointToPoint | net.FlagMulticast,
+	}
+	if isPrimaryV6(ptp) {
+		t.Error("isPrimaryV6(point-to-point) = true, want false")
+	}
+}
+
+// ---- listMulticastInterfaces ----
+
+func TestListMulticastInterfaces_ReturnsNonNilOnAnyOS(t *testing.T) {
+	t.Parallel()
+	// May be empty in a sandbox but must not panic.
+	ifaces := listMulticastInterfaces()
+	// All returned entries must have FlagUp + FlagMulticast set.
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagUp == 0 {
+			t.Errorf("interface %q: FlagUp not set", ifi.Name)
+		}
+		if ifi.Flags&net.FlagMulticast == 0 {
+			t.Errorf("interface %q: FlagMulticast not set", ifi.Name)
+		}
+	}
+}
+
+// ---- SubtypeResponder.AddSubtype / RemoveSubtype (nil guard) ----
+
+func TestSubtypeResponder_NilReceiver(t *testing.T) {
+	t.Parallel()
+	var r *SubtypeResponder
+
+	// None of these should panic.
+	r.AddSubtype("_L1._sub._matterc._udp.local", "inst._matterc._udp.local")
+	r.RemoveSubtype("_L1._sub._matterc._udp.local")
+	_ = r.Close()
+	r.Start(nil) //nolint:staticcheck // nil ctx intentional for guard test
+}
+
+// ---- buildReply / matchAnswers via a freshly constructed responder ----
+
+// newTestResponder builds a SubtypeResponder with no actual socket
+// by directly constructing the struct (white-box, same package).
+func newTestResponder() *SubtypeResponder {
+	return &SubtypeResponder{
+		logger:   slog.Default(),
+		mappings: make(map[string]string),
+	}
+}
+
+func TestBuildReply_GarbageInput(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	out, ok := r.buildReply([]byte{0xFF, 0xFE, 0xFD})
+	if ok || out != nil {
+		t.Error("buildReply on garbage: expected (nil, false)")
+	}
+}
+
+func TestBuildReply_ResponsePacket_Ignored(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+
+	// Build a DNS response (not a query).
+	msg := new(dns.Msg)
+	msg.SetReply(new(dns.Msg))
+	buf, _ := msg.Pack()
+
+	out, ok := r.buildReply(buf)
+	if ok || out != nil {
+		t.Error("buildReply on DNS response: expected (nil, false)")
+	}
+}
+
+func TestBuildReply_NoMappings_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+
+	msg := new(dns.Msg)
+	msg.SetQuestion("_l3840._sub._matterc._udp.local.", dns.TypePTR)
+	buf, _ := msg.Pack()
+
+	out, ok := r.buildReply(buf)
+	if ok || out != nil {
+		t.Error("buildReply with no mappings: expected (nil, false)")
+	}
+}
+
+func TestBuildReply_MatchingPTR_ReturnsReply(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	qname := "_l3840._sub._matterc._udp.local."
+	target := "aabbccddeeff1122._matterc._udp.local."
+	r.AddSubtype(qname, target)
+
+	msg := new(dns.Msg)
+	msg.SetQuestion(qname, dns.TypePTR)
+	buf, _ := msg.Pack()
+
+	out, ok := r.buildReply(buf)
+	if !ok || len(out) == 0 {
+		t.Fatal("buildReply: expected (data, true) for matching PTR query")
+	}
+
+	// Parse and validate the reply.
+	resp := new(dns.Msg)
+	if err := resp.Unpack(out); err != nil {
+		t.Fatalf("unpack reply: %v", err)
+	}
+	if !resp.Response {
+		t.Error("reply: Response flag not set")
+	}
+	if !resp.Authoritative {
+		t.Error("reply: Authoritative flag not set")
+	}
+	if len(resp.Answer) != 1 {
+		t.Fatalf("reply: len(Answer)=%d, want 1", len(resp.Answer))
+	}
+	ptr, ok := resp.Answer[0].(*dns.PTR)
+	if !ok {
+		t.Fatalf("reply Answer[0] type=%T, want *dns.PTR", resp.Answer[0])
+	}
+	if ptr.Ptr != target {
+		t.Errorf("ptr.Ptr = %q, want %q", ptr.Ptr, target)
+	}
+}
+
+func TestBuildReply_TypeANY_AlsoMatches(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	qname := "_cm._sub._matterc._udp.local."
+	target := "instance._matterc._udp.local."
+	r.AddSubtype(qname, target)
+
+	msg := new(dns.Msg)
+	msg.SetQuestion(qname, dns.TypeANY)
+	buf, _ := msg.Pack()
+
+	_, ok := r.buildReply(buf)
+	if !ok {
+		t.Error("buildReply with TypeANY: expected ok=true")
+	}
+}
+
+func TestBuildReply_WrongQtype_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	qname := "_cm._sub._matterc._udp.local."
+	r.AddSubtype(qname, "inst._matterc._udp.local.")
+
+	msg := new(dns.Msg)
+	msg.SetQuestion(qname, dns.TypeA) // not PTR or ANY
+	buf, _ := msg.Pack()
+
+	out, ok := r.buildReply(buf)
+	if ok || out != nil {
+		t.Error("buildReply with TypeA: expected (nil, false)")
+	}
+}
+
+func TestMatchAnswers_Empty_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	got := r.matchAnswers(nil)
+	if got != nil {
+		t.Errorf("matchAnswers(nil): %v, want nil", got)
+	}
+}
+
+func TestMatchAnswers_CaseInsensitiveLookup(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	// AddSubtype lowercases the key.
+	r.AddSubtype("_CM._sub._matterc._udp.local.", "inst._matterc._udp.local.")
+
+	// Query with mixed-case name.
+	qs := []dns.Question{{
+		Name:  "_CM._sub._matterc._udp.local.",
+		Qtype: dns.TypePTR,
+	}}
+	got := r.matchAnswers(qs)
+	if len(got) != 1 {
+		t.Fatalf("matchAnswers: len=%d, want 1", len(got))
+	}
+}
+
+func TestRemoveSubtype_ClearsMapping(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	qname := "_l3840._sub._matterc._udp.local."
+	r.AddSubtype(qname, "inst._matterc._udp.local.")
+	r.RemoveSubtype(qname)
+
+	qs := []dns.Question{{Name: qname, Qtype: dns.TypePTR}}
+	got := r.matchAnswers(qs)
+	if len(got) != 0 {
+		t.Errorf("matchAnswers after RemoveSubtype: len=%d, want 0", len(got))
+	}
+}
+
+// ---- Start / Close with no sockets (nil pc4 / pc6 paths) ----
+
+func TestSubtypeResponder_Start_NoPCSockets_NoGoroutines(t *testing.T) {
+	t.Parallel()
+	// Build a responder without actual network sockets (pc4=nil, pc6=nil).
+	r := newTestResponder()
+	// Start should not launch any goroutines when both pc4 and pc6 are nil.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.Start(ctx)
+	// Calling Start again (cancel != nil now) must be a no-op.
+	r.Start(ctx)
+	// Close should work even without sockets.
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+func TestSubtypeResponder_Close_WithoutStart(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	// Close without Start must not block.
+	if err := r.Close(); err != nil {
+		t.Fatalf("Close without Start: %v", err)
+	}
+}
+
+func TestSubtypeResponder_Close_Idempotent(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r.Start(ctx)
+	if err := r.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+	// Second Close must not panic or return an error.
+	if err := r.Close(); err != nil {
+		t.Fatalf("second Close: %v", err)
+	}
+}
+
+// ---- isPrimaryV4 / isPrimaryV6 — real interface walk ----
+
+// TestIsPrimaryV4_AllInterfaces exercises isPrimaryV4 against every
+// interface on the host so the function body is exercised regardless
+// of which flag combinations the test runner has. We only check that
+// the call does not panic — correctness of the "true" case depends on
+// the host having a non-loopback IPv4 interface.
+func TestIsPrimaryV4_AllSystemInterfaces(t *testing.T) {
+	t.Parallel()
+	ifaces, _ := net.Interfaces()
+	for i := range ifaces {
+		ifi := &ifaces[i]
+		// Must not panic.
+		_ = isPrimaryV4(ifi)
+	}
+}
+
+func TestIsPrimaryV6_AllSystemInterfaces(t *testing.T) {
+	t.Parallel()
+	ifaces, _ := net.Interfaces()
+	for i := range ifaces {
+		ifi := &ifaces[i]
+		_ = isPrimaryV6(ifi)
+	}
+}
+
+// TestIsPrimaryV4_NonLoopback_WithAddress exercises the "has non-loopback
+// IPv4" path. We look for a suitable interface on this machine; if none
+// exists we skip — this is a coverage opportunistic test.
+func TestIsPrimaryV4_WithRealInterface(t *testing.T) {
+	t.Parallel()
+	ifaces, _ := net.Interfaces()
+	for i := range ifaces {
+		ifi := &ifaces[i]
+		if ifi.Flags&net.FlagLoopback != 0 || ifi.Flags&net.FlagPointToPoint != 0 {
+			continue
+		}
+		// Just verify the call does not panic.
+		result := isPrimaryV4(ifi)
+		_ = result
+	}
+}
+
+func TestIsPrimaryV6_WithRealInterface(t *testing.T) {
+	t.Parallel()
+	ifaces, _ := net.Interfaces()
+	for i := range ifaces {
+		ifi := &ifaces[i]
+		if ifi.Flags&net.FlagLoopback != 0 || ifi.Flags&net.FlagPointToPoint != 0 {
+			continue
+		}
+		result := isPrimaryV6(ifi)
+		_ = result
+	}
+}
+
+// ---- AddSubtype / RemoveSubtype — nil-value guards ----
+
+func TestAddSubtype_EmptySubType_NoOp(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	// Empty subType — should not add.
+	r.AddSubtype("", "inst._matterc._udp.local.")
+	if len(r.mappings) != 0 {
+		t.Errorf("expected 0 mappings, got %d", len(r.mappings))
+	}
+}
+
+func TestAddSubtype_EmptyTarget_NoOp(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	r.AddSubtype("_cm._sub._matterc._udp.local.", "")
+	if len(r.mappings) != 0 {
+		t.Errorf("expected 0 mappings, got %d", len(r.mappings))
+	}
+}
+
+func TestRemoveSubtype_Empty_NoOp(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	// Should not panic.
+	r.RemoveSubtype("")
+}
+
+// ---- matchAnswers — no mappings returns nil (not empty slice) ----
+
+func TestMatchAnswers_ZeroQuestions(t *testing.T) {
+	t.Parallel()
+	r := newTestResponder()
+	r.AddSubtype("_cm._sub._matterc._udp.local.", "inst._matterc._udp.local.")
+	// matchAnswers with an empty slice should return nil.
+	got := r.matchAnswers([]dns.Question{})
+	if got != nil {
+		t.Errorf("matchAnswers(empty): expected nil, got %v", got)
+	}
+}

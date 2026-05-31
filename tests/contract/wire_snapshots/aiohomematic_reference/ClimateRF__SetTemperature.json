@@ -1,0 +1,41 @@
+{
+  "dp_type": "ClimateRF",
+  "setter": "SetTemperature",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "temp=5",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "SET_TEMPERATURE",
+          "value": 5
+        }
+      ]
+    },
+    {
+      "label": "temp=15",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "SET_TEMPERATURE",
+          "value": 15
+        }
+      ]
+    },
+    {
+      "label": "temp=30",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RFTHR0001:1",
+          "parameter": "SET_TEMPERATURE",
+          "value": 30
+        }
+      ]
+    }
+  ]
+}

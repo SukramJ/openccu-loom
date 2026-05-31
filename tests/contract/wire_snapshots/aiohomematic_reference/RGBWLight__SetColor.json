@@ -1,0 +1,36 @@
+{
+  "dp_type": "RGBWLight",
+  "setter": "SetColor",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "hue=0,sat=1.0",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RGBW0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "HUE": 0,
+            "SATURATION": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "label": "hue=180,sat=0.7",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "RGBW0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "HUE": 180,
+            "SATURATION": 0.7
+          }
+        }
+      ]
+    }
+  ]
+}

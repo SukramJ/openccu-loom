@@ -1,0 +1,22 @@
+{
+  "dp_type": "IrrigationValve",
+  "setter": "Open",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "duration=120s",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "WHS0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "ON_TIME": 120,
+            "STATE": true
+          }
+        }
+      ]
+    }
+  ]
+}

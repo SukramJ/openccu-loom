@@ -1,0 +1,17 @@
+{
+  "dp_type": "DRGDaliLight",
+  "setter": "SetKelvin",
+  "inputs": [
+    {
+      "label": "kelvin=4000",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DALI0001:1",
+          "parameter": "COLOR_TEMPERATURE",
+          "value": 4000
+        }
+      ]
+    }
+  ]
+}

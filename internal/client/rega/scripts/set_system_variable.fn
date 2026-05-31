@@ -1,0 +1,17 @@
+!# openccu-loom — set_system_variable
+!# Params: ##name## (string), ##value## (string)
+!# Output: value emitted by .State() — empty on failure
+!#
+!# Writes a string-typed system variable. Non-string types are rejected
+!# silently (matches CCU WebUI behaviour; caller detects failure by the
+!# absence of output).
+
+string sName = "##name##";
+string sValue = "##value##";
+
+object oTarget = dom.GetObject(ID_SYSTEM_VARIABLES).Get(sName);
+if (oTarget) {
+    if (oTarget.ValueTypeStr() == "String") {
+        Write(oTarget.State(sValue));
+    }
+}

@@ -1,0 +1,19 @@
+{
+  "dp_type": "Switch",
+  "setter": "TurnOff",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "VCU0001:3",
+          "parameter": "STATE",
+          "value": false
+        }
+      ]
+    }
+  ]
+}

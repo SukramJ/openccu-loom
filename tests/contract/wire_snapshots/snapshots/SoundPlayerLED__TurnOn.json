@@ -1,0 +1,24 @@
+{
+  "dp_type": "SoundPlayerLED",
+  "setter": "TurnOn",
+  "inputs": [
+    {
+      "label": "brightness=128,flash=500ms,rep=3",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "MP3P0001:6",
+          "put_values": {
+            "COLOR": "WHITE",
+            "LEVEL": 0.5019607843137255,
+            "ON_TIME": 0,
+            "ON_TIME_LIST_1": "500MS",
+            "RAMP_TIME": 0,
+            "REPETITIONS": "REPETITIONS_003"
+          }
+        }
+      ]
+    }
+  ]
+}

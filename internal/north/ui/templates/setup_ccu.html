@@ -1,0 +1,28 @@
+{{define "body"}}
+<section class="card">
+  <p class="step-progress">{{t "setup.step.progress"}}</p>
+  <h1>{{t "setup.step3.title"}}</h1>
+  {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
+  <form method="post" action="/setup/ccu">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>{{t "setup.ccu.name"}}<input type="text" name="ccu_name" value="{{.Data.State.CCUName}}"></label>
+    <label>{{t "setup.ccu.host"}}<input type="text" name="ccu_host" placeholder="192.168.0.10" value="{{.Data.State.CCUHost}}"></label>
+    <label>{{t "setup.username"}}<input type="text" name="ccu_username" value="{{.Data.State.CCUUsername}}"></label>
+    <label>{{t "setup.password"}}<input type="password" name="ccu_password"></label>
+    <fieldset>
+      <legend>{{t "setup.ccu.interfaces"}}</legend>
+      <p class="hint">{{t "setup.ccu.interfaces_hint"}}</p>
+      <label><input type="checkbox" name="ccu_interfaces" value="HmIP-RF"> HmIP-RF</label>
+      <label><input type="checkbox" name="ccu_interfaces" value="BidCos-RF"> BidCos-RF</label>
+      <label><input type="checkbox" name="ccu_interfaces" value="BidCos-Wired"> BidCos-Wired</label>
+      <label><input type="checkbox" name="ccu_interfaces" value="HmIP-Wired"> HmIP-Wired</label>
+      <label><input type="checkbox" name="ccu_interfaces" value="VirtualDevices"> VirtualDevices</label>
+      <label><input type="checkbox" name="ccu_interfaces" value="CUxD"> CUxD</label>
+    </fieldset>
+    <div class="button-row">
+      <button type="submit">{{t "setup.submit"}}</button>
+      <button type="submit" name="skip" value="1" formnovalidate>{{t "setup.ccu.skip"}}</button>
+    </div>
+  </form>
+</section>
+{{end}}

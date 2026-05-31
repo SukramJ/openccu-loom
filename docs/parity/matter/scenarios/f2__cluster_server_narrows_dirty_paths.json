@@ -1,0 +1,49 @@
+{
+  "name": "f2__cluster_server_narrows_dirty_paths",
+  "description": "F2 regression guard at scenario level: when a value-change notifier ALSO implements MatterClusterServer (the production *custom.Switch shape), wireMeasurementListenersLocked narrows the dirty-mark set to ONLY paths whose cluster matches the notifier's MatterClusterID. The scenario subscribes to four paths on one bridged endpoint (OnOff 0x0006, Identify 0x0003, Descriptor 0x001D, BridgedDeviceBasicInformation 0x0039). The fake OnOff source fires its notifier; the bridge ships exactly one AttributeReport (the OnOff attribute). Without F2 the burst would carry one report per reportable path and Apple Home would treat the cross-cluster sibling reports as same-DataVersion noise.",
+  "tags": ["matter", "subscribe", "f2", "engine-tick", "notifier-narrowing"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 131,
+        "peer_subscribe_exchange_id": 137,
+        "paths": [
+          { "endpoint": 2, "cluster": 6,  "attribute": 0 },
+          { "endpoint": 2, "cluster": 3,  "attribute": 0 },
+          { "endpoint": 2, "cluster": 29, "attribute": 0 },
+          { "endpoint": 2, "cluster": 57, "attribute": 5 }
+        ]
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_notifier_source"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "attribute_reports_count": 1,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

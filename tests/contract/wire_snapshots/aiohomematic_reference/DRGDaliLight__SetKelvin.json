@@ -1,0 +1,19 @@
+{
+  "dp_type": "DRGDaliLight",
+  "setter": "SetKelvin",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "kelvin=4000",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DALI0001:1",
+          "parameter": "COLOR_TEMPERATURE",
+          "value": 4000
+        }
+      ]
+    }
+  ]
+}

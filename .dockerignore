@@ -1,0 +1,11 @@
+# Keep the build context small and deterministic. The Svelte SPA is built
+# fresh in the `spa` stage and overlaid, so the host's (gitignored, usually
+# empty) spa_dist must not leak in. node_modules is recreated by `npm ci`.
+.git
+.github
+bin
+dist
+assets/ui/node_modules
+internal/north/ui/spa_dist
+# Large, locally-generated parity snapshots (gitignored).
+tests/integration/testdata/model_snapshot_*.json

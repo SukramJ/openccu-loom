@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "DataPointKey": {
+      "description": "Composite key identifying one wire data point.",
+      "properties": {
+        "channel_no": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "device_address": {
+          "type": "string"
+        },
+        "interface": {
+          "$ref": "#/definitions/Interface"
+        },
+        "parameter": {
+          "$ref": "#/definitions/Parameter"
+        },
+        "paramset_key": {
+          "$ref": "#/definitions/ParamsetKey"
+        }
+      },
+      "required": [
+        "interface",
+        "device_address",
+        "channel_no",
+        "paramset_key",
+        "parameter"
+      ],
+      "type": "object"
+    },
+    "ParamValue": {
+      "description": "Typed parameter value. Exactly one of bool/int/float/string/list is meaningful per Kind.",
+      "properties": {
+        "bool": {
+          "type": "boolean"
+        },
+        "float": {
+          "type": "number"
+        },
+        "int": {
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/definitions/ValueKind"
+        },
+        "list": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "string": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "ValueKind": {
+      "description": "Tag of the active member of a ParamValue.",
+      "enum": [
+        "none",
+        "bool",
+        "int",
+        "float",
+        "string",
+        "list"
+      ],
+      "type": "string"
+    }
+  }
+}

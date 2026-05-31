@@ -1,0 +1,30 @@
+{
+  "dp_type": "RGBWLight",
+  "setter": "SetEffect",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "BLINKING_SLOW",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RGBW0001:1",
+          "parameter": "EFFECT",
+          "value": "BLINKING_SLOW"
+        }
+      ]
+    },
+    {
+      "label": "FLASH_SHORT",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "RGBW0001:1",
+          "parameter": "EFFECT",
+          "value": "FLASH_SHORT"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,596 @@
+{
+  "version": "1.0",
+  "envelope": {
+    "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
+    "fields": {
+      "seq": "integer (uint64) — monotonic daemon-assigned cursor; clients store the last received value and pass it back as `since` on subscribe to resume the stream after a reconnect",
+      "kind": "string enum (initial|change|refresh) — event family discriminator; default and dominant case is `change`",
+      "topic": "string — routing key the client subscribed to (broadcasts only; absent on command replies)",
+      "type": "string — discriminator naming the event family; matches the `name` field of the matching broadcast entry below",
+      "ts": "string — RFC3339Nano timestamp of the event; UTC",
+      "payload": "object — see the per-broadcast `payload` field for the schema reference"
+    }
+  },
+  "resume": {
+    "description": "Client → server: append `since: N` to a subscribe op to request replay of buffered events with seq > N matching the supplied topic patterns. Server → client: after the replay completes, the daemon sends one of two control frames. `{op:\"replay_done\", seq:N}` confirms the replay finished and carries the last-replayed seq (or the original `since` when nothing matched). `{op:\"replay_lost\", oldest_seq:M}` signals that `since` precedes the oldest buffered event — the client must take a fresh GET /snapshot to resync. The replay buffer ceiling defaults to 1024 events.",
+    "replay_buffer_capacity": 1024
+  },
+  "heartbeat": {
+    "description": "The daemon sends a `{\"op\":\"ping\"}` frame every ping_interval_seconds. Clients MUST respond with `{\"op\":\"pong\"}` within read_timeout_seconds or the connection is closed. Clients behind NAT or mobile-data proxies that drop idle connections faster than read_timeout_seconds should additionally issue their own `{\"op\":\"pong\"}` frames pre-emptively — the daemon accepts unsolicited pongs.",
+    "ping_interval_seconds": 30,
+    "read_timeout_seconds": 60
+  },
+  "subscription_ack": {
+    "description": "After a `{op:\"subscribe\", topics:[...]}` or `{op:\"unsubscribe\", topics:[...]}` is processed, the daemon echoes one `{op:\"subscribed\"|\"unsubscribed\", topics:[...]}` frame carrying the topics the client just requested. Reconnect-after-failure logic can use this ACK to confirm the subscription set survived the round trip without needing to inspect daemon-side state. An empty topics array suppresses the ACK to keep no-op subscribes quiet."
+  },
+  "command_schemas": {
+    "description": "Each command entry below may carry an `args` and a `result` field documenting its argument and return shape. `args` is an object whose keys are argument names; each value is a string of the form `<json-type>[?]` (with `?` marking optional fields). `result` follows the same conventions and may also be `\"array\"` or a fully-spelled object. Missing fields mean the command takes no arguments and/or returns an opaque object — the canonical source for the wire shape is then the matching Go handler under internal/north/rest/ws/."
+  },
+  "commands": [
+    {
+      "category": "alarms",
+      "description": "Acknowledge (clear) a single alarm message by id.",
+      "name": "alarm_messages.ack",
+      "args": { "id": "string" }
+    },
+    {
+      "category": "alarms",
+      "description": "List all active CCU alarm messages.",
+      "name": "alarm_messages.list"
+    },
+    {
+      "category": "backup",
+      "description": "Return the current status of a running or last-completed CCU backup operation.",
+      "name": "backup.status"
+    },
+    {
+      "category": "backup",
+      "description": "Trigger a CCU configuration backup asynchronously.",
+      "name": "backup.trigger"
+    },
+    {
+      "category": "ccu",
+      "description": "Clear all in-memory caches on the central; next read fetches fresh data from the CCU. Mirrors Python ws_clear_cache (V8-N10).",
+      "name": "ccu.cache_clear"
+    },
+    {
+      "category": "ccu",
+      "description": "Return per-interface device statistics: total, unreachable, and firmware-updatable counts plus grand totals. Mirrors Python ws_get_device_statistics (V8-N11).",
+      "name": "ccu.device_statistics"
+    },
+    {
+      "category": "ccu",
+      "description": "Return service-message count and alarm-message count from hub data points. Mirrors Python ws_get_hub_data (websocket_api.py:2052).",
+      "name": "ccu.get_hub_data"
+    },
+    {
+      "category": "ccu",
+      "description": "Return RSSI, reachability, and low-battery state for every known device. Mirrors Python ws_get_signal_quality (websocket_api.py:2158).",
+      "name": "ccu.get_signal_quality"
+    },
+    {
+      "category": "ccu",
+      "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
+      "name": "ccu.reload_device_config",
+      "args": { "device_address": "string" }
+    },
+    {
+      "category": "ccu",
+      "description": "Return per-interface command-throttle diagnostics (in_flight, waiting, burst_downgrades, waited_for_burst_slot). Mirrors Python ws_get_command_throttle_stats (V8-N9).",
+      "name": "ccu.throttle_stats"
+    },
+    {
+      "category": "central",
+      "description": "Report per-interface connectivity details for all configured centrals.",
+      "name": "central.connectivity"
+    },
+    {
+      "category": "central",
+      "description": "Return identity and version information for the connected CCU.",
+      "name": "central.info"
+    },
+    {
+      "category": "central",
+      "description": "Kick off an ad-hoc reconciliation pass against the CCU device registry.",
+      "name": "central.reconcile"
+    },
+    {
+      "category": "central",
+      "description": "Server-pushed: a CentralUnit transitioned between lifecycle states (CONNECTING, READY, STOPPED, …).",
+      "kind": "broadcast",
+      "name": "central.state_changed",
+      "topic": "central.{name}.state",
+      "payload": "CentralStateChangedPayload"
+    },
+    {
+      "category": "central",
+      "description": "Return a combined system-health snapshot from the CCU's perspective.",
+      "name": "central.system_health"
+    },
+    {
+      "category": "change_history",
+      "description": "Clear (truncate) the persisted paramset-write history log. Mirrors Python ws_clear_change_history (V8-N16).",
+      "name": "change_history.clear"
+    },
+    {
+      "category": "change_history",
+      "description": "List recent paramset-write history entries, optionally filtered by channel address.",
+      "name": "change_history.list"
+    },
+    {
+      "category": "config",
+      "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_reload_device_config (websocket_api.py:1735). Closes parity_audit gap L-7002.",
+      "name": "config.reload_device_config"
+    },
+    {
+      "category": "config",
+      "description": "Return the current pending changes for an open config session.",
+      "name": "config.session.changes"
+    },
+    {
+      "category": "config",
+      "description": "Discard all pending changes and close the config session.",
+      "name": "config.session.discard"
+    },
+    {
+      "category": "config",
+      "description": "Open a config session for a channel/paramset pair and return its initial values.",
+      "name": "config.session.open",
+      "args": {
+        "central_name": "string?",
+        "channel_address": "string",
+        "paramset_key": "string"
+      }
+    },
+    {
+      "category": "config",
+      "description": "Re-apply the most recently undone change in the open config session.",
+      "name": "config.session.redo"
+    },
+    {
+      "category": "config",
+      "description": "Write the pending changes of the open config session to the CCU and close the session.",
+      "name": "config.session.save"
+    },
+    {
+      "category": "config",
+      "description": "Stage a single parameter change into the open config session.",
+      "name": "config.session.set",
+      "args": {
+        "central_name": "string?",
+        "channel_address": "string",
+        "paramset_key": "string",
+        "parameter": "string?",
+        "value": "any"
+      }
+    },
+    {
+      "category": "config",
+      "description": "Undo the most recent staged change in the open config session.",
+      "name": "config.session.undo"
+    },
+    {
+      "category": "custom_data_point",
+      "description": "Server-pushed: a CCU data-point change observable to a Custom-DP altered the CDP's aggregated state. SPA tiles subscribe to one CDP-scoped topic instead of N per-DP topics.",
+      "kind": "broadcast",
+      "name": "custom_data_point.state_changed",
+      "topic": "device.{address}.cdps.{name}",
+      "payload": "CustomDataPointStateChangedPayload"
+    },
+    {
+      "category": "datapoint",
+      "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple.",
+      "kind": "broadcast",
+      "name": "datapoint.value_changed",
+      "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
+      "payload": "DataPointValueChangedPayload"
+    },
+    {
+      "category": "devices",
+      "description": "Server-pushed: a new device was observed in the registry (added via CCU pairing, cache reload, or initial-snapshot import).",
+      "kind": "broadcast",
+      "name": "device.created",
+      "topic": "device.{address}.lifecycle",
+      "payload": "DeviceCreatedPayload"
+    },
+    {
+      "category": "devices",
+      "description": "Put a single device into pairing install-mode for a given duration.",
+      "name": "device.install_mode",
+      "args": {
+        "address": "string",
+        "duration_seconds": "integer?"
+      }
+    },
+    {
+      "category": "devices",
+      "description": "Server-pushed: the CCU reported a device deletion. The same topic carries device.created — subscribers route by envelope `type`.",
+      "kind": "broadcast",
+      "name": "device.removed",
+      "topic": "device.{address}.lifecycle",
+      "payload": "DeviceRemovedPayload"
+    },
+    {
+      "category": "devices",
+      "description": "Rename a device on the CCU.",
+      "name": "device.rename",
+      "args": { "address": "string", "name": "string" },
+      "result": { "address": "string", "name": "string" }
+    },
+    {
+      "category": "devices",
+      "description": "Return the full detail record for a single device by address.",
+      "name": "devices.get",
+      "args": { "address": "string" }
+    },
+    {
+      "category": "devices",
+      "description": "Return a summary list of all registered devices sorted by address.",
+      "name": "devices.list"
+    },
+    {
+      "category": "firmware",
+      "description": "Report the current and available firmware versions and pending update status.",
+      "name": "firmware.info"
+    },
+    {
+      "category": "firmware",
+      "description": "Force-refresh the firmware cache from the CCU (re-fetch available firmware metadata). Mirrors Python ws_refresh_firmware_data (V8-N13).",
+      "name": "firmware.refresh"
+    },
+    {
+      "category": "firmware",
+      "description": "Trigger the CCU firmware update and reboot sequence.",
+      "name": "firmware.update"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: a CCU program finished executing (Zentralenprogramm). Topic is scoped per central and per program-id.",
+      "kind": "broadcast",
+      "name": "hub.program_executed",
+      "topic": "hub.{central}.programs.{id}",
+      "payload": "ProgramExecutedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: a CCU system variable's value changed. Topic is scoped per central and per sysvar name.",
+      "kind": "broadcast",
+      "name": "hub.sysvar_changed",
+      "topic": "hub.{central}.sysvars.{name}",
+      "payload": "SysvarChangedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: the CCU install-mode (pairing window) changed state. Topic is scoped per central.",
+      "kind": "broadcast",
+      "name": "hub.install_mode_changed",
+      "topic": "hub.{central}.install_mode",
+      "payload": "InstallModeChangedPayload"
+    },
+    {
+      "category": "incidents",
+      "description": "Clear all entries from the incident store. Mirrors Python ws_clear_incidents (V8-N17).",
+      "name": "incidents.clear"
+    },
+    {
+      "category": "incidents",
+      "description": "Alias for incidents.list kept for Python ws_get_incidents name parity (L12). Returns the same payload as incidents.list.",
+      "name": "incidents.get"
+    },
+    {
+      "category": "incidents",
+      "description": "Return all stored diagnostic incidents ordered by last_seen descending. Mirrors Python ws_get_incidents (L12).",
+      "name": "incidents.list"
+    },
+    {
+      "category": "inbox",
+      "description": "Promote a paired-but-unconfigured inbox device into the active device set.",
+      "name": "inbox.accept"
+    },
+    {
+      "category": "inbox",
+      "description": "List devices the CCU has seen in pairing mode that have not yet been accepted.",
+      "name": "inbox.list"
+    },
+    {
+      "category": "install_mode",
+      "description": "Close the pairing window for the named interface.",
+      "name": "install_mode.disable"
+    },
+    {
+      "category": "install_mode",
+      "description": "Open the pairing window for the named interface for a given duration in seconds.",
+      "name": "install_mode.enable"
+    },
+    {
+      "category": "install_mode",
+      "description": "Report the current pairing-mode state per interface.",
+      "name": "install_mode.status"
+    },
+    {
+      "category": "links",
+      "description": "Create a new direct link between a sender and a receiver channel.",
+      "name": "links.add"
+    },
+    {
+      "category": "links",
+      "description": "Return the form schema (descriptions + current values) for a link paramset between sender and receiver. Mirrors Python ws_get_link_form_schema (websocket_api.py:1057).",
+      "name": "links.get_form_schema"
+    },
+    {
+      "category": "links",
+      "description": "Return available easymode profiles for a link between sender and receiver channel types. Mirrors Python ws_get_link_profiles (websocket_api.py:1123). Stub until Phase-11.",
+      "name": "links.get_profiles"
+    },
+    {
+      "category": "links",
+      "description": "Return the channels eligible to be linked against a given device.",
+      "name": "links.linkable_channels"
+    },
+    {
+      "category": "links",
+      "description": "Read the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_get_link_paramset (websocket_api.py:1313). Closes parity_audit gap G-03.",
+      "name": "links.get_paramset"
+    },
+    {
+      "category": "links",
+      "description": "List all direct links a device participates in.",
+      "name": "links.list"
+    },
+    {
+      "category": "links",
+      "description": "Write values to the LINK paramset on the given channel keyed by the peer channel address. Mirrors Python ws_put_link_paramset (websocket_api.py:1387). Closes parity_audit gap G-04.",
+      "name": "links.put_paramset"
+    },
+    {
+      "category": "links",
+      "description": "Delete an existing direct link between a sender and a receiver channel.",
+      "name": "links.remove"
+    },
+    {
+      "category": "links",
+      "description": "Temporarily apply a link profile's default values to a link paramset for preview. Mirrors Python ws_test_link_profile (websocket_api.py:2643). Stub until Phase-11.",
+      "name": "links.test_profile"
+    },
+    {
+      "category": "master_profiles",
+      "description": "Apply a stored master profile to a channel by writing its fixed parameters.",
+      "name": "master_profiles.apply"
+    },
+    {
+      "category": "master_profiles",
+      "description": "Return the full parameter set of a single master profile by device type and id.",
+      "name": "master_profiles.get"
+    },
+    {
+      "category": "master_profiles",
+      "description": "List available master profiles, optionally filtered by device type and channel type.",
+      "name": "master_profiles.list"
+    },
+    {
+      "category": "master_profiles",
+      "description": "Match observed parameter values against the master-profile constraint set and return the active profile ID (0 = Expert / no match).",
+      "name": "master_profiles.match"
+    },
+    {
+      "category": "paramsets",
+      "description": "Copy a paramset (VALUES or MASTER) from a source channel to a target channel by reading + writing the values. Distinct from links.copy (peer-to-peer link-entry copy). Mirrors Python ws_copy_paramset (websocket_api.py:916). Closes parity_audit gap L-7015.",
+      "name": "paramset.copy"
+    },
+    {
+      "category": "paramsets",
+      "description": "Return the parameter descriptors for a channel/paramset pair.",
+      "name": "paramset.description"
+    },
+    {
+      "category": "paramsets",
+      "description": "Auto-detect a parameter value from the device via determine_parameter. Mirrors Python ws_determine_parameter (websocket_api.py:2556). Stub until Phase-11.",
+      "name": "paramset.determine"
+    },
+    {
+      "category": "paramsets",
+      "description": "Return the form schema (descriptions + grouping) for a channel paramset. Mirrors Python ws_get_form_schema (websocket_api.py:252). Closes parity_audit gap G-27.",
+      "name": "paramset.form_schema",
+      "args": {
+        "address": "string",
+        "channel_no": "integer",
+        "paramset": "string?",
+        "locale": "string?",
+        "peer": "string?"
+      }
+    },
+    {
+      "category": "paramsets",
+      "description": "Return the current values for a channel/paramset pair.",
+      "name": "paramset.get",
+      "args": {
+        "central_name": "string?",
+        "channel_address": "string",
+        "paramset_key": "string"
+      }
+    },
+    {
+      "category": "paramsets",
+      "description": "Write a paramset directly to the CCU without a session (non-transactional from a daemon-session perspective, but atomic on the wire: forwarded as one setParamsetValues XML-RPC call so the CCU applies all values together or none). Returns {written: N} on success. The CCU does not surface per-parameter status on this path — for that, use a config.session.* flow.",
+      "name": "paramset.put",
+      "args": {
+        "channel_address": "string",
+        "paramset_key": "string",
+        "values": "object"
+      },
+      "result": { "written": "integer" }
+    },
+    {
+      "category": "programs",
+      "description": "Execute a CCU program by id.",
+      "name": "programs.execute"
+    },
+    {
+      "category": "programs",
+      "description": "List all CCU programs.",
+      "name": "programs.list"
+    },
+    {
+      "category": "schedules",
+      "description": "Select the active climate profile (P1..P6) on a thermostat channel.",
+      "name": "schedules.active_profile.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Read the active climate week-program for a thermostat channel.",
+      "name": "schedules.climate.get"
+    },
+    {
+      "category": "schedules",
+      "description": "Write a climate week-program back to a thermostat channel.",
+      "name": "schedules.climate.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Select the active climate profile by name (e.g. P1..P6) on the resolved schedule channel of a device.",
+      "name": "schedules.device.active_profile.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Read the unified schedule DTO for a device, resolving the correct channel automatically.",
+      "name": "schedules.device.get"
+    },
+    {
+      "category": "schedules",
+      "description": "Write a schedule back to the resolved schedule channel of a device.",
+      "name": "schedules.device.set"
+    },
+    {
+      "category": "schedules",
+      "description": "List all devices that expose a weekly schedule (week-profile data point). Mirrors Python ws_list_schedule_devices (websocket_api.py:1491).",
+      "name": "schedules.list_devices"
+    },
+    {
+      "category": "schedules",
+      "description": "Enable or disable the weekly program on a device. Mirrors Python ws_set_schedule_enabled (websocket_api.py:1698). Stub until Phase-11.",
+      "name": "schedules.set_enabled"
+    },
+    {
+      "category": "alarms",
+      "description": "Disable (suppress) a single service message by id.",
+      "name": "service_messages.disable"
+    },
+    {
+      "category": "alarms",
+      "description": "Acknowledge (clear) a single service message by id.",
+      "name": "service_messages.ack"
+    },
+    {
+      "category": "alarms",
+      "description": "List all active CCU service messages (UNREACH, low-battery, config-pending, etc.).",
+      "name": "service_messages.list"
+    },
+    {
+      "category": "system",
+      "description": "Return the list of all registered WS command names (introspection endpoint).",
+      "name": "system.commands"
+    },
+    {
+      "category": "system",
+      "description": "Return a health snapshot including overall status, score, and per-component details.",
+      "name": "system.health"
+    },
+    {
+      "category": "system",
+      "description": "Server-pushed: an aggregated system-status transition (component health, callback state, degraded interfaces, …). Topic is scoped per central.",
+      "kind": "broadcast",
+      "name": "system.status_changed",
+      "topic": "system.{central}.status",
+      "payload": "SystemStatusChangedPayload"
+    },
+    {
+      "category": "system",
+      "description": "Return the effective role and permissions for the authenticated user. Mirrors Python ws_get_user_permissions (websocket_api.py:2727).",
+      "name": "system.user_permissions"
+    },
+    {
+      "category": "sysvars",
+      "description": "List all CCU system variables.",
+      "name": "sysvars.list"
+    },
+    {
+      "category": "sysvars",
+      "description": "Update the value of a CCU system variable by name.",
+      "name": "sysvars.set",
+      "args": { "name": "string", "value": "any" }
+    },
+    {
+      "category": "cdp",
+      "description": "List all custom data points of all devices (or a single device when 'device' param is supplied).",
+      "name": "cdp.list"
+    },
+    {
+      "category": "cdp",
+      "description": "Return a single custom data point by device address and name.",
+      "name": "cdp.get"
+    },
+    {
+      "category": "cdp",
+      "description": "Invoke an operation on a custom data point (turn_on, set_temperature, open, …).",
+      "name": "cdp.invoke"
+    },
+    {
+      "category": "calc_dp",
+      "description": "List all calculated data points for all devices (or a single device / channel when params supplied).",
+      "name": "calc_dp.list"
+    },
+    {
+      "category": "calc_dp",
+      "description": "Return a single calculated data point by device address, channel number, and name.",
+      "name": "calc_dp.get"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: an allowlist row was inserted, updated or deleted via /api/v1/matter/exposable.",
+      "kind": "broadcast",
+      "name": "matter.exposable_changed",
+      "topic": "matter.exposable_changed",
+      "payload": "MatterExposureUpdate"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: a Matter commissioning window opened (REST or cluster command).",
+      "kind": "broadcast",
+      "name": "matter.commissioning_window_opened",
+      "topic": "matter.commissioning_window_opened",
+      "payload": "MatterCommissioningWindowResponse"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: commissioning state transition (PASE / CASE / AddNOC / completion).",
+      "kind": "broadcast",
+      "name": "matter.commissioning_progress",
+      "topic": "matter.commissioning_progress",
+      "payload": "MatterCommissioningProgressPayload"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: a Matter fabric finished commissioning (post-AddNOC, first CASE pickup).",
+      "kind": "broadcast",
+      "name": "matter.fabric_added",
+      "topic": "matter.fabric_added",
+      "payload": "MatterFabric"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: a Matter fabric was revoked via /api/v1/matter/fabrics/{id}.",
+      "kind": "broadcast",
+      "name": "matter.fabric_removed",
+      "topic": "matter.fabric_removed",
+      "payload": "MatterFabricRemovedPayload"
+    },
+    {
+      "category": "matter",
+      "description": "Server-pushed: bridge endpoint topology was reassembled. Payload includes the new endpoint count.",
+      "kind": "broadcast",
+      "name": "matter.endpoint_assembled",
+      "topic": "matter.endpoint_assembled",
+      "payload": "MatterEndpointAssembledPayload"
+    }
+  ]
+}

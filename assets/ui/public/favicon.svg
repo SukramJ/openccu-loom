@@ -1,0 +1,14 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenCCU-Loom">
+  <title>OpenCCU-Loom — Favicon</title>
+  <!-- Rounded-square background for small-render contrast -->
+  <rect width="200" height="200" rx="36" fill="#F1F5F9"/>
+  <!-- 4 horizontal strands -->
+  <g stroke="#475569" stroke-width="14" stroke-linecap="round" fill="none">
+    <line x1="32" y1="62" x2="168" y2="62"/>
+    <line x1="32" y1="88" x2="168" y2="88"/>
+    <line x1="32" y1="112" x2="168" y2="112"/>
+    <line x1="32" y1="138" x2="168" y2="138"/>
+  </g>
+  <!-- Bundling band -->
+  <rect x="85" y="46" width="30" height="108" rx="8" fill="#0F766E"/>
+</svg>

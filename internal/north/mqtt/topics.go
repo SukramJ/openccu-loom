@@ -1,0 +1,361 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package mqtt
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// TopicBuilder assembles topic strings from the raw plane components.
+// Base defaults to "openccu-loom" but can be overridden per bridge.
+//
+// Every method that targets a model-relevant topic (data point,
+// channel aggregate, device snapshot, hub topic, …) delegates to
+// [naming.PathData] or a free function in the naming package — the
+// model layer owns every format string. The bridge layer only fills
+// in the runtime context (Base, Central) that the model has no
+// natural access to. The few topics that stay defined here
+// ([TopicBuilder.BridgeStatus], [TopicBuilder.BridgeHealth],
+// [TopicBuilder.DiscoveryConfig]) are bridge-internal operational
+// concerns with no model representation.
+type TopicBuilder struct {
+	Base string
+}
+
+// NewTopicBuilder returns a builder with base as the prefix.
+func NewTopicBuilder(base string) *TopicBuilder {
+	if base == "" {
+		base = "openccu-loom"
+	}
+	return &TopicBuilder{Base: strings.Trim(base, "/")}
+}
+
+// --- Bridge-internal (not model-driven) -------------------------------
+
+// BridgeStatus is the LWT / retained status topic.
+func (b *TopicBuilder) BridgeStatus() string {
+	return b.Base + "/bridge/status"
+}
+
+// BridgeHealth is the retained daemon-level health topic.
+//
+//	<base>/bridge/health
+func (b *TopicBuilder) BridgeHealth() string {
+	return b.Base + "/bridge/health"
+}
+
+// DiscoveryConfig is the HA Discovery retained config topic.
+// Delegates to [naming.DiscoveryConfigTopic] — the model layer owns
+// the format string.
+//
+//	homeassistant/<component>/<node_id>/<object_id>/config
+func (b *TopicBuilder) DiscoveryConfig(component, nodeID, objectID string) string {
+	return naming.DiscoveryConfigTopic(component, nodeID, objectID)
+}
+
+// --- Channel-bound DP topics (delegate to naming.PathData) -----------
+
+// ParameterState is the canonical retained value topic for one data
+// point in one paramset bucket. Delegates to
+// [naming.PathData.MQTTState].
+func (b *TopicBuilder) ParameterState(central, iface, address string, channel int, bucket, parameter string) string {
+	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTState(b.Base, central)
+}
+
+// ParameterCommand returns the subscribed `/set` topic.
+func (b *TopicBuilder) ParameterCommand(central, iface, address string, channel int, bucket, parameter string) string {
+	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTCommand(b.Base, central)
+}
+
+// ParameterConfig returns the descriptor-companion `/config` topic.
+func (b *TopicBuilder) ParameterConfig(central, iface, address string, channel int, bucket, parameter string) string {
+	return b.parameterPathData(iface, address, channel, bucket, parameter).MQTTConfig(b.Base, central)
+}
+
+// DataPointState resolves to [TopicBuilder.ParameterState] on the
+// VALUES bucket. Retained as a back-compat alias.
+func (b *TopicBuilder) DataPointState(central, iface, address string, channel int, parameter string) string {
+	return b.ParameterState(central, iface, address, channel, string(payload.BucketValues), parameter)
+}
+
+// DataPointCommand is the VALUES-bucket /set alias.
+func (b *TopicBuilder) DataPointCommand(central, iface, address string, channel int, parameter string) string {
+	return b.ParameterCommand(central, iface, address, channel, string(payload.BucketValues), parameter)
+}
+
+// DataPointConfig is the VALUES-bucket /config alias.
+func (b *TopicBuilder) DataPointConfig(central, iface, address string, channel int, parameter string) string {
+	return b.ParameterConfig(central, iface, address, channel, string(payload.BucketValues), parameter)
+}
+
+// DataPointEvent is the legacy per-event-type pulse topic. Delegates
+// to [naming.PathData.MQTTDataPointEvent].
+func (b *TopicBuilder) DataPointEvent(central, iface, address string, channel int, etype string) string {
+	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	return pd.MQTTDataPointEvent(b.Base, central, etype)
+}
+
+// ChannelEvent is the non-retained per-channel aggregate-event
+// topic. Delegates to [naming.PathData.MQTTChannelEvent].
+func (b *TopicBuilder) ChannelEvent(central, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	return pd.MQTTChannelEvent(b.Base, central)
+}
+
+// AggregatedState is the retained per-Source state topic introduced
+// by ADR 0007. Delegates to [naming.PathData.MQTTChannelAggregateState].
+func (b *TopicBuilder) AggregatedState(central, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	return pd.MQTTChannelAggregateState(b.Base, central)
+}
+
+// --- Slot helpers (delegate to ParameterState for non-custom buckets) ---
+
+// SlotState resolves to the per-parameter
+// [TopicBuilder.ParameterState] for VALUES/MASTER/CALCULATED buckets,
+// and to [naming.PathData.MQTTCustomDPState] for [BucketCustom].
+func (b *TopicBuilder) SlotState(central, iface string, slot payload.TopicSlot) string {
+	if slot.Bucket == payload.BucketCustom {
+		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		return pd.MQTTCustomDPState(b.Base, central)
+	}
+	return b.ParameterState(central, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
+}
+
+// SlotConfig resolves to the matching descriptor-companion topic.
+func (b *TopicBuilder) SlotConfig(central, iface string, slot payload.TopicSlot) string {
+	if slot.Bucket == payload.BucketCustom {
+		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		return pd.MQTTCustomDPConfig(b.Base, central)
+	}
+	return b.ParameterConfig(central, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
+}
+
+// SlotCommand resolves to the matching `set` topic. Custom-DP slots
+// expose a single `set` topic (per-method shape via
+// [TopicBuilder.CustomDPServiceMethod]).
+func (b *TopicBuilder) SlotCommand(central, iface string, slot payload.TopicSlot) string {
+	if slot.Bucket == payload.BucketCustom {
+		pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+		state := pd.MQTTCustomDPState(b.Base, central)
+		if state == "" {
+			return ""
+		}
+		return state + "/set"
+	}
+	return b.ParameterCommand(central, iface, slot.Address, slot.Channel, string(slot.Bucket), slot.Parameter)
+}
+
+// CustomDPServiceMethod returns the per-method command topic for a
+// custom-DP slot. Delegates to
+// [naming.PathData.MQTTCustomDPServiceMethod].
+func (b *TopicBuilder) CustomDPServiceMethod(central, iface string, slot payload.TopicSlot, method string) string {
+	pd := naming.NewCustomDPPathData(hmenum.Interface(iface), slot.Address, slot.Channel, slot.Parameter)
+	return pd.MQTTCustomDPServiceMethod(b.Base, central, method)
+}
+
+// CustomDPInvoke is the subscribed invoke-topic for a custom DP
+// operation. Delegates to [naming.MQTTCustomDPInvoke].
+func (b *TopicBuilder) CustomDPInvoke(central, deviceAddress, name, operation string) string {
+	return naming.MQTTCustomDPInvoke(b.Base, central, deviceAddress, name, operation)
+}
+
+// --- Device-scope topics (delegate to naming.PathData) --------------
+
+// DeviceAvailability is the per-device retained availability topic.
+func (b *TopicBuilder) DeviceAvailability(central, iface, address string) string {
+	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	return pd.MQTTDeviceAvailability(b.Base, central)
+}
+
+// DeviceInfo is the retained per-device device-info topic.
+func (b *TopicBuilder) DeviceInfo(central, iface, address string) string {
+	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	return pd.MQTTDeviceInfo(b.Base, central)
+}
+
+// DeviceDiagnostics is the retained per-device aggregated-diagnostics
+// topic.
+func (b *TopicBuilder) DeviceDiagnostics(central, iface, address string) string {
+	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	return pd.MQTTDeviceDiagnostics(b.Base, central)
+}
+
+// DeviceUpdateState is the retained JSON state topic for the HA
+// `update` entity.
+func (b *TopicBuilder) DeviceUpdateState(central, iface, address string) string {
+	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	return pd.MQTTDeviceUpdateState(b.Base, central)
+}
+
+// DeviceUpdateCommand is the subscribed install-command topic.
+func (b *TopicBuilder) DeviceUpdateCommand(central, iface, address string) string {
+	pd := naming.NewDevicePathData(hmenum.Interface(iface), address)
+	return pd.MQTTDeviceUpdateCommand(b.Base, central)
+}
+
+// WeekProfileState is the retained state topic for the week-profile
+// select entity.
+func (b *TopicBuilder) WeekProfileState(central, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	return pd.MQTTWeekProfileState(b.Base, central)
+}
+
+// WeekProfileCommand is the subscribed set topic.
+func (b *TopicBuilder) WeekProfileCommand(central, iface, address string, channel int) string {
+	pd := naming.NewChannelPathData(hmenum.Interface(iface), address, channel)
+	return pd.MQTTWeekProfileCommand(b.Base, central)
+}
+
+// CombinedState returns the retained state topic for a combined DP
+// (HSColor, Timer, LevelCombined, …) on a channel. The kind disambiguates
+// multiple combined DPs on the same channel ("duration", "hs_color", …).
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/combined/<kind>
+func (b *TopicBuilder) CombinedState(central, iface, address string, channel int, kind string) string {
+	// The combined-DP topology is local to the bridge layer (the naming
+	// package does not yet carry a helper for it). Construct directly
+	// using the same TopicSafe contract every channel topic uses.
+	return naming.TopicSafe(b.Base) + "/" +
+		naming.TopicSafe(central) + "/" +
+		naming.TopicSafe(iface) + "/" +
+		naming.TopicSafe(address) + "/" +
+		intStr(channel) + "/combined/" + naming.TopicSafe(kind)
+}
+
+// CombinedCommand returns the subscribed set topic for a combined DP.
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/combined/<kind>/set
+func (b *TopicBuilder) CombinedCommand(central, iface, address string, channel int, kind string) string {
+	return b.CombinedState(central, iface, address, channel, kind) + "/set"
+}
+
+// ScheduleEntityState returns the retained state topic for the
+// device-level Zeitplan sensor (one per schedule-relevant device). The
+// state payload is the count of active schedule entries.
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/schedule/state
+func (b *TopicBuilder) ScheduleEntityState(central, iface, address string, channel int) string {
+	return naming.TopicSafe(b.Base) + "/" +
+		naming.TopicSafe(central) + "/" +
+		naming.TopicSafe(iface) + "/" +
+		naming.TopicSafe(address) + "/" +
+		intStr(channel) + "/schedule/state"
+}
+
+// ScheduleEntityAttrs returns the retained json_attributes topic for the
+// Zeitplan sensor — schedule_type, max_entries, available_target_channels,
+// schedule_enabled, schedule_data, …
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/schedule/attrs
+func (b *TopicBuilder) ScheduleEntityAttrs(central, iface, address string, channel int) string {
+	return naming.TopicSafe(b.Base) + "/" +
+		naming.TopicSafe(central) + "/" +
+		naming.TopicSafe(iface) + "/" +
+		naming.TopicSafe(address) + "/" +
+		intStr(channel) + "/schedule/attrs"
+}
+
+// ScheduleSwitchState returns the retained boolean state topic for one
+// schedule channel switch.
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/state
+func (b *TopicBuilder) ScheduleSwitchState(central, iface, address string, channel int, key string) string {
+	return naming.TopicSafe(b.Base) + "/" +
+		naming.TopicSafe(central) + "/" +
+		naming.TopicSafe(iface) + "/" +
+		naming.TopicSafe(address) + "/" +
+		intStr(channel) + "/schedule/" + naming.TopicSafe(key) + "/state"
+}
+
+// ScheduleSwitchCommand returns the subscribed set topic for one
+// schedule channel switch.
+//
+//	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/set
+func (b *TopicBuilder) ScheduleSwitchCommand(central, iface, address string, channel int, key string) string {
+	return naming.TopicSafe(b.Base) + "/" +
+		naming.TopicSafe(central) + "/" +
+		naming.TopicSafe(iface) + "/" +
+		naming.TopicSafe(address) + "/" +
+		intStr(channel) + "/schedule/" + naming.TopicSafe(key) + "/set"
+}
+
+func intStr(i int) string {
+	return strconv.Itoa(i)
+}
+
+// --- Central-scope topics (delegate to naming free functions) -------
+
+// SystemStatus is the non-retained per-central system-status event topic.
+func (b *TopicBuilder) SystemStatus(central string) string {
+	return naming.MQTTSystemStatus(b.Base, central)
+}
+
+// HubStatus is the retained CCU connection state topic. Central-weite
+// aggregate that is not bound to a specific model object.
+func (b *TopicBuilder) HubStatus(central string) string {
+	return naming.MQTTHubStatus(b.Base, central)
+}
+
+// HubInfo is the retained CCU info-snapshot topic.
+func (b *TopicBuilder) HubInfo(central string) string {
+	return naming.MQTTHubInfo(b.Base, central)
+}
+
+// HubDiagnostics is the retained per-CCU diagnostics topic.
+func (b *TopicBuilder) HubDiagnostics(central string) string {
+	return naming.MQTTHubDiagnostics(b.Base, central)
+}
+
+// HubSystemHealthScore is the retained system-health score topic
+// (`<base>/<central>/system/health_score`). Matches the state_topic
+// in BuildSystemHealthDiscovery.
+func (b *TopicBuilder) HubSystemHealthScore(central string) string {
+	return b.Base + "/" + strings.ToLower(central) + "/system/health_score"
+}
+
+// HubConnectionLatency is the retained per-interface connection-latency
+// topic (`<base>/<central>/system/latency/<iface>`). Matches the
+// state_topic in BuildConnectionLatencyDiscovery.
+func (b *TopicBuilder) HubConnectionLatency(central, iface string) string {
+	return b.Base + "/" + strings.ToLower(central) + "/system/latency/" + strings.ToLower(iface)
+}
+
+// HubUpdate is the retained firmware-update state topic
+// (`<base>/<central>/hub/update`). Matches the state_topic in
+// BuildHubUpdateDiscovery.
+func (b *TopicBuilder) HubUpdate(central string) string {
+	return naming.MQTTHubUpdate(b.Base, central)
+}
+
+// --- Helpers ---------------------------------------------------------
+
+// parameterPathData composes the [naming.PathData] for a per-DP
+// topic. Centralised so the bucket-empty fallback (→ VALUES) and
+// the iface-string conversion stay in one place.
+func (b *TopicBuilder) parameterPathData(iface, address string, channel int, bucket, parameter string) naming.PathData {
+	if bucket == "" {
+		bucket = string(payload.BucketValues)
+	}
+	return naming.NewDataPointPathData(
+		hmenum.Interface(iface),
+		address,
+		channel,
+		naming.Bucket(bucket),
+		parameter,
+	)
+}
+
+// safe is a thin wrapper kept for the bridge-internal topics
+// (BridgeStatus, BridgeHealth, DiscoveryConfig, ServiceMethodCommand)
+// that don't go through naming.PathData. Mirrors
+// [naming.TopicSafe] exactly.
+func safe(s string) string {
+	return naming.TopicSafe(s)
+}

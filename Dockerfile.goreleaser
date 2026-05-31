@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: MIT
+# Release image for goreleaser: packages the pre-built binary — which
+# already has the Svelte SPA embedded (the release workflow runs the Vite
+# build before goreleaser) — into a distroless base. goreleaser copies the
+# cross-compiled `openccu-loom` binary into the build context; the
+# source-build path for local `make docker` lives in ./Dockerfile.
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+COPY openccu-loom /app/openccu-loom
+COPY assets/openapi.yaml /app/assets/openapi.yaml
+USER nonroot:nonroot
+
+EXPOSE 8080/tcp
+EXPOSE 8120/tcp
+EXPOSE 8129/tcp
+
+ENTRYPOINT ["/app/openccu-loom"]
+CMD ["run"]

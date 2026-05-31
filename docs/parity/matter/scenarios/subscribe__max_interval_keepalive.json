@@ -1,0 +1,32 @@
+{
+  "name": "subscribe__max_interval_keepalive",
+  "description": "Locks the matter.js-aligned heartbeat cadence: after a subscription is admitted, if no dirty marks arrive within min(MaxIntervalCeiling/2, 30 s), the engine MUST ship an empty-payload ReportData (keepalive) so Apple Home's MTRDevice / chip-tool's ReadClient does not drop the subscription. The scenario picks MaxIntervalCeiling=2 (heartbeat ≈ 1 s), waits ~1.5 s without firing any change, and asserts a keepalive arrives with attribute_reports_count=0.",
+  "tags": ["matter", "subscribe", "cadence", "max-interval", "keepalive"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 179,
+        "peer_subscribe_exchange_id": 181,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "min_interval_floor_seconds": 0,
+        "max_interval_ceiling_seconds": 2
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "attribute_reports_count": 0,
+      "tlv_tags_present": [0, 4],
+      "bind_exchange_id_to": "$keepalive_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$keepalive_exch",
+      "status": "Success"
+    }
+  ]
+}

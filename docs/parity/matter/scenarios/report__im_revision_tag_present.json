@@ -1,0 +1,42 @@
+{
+  "name": "report__im_revision_tag_present",
+  "description": "Every ReportData frame must carry the InteractionModelRevision marker at TLV context tag 0xFF (uint8 255). The emission site is internal/north/matter/im/read.go:343 where enc.PutUint(tlv.ContextTag(tagInteractionModelRevision), ...) appends the field after SuppressResponse. Apple Home strict-decodes this field and silently times the subscribe transaction out when it is absent, making the subscription appear to never complete from the controller side. This scenario locks that invariant: removing the enc.PutUint call at read.go:343 causes the harness to fail with 'tag 255 absent at TLV top level'.",
+  "tags": ["matter", "subscribe", "spec-compliance", "im-revision"],
+  "given": {
+    "session_id": 4,
+    "peer_subscribe_exchange_id": 17,
+    "subscription": {
+      "endpoint": 2,
+      "cluster": 6,
+      "attribute": 0
+    }
+  },
+  "steps": [
+    {
+      "actor": "ccu",
+      "kind": "fire_via_engine"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "initiator": true,
+      "exchange_id_fresh": true,
+      "exchange_id_neq_subscribe": true,
+      "tlv_tags_present": [0, 4, 255],
+      "bind_exchange_id_to": "$fresh_exch"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "$fresh_exch",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_log",
+      "msg": "matter.rx.im.status_ack",
+      "match_exchange": "$fresh_exch"
+    }
+  ]
+}

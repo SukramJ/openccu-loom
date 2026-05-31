@@ -1,0 +1,39 @@
+{
+  "dp_type": "EffectLight",
+  "setter": "SetEffect",
+  "inputs": [
+    {
+      "label": "effect=0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "EFF0001:1",
+          "parameter": "PROGRAM",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "effect=1",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "EFF0001:1",
+          "parameter": "PROGRAM",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "effect=2",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "EFF0001:1",
+          "parameter": "PROGRAM",
+          "value": 2
+        }
+      ]
+    }
+  ]
+}

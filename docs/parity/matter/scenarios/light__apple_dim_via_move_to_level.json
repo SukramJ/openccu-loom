@@ -1,0 +1,30 @@
+{
+  "name": "light__apple_dim_via_move_to_level",
+  "description": "Apple ships a LevelControl.MoveToLevel (cluster 0x0008, command 0x00) invoke with the target Level (uint8) inside the command-fields struct. The bridge MUST decode the Level field and forward it to the cluster server's MatterInvoke as a uint8 (or a typed request struct extractMoveToLevel recognises). Catches the regression where commandFieldsReader silently drains every non-commissioning cluster's command fields and surfaces nil — produces an UnsupportedAttribute / InvalidCommand status instead of actually dimming the lamp. Phase-X-class: Apple-driven dim against a real LevelControl cluster server on a single_onoff_endpoint_source-style topology stand-in. The fake source returns its own DataVersion bump as proof the write applied. Live-reproduced bug: HmIP-BDT Küchenstrahler accepts 100% and 0% (routed via OnOff) but ignores intermediate levels because MoveToLevel's Level field never reaches the cluster server.",
+  "tags": ["matter", "invoke", "level-control", "dimmer", "apple-write"],
+  "given": {
+    "topology": "single_onoff_endpoint_source",
+    "subscriptions": [
+      {
+        "session_id": 313,
+        "peer_subscribe_exchange_id": 317,
+        "subscription": { "endpoint": 2, "cluster": 8, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_invoke_move_to_level",
+      "value": 128,
+      "peer_exchange_id": 331
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "InvokeResponse",
+      "expect_invoke_status": 0
+    }
+  ]
+}

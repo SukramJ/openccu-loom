@@ -1,0 +1,137 @@
+<script lang="ts">
+  import type { DeviceSummary } from "$lib/api/types";
+  import Icon from "$lib/components/ui/Icon.svelte";
+  import { maintenanceStore } from "$lib/stores/maintenance.svelte";
+  import { t } from "$lib/i18n";
+
+  type Props = {
+    device: DeviceSummary;
+    selected?: boolean;
+    onToggleSelect?: (selected: boolean) => void;
+  };
+  let { device, selected = false, onToggleSelect }: Props = $props();
+
+  const subtitle = $derived(device.model_label || device.model);
+
+  // Live maintenance values from the WS bus. `null` until the daemon
+  // ships an event for this device — keeps the icons honest about
+  // what we know vs. don't know.
+  maintenanceStore.bind();
+  const maintenance = $derived(maintenanceStore.all()[device.address] ?? null);
+
+  // Tone helpers — green for "good", amber for "warn", red for "bad".
+  function tone(active: boolean | null, badIsTrue: boolean): string {
+    if (active === null) return "color: var(--ha-disabled-text-color);";
+    if (active === badIsTrue) return "color: var(--ha-error-color);";
+    return "color: var(--ha-success-color);";
+  }
+</script>
+
+<div
+  class="group flex items-start gap-3 rounded-lg border p-4 shadow-sm transition hover:border-brand-500 hover:shadow-md"
+  style="background-color: var(--ha-card-background-color); border-color: {selected ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'};"
+  class:ring-2={selected}
+  class:ring-brand-300={selected}
+>
+  {#if onToggleSelect}
+    <input
+      type="checkbox"
+      class="mt-1 h-4 w-4 cursor-pointer accent-brand-500"
+      checked={selected}
+      onchange={(e) => onToggleSelect((e.target as HTMLInputElement).checked)}
+      aria-label={t("device.list.select_aria")}
+    />
+  {/if}
+  <a
+    href="#/devices/{encodeURIComponent(device.address)}"
+    class="flex min-w-0 flex-1 items-start gap-3"
+  >
+    <div
+      class="mt-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full"
+      class:bg-emerald-500={device.available}
+      class:bg-slate-400={!device.available}
+      title={device.available
+        ? t("device.list.reachable")
+        : t("device.list.unreachable")}
+    ></div>
+    <div class="min-w-0 flex-1">
+      <h3
+        class="break-words font-medium"
+        style="color: var(--ha-primary-text-color);"
+      >
+        {device.name || device.address}
+      </h3>
+      <!-- Description split into two lines: model on its own row,
+           transport metadata on a second smaller row. Wrapping is on
+           by default (`break-words`) so long model labels or rare
+           multi-CCU strings don't get clipped at the card edge. -->
+      <p
+        class="mt-0.5 break-words text-xs"
+        style="color: var(--ha-secondary-text-color);"
+      >
+        {subtitle}
+      </p>
+      <p
+        class="mt-0.5 break-words text-[11px]"
+        style="color: var(--ha-disabled-text-color);"
+      >
+        {device.interface}{#if device.central}
+          · {device.central}
+        {/if} · {device.channels_count}&nbsp;{t("device.list.channels")}
+      </p>
+      {#if device.rooms && device.rooms.length > 0}
+        <p
+          class="mt-1 break-words text-xs"
+          style="color: var(--ha-secondary-text-color);"
+        >
+          {device.rooms.join(", ")}
+        </p>
+      {/if}
+    </div>
+    <div class="flex flex-shrink-0 flex-col items-end gap-1.5">
+      {#if device.update_available}
+        <span
+          class="rounded-full px-2 py-0.5 text-[11px] font-medium"
+          style="background-color: rgb(251 191 36 / 0.18); color: var(--ha-warning-color);"
+          title={t("device.list.firmware_available")}
+        >
+          FW
+        </span>
+      {/if}
+      {#if maintenance}
+        <div class="flex items-center gap-1">
+          {#if maintenance.LOW_BAT !== undefined}
+            <span style={tone(Boolean(maintenance.LOW_BAT), true)}>
+              <Icon
+                name="mdi:battery-alert"
+                size={14}
+                aria-label={t("device.maintenance.low_bat")}
+                title={t("device.maintenance.low_bat")}
+              />
+            </span>
+          {/if}
+          {#if maintenance.DUTY_CYCLE !== undefined && Boolean(maintenance.DUTY_CYCLE)}
+            <span style="color: var(--ha-warning-color);">
+              <Icon
+                name="mdi:alert-triangle"
+                size={14}
+                aria-label={t("device.maintenance.duty_cycle")}
+                title={t("device.maintenance.duty_cycle")}
+              />
+            </span>
+          {/if}
+          {#if maintenance.CONFIG_PENDING !== undefined && Boolean(maintenance.CONFIG_PENDING)}
+            <span style="color: var(--ha-info-color);">
+              <Icon
+                name="mdi:information-outline"
+                size={14}
+                aria-label={t("device.maintenance.config_pending")}
+                title={t("device.maintenance.config_pending")}
+              />
+            </span>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  </a>
+</div>

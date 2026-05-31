@@ -1,0 +1,47 @@
+{
+  "dp_type": "ClimateIP",
+  "setter": "SetMode",
+  "inputs": [
+    {
+      "label": "mode=auto",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "BWTH0001:1",
+          "put_values": {
+            "CONTROL_MODE": 0
+          }
+        }
+      ]
+    },
+    {
+      "label": "mode=heat",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "BWTH0001:1",
+          "put_values": {
+            "CONTROL_MODE": 1,
+            "SET_POINT_TEMPERATURE": 5
+          }
+        }
+      ]
+    },
+    {
+      "label": "mode=off",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "BWTH0001:1",
+          "put_values": {
+            "CONTROL_MODE": 1,
+            "SET_POINT_TEMPERATURE": 4.5
+          }
+        }
+      ]
+    }
+  ]
+}

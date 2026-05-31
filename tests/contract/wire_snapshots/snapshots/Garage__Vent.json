@@ -1,0 +1,17 @@
+{
+  "dp_type": "Garage",
+  "setter": "Vent",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "MOHO0001:1",
+          "parameter": "DOOR_COMMAND",
+          "value": "PARTIAL_OPEN"
+        }
+      ]
+    }
+  ]
+}

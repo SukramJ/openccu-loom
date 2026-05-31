@@ -1,0 +1,29 @@
+{
+  "name": "subscribe__multi_chunk_burst_guaranteed",
+  "description": "Locks the F5/F6 per-chunk handshake loop against a guaranteed multi-chunk initial burst. The many_temp_sensors topology lays out 30 bridged Temperature endpoints; a wildcard SubscribeRequest expands to ~360 AttributeReports — far past the 1100-byte chunk budget. The scenario asserts drain_subscribe_chunks consumes at least 2 ReportData chunks (each ACKed with a fresh StatusResponse) before the SubscribeResponse arrives. Without the F5/F6 fixes the bridge burst-fires all chunks, Apple's ReadClient state-machine collapses, and ProcessSubscribeResponse never triggers.",
+  "tags": ["matter", "subscribe", "f5", "f6", "chunked", "multi-chunk"],
+  "given": {
+    "topology": "many_temp_sensors",
+    "subscriptions": [
+      {
+        "session_id": 199,
+        "peer_subscribe_exchange_id": 211,
+        "subscription": { "endpoint": 2, "cluster": 1026, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_subscribe_request",
+      "wildcard": true
+    },
+    {
+      "actor": "bridge",
+      "kind": "drain_subscribe_chunks",
+      "min_chunks": 2,
+      "bind_exchange_id_to": "$sub_resp_exch"
+    }
+  ]
+}

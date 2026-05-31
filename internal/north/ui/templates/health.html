@@ -1,0 +1,19 @@
+{{define "body"}}
+<section>
+  <h1>Health</h1>
+  <p>Overall status: <strong class="status-{{.Data.Status}}">{{.Data.Status}}</strong></p>
+  <table>
+    <thead><tr><th>Component</th><th>Status</th><th>Note</th><th>Recorded</th></tr></thead>
+    <tbody>
+      {{range .Data.Components}}
+      <tr>
+        <td>{{.Name}}</td>
+        <td class="status-{{.Status}}">{{.Status}}</td>
+        <td>{{.Note}}</td>
+        <td>{{.RecordedAt.Format "2006-01-02 15:04:05"}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</section>
+{{end}}

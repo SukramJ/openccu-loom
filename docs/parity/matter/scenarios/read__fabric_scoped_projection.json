@@ -1,0 +1,52 @@
+{
+  "name": "read__fabric_scoped_projection",
+  "description": "Locks per-fabric content projection: a FabricScopedReader cluster server (fabric_scoped_reader topology) returns the FabricIndex stamped into the dispatch context as the attribute value. Two scenarios drive the same OnOff attribute on two sessions with different FabricIndex values; each ReadRequest with FabricFiltered=true MUST receive a ReportData whose first AttributeDataIB carries the session-specific fabric ID. Without the session→fabric resolver, both reads would return the no-fabric fallback (0xFF). Locks the SessionFabricResolver + im.WithFabricFilter + FabricScopedReader.MatterReadFiltered chain end-to-end.",
+  "tags": ["matter", "read", "fabric-filtered", "fabric-projection"],
+  "given": {
+    "topology": "fabric_scoped_reader",
+    "subscriptions": [
+      {
+        "session_id": 223,
+        "peer_subscribe_exchange_id": 227,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true,
+        "fabric_index": 3
+      },
+      {
+        "session_id": 229,
+        "peer_subscribe_exchange_id": 233,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true,
+        "fabric_index": 7
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_read_request",
+      "fabric_filtered": true,
+      "peer_exchange_id": 239,
+      "subscription_idx": 0
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "expect_attribute_value": 3
+    },
+    {
+      "actor": "peer",
+      "kind": "send_read_request",
+      "fabric_filtered": true,
+      "peer_exchange_id": 241,
+      "subscription_idx": 1
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData",
+      "expect_attribute_value": 7
+    }
+  ]
+}

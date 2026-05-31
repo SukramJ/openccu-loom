@@ -1,0 +1,545 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package main
+
+// daemon_coverage9_test.go — low-hanging coverage wins (Welle HH):
+//   - splitListenPort: valid IPv4, IPv6, port-only, port 65535, port 0,
+//     out-of-range port, non-numeric port, unix socket path, empty string
+//   - buildRateLimitConfig: disabled (nil) and enabled (non-nil) paths
+//   - runtimeCapabilityDetector: HasMQTTDiscovery, HasMatterBridge, HasOIDC
+//   - newLoggerStack / newFullLoggerStack: valid, with overrides, invalid override
+//   - systemCCUAdapter.List + interfaceNames: nil fields, empty centrals,
+//     central absent from registry, central present in registry
+//   - wireValuesCacheStore: nil cfg, disabled-by-config, bad DataDir
+//   - newValuesCacheHandlerAdapter: nil store, non-nil store
+//   - valuesCacheHandlerAdapter.DeleteAll / DeleteDevice / Stats / Metrics
+//   - newDeviceLookupAdapter: nil reg, non-nil reg
+//   - deviceLookupAdapter.LocateDevice: nil receiver, empty registry,
+//     registry with central but no matching device
+//   - caseResumptionStoreAdapter.GetByID: nil manager
+
+import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/config"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+)
+
+// ── splitListenPort ───────────────────────────────────────────────────────────
+
+func TestSplitListenPort_ColonPort(t *testing.T) {
+	t.Parallel()
+	p, ok := splitListenPort(":8080")
+	if !ok || p != 8080 {
+		t.Errorf("splitListenPort(%q) = (%d, %v), want (8080, true)", ":8080", p, ok)
+	}
+}
+
+func TestSplitListenPort_IPv4(t *testing.T) {
+	t.Parallel()
+	p, ok := splitListenPort("0.0.0.0:9000")
+	if !ok || p != 9000 {
+		t.Errorf("splitListenPort(%q) = (%d, %v), want (9000, true)", "0.0.0.0:9000", p, ok)
+	}
+}
+
+func TestSplitListenPort_IPv6(t *testing.T) {
+	t.Parallel()
+	p, ok := splitListenPort("[::]:1234")
+	if !ok || p != 1234 {
+		t.Errorf("splitListenPort(%q) = (%d, %v), want (1234, true)", "[::]:1234", p, ok)
+	}
+}
+
+func TestSplitListenPort_MaxPort(t *testing.T) {
+	t.Parallel()
+	p, ok := splitListenPort(":65535")
+	if !ok || p != 65535 {
+		t.Errorf("splitListenPort(%q) = (%d, %v), want (65535, true)", ":65535", p, ok)
+	}
+}
+
+func TestSplitListenPort_PortZero_FalseOK(t *testing.T) {
+	t.Parallel()
+	_, ok := splitListenPort(":0")
+	if ok {
+		t.Error("splitListenPort(:0) should return ok=false for port 0")
+	}
+}
+
+func TestSplitListenPort_OutOfRange_FalseOK(t *testing.T) {
+	t.Parallel()
+	_, ok := splitListenPort(":65536")
+	if ok {
+		t.Error("splitListenPort(:65536) should return ok=false for out-of-range port")
+	}
+}
+
+func TestSplitListenPort_NonNumericPort_FalseOK(t *testing.T) {
+	t.Parallel()
+	_, ok := splitListenPort(":abc")
+	if ok {
+		t.Error("splitListenPort(:abc) should return ok=false")
+	}
+}
+
+func TestSplitListenPort_UnixSocketPath_FalseOK(t *testing.T) {
+	t.Parallel()
+	// A bare path without a colon cannot be split by net.SplitHostPort.
+	_, ok := splitListenPort("/run/openccu-loom.sock")
+	if ok {
+		t.Error("splitListenPort(unix socket path) should return ok=false")
+	}
+}
+
+func TestSplitListenPort_Empty_FalseOK(t *testing.T) {
+	t.Parallel()
+	_, ok := splitListenPort("")
+	if ok {
+		t.Error("splitListenPort(\"\") should return ok=false")
+	}
+}
+
+// ── buildRateLimitConfig ──────────────────────────────────────────────────────
+
+func TestBuildRateLimitConfig_Disabled_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.REST.RateLimit.Enabled = false
+	if got := buildRateLimitConfig(cfg); got != nil {
+		t.Errorf("expected nil when rate limiting disabled, got %+v", got)
+	}
+}
+
+func TestBuildRateLimitConfig_Enabled_ReturnsConfig(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.North.REST.RateLimit.Enabled = true
+	cfg.North.REST.RateLimit.RequestsPerSecond = 50.0
+	cfg.North.REST.RateLimit.Burst = 100
+	got := buildRateLimitConfig(cfg)
+	if got == nil {
+		t.Fatal("expected non-nil rate limit config when enabled")
+	}
+	if got.RequestsPerSecond != 50.0 {
+		t.Errorf("RequestsPerSecond: got %v, want 50.0", got.RequestsPerSecond)
+	}
+	if got.Burst != 100 {
+		t.Errorf("Burst: got %d, want 100", got.Burst)
+	}
+}
+
+// ── runtimeCapabilityDetector ─────────────────────────────────────────────────
+
+func TestRuntimeCapabilityDetector_AllFalse(t *testing.T) {
+	t.Parallel()
+	d := runtimeCapabilityDetector{mqtt: false, matter: false, oidc: false}
+	if d.HasMQTTDiscovery() {
+		t.Error("HasMQTTDiscovery should be false")
+	}
+	if d.HasMatterBridge() {
+		t.Error("HasMatterBridge should be false")
+	}
+	if d.HasOIDC() {
+		t.Error("HasOIDC should be false")
+	}
+}
+
+func TestRuntimeCapabilityDetector_AllTrue(t *testing.T) {
+	t.Parallel()
+	d := runtimeCapabilityDetector{mqtt: true, matter: true, oidc: true}
+	if !d.HasMQTTDiscovery() {
+		t.Error("HasMQTTDiscovery should be true")
+	}
+	if !d.HasMatterBridge() {
+		t.Error("HasMatterBridge should be true")
+	}
+	if !d.HasOIDC() {
+		t.Error("HasOIDC should be true")
+	}
+}
+
+func TestRuntimeCapabilityDetector_MixedCapabilities(t *testing.T) {
+	t.Parallel()
+	d := runtimeCapabilityDetector{mqtt: true, matter: false, oidc: true}
+	if !d.HasMQTTDiscovery() {
+		t.Error("HasMQTTDiscovery should be true")
+	}
+	if d.HasMatterBridge() {
+		t.Error("HasMatterBridge should be false")
+	}
+	if !d.HasOIDC() {
+		t.Error("HasOIDC should be true")
+	}
+}
+
+// ── newLoggerStack / newFullLoggerStack ───────────────────────────────────────
+
+func TestNewLoggerStack_ValidConfig_ReturnsLogger(t *testing.T) {
+	t.Parallel()
+	lc := config.LoggingConfig{Level: "info", Format: "json"}
+	logger, levels, err := newLoggerStack(lc, io.Discard)
+	if err != nil {
+		t.Fatalf("newLoggerStack: %v", err)
+	}
+	if logger == nil {
+		t.Error("expected non-nil logger")
+	}
+	if levels == nil {
+		t.Error("expected non-nil LevelRegistry")
+	}
+}
+
+func TestNewLoggerStack_ValidOverrides_Applies(t *testing.T) {
+	t.Parallel()
+	lc := config.LoggingConfig{
+		Level:  "info",
+		Format: "text",
+		Overrides: map[string]string{
+			"some.subsystem": "debug",
+		},
+	}
+	var buf bytes.Buffer
+	logger, levels, err := newLoggerStack(lc, &buf)
+	if err != nil {
+		t.Fatalf("newLoggerStack with overrides: %v", err)
+	}
+	if logger == nil || levels == nil {
+		t.Error("expected non-nil logger and levels")
+	}
+}
+
+func TestNewFullLoggerStack_InvalidOverride_ReturnsError(t *testing.T) {
+	t.Parallel()
+	// "trace" is not a valid slog level — ApplyConfig should return an error.
+	lc := config.LoggingConfig{
+		Level:  "info",
+		Format: "json",
+		Overrides: map[string]string{
+			"subsystem.x": "trace",
+		},
+	}
+	_, err := newFullLoggerStack(lc, io.Discard)
+	if err == nil {
+		t.Fatal("expected error for invalid override level 'trace'")
+	}
+}
+
+func TestNewFullLoggerStack_NoOverrides_NoError(t *testing.T) {
+	t.Parallel()
+	lc := config.LoggingConfig{Level: "warn", Format: "json"}
+	stack, err := newFullLoggerStack(lc, io.Discard)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if stack.Logger == nil {
+		t.Error("expected non-nil stack.Logger")
+	}
+}
+
+// ── interfaceNames ────────────────────────────────────────────────────────────
+
+func TestInterfaceNames_EmptyInterfaces(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{Name: "ccu", Interfaces: nil}
+	got := interfaceNames(cc)
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %v", got)
+	}
+}
+
+func TestInterfaceNames_MultipleInterfaces(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{
+		Name: "ccu",
+		Interfaces: []config.InterfaceSpec{
+			{Name: "HmIP-RF"},
+			{Name: "BidCos-RF"},
+			{Name: "CUxD"},
+		},
+	}
+	got := interfaceNames(cc)
+	if len(got) != 3 {
+		t.Fatalf("expected 3 interface names, got %d: %v", len(got), got)
+	}
+	if got[0] != "HmIP-RF" || got[1] != "BidCos-RF" || got[2] != "CUxD" {
+		t.Errorf("unexpected interface names: %v", got)
+	}
+}
+
+// ── systemCCUAdapter.List ─────────────────────────────────────────────────────
+
+func TestSystemCCUAdapter_List_NilReceiverFields_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	a := &systemCCUAdapter{reg: nil, cfg: nil}
+	got := a.List(context.Background())
+	if got != nil {
+		t.Errorf("expected nil for nil reg+cfg, got %v", got)
+	}
+}
+
+func TestSystemCCUAdapter_List_EmptyCentrals_EmptyResult(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Centrals = nil
+	reg := buildTestRegistry(t)
+	a := newSystemCCUAdapter(reg, cfg)
+	got := a.List(context.Background())
+	if len(got) != 0 {
+		t.Errorf("expected empty result for no centrals, got %v", got)
+	}
+}
+
+func TestSystemCCUAdapter_List_CentralNotInRegistry_AvailableFalse(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{
+		{
+			Name: "absent-ccu",
+			Host: "10.0.0.99",
+			Interfaces: []config.InterfaceSpec{
+				{Name: "HmIP-RF"},
+			},
+		},
+	}
+	// Registry is empty — central is configured but not registered.
+	reg := buildTestRegistry(t)
+	a := newSystemCCUAdapter(reg, cfg)
+	got := a.List(context.Background())
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(got))
+	}
+	if got[0].Available {
+		t.Error("expected Available=false for unregistered central")
+	}
+	if got[0].Name != "absent-ccu" {
+		t.Errorf("Name: got %q, want %q", got[0].Name, "absent-ccu")
+	}
+	if len(got[0].ConfiguredInterfaces) != 1 || got[0].ConfiguredInterfaces[0] != "HmIP-RF" {
+		t.Errorf("ConfiguredInterfaces: got %v", got[0].ConfiguredInterfaces)
+	}
+}
+
+func TestSystemCCUAdapter_List_CentralInRegistry_FieldsPopulated(t *testing.T) {
+	t.Parallel()
+	const centralName = "registered-ccu"
+	cfg := config.Default()
+	cfg.Centrals = []config.CentralConfig{
+		{
+			Name: centralName,
+			Host: "10.0.0.1",
+			Interfaces: []config.InterfaceSpec{
+				{Name: "HmIP-RF"},
+				{Name: "BidCos-RF"},
+			},
+		},
+	}
+	reg := buildTestRegistry(t, centralName)
+	a := newSystemCCUAdapter(reg, cfg)
+	got := a.List(context.Background())
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(got))
+	}
+	if got[0].Name != centralName {
+		t.Errorf("Name: got %q, want %q", got[0].Name, centralName)
+	}
+	if len(got[0].ConfiguredInterfaces) != 2 {
+		t.Errorf("ConfiguredInterfaces len: got %d, want 2", len(got[0].ConfiguredInterfaces))
+	}
+}
+
+// ── wireValuesCacheStore ──────────────────────────────────────────────────────
+
+func TestWireValuesCacheStore_NilConfig_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	got := wireValuesCacheStore(nil, logger)
+	if got != nil {
+		t.Error("expected nil for nil config")
+	}
+}
+
+func TestWireValuesCacheStore_DisabledByConfig_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	disabled := false
+	cfg := config.Default()
+	cfg.Persistence.ValuesCache.Enabled = &disabled
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	got := wireValuesCacheStore(cfg, logger)
+	if got != nil {
+		t.Error("expected nil when values cache explicitly disabled")
+	}
+}
+
+func TestWireValuesCacheStore_BadDataDir_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	// Place a regular file where the directory would be so sqlite.Open fails.
+	tmp := t.TempDir()
+	blockingFile := filepath.Join(tmp, "openccu-loom-blocked")
+	if err := os.WriteFile(blockingFile, []byte("block"), 0o644); err != nil {
+		t.Skipf("could not create blocking file: %v", err)
+	}
+	// DataDir points at the blocking file, not a directory — sqlite cannot
+	// create openccu-loom.db inside a file.
+	cfg.DataDir = blockingFile
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	gooseMigrateMu.Lock()
+	got := wireValuesCacheStore(cfg, logger)
+	gooseMigrateMu.Unlock()
+	if got != nil {
+		t.Error("expected nil when DataDir is a regular file")
+	}
+}
+
+// ── newValuesCacheHandlerAdapter ──────────────────────────────────────────────
+
+func TestNewValuesCacheHandlerAdapter_NilStore_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	got := newValuesCacheHandlerAdapter(nil)
+	if got != nil {
+		t.Error("expected nil for nil store")
+	}
+}
+
+func TestNewValuesCacheHandlerAdapter_NonNilStore_ReturnsAdapter(t *testing.T) {
+	t.Parallel()
+	store := openTestValuesCacheStore(t)
+	got := newValuesCacheHandlerAdapter(store)
+	if got == nil {
+		t.Error("expected non-nil adapter for non-nil store")
+	}
+}
+
+// ── valuesCacheHandlerAdapter methods ─────────────────────────────────────────
+
+func TestValuesCacheHandlerAdapter_DeleteAll_NoError(t *testing.T) {
+	t.Parallel()
+	store := openTestValuesCacheStore(t)
+	a := newValuesCacheHandlerAdapter(store)
+	if err := a.DeleteAll(context.Background()); err != nil {
+		t.Fatalf("DeleteAll: %v", err)
+	}
+}
+
+func TestValuesCacheHandlerAdapter_DeleteDevice_NoError(t *testing.T) {
+	t.Parallel()
+	store := openTestValuesCacheStore(t)
+	a := newValuesCacheHandlerAdapter(store)
+	if err := a.DeleteDevice(context.Background(), "test-central", "HmIP-RF", "00012345ABCDEF:0"); err != nil {
+		t.Fatalf("DeleteDevice: %v", err)
+	}
+}
+
+func TestValuesCacheHandlerAdapter_Stats_ReturnsValue(t *testing.T) {
+	t.Parallel()
+	store := openTestValuesCacheStore(t)
+	a := newValuesCacheHandlerAdapter(store)
+	stats, err := a.Stats(context.Background())
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.Rows < 0 {
+		t.Errorf("Stats.Rows should be >= 0, got %d", stats.Rows)
+	}
+}
+
+func TestValuesCacheHandlerAdapter_Metrics_ReturnsValue(t *testing.T) {
+	t.Parallel()
+	store := openTestValuesCacheStore(t)
+	a := newValuesCacheHandlerAdapter(store)
+	// Zero-value counters on a fresh store; just confirm no panic.
+	_ = a.Metrics()
+}
+
+// ── newDeviceLookupAdapter ────────────────────────────────────────────────────
+
+func TestNewDeviceLookupAdapter_NilReg_ReturnsNil(t *testing.T) {
+	t.Parallel()
+	got := newDeviceLookupAdapter(nil)
+	if got != nil {
+		t.Error("expected nil for nil registry")
+	}
+}
+
+func TestNewDeviceLookupAdapter_NonNilReg_ReturnsAdapter(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t)
+	got := newDeviceLookupAdapter(reg)
+	if got == nil {
+		t.Error("expected non-nil adapter for non-nil registry")
+	}
+}
+
+// ── deviceLookupAdapter.LocateDevice ─────────────────────────────────────────
+
+func TestDeviceLookupAdapter_LocateDevice_NilReceiver_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var a *deviceLookupAdapter
+	_, _, ok := a.LocateDevice("00012345:0")
+	if ok {
+		t.Error("nil receiver: expected ok=false")
+	}
+}
+
+func TestDeviceLookupAdapter_LocateDevice_EmptyRegistry_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t)
+	a := newDeviceLookupAdapter(reg)
+	_, _, ok := a.LocateDevice("00012345:0")
+	if ok {
+		t.Error("empty registry: expected ok=false")
+	}
+}
+
+func TestDeviceLookupAdapter_LocateDevice_RegistryWithCentralNoDevice_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "ccu-01")
+	a := newDeviceLookupAdapter(reg)
+	// Registry has a central but its ModelRegistry has no matching device address.
+	_, _, ok := a.LocateDevice("00012345:0")
+	if ok {
+		t.Error("central with empty model registry: expected ok=false")
+	}
+}
+
+// ── caseResumptionStoreAdapter.GetByID: nil manager ──────────────────────────
+
+func TestCaseResumptionStoreAdapter_GetByID_NilManager_ReturnsNilNil(t *testing.T) {
+	t.Parallel()
+	a := caseResumptionStoreAdapter{mgr: nil}
+	rec, err := a.GetByID([]byte{0x01, 0x02, 0x03})
+	if err != nil {
+		t.Errorf("expected nil error for nil manager, got %v", err)
+	}
+	if rec != nil {
+		t.Errorf("expected nil record for nil manager, got %v", rec)
+	}
+}
+
+// ── shared test helper ────────────────────────────────────────────────────────
+
+// openTestValuesCacheStore opens a real SQLite-backed ValuesCacheStore in a
+// temp directory and registers cleanup. Returns nil and calls t.Skip when
+// SQLite is unavailable.
+func openTestValuesCacheStore(t *testing.T) *sqlitestore.ValuesCacheStore {
+	t.Helper()
+	cfg := config.Default()
+	cfg.DataDir = t.TempDir()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	gooseMigrateMu.Lock()
+	store := wireValuesCacheStore(cfg, logger)
+	gooseMigrateMu.Unlock()
+	if store == nil {
+		t.Skip("wireValuesCacheStore returned nil (SQLite unavailable in this env)")
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	return store
+}

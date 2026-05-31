@@ -1,0 +1,12 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenCCU-Loom">
+  <title>OpenCCU-Loom — Mark (mono)</title>
+  <!-- 4 horizontal strands, single dark color -->
+  <g stroke="#0F172A" stroke-width="14" stroke-linecap="round" fill="none">
+    <line x1="22" y1="56" x2="178" y2="56"/>
+    <line x1="22" y1="84" x2="178" y2="84"/>
+    <line x1="22" y1="112" x2="178" y2="112"/>
+    <line x1="22" y1="140" x2="178" y2="140"/>
+  </g>
+  <!-- Bundling band, same color -->
+  <rect x="85" y="40" width="30" height="116" rx="8" fill="#0F172A"/>
+</svg>

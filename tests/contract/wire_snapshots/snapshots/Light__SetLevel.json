@@ -1,0 +1,39 @@
+{
+  "dp_type": "Light",
+  "setter": "SetLevel",
+  "inputs": [
+    {
+      "label": "level=0.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DIM0001:1",
+          "parameter": "LEVEL",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "label": "level=0.5",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DIM0001:1",
+          "parameter": "LEVEL",
+          "value": 0.5
+        }
+      ]
+    },
+    {
+      "label": "level=1.0",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DIM0001:1",
+          "parameter": "LEVEL",
+          "value": 1
+        }
+      ]
+    }
+  ]
+}

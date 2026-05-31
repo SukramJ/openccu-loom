@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Integration Tests" type="GoTestRunConfiguration" factoryName="Go Test">
+    <module name="openccu-loom" />
+    <working_directory value="$PROJECT_DIR$" />
+    <go_parameters value="-tags=integration" />
+    <envs>
+      <env name="CGO_ENABLED" value="0" />
+    </envs>
+    <kind value="DIRECTORY" />
+    <package value="github.com/SukramJ/openccu-loom/tests/integration" />
+    <directory value="$PROJECT_DIR$/tests/integration" />
+    <filePath value="$PROJECT_DIR$/tests/integration" />
+    <framework value="gotest" />
+    <pattern value="^Test.*" />
+    <method v="2" />
+  </configuration>
+</component>

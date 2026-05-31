@@ -1,0 +1,71 @@
+# Changelog
+
+All notable changes to OpenCCU-Loom are recorded in this file.
+The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] — Initial Release
+
+First public release of **OpenCCU-Loom**, a standalone Go daemon that
+bridges Homematic CCUs to MQTT, a REST + WebSocket API, a web Config UI,
+and a Matter bridge. A Go port of the `aiohomematic` family that adds the
+standalone-daemon surface on top.
+
+### Core
+
+- **Multi-CCU from day one** — one daemon, many CCUs; every coordinator,
+  adapter, and store is `central_name`-scoped (ADR 0002).
+- **Hexagonal architecture** (ports & adapters) with an internal typed,
+  priority-aware event bus for cross-domain communication.
+- **Single static binary** (`CGO_ENABLED=0`, no CGo) + multi-arch Docker
+  images (linux/amd64, arm64, armv7).
+- **Pure-Go SQLite** (`modernc.org/sqlite`) + filesystem persistence;
+  goose-managed migrations.
+
+### South-bound (CCU)
+
+- All three transports: **XML-RPC, BIN-RPC, JSON-RPC**, plus HTTP and raw
+  TCP callback servers (shared across all centrals, dynamic-port aware).
+- Every MVP interface — HmIP-RF, BidCos-RF, BidCos-Wired, HmIP-Wired,
+  VirtualDevices, and CUxD (BIN-RPC) — supports **push callbacks**; no
+  polling-only code path.
+- Reliability layer per `(central, interface)`: circuit breaker, retry,
+  throttle, coalescer, ping/pong.
+- 139 generated device profiles with hand-written custom data-point types;
+  ReGa script runner.
+
+### North-bound (bridges)
+
+- **MQTT** — Home Assistant Discovery **and** raw topic planes in parallel;
+  MQTT config applies without a daemon restart.
+- **REST + WebSocket API** — ~80 REST endpoints (`assets/openapi.yaml`) and
+  85 WebSocket commands.
+- **Config UI** — a Svelte 5 SPA (Tailwind 4, embedded via `go:embed`) as
+  the primary surface, with a minimal HTMX bootstrap surface for pre-auth
+  flows (login, first-run setup, OIDC callback) and SPA-down diagnosis.
+- **Matter bridge** — native-Go, default off, operator opt-in; a semantic
+  port of matter.js HEAD.
+
+### Auth & security
+
+- Basic / Session / OIDC / API-Token authentication with role gating
+  (admin-only mutations); CSRF protection for cookie-session flows.
+- Audit ledger for sensitive operations.
+
+### Diagnostics & observability
+
+- Unified health tracker (per-central + daemon-global), Prometheus
+  metrics, tracing helpers, incident journal.
+- **Live log viewer** (`#/logs`, admin-only): always-on ring buffer with an
+  SSE tail (`tail -f`, resume via `Last-Event-ID`/`?since=`), aggregated
+  (≥ warn, deduplicated) vs. detail views, level dropdown, and download of
+  the last N records.
+- **Diagnose & Aufzeichnen hub**: RAM-buffered debug-log capture and an
+  **RPC session recorder** (XML / JSON / BIN-RPC traffic for deterministic
+  golden replay) with per-CCU scope, duration limit + safety cap,
+  optional anonymisation, restart-survival, and `map`/`golden` export.
+- Composite diagnostics dump and runtime per-subsystem log-level overrides.
+
+### Internationalisation
+
+- German + English catalogues across UI and server-rendered surfaces.

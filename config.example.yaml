@@ -1,0 +1,138 @@
+# SPDX-License-Identifier: MIT
+# openccu-loom — minimal reference configuration
+#
+# Everything you actually need to start the daemon. Almost every
+# other setting (MQTT, Matter, mDNS, REST CORS / auth / rate-limit,
+# OIDC, reliability tunables, persistence tunables, CCU rooms /
+# functions, users, tokens, additional centrals) is configured
+# through the SPA's Settings tab and persisted to the SQLite
+# database at <data_dir>/openccu-loom.db.
+#
+# Why this file is short:
+#
+#   * The fields below are the "bootstrap tier" — values the
+#     daemon needs before the database is open (data_dir, bind
+#     addresses, log handler, env-file path).
+#   * On a fresh install, anything you DO list here is copied
+#     into the database on first start as the initial seed. After
+#     that the database wins; further edits in this file are
+#     ignored unless the matching DB row is deleted.
+#   * If you do not want the SPA to manage anything, you can keep
+#     setting every field via this YAML — the daemon will still
+#     read it. But the cleaner workflow is: bootstrap here, live-
+#     edit in the SPA.
+#
+# This whole file is OPTIONAL — the daemon ships with built-in defaults
+# and is fully configurable through the SPA. Provide it only to pin the
+# bootstrap tier below.
+#
+# Run with an explicit path:  openccu-loom run --config config.yaml
+# …or just `openccu-loom run` — it auto-discovers a config from
+# (first existing wins):
+#   1. $OPENCCU_LOOM_CONFIG
+#   2. ./config.yaml                       (container: /app/config.yaml)
+#   3. ~/.config/openccu-loom/config.yaml  ($XDG_CONFIG_HOME honoured)
+#   4. /etc/openccu-loom/config.yaml
+# Validate syntax with:       hmcli config validate config.yaml
+
+# ---------------------------------------------------------------------
+# Bootstrap tier — read before the database opens (all have defaults)
+# ---------------------------------------------------------------------
+
+# Default UI language for the very first SPA load (operators can
+# flip per-user via the Settings tab). [default: en]
+locale: de
+
+# On-disk root for SQLite, sessions, backups, logs. Must be
+# writable by the daemon user; created on first start.  [default: ./var]
+data_dir: ./var
+
+logging:
+  # debug | info | warn | error                          [default: info]
+  level: info
+  # json | text | text-color                             [default: json]
+  format: json
+
+# REST + Bootstrap-UI bind addresses. These two cannot be edited
+# from the SPA itself — the SPA needs to reach them BEFORE it can
+# render its Settings tab. Everything else under `north:` is
+# managed in the SPA (MQTT, Matter, mDNS, CORS, OIDC, rate-limit).
+#
+# REST and UI default to enabled — omit the `enabled:` key here
+# and the daemon turns them on. Set `enabled: false` only to
+# intentionally run a daemon without the matching surface.
+north:
+  rest:
+    listen: ":8080"
+    # csrf_enabled: true    # double-submit cookie/header guard for mutating
+    #                       # endpoints. Default: true. Set to false only for
+    #                       # pure API-token deployments without browser sessions.
+    # csrf_secure: true     # set Secure flag on CSRF cookie (requires HTTPS)
+    auth:
+      # First admin — seed only. Once any user exists in the
+      # SQLite users table, this block is ignored. After
+      # bootstrap, manage users via the SPA's Users tab.
+      users:
+        admin: "change-me"
+  ui:
+    listen: ":8081"
+
+# First-run setup safety. The /setup wizard always refuses once
+# there is at least one admin user; this toggle lets you keep the
+# route dormant even with a manually-emptied users table.
+bootstrap:
+  allow_first_run_setup: true
+
+# KEY=VALUE file the daemon loads at startup. Use it to keep CCU /
+# MQTT / OIDC passwords out of YAML and out of the database. The
+# file is optional (the daemon does not fail when it is missing).
+# Set to "-" to disable env-file loading.  [default: .env]
+env_file: .env
+
+# ---------------------------------------------------------------------
+# Initial seed (optional)
+# ---------------------------------------------------------------------
+#
+# Everything below is copied into the database on first start. Once
+# the corresponding tables / sections exist, this YAML block is
+# ignored on subsequent starts — manage the values via the SPA's
+# Settings tab.
+#
+# Leave the lists empty if you want to bootstrap a fresh install
+# entirely through the /setup wizard at http://<host>:8081/setup.
+
+centrals: []
+#  - name: Home
+#    host: 192.168.1.10
+#    interfaces:
+#      - HmIP-RF
+#      - BidCos-RF
+#    # Per-CCU password — preferred path is to set it via the SPA's
+#    # CCU dialog (stored in the SQLite `centrals` table, redacted
+#    # on backup unless --include-secrets is passed). For declarative
+#    # deployment, set it inline here (initial seed only) or point at
+#    # an env variable:
+#    #     password_env: CCU_HOME_PASSWORD
+#    password_env: ""
+#    tls: false
+
+# ---------------------------------------------------------------------
+# Where to learn more
+# ---------------------------------------------------------------------
+#
+# * Live configuration (current effective values + source attribution):
+#   curl --user admin:change-me http://localhost:8080/api/v1/config/effective
+#
+# * Field schema (every available knob + classification basic /
+#   expert / secret):
+#   curl http://localhost:8080/api/v1/config/schema
+#
+# * Export a snapshot of the live configuration as JSON:
+#   openccu-loom config export --out my-config.json
+#
+# * Re-import a snapshot:
+#   openccu-loom config import my-config.json
+#
+# * Full reference (every YAML-side field that was supported in 0.0.x
+#   and that you can still set declaratively if you prefer YAML over
+#   SPA): see docs/configuration-reference.md

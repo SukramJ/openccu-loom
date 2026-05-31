@@ -1,0 +1,17 @@
+{
+  "dp_type": "Light",
+  "setter": "TurnOff",
+  "inputs": [
+    {
+      "label": "from-on",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DIM0001:1",
+          "parameter": "LEVEL",
+          "value": 0
+        }
+      ]
+    }
+  ]
+}

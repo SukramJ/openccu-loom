@@ -1,0 +1,21 @@
+{{define "body"}}
+<section class="card">
+  <p class="step-progress">{{t "setup.step.progress"}}</p>
+  <h1>{{t "setup.step4.title"}}</h1>
+  {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
+  <form method="post" action="/setup/mqtt">
+    <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+    <label>
+      <input type="checkbox" name="mqtt_enabled" value="1"{{if .Data.State.MQTTEnabled}} checked{{end}}>
+      {{t "setup.mqtt.enable"}}
+    </label>
+    <label>{{t "setup.mqtt.broker"}}<input type="text" name="mqtt_broker_url" placeholder="mqtt://192.168.0.5:1883" value="{{.Data.State.MQTTBrokerURL}}"></label>
+    <label>{{t "setup.username"}}<input type="text" name="mqtt_username" value="{{.Data.State.MQTTUsername}}"></label>
+    <label>{{t "setup.password"}}<input type="password" name="mqtt_password"></label>
+    <div class="button-row">
+      <button type="submit">{{t "setup.submit"}}</button>
+      <button type="submit" name="skip" value="1" formnovalidate>{{t "setup.mqtt.skip"}}</button>
+    </div>
+  </form>
+</section>
+{{end}}

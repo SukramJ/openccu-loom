@@ -1,0 +1,51 @@
+{
+  "dp_type": "ClimateRF",
+  "setter": "SetProfile",
+  "inputs": [
+    {
+      "label": "WeekProgram1",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "RFTHR0001:1",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 1"
+          }
+        }
+      ]
+    },
+    {
+      "label": "WeekProgram2",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "RFTHR0001:1",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 2"
+          }
+        }
+      ]
+    },
+    {
+      "label": "WeekProgram3",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "RFTHR0001:1",
+          "put_values": {
+            "AUTO_MODE": true,
+            "BOOST_MODE": false,
+            "WEEK_PROGRAM_POINTER": "WEEK PROGRAM 3"
+          }
+        }
+      ]
+    }
+  ]
+}

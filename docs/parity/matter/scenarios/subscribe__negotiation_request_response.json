@@ -1,0 +1,38 @@
+{
+  "name": "subscribe__negotiation_request_response",
+  "description": "Drives the IM:Subscribe negotiation end-to-end: peer ships SubscribeRequest → bridge replies with the initial ReportData (possibly chunked, each chunk requiring a per-chunk StatusResponse from the peer per F5/F6 fixes) → bridge ships SubscribeResponse with the negotiated subscriptionId + MaxInterval. The harness asserts the SubscribeResponse arrives on the same peer-opened exchange the request used. Locks the F5 (per-chunk handshake) and F6 (MRP piggyback-ack per chunk) regressions at scenario level — without those, Apple Home sees the initial Subscribe transaction time out before SubscribeResponse arrives.",
+  "tags": ["matter", "subscribe", "negotiation", "f5", "f6"],
+  "given": {
+    "topology": "single_temp_sensor",
+    "subscriptions": [
+      {
+        "session_id": 97,
+        "peer_subscribe_exchange_id": 101,
+        "subscription": { "endpoint": 2, "cluster": 1026, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "peer",
+      "kind": "send_subscribe_request"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "ReportData"
+    },
+    {
+      "actor": "peer",
+      "kind": "send_status_response",
+      "exchange": "101",
+      "status": "Success"
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_tx",
+      "opcode": "SubscribeResponse"
+    }
+  ]
+}

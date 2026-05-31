@@ -1,0 +1,20 @@
+{
+  "dp_type": "Siren",
+  "setter": "TurnOff",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "paramset_key": "VALUES",
+          "address": "ASIR0001:3",
+          "put_values": {
+            "ACOUSTIC_ALARM_SELECTION": "DISABLE_ACOUSTIC_SIGNAL",
+            "OPTICAL_ALARM_SELECTION": "DISABLE_ACOUSTIC_SIGNAL"
+          }
+        }
+      ]
+    }
+  ]
+}

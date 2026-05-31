@@ -1,0 +1,17 @@
+{
+  "dp_type": "Lock",
+  "setter": "Unlock",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "DLD0001:1",
+          "parameter": "LOCK_TARGET_LEVEL",
+          "value": "UNLOCKED"
+        }
+      ]
+    }
+  ]
+}

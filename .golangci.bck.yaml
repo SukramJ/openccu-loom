@@ -1,0 +1,95 @@
+# openccu-loom — golangci-lint configuration
+#
+# Linter set is pinned in CLAUDE.md §Code Quality & Standards / §3.3 of the
+# specification. Any change that adds or removes a linter requires an ADR.
+
+run:
+  timeout: 5m
+  go: "1.26"
+  tests: true
+  allow-parallel-runners: true
+
+output:
+  sort-results: true
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - errcheck
+    - errorlint
+    - exhaustive
+    - gocritic
+    - gofumpt
+    - goimports
+    - gosec
+    - govet
+    - nilerr
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+
+linters-settings:
+  goimports:
+    local-prefixes: github.com/SukramJ/openccu-loom
+  gofumpt:
+    extra-rules: true
+  errcheck:
+    check-type-assertions: true
+  exhaustive:
+    default-signifies-exhaustive: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+      - opinionated
+    disabled-checks:
+      - ifElseChain
+      - hugeParam # re-enable once domain types settle
+  revive:
+    severity: warning
+    rules:
+      - name: blank-imports
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+      - name: if-return
+      - name: increment-decrement
+      - name: indent-error-flow
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: redefines-builtin-id
+      - name: superfluous-else
+      - name: time-naming
+      - name: unexported-return
+      - name: unreachable-code
+      - name: var-declaration
+      - name: var-naming
+  gosec:
+    excludes:
+      # G104 (unhandled errors) is covered by errcheck with richer config.
+      - G104
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+        - unparam
+    - path: cmd/
+      linters:
+        - gosec

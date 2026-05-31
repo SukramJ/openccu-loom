@@ -1,0 +1,50 @@
+{
+  "dp_type": "ColorLight",
+  "setter": "SetColor",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "hue=0,sat=1.0",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "COL0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "HUE": 0,
+            "SATURATION": 1.0
+          }
+        }
+      ]
+    },
+    {
+      "label": "hue=120,sat=0.8",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "COL0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "HUE": 120,
+            "SATURATION": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "label": "hue=240,sat=0.5",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "COL0001:1",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "HUE": 240,
+            "SATURATION": 0.5
+          }
+        }
+      ]
+    }
+  ]
+}

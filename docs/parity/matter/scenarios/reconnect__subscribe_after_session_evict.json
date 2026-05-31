@@ -1,0 +1,43 @@
+{
+  "name": "reconnect__subscribe_after_session_evict",
+  "description": "Recovery-from-reconnect contract: when a CASE session is evicted (peer reconnect, CASE-resume failure, RemoveFabric, ...), the bridge MUST cleanly accept a fresh SubscribeRequest on the new session without leaking state from the old one. Two sessions are wired in the harness. Session A is pre-registered with a subscription; the scenario closes session A (cascading subscription eviction), then drives a peer-side SubscribeRequest on session B. Drain consumes the initial ReportData chunks and asserts the SubscribeResponse arrives on session B's exchange. Catches regressions where stale subTarget entries from session A bleed into session B's negotiation or where the bridge mis-routes the SubscribeResponse.",
+  "tags": ["matter", "subscribe", "reconnect", "session-evict", "recovery"],
+  "given": {
+    "subscriptions": [
+      {
+        "session_id": 283,
+        "peer_subscribe_exchange_id": 293,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 }
+      },
+      {
+        "session_id": 307,
+        "peer_subscribe_exchange_id": 311,
+        "subscription": { "endpoint": 2, "cluster": 6, "attribute": 0 },
+        "skip_auto_subscribe": true
+      }
+    ]
+  },
+  "steps": [
+    {
+      "actor": "bridge",
+      "kind": "close_session",
+      "subscription_idx": 0
+    },
+    {
+      "actor": "bridge",
+      "kind": "expect_no_tx",
+      "timeout_millis": 500
+    },
+    {
+      "actor": "peer",
+      "kind": "send_subscribe_request",
+      "subscription_idx": 1
+    },
+    {
+      "actor": "bridge",
+      "kind": "drain_subscribe_chunks",
+      "subscription_idx": 1,
+      "bind_exchange_id_to": "$sub_resp_exch"
+    }
+  ]
+}

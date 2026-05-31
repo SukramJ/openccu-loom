@@ -1,0 +1,19 @@
+{
+  "dp_type": "Blind",
+  "setter": "Close",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "SetValue",
+          "address": "BBL0001:1",
+          "parameter": "COMBINED_PARAMETER",
+          "value": "L2=0,L=0"
+        }
+      ]
+    }
+  ]
+}

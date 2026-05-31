@@ -1,0 +1,23 @@
+{
+  "dp_type": "SoundPlayer",
+  "setter": "StopSound",
+  "source": "aiohomematic",
+  "aiohomematic_version": "2026.5.7",
+  "inputs": [
+    {
+      "label": "priority=normal",
+      "calls": [
+        {
+          "method": "PutParamset",
+          "address": "MP3P0001:2",
+          "paramset_key": "VALUES",
+          "put_values": {
+            "DURATION_UNIT": 0,
+            "DURATION_VALUE": 0,
+            "LEVEL": 0
+          }
+        }
+      ]
+    }
+  ]
+}

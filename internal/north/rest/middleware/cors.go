@@ -1,0 +1,88 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package middleware
+
+import (
+	"net/http"
+	"strings"
+)
+
+// CORSConfig governs the CORS middleware.
+type CORSConfig struct {
+	Origins          []string // "*" matches any; comma-separated list forbidden
+	AllowCredentials bool
+	MaxAgeSeconds    int
+}
+
+// CORS returns a middleware that handles CORS preflight + adds the
+// `Access-Control-Allow-*` headers when the request Origin is
+// whitelisted.
+func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
+	allowAll := false
+	whitelist := make(map[string]struct{}, len(cfg.Origins))
+	for _, o := range cfg.Origins {
+		if o == "*" {
+			allowAll = true
+			continue
+		}
+		whitelist[strings.ToLower(o)] = struct{}{}
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin != "" {
+				allowed := allowAll
+				if !allowed {
+					_, allowed = whitelist[strings.ToLower(origin)]
+				}
+				if allowed {
+					if allowAll && !cfg.AllowCredentials {
+						w.Header().Set("Access-Control-Allow-Origin", "*")
+					} else {
+						w.Header().Set("Access-Control-Allow-Origin", origin)
+						w.Header().Add("Vary", "Origin")
+					}
+					if cfg.AllowCredentials {
+						w.Header().Set("Access-Control-Allow-Credentials", "true")
+					}
+				}
+			}
+			if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+				if h := r.Header.Get("Access-Control-Request-Headers"); h != "" {
+					w.Header().Set("Access-Control-Allow-Headers", h)
+				}
+				if cfg.MaxAgeSeconds > 0 {
+					w.Header().Set("Access-Control-Max-Age", itoa(cfg.MaxAgeSeconds))
+				}
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	neg := false
+	if n < 0 {
+		neg = true
+		n = -n
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}

@@ -1,0 +1,794 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package main
+
+// ws_adapters.go — bridges the REST domain adapters onto the narrower
+// WS-specific interfaces declared in internal/north/rest/ws.
+//
+// Design: each wrapper is minimal — no business logic, just
+// method-signature translation and type conversion. Where a WS
+// interface method has no direct domain equivalent the wrapper returns
+// errors.New("ws: feature not yet wired through domain") and documents
+// why. Extensions land in +.
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/configui"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
+	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+)
+
+// wsCommandWiring bundles every domain adapter + auxiliary deps the
+// wireWSCommands function needs. Constructed once in daemonServe so
+// the WS hub and the REST router share the same adapter instances.
+type wsCommandWiring struct {
+	health          *adapter.HealthAdapter
+	devices         *adapter.DevicesAdapter
+	hub             *adapter.HubAdapter
+	linksDomain     *adapter.LinksDomain
+	schedulesDomain *adapter.SchedulesDomain
+	centralLinks    *adapter.CentralLinksDomain
+	deviceAdmin     *adapter.DeviceAdminDomain
+	paramsets       *adapter.ParamsetsDomain
+	customDP        *adapter.CustomDPDispatcher
+	masterProfiles  *masterprofile.Store
+	linkProfiles    *linkprofile.Store
+	valueWriter     *clientpkg.ValueWriter
+	registry        *central.Registry
+	// deviceReloader backs config.reload_device_config and
+	// ccu.reload_device_config
+	deviceReloader *adapter.DeviceReloaderAdapter
+	logger         *slog.Logger
+	// centralName scopes every WS-command log record. Empty in multi-
+	// central setups; populated from [singleCentralName] in daemon.go.
+	centralName string
+	// sessionStore backs config.session.* commands. When non-nil the
+	// session-open / save / discard / changes commands are registered.
+	sessionStore *configui.SessionStore
+	// changeLog receives one entry per successful config.session.save.
+	// When nil the save path proceeds without recording.
+	changeLog *audit.ChangeLog
+}
+
+// wireWSCommands registers every WS command set onto hub.
+//
+// Adapters that cannot yet be bridged (ChangeHistory, ThrottleStats,
+// CacheClearer, DeviceStatistics, FirmwareRefresher, IncidentClearer) are
+// left nil — the corresponding command families are simply not registered,
+// which is safe: the client receives "unknown_command" rather than a panic.
+func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
+	router := hub.Router()
+	// Install the cross-cutting boundary so every WS command emits the
+	// same logging shape as REST requests (audit O13). The central
+	// name comes from the wiring struct so multi-central deployments
+	// stay unambiguous in log aggregation.
+	router.SetBoundary(w.logger, w.centralName)
+
+	schedQueryAdapter := adapter.NewScheduleQueryAdapter(w.schedulesDomain)
+
+	deviceQuery := &wsDeviceQuery{devs: w.devices, paramsets: w.paramsets, registry: w.registry, writer: w.valueWriter}
+	ws.RegisterDefaultCommands(router, ws.DefaultCommandsConfig{
+		Health:  w.health, // *adapter.HealthAdapter directly satisfies ws.HealthSnapshotProvider
+		Devices: deviceQuery,
+		Hub:     &wsHubQuery{hub: w.hub, registry: w.registry},
+		Links:   &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
+		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
+		Schedules: schedQueryAdapter,
+		// Sessions: wired via configui.SessionStore stored in wsCommandWiring.
+		// SessionBackend: wsSessionBackend delegates Open to the device-query path
+		// and PutParamset to the paramsets domain.
+		Sessions:       w.sessionStore,
+		SessionBackend: &wsSessionBackend{deviceQuery: deviceQuery, paramsets: &wsParamsetWriter{domain: w.paramsets}},
+		// ChangeLog receives one entry per successful config.session.save.
+		ChangeLog: w.changeLog,
+		// DeviceReloader backs config.reload_device_config and
+		// ccu.reload_device_config — re-pulls device descriptions from the
+		// CCU and recreates missing channels/DPs.
+		DeviceReloader: w.deviceReloader,
+	})
+
+	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{
+		Devices:        &wsDeviceWriter{admin: w.deviceAdmin},
+		Paramsets:      &wsParamsetWriter{domain: w.paramsets},
+		MasterProfiles: w.masterProfiles,
+		// ChangeHistory, ThrottleStats, CacheClearer, DeviceStatistics,
+		// FirmwareRefresher, IncidentClearer, ChangeHistoryClearer, ExtendedHub,
+		// Central, ParamsetReader: all nil — see docs/parity/by_design.md
+		// "ws-rest-split". The in-tree Svelte SPA uses REST + WS event-stream;
+		// These command families are parity-shape against
+		// and remain dormant until an external WS bridge wires them.
+	})
+
+	ws.RegisterCustomDPCommands(router, ws.CustomDPCommandsConfig{
+		Index:   w.devices, // *adapter.DevicesAdapter satisfies ws.CustomDPIndex
+		Invoker: w.customDP,
+	})
+
+	// RegisterMissingCommands wires all 9 previously-missing WS commands.
+	// The 5 that were stubs (L01-L05) are now fully wired via domain adapters.
+	allDevices := &wsAllDevices{devs: w.devices}
+	ws.RegisterMissingCommands(router, ws.MissingCommandsConfig{
+		// ccu.get_signal_quality — RSSI + reachability per device.
+		SignalQuality: allDevices,
+		// schedules.list_devices — devices that expose a week-profile.
+		ScheduleDevices: allDevices,
+		// ccu.get_hub_data — service/alarm message counts.
+		HubData: &wsHubMessageCounts{hub: w.hub},
+		// system.user_permissions — reads from ctx; no extra provider needed.
+		UserPermissions: nil, // always registered via nil-safe handler
+
+		// L05: schedules.set_enabled — SchedulesDomain now has SetScheduleEnabled.
+		ScheduleEnabler: w.schedulesDomain,
+
+		// L01: links.get_form_schema — ParamsetsDomain now has GetLinkFormSchema.
+		LinkFormSchema: w.paramsets,
+
+		// L02 + L03: links.get_profiles + links.test_profile —
+		// LinkProfilesAdapter wraps linkprofile.Store.
+		LinkProfiles: adapter.NewLinkProfilesAdapter(w.registry, w.linkProfiles),
+
+		// L04: paramset.determine — ParameterDeterminerAdapter resolves via registry.
+		ParameterDeterminer: adapter.NewParameterDeterminerAdapter(w.registry, w.valueWriter),
+	})
+}
+
+// ── wsAllDevices ─────────────────────────────────────────────────────────────
+
+// wsAllDevices adapts *adapter.DevicesAdapter (which exposes Devices())
+// to ws.SignalQualityProvider and ws.ScheduleDevicesProvider (which
+// require AllDevices()). The rename is purely a naming delta.
+type wsAllDevices struct {
+	devs *adapter.DevicesAdapter
+}
+
+func (w *wsAllDevices) AllDevices() []*device.Device {
+	if w.devs == nil {
+		return nil
+	}
+	return w.devs.Devices()
+}
+
+// ── wsHubMessageCounts ───────────────────────────────────────────────────────
+
+// wsHubMessageCounts adapts *adapter.HubAdapter onto ws.HubDataProvider.
+// HubAdapter exposes Hub() *hub.Hub; this wrapper extracts the message
+// counts without importing hub directly.
+type wsHubMessageCounts struct {
+	hub *adapter.HubAdapter
+}
+
+func (w *wsHubMessageCounts) HubMessageCounts() (serviceMessages, alarmMessages *int) {
+	if w.hub == nil {
+		return nil, nil
+	}
+	h := w.hub.Hub()
+	if h == nil {
+		return nil, nil
+	}
+	svc := h.ServiceMessages.Count()
+	alarm := h.Messages.Count()
+	return &svc, &alarm
+}
+
+// ── wsLinkQuery ─────────────────────────────────────────────────────────────
+
+// wsLinkQuery bridges *adapter.LinksDomain → ws.LinkQuery.
+//
+// Signature deltas:
+// - ListLinks: domain takes (ctx, deviceAddress, locale); WS takes
+// (ctx, deviceAddress) — use "" locale (falls back to raw CCU string).
+// - LinkableChannels: domain takes (ctx, interfaceID, sourceChannelAddr,
+// role, locale); WS takes (ctx, deviceAddress). We resolve the device's
+// interface ID from the device address and forward all channels from
+// that interface with an empty role (match-all in the MVP).
+type wsLinkQuery struct {
+	domain   *adapter.LinksDomain
+	registry *central.Registry
+}
+
+func (w *wsLinkQuery) ListLinks(ctx context.Context, deviceAddress string) ([]map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	links, err := w.domain.ListLinks(ctx, deviceAddress, "")
+	if err != nil {
+		return nil, err
+	}
+	return structSliceToMapSlice(links)
+}
+
+func (w *wsLinkQuery) AddLink(ctx context.Context, sender, receiver, name, description string) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.AddLink(ctx, sender, receiver, name, description)
+}
+
+func (w *wsLinkQuery) RemoveLink(ctx context.Context, sender, receiver string) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.RemoveLink(ctx, sender, receiver)
+}
+
+// LinkableChannels resolves the device's interfaceID via the registry
+// and delegates to the domain with empty role ("" = match-all in MVP)
+// and empty locale. The WS surface only provides deviceAddress, so the
+// device address itself is the source-channel placeholder — every
+// channel of every device on the same interface (except the source
+// device's own channels) becomes a candidate.
+func (w *wsLinkQuery) LinkableChannels(ctx context.Context, deviceAddress string) ([]map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	if w.registry == nil {
+		return nil, errors.New("ws: registry not wired")
+	}
+	for _, c := range w.registry.List() {
+		dev, ok := c.ModelRegistry.Get(deviceAddress)
+		if !ok {
+			continue
+		}
+		channels, err := w.domain.LinkableChannels(ctx, dev.InterfaceID, deviceAddress, "", "")
+		if err != nil {
+			return nil, err
+		}
+		return structSliceToMapSlice(channels)
+	}
+	return nil, fmt.Errorf("ws: device not found: %s", deviceAddress)
+}
+
+// GetLinkParamset bridges to LinksDomain.GetLinkParamset.
+func (w *wsLinkQuery) GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error) {
+	if w.domain == nil {
+		return nil, errors.New("ws: links domain not wired")
+	}
+	return w.domain.GetLinkParamset(ctx, channelAddress, peerAddress)
+}
+
+// PutLinkParamset bridges to LinksDomain.PutLinkParamset.
+func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error {
+	if w.domain == nil {
+		return errors.New("ws: links domain not wired")
+	}
+	return w.domain.PutLinkParamset(ctx, channelAddress, peerAddress, values)
+}
+
+// ── wsHubQuery ──────────────────────────────────────────────────────────────
+
+// wsHubQuery bridges *adapter.HubAdapter (which exposes Hub() *hub.Hub)
+// onto ws.HubQuery. All methods delegate to the hub.Hub model directly.
+//
+// InstallMode methods read the per-interface InstallMode trackers via
+// hub.Hub.InstallModeDPs() / InstallModeDP(interfaceID). Each tracker
+// is registered by the CentralUnit boot sequence on the ServiceRegistry.
+type wsHubQuery struct {
+	hub      *adapter.HubAdapter
+	registry *central.Registry
+}
+
+func (w *wsHubQuery) ListPrograms(_ context.Context) ([]map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return []map[string]any{}, nil
+	}
+	progs := h.Programs()
+	out := make([]map[string]any, 0, len(progs))
+	for _, p := range progs {
+		active, observed := p.Active()
+		e := map[string]any{
+			"id":          p.ID,
+			"name":        p.Name,
+			"description": p.Description,
+			"is_internal": p.IsInternal,
+		}
+		if observed {
+			e["active"] = active
+		}
+		if ts, ok := p.LastExecution(); ok {
+			e["last_executed"] = ts.UTC().Format(time.RFC3339)
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (w *wsHubQuery) ExecuteProgram(ctx context.Context, id string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	p, ok := h.Program(id)
+	if !ok {
+		return fmt.Errorf("ws: program not found: %s", id)
+	}
+	return p.Execute(ctx)
+}
+
+func (w *wsHubQuery) ListSysvars(_ context.Context) ([]map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return []map[string]any{}, nil
+	}
+	sysvars := h.Sysvars()
+	out := make([]map[string]any, 0, len(sysvars))
+	for _, s := range sysvars {
+		e := map[string]any{
+			"name":        s.Name,
+			"description": s.Description,
+			"unit":        s.Unit,
+			"value_type":  string(s.ValueType),
+			"value_list":  s.ValueList,
+		}
+		if v, ok := s.Value(); ok {
+			e["value"] = v.Unwrap()
+			e["observed"] = true
+		} else {
+			e["observed"] = false
+		}
+		if s.Min != nil {
+			e["min"] = s.Min.Float
+		}
+		if s.Max != nil {
+			e["max"] = s.Max.Float
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+func (w *wsHubQuery) SetSysvar(ctx context.Context, name string, value any) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	s, ok := h.Sysvar(name)
+	if !ok {
+		return fmt.Errorf("ws: sysvar not found: %s", name)
+	}
+	pv, err := hmtypes.NewParamValue(value)
+	if err != nil {
+		return fmt.Errorf("ws: set_sysvar value: %w", err)
+	}
+	return s.Set(ctx, pv)
+}
+
+func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return []map[string]any{}, nil
+	}
+	msgs := h.Messages.List()
+	out := make([]map[string]any, 0, len(msgs))
+	for i := range msgs {
+		m := &msgs[i]
+		out = append(out, map[string]any{
+			"id":           m.ID,
+			"name":         m.Name,
+			"description":  m.Description,
+			"device_name":  m.DeviceName,
+			"address":      m.Address,
+			"state_value":  m.StateValue,
+			"timestamp":    m.Timestamp,
+			"counter":      m.Counter,
+			"last_trigger": m.LastTrigger,
+			"rooms":        m.Rooms,
+		})
+	}
+	return out, nil
+}
+
+func (w *wsHubQuery) AcknowledgeAlarmMessage(ctx context.Context, id string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.Messages.Acknowledge(ctx, id)
+}
+
+func (w *wsHubQuery) ListServiceMessages(_ context.Context) ([]map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return []map[string]any{}, nil
+	}
+	msgs := h.ServiceMessages.List()
+	out := make([]map[string]any, 0, len(msgs))
+	for i := range msgs {
+		m := &msgs[i]
+		out = append(out, map[string]any{
+			"id":          m.ID,
+			"name":        m.Name,
+			"address":     m.Address,
+			"device_name": m.DeviceName,
+			"type":        m.Type.String(),
+			"description": m.Description,
+			"priority":    m.Priority,
+			"timestamp":   m.Timestamp,
+			"counter":     m.Counter,
+			"quittable":   m.Quittable,
+		})
+	}
+	return out, nil
+}
+
+func (w *wsHubQuery) AcknowledgeServiceMessage(ctx context.Context, id string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.ServiceMessages.Acknowledge(ctx, id)
+}
+
+// InstallModeStatus returns the per-interface install-mode state by
+// iterating the InstallMode trackers registered on the hub. The result
+// is keyed by interfaceID; each entry carries enabled/remaining_seconds/
+// observed.
+func (w *wsHubQuery) InstallModeStatus(_ context.Context) (map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return nil, errors.New("ws: hub not available")
+	}
+	dps := h.InstallModeDPs()
+	out := make(map[string]any, len(dps))
+	for _, m := range dps {
+		enabled, remaining, observed := m.InstallState()
+		out[m.InterfaceID] = map[string]any{
+			"enabled":           enabled,
+			"remaining_seconds": int(remaining.Seconds()),
+			"observed":          observed,
+		}
+	}
+	return out, nil
+}
+
+// EnableInstallMode opens the pairing window for interfaceID for the
+// given duration. InstallMode.Enable validates duration > 0.
+func (w *wsHubQuery) EnableInstallMode(ctx context.Context, interfaceID string, durationSecs int) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	m, ok := h.InstallModeDP(interfaceID)
+	if !ok {
+		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
+	}
+	return m.Enable(ctx, time.Duration(durationSecs)*time.Second)
+}
+
+// DisableInstallMode closes the pairing window for interfaceID.
+func (w *wsHubQuery) DisableInstallMode(ctx context.Context, interfaceID string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	m, ok := h.InstallModeDP(interfaceID)
+	if !ok {
+		return fmt.Errorf("ws: install mode for interface %q not registered", interfaceID)
+	}
+	return m.Disable(ctx)
+}
+
+func (w *wsHubQuery) TriggerBackup(ctx context.Context) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.TriggerBackupRemote(ctx)
+}
+
+func (w *wsHubQuery) BackupStatus(ctx context.Context) (map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil {
+		return nil, errors.New("ws: hub not available")
+	}
+	status, err := h.BackupStatusRemote(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"status": status}, nil
+}
+
+// FirmwareInfo returns the latest CCU firmware-update snapshot from the
+// hub's Update entity. Reports `observed: false` when no info has been
+// recorded yet (first OnInfo callback hasn't fired).
+func (w *wsHubQuery) FirmwareInfo(_ context.Context) (map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil || h.Update == nil {
+		return map[string]any{"observed": false}, nil
+	}
+	info, observed := h.Update.UpdateInfo()
+	if !observed {
+		return map[string]any{"observed": false, "in_progress": h.Update.InProgress()}, nil
+	}
+	return map[string]any{
+		"observed":               true,
+		"in_progress":            h.Update.InProgress(),
+		"current_firmware":       info.CurrentFirmware,
+		"available_firmware":     info.AvailableFirmware,
+		"update_available":       info.UpdateAvailable,
+		"check_script_available": info.CheckScriptAvailable,
+	}, nil
+}
+
+func (w *wsHubQuery) TriggerFirmwareUpdate(ctx context.Context) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.TriggerFirmwareUpdateRemote(ctx)
+}
+
+func (w *wsHubQuery) InboxDevices(_ context.Context) ([]map[string]any, error) {
+	h := w.hub.Hub()
+	if h == nil || h.Inbox == nil {
+		return []map[string]any{}, nil
+	}
+	entries := h.Inbox.List()
+	out := make([]map[string]any, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, map[string]any{
+			"address":      e.Address,
+			"model":        e.Model,
+			"serial":       e.Serial,
+			"manufacturer": e.Manufacturer,
+			"first_seen":   e.FirstSeen,
+		})
+	}
+	return out, nil
+}
+
+func (w *wsHubQuery) AcceptInboxDevice(ctx context.Context, deviceAddress string) error {
+	h := w.hub.Hub()
+	if h == nil {
+		return errors.New("ws: hub not available")
+	}
+	return h.AcceptInboxDeviceRemote(ctx, deviceAddress)
+}
+
+// ── wsDeviceQuery ────────────────────────────────────────────────────────────
+
+// wsDeviceQuery bridges *adapter.DevicesAdapter + *adapter.ParamsetsDomain
+// onto ws.DeviceQuery. Device rendering uses JSON round-trip to produce
+// the opaque map[string]any the WS layer hands clients unchanged.
+type wsDeviceQuery struct {
+	devs      *adapter.DevicesAdapter
+	paramsets *adapter.ParamsetsDomain
+	registry  *central.Registry
+	writer    *clientpkg.ValueWriter
+}
+
+func (w *wsDeviceQuery) ListDevices(_ context.Context) ([]map[string]any, error) {
+	if w.devs == nil {
+		return []map[string]any{}, nil
+	}
+	devs := w.devs.Devices()
+	out := make([]map[string]any, 0, len(devs))
+	for _, d := range devs {
+		out = append(out, map[string]any{
+			"address":        d.Address,
+			"central":        w.devs.CentralOf(d.Address),
+			"interface":      string(d.Interface),
+			"interface_id":   d.InterfaceID,
+			"model":          d.Model,
+			"name":           d.Name,
+			"available":      d.Available(),
+			"channels_count": len(d.Channels()),
+			"rooms":          d.Rooms,
+			"functions":      d.Functions,
+		})
+	}
+	return out, nil
+}
+
+func (w *wsDeviceQuery) GetDevice(_ context.Context, address string) (map[string]any, error) {
+	if w.devs == nil {
+		return nil, errors.New("ws: devices adapter not wired")
+	}
+	d, ok := w.devs.Device(address)
+	if !ok {
+		return nil, fmt.Errorf("ws: device not found: %s", address)
+	}
+	channels := make([]map[string]any, 0, len(d.Channels()))
+	for _, ch := range d.Channels() {
+		channels = append(channels, map[string]any{
+			"address": ch.Address,
+			"number":  ch.Number,
+			"type":    ch.Type,
+			"name":    ch.Name,
+		})
+	}
+	return map[string]any{
+		"address":        d.Address,
+		"central":        w.devs.CentralOf(d.Address),
+		"interface":      string(d.Interface),
+		"interface_id":   d.InterfaceID,
+		"model":          d.Model,
+		"name":           d.Name,
+		"available":      d.Available(),
+		"channels_count": len(d.Channels()),
+		"channels":       channels,
+		"rooms":          d.Rooms,
+		"functions":      d.Functions,
+	}, nil
+}
+
+func (w *wsDeviceQuery) GetParamsetDescription(ctx context.Context, key configui.SessionKey) (map[string]any, error) {
+	if w.paramsets == nil || w.writer == nil {
+		return nil, errors.New("ws: paramset backend not wired")
+	}
+	// Look up the device's interface so we can reach the backend directly.
+	if w.registry == nil {
+		return nil, errors.New("ws: registry not wired")
+	}
+	for _, c := range w.registry.List() {
+		if key.CentralName != "" && c.Name() != key.CentralName {
+			continue
+		}
+		deviceAddr := deviceAddrFromChannel(key.ChannelAddress)
+		dev, ok := c.ModelRegistry.Get(deviceAddr)
+		if !ok {
+			continue
+		}
+		backend, ok := w.writer.Backend(c.Name(), dev.InterfaceID)
+		if !ok {
+			return nil, fmt.Errorf("ws: no backend for %s/%s", c.Name(), dev.InterfaceID)
+		}
+		psKey := key.ParamsetKey
+		if psKey == "" {
+			psKey = hmenum.ParamsetKeyMaster
+		}
+		raw, err := backend.GetParamsetDescription(ctx, key.ChannelAddress, psKey)
+		if err != nil {
+			return nil, err
+		}
+		// Convert map[string]hmproto.ParameterData → map[string]any via JSON round-trip.
+		return structToMap(raw)
+	}
+	return nil, fmt.Errorf("ws: device not found for channel %s", key.ChannelAddress)
+}
+
+func (w *wsDeviceQuery) GetParamset(ctx context.Context, key configui.SessionKey) (map[string]any, error) {
+	if w.paramsets == nil {
+		return nil, errors.New("ws: paramsets domain not wired")
+	}
+	psKey := key.ParamsetKey
+	if psKey == "" {
+		psKey = hmenum.ParamsetKeyMaster
+	}
+	return w.paramsets.GetParamset(ctx, key.ChannelAddress, psKey)
+}
+
+// ── wsParamsetWriter ─────────────────────────────────────────────────────────
+
+// wsParamsetWriter bridges *adapter.ParamsetsDomain onto ws.ParamsetWriter.
+// The WS layer passes a configui.SessionKey; the domain takes (address, key).
+type wsParamsetWriter struct {
+	domain *adapter.ParamsetsDomain
+}
+
+func (w *wsParamsetWriter) PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error {
+	if w.domain == nil {
+		return errors.New("ws: paramsets domain not wired")
+	}
+	psKey := key.ParamsetKey
+	if psKey == "" {
+		psKey = hmenum.ParamsetKeyMaster
+	}
+	return w.domain.PutParamset(ctx, key.ChannelAddress, psKey, values)
+}
+
+// ── wsSessionBackend ─────────────────────────────────────────────────────────
+
+// wsSessionBackend implements ws.SessionBackend by delegating Open to the
+// device-query path (descriptions + initial values) and PutParamset to the
+// paramsets domain. This wires the config.session.open + save commands
+// without duplicating the lookup logic already in wsDeviceQuery and
+// wsParamsetWriter.
+type wsSessionBackend struct {
+	deviceQuery *wsDeviceQuery
+	paramsets   *wsParamsetWriter
+}
+
+// Open fetches the paramset descriptions and current values for the session
+// key. The returned descriptions map is opaque (map[string]any) so the WS
+// layer stays decoupled from the wire protocol.
+func (b *wsSessionBackend) Open(ctx context.Context, key configui.SessionKey) (descs, values map[string]any, err error) {
+	if b.deviceQuery == nil {
+		return nil, nil, errors.New("ws: session backend: device query not wired")
+	}
+	descs, err = b.deviceQuery.GetParamsetDescription(ctx, key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ws: session backend: descriptions: %w", err)
+	}
+	values, err = b.deviceQuery.GetParamset(ctx, key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("ws: session backend: values: %w", err)
+	}
+	return descs, values, nil
+}
+
+// PutParamset writes the changed values via the paramsets domain.
+func (b *wsSessionBackend) PutParamset(ctx context.Context, key configui.SessionKey, values map[string]any) error {
+	if b.paramsets == nil {
+		return errors.New("ws: session backend: paramsets not wired")
+	}
+	return b.paramsets.PutParamset(ctx, key, values)
+}
+
+// ── wsDeviceWriter ───────────────────────────────────────────────────────────
+
+// wsDeviceWriter bridges *adapter.DeviceAdminDomain onto ws.DeviceWriter.
+type wsDeviceWriter struct {
+	admin *adapter.DeviceAdminDomain
+}
+
+func (w *wsDeviceWriter) Rename(ctx context.Context, address, name string) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.RenameDevice(ctx, address, name)
+}
+
+// SetInstallMode opens a per-device pairing window via
+// DeviceAdminDomain.SetInstallMode (backend's XML-RPC `setInstallMode`).
+func (w *wsDeviceWriter) SetInstallMode(ctx context.Context, address string, durationSeconds int) error {
+	if w.admin == nil {
+		return errors.New("ws: device admin not wired")
+	}
+	return w.admin.SetInstallMode(ctx, address, durationSeconds)
+}
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+// structSliceToMapSlice JSON-encodes a slice of typed structs and decodes them
+// as []map[string]any. Used for handlers.Link etc.
+func structSliceToMapSlice[T any](in []T) ([]map[string]any, error) {
+	raw, err := json.Marshal(in)
+	if err != nil {
+		return nil, fmt.Errorf("ws: encode: %w", err)
+	}
+	var out []map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("ws: decode: %w", err)
+	}
+	return out, nil
+}
+
+// structToMap JSON-encodes an arbitrary struct and decodes it as map[string]any.
+func structToMap(v any) (map[string]any, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("ws: encode: %w", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("ws: decode: %w", err)
+	}
+	return out, nil
+}
+
+// deviceAddrFromChannel strips the ":N" channel suffix from a channel
+// address to produce the device address.
+func deviceAddrFromChannel(channelAddress string) string {
+	for i := len(channelAddress) - 1; i >= 0; i-- {
+		if channelAddress[i] == ':' {
+			return channelAddress[:i]
+		}
+	}
+	return channelAddress
+}
