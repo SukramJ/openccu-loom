@@ -267,6 +267,9 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 		colorBehaviour: custom.SelectField(cfg.Channel, hmenum.ParameterColorBehaviour),
 		channelColor:   custom.StringSensorField(cfg.Channel, hmenum.ParameterChannelColor),
 	}
+	// Signal lights reset the device-side ON_TIME duration on every plain
+	// turn_on; RGBW/DALI must not (see Light.resetsOnTimeOnTurnOn).
+	fc.Light.resetsOnTimeOnTurnOn = true
 	if fc.Float != nil {
 		fc.registerFixedColorLightServices()
 	}

@@ -96,6 +96,14 @@ type Light struct {
 	// running timer rather than leaving the old value active.
 	hasOnTimeUnit bool
 
+	// resetsOnTimeOnTurnOn gates whether a plain TurnOn (no explicit
+	// on-time/timer) emits the NotUsed sentinel on a channel that carries
+	// ON_TIME_UNIT. Only signal lights (FixedColorLight) require this reset.
+	// For HmIP-RGBW / HmIP-DRG-DALI the device interprets the sentinel duration
+	// on a plain turn_on and switches off again immediately (briefly flashes,
+	// then off), so the default is false and only LEVEL is sent.
+	resetsOnTimeOnTurnOn bool
+
 	unsubLevel func()
 }
 
@@ -509,10 +517,12 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 		if !l.IsStateChangeFull(StateChangeArgsFull{TurnOn: true}) {
 			return nil
 		}
-		// When the channel has ON_TIME_UNIT, send ON_TIME=NotUsed to cancel any
+		// Signal lights with ON_TIME_UNIT send ON_TIME=NotUsed to cancel any
 		// previously active timer. Without this, the old on-time remains active
 		// after a plain TurnOn and the light switches itself off unexpectedly.
-		if l.hasOnTimeUnit && l.Writer != nil {
+		// Other lights (RGBW/DALI) must not — the device reads the sentinel as a
+		// shutdown duration and turns off again right away.
+		if l.resetsOnTimeOnTurnOn && l.hasOnTimeUnit && l.Writer != nil {
 			notUsed := time.Duration(NotUsed * float64(time.Second))
 			b := l.LastLevel()
 			onCfg := OnConfig{
