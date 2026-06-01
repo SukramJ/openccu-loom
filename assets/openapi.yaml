@@ -1203,7 +1203,13 @@ paths:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: no, required: true, schema: { type: integer } }
       responses:
-        "200": { description: Calculated DP list }
+        "200":
+          description: Calculated DP list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CalculatedDPSummary" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/calc-dps/{name}:
@@ -1216,7 +1222,11 @@ paths:
         - { in: path, name: no, required: true, schema: { type: integer } }
         - { in: path, name: name, required: true, schema: { type: string } }
       responses:
-        "200": { description: Calculated DP detail }
+        "200":
+          description: Calculated DP detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CalculatedDPDetail" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/linkable-channels:
@@ -1255,23 +1265,7 @@ paths:
           description: Week-profile metadata
           content:
             application/json:
-              schema:
-                type: object
-                required: [address, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]
-                properties:
-                  address: { type: string }
-                  schedule_type: { type: string, enum: [default, climate] }
-                  min_temp: { type: number }
-                  max_temp: { type: number }
-                  profile_count: { type: integer }
-                  current_profile: { type: string }
-                  available_profiles:
-                    type: array
-                    items: { type: string }
-                  schedule_enabled:
-                    type: object
-                    additionalProperties: { type: boolean }
-                  has_climate_schedule: { type: boolean }
+              schema: { $ref: "#/components/schemas/WeekProfileResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
   /devices/{addr}/channels/{no}/schedule:
     get:
@@ -1282,7 +1276,11 @@ paths:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: no, required: true, schema: { type: integer } }
       responses:
-        "200": { description: Schedule }
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
@@ -1298,6 +1296,11 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: no, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Schedule" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1316,6 +1319,11 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: no, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetActiveProfileRequest" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1330,7 +1338,11 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
       responses:
-        "200": { description: Schedule }
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Schedule" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -1344,6 +1356,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Schedule" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1361,6 +1378,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetActiveProfileRequest" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1376,7 +1398,13 @@ paths:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: query, name: locale, schema: { type: string, default: en } }
       responses:
-        "200": { description: Links }
+        "200":
+          description: Links
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Link" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -1390,6 +1418,11 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddLinkRequest" }
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1450,7 +1483,11 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
       responses:
-        "200": { description: Status }
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CentralLinksStatus" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
@@ -4507,3 +4544,168 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    # ---- Schedules / week profiles ----
+    ScheduleChannelRef:
+      type: object
+      required: [address, number, device_address]
+      description: Identifies the channel a schedule belongs to.
+      properties:
+        address: { type: string }
+        number: { type: integer }
+        device_address: { type: string }
+    ClimatePeriod:
+      type: object
+      required: [start_time, end_time, temperature]
+      description: One heating period inside a climate weekday program.
+      properties:
+        start_time: { type: string, description: "HH:MM start of the period." }
+        end_time: { type: string, description: "HH:MM end of the period." }
+        temperature: { type: number, description: Setpoint for the period. }
+    ClimateWeekday:
+      type: object
+      required: [base_temperature, periods]
+      description: A single weekday of a climate profile.
+      properties:
+        base_temperature: { type: number }
+        periods:
+          type: array
+          items: { $ref: "#/components/schemas/ClimatePeriod" }
+    ClimateProfile:
+      type: object
+      required: [weekdays]
+      description: One climate profile (P1..P6), keyed by weekday name.
+      properties:
+        weekdays:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ClimateWeekday" }
+    SimpleScheduleEntry:
+      type: object
+      required: [slot_no, weekdays, time, level]
+      description: One slot of a non-climate (switch/dimmer/astro) weekly program.
+      properties:
+        slot_no: { type: integer }
+        weekdays:
+          type: array
+          items: { type: string }
+        time: { type: string }
+        condition: { type: string }
+        astro_type: { type: string }
+        astro_offset_minutes: { type: integer }
+        target_channels:
+          type: array
+          items: { type: string }
+        level: { type: number }
+        level_2: { type: number }
+        duration: { type: string }
+        ramp_time: { type: string }
+        lock_mode: { type: string }
+        lock_action: { type: string }
+        permission: { type: string }
+    Schedule:
+      type: object
+      required: [channel, kind]
+      description: |
+        Unified schedule DTO. ``kind`` is ``climate`` (thermostat
+        week-program, carried in ``profiles``) or ``simple`` (switch /
+        dimmer / astro program, carried in ``simple_entries``).
+      properties:
+        channel:
+          $ref: "#/components/schemas/ScheduleChannelRef"
+        kind: { type: string, enum: [climate, simple] }
+        domain: { type: string }
+        active_profile: { type: string }
+        active_profile_index: { type: integer }
+        profiles:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/ClimateProfile" }
+        simple_entries:
+          type: array
+          items: { $ref: "#/components/schemas/SimpleScheduleEntry" }
+    SetActiveProfileRequest:
+      type: object
+      required: [profile]
+      description: Selects the active climate profile (P1..P6).
+      properties:
+        profile: { type: string }
+    WeekProfileResponse:
+      type: object
+      required: [address, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]
+      description: Week-profile descriptor for a thermostat channel.
+      properties:
+        address: { type: string }
+        schedule_type: { type: string, enum: [default, climate] }
+        min_temp: { type: number }
+        max_temp: { type: number }
+        profile_count: { type: integer }
+        current_profile: { type: string }
+        available_profiles:
+          type: array
+          items: { type: string }
+        schedule_enabled:
+          type: object
+          additionalProperties: { type: boolean }
+        has_climate_schedule: { type: boolean }
+
+    # ---- Direct + central links ----
+    Link:
+      type: object
+      required: [sender_address, receiver_address, peer_address, direction]
+      description: One direct link (sender → receiver peering) of a device.
+      properties:
+        sender_address: { type: string }
+        receiver_address: { type: string }
+        name: { type: string }
+        description: { type: string }
+        flags: { type: integer }
+        sender_device_name: { type: string }
+        sender_device_model: { type: string }
+        sender_channel_type: { type: string }
+        sender_channel_type_label: { type: string }
+        sender_channel_name: { type: string }
+        receiver_device_name: { type: string }
+        receiver_device_model: { type: string }
+        receiver_channel_type: { type: string }
+        receiver_channel_type_label: { type: string }
+        receiver_channel_name: { type: string }
+        peer_address: { type: string }
+        peer_device_name: { type: string }
+        peer_device_model: { type: string }
+        direction: { type: string }
+    AddLinkRequest:
+      type: object
+      required: [sender_address, receiver_address]
+      description: Create a direct link between a sender and a receiver channel.
+      properties:
+        sender_address: { type: string }
+        receiver_address: { type: string }
+        name: { type: string }
+        description: { type: string }
+    CentralLinksStatus:
+      type: object
+      required: [supported]
+      description: PRESS-event (central click) forwarding status for a device.
+      properties:
+        supported: { type: boolean }
+        reason: { type: string }
+        eligible_channels: { type: integer }
+
+    # ---- Calculated data points ----
+    CalculatedDPSummary:
+      type: object
+      required: [name, value, observed]
+      description: A derived/calculated data point on a channel.
+      properties:
+        name: { type: string }
+        category: { type: string }
+        value: {}
+        observed: { type: boolean }
+        modified_at: { type: string, format: date-time }
+    CalculatedDPDetail:
+      allOf:
+        - $ref: "#/components/schemas/CalculatedDPSummary"
+        - type: object
+          properties:
+            depends_on:
+              type: array
+              items: { type: string }
