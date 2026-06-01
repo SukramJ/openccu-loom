@@ -115,9 +115,8 @@ type ChannelSummary struct {
 	ParamsetKey string `json:"paramset_key"`
 	DataPoints  int    `json:"data_points_count"`
 	// Category is the OCCU channel-type string (same as Type), exposed
-	// Under the key name so consumers can route
-	// on channel purpose without parsing the Type string.
-	// Closes H-036.
+	// under its own `category` key so consumers can route on channel
+	// purpose without parsing the Type string.
 	Category string `json:"category,omitempty"`
 	// CustomDpName is the stable name of the Custom-DP that owns this
 	// channel — empty when the channel is not attached to any CDP.
@@ -480,7 +479,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		Number:      ch.Number,
 		Type:        ch.Type,
 		TypeLabel:   channelTypeLabel(labels, ch.Type),
-		Category:    ch.Type, // H-036
+		Category:    ch.Type,
 		Name:        ch.Name,
 		ParamsetKey: string(ch.ParamsetIn),
 		DataPoints:  ch.Len(),
