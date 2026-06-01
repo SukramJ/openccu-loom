@@ -168,6 +168,17 @@ type DataPointSummary struct {
 	// render.
 	ValueAgeSeconds int64               `json:"value_age_seconds,omitempty"`
 	Operations      DataPointSummaryOps `json:"operations"`
+	// Category is the fine-grained DataPointCategory ("light", "cover",
+	// "climate", "sensor", "binary_sensor", "switch", …) the daemon
+	// derives internally. External clients (the HA drop-in) spawn entities
+	// off this instead of re-deriving categories from raw paramsets.
+	// Empty only when the DP does not implement the categorised surface.
+	Category string `json:"category,omitempty"`
+	// DataPointType is the consumer-facing functional type mapped from
+	// Category via hmenum.CategoryToType ("light", "number", "select",
+	// "sensor", …). Distinct from Type above, which is the CCU descriptor
+	// primitive (BOOL/INTEGER/FLOAT/ENUM); the two must not be conflated.
+	DataPointType string `json:"data_point_type,omitempty"`
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
 	// "DIMMER.LEVEL"). Drives the SPA's CONTROL-aware widget resolver
@@ -670,6 +681,14 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// instead of the bare-parameter "Leistung". Falls back to the
 	// un-typed translation when the channel-type entry is missing.
 	s.ParameterLabel = channelTypedParameterLabel(labels, channelType, s.Parameter)
+	// Category + functional type let a client classify the DP declaratively.
+	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:
+	// every concrete generic.DataPoint implements CategorisedDataPoint.
+	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
+		cat := cdp.Category()
+		s.Category = string(cat)
+		s.DataPointType = string(hmenum.CategoryToType[cat])
+	}
 	s.Control = pd.Control
 	s.Type = string(pd.Type)
 	s.Unit = pd.Unit

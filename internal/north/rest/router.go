@@ -612,6 +612,7 @@ func NewRouter(d Deps) *chi.Mux {
 				Devices:    d.Devices,
 				Hub:        d.Hub,
 				Interfaces: d.Interfaces,
+				Labels:     d.Labels,
 			}))
 
 			// Live-edit config endpoints. ConfigAdmin / UserAdmin /

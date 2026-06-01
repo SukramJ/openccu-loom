@@ -525,19 +525,25 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 	model, name := lookupDevice(b.registry, deviceAddr)
 
 	if b.wsHub != nil {
+		// Resolve the channel once: it feeds both the inline DP
+		// classification (category / functional type) and the CDP-state
+		// aggregate below. The look-up is in-memory and nil-safe.
+		ch := lookupChannel(b.registry, deviceAddr, channelNo)
+		category, dpType := valueChangedClassification(ch, e.Key.Parameter)
 		b.wsHub.PublishDataPointValueChangedKind(
 			envKind,
 			centralName, iface, deviceAddr, channelNo,
 			e.Key.Parameter, string(e.Key.ParamsetKey),
 			e.NewValue.Unwrap(), e.OldValue.Unwrap(),
 			e.Timestamp(),
+			category, dpType,
 		)
 		// CDP-state aggregate: when the affected channel hosts a
 		// Custom-DP, also emit a state snapshot on
 		// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
 		// once per CDP instead of N times per slot. The look-up is
 		// cheap (in-memory) and only runs when a CDP exists.
-		if ch := lookupChannel(b.registry, deviceAddr, channelNo); ch != nil {
+		if ch != nil {
 			if cdp := ch.CustomDataPoint(); cdp != nil {
 				if state, ok := customDPStatePayload(cdp); ok {
 					b.wsHub.PublishCustomDataPointStateChangedKind(
@@ -1439,6 +1445,28 @@ func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *
 		}
 	}
 	return nil
+}
+
+// valueChangedClassification resolves the (category, functional type)
+// pair for the DP named by parameter on ch, mirroring the assertion the
+// REST DataPointSummary and MQTT discovery use. Returns empty strings
+// when the channel or DP is unknown, or the DP does not implement the
+// categorised surface — the WS write pump only surfaces these to clients
+// that opted into `classify`, so empty is a safe no-op.
+func valueChangedClassification(ch *device.Channel, parameter string) (category, dataPointType string) {
+	if ch == nil {
+		return "", ""
+	}
+	dp := ch.Parameter(hmenum.Parameter(parameter))
+	if dp == nil {
+		return "", ""
+	}
+	cdp, ok := dp.(device.CategorisedDataPoint)
+	if !ok {
+		return "", ""
+	}
+	cat := cdp.Category()
+	return string(cat), string(hmenum.CategoryToType[cat])
 }
 
 // lookupCalculatedUnit resolves the canonical unit of a calculated

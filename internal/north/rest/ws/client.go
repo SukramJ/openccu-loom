@@ -38,6 +38,12 @@ type client struct {
 	mu       sync.RWMutex
 	topics   []string
 	identity auth.Identity
+	// classify, when set via a subscribe frame's `classify:true`, keeps
+	// the quasi-static category / data_point_type fields on value-changed
+	// payloads this client receives. Default off so the high-frequency
+	// stream stays lean for clients that cache classification from the
+	// snapshot catalogue instead.
+	classify bool
 
 	writeMu sync.Mutex
 
@@ -56,6 +62,23 @@ func newClient(conn net.Conn, br *bufio.Reader, bw *bufio.Writer, hub *Hub, logg
 		out:    make(chan Event, clientBufferSize),
 		closed: make(chan struct{}),
 	}
+}
+
+// setClassify records the client's opt-in for inline DP classification
+// on value-changed payloads. Guarded by the same mutex as the topic set
+// since the write pump reads it on every dispatch.
+func (c *client) setClassify(v bool) {
+	c.mu.Lock()
+	c.classify = v
+	c.mu.Unlock()
+}
+
+// classifyEnabled reports whether this client opted into inline
+// category / data_point_type on value-changed payloads.
+func (c *client) classifyEnabled() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.classify
 }
 
 // subscribe adds topics to the subscription set (deduped).
@@ -216,6 +239,11 @@ type inboundMessage struct {
 	ID      string          `json:"id,omitempty"`
 	Command string          `json:"command,omitempty"`
 	Args    json.RawMessage `json:"args,omitempty"`
+	// Classify, when present on a subscribe frame, toggles inline
+	// category / data_point_type on value-changed payloads for this
+	// client. Pointer so an absent field leaves the current preference
+	// untouched across re-subscribes.
+	Classify *bool `json:"classify,omitempty"`
 }
 
 // outboundEvent is the envelope every server→client event uses.
@@ -261,6 +289,9 @@ func (c *client) readPump() {
 			}
 			switch msg.Op {
 			case "subscribe":
+				if msg.Classify != nil {
+					c.setClassify(*msg.Classify)
+				}
 				c.subscribe(msg.Topics)
 				c.sendAck("subscribed", msg.Topics)
 				if msg.Since != nil {
@@ -298,13 +329,22 @@ func (c *client) writePump() {
 			if kind == "" {
 				kind = KindChange
 			}
+			payload := ev.Payload
+			// Strip the inline classification fields unless this client
+			// opted into them. The payload is a value type, so the copy
+			// here never mutates the buffered event other clients read.
+			if dp, ok := payload.(DataPointValueChangedPayload); ok && !c.classifyEnabled() {
+				dp.Category = ""
+				dp.DataPointType = ""
+				payload = dp
+			}
 			frame := outboundEvent{
 				Seq:     ev.Seq,
 				Kind:    kind,
 				Topic:   ev.Topic,
 				Type:    ev.Type,
 				TS:      ev.When.UTC().Format("2006-01-02T15:04:05.000Z"),
-				Payload: ev.Payload,
+				Payload: payload,
 			}
 			buf, err := json.Marshal(frame)
 			if err != nil {

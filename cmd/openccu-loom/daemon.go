@@ -1417,6 +1417,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	wsDeviceLifecycle.Start()
 	defer wsDeviceLifecycle.Stop()
 
+	wsDeviceTrigger := ws.NewDeviceTriggerSubscriber(reg, wsHub)
+	wsDeviceTrigger.Start()
+	defer wsDeviceTrigger.Stop()
+
+	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
+	wsOptimisticRollback.Start()
+	defer wsOptimisticRollback.Stop()
+
 	if mqttWiring != nil {
 		mqttSysStatus := mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
 		mqttSysStatus.Start()

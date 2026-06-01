@@ -719,12 +719,44 @@ paths:
         cold-restore tooling, periodic external backups, or
         debugging session replays. Sources that are not wired
         contribute empty arrays rather than failing the request.
+
+        Pass `?include=channels` to nest each device's channels under
+        `device_channels`, or `?include=channels,data_points` to also
+        expand each channel's data points — collapsing the otherwise
+        N×M per-channel bootstrap into one round trip. `data_points`
+        implies `channels`. With `Accept: application/x-ndjson` the same
+        entities stream as `kind:"channel"` / `kind:"data_point"` lines.
+      parameters:
+        - name: include
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Comma-separated set of nested entities to expand:
+            `channels` and/or `data_points` (alias `data-points`).
+            Unknown tokens are ignored.
+        - name: anonymize
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: |
+            Tokenise operator-assigned names (device / channel /
+            sub-device / sysvar / room / function labels and program
+            descriptions) with stable non-identifying hashes. Addresses
+            and values stay intact. `anonymise` is accepted as an alias.
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Snapshot" }
+            application/x-ndjson:
+              schema:
+                type: string
+                description: |
+                  Line-delimited stream, one `{"kind":...,"data":...}`
+                  object per line. Kinds: meta, interface, device,
+                  channel, data_point, room, function, program, sysvar.
 
   /events:
     get:
@@ -3553,6 +3585,23 @@ components:
             read: { type: boolean }
             write: { type: boolean }
             event: { type: boolean }
+        category:
+          type: string
+          description: |
+            Fine-grained DataPointCategory the daemon derives internally
+            ("light", "cover", "climate", "sensor", "binary_sensor",
+            "switch", …). External clients spawn entities off this instead
+            of re-deriving categories from raw paramsets. A change to a
+            category value is a breaking wire change — see the enum
+            catalogue in assets/schemas/enums.json and ADR 0020. Empty
+            only when the DP does not implement the categorised surface.
+        data_point_type:
+          type: string
+          description: |
+            Consumer-facing functional type mapped from category via
+            hmenum.CategoryToType ("light", "number", "select", "sensor",
+            …). Distinct from `type` (the CCU descriptor primitive); the
+            two must not be conflated.
         control:
           type: string
           description: |
@@ -3779,6 +3828,30 @@ components:
         interfaces:
           type: array
           items: { $ref: "#/components/schemas/InterfaceState" }
+        device_channels:
+          type: array
+          description: |
+            Present only when the request set `?include=channels` (or
+            `data_points`). Nests each device's channels — and, with
+            `data_points`, their data points — keyed by device address.
+            Parallel to `devices`, which stays unchanged.
+          items:
+            type: object
+            required: [device_address, channels]
+            properties:
+              device_address: { type: string }
+              channels:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/ChannelSummary"
+                    - type: object
+                      properties:
+                        data_points:
+                          type: array
+                          description: |
+                            Present only with `?include=data_points`.
+                          items: { $ref: "#/components/schemas/DataPointSummary" }
     Identity:
       type: object
       required: [subject, role]

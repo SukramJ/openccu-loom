@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -832,3 +833,107 @@ func TestRefreshDevices_Error_Returns502(t *testing.T) {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// --- toDataPointSummary: category + data_point_type ---
+
+// newCategorisedDP builds a generic BinarySensor with Kind explicitly set so
+// Category() returns DataPointCategoryBinarySensor. This is the same pattern
+// the device-ingest pipeline uses: Kind is injected via Spec rather than
+// inferred at constructor time.
+func newCategorisedDP(t *testing.T, chAddr string, param hmenum.Parameter, kind generic.ResolvedKind) device.ParameterDataPoint {
+	t.Helper()
+	return generic.NewBinarySensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(param),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+		Kind: kind,
+	})
+}
+
+// TestToDataPointSummary_CategoryAndType verifies that a DP implementing
+// CategorisedDataPoint surfaces non-empty category and data_point_type
+// fields, and that data_point_type equals the CategoryToType mapping for
+// the given category.
+func TestToDataPointSummary_CategoryAndType(t *testing.T) {
+	t.Parallel()
+	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
+	s := toDataPointSummary(dp, nil, "SWITCH")
+
+	if s.Category == "" {
+		t.Error("category must not be empty for a CategorisedDataPoint")
+	}
+	if s.DataPointType == "" {
+		t.Error("data_point_type must not be empty for a CategorisedDataPoint")
+	}
+	cat := hmenum.DataPointCategory(s.Category)
+	wantType := string(hmenum.CategoryToType[cat])
+	if s.DataPointType != wantType {
+		t.Errorf("data_point_type = %q, want CategoryToType[%q] = %q", s.DataPointType, s.Category, wantType)
+	}
+}
+
+// TestToDataPointSummary_NoCategory_FieldsAbsent verifies that a DP that
+// does not implement CategorisedDataPoint produces empty category and
+// data_point_type, confirming omitempty behaviour at the JSON level.
+func TestToDataPointSummary_NoCategory_FieldsAbsent(t *testing.T) {
+	t.Parallel()
+	// KindUnknown → Category() returns DataPointCategoryUndefined which maps
+	// to an empty string (no CategoryToType entry for "undefined"); the DP
+	// still implements CategorisedDataPoint, but the empty-string Category
+	// means neither field is populated.
+	//
+	// To get a DP that truly does NOT implement CategorisedDataPoint we use
+	// a minimal inline stub — not a generic.DataPoint subtype.
+	dp := &minimalDP{param: hmenum.ParameterState}
+	s := toDataPointSummary(dp, nil, "SWITCH")
+
+	if s.Category != "" {
+		t.Errorf("category must be empty for a non-categorised DP, got %q", s.Category)
+	}
+	if s.DataPointType != "" {
+		t.Errorf("data_point_type must be empty for a non-categorised DP, got %q", s.DataPointType)
+	}
+}
+
+// TestToDataPointSummary_TypeFieldDistinctFromDataPointType verifies that the
+// CCU descriptor's Type (BOOL, INTEGER, …) and the semantic DataPointType
+// ("binary_sensor", "switch", …) are independent and both present.
+func TestToDataPointSummary_TypeFieldDistinctFromDataPointType(t *testing.T) {
+	t.Parallel()
+	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
+	s := toDataPointSummary(dp, nil, "SWITCH")
+
+	// descriptor type is "BOOL" (ParameterTypeBool)
+	if s.Type == "" {
+		t.Error("type (CCU descriptor) must not be empty")
+	}
+	if s.DataPointType == "" {
+		t.Error("data_point_type (semantic type) must not be empty")
+	}
+	// They carry different semantics and must not be equal for this DP.
+	if s.Type == s.DataPointType {
+		t.Errorf("type=%q and data_point_type=%q must differ — they represent distinct concepts", s.Type, s.DataPointType)
+	}
+}
+
+// minimalDP is a test double that satisfies device.ParameterDataPoint without
+// implementing device.CategorisedDataPoint. It carries only the minimum
+// surface toDataPointSummary requires.
+type minimalDP struct {
+	param hmenum.Parameter
+}
+
+func (m *minimalDP) Parameter() hmenum.Parameter { return m.param }
+func (m *minimalDP) DataPointKey() hmtypes.DataPointKey {
+	return hmtypes.DataPointKey{Parameter: string(m.param)}
+}
+func (m *minimalDP) ParameterData() hmproto.ParameterData     { return hmproto.ParameterData{} }
+func (m *minimalDP) RawValue() (any, bool)                    { return nil, false }
+func (m *minimalDP) ModifiedAt() time.Time                    { return time.Time{} }
+func (m *minimalDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }

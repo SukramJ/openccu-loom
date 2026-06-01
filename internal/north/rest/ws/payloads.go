@@ -40,6 +40,14 @@ type DataPointValueChangedPayload struct {
 	Value         any    `json:"value"`
 	Previous      any    `json:"previous,omitempty"`
 	ModifiedAt    string `json:"modified_at"`
+	// Category and DataPointType classify the DP inline so a client that
+	// reconnects mid-stream can route the event without a prior catalogue
+	// lookup. They are quasi-static, so they ride a high-frequency message
+	// only when a client opts in with `classify` on its subscribe frame;
+	// the per-client write pump strips them otherwise (default off). See
+	// docs/external-clients/drop-in-optimizations.md.
+	Category      string `json:"category,omitempty"`
+	DataPointType string `json:"data_point_type,omitempty"`
 }
 
 // CustomDataPointStateChangedPayload carries the aggregated CDP-state
@@ -77,7 +85,7 @@ func (h *Hub) PublishDataPointValueChanged(
 	when time.Time,
 ) {
 	h.PublishDataPointValueChangedKind(KindChange, central, iface, deviceAddr, channel,
-		parameter, paramsetKey, value, previous, when)
+		parameter, paramsetKey, value, previous, when, "", "")
 }
 
 // PublishDataPointValueChangedKind is the kind-aware variant of
@@ -85,12 +93,17 @@ func (h *Hub) PublishDataPointValueChanged(
 // initial-snapshot pushes from incremental changes pass [KindInitial]
 // or [KindRefresh] here; the default [KindChange] is what
 // [Hub.PublishDataPointValueChanged] uses.
+// The trailing category / dataPointType arguments classify the DP. They
+// are always carried on the buffered payload (so a replay keeps them) and
+// stripped per-client at write time unless the client opted into
+// `classify` — see [client.writePump]. Pass empty strings to omit.
 func (h *Hub) PublishDataPointValueChangedKind(
 	envKind, central, iface, deviceAddr string,
 	channel int,
 	parameter, paramsetKey string,
 	value, previous any,
 	when time.Time,
+	category, dataPointType string,
 ) {
 	h.Publish(Event{
 		Kind:  envKind,
@@ -107,6 +120,8 @@ func (h *Hub) PublishDataPointValueChangedKind(
 			Value:         value,
 			Previous:      previous,
 			ModifiedAt:    when.UTC().Format(time.RFC3339Nano),
+			Category:      category,
+			DataPointType: dataPointType,
 		},
 	})
 }
