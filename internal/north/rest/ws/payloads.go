@@ -44,8 +44,7 @@ type DataPointValueChangedPayload struct {
 	// reconnects mid-stream can route the event without a prior catalogue
 	// lookup. They are quasi-static, so they ride a high-frequency message
 	// only when a client opts in with `classify` on its subscribe frame;
-	// the per-client write pump strips them otherwise (default off). See
-	// docs/external-clients/drop-in-optimizations.md.
+	// the per-client write pump strips them otherwise (default off).
 	Category      string `json:"category,omitempty"`
 	DataPointType string `json:"data_point_type,omitempty"`
 }

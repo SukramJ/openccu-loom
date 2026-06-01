@@ -231,9 +231,8 @@ danach kann jeder Code-Generator in jeder Sprache sie verwenden. Heute
 muss man Go-AST parsen, um zu wissen, dass `ParamsetKey.VALUES ==
 "VALUES"`.
 
-**Breaking-Change-Achse `DataPointCategory` / `DataPointType`:** Seit
-der Drop-in-Optimierung (siehe `docs/external-clients/drop-in-optimizations.md`)
-liegen diese beiden Enums auf dem Wire — `DataPointSummary.category`
+**Breaking-Change-Achse `DataPointCategory` / `DataPointType`:** Diese
+beiden Enums liegen auf dem Wire — `DataPointSummary.category`
 + `data_point_type`, optional auf dem WS-Value-Changed-Payload, und
 die genesteten Snapshot-Einträge. `homematicip_local` filtert direkt
 auf `DataPointCategory`. **Jede Änderung an einem Wert dieser beiden

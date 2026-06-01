@@ -35,7 +35,7 @@ type SnapshotEnvelope struct {
 	// external client can bootstrap structure + values in one round trip
 	// instead of N×M per-channel calls. Kept parallel to Devices so the
 	// flat summary list stays byte-identical for clients that do not ask
-	// for nesting. See docs/external-clients/drop-in-optimizations.md.
+	// for nesting.
 	DeviceChannels []SnapshotDeviceChannels `json:"device_channels,omitempty"`
 }
 
