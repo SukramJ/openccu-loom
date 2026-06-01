@@ -4330,6 +4330,47 @@ components:
         interface_id: { type: string }
         device_address: { type: string }
 
+    OptimisticRollbackPayload:
+      type: object
+      description: |
+        Payload of a `datapoint.optimistic_rolled_back` broadcast. Rides
+        the same `device.{address}.channels.{channel}.data_points.{parameter}`
+        topic as `datapoint.value_changed`; subscribers route by the
+        envelope `type` field. Fires when an optimistic write is rolled
+        back — the CCU never confirmed it within the TTL, or rejected it.
+      required: [central, device_address, channel, parameter, paramset_key, reason]
+      properties:
+        central: { type: string }
+        device_address: { type: string }
+        channel: { type: integer, minimum: 0 }
+        parameter: { type: string }
+        paramset_key: { type: string, description: "VALUES, MASTER, or LINK" }
+        reason: { type: string, description: "Why the optimistic value was rolled back (TTL expiry or CCU rejection)." }
+        sent:
+          description: The optimistic value that was rolled back. Omitted when not tracked.
+        present:
+          description: The value the data point reverted to (last CCU-confirmed value). Omitted when not tracked.
+
+    DeviceTriggerPayload:
+      type: object
+      description: |
+        Payload of a `device.trigger` broadcast. Topic pattern
+        `device.{address}.channels.{channel}.trigger` — one topic per
+        (device, channel). Fires when the CCU reports a non-state device
+        event (keypress, impulse, device error). The `event_type` /
+        `parameter` fields disambiguate which trigger fired; distinct
+        from `datapoint.value_changed`.
+      required: [central, interface_id, device_address, channel, event_type, parameter]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        device_address: { type: string }
+        channel: { type: integer, minimum: 0 }
+        event_type: { type: string }
+        parameter: { type: string }
+        value:
+          description: Optional value carried by the trigger event in its native CCU type. Omitted when absent.
+
     # ─── Matter broadcast payloads ────────────────────────────────────
     # The 6 matter.* broadcasts in wsapi.json reference these schemas
     # via their `payload` field. The bridge publishes them through
