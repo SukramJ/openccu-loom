@@ -3387,8 +3387,27 @@ components:
         (`model`, `version`, `hostname`, `serial`, `url`, `is_ha_app`)
         — the latter set may be empty before the first successful
         connect.
+
+        NORMATIVE — central-scope identity. `name` is the single
+        scoping discriminator for a CCU across the whole API and is
+        guaranteed equal to both `CentralRow.name` (the persisted
+        config record) and the `central` field carried in every
+        WebSocket / payload envelope:
+
+            SystemCCUEntry.name == CentralRow.name == payload.central
+
+        External clients resolve a CCU by its real-world `serial` and
+        then scope all per-central requests / subscriptions by this
+        `name`. The daemon never uses `name` as a Home Assistant
+        entity-identity key — that is owned by the client (see
+        docs/external-clients/ha-drop-in-identity-and-scoping.md).
       properties:
-        name: { type: string }
+        name:
+          type: string
+          description: |
+            Daemon-local scoping identifier. Equal to `CentralRow.name`
+            and to the `central` field in WS / payload envelopes; unique
+            per daemon.
         host: { type: string }
         available: { type: boolean }
         model: { type: string }
@@ -4608,7 +4627,13 @@ components:
       properties:
         name:
           type: string
-          description: Daemon-local identifier; must be unique.
+          description: |
+            Daemon-local identifier; must be unique. This is the
+            canonical central-scope discriminator: guaranteed equal to
+            `SystemCCUEntry.name` and to the `central` field in
+            WS / payload envelopes (`name == SystemCCUEntry.name ==
+            payload.central`). Changing it re-scopes every per-central
+            request, subscription and payload for this CCU.
         host:
           type: string
           description: CCU hostname or IP address.

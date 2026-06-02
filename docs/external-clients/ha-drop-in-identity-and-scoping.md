@@ -104,12 +104,16 @@ A `homematicip_local` entry identifies its CCU by **serial** (its HA
 resolve serial → name by listing `/system/ccu` — **iff** the daemon
 guarantees `SystemCCUEntry.name == CentralRow.name == payload.central`.
 
-**Decision needed:** confirm/guarantee that equality (a single normative
-statement), and ideally expose the `central` (name) directly where a
-client needs it — e.g. on `SystemCCUEntry`, and on `/info` /the snapshot
-envelope — so the client never has to assume `instance_name == central_name`.
-Today the loom adapter passes `name=instance_name` and hopes it matches
-the daemon's configured central name; nothing enforces that.
+**Resolution (taken):** the equality is now a **normative** statement in
+`assets/openapi.yaml` on both `SystemCCUEntry` (schema description +
+`name` property) and `CentralRow.name`:
+
+    SystemCCUEntry.name == CentralRow.name == payload.central
+
+A client resolves its CCU by `serial` via `GET /system/ccu`, reads the
+matching entry's `name`, and scopes all per-central requests /
+subscriptions by it — without assuming `instance_name == central_name`.
+The `TestOpenAPISpecIsValid` contract test keeps the spec well-formed.
 
 ## P5 — a third, *divergent* `unique_id` implementation lives in the daemon
 
@@ -168,7 +172,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 |---|---|---|
 | `unique_id` prefix = HA `entry_id[-10:]` | **client / homematicip_local** | inject `central_id` into `LoomCentralConfig` (loom path currently omits it) |
 | key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
-| select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution — **P4** |
+| select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution; equality normative in `openapi.yaml` — **P4 (resolved)** |
 | fetch one CCU's devices over REST | **daemon** | scoped routes or `central` param — **P2** |
 | receive one CCU's device events | **daemon contract + client** | filter by payload `central` (document it) — **P3** |
 | token = which CCU | **n/a** | token is daemon-wide; not a scoping axis — **P1** |
