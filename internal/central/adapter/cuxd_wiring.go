@@ -51,11 +51,16 @@ func wireCUxDInterface(
 		port = p
 	}
 	addr := fmt.Sprintf("%s:%d", cc.Host, port)
-	wireID := WireInterfaceID(unit.InstanceName(), cc.Name, iface)
+	// wireID is the canonical host-independent id used for all internal
+	// wiring; initID is the wire-boundary triple used for the CUxD init()
+	// and the BIN-RPC callback-server registration (CUxD routes its
+	// callbacks by interface_id). See [WireInterfaceID] / [InitInterfaceID].
+	wireID := WireInterfaceID(cc.Name, iface)
+	initID := InitInterfaceID(unit.InstanceName(), cc.Name, iface)
 
 	binClient, err := binrpc.NewClient(binrpc.Config{
 		Addr:      addr,
-		Interface: wireID,
+		Interface: initID,
 		Logger:    logger.With(slog.String("interface", wireID)),
 		Observer: observer.NewMulti(
 			observer.NewLogging(observer.WithLogger(logger), observer.WithSlowThreshold(2*time.Second)),
@@ -157,12 +162,12 @@ func wireCUxDInterface(
 		if writer != nil {
 			handlers.SetWriter(writer)
 		}
-		binrpcCallbackServer.Register(wireID, handlers)
+		binrpcCallbackServer.Register(initID, handlers)
 		callbackURL = fmt.Sprintf("binary://%s", binrpcCallbackAddr)
 		closerSrv := binrpcCallbackServer
-		capturedWireID := wireID
+		capturedInitID := initID
 		_ = closerSrv // avoid unused-var lint for deregister call in closer
-		_ = capturedWireID
+		_ = capturedInitID
 	}
 
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger)
@@ -194,21 +199,21 @@ func wireCUxDInterface(
 	seedReadableEvents(ctx, unit, iface, logger)
 
 	if callbackURL != "" {
-		if err := backend.Deinit(ctx, wireID); err != nil {
+		if err := backend.Deinit(ctx, initID); err != nil {
 			logger.Debug("wire.deinit.pre_init",
 				slog.String("central", cc.Name),
-				slog.String("interface", wireID),
+				slog.String("interface", initID),
 				slog.String("err", err.Error()))
 		}
-		if err := backend.Init(ctx, wireID, callbackURL); err != nil {
+		if err := backend.Init(ctx, initID, callbackURL); err != nil {
 			logger.Warn("wire.init.failed",
 				slog.String("central", cc.Name),
-				slog.String("interface", wireID),
+				slog.String("interface", initID),
 				slog.String("err", err.Error()))
 		} else {
 			logger.Info("wire.init.ok",
 				slog.String("central", cc.Name),
-				slog.String("interface", wireID))
+				slog.String("interface", initID))
 			// Drive the client state machine to CONNECTED — the XML-RPC path
 			// does this too. Without it CUxD sits at its initial state, so the
 			// central check_connection job sees ClientState != CONNECTED and
@@ -219,11 +224,11 @@ func wireCUxDInterface(
 
 	closer := func() {
 		if binrpcCallbackServer != nil {
-			if err := backend.Deinit(ctx, wireID); err != nil {
+			if err := backend.Deinit(ctx, initID); err != nil {
 				logger.Debug("wire.deinit.shutdown",
-					slog.String("interface", wireID), slog.String("err", err.Error()))
+					slog.String("interface", initID), slog.String("err", err.Error()))
 			}
-			binrpcCallbackServer.Deregister(wireID)
+			binrpcCallbackServer.Deregister(initID)
 		}
 		if poller != nil {
 			poller.Close()

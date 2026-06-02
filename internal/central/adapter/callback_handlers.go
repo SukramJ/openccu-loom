@@ -83,6 +83,19 @@ func (h *CallbackHandlers) incidentRecorder() reliability.IncidentRecorder {
 	return h.unit.Cache.GetIncidentRecorder()
 }
 
+// canonicalInterfaceID maps the interface_id the CCU echoes in a callback
+// envelope (the [InitInterfaceID] triple `<instance>-<central>-<iface>`) back
+// to the canonical host-independent [WireInterfaceID] (`<central>-<iface>`)
+// used by the stamped devices, the Clients registry, and DataPointKeys.
+// Every inbound callback entry runs this before touching the model so the
+// echoed id matches the internal id. Nil-safe.
+func (h *CallbackHandlers) canonicalInterfaceID(interfaceID string) string {
+	if h == nil || h.unit == nil {
+		return interfaceID
+	}
+	return StripInstance(h.unit.InstanceName(), interfaceID)
+}
+
 // Stop cancels all in-flight background goroutines and waits for them to
 // finish. Safe to call multiple times.
 func (h *CallbackHandlers) Stop() {
@@ -106,6 +119,7 @@ func (h *CallbackHandlers) Stop() {
 // without that publish the EventBridge (REST/WS/MQTT) sees nothing
 // and downstream topics never appear at the broker.
 func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	deviceAddr := deviceAddressOf(channelAddress)
 	dev, ok := h.unit.ModelRegistry.Get(deviceAddr)
 	if !ok {
@@ -316,6 +330,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 // that the DeviceRegistry and ModelRegistry are updated without waiting
 // for the next reconnect cycle.
 func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, descs xmlrpc.ArrayValue) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.new_devices",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(descs)))
@@ -342,6 +357,7 @@ func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, d
 // DeleteDevices drops the listed devices from the model registry so
 // the REST / MQTT views stop advertising them.
 func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, addresses []string) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.delete_devices",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(addresses)))
@@ -357,6 +373,7 @@ func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, 
 // paramset descriptions. hint=1 is a no-op beyond logging — link-peer
 // changes are small and reconciled on the next scheduled sweep.
 func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, address string, hint int) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.update_device",
 		slog.String("interface", interfaceID),
 		slog.String("address", address),
@@ -396,6 +413,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 // delegating to [coordinators.DeviceCoordinator.ReplaceDevice]. When no
 // writer is wired the call degrades to eviction-only (no fresh fetch).
 func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAddress, newAddress string) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.replace_device",
 		slog.String("interface", interfaceID),
 		slog.String("old", oldAddress),
@@ -431,6 +449,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 // is invalidated for each address and fresh descriptions are fetched in a
 // background goroutine.
 func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, addresses []string) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Info("callback.readded_device",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(addresses)))
@@ -483,6 +502,7 @@ var _ coordinators.DeviceDescriptionFetcher = (*callbackDescFetcher)(nil)
 // is exactly what we want — the CCU will then announce everything via
 // NewDevices on the next reconnect.
 func (h *CallbackHandlers) ListDevices(_ context.Context, interfaceID string) (xmlrpc.ArrayValue, error) {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Debug("callback.list_devices",
 		slog.String("interface", interfaceID))
 	return xmlrpc.ArrayValue{}, nil
@@ -495,6 +515,7 @@ func (h *CallbackHandlers) ListDevices(_ context.Context, interfaceID string) (x
 // Always returns nil — the CCU does not interpret a non-nil response and a
 // failed local handler must not break the callback channel.
 func (h *CallbackHandlers) Error(_ context.Context, interfaceID string, errorCode int, msg string) error {
+	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Warn("callback.error",
 		slog.String("interface", interfaceID),
 		slog.Int("error_code", errorCode),

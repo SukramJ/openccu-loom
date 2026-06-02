@@ -1,4 +1,4 @@
-# ADR 0024 — Daemon-instance vs CCU identity, and the interface_id triple
+# ADR 0024 — Daemon-instance vs CCU identity, and the two interface ids
 
 - **Status**: accepted
 - **Date**: 2026-06-02
@@ -50,20 +50,28 @@ considered and rolled back; see below.)
 
 - **`instance_name`** — the daemon's identity. Reuses the existing
   `config.InstanceName` (default: OS hostname, `.local` stripped).
-  Appears **only** in the `interface_id` prefix. Operators override it
-  for the rare same-hostname-multiple-daemons case.
+  Appears **only** in `InitInterfaceID` (the CCU-facing init id), never
+  in the canonical `InterfaceID`. Operators override it for the rare
+  same-hostname-multiple-daemons case.
 - **`central_name`** — the connected CCU's name. User-defined per
-  connection (`centrals[].name`, required, unique per daemon). It is the
-  CCU discriminator: the `interface_id` middle component, the callback
-  path token, and the wire scoping field (`payload.central`, MQTT topic
-  segment, REST `?central=`).
-- **`interface_id = <instance_name>-<central_name>-<interface>`** —
-  satisfies CCU-side client uniqueness (via `instance_name`) **and**
-  daemon-internal per-CCU uniqueness (via `central_name`) with no
-  translation layer; the `InterfaceID` stays the single internal key.
+  connection (`centrals[].name`, required, unique per daemon). The CCU
+  discriminator: the callback path token and the wire scoping field
+  (`payload.central`, MQTT topic segment, REST `?central=`).
+- **Two interface identifiers — the hostname touches only the CCU wire:**
+  - **`InterfaceID = <central_name>-<interface>`** — the canonical id
+    used **everywhere**: `DataPointKey`, the value-writer key, the
+    `Clients` registry, MQTT topics, REST/WS payloads, the SPA.
+    Host-independent; `central_name` already gives daemon-internal
+    per-CCU uniqueness (`DataPointKey` has no separate central field).
+  - **`InitInterfaceID = <instance_name>-<central_name>-<interface>`** —
+    derived **only** for the CCU `init()`/`deinit()` and the BIN-RPC
+    callback registration, where the id must be unique per daemon on the
+    CCU (two daemons against one CCU). The CCU echoes it in callbacks;
+    the callback handler strips `<instance_name>-` back to `InterfaceID`
+    (`StripInstance`). The hostname therefore never leaks into topics,
+    internal keys, or the external `interface_id` field.
 - **Callback URL = `<host:port>/RPC2/<central_name>`** — the daemon is
-  implicit in the callback server's `host:port`, so `instance_name` is
-  not repeated in the path.
+  implicit in the callback server's `host:port`.
 
 The normative scoping equality from P4 holds:
 `central_name == SystemCCUEntry.name == payload.central`.
@@ -88,7 +96,8 @@ hardware. This homogeneity is the rule a future change must preserve.
 | Local var / param | object → `u` / `unit`; name string → `centralName` |
 | Payload self-DTOs | `payload.CentralInfo` / `CentralConfig` / `CentralState` |
 | Daemon identity | `instance_name` / `InstanceName` |
-| interface_id | `<instance_name>-<central_name>-<interface>` |
+| InterfaceID (canonical, everywhere) | `<central_name>-<interface>` |
+| InitInterfaceID (CCU init/deinit + BIN-RPC register only) | `<instance_name>-<central_name>-<interface>` |
 
 **Variable-naming rule (Go-idiomatic, binding).** `central` is the
 *package*; reach its API as `central.Unit`, `central.New`,
@@ -107,12 +116,16 @@ name:
 
 ## Consequences
 
-- The wire `interface_id` format changes
-  (`<central_name>-<iface>` → `<instance_name>-<central_name>-<iface>`).
-  On upgrade the daemon re-registers callbacks (deinit old, init new) and
-  the `values_cache` rows (keyed by `(central_name, interface_id, …)`)
-  are wiped and refetched — they are a cache (`ValuesCacheSchemaVersion`
-  bump), not a hard data migration.
+- The **internal** `InterfaceID` stays two-part `<central_name>-<interface>`
+  (the pre-ADR format), so `DataPointKey`s, the value-writer key, MQTT
+  topics, REST/WS payloads and the `values_cache` are all unchanged and
+  host-independent (`ValuesCacheSchemaVersion` stays `1`). Only the
+  CCU-facing `InitInterfaceID` gains the `instance_name` prefix: on
+  upgrade the CCU re-registers the callback under the new init id (deinit
+  old, init new); nothing on disk migrates. An earlier attempt that put
+  the triple into the unified internal id leaked the hostname into MQTT
+  topics + the external `interface_id` (it was even unpredictable to
+  clients/tests) and was reverted in favour of this two-id split.
 - The runtime type was shortened `CentralUnit` → `central.Unit` (the
   package qualifier already carries "central"), and the CCU-self payload
   DTOs are `payload.Central{Info,Config,State}`. The `central` package,

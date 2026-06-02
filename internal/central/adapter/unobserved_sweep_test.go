@@ -67,7 +67,7 @@ func TestUnobservedSweepLoadsRelevantInitParameter(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
@@ -101,7 +101,7 @@ func TestUnobservedSweepSkipsAlreadyObservedDPs(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
@@ -132,7 +132,7 @@ func TestUnobservedSweepCountsLoadFailureAsErrored(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
@@ -164,7 +164,7 @@ func TestUnobservedSweepLoadsReadableEvents(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
