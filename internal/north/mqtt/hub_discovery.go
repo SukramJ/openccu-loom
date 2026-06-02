@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -202,9 +203,9 @@ func safeLower(s string) string {
 // - NUMBER, FLOAT,
 // INTEGER → number (writable) / sensor
 //
-// The stable HA `unique_id` is `openccu-loom_<central>_sysvar_<name>`
-// (lower-cased), independent of the friendly description so renames
-// in the CCU don't orphan HA history.
+// The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
+// independent of the friendly description so renames in the CCU don't
+// orphan HA history.
 func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(central string, sv HubSysvarSpec) DiscoveryItem {
 	if sv.Name == "" {
 		return DiscoveryItem{}
@@ -212,7 +213,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(central string, sv HubSys
 	var component string
 	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, central, sv.Name)
 	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, central, sv.Name)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_sysvar_" + safeLower(sv.Name)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(central), "sysvar", routingkey.HubSlug(sv.Name), "")
 
 	body := map[string]any{
 		"name":              displaySysvarName(sv),
@@ -344,7 +345,13 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(central, id, name string
 	}
 	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, central, id)
 	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, central, id)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_program_" + safeLower(id)
+	// Programs are keyed by NAME (slug), not by ID. When no name is supplied,
+	// fall back to the ID slug so the unique_id stays stable across renames.
+	programSlug := routingkey.HubSlug(name)
+	if programSlug == "" {
+		programSlug = routingkey.HubSlug(id)
+	}
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(central), "program", programSlug, "")
 	displayName := name
 	if displayName == "" {
 		displayName = id
@@ -380,7 +387,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(central, id, name string
 // would be rejected on a sensor entity, so it is intentionally omitted.
 func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(central string) DiscoveryItem {
 	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_alarm_messages"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "alarm_messages")
 	body := map[string]any{
 		"name":                     "Alarm Messages",
 		"unique_id":                uniqueID,
@@ -408,7 +415,7 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(central string) Di
 // device_class (HA shows a neutral icon).
 func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(central string) DiscoveryItem {
 	topic := naming.MQTTHubServiceMessages(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_service_messages"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "service_messages")
 	body := map[string]any{
 		"name":                     "Service Messages",
 		"unique_id":                uniqueID,
@@ -440,7 +447,7 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(central string) 
 // state_class="measurement", enabled_default=True).
 func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(central string) DiscoveryItem {
 	topic := naming.MQTTHubInbox(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_inbox"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "inbox")
 	body := map[string]any{
 		"name":                     "Inbox",
 		"unique_id":                uniqueID,
@@ -471,7 +478,7 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(central string) DiscoveryI
 // happens through REST.
 func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(central string) DiscoveryItem {
 	topic := naming.MQTTHubInstallMode(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_install_mode"
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(central), "install_mode", "", "")
 	body := map[string]any{
 		"name":                "Install Mode",
 		"unique_id":           uniqueID,
@@ -503,7 +510,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(central, iface stri
 		return DiscoveryItem{}
 	}
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, central, iface)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_connectivity_" + safeLower(iface)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "connectivity_"+safeLower(iface))
 	body := map[string]any{
 		"name":              fmt.Sprintf("Connectivity %s", iface),
 		"unique_id":         uniqueID,
@@ -535,7 +542,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(central string) Dis
 	if central == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "openccu-loom_" + safeLower(central) + "_system_health_score"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "system_health_score")
 	topic := d.TopicBuilder.Base + "/" + safeLower(central) + "/system/health_score"
 	body := map[string]any{
 		"name":                        "System Health Score",
@@ -570,7 +577,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(central, iface
 	}
 	nodeID := hubNodeID(central, "latency")
 	objID := safeLower(iface)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_latency_" + objID
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "latency_"+objID)
 	topic := d.TopicBuilder.Base + "/" + safeLower(central) + "/system/latency/" + objID
 	body := map[string]any{
 		"name":                        fmt.Sprintf("Latency %s", iface),
@@ -604,7 +611,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(central, iface
 // translation_key="update", enabled_default=True).
 func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(central string) DiscoveryItem {
 	topic := naming.MQTTHubUpdate(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_update"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(central), "update")
 	body := map[string]any{
 		"name":                    "System Update",
 		"unique_id":               uniqueID,

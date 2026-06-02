@@ -3,7 +3,30 @@
 
 package routingkey
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
+
+// TestHubSlugConcurrent locks the goroutine-safety of HubSlug: the
+// Unicode transformer it uses carries internal state, so a shared
+// instance would corrupt under parallel callers (the MQTT discovery
+// builder calls it from concurrent publish paths). Run with -race.
+func TestHubSlugConcurrent(t *testing.T) {
+	const want = "loom_11a0001234_sysvar_aussen-temperatur"
+	var wg sync.WaitGroup
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got := CanonicalUniqueID("11a0001234", "sysvar", HubSlug("Außen Temperatur"), "")
+			if got != want {
+				t.Errorf("concurrent HubSlug = %q, want %q", got, want)
+			}
+		}()
+	}
+	wg.Wait()
+}
 
 func TestSerialSuffix(t *testing.T) {
 	cases := []struct {

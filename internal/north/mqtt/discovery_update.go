@@ -6,9 +6,9 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // UpdateEvent carries the per-device context needed to build discovery
@@ -94,7 +94,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 
 	nodeID := discoveryNodeID(central, ev.DeviceAddress)
 	// object_id is unique per device — there is exactly one update entity per device.
-	objectID := "openccu-loom_" + strings.ToLower(ev.DeviceAddress) + "_update"
+	objectID := routingkey.CanonicalUniqueID(d.serialSuffix(central), ev.DeviceAddress, "update", "")
 
 	// Compose the mock Event needed by deviceDescriptor / channelBaseBody.
 	mockEv := Event{

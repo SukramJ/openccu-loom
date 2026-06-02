@@ -75,31 +75,6 @@ func TestCustomDataPointName(t *testing.T) {
 	}
 }
 
-func TestGenerateUniqueID(t *testing.T) {
-	cases := []struct {
-		centralID string
-		address   string
-		parameter string
-		prefix    string
-		want      string
-	}{
-		{"central1", "ABC0001:1", "LEVEL", "", "abc0001_1_level"},
-		{"central1", "ABC0001:1", "", "", "abc0001_1"},
-		{"central1", "ABC-0001:1", "STATE", "", "abc_0001_1_state"},
-		{"central1", "ABC0001:1", "PRESS_SHORT", "event", "event_abc0001_1_press_short"},
-		// Hub-style addresses get the central_id namespace.
-		{"central42", "Sysvar", "PRES", "", "central42_sysvar_pres"},
-		{"central42", "INT0000001", "STATE", "", "central42_int0000001_state"},
-	}
-	for _, c := range cases {
-		got := GenerateUniqueID(c.centralID, c.address, c.parameter, c.prefix)
-		if got != c.want {
-			t.Errorf("GenerateUniqueID(%q,%q,%q,%q) = %q, want %q",
-				c.centralID, c.address, c.parameter, c.prefix, got, c.want)
-		}
-	}
-}
-
 func TestGenerateTranslationKey(t *testing.T) {
 	cases := []struct {
 		in, want string

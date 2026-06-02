@@ -14,14 +14,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
-
-// daemonDiscoveryPrefix is the constant identity prefix every
-// HA-Discovery `unique_id` carries. Pinning it here keeps the value
-// one source-of-truth — HA persists the unique_id in its registry, so
-// changing the prefix orphans every entity HA already knows about.
-const daemonDiscoveryPrefix = "openccu-loom"
 
 // valueJSONValueTemplate is the canonical Jinja extractor for the
 // PerDPState `value` field. The defensive `is defined` guard avoids
@@ -182,6 +177,23 @@ func (d *DefaultDiscoveryBuilder) hubFor(central string) HubInfo {
 	return d.Hub
 }
 
+// serialSuffix returns the last-10-characters serial discriminator for the
+// given central. It feeds the serial-prefix slot of [routingkey.CanonicalUniqueID]
+// for address classes whose addresses repeat across CCUs (hub roots, INT000*,
+// virtual remotes).
+func (d *DefaultDiscoveryBuilder) serialSuffix(central string) string {
+	return routingkey.SerialSuffix(d.hubFor(central).Serial)
+}
+
+// hubAggregateUniqueID builds the unique_id for loom-specific hub
+// aggregate entities that have no equivalent in the canonical
+// routing-key contract (alarm_messages, service_messages, inbox,
+// connectivity_<iface>, system_health_score, latency_<iface>,
+// hub update). The shape is "loom_<serial10>_<kind>".
+func hubAggregateUniqueID(serial10, kind string) string {
+	return "loom_" + serial10 + "_" + kind
+}
+
 // WithSubDevices toggles per-channel-group sub-device splitting in the
 // HA `device` block.
 func (d *DefaultDiscoveryBuilder) WithSubDevices(on bool) *DefaultDiscoveryBuilder {
@@ -270,7 +282,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	)
 	nodeID = pd.DiscoveryNodeID(d.Central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
-	uniqueID := pd.DiscoveryUniqueID(daemonDiscoveryPrefix, "", ev.Parameter)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, d.Central)
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, d.Central)

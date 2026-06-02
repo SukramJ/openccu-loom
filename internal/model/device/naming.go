@@ -31,60 +31,6 @@ func (c *Channel) CustomDataPointFullName(parameter, postfix string) string {
 	return c.DataPointFullName(strings.ToUpper(postfix))
 }
 
-// GenerateUniqueID builds a lower-case unique identifier from an
-// address, an optional parameter, and an optional prefix:
-//
-//	<address with "-" or ":" → "_">                       (no parameter)
-//	<address>_<parameter>                                  (with parameter)
-//	<prefix>_<address>[_<parameter>]                       (with prefix)
-//
-// The central_id is prepended for the hub roots (Sysvar / Programs /
-// InstallMode), internal addresses (INT000*), and every virtual-remote
-// channel — including the VCU* channel range — so identical IDs stay
-// disambiguated across CCUs.
-//
-// This is a daemon-internal generator and is deliberately NOT the
-// cross-backend Home Assistant routing key: it carries the central_id
-// on VCU channels and capitalises the hub roots, where the routing-key
-// contract does neither. It is also distinct from the MQTT-discovery
-// unique_id (which is daemon-namespaced with the "openccu-loom" prefix
-// and pinned for registry stability). The shared HA routing key lives
-// in internal/routingkey (mirrored from the cross-backend contract and
-// locked by a golden-fixture test); external clients rebuild the HA
-// registry key from address + parameter themselves. See
-// docs/parity/by_design.md (BD-Identity-RoutingKeyNamespaces). A future
-// consumer that needs the HA routing key must use internal/routingkey,
-// not this function.
-//
-// loom:reachable:reason="daemon-internal id generator exercised by the naming-pipeline golden test; the cross-backend HA routing key lives in internal/routingkey"
-func GenerateUniqueID(centralID, address, parameter, prefix string) string {
-	uid := strings.ReplaceAll(address, ":", "_")
-	uid = strings.ReplaceAll(uid, "-", "_")
-	if parameter != "" {
-		uid = uid + "_" + parameter
-	}
-	if prefix != "" {
-		uid = prefix + "_" + uid
-	}
-	switch {
-	case address == "BidCoS-RF" || address == "BidCoS-Wir" || address == "HmIP-RCV-1" ||
-		address == "Sysvar" || address == "Programs" || address == "InstallMode":
-		// Exact virtual-remote root addresses (no channel suffix) are
-		// namespaced with central_id to avoid collisions when two CCUs
-		// each expose the same logical virtual bus.
-		uid = centralID + "_" + uid
-	case strings.HasPrefix(address, "INT000"):
-		uid = centralID + "_" + uid
-	case strings.HasPrefix(address, "BidCoS-RF") || strings.HasPrefix(address, "BidCoS-Wir") ||
-		strings.HasPrefix(address, "HmIP-RCV-1") || strings.HasPrefix(address, "VCU"):
-		// Channel addresses derived from virtual-remote roots (e.g.
-		// "BidCoS-Wir:1", "HmIP-RCV-1:3") also carry the central_id so
-		// multi-CCU unique-IDs stay collision-free.
-		uid = centralID + "_" + uid
-	}
-	return strings.ToLower(uid)
-}
-
 // GenerateTranslationKey converts a free-form name into the slug
 // Mirrors
 // `support.py:generate_translation_key` — slugify-then-replace dots

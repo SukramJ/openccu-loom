@@ -6,7 +6,10 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // WeekProfileDescriptor is the narrow read-side contract on a week-profile
@@ -75,12 +78,16 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev W
 	stateTopic := d.TopicBuilder.WeekProfileState(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 	commandTopic := d.TopicBuilder.WeekProfileCommand(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 
-	uniqueID := ev.WP.UniqueID()
-	// Normalise the unique_id to lower-case and replace colons (which occur
-	// in the "<central>:<addr>:WEEKPROFILE" form) with underscores so it is
-	// safe as both a topic segment and an HA object_id.
-	objectID := strings.NewReplacer(":", "_").Replace(strings.ToLower(uniqueID))
-	// Prefix with "openccu-loom_" to match the pattern used by all other entities.
+	// Build the canonical unique_id from the channel address and the
+	// "WEEKPROFILE" parameter. The WeekProfileEvent carries DeviceAddress and
+	// ChannelNo directly, so we compose the channel address string here.
+	channelAddr := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(central), channelAddr, "WEEKPROFILE", "")
+	// object_id is the normalised (colon→underscore, lower-case) form of the
+	// legacy "<central>:<addr>:WEEKPROFILE" identifier — kept for HA topic
+	// continuity. The unique_id is the canonical routing-key form.
+	rawUID := ev.WP.UniqueID()
+	objectID := strings.NewReplacer(":", "_").Replace(strings.ToLower(rawUID))
 	if !strings.HasPrefix(objectID, "openccu-loom_") {
 		objectID = "openccu-loom_" + objectID
 	}
@@ -100,7 +107,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev W
 
 	body := map[string]any{
 		"name":              "Week Profile",
-		"unique_id":         objectID,
+		"unique_id":         uniqueID,
 		"object_id":         objectID,
 		"state_topic":       stateTopic,
 		"command_topic":     commandTopic,

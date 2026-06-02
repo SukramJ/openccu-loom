@@ -44,7 +44,6 @@ type namingCase struct {
 	// Expected outputs.
 	WantDpName      string `json:"want_dp_name"`
 	WantDpFullName  string `json:"want_dp_full_name"`
-	WantUniqueID    string `json:"want_unique_id"`
 	WantTranslation string `json:"want_translation_key"`
 }
 
@@ -69,7 +68,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "Kanal LEVEL",
 			WantDpFullName:  "Wohnzimmer Licht Kanal LEVEL",
-			WantUniqueID:    "abc0001_1_level",
 			WantTranslation: "wohnzimmer_licht_kanal_level",
 		},
 		// 2: Channel without explicit name → falls back to parameter alone.
@@ -84,7 +82,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "LOW_BAT",
 			WantDpFullName:  "Sensor LOW_BAT",
-			WantUniqueID:    "abc0001_0_low_bat",
 			WantTranslation: "sensor_low_bat",
 		},
 		// 3: No parameter → device-only fallback for full name.
@@ -98,7 +95,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "",
 			WantDpFullName:  "Heizkoerper Bad",
-			WantUniqueID:    "abc0001_1",
 			WantTranslation: "heizkoerper_bad",
 		},
 		// 4: Custom-DP with postfix — base name overridden by upper-cased postfix.
@@ -115,7 +111,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "Kanal COLOR",
 			WantDpFullName:  "Wohnzimmer Licht Kanal COLOR",
-			WantUniqueID:    "abc0001_1_level",
 			WantTranslation: "wohnzimmer_licht_kanal_color",
 		},
 		// (Translation derived from fullName "Wohnzimmer Licht Kanal COLOR" → "wohnzimmer_licht_kanal_color".)
@@ -132,7 +127,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "BUTTON_LOCK",
 			WantDpFullName:  "Aussentuere BUTTON_LOCK",
-			WantUniqueID:    "def0002_1_button_lock",
 			WantTranslation: "aussentuere_button_lock",
 		},
 		// 6: Hub-style address gets the central_id prefix in unique_id.
@@ -146,7 +140,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "PRES",
 			WantDpFullName:  "System PRES",
-			WantUniqueID:    "central42_sysvar_pres",
 			WantTranslation: "system_pres",
 		},
 		// 7: Internal address (INT000…) namespaced by central_id.
@@ -160,7 +153,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "STATE",
 			WantDpFullName:  "Virtual STATE",
-			WantUniqueID:    "central42_int0000001_state",
 			WantTranslation: "virtual_state",
 		},
 		// 8: Address with dash gets normalised to underscore.
@@ -174,7 +166,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "DOOR_STATE",
 			WantDpFullName:  "Garage DOOR_STATE",
-			WantUniqueID:    "abc_0003_1_door_state",
 			WantTranslation: "garage_door_state",
 		},
 		// 9: Prefix-based unique_id (events / button presses).
@@ -189,7 +180,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "PRESS_SHORT",
 			WantDpFullName:  "Funk-Taster PRESS_SHORT",
-			WantUniqueID:    "event_abc0004_1_press_short",
 			WantTranslation: "funk_taster_press_short",
 		},
 		// 10: ColorTemp postfix — postfix replaces parameter slot.
@@ -205,7 +195,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "COLOR_TEMP",
 			WantDpFullName:  "Tisch Lampe COLOR_TEMP",
-			WantUniqueID:    "ghi0005_2_level",
 			WantTranslation: "tisch_lampe_color_temp",
 		},
 		// 11: Effect postfix.
@@ -221,7 +210,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "EFFECT",
 			WantDpFullName:  "RGB-Strip EFFECT",
-			WantUniqueID:    "jkl0006_1_program",
 			WantTranslation: "rgb_strip_effect",
 		},
 		// 12: HS postfix (RGBW light).
@@ -236,7 +224,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "HS",
 			WantDpFullName:  "Decken-Spot HS",
-			WantUniqueID:    "mno0007_3_hue",
 			WantTranslation: "decken_spot_hs",
 		},
 		// 13: Cover with no parameter and no channel name.
@@ -250,7 +237,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "",
 			WantDpFullName:  "Rolladen",
-			WantUniqueID:    "pqr0008_1",
 			WantTranslation: "rolladen",
 		},
 		// 14: Channel name without device prefix passes through.
@@ -265,7 +251,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "Wind WIND_SPEED",
 			WantDpFullName:  "Wetterstation Wind WIND_SPEED",
-			WantUniqueID:    "stu0009_5_wind_speed",
 			WantTranslation: "wetterstation_wind_wind_speed",
 		},
 		// 15: Lower-case device name + uppercase parameter.
@@ -280,7 +265,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "STATE",
 			WantDpFullName:  "Steckdose STATE",
-			WantUniqueID:    "vwx0010_1_state",
 			WantTranslation: "steckdose_state",
 		},
 		// 16: Mehrere Bindestriche im Device-Namen.
@@ -295,7 +279,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "ACTUAL_TEMPERATURE",
 			WantDpFullName:  "Smart-Home-Heizung-1 ACTUAL_TEMPERATURE",
-			WantUniqueID:    "yza0011_1_actual_temperature",
 			WantTranslation: "smart_home_heizung_1_actual_temperature",
 		},
 		// 17: Sound postfix (MP3P) — postfix replaces parameter slot.
@@ -310,7 +293,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "SOUND",
 			WantDpFullName:  "MP3 Player SOUND",
-			WantUniqueID:    "bcd0012_2_level",
 			WantTranslation: "mp3_player_sound",
 		},
 		// 18: BidCoS-RF special-prefix address gets central_id namespace.
@@ -324,7 +306,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "PRESS_SHORT",
 			WantDpFullName:  "BidCoS-RF PRESS_SHORT",
-			WantUniqueID:    "central13_bidcos_rf_press_short",
 			WantTranslation: "bidcos_rf_press_short",
 		},
 		// 19: Display row.
@@ -338,7 +319,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "DISPLAY_DATA_STRING",
 			WantDpFullName:  "Display DISPLAY_DATA_STRING",
-			WantUniqueID:    "efg0014_3_display_data_string",
 			WantTranslation: "display_display_data_string",
 		},
 		// 20: Empty parameter on a named channel — channel only.
@@ -353,7 +333,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 
 			WantDpName:      "Kanal",
 			WantDpFullName:  "Wohnung Kanal",
-			WantUniqueID:    "hij0015_1",
 			WantTranslation: "wohnung_kanal",
 		},
 	}
@@ -378,7 +357,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			dpName = ch.DataPointName(c.Parameter)
 			fullName = ch.DataPointFullName(c.Parameter)
 		}
-		uid := device.GenerateUniqueID(c.CentralID, c.ChannelAddr, c.Parameter, c.Prefix)
 		// Translation key is the slug of the user-facing full name — including the
 		// postfix slot for custom DPs.
 		tk := device.GenerateTranslationKey(fullName)
@@ -393,7 +371,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 			"central_id":           c.CentralID,
 			"data_point_name":      dpName,
 			"data_point_full_name": fullName,
-			"unique_id":            uid,
 			"translation_key":      tk,
 		}
 		got = append(got, row)
@@ -405,10 +382,6 @@ func TestNamingPipelineGoldfiles(t *testing.T) {
 		if fullName != c.WantDpFullName {
 			t.Errorf("case %d (%s): DataPointFullName=%q, want %q",
 				i+1, c.DeviceName, fullName, c.WantDpFullName)
-		}
-		if uid != c.WantUniqueID {
-			t.Errorf("case %d (%s): UniqueID=%q, want %q",
-				i+1, c.DeviceName, uid, c.WantUniqueID)
 		}
 		if tk != c.WantTranslation {
 			t.Errorf("case %d (%s): TranslationKey=%q, want %q",

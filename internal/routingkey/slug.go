@@ -21,11 +21,17 @@ var slugReplacer = strings.NewReplacer(
 	"ẞ", "ss",
 )
 
-// markStripper decomposes accented letters (NFKD) and drops the
-// resulting combining marks, turning "ü" → "u", "ö" → "o", "ä" → "a"
-// — matching the Unicode transliteration the contract specifies, not a
-// German "ü" → "ue" expansion.
-var markStripper = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+// newMarkStripper builds a transformer that decomposes accented letters
+// (NFKD) and drops the resulting combining marks, turning "ü" → "u",
+// "ö" → "o", "ä" → "a" — matching the Unicode transliteration the
+// contract specifies, not a German "ü" → "ue" expansion.
+//
+// A fresh transformer is built per call: transform.Transformer carries
+// internal state and is not safe for concurrent use, so a shared
+// package-level instance would corrupt under parallel callers.
+func newMarkStripper() transform.Transformer {
+	return transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn)), norm.NFC)
+}
 
 // HubSlug slugifies a hub data-point name (system variable, program,
 // connectivity, metric) before it becomes the parameter segment of the
@@ -37,7 +43,7 @@ var markStripper = transform.Chain(norm.NFKD, runes.Remove(runes.In(unicode.Mn))
 // cutover; see docs/external-clients/ha-drop-in-identity-and-scoping.md.
 func HubSlug(name string) string {
 	s := slugReplacer.Replace(name)
-	if t, _, err := transform.String(markStripper, s); err == nil {
+	if t, _, err := transform.String(newMarkStripper(), s); err == nil {
 		s = t
 	}
 	s = strings.ToLower(s)
