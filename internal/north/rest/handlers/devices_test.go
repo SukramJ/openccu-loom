@@ -666,6 +666,159 @@ func TestPutDataPointValue_ReadOnlyParam_Returns502(t *testing.T) {
 	}
 }
 
+// --- ListDevices central filter ---
+
+// multiCentralDeviceIndex is a DeviceIndex stub that maps each device address
+// to its owning central name, enabling tests that span multiple CCUs.
+type multiCentralDeviceIndex struct {
+	devices  map[string]*device.Device
+	centrals map[string]string // address → central name
+}
+
+func (m *multiCentralDeviceIndex) Devices() []*device.Device {
+	out := make([]*device.Device, 0, len(m.devices))
+	for _, d := range m.devices {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (m *multiCentralDeviceIndex) Device(address string) (*device.Device, bool) {
+	d, ok := m.devices[address]
+	return d, ok
+}
+
+func (m *multiCentralDeviceIndex) CentralOf(address string) string {
+	return m.centrals[address]
+}
+
+func TestListDevices_CentralFilter(t *testing.T) {
+	t.Parallel()
+
+	homeAddr := "AABB0001"
+	officeAddr := "CCDD0002"
+	dHome := newTestDevice(homeAddr, "HmIP-BSM")
+	dOffice := newTestDevice(officeAddr, "HmIP-STE2")
+
+	idx := &multiCentralDeviceIndex{
+		devices: map[string]*device.Device{
+			homeAddr:   dHome,
+			officeAddr: dOffice,
+		},
+		centrals: map[string]string{
+			homeAddr:   "home",
+			officeAddr: "office",
+		},
+	}
+
+	t.Run("central=home returns only home device", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body["total"].(float64) != 1 {
+			t.Fatalf("expected total=1 for central=home, got %v", body["total"])
+		}
+		items := body["items"].([]any)
+		addr := items[0].(map[string]any)["address"].(string)
+		if addr != homeAddr {
+			t.Errorf("expected home device %q, got %q", homeAddr, addr)
+		}
+	})
+
+	t.Run("no central param returns all devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body["total"].(float64) != 2 {
+			t.Fatalf("expected total=2 without central filter, got %v", body["total"])
+		}
+	})
+
+	t.Run("empty central param returns all devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices?central=", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body["total"].(float64) != 2 {
+			t.Fatalf("expected total=2 for empty central, got %v", body["total"])
+		}
+	})
+
+	t.Run("unknown central returns no devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices?central=nope", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body["total"].(float64) != 0 {
+			t.Fatalf("expected total=0 for unknown central, got %v", body["total"])
+		}
+	})
+
+	t.Run("central composes with model filter", func(t *testing.T) {
+		t.Parallel()
+		// central=home AND model=bsm — matches only the home device.
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices?central=home&model=bsm", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if body["total"].(float64) != 1 {
+			t.Fatalf("expected total=1 (central+model), got %v", body["total"])
+		}
+		// central=office AND model=bsm — office device is STE2, not BSM.
+		req2 := httptest.NewRequest(http.MethodGet, "/api/v1/devices?central=office&model=bsm", http.NoBody)
+		w2 := httptest.NewRecorder()
+		ListDevices(idx).ServeHTTP(w2, req2)
+		var body2 map[string]any
+		if err := json.Unmarshal(w2.Body.Bytes(), &body2); err != nil {
+			t.Fatalf("unmarshal body2: %v", err)
+		}
+		if body2["total"].(float64) != 0 {
+			t.Fatalf("expected total=0 (central=office+model=bsm), got %v", body2["total"])
+		}
+	})
+}
+
 // --- parsePriority ---
 
 func TestParsePriority_AllValues(t *testing.T) {

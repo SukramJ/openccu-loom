@@ -566,6 +566,235 @@ func TestSnapshot_NDJSON_WithInclude(t *testing.T) {
 	}
 }
 
+// --- Snapshot central filter ---
+
+// multiCentralSnapshotIndex is a DeviceIndex stub that maps device addresses
+// to named centrals, used by multi-CCU snapshot filter tests.
+type multiCentralSnapshotIndex struct {
+	devices  map[string]*device.Device
+	centrals map[string]string
+}
+
+func (m *multiCentralSnapshotIndex) Devices() []*device.Device {
+	out := make([]*device.Device, 0, len(m.devices))
+	for _, d := range m.devices {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (m *multiCentralSnapshotIndex) Device(address string) (*device.Device, bool) {
+	d, ok := m.devices[address]
+	return d, ok
+}
+
+func (m *multiCentralSnapshotIndex) CentralOf(address string) string {
+	return m.centrals[address]
+}
+
+// TestSnapshot_CentralScope verifies that ?central=<name> scopes devices (and
+// device_channels when included) plus the hub entities (programs, sysvars,
+// which carry their owning central) to the named central, while rooms and
+// functions remain fleet-wide because the model does not tag them by central.
+func TestSnapshot_CentralScope(t *testing.T) {
+	t.Parallel()
+
+	homeAddr := "HOME0001"
+	officeAddr := "OFFC0002"
+
+	dHome := newSnapshotDevice(homeAddr, "SWITCH")
+	dHome.Rooms = []string{"Living Room"}
+	dHome.Functions = []string{"Lighting"}
+
+	dOffice := newSnapshotDevice(officeAddr, "SWITCH")
+	dOffice.Rooms = []string{"Meeting Room"}
+	dOffice.Functions = []string{"Lighting"}
+
+	devIdx := &multiCentralSnapshotIndex{
+		devices: map[string]*device.Device{
+			homeAddr:   dHome,
+			officeAddr: dOffice,
+		},
+		centrals: map[string]string{
+			homeAddr:   "home",
+			officeAddr: "office",
+		},
+	}
+
+	h := hub.NewHub("home")
+	h.PutProgram(hub.NewProgram("home", "P1", "Morning", "", false, nil))
+	h.PutSysvar(hub.NewSysvar("home", "Flag", "", hmenum.HubValueTypeLogic, nil))
+	hubIdx := &testHubIndex{h: h}
+
+	t.Run("central=home scopes devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx, Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 1 {
+			t.Fatalf("expected 1 device for central=home, got %d", len(env.Devices))
+		}
+		if env.Devices[0].Address != homeAddr {
+			t.Errorf("expected home device %q, got %q", homeAddr, env.Devices[0].Address)
+		}
+	})
+
+	t.Run("central=office scopes devices to office only", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=office", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 1 {
+			t.Fatalf("expected 1 device for central=office, got %d", len(env.Devices))
+		}
+		if env.Devices[0].Address != officeAddr {
+			t.Errorf("expected office device %q, got %q", officeAddr, env.Devices[0].Address)
+		}
+	})
+
+	t.Run("no central returns all devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 2 {
+			t.Fatalf("expected 2 devices without central filter, got %d", len(env.Devices))
+		}
+	})
+
+	t.Run("rooms and functions are fleet-wide regardless of central", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// Rooms and functions are not scoped by central; both devices contribute.
+		if len(env.Rooms) != 2 {
+			t.Errorf("expected 2 rooms (fleet-wide), got %d: %+v", len(env.Rooms), env.Rooms)
+		}
+		if len(env.Functions) != 1 {
+			t.Errorf("expected 1 function (both devices share Lighting), got %d: %+v", len(env.Functions), env.Functions)
+		}
+	})
+
+	t.Run("central=home with include=channels scopes device_channels", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home&include=channels", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.DeviceChannels) != 1 {
+			t.Fatalf("expected 1 device_channels entry for central=home, got %d", len(env.DeviceChannels))
+		}
+		if env.DeviceChannels[0].DeviceAddress != homeAddr {
+			t.Errorf("expected device_channels[0] for %q, got %q", homeAddr, env.DeviceChannels[0].DeviceAddress)
+		}
+	})
+
+	t.Run("central=home keeps matching programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// Programs / sysvars carry their owning central, so a matching
+		// filter keeps them (one home program + one home sysvar).
+		if len(env.Programs) != 1 {
+			t.Errorf("expected 1 program for central=home, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 1 {
+			t.Errorf("expected 1 sysvar for central=home, got %d", len(env.Sysvars))
+		}
+	})
+
+	t.Run("non-matching central drops all programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=office", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Programs) != 0 {
+			t.Errorf("expected 0 programs for central=office, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 0 {
+			t.Errorf("expected 0 sysvars for central=office, got %d", len(env.Sysvars))
+		}
+	})
+
+	t.Run("empty central returns all programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Programs) != 1 {
+			t.Fatalf("expected 1 program for no central filter, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 1 {
+			t.Fatalf("expected 1 sysvar for no central filter, got %d", len(env.Sysvars))
+		}
+	})
+}
+
 // TestSnapshot_Anonymise_NestedChannelNames verifies that ?anonymize=1 with
 // ?include=channels tokenises channel names while leaving addresses intact.
 func TestSnapshot_Anonymise_NestedChannelNames(t *testing.T) {

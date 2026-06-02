@@ -376,8 +376,16 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		modelFilter := strings.ToLower(strings.TrimSpace(q.Get("model")))
 		nameFilter := strings.ToLower(strings.TrimSpace(q.Get("name")))
 		addrFilter := strings.ToLower(strings.TrimSpace(q.Get("address")))
+		// `central` is the per-CCU scoping discriminator, matched exactly
+		// (not substring): it is the canonical central name
+		// (`SystemCCUEntry.name == CentralRow.name == payload.central`), so
+		// a multi-CCU client can fetch exactly one CCU's device list.
+		centralFilter := strings.TrimSpace(q.Get("central"))
 		filtered := devs[:0:0]
 		for _, d := range devs {
+			if centralFilter != "" && idx.CentralOf(d.Address) != centralFilter {
+				continue
+			}
 			if ifaceFilter != "" && !strings.Contains(strings.ToLower(string(d.Interface)), ifaceFilter) {
 				continue
 			}

@@ -509,6 +509,7 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 func toSysvarSummary(s *hub.Sysvar) SysvarSummary {
 	v, ok := s.Value()
 	sum := SysvarSummary{
+		Central:     s.Central(),
 		Name:        s.Name,
 		Description: s.Description,
 		Unit:        s.Unit,

@@ -110,7 +110,7 @@ type snapshotInclude struct {
 // useful for diagnostics. Applies to both response shapes.
 func Snapshot(deps SnapshotDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		env := buildSnapshotEnvelope(deps, snapshotIncludes(r))
+		env := buildSnapshotEnvelope(deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")))
 		if wantsAnonymise(r) {
 			anonymiseSnapshot(&env)
 		}
@@ -147,12 +147,26 @@ func snapshotIncludes(r *http.Request) snapshotInclude {
 // buildSnapshotEnvelope assembles the envelope from the deps. Pulled
 // out of [Snapshot] so the NDJSON path can reuse the same source-of-truth
 // projection.
-func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude) SnapshotEnvelope {
+//
+// A non-empty `central` scopes the device tree (devices + channels) and
+// the hub entities (programs + sysvars) to that one CCU via exact match
+// on the canonical central name. Rooms and functions are not
+// central-tagged in the model and stay fleet-wide.
+func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, central string) SnapshotEnvelope {
 	env := SnapshotEnvelope{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if deps.Devices != nil {
 		devs := deps.Devices.Devices()
+		if central != "" {
+			scoped := make([]*device.Device, 0, len(devs))
+			for _, d := range devs {
+				if deps.Devices.CentralOf(d.Address) == central {
+					scoped = append(scoped, d)
+				}
+			}
+			devs = scoped
+		}
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
@@ -165,13 +179,43 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude) SnapshotEnvel
 		env.Functions = snapshotFunctions(deps.Devices)
 	}
 	if deps.Hub != nil {
-		env.Programs = snapshotPrograms(deps.Hub)
-		env.Sysvars = snapshotSysvars(deps.Hub)
+		env.Programs = filterProgramsByCentral(snapshotPrograms(deps.Hub), central)
+		env.Sysvars = filterSysvarsByCentral(snapshotSysvars(deps.Hub), central)
 	}
 	if deps.Interfaces != nil {
 		env.Interfaces = snapshotInterfaces(deps.Interfaces)
 	}
 	return env
+}
+
+// filterProgramsByCentral keeps only programs owned by central; an empty
+// central returns the input unchanged (fleet-wide).
+func filterProgramsByCentral(programs []ProgramSummary, central string) []ProgramSummary {
+	if central == "" {
+		return programs
+	}
+	out := make([]ProgramSummary, 0, len(programs))
+	for i := range programs {
+		if programs[i].Central == central {
+			out = append(out, programs[i])
+		}
+	}
+	return out
+}
+
+// filterSysvarsByCentral keeps only sysvars owned by central; an empty
+// central returns the input unchanged (fleet-wide).
+func filterSysvarsByCentral(sysvars []SysvarSummary, central string) []SysvarSummary {
+	if central == "" {
+		return sysvars
+	}
+	out := make([]SysvarSummary, 0, len(sysvars))
+	for i := range sysvars {
+		if sysvars[i].Central == central {
+			out = append(out, sysvars[i])
+		}
+	}
+	return out
 }
 
 // wantsNDJSON reports whether the client opts into the streaming
@@ -397,7 +441,7 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 	out := make([]ProgramSummary, 0, len(progs))
 	for _, p := range progs {
 		active, observed := p.Active()
-		entry := ProgramSummary{ID: p.ID, Name: p.Name, Description: p.Description}
+		entry := ProgramSummary{ID: p.ID, Name: p.Name, Description: p.Description, Central: p.Central()}
 		if observed {
 			v := active
 			entry.Active = &v

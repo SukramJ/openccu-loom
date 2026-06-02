@@ -73,13 +73,25 @@ So today the device/snapshot/value endpoints the client relies on are the
 external client (and thus a second `homematicip_local` entry) has **no way
 to fetch one CCU's device tree over REST**.
 
-**Decision needed (daemon side):** pick one —
-1. add the scoped device tree ADR-0002 described (`/centrals/{name}/devices/...`,
-   `/centrals/{name}/snapshot`), or
-2. add a `central` query parameter / header to the existing unscoped
-   endpoints, or
-3. explicitly contract external clients as **one daemon = one central**
-   for the device surface, and document multi-CCU as MQTT/UI-only.
+**Resolution (taken):** option 2 — a `central` query parameter on the
+collection endpoints. The per-address endpoints (`/devices/{addr}/...`)
+already work multi-CCU because device addresses are globally unique and
+the handler resolves the owning central per address. The gap was only
+*server-side* filtering of the collection endpoints, so:
+
+- `GET /devices?central=<name>` filters the list by exact central name.
+- `GET /snapshot?central=<name>` scopes the device tree (devices,
+  channels) and the hub entities (programs, sysvars) by central; rooms
+  and functions are not central-tagged in the model and stay fleet-wide.
+- `POST /devices/values:batch` is already per-address, so it needs no
+  central parameter.
+
+`central` is matched exactly against the canonical central name
+(`== SystemCCUEntry.name == payload.central`, P4). Both parameters are
+documented in `assets/openapi.yaml`. This mirrors the existing
+`?central=` filter on the audit endpoint and the WS filter-by-payload
+model (P3); the heavier scoped-route tree (option 1) stays available as
+a future step if a fully path-scoped surface is ever required.
 
 ## P3 — WS device events are only scopable by payload, not by topic
 
@@ -173,7 +185,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 | `unique_id` prefix = HA `entry_id[-10:]` | **client / homematicip_local** | inject `central_id` into `LoomCentralConfig` (loom path currently omits it) |
 | key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
 | select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution; equality normative in `openapi.yaml` — **P4 (resolved)** |
-| fetch one CCU's devices over REST | **daemon** | scoped routes or `central` param — **P2** |
+| fetch one CCU's devices over REST | **daemon** | `central` query param on `/devices` + `/snapshot` (per-address already multi-CCU) — **P2 (resolved)** |
 | receive one CCU's device events | **daemon contract + client** | filter by payload `central` (document it) — **P3** |
 | token = which CCU | **n/a** | token is daemon-wide; not a scoping axis — **P1** |
 

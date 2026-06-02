@@ -130,6 +130,15 @@ paths:
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Scope the list to a single CCU by its canonical central name
+            (exact match; `central == SystemCCUEntry.name ==
+            payload.central`). Omit to list devices across every central
+            the daemon manages.
       responses:
         "200":
           description: OK
@@ -744,6 +753,16 @@ paths:
             sub-device / sysvar / room / function labels and program
             descriptions) with stable non-identifying hashes. Addresses
             and values stay intact. `anonymise` is accepted as an alias.
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: |
+            Scope the snapshot to a single CCU by its canonical central
+            name (exact match; `central == SystemCCUEntry.name ==
+            payload.central`). Scopes the device tree (devices, channels)
+            and hub entities (programs, sysvars). Rooms and functions are
+            not central-tagged and stay fleet-wide. Omit for all centrals.
       responses:
         "200":
           description: OK
