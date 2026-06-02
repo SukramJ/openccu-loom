@@ -202,10 +202,10 @@ type MetricHubSensor struct {
 
 // NewMetricHubSensor constructs a MetricHubSensor for the given kind,
 // backed by the provided Metrics aggregate.
-func NewMetricHubSensor(central string, kind MetricKind, m *Metrics) *MetricHubSensor {
+func NewMetricHubSensor(centralName string, kind MetricKind, m *Metrics) *MetricHubSensor {
 	name := MetricSensorName(kind)
 	return &MetricHubSensor{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "HUB", string(kind)),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "HUB", string(kind)),
 		Kind:                kind,
 		Unit:                MetricSensorUnit(kind),
 		Name:                name,
@@ -246,10 +246,10 @@ func (s *MetricHubSensor) TranslationKey() string {
 
 // MetricHubSensors creates the three standard metric hub sensors backed
 // by the given Metrics aggregate. Returns (systemHealth, latency, eventAge).
-func MetricHubSensors(central string, m *Metrics) (systemHealth, latency, eventAge *MetricHubSensor) {
-	return NewMetricHubSensor(central, MetricSystemHealth, m),
-		NewMetricHubSensor(central, MetricConnectionLatMs, m),
-		NewMetricHubSensor(central, MetricLastEventAgeSecs, m)
+func MetricHubSensors(centralName string, m *Metrics) (systemHealth, latency, eventAge *MetricHubSensor) {
+	return NewMetricHubSensor(centralName, MetricSystemHealth, m),
+		NewMetricHubSensor(centralName, MetricConnectionLatMs, m),
+		NewMetricHubSensor(centralName, MetricLastEventAgeSecs, m)
 }
 
 // Compile-time assertion: MetricHubSensor satisfies HubDataPointer.

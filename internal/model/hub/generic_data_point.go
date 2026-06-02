@@ -79,9 +79,9 @@ type HubDataPoint struct {
 // and the KeyName inside BaseDataPointFields).
 // - description — optional human-readable text.
 // - enabledDefault — initial value for the EnabledDefault field.
-func NewHubDataPoint(central, name, description string, enabledDefault bool) HubDataPoint {
+func NewHubDataPoint(centralName, name, description string, enabledDefault bool) HubDataPoint {
 	return HubDataPoint{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "", name),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", name),
 		Name:                name,
 		Description:         description,
 		EnabledDefault:      enabledDefault,

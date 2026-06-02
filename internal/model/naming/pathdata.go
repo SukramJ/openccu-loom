@@ -133,14 +133,14 @@ func (p PathData) IsZero() bool { return p.SetPath == "" && p.StatePath == "" }
 //
 // All inputs are MQTT-safe-escaped via [TopicSafe]. Wire parameters
 // are upper-case by convention; bucket labels are lower-case.
-func (p PathData) MQTTState(base, central string) string {
+func (p PathData) MQTTState(base, centralName string) string {
 	if p.Address == "" || p.Kind == "" || p.Bucket == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/%s/%s",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -151,8 +151,8 @@ func (p PathData) MQTTState(base, central string) string {
 
 // MQTTCommand returns the matching `/set` topic for a writable data
 // point. Empty for non-channel-bound DPs.
-func (p PathData) MQTTCommand(base, central string) string {
-	state := p.MQTTState(base, central)
+func (p PathData) MQTTCommand(base, centralName string) string {
+	state := p.MQTTState(base, centralName)
 	if state == "" {
 		return ""
 	}
@@ -160,8 +160,8 @@ func (p PathData) MQTTCommand(base, central string) string {
 }
 
 // MQTTConfig returns the descriptor-companion `/config` topic.
-func (p PathData) MQTTConfig(base, central string) string {
-	state := p.MQTTState(base, central)
+func (p PathData) MQTTConfig(base, centralName string) string {
+	state := p.MQTTState(base, centralName)
 	if state == "" {
 		return ""
 	}
@@ -174,14 +174,14 @@ func (p PathData) MQTTConfig(base, central string) string {
 // / cover / valve / siren). Uses only Address + ChannelNo +
 // Interface; Bucket and Kind are ignored. Empty when Address is
 // missing.
-func (p PathData) MQTTChannelAggregateState(base, central string) string {
+func (p PathData) MQTTChannelAggregateState(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/state",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -191,14 +191,14 @@ func (p PathData) MQTTChannelAggregateState(base, central string) string {
 // MQTTChannelEvent returns the per-channel event-aggregate topic
 // `<base>/<central>/<iface>/<addr>/<ch>/event`. Non-retained;
 // carries the multi-press JSON `{"event_type": ...}` payload.
-func (p PathData) MQTTChannelEvent(base, central string) string {
+func (p PathData) MQTTChannelEvent(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/event",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -207,14 +207,14 @@ func (p PathData) MQTTChannelEvent(base, central string) string {
 
 // MQTTDataPointEvent returns the legacy per-event-type pulse topic
 // `<base>/<central>/<iface>/<addr>/<ch>/event/<etype>`.
-func (p PathData) MQTTDataPointEvent(base, central, etype string) string {
+func (p PathData) MQTTDataPointEvent(base, centralName, etype string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/event/%s",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -226,14 +226,14 @@ func (p PathData) MQTTDataPointEvent(base, central, etype string) string {
 // availability topic `<base>/<central>/<iface>/<addr>/availability`.
 // Uses only Address + Interface; ChannelNo / Bucket / Kind are
 // ignored. Empty when Address is missing.
-func (p PathData) MQTTDeviceAvailability(base, central string) string {
+func (p PathData) MQTTDeviceAvailability(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/availability",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 	)
@@ -241,14 +241,14 @@ func (p PathData) MQTTDeviceAvailability(base, central string) string {
 
 // MQTTDeviceInfo returns the per-device retained info-snapshot topic
 // `<base>/<central>/<iface>/<addr>/info`.
-func (p PathData) MQTTDeviceInfo(base, central string) string {
+func (p PathData) MQTTDeviceInfo(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/info",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 	)
@@ -256,14 +256,14 @@ func (p PathData) MQTTDeviceInfo(base, central string) string {
 
 // MQTTDeviceDiagnostics returns the per-device retained diagnostics
 // topic `<base>/<central>/<iface>/<addr>/diagnostics`.
-func (p PathData) MQTTDeviceDiagnostics(base, central string) string {
+func (p PathData) MQTTDeviceDiagnostics(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/diagnostics",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 	)
@@ -273,14 +273,14 @@ func (p PathData) MQTTDeviceDiagnostics(base, central string) string {
 // state topic `<base>/<central>/<iface>/<addr>/update`. Follows the
 // device-scope convention (`/availability`, `/info`, `/diagnostics`)
 // — no `/state` suffix because the topic IS the state.
-func (p PathData) MQTTDeviceUpdateState(base, central string) string {
+func (p PathData) MQTTDeviceUpdateState(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/update",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 	)
@@ -289,8 +289,8 @@ func (p PathData) MQTTDeviceUpdateState(base, central string) string {
 // MQTTDeviceUpdateCommand returns the subscribed install-command
 // topic `<base>/<central>/<iface>/<addr>/update/set`. Follows the
 // `/set` convention used everywhere else for inbound writes.
-func (p PathData) MQTTDeviceUpdateCommand(base, central string) string {
-	state := p.MQTTDeviceUpdateState(base, central)
+func (p PathData) MQTTDeviceUpdateCommand(base, centralName string) string {
+	state := p.MQTTDeviceUpdateState(base, centralName)
 	if state == "" {
 		return ""
 	}
@@ -299,14 +299,14 @@ func (p PathData) MQTTDeviceUpdateCommand(base, central string) string {
 
 // MQTTWeekProfileState returns the week-profile select-entity state
 // topic `<base>/<central>/<iface>/<addr>/<ch>/week_profile/state`.
-func (p PathData) MQTTWeekProfileState(base, central string) string {
+func (p PathData) MQTTWeekProfileState(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/week_profile/state",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -315,14 +315,14 @@ func (p PathData) MQTTWeekProfileState(base, central string) string {
 
 // MQTTWeekProfileCommand returns the subscribed `set` topic
 // `<base>/<central>/<iface>/<addr>/<ch>/week_profile/set`.
-func (p PathData) MQTTWeekProfileCommand(base, central string) string {
+func (p PathData) MQTTWeekProfileCommand(base, centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/week_profile/set",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -336,14 +336,14 @@ func (p PathData) MQTTWeekProfileCommand(base, central string) string {
 // [BucketCustom] and `Kind` set to the lowercase domain label
 // (e.g. "climate"). Empty when Bucket != BucketCustom or Address /
 // Kind is missing.
-func (p PathData) MQTTCustomDPState(base, central string) string {
+func (p PathData) MQTTCustomDPState(base, centralName string) string {
 	if p.Address == "" || p.Kind == "" || p.Bucket != BucketCustom {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/%s/%s/%d/custom/%s",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(string(p.Interface)),
 		TopicSafe(p.Address),
 		p.ChannelNo,
@@ -353,8 +353,8 @@ func (p PathData) MQTTCustomDPState(base, central string) string {
 
 // MQTTCustomDPConfig is the descriptor companion `/config` topic
 // for the custom-DP slot.
-func (p PathData) MQTTCustomDPConfig(base, central string) string {
-	state := p.MQTTCustomDPState(base, central)
+func (p PathData) MQTTCustomDPConfig(base, centralName string) string {
+	state := p.MQTTCustomDPState(base, centralName)
 	if state == "" {
 		return ""
 	}
@@ -366,8 +366,8 @@ func (p PathData) MQTTCustomDPConfig(base, central string) string {
 // for a custom-DP service-method invocation (open, close, set_mode,
 // turn_on, …). Mirrors ADR 0011's `…/custom/<kind>/set/<method>`
 // shape. Empty when the PathData is not a custom-DP slot.
-func (p PathData) MQTTCustomDPServiceMethod(base, central, method string) string {
-	state := p.MQTTCustomDPState(base, central)
+func (p PathData) MQTTCustomDPServiceMethod(base, centralName, method string) string {
+	state := p.MQTTCustomDPState(base, centralName)
 	if state == "" {
 		return ""
 	}
@@ -382,15 +382,15 @@ func (p PathData) MQTTCustomDPServiceMethod(base, central, method string) string
 // collapses to just the lower-cased address.
 //
 // Empty when the PathData has no Address.
-func (p PathData) DiscoveryNodeID(central string) string {
+func (p PathData) DiscoveryNodeID(centralName string) string {
 	if p.Address == "" {
 		return ""
 	}
 	addr := strings.ToLower(p.Address)
-	if central == "" {
+	if centralName == "" {
 		return addr
 	}
-	return strings.ToLower(TopicSafe(central)) + "_" + addr
+	return strings.ToLower(TopicSafe(centralName)) + "_" + addr
 }
 
 // DiscoveryObjectID returns the HA-Discovery `<object_id>` segment
@@ -423,7 +423,7 @@ func (p PathData) DiscoveryObjectID(suffix string) string {
 // per-daemon unique-ids without collision.
 //
 // Empty when Address is missing or the suffix is empty.
-func (p PathData) DiscoveryUniqueID(daemonPrefix, central, suffix string) string {
+func (p PathData) DiscoveryUniqueID(daemonPrefix, centralName, suffix string) string {
 	if p.Address == "" || suffix == "" {
 		return ""
 	}
@@ -433,12 +433,12 @@ func (p PathData) DiscoveryUniqueID(daemonPrefix, central, suffix string) string
 	if prefix == "" {
 		prefix = "openccu-loom"
 	}
-	if central == "" {
+	if centralName == "" {
 		return fmt.Sprintf("%s_%s_%d_%s", prefix, addr, p.ChannelNo, suf)
 	}
 	return fmt.Sprintf(
 		"%s_%s_%s_%d_%s",
-		prefix, strings.ToLower(TopicSafe(central)), addr, p.ChannelNo, suf,
+		prefix, strings.ToLower(TopicSafe(centralName)), addr, p.ChannelNo, suf,
 	)
 }
 
@@ -635,59 +635,59 @@ func NewHubPathData(name string) PathData {
 
 // MQTTHubStatus returns the retained CCU connection-state topic
 // `<base>/<central>/hub/status`.
-func MQTTHubStatus(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/status", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubStatus(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/status", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubInfo returns the retained CCU info-snapshot topic
 // `<base>/<central>/hub/info`.
-func MQTTHubInfo(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/info", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubInfo(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/info", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubDiagnostics returns the retained per-CCU diagnostics topic
 // `<base>/<central>/hub/diagnostics`.
-func MQTTHubDiagnostics(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/diagnostics", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubDiagnostics(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/diagnostics", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubSysvarState returns the canonical ADR-0011 sysvar state
 // topic `<base>/<central>/hub/sysvars/<name>/state`.
-func MQTTHubSysvarState(base, central, name string) string {
+func MQTTHubSysvarState(base, centralName, name string) string {
 	if name == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/hub/sysvars/%s/state",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(name),
 	)
 }
 
 // MQTTHubSysvarCommand returns the matching `set` topic.
-func MQTTHubSysvarCommand(base, central, name string) string {
+func MQTTHubSysvarCommand(base, centralName, name string) string {
 	if name == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/hub/sysvars/%s/set",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(name),
 	)
 }
 
 // MQTTHubProgramTrigger returns the canonical ADR-0011 program-
 // trigger topic `<base>/<central>/hub/programs/<id>/trigger`.
-func MQTTHubProgramTrigger(base, central, id string) string {
+func MQTTHubProgramTrigger(base, centralName, id string) string {
 	if id == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/hub/programs/%s/trigger",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(id),
 	)
 }
@@ -696,14 +696,14 @@ func MQTTHubProgramTrigger(base, central, id string) string {
 // state topic `<base>/<central>/hub/programs/<id>/state`. Mirrors
 // the sysvar `state`/`set` symmetry — HA's `switch` entity for a
 // program needs a retained state topic to render its on/off pip.
-func MQTTHubProgramState(base, central, id string) string {
+func MQTTHubProgramState(base, centralName, id string) string {
 	if id == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/hub/programs/%s/state",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(id),
 	)
 }
@@ -711,61 +711,61 @@ func MQTTHubProgramState(base, central, id string) string {
 // MQTTHubInstallMode is the canonical install-mode countdown topic
 // `<base>/<central>/hub/install_mode`. The legacy form lives at
 // `<base>/<central>/install_mode` and is gated by LegacyAliasConfig.
-func MQTTHubInstallMode(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubInstallMode(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubAlarmMessages is the canonical alarm-messages topic
 // `<base>/<central>/hub/alarm_messages`.
-func MQTTHubAlarmMessages(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/alarm_messages", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubAlarmMessages(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/alarm_messages", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubServiceMessages is the canonical service-messages topic
 // `<base>/<central>/hub/service_messages`.
-func MQTTHubServiceMessages(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/service_messages", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubServiceMessages(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/service_messages", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubInbox is the canonical inbox topic
 // `<base>/<central>/hub/inbox`.
-func MQTTHubInbox(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/inbox", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubInbox(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/inbox", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubUpdate is the canonical hub firmware-update state topic
 // `<base>/<central>/hub/update`.
-func MQTTHubUpdate(base, central string) string {
-	return fmt.Sprintf("%s/%s/hub/update", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTHubUpdate(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/hub/update", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTHubConnectivity is the canonical per-interface connectivity
 // topic `<base>/<central>/hub/connectivity/<iface>`.
-func MQTTHubConnectivity(base, central, iface string) string {
+func MQTTHubConnectivity(base, centralName, iface string) string {
 	return fmt.Sprintf(
 		"%s/%s/hub/connectivity/%s",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(iface),
 	)
 }
 
 // MQTTSystemStatus returns the non-retained per-central
 // system-status event topic `<base>/<central>/system/status`.
-func MQTTSystemStatus(base, central string) string {
-	return fmt.Sprintf("%s/%s/system/status", strings.Trim(base, "/"), TopicSafe(central))
+func MQTTSystemStatus(base, centralName string) string {
+	return fmt.Sprintf("%s/%s/system/status", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
 // MQTTCustomDPInvoke returns the device-scoped custom-DP invocation
 // topic `<base>/<central>/devices/<addr>/cdps/<name>/<op>/invoke`.
-func MQTTCustomDPInvoke(base, central, deviceAddress, name, operation string) string {
+func MQTTCustomDPInvoke(base, centralName, deviceAddress, name, operation string) string {
 	if deviceAddress == "" || name == "" || operation == "" {
 		return ""
 	}
 	return fmt.Sprintf(
 		"%s/%s/devices/%s/cdps/%s/%s/invoke",
 		strings.Trim(base, "/"),
-		TopicSafe(central),
+		TopicSafe(centralName),
 		TopicSafe(deviceAddress),
 		TopicSafe(name),
 		TopicSafe(operation),

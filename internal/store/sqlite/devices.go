@@ -75,17 +75,17 @@ ON CONFLICT(central_name, interface_id, address) DO UPDATE SET
 }
 
 // Get returns the record for (central, interface, address).
-func (s *DeviceStore) Get(ctx context.Context, central, ifaceID, address string) (DeviceRecord, error) {
+func (s *DeviceStore) Get(ctx context.Context, centralName, ifaceID, address string) (DeviceRecord, error) {
 	const q = `
 SELECT type, parent, firmware, model, manufacturer, product_group, hash, description_json
 FROM devices WHERE central_name = ? AND interface_id = ? AND address = ?`
 	var rec DeviceRecord
-	rec.CentralName = central
+	rec.CentralName = centralName
 	rec.InterfaceID = ifaceID
 	rec.Address = address
 
 	var mfr, pg, raw string
-	err := s.db.QueryRowContext(ctx, q, central, ifaceID, address).
+	err := s.db.QueryRowContext(ctx, q, centralName, ifaceID, address).
 		Scan(&rec.Type, &rec.Parent, &rec.Firmware, &rec.Model, &mfr, &pg, &rec.Hash, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return DeviceRecord{}, ErrDeviceNotFound
@@ -102,10 +102,10 @@ FROM devices WHERE central_name = ? AND interface_id = ? AND address = ?`
 }
 
 // Delete removes a device. Returns the number of rows affected.
-func (s *DeviceStore) Delete(ctx context.Context, central, ifaceID, address string) (int64, error) {
+func (s *DeviceStore) Delete(ctx context.Context, centralName, ifaceID, address string) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM devices WHERE central_name = ? AND interface_id = ? AND address = ?`,
-		central, ifaceID, address)
+		centralName, ifaceID, address)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: delete device: %w", err)
 	}
@@ -113,10 +113,10 @@ func (s *DeviceStore) Delete(ctx context.Context, central, ifaceID, address stri
 }
 
 // Size returns the total number of device records stored for central.
-func (s *DeviceStore) Size(ctx context.Context, central string) (int, error) {
+func (s *DeviceStore) Size(ctx context.Context, centralName string) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM devices WHERE central_name = ?`, central).Scan(&n)
+		`SELECT COUNT(*) FROM devices WHERE central_name = ?`, centralName).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: device size: %w", err)
 	}
@@ -125,8 +125,8 @@ func (s *DeviceStore) Size(ctx context.Context, central string) (int, error) {
 
 // FindDeviceDescription returns the record for (central, interface, address),
 // returning nil when not found instead of an error.
-func (s *DeviceStore) FindDeviceDescription(ctx context.Context, central, ifaceID, address string) (*DeviceRecord, error) {
-	rec, err := s.Get(ctx, central, ifaceID, address)
+func (s *DeviceStore) FindDeviceDescription(ctx context.Context, centralName, ifaceID, address string) (*DeviceRecord, error) {
+	rec, err := s.Get(ctx, centralName, ifaceID, address)
 	if err != nil {
 		if errors.Is(err, ErrDeviceNotFound) {
 			return nil, nil //nolint:nilnil // intentional: None-return parity with Python
@@ -138,10 +138,10 @@ func (s *DeviceStore) FindDeviceDescription(ctx context.Context, central, ifaceI
 
 // GetAddresses returns the sorted set of all known device/channel addresses
 // for (central, interface).
-func (s *DeviceStore) GetAddresses(ctx context.Context, central, ifaceID string) ([]string, error) {
+func (s *DeviceStore) GetAddresses(ctx context.Context, centralName, ifaceID string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT address FROM devices WHERE central_name = ? AND interface_id = ? ORDER BY address`,
-		central, ifaceID)
+		centralName, ifaceID)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get addresses: %w", err)
 	}
@@ -159,13 +159,13 @@ func (s *DeviceStore) GetAddresses(ctx context.Context, central, ifaceID string)
 
 // GetDeviceWithChannels returns the device description plus all channel
 // descriptions in a single query. The returned map is keyed by address.
-func (s *DeviceStore) GetDeviceWithChannels(ctx context.Context, central, ifaceID, deviceAddress string) (map[string]DeviceRecord, error) {
+func (s *DeviceStore) GetDeviceWithChannels(ctx context.Context, centralName, ifaceID, deviceAddress string) (map[string]DeviceRecord, error) {
 	const q = `
 SELECT address, type, parent, firmware, model, manufacturer, product_group, hash, description_json
 FROM devices
 WHERE central_name = ? AND interface_id = ? AND (address = ? OR parent = ?)
 ORDER BY address`
-	rows, err := s.db.QueryContext(ctx, q, central, ifaceID, deviceAddress, deviceAddress)
+	rows, err := s.db.QueryContext(ctx, q, centralName, ifaceID, deviceAddress, deviceAddress)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get device with channels: %w", err)
 	}
@@ -173,7 +173,7 @@ ORDER BY address`
 	out := make(map[string]DeviceRecord)
 	for rows.Next() {
 		var rec DeviceRecord
-		rec.CentralName = central
+		rec.CentralName = centralName
 		rec.InterfaceID = ifaceID
 		var mfr, pg, raw string
 		if err := rows.Scan(&rec.Address, &rec.Type, &rec.Parent, &rec.Firmware,
@@ -191,10 +191,10 @@ ORDER BY address`
 }
 
 // GetInterfaceIDs returns all interface IDs that have device records for central.
-func (s *DeviceStore) GetInterfaceIDs(ctx context.Context, central string) ([]string, error) {
+func (s *DeviceStore) GetInterfaceIDs(ctx context.Context, centralName string) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT DISTINCT interface_id FROM devices WHERE central_name = ? ORDER BY interface_id`,
-		central)
+		centralName)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get interface ids: %w", err)
 	}
@@ -212,11 +212,11 @@ func (s *DeviceStore) GetInterfaceIDs(ctx context.Context, central string) ([]st
 
 // GetModel returns the model string for deviceAddress across all interfaces
 // in central, or the empty string when the device is not found.
-func (s *DeviceStore) GetModel(ctx context.Context, central, deviceAddress string) (string, error) {
+func (s *DeviceStore) GetModel(ctx context.Context, centralName, deviceAddress string) (string, error) {
 	var model string
 	err := s.db.QueryRowContext(ctx,
 		`SELECT model FROM devices WHERE central_name = ? AND address = ? LIMIT 1`,
-		central, deviceAddress).Scan(&model)
+		centralName, deviceAddress).Scan(&model)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -228,11 +228,11 @@ func (s *DeviceStore) GetModel(ctx context.Context, central, deviceAddress strin
 
 // HasDeviceDescriptions reports whether any device records exist for
 // (central, interface).
-func (s *DeviceStore) HasDeviceDescriptions(ctx context.Context, central, ifaceID string) (bool, error) {
+func (s *DeviceStore) HasDeviceDescriptions(ctx context.Context, centralName, ifaceID string) (bool, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM devices WHERE central_name = ? AND interface_id = ? LIMIT 1`,
-		central, ifaceID).Scan(&n)
+		centralName, ifaceID).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("sqlite: has device descriptions: %w", err)
 	}
@@ -241,10 +241,10 @@ func (s *DeviceStore) HasDeviceDescriptions(ctx context.Context, central, ifaceI
 
 // Clear removes all device records for (central, ifaceID). Returns the number
 // of rows deleted.
-func (s *DeviceStore) Clear(ctx context.Context, central, ifaceID string) (int64, error) {
+func (s *DeviceStore) Clear(ctx context.Context, centralName, ifaceID string) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM devices WHERE central_name = ? AND interface_id = ?`,
-		central, ifaceID)
+		centralName, ifaceID)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: clear devices: %w", err)
 	}
@@ -253,11 +253,11 @@ func (s *DeviceStore) Clear(ctx context.Context, central, ifaceID string) (int64
 
 // ListByInterface returns every device belonging to (central, iface)
 // sorted by address ascending.
-func (s *DeviceStore) ListByInterface(ctx context.Context, central, ifaceID string) ([]DeviceRecord, error) {
+func (s *DeviceStore) ListByInterface(ctx context.Context, centralName, ifaceID string) ([]DeviceRecord, error) {
 	const q = `
 SELECT address, type, parent, firmware, model, manufacturer, product_group, hash, description_json
 FROM devices WHERE central_name = ? AND interface_id = ? ORDER BY address`
-	rows, err := s.db.QueryContext(ctx, q, central, ifaceID)
+	rows, err := s.db.QueryContext(ctx, q, centralName, ifaceID)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: list devices: %w", err)
 	}
@@ -265,7 +265,7 @@ FROM devices WHERE central_name = ? AND interface_id = ? ORDER BY address`
 	var out []DeviceRecord
 	for rows.Next() {
 		var rec DeviceRecord
-		rec.CentralName = central
+		rec.CentralName = centralName
 		rec.InterfaceID = ifaceID
 		var mfr, pg, raw string
 		if err := rows.Scan(&rec.Address, &rec.Type, &rec.Parent, &rec.Firmware,

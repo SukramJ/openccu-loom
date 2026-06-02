@@ -112,12 +112,12 @@ func NewValueWriter() *ValueWriter {
 }
 
 // Register binds a backend for (central, interface).
-func (w *ValueWriter) Register(central, interfaceID string, b backends.Operations) {
+func (w *ValueWriter) Register(centralName, interfaceID string, b backends.Operations) {
 	if b == nil {
 		return
 	}
 	w.mu.Lock()
-	w.backends[valueWriterKey{Central: central, Interface: interfaceID}] = b
+	w.backends[valueWriterKey{Central: centralName, Interface: interfaceID}] = b
 	w.mu.Unlock()
 }
 
@@ -131,8 +131,8 @@ func (w *ValueWriter) Register(central, interfaceID string, b backends.Operation
 // Passing nil removes the IC binding; subsequent calls with
 // [WriteOptions.SkipRetry] fall through to the direct backend path
 // (no retrier is involved either way).
-func (w *ValueWriter) RegisterIC(central, interfaceID string, ic icSetterLike) {
-	key := valueWriterKey{Central: central, Interface: interfaceID}
+func (w *ValueWriter) RegisterIC(centralName, interfaceID string, ic icSetterLike) {
+	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	w.mu.Lock()
 	if ic == nil {
 		delete(w.icSetters, key)
@@ -143,8 +143,8 @@ func (w *ValueWriter) RegisterIC(central, interfaceID string, ic icSetterLike) {
 }
 
 // Deregister drops the binding for both the backend and the IC.
-func (w *ValueWriter) Deregister(central, interfaceID string) {
-	key := valueWriterKey{Central: central, Interface: interfaceID}
+func (w *ValueWriter) Deregister(centralName, interfaceID string) {
+	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	w.mu.Lock()
 	delete(w.backends, key)
 	delete(w.icSetters, key)
@@ -159,10 +159,10 @@ var ErrNoBackend = errors.New("value_writer: no backend for (central, interface)
 // options so the same reliability path (PurgeAddresses guard, retrier hook)
 // is used uniformly.
 func (w *ValueWriter) SetValue(
-	ctx context.Context, central, interfaceID, channelAddress string,
+	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
 ) error {
-	return w.SetValueWithOptions(ctx, central, interfaceID, channelAddress, parameter, value, WriteOptions{
+	return w.SetValueWithOptions(ctx, centralName, interfaceID, channelAddress, parameter, value, WriteOptions{
 		Priority: priority,
 		// RxMode left as Unset (CCU default), WaitForCallback false,
 		// CheckAgainstPD false — matches the historical SetValue
@@ -172,10 +172,10 @@ func (w *ValueWriter) SetValue(
 }
 
 // Backend returns the operations bound to (central, interface).
-func (w *ValueWriter) Backend(central, interfaceID string) (backends.Operations, bool) {
+func (w *ValueWriter) Backend(centralName, interfaceID string) (backends.Operations, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	b, ok := w.backends[valueWriterKey{Central: central, Interface: interfaceID}]
+	b, ok := w.backends[valueWriterKey{Central: centralName, Interface: interfaceID}]
 	return b, ok
 }
 
@@ -242,7 +242,7 @@ func (w *ValueWriter) InFlightTracker() *reliability.InFlightTracker {
 // interface) pair by forwarding to the installed retrier's
 // [reliability.Retrier.CancelInterface]. Returns the number of chains
 // canceled, or 0 when no retrier is installed.
-func (w *ValueWriter) CancelInterface(central, interfaceID string) int {
+func (w *ValueWriter) CancelInterface(centralName, interfaceID string) int {
 	w.mu.RLock()
 	r := w.retrier
 	w.mu.RUnlock()

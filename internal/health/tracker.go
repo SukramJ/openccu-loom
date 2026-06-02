@@ -422,8 +422,8 @@ func (t *Tracker) ScoreInt() int {
 // `hub.ccu-main`), so the substring match catches both the
 // transport-level entries and the per-bridge / per-store entries
 // that carry the same prefix.
-func (t *Tracker) CentralScore(central string) float64 {
-	if central == "" {
+func (t *Tracker) CentralScore(centralName string) float64 {
+	if centralName == "" {
 		return 0
 	}
 	t.mu.RLock()
@@ -431,7 +431,7 @@ func (t *Tracker) CentralScore(central string) float64 {
 	total := 0.0
 	count := 0
 	for name, raw := range t.components {
-		if !strings.Contains(name, central) {
+		if !strings.Contains(name, centralName) {
 			continue
 		}
 		c := t.applyStaleLocked(raw)
@@ -453,8 +453,8 @@ func (t *Tracker) CentralScore(central string) float64 {
 
 // CentralScoreInt is the integer convenience wrapper for
 // [CentralScore], mirroring [ScoreInt] for the global aggregate.
-func (t *Tracker) CentralScoreInt(central string) int {
-	return int(t.CentralScore(central) * 100)
+func (t *Tracker) CentralScoreInt(centralName string) int {
+	return int(t.CentralScore(centralName) * 100)
 }
 
 // OverallStatus returns the worst-case status across all components.

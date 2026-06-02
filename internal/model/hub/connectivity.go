@@ -146,12 +146,12 @@ func (*Connectivity) EnabledByDefault() bool { return true }
 // Connectivity is a multi-interface aggregate, so callers parametrise
 // over the interface ID rather than calling [payload.MQTTAddressable]
 // on the aggregate as a whole.
-func (c *Connectivity) MQTTTopicsForInterface(base, central, iface string) payload.MQTTTopicSet {
+func (c *Connectivity) MQTTTopicsForInterface(base, centralName, iface string) payload.MQTTTopicSet {
 	if iface == "" {
 		return payload.MQTTTopicSet{}
 	}
 	return payload.MQTTTopicSet{
-		State: naming.MQTTHubConnectivity(base, central, iface),
+		State: naming.MQTTHubConnectivity(base, centralName, iface),
 	}
 }
 

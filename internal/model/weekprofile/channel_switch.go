@@ -42,10 +42,10 @@ type ChannelSwitch struct {
 // The UniqueID is computed as
 //
 //	<central>:<deviceAddress>:SCHEDULE_CHANNEL_LOCK_<channelKey>
-func NewChannelSwitch(central, deviceAddress, channelKey string, profile *ProfileDataPoint) *ChannelSwitch {
+func NewChannelSwitch(centralName, deviceAddress, channelKey string, profile *ProfileDataPoint) *ChannelSwitch {
 	keyName := "SCHEDULE_CHANNEL_LOCK_" + channelKey
 	cs := &ChannelSwitch{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, deviceAddress, keyName),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, deviceAddress, keyName),
 		channelKey:          channelKey,
 		profile:             profile,
 	}

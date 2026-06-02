@@ -67,9 +67,9 @@ func NewInbox() *Inbox { return NewInboxWithCentral("") }
 // [datapoint.BaseDataPointFields] is initialised with the `central`
 // scope so the resulting [UniqueID] is `<central>::inbox`.
 // ADR 0002 requires production callers to set `central`.
-func NewInboxWithCentral(central string) *Inbox {
+func NewInboxWithCentral(centralName string) *Inbox {
 	return &Inbox{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "", "inbox"),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "inbox"),
 		devices:             make(map[string]InboxDevice),
 	}
 }
@@ -147,9 +147,9 @@ func (i *Inbox) OnUpdate(fn func([]InboxDevice)) func() {
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical inbox
 // aggregate is published to `<base>/<central>/hub/inbox`. Read-only;
 // no Set topic.
-func (i *Inbox) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (i *Inbox) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
-		State: naming.MQTTHubInbox(base, central),
+		State: naming.MQTTHubInbox(base, centralName),
 	}
 }
 

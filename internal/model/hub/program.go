@@ -63,9 +63,9 @@ type Program struct {
 // - description — optional human-readable description.
 // - isInternal — true for Tmp_*-programs created internally by the CCU.
 // - writer — the execution backend; nil creates an execute-only program.
-func NewProgram(central, id, name, description string, isInternal bool, writer ProgramWriter) *Program {
+func NewProgram(centralName, id, name, description string, isInternal bool, writer ProgramWriter) *Program {
 	p := &Program{
-		HubDataPoint: NewHubDataPoint(central, name, description, true),
+		HubDataPoint: NewHubDataPoint(centralName, name, description, true),
 		ID:           id,
 		IsInternal:   isInternal,
 		Writer:       writer,
@@ -105,13 +105,13 @@ type ProgramEvent struct {
 // ADR-0011 program topology. State carries the active-flag mirror so
 // HA's `switch` entity can render its pip; Trigger is the HA → daemon
 // invocation topic.
-func (p *Program) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (p *Program) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	if p.ID == "" {
 		return payload.MQTTTopicSet{}
 	}
 	return payload.MQTTTopicSet{
-		State:   naming.MQTTHubProgramState(base, central, p.ID),
-		Trigger: naming.MQTTHubProgramTrigger(base, central, p.ID),
+		State:   naming.MQTTHubProgramState(base, centralName, p.ID),
+		Trigger: naming.MQTTHubProgramTrigger(base, centralName, p.ID),
 	}
 }
 

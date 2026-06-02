@@ -148,9 +148,9 @@ func (m *InstallMode) TranslationKey() string { return "install_mode" }
 // InstallMode lives per-interface in the model but its broker topic
 // is central-weite; the adapter aggregates remaining seconds across
 // interfaces before publishing.
-func (m *InstallMode) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (m *InstallMode) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
-		State: naming.MQTTHubInstallMode(base, central),
+		State: naming.MQTTHubInstallMode(base, centralName),
 	}
 }
 

@@ -85,9 +85,9 @@ func NewHSColor(address string, w Writer, hueParam, satParam hmenum.Parameter) *
 // channel that owns this combined DP drives its visibility through
 // the parent's CDPPrimary/CDPVisible usage, not through the combined
 // sub-DP itself.
-func NewHSColorWithCentral(central, address string, w Writer, hueParam, satParam hmenum.Parameter) *HSColor {
+func NewHSColorWithCentral(centralName, address string, w Writer, hueParam, satParam hmenum.Parameter) *HSColor {
 	c := &HSColor{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, address, hsColorKeyName),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, address, hsColorKeyName),
 		Address:             address,
 		Writer:              w,
 		HueParameter:        hueParam,

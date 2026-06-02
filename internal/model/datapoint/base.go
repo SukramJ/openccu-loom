@@ -157,9 +157,9 @@ const publishedEventWindow = 500 * time.Millisecond
 // the `keyName` then carries the full identity.
 // - `keyName` — the parameter name, the program/sysvar name, or
 // the calculated/combined identifier. Required.
-func NewBaseDataPointFields(central, address, keyName string) BaseDataPointFields {
+func NewBaseDataPointFields(centralName, address, keyName string) BaseDataPointFields {
 	return BaseDataPointFields{
-		centralName: central,
+		centralName: centralName,
 		address:     address,
 		keyName:     keyName,
 	}

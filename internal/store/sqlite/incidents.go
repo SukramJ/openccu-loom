@@ -97,12 +97,12 @@ WHERE id = (
 
 // GetAllIncidents returns all incidents for central ordered by last_seen
 // descending.
-func (s *IncidentStore) GetAllIncidents(ctx context.Context, central string) ([]Incident, error) {
+func (s *IncidentStore) GetAllIncidents(ctx context.Context, centralName string) ([]Incident, error) {
 	const q = `
 SELECT id, COALESCE(interface_id, ''), type, severity, message, COALESCE(details, ''), COALESCE(journal_excerpt, ''), first_seen, last_seen, count
 FROM incidents WHERE central_name = ?
 ORDER BY last_seen DESC`
-	rows, err := s.db.QueryContext(ctx, q, central)
+	rows, err := s.db.QueryContext(ctx, q, centralName)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get all incidents: %w", err)
 	}
@@ -110,7 +110,7 @@ ORDER BY last_seen DESC`
 	var out []Incident
 	for rows.Next() {
 		var inc Incident
-		inc.CentralName = central
+		inc.CentralName = centralName
 		var typ, sev string
 		if err := rows.Scan(&inc.ID, &inc.InterfaceID, &typ, &sev,
 			&inc.Message, &inc.Details, &inc.JournalExcerpt, &inc.FirstSeen, &inc.LastSeen, &inc.Count); err != nil {
@@ -124,8 +124,8 @@ ORDER BY last_seen DESC`
 }
 
 // GetDiagnostics returns a summary of incidents for central.
-func (s *IncidentStore) GetDiagnostics(ctx context.Context, central string, maxPerType, maxAgeDays int) (map[string]any, error) {
-	all, err := s.GetAllIncidents(ctx, central)
+func (s *IncidentStore) GetDiagnostics(ctx context.Context, centralName string, maxPerType, maxAgeDays int) (map[string]any, error) {
+	all, err := s.GetAllIncidents(ctx, centralName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +164,12 @@ func (s *IncidentStore) GetDiagnostics(ctx context.Context, central string, maxP
 }
 
 // GetIncidentsByType returns all incidents of incidentType for central.
-func (s *IncidentStore) GetIncidentsByType(ctx context.Context, central string, incidentType hmenum.IncidentType) ([]Incident, error) {
+func (s *IncidentStore) GetIncidentsByType(ctx context.Context, centralName string, incidentType hmenum.IncidentType) ([]Incident, error) {
 	const q = `
 SELECT id, COALESCE(interface_id, ''), severity, message, COALESCE(details, ''), COALESCE(journal_excerpt, ''), first_seen, last_seen, count
 FROM incidents WHERE central_name = ? AND type = ?
 ORDER BY last_seen DESC`
-	rows, err := s.db.QueryContext(ctx, q, central, string(incidentType))
+	rows, err := s.db.QueryContext(ctx, q, centralName, string(incidentType))
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get incidents by type: %w", err)
 	}
@@ -177,7 +177,7 @@ ORDER BY last_seen DESC`
 	var out []Incident
 	for rows.Next() {
 		var inc Incident
-		inc.CentralName = central
+		inc.CentralName = centralName
 		inc.Type = incidentType
 		var sev string
 		if err := rows.Scan(&inc.ID, &inc.InterfaceID, &sev,
@@ -191,7 +191,7 @@ ORDER BY last_seen DESC`
 }
 
 // PurgeOld removes incidents older than maxAgeDays for central.
-func (s *IncidentStore) PurgeOld(ctx context.Context, central string, maxAgeDays int) (int64, error) {
+func (s *IncidentStore) PurgeOld(ctx context.Context, centralName string, maxAgeDays int) (int64, error) {
 	if maxAgeDays <= 0 {
 		maxAgeDays = DefaultMaxAgeDays
 	}
@@ -199,7 +199,7 @@ func (s *IncidentStore) PurgeOld(ctx context.Context, central string, maxAgeDays
 	res, err := s.db.ExecContext(
 		ctx,
 		`DELETE FROM incidents WHERE central_name = ? AND last_seen < datetime('now', ?)`,
-		central, offset,
+		centralName, offset,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: purge old incidents: %w", err)
@@ -209,14 +209,14 @@ func (s *IncidentStore) PurgeOld(ctx context.Context, central string, maxAgeDays
 
 // EnforcePerTypeCap removes the oldest incidents that exceed maxPerType
 // for each incident type for central.
-func (s *IncidentStore) EnforcePerTypeCap(ctx context.Context, central string, maxPerType int) error {
+func (s *IncidentStore) EnforcePerTypeCap(ctx context.Context, centralName string, maxPerType int) error {
 	if maxPerType <= 0 {
 		maxPerType = DefaultMaxPerType
 	}
 	// Find all distinct types for central with more than maxPerType rows.
 	const typesQ = `
 SELECT DISTINCT type FROM incidents WHERE central_name = ?`
-	rows, err := s.db.QueryContext(ctx, typesQ, central)
+	rows, err := s.db.QueryContext(ctx, typesQ, centralName)
 	if err != nil {
 		return fmt.Errorf("sqlite: enforce per-type cap (types): %w", err)
 	}
@@ -241,7 +241,7 @@ DELETE FROM incidents WHERE central_name = ? AND type = ? AND id NOT IN (
     SELECT id FROM incidents WHERE central_name = ? AND type = ?
     ORDER BY last_seen DESC LIMIT ?
 )`
-		if _, err := s.db.ExecContext(ctx, delQ, central, t, central, t, maxPerType); err != nil {
+		if _, err := s.db.ExecContext(ctx, delQ, centralName, t, centralName, t, maxPerType); err != nil {
 			return fmt.Errorf("sqlite: enforce per-type cap (delete): %w", err)
 		}
 	}
@@ -249,12 +249,12 @@ DELETE FROM incidents WHERE central_name = ? AND type = ? AND id NOT IN (
 }
 
 // GetIncidentsByInterface returns all incidents for the given interface ID.
-func (s *IncidentStore) GetIncidentsByInterface(ctx context.Context, central, interfaceID string) ([]Incident, error) {
+func (s *IncidentStore) GetIncidentsByInterface(ctx context.Context, centralName, interfaceID string) ([]Incident, error) {
 	const q = `
 SELECT id, COALESCE(interface_id, ''), type, severity, message, COALESCE(details, ''), COALESCE(journal_excerpt, ''), first_seen, last_seen, count
 FROM incidents WHERE central_name = ? AND interface_id = ?
 ORDER BY last_seen DESC`
-	rows, err := s.db.QueryContext(ctx, q, central, interfaceID)
+	rows, err := s.db.QueryContext(ctx, q, centralName, interfaceID)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get incidents by interface: %w", err)
 	}
@@ -262,7 +262,7 @@ ORDER BY last_seen DESC`
 	var out []Incident
 	for rows.Next() {
 		var inc Incident
-		inc.CentralName = central
+		inc.CentralName = centralName
 		var typ, sev string
 		if err := rows.Scan(&inc.ID, &inc.InterfaceID, &typ, &sev,
 			&inc.Message, &inc.Details, &inc.JournalExcerpt, &inc.FirstSeen, &inc.LastSeen, &inc.Count); err != nil {
@@ -276,10 +276,10 @@ ORDER BY last_seen DESC`
 }
 
 // IncidentCount returns the total number of incidents stored for central.
-func (s *IncidentStore) IncidentCount(ctx context.Context, central string) (int, error) {
+func (s *IncidentStore) IncidentCount(ctx context.Context, centralName string) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM incidents WHERE central_name = ?`, central).Scan(&n)
+		`SELECT COUNT(*) FROM incidents WHERE central_name = ?`, centralName).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: incident count: %w", err)
 	}
@@ -287,9 +287,9 @@ func (s *IncidentStore) IncidentCount(ctx context.Context, central string) (int,
 }
 
 // ClearIncidents removes all incident rows for central from the database.
-func (s *IncidentStore) ClearIncidents(ctx context.Context, central string) error {
+func (s *IncidentStore) ClearIncidents(ctx context.Context, centralName string) error {
 	_, err := s.db.ExecContext(ctx,
-		`DELETE FROM incidents WHERE central_name = ?`, central)
+		`DELETE FROM incidents WHERE central_name = ?`, centralName)
 	if err != nil {
 		return fmt.Errorf("sqlite: clear incidents: %w", err)
 	}
@@ -364,12 +364,12 @@ func (s *IncidentStore) RecordIncident(ctx context.Context, inc reliability.Inci
 }
 
 // Recent returns the most recent limit incidents (all severities).
-func (s *IncidentStore) Recent(ctx context.Context, central string, limit int) ([]Incident, error) {
+func (s *IncidentStore) Recent(ctx context.Context, centralName string, limit int) ([]Incident, error) {
 	const q = `
 SELECT id, COALESCE(interface_id, ''), type, severity, message, COALESCE(details, ''), COALESCE(journal_excerpt, ''), first_seen, last_seen, count
 FROM incidents WHERE central_name = ?
 ORDER BY last_seen DESC LIMIT ?`
-	rows, err := s.db.QueryContext(ctx, q, central, limit)
+	rows, err := s.db.QueryContext(ctx, q, centralName, limit)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: recent incidents: %w", err)
 	}
@@ -377,7 +377,7 @@ ORDER BY last_seen DESC LIMIT ?`
 	var out []Incident
 	for rows.Next() {
 		var inc Incident
-		inc.CentralName = central
+		inc.CentralName = centralName
 		var typ, sev string
 		if err := rows.Scan(&inc.ID, &inc.InterfaceID, &typ, &sev,
 			&inc.Message, &inc.Details, &inc.JournalExcerpt, &inc.FirstSeen, &inc.LastSeen, &inc.Count); err != nil {

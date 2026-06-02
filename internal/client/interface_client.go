@@ -232,12 +232,12 @@ func New(cfg Config) (*InterfaceClient, error) {
 		// adapter; this default listener provides the equivalent without additional
 		// wiring overhead.
 		ifaceID := string(cfg.Interface)
-		central := cfg.CentralName
+		centralName := cfg.CentralName
 		logger := cfg.Logger
 		cfg.Circuit.AddOnStateChange(func(from, to hmenum.CircuitState) {
 			logger.Info(
 				"circuit-breaker state changed",
-				slog.String("central", central),
+				slog.String("central", centralName),
 				slog.String("interface_id", ifaceID),
 				slog.String("from", from.String()),
 				slog.String("to", to.String()),

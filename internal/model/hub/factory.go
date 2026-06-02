@@ -21,25 +21,25 @@ func NewMetricsFactory() *Metrics {
 
 // NewProgramFactory ist ein dünner Wrapper über [NewProgram].
 // Parameter entsprechen [NewProgram] 1:1.
-func NewProgramFactory(central, id, name, description string, isInternal bool, writer ProgramWriter) *Program {
-	return NewProgram(central, id, name, description, isInternal, writer)
+func NewProgramFactory(centralName, id, name, description string, isInternal bool, writer ProgramWriter) *Program {
+	return NewProgram(centralName, id, name, description, isInternal, writer)
 }
 
 // NewSysvarFactory ist ein dünner Wrapper über [NewSysvar].
-func NewSysvarFactory(central, name, description string, valueType hmenum.HubValueType, writer SysvarWriter) *Sysvar {
-	return NewSysvar(central, name, description, valueType, writer)
+func NewSysvarFactory(centralName, name, description string, valueType hmenum.HubValueType, writer SysvarWriter) *Sysvar {
+	return NewSysvar(centralName, name, description, valueType, writer)
 }
 
 // NewInboxFactory ist ein dünner Wrapper über [NewInboxWithCentral].
 // Multi-CCU-safe: der central-Parameter wird an [NewInboxWithCentral]
 // weitergereicht.
-func NewInboxFactory(central string) *Inbox {
-	return NewInboxWithCentral(central)
+func NewInboxFactory(centralName string) *Inbox {
+	return NewInboxWithCentral(centralName)
 }
 
 // NewServiceMessagesFactory ist ein dünner Wrapper über [NewServiceMessagesWithCentral].
-func NewServiceMessagesFactory(central string, ack MessageAcknowledger) *ServiceMessages {
-	return NewServiceMessagesWithCentral(central, ack)
+func NewServiceMessagesFactory(centralName string, ack MessageAcknowledger) *ServiceMessages {
+	return NewServiceMessagesWithCentral(centralName, ack)
 }
 
 // NewInstallModeFactory ist ein dünner Wrapper über [NewInstallMode].

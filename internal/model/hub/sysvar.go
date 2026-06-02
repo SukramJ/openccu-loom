@@ -73,9 +73,9 @@ type Sysvar struct {
 // - description — optional human-readable description.
 // - valueType — the CCU-declared wire type.
 // - writer — the write backend; nil creates a read-only sysvar.
-func NewSysvar(central, name, description string, valueType hmenum.HubValueType, writer SysvarWriter) *Sysvar {
+func NewSysvar(centralName, name, description string, valueType hmenum.HubValueType, writer SysvarWriter) *Sysvar {
 	s := &Sysvar{
-		HubDataPoint: NewHubDataPoint(central, name, description, true),
+		HubDataPoint: NewHubDataPoint(centralName, name, description, true),
 		ValueType:    valueType,
 		Writer:       writer,
 	}
@@ -395,15 +395,15 @@ func (s *Sysvar) PathData() naming.PathData {
 // bridge is a pass-through that only fills in `base` and `central`.
 // Legacy mirror topics are a bridge-operations detail and live
 // behind LegacyAliasConfig in the north/mqtt package.
-func (s *Sysvar) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	if s.Name == "" {
 		return payload.MQTTTopicSet{}
 	}
 	set := payload.MQTTTopicSet{
-		State: naming.MQTTHubSysvarState(base, central, s.Name),
+		State: naming.MQTTHubSysvarState(base, centralName, s.Name),
 	}
 	if s.Writer != nil {
-		set.Set = naming.MQTTHubSysvarCommand(base, central, s.Name)
+		set.Set = naming.MQTTHubSysvarCommand(base, centralName, s.Name)
 	}
 	return set
 }
