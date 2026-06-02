@@ -1638,7 +1638,7 @@ func buildBoost13Fixture(t *testing.T) *boost13Fixture {
 	}
 
 	// Use WireInterfaceID so the device matches the wireID used by seedRelevantInitParameters.
-	wireID := WireInterfaceID(centralName, hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", centralName, hmenum.InterfaceHmIPRF)
 
 	dev := device.New(device.Config{
 		InterfaceID: wireID,
@@ -4809,7 +4809,7 @@ func TestSeedRelevantInitParameters_ObservedDP_Skipped(t *testing.T) {
 
 	// Build device + channel :0 with a real UNREACH float DP that
 	// has been observed so skip logic fires.
-	wireID := WireInterfaceID("ccu-b23-ri1", hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", "ccu-b23-ri1", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -4859,7 +4859,7 @@ func TestSeedRelevantInitParameters_LoadValueFails(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 
-	wireID := WireInterfaceID("ccu-b23-ri2", hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", "ccu-b23-ri2", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -4901,7 +4901,7 @@ func TestMaterialiseCustomDataPoints_NilLogger(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	wireID := WireInterfaceID("ccu-b23-mc1", hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", "ccu-b23-mc1", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -6883,7 +6883,7 @@ func TestSeedRelevantInitParameters_LoadValueSucceeds(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 
-	wireID := WireInterfaceID("ccu-b28-ri1", hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", "ccu-b28-ri1", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -6925,7 +6925,7 @@ func buildReadableEventEnv(
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	wireID := WireInterfaceID(centralName, hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", centralName, hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -8000,7 +8000,7 @@ func TestSeedReadableEvents_ObservedDP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	wireID := WireInterfaceID("ccu-b30-reobs1", hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", "ccu-b30-reobs1", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -10366,7 +10366,7 @@ func TestSchedulesDomain_FindScheduleChannel_NilRegistry_ReturnsErr(t *testing.T
 
 func TestWireInterfaceID_ProducesExpectedFormat(t *testing.T) {
 	t.Parallel()
-	got := WireInterfaceID("ccu1", hmenum.InterfaceHmIPRF)
+	got := WireInterfaceID("", "ccu1", hmenum.InterfaceHmIPRF)
 	if got == "" {
 		t.Error("WireInterfaceID returned empty string")
 	}

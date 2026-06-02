@@ -620,10 +620,10 @@ func TestSeedRelevantInitParametersWithMatchingDevice(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	// Register a device whose InterfaceID matches the composite wire ID.
-	// WireInterfaceID("ccu-seed-ri2", InterfaceHmIPRF) = "ccu-seed-ri2-HmIP-RF"
+	// WireInterfaceID("", "ccu-seed-ri2", InterfaceHmIPRF) = "ccu-seed-ri2-HmIP-RF"
 	d := device.New(device.Config{
 		Address:     "SRIDEV001",
-		InterfaceID: WireInterfaceID("ccu-seed-ri2", hmenum.InterfaceHmIPRF),
+		InterfaceID: WireInterfaceID("", "ccu-seed-ri2", hmenum.InterfaceHmIPRF),
 		Interface:   hmenum.InterfaceHmIPRF,
 		Model:       "HmIP-STH",
 	})

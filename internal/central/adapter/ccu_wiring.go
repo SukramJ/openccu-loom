@@ -389,7 +389,7 @@ func wireInterface(
 	// (see [WireInterfaceID]). Using the bare `string(iface)` would
 	// collide on the CCU when two daemons share the same physical
 	// interface — see ADR-style note in interface_id.go.
-	wireID := WireInterfaceID(cc.Name, iface)
+	wireID := WireInterfaceID(unit.InstanceName(), cc.Name, iface)
 
 	xmlClient, err := xmlrpc.NewClient(xmlrpc.Config{
 		URL:                url,

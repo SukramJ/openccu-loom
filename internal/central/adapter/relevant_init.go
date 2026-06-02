@@ -37,7 +37,7 @@ func seedRelevantInitParameters(ctx context.Context, unit *central.CentralUnit, 
 	// Devices are stamped with the wire-form interface_id (`<central>-<iface>`)
 	// during pipeline ingest — see [WireInterfaceID]. Match on that
 	// composite, not on the bare interface name.
-	wireID := WireInterfaceID(unit.Name(), iface)
+	wireID := WireInterfaceID(unit.InstanceName(), unit.Name(), iface)
 	loaded, errored := 0, 0
 	for _, d := range unit.ModelRegistry.List() {
 		if d.InterfaceID != wireID {
@@ -110,7 +110,7 @@ func seedReadableEvents(ctx context.Context, unit *central.CentralUnit, iface hm
 	if unit == nil {
 		return
 	}
-	wireID := WireInterfaceID(unit.Name(), iface)
+	wireID := WireInterfaceID(unit.InstanceName(), unit.Name(), iface)
 	loaded, errored := 0, 0
 	for _, d := range unit.ModelRegistry.List() {
 		if d.InterfaceID != wireID {

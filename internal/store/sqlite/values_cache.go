@@ -33,7 +33,12 @@ const (
 // are dropped on the next restore (and recreated as new values arrive)
 // so old rows cannot ship a value through the cast layer that the
 // current code can no longer interpret.
-const ValuesCacheSchemaVersion = 1
+//
+// v2: the wire interface_id gained an instance-name component
+// (`<instance_name>-<ccu_name>-<interface>`, ADR-0024). Rows keyed by
+// the old `<ccu_name>-<interface>` interface_id no longer match and are
+// dropped + refetched on upgrade.
+const ValuesCacheSchemaVersion = 2
 
 // ValueType is the small discriminator stored alongside value_json
 // so readers can filter / dispatch without parsing JSON.

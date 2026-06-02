@@ -38,6 +38,15 @@ type Config struct {
 	// Appears in every log and metric label.
 	Name string
 
+	// InstanceName is the daemon's own identity, advertised to the CCU
+	// as the leading component of the wire interface_id
+	// (`<instance_name>-<central_name>-<interface>`) so two daemons against
+	// the same CCU do not overwrite each other's callback registration.
+	// Daemon-global (same for every central); defaults to the OS
+	// hostname. Empty falls back to the legacy `<central_name>-<interface>`
+	// form. See ADR-0024.
+	InstanceName string
+
 	// DB is the shared SQLite handle. May be nil for tests that run
 	// without persistence.
 	DB *sql.DB
@@ -364,6 +373,12 @@ func (c *CentralUnit) ReloadRecorderFromPersistence(ctx context.Context) {
 
 // Name returns the central's identifier.
 func (c *CentralUnit) Name() string { return c.cfg.Name }
+
+// InstanceName returns the daemon-global instance identity used as the
+// leading component of the wire interface_id. Empty when unset (the
+// interface_id then falls back to the legacy `<central_name>-<interface>`
+// form). See [Config.InstanceName] and ADR-0024.
+func (c *CentralUnit) InstanceName() string { return c.cfg.InstanceName }
 
 // WireDevicesCreatedGate subscribes to the event bus and sets the
 // devicesCreated flag on the first [hmevent.DeviceCreatedEvent]. This must be

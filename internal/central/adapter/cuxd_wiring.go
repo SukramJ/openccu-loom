@@ -51,7 +51,7 @@ func wireCUxDInterface(
 		port = p
 	}
 	addr := fmt.Sprintf("%s:%d", cc.Host, port)
-	wireID := WireInterfaceID(cc.Name, iface)
+	wireID := WireInterfaceID(unit.InstanceName(), cc.Name, iface)
 
 	binClient, err := binrpc.NewClient(binrpc.Config{
 		Addr:      addr,

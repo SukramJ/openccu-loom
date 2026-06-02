@@ -42,7 +42,7 @@ func TestSeedReadableEventsLoadsButtonsWithoutObservedValue(t *testing.T) {
 	t.Parallel()
 
 	unit, _ := central.New(central.Config{Name: "TestCentral"})
-	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
@@ -86,7 +86,7 @@ func TestSeedReadableEventsSkipsObservedDPs(t *testing.T) {
 	t.Parallel()
 
 	unit, _ := central.New(central.Config{Name: "TestCentral"})
-	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -128,7 +128,7 @@ func TestSeedReadableEventsSkipsNonReadableDPs(t *testing.T) {
 	t.Parallel()
 
 	unit, _ := central.New(central.Config{Name: "TestCentral"})
-	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: wireID,
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -169,7 +169,7 @@ func TestSeedReadableEventsRespectsWireInterfaceID(t *testing.T) {
 	t.Parallel()
 
 	unit, _ := central.New(central.Config{Name: "PrimaryDaemon"})
-	otherCentralWireID := WireInterfaceID("BackupDaemon", hmenum.InterfaceHmIPRF)
+	otherCentralWireID := WireInterfaceID("", "BackupDaemon", hmenum.InterfaceHmIPRF)
 	d := device.New(device.Config{
 		InterfaceID: otherCentralWireID, // does NOT match unit's wireID
 		Interface:   hmenum.InterfaceHmIPRF,

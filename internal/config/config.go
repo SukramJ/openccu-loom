@@ -262,6 +262,20 @@ func (m NorthDiscoveryMDNS) IsEnabled() bool {
 	return *m.Enabled
 }
 
+// ResolveInstanceName returns the configured InstanceName or the OS
+// hostname (with any ".local" suffix stripped) when unset. Beyond mDNS
+// advertising, this is the daemon's instance identity used as the
+// leading component of the wire interface_id (ADR-0024).
+func (m NorthDiscoveryMDNS) ResolveInstanceName() string {
+	if m.InstanceName != "" {
+		return m.InstanceName
+	}
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return strings.TrimSuffix(h, ".local")
+	}
+	return ""
+}
+
 // NorthMatter configures the Matter bridge runtime. Disabled by
 // default — when enabled, the daemon stands up the UDP listener,
 // assembles the endpoint topology, and advertises via mDNS. See

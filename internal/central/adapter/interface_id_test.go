@@ -12,35 +12,53 @@ import (
 func TestWireInterfaceID(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		centralName string
-		iface       hmenum.Interface
-		want        string
+		name         string
+		instanceName string
+		centralName  string
+		iface        hmenum.Interface
+		want         string
 	}{
-		{"hmip rf with central", "GoOtto", hmenum.InterfaceHmIPRF, "GoOtto-HmIP-RF"},
-		{"bidcos rf with central", "Backup", hmenum.InterfaceBidCosRF, "Backup-BidCos-RF"},
-		{"cuxd with central", "Primary", hmenum.InterfaceCUxD, "Primary-CUxD"},
-		{"empty central falls back to bare iface", "", hmenum.InterfaceHmIPRF, "HmIP-RF"},
+		{"triple", "loomhost", "GoOtto", hmenum.InterfaceHmIPRF, "loomhost-GoOtto-HmIP-RF"},
+		{"triple bidcos", "loomhost", "Backup", hmenum.InterfaceBidCosRF, "loomhost-Backup-BidCos-RF"},
+		{"triple cuxd", "loomhost", "Primary", hmenum.InterfaceCUxD, "loomhost-Primary-CUxD"},
+		{"empty instance falls back to ccu-iface", "", "GoOtto", hmenum.InterfaceHmIPRF, "GoOtto-HmIP-RF"},
+		{"empty ccu yields instance-iface", "loomhost", "", hmenum.InterfaceHmIPRF, "loomhost-HmIP-RF"},
+		{"both empty falls back to bare iface", "", "", hmenum.InterfaceHmIPRF, "HmIP-RF"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := WireInterfaceID(tc.centralName, tc.iface); got != tc.want {
-				t.Errorf("WireInterfaceID(%q, %q) = %q, want %q", tc.centralName, tc.iface, got, tc.want)
+			if got := WireInterfaceID(tc.instanceName, tc.centralName, tc.iface); got != tc.want {
+				t.Errorf("WireInterfaceID(%q, %q, %q) = %q, want %q",
+					tc.instanceName, tc.centralName, tc.iface, got, tc.want)
 			}
 		})
 	}
 }
 
-func TestWireInterfaceIDIsCcuUniqueAcrossCentrals(t *testing.T) {
+// TestWireInterfaceIDIsClientUniqueAcrossDaemons pins the CCU-side
+// uniqueness guarantee: two daemons (distinct instance names) against the
+// SAME CCU (same central_name) must produce different interface_ids, or the
+// CCU conflates their callback registrations. This is the case the bare
+// `<central_name>-<interface>` form failed (ADR-0024).
+func TestWireInterfaceIDIsClientUniqueAcrossDaemons(t *testing.T) {
 	t.Parallel()
-	// The whole point of the central-prefix is that two daemons sharing
-	// a CCU produce different interface_ids for the same physical
-	// interface. Pin that explicitly so a future refactor that drops
-	// the prefix breaks loudly here.
-	a := WireInterfaceID("PrimaryDaemon", hmenum.InterfaceHmIPRF)
-	b := WireInterfaceID("BackupDaemon", hmenum.InterfaceHmIPRF)
+	a := WireInterfaceID("PrimaryDaemon", "GoOtto", hmenum.InterfaceHmIPRF)
+	b := WireInterfaceID("BackupDaemon", "GoOtto", hmenum.InterfaceHmIPRF)
 	if a == b {
-		t.Fatalf("two centrals produced identical interface_id %q — the CCU would conflate their callback registrations", a)
+		t.Fatalf("two daemons produced identical interface_id %q — the CCU would conflate their callback registrations", a)
+	}
+}
+
+// TestWireInterfaceIDIsCcuUniqueWithinDaemon pins the daemon-internal
+// uniqueness guarantee: one daemon (same instance name) against two CCUs
+// must produce different interface_ids for the same interface, so devices
+// with repeating addresses across CCUs do not collide on the InterfaceID.
+func TestWireInterfaceIDIsCcuUniqueWithinDaemon(t *testing.T) {
+	t.Parallel()
+	a := WireInterfaceID("loomhost", "Wohnzimmer", hmenum.InterfaceHmIPRF)
+	b := WireInterfaceID("loomhost", "Keller", hmenum.InterfaceHmIPRF)
+	if a == b {
+		t.Fatalf("two CCUs produced identical interface_id %q — internal DataPointKeys would collide", a)
 	}
 }

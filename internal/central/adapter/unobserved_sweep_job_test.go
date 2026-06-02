@@ -25,7 +25,7 @@ func TestStartUnobservedSweepLoopFiresAtInterval(t *testing.T) {
 	if err := reg.Register(unit); err != nil {
 		t.Fatalf("register: %v", err)
 	}
-	wireID := WireInterfaceID(unit.Name(), hmenum.InterfaceHmIPRF)
+	wireID := WireInterfaceID("", unit.Name(), hmenum.InterfaceHmIPRF)
 
 	d := device.New(device.Config{
 		InterfaceID: wireID,
