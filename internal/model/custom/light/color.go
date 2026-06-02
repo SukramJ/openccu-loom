@@ -269,7 +269,7 @@ func NewFixedColorLight(cfg Config) *FixedColorLight {
 	}
 	// Signal lights reset the device-side ON_TIME duration on every plain
 	// turn_on; RGBW/DALI must not (see Light.resetsOnTimeOnTurnOn).
-	fc.Light.resetsOnTimeOnTurnOn = true
+	fc.resetsOnTimeOnTurnOn = true
 	if fc.Float != nil {
 		fc.registerFixedColorLightServices()
 	}
