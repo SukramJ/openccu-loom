@@ -9,9 +9,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-func makeKey(central, channel string) SessionKey {
+func makeKey(centralName, channel string) SessionKey {
 	return SessionKey{
-		CentralName:    central,
+		CentralName:    centralName,
 		ChannelAddress: channel,
 		ParamsetKey:    hmenum.ParamsetKeyMaster,
 	}

@@ -12,9 +12,9 @@ import (
 )
 
 // p2Incident constructs an Incident for use in multi-method test helpers.
-func p2Incident(central, iface string, incType hmenum.IncidentType) Incident {
+func p2Incident(centralName, iface string, incType hmenum.IncidentType) Incident {
 	return Incident{
-		CentralName: central,
+		CentralName: centralName,
 		InterfaceID: iface,
 		Type:        incType,
 		Severity:    hmenum.IncidentSeverityWarning,
@@ -28,9 +28,9 @@ func freshIncidentStore(t *testing.T) *IncidentStore {
 	return NewIncidentStore(openTestDB(t, "inc.db"))
 }
 
-func baseIncident(central, iface string) Incident {
+func baseIncident(centralName, iface string) Incident {
 	return Incident{
-		CentralName: central,
+		CentralName: centralName,
 		InterfaceID: iface,
 		Type:        hmenum.IncidentTypeAuthFailure,
 		Severity:    hmenum.IncidentSeverityError,

@@ -243,9 +243,9 @@ func TestCtxCancelPropagatesOnExport(t *testing.T) {
 func TestMultiCCUScopeIsolation(t *testing.T) {
 	t.Parallel()
 
-	buildInput := func(central string) ExportInput {
+	buildInput := func(centralName string) ExportInput {
 		return ExportInput{
-			CentralName:    central,
+			CentralName:    centralName,
 			DeviceAddress:  "0001ABCD",
 			Model:          "HmIP-eTRV-2",
 			ChannelAddress: "0001ABCD:1",

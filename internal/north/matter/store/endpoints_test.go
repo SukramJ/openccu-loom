@@ -13,9 +13,9 @@ import (
 
 // ---- helpers ----
 
-func testKey(central, address string, channel int, kind store.DPKind, dpKey string) store.EndpointKey {
+func testKey(centralName, address string, channel int, kind store.DPKind, dpKey string) store.EndpointKey {
 	return store.EndpointKey{
-		CentralName:   central,
+		CentralName:   centralName,
 		DeviceAddress: address,
 		ChannelNo:     channel,
 		DPKind:        kind,
@@ -80,8 +80,8 @@ func TestListEndpoints_FilterByCentral(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"a", "b", "b"} {
-		key := testKey(central, "DEV:1", i+2, store.DPKindGeneric, "V")
+	for i, centralName := range []string{"a", "b", "b"} {
+		key := testKey(centralName, "DEV:1", i+2, store.DPKindGeneric, "V")
 		if err := s.UpsertEndpoint(ctx, store.EndpointRecord{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
 			t.Fatalf("UpsertEndpoint: %v", err)
 		}
@@ -102,8 +102,8 @@ func TestListEndpoints_NoFilter(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"x", "y"} {
-		key := testKey(central, "DEV:1", i+2, store.DPKindGeneric, "V")
+	for i, centralName := range []string{"x", "y"} {
+		key := testKey(centralName, "DEV:1", i+2, store.DPKindGeneric, "V")
 		if err := s.UpsertEndpoint(ctx, store.EndpointRecord{Key: key, EndpointID: uint16(i + 2), DeviceType: 1}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
 			t.Fatalf("UpsertEndpoint: %v", err)
 		}
@@ -441,8 +441,8 @@ func TestEndpoints_ListNoFilter(t *testing.T) {
 	ctx := context.Background()
 	s := store.New(openTestDB(t))
 
-	for i, central := range []string{"c1", "c2", "c1"} {
-		key := testKey(central, "E:1", i+2, store.DPKindCustom, "V")
+	for i, centralName := range []string{"c1", "c2", "c1"} {
+		key := testKey(centralName, "E:1", i+2, store.DPKindCustom, "V")
 		if err := s.UpsertEndpoint(ctx, store.EndpointRecord{Key: key, EndpointID: uint16(i + 2)}); err != nil { //nolint:gosec // loop index is small and positive; uint16 conversion is safe
 			t.Fatalf("UpsertEndpoint[%d]: %v", i, err)
 		}

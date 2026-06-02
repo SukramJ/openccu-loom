@@ -17,14 +17,14 @@ import (
 // rawInsertParamset inserts a paramset row directly into the DB with an
 // explicit schema_version, bypassing ParamsetStore.Upsert. This allows
 // tests to seed rows with non-current versions.
-func rawInsertParamset(t *testing.T, s *ParamsetStore, central, iface, ch string, psKey hmenum.ParamsetKey, schemaVersion int) {
+func rawInsertParamset(t *testing.T, s *ParamsetStore, centralName, iface, ch string, psKey hmenum.ParamsetKey, schemaVersion int) {
 	t.Helper()
 	_, err := s.db.ExecContext(
 		context.Background(),
 		`INSERT INTO paramsets
 		    (central_name, interface_id, channel_address, paramset_key, hash, paramset_json, schema_version, updated_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-		central, iface, ch, string(psKey), "legacy-hash", `{"X":{"type":"BOOL"}}`, schemaVersion,
+		centralName, iface, ch, string(psKey), "legacy-hash", `{"X":{"type":"BOOL"}}`, schemaVersion,
 	)
 	if err != nil {
 		t.Fatalf("rawInsertParamset: %v", err)
@@ -121,17 +121,17 @@ func TestParamsetUpsertOverwritesOutdatedRowToCurrentVersion(t *testing.T) {
 	ctx := context.Background()
 
 	const (
-		central = "ccu1"
-		iface   = "HmIP-RF"
-		ch      = "PROMOTE:1"
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
+		ch          = "PROMOTE:1"
 	)
 
 	// Seed a row with a "future" schema version (99) via raw SQL.
-	rawInsertParamset(t, s, central, iface, ch, hmenum.ParamsetKeyValues, 99)
+	rawInsertParamset(t, s, centralName, iface, ch, hmenum.ParamsetKeyValues, 99)
 
 	// Upsert the same key through the store — must promote to current version.
 	if err := s.Upsert(ctx, ParamsetRecord{
-		CentralName:    central,
+		CentralName:    centralName,
 		InterfaceID:    iface,
 		ChannelAddress: ch,
 		ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -147,7 +147,7 @@ func TestParamsetUpsertOverwritesOutdatedRowToCurrentVersion(t *testing.T) {
 		ctx,
 		`SELECT schema_version FROM paramsets
 		 WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND paramset_key = ?`,
-		central, iface, ch, string(hmenum.ParamsetKeyValues),
+		centralName, iface, ch, string(hmenum.ParamsetKeyValues),
 	).Scan(&gotVersion)
 	if err != nil {
 		t.Fatalf("raw SELECT schema_version: %v", err)

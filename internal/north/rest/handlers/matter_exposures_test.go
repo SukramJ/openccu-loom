@@ -649,7 +649,7 @@ func TestValidateExposureKey_AllKnownKinds(t *testing.T) {
 func TestValidateExposureKey_EmptyFields(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		central, addr, kind, key string
+		centralName, addr, kind, key string
 	}{
 		{"", "D", "custom", "k"},
 		{"c", "", "custom", "k"},
@@ -657,8 +657,8 @@ func TestValidateExposureKey_EmptyFields(t *testing.T) {
 		{"c", "D", "custom", ""},
 	}
 	for _, tc := range cases {
-		if err := validateExposureKey(tc.central, tc.addr, tc.kind, tc.key); err == nil {
-			t.Errorf("(%q,%q,%q,%q): expected error for empty field", tc.central, tc.addr, tc.kind, tc.key)
+		if err := validateExposureKey(tc.centralName, tc.addr, tc.kind, tc.key); err == nil {
+			t.Errorf("(%q,%q,%q,%q): expected error for empty field", tc.centralName, tc.addr, tc.kind, tc.key)
 		}
 	}
 }

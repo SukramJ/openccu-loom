@@ -168,30 +168,30 @@ func TestChannelEventAggregateTopicFormat(t *testing.T) {
 	tb := NewTopicBuilder("openccu-loom")
 
 	cases := []struct {
-		central, iface, addr string
-		channel              int
-		want                 string
+		centralName, iface, addr string
+		channel                  int
+		want                     string
 	}{
 		{
-			central: "ccu", iface: "HmIP-RF", addr: "0034WRC2", channel: 1,
+			centralName: "ccu", iface: "HmIP-RF", addr: "0034WRC2", channel: 1,
 			want: "openccu-loom/ccu/HmIP-RF/0034WRC2/1/event",
 		},
 		{
-			central: "ccu2", iface: "BidCos-RF", addr: "0ABC", channel: 3,
+			centralName: "ccu2", iface: "BidCos-RF", addr: "0ABC", channel: 3,
 			want: "openccu-loom/ccu2/BidCos-RF/0ABC/3/event",
 		},
 		// Characters that are unsafe for MQTT topic levels must be sanitised.
 		{
-			central: "ccu", iface: "HmIP/RF", addr: "0034+WRC2", channel: 2,
+			centralName: "ccu", iface: "HmIP/RF", addr: "0034+WRC2", channel: 2,
 			want: "openccu-loom/ccu/HmIP_RF/0034_WRC2/2/event",
 		},
 	}
 
 	for _, tc := range cases {
-		got := tb.ChannelEvent(tc.central, tc.iface, tc.addr, tc.channel)
+		got := tb.ChannelEvent(tc.centralName, tc.iface, tc.addr, tc.channel)
 		if got != tc.want {
 			t.Errorf("ChannelEvent(%q,%q,%q,%d)=%q want %q",
-				tc.central, tc.iface, tc.addr, tc.channel, got, tc.want)
+				tc.centralName, tc.iface, tc.addr, tc.channel, got, tc.want)
 		}
 	}
 }

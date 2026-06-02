@@ -30,14 +30,14 @@ func TestValuesCache_SaveAndLoadChannel_Roundtrip(t *testing.T) {
 
 	now := nowMS()
 	const (
-		central = "ccu1"
-		iface   = "HmIP-RF"
-		ch      = "DEV:1"
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
+		ch          = "DEV:1"
 	)
 
 	save := func(param string, val any) {
 		t.Helper()
-		if err := s.SaveValue(ctx, central, iface, ch, param, val, now, now); err != nil {
+		if err := s.SaveValue(ctx, centralName, iface, ch, param, val, now, now); err != nil {
 			t.Fatalf("SaveValue(%s): %v", param, err)
 		}
 	}
@@ -48,7 +48,7 @@ func TestValuesCache_SaveAndLoadChannel_Roundtrip(t *testing.T) {
 	save("STR_PARAM", "ok")
 	save("NIL_PARAM", nil) // must NOT be stored
 
-	got, err := s.LoadChannel(ctx, central, iface, ch)
+	got, err := s.LoadChannel(ctx, centralName, iface, ch)
 	if err != nil {
 		t.Fatalf("LoadChannel: %v", err)
 	}
@@ -96,8 +96,8 @@ func TestValuesCache_LoadAll_GroupedCorrectly(t *testing.T) {
 	now := nowMS()
 
 	entries := []struct {
-		central, iface, ch, param string
-		val                       any
+		centralName, iface, ch, param string
+		val                           any
 	}{
 		{"ccu1", "HmIP-RF", "A:1", "P1", float64(1)},
 		{"ccu1", "HmIP-RF", "A:2", "P1", float64(2)},
@@ -105,8 +105,8 @@ func TestValuesCache_LoadAll_GroupedCorrectly(t *testing.T) {
 		{"ccu2", "HmIP-RF", "C:1", "P3", "hello"},
 	}
 	for _, e := range entries {
-		if err := s.SaveValue(ctx, e.central, e.iface, e.ch, e.param, e.val, now, now); err != nil {
-			t.Fatalf("SaveValue %s/%s/%s/%s: %v", e.central, e.iface, e.ch, e.param, err)
+		if err := s.SaveValue(ctx, e.centralName, e.iface, e.ch, e.param, e.val, now, now); err != nil {
+			t.Fatalf("SaveValue %s/%s/%s/%s: %v", e.centralName, e.iface, e.ch, e.param, err)
 		}
 	}
 
@@ -115,15 +115,15 @@ func TestValuesCache_LoadAll_GroupedCorrectly(t *testing.T) {
 		t.Fatalf("LoadAll: %v", err)
 	}
 
-	check := func(central, iface, ch string, wantCount int) {
+	check := func(centralName, iface, ch string, wantCount int) {
 		t.Helper()
-		vals, ok := all[central][iface][ch]
+		vals, ok := all[centralName][iface][ch]
 		if !ok {
-			t.Errorf("key [%s][%s][%s] missing", central, iface, ch)
+			t.Errorf("key [%s][%s][%s] missing", centralName, iface, ch)
 			return
 		}
 		if len(vals) != wantCount {
-			t.Errorf("[%s][%s][%s]: got %d entries, want %d", central, iface, ch, len(vals), wantCount)
+			t.Errorf("[%s][%s][%s]: got %d entries, want %d", centralName, iface, ch, len(vals), wantCount)
 		}
 	}
 
@@ -289,22 +289,22 @@ func TestValuesCache_GCDeadRows_KeepsAliveOnly(t *testing.T) {
 	now := nowMS()
 
 	const (
-		central = "ccu1"
-		iface   = "HmIP-RF"
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
 	)
 	for _, e := range []struct{ ch, param string }{
 		{"A:1", "P"},
 		{"B:1", "P"},
 		{"C:1", "P"},
 	} {
-		if err := s.SaveValue(ctx, central, iface, e.ch, e.param, true, now, now); err != nil {
+		if err := s.SaveValue(ctx, centralName, iface, e.ch, e.param, true, now, now); err != nil {
 			t.Fatalf("SaveValue %s.%s: %v", e.ch, e.param, err)
 		}
 	}
 
 	alive := map[string]struct{}{
-		AliveKey(central, iface, "A:1", "P"): {},
-		AliveKey(central, iface, "B:1", "P"): {},
+		AliveKey(centralName, iface, "A:1", "P"): {},
+		AliveKey(centralName, iface, "B:1", "P"): {},
 		// C:1.P is intentionally absent → must be deleted
 	}
 
@@ -321,7 +321,7 @@ func TestValuesCache_GCDeadRows_KeepsAliveOnly(t *testing.T) {
 
 	// A:1 and B:1 must still be readable.
 	for _, ch := range []string{"A:1", "B:1"} {
-		got, err := s.LoadChannel(ctx, central, iface, ch)
+		got, err := s.LoadChannel(ctx, centralName, iface, ch)
 		if err != nil {
 			t.Fatalf("LoadChannel %s: %v", ch, err)
 		}
@@ -331,7 +331,7 @@ func TestValuesCache_GCDeadRows_KeepsAliveOnly(t *testing.T) {
 	}
 
 	// C:1 must be gone.
-	gone, err := s.LoadChannel(ctx, central, iface, "C:1")
+	gone, err := s.LoadChannel(ctx, centralName, iface, "C:1")
 	if err != nil {
 		t.Fatalf("LoadChannel C:1: %v", err)
 	}
@@ -509,14 +509,14 @@ func TestValuesCache_MultiCentral_Isolated(t *testing.T) {
 		t.Fatalf("SaveValue ccu2: %v", err)
 	}
 
-	load := func(central string) CachedValue {
+	load := func(centralName string) CachedValue {
 		t.Helper()
-		got, err := s.LoadChannel(ctx, central, iface, ch)
+		got, err := s.LoadChannel(ctx, centralName, iface, ch)
 		if err != nil {
-			t.Fatalf("LoadChannel %s: %v", central, err)
+			t.Fatalf("LoadChannel %s: %v", centralName, err)
 		}
 		if len(got) != 1 {
-			t.Fatalf("LoadChannel %s: got %d entries, want 1", central, len(got))
+			t.Fatalf("LoadChannel %s: got %d entries, want 1", centralName, len(got))
 		}
 		return got[0]
 	}

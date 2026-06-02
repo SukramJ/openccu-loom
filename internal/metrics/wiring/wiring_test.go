@@ -104,7 +104,7 @@ func TestSubscribeObserverNilBusOrObserverIsNoop(t *testing.T) {
 func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	t.Parallel()
 
-	const central = "ccu-roundtrip"
+	const centralName = "ccu-roundtrip"
 
 	// 1. EventBus + observer — fed by SubscribeObserver.
 	bus := events.NewBus()
@@ -113,9 +113,9 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	defer cancel()
 
 	// 2. Client provider.
-	cp := client.NewMetricsClientProvider(central)
+	cp := client.NewMetricsClientProvider(centralName)
 	ic, err := client.New(client.Config{
-		CentralName: central, Interface: hmenum.InterfaceHmIPRF,
+		CentralName: centralName, Interface: hmenum.InterfaceHmIPRF,
 		Caller: &wiringFakeCaller{err: errors.New("simulated")},
 	})
 	if err != nil {
@@ -140,7 +140,7 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	_, _ = cc.Get(key) // hit.
 
 	// 4. Recovery provider.
-	rc := coordinators.NewConnectionRecoveryCoordinator(central, bus)
+	rc := coordinators.NewConnectionRecoveryCoordinator(centralName, bus)
 	pipeline := []coordinators.Pipeline{
 		{Stage: hmenum.RecoveryStageDetecting, Run: func(_ context.Context) error {
 			return errors.New("rec err")
@@ -161,7 +161,7 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	}
 
 	agg := metrics.NewAggregator(
-		central, obs,
+		centralName, obs,
 		metrics.WithClientProvider(NewClientProvider(cp)),
 		metrics.WithCacheProvider(NewCacheProvider(cc)),
 		metrics.WithRecoveryProvider(NewRecoveryProvider(rc)),
