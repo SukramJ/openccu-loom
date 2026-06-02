@@ -56,8 +56,8 @@ func (p *HubMQTTPublisher) Start(ctx context.Context) {
 	if p.registry == nil || p.wiring == nil {
 		return
 	}
-	for _, c := range p.registry.List() {
-		p.wireOneCentral(ctx, c)
+	for _, u := range p.registry.List() {
+		p.wireOneCentral(ctx, u)
 	}
 }
 
@@ -83,9 +83,9 @@ func (p *HubMQTTPublisher) addUnsub(u func()) {
 
 // wireOneCentral attaches subscriptions for all hub entities belonging
 // to c and performs the initial-state publish.
-func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, c *central.Unit) {
-	hubModel := c.HubModel
-	centralName := c.Name()
+func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) {
+	hubModel := u.HubModel
+	centralName := u.Name()
 	w := p.wiring
 	b := w.Bridge()
 	disco := mqtt.NewDefaultDiscoveryBuilder(b.Topics(), centralName)
@@ -155,7 +155,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, c *central.Unit) 
 	// resolve to the same canonical central-wide topic).
 	_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeDiscovery(centralName))
 	installModeTopic := pickInstallModeTopicSource(hubModel)
-	p.addUnsub(events.Subscribe(c.EventBus, func(e hmevent.InstallModeChangedEvent) {
+	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.InstallModeChangedEvent) {
 		if e.CentralName != centralName {
 			return
 		}
@@ -171,7 +171,7 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, c *central.Unit) 
 	// from the reconciler and from the callback-driven push path.
 	connectivityDiscovered := make(map[string]bool)
 	latencyDiscovered := make(map[string]bool)
-	p.addUnsub(events.Subscribe(c.EventBus, func(e hmevent.ConnectivityChangedEvent) {
+	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
 		if e.CentralName != centralName {
 			return
 		}

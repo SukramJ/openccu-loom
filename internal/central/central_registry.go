@@ -115,8 +115,8 @@ func (r *Registry) HubFor(centralName string) *hub.Hub {
 // StartAll fans out Start to every registered unit. First error
 // short-circuits; the caller should teardown via [StopAll].
 func (r *Registry) StartAll(ctx context.Context) error {
-	for _, c := range r.List() {
-		if err := c.Start(ctx); err != nil {
+	for _, u := range r.List() {
+		if err := u.Start(ctx); err != nil {
 			return err
 		}
 	}
@@ -125,7 +125,7 @@ func (r *Registry) StartAll(ctx context.Context) error {
 
 // StopAll tears down every unit. Errors are best-effort only.
 func (r *Registry) StopAll() {
-	for _, c := range r.List() {
-		c.Stop()
+	for _, u := range r.List() {
+		u.Stop()
 	}
 }

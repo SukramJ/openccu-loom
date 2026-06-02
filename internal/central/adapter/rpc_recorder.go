@@ -77,9 +77,9 @@ func (a *RPCRecorderAdapter) units(names []string) []*central.Unit {
 	}
 	if len(names) == 0 {
 		var out []*central.Unit
-		for _, c := range a.registry.List() {
-			if c != nil && c.Recorder != nil {
-				out = append(out, c)
+		for _, u := range a.registry.List() {
+			if u != nil && u.Recorder != nil {
+				out = append(out, u)
 			}
 		}
 		return out
@@ -194,15 +194,15 @@ func (a *RPCRecorderAdapter) Status() []handlers.RPCRecordingStatus {
 // the recording was started with randomize, operator-identifying values in
 // the exported trace are anonymised.
 func (a *RPCRecorderAdapter) Export(centralName, format string) (any, bool) {
-	exportOne := func(c *central.Unit) any {
+	exportOne := func(u *central.Unit) any {
 		var data any
 		if format == "golden" {
-			data = c.Recorder.SerializeToGolden()
+			data = u.Recorder.SerializeToGolden()
 		} else {
-			data = c.Recorder.SerializeToMap()
+			data = u.Recorder.SerializeToMap()
 		}
 		a.mu.Lock()
-		st := a.states[c.Name()]
+		st := a.states[u.Name()]
 		a.mu.Unlock()
 		if st != nil && st.randomize {
 			data = anonymiseExport(data)

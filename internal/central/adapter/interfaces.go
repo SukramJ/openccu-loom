@@ -40,14 +40,14 @@ func (a *InterfacesAdapter) Interfaces() []handlers.InterfaceState {
 		return nil
 	}
 	var out []handlers.InterfaceState
-	for _, c := range a.registry.List() {
-		for _, e := range c.Clients.List() {
+	for _, u := range a.registry.List() {
+		for _, e := range u.Clients.List() {
 			out = append(out, handlers.InterfaceState{
 				ID:        e.InterfaceID,
 				Name:      e.InterfaceID,
 				Connected: e.Connected(),
 				Interface: string(e.Interface),
-				CentralID: c.Name(),
+				CentralID: u.Name(),
 				Host:      e.Host,
 			})
 		}

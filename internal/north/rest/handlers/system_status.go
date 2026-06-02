@@ -94,12 +94,12 @@ func (b *SystemStatusBuffer) Subscribe(reg *central.Registry) (stop func()) {
 		return func() {}
 	}
 	var unsubs []func()
-	for _, c := range reg.List() {
-		bus := c.EventBus
+	for _, u := range reg.List() {
+		bus := u.EventBus
 		if bus == nil {
 			continue
 		}
-		centralName := c.Name()
+		centralName := u.Name()
 		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
 			b.append(SystemStatusEntry{
 				Central:            centralName,

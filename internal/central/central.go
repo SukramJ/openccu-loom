@@ -188,13 +188,13 @@ type Unit struct {
 // attach registry-level teardown (e.g. CentralRegistry.Unregister, health
 // tracker deregistration) that cannot be expressed inside the central itself.
 // Thread-safe; hooks may be registered at any time before Stop is called.
-func (c *Unit) AddOnStopHook(fn func()) {
+func (u *Unit) AddOnStopHook(fn func()) {
 	if fn == nil {
 		return
 	}
-	c.onStopHooksMu.Lock()
-	c.onStopHooks = append(c.onStopHooks, fn)
-	c.onStopHooksMu.Unlock()
+	u.onStopHooksMu.Lock()
+	u.onStopHooks = append(u.onStopHooks, fn)
+	u.onStopHooksMu.Unlock()
 }
 
 // SetAggregator attaches a metrics aggregator to the central. Called
@@ -203,20 +203,20 @@ func (c *Unit) AddOnStopHook(fn func()) {
 // via the public [Aggregator] field; REST handlers read it directly
 // without synchronisation because it is only written once before any
 // handler starts serving.
-func (c *Unit) SetAggregator(agg *metrics.Aggregator) {
-	c.Aggregator = agg
+func (u *Unit) SetAggregator(agg *metrics.Aggregator) {
+	u.Aggregator = agg
 }
 
 // SetObservabilityRecorder fan-outs a recorder into every
 // [observability.Recorder]-aware coordinator owned by the central.
 // Daemons call this once at boot, after constructing the metrics
 // recorder. Passing nil restores the no-op default.
-func (c *Unit) SetObservabilityRecorder(rec observability.Recorder) {
+func (u *Unit) SetObservabilityRecorder(rec observability.Recorder) {
 	if rec == nil {
 		rec = observability.NoopRecorder{}
 	}
-	c.Hub.SetRecorder(rec)
-	c.Recovery.SetRecorder(rec)
+	u.Hub.SetRecorder(rec)
+	u.Recovery.SetRecorder(rec)
 }
 
 // SystemInfo carries the CCU-side metadata northbound consumers need
@@ -327,30 +327,30 @@ func New(cfg Config) (*Unit, error) {
 // closes the production-replay path that was deferred
 // in the audit. Without this wiring the recorder works as before
 // (in-memory only), so existing callers are not affected.
-func (c *Unit) WireSessionRecorderPersistence(ctx context.Context, store session.PersistStore, slug string, interval time.Duration) func() {
-	if c == nil || c.Recorder == nil || store == nil {
+func (u *Unit) WireSessionRecorderPersistence(ctx context.Context, store session.PersistStore, slug string, interval time.Duration) func() {
+	if u == nil || u.Recorder == nil || store == nil {
 		return func() {}
 	}
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
-	c.recorderPersistMu.Lock()
-	if c.recorderPersistUnsub != nil {
-		c.recorderPersistUnsub()
-		c.recorderPersistUnsub = nil
+	u.recorderPersistMu.Lock()
+	if u.recorderPersistUnsub != nil {
+		u.recorderPersistUnsub()
+		u.recorderPersistUnsub = nil
 	}
-	c.recorderStore = store
-	c.recorderSlug = slug
-	stop := c.Recorder.SetAutoPersist(ctx, store, c.cfg.Name, slug, interval)
-	c.recorderPersistUnsub = stop
-	c.recorderPersistMu.Unlock()
+	u.recorderStore = store
+	u.recorderSlug = slug
+	stop := u.Recorder.SetAutoPersist(ctx, store, u.cfg.Name, slug, interval)
+	u.recorderPersistUnsub = stop
+	u.recorderPersistMu.Unlock()
 	return func() {
-		c.recorderPersistMu.Lock()
-		if c.recorderPersistUnsub != nil {
-			c.recorderPersistUnsub()
-			c.recorderPersistUnsub = nil
+		u.recorderPersistMu.Lock()
+		if u.recorderPersistUnsub != nil {
+			u.recorderPersistUnsub()
+			u.recorderPersistUnsub = nil
 		}
-		c.recorderPersistMu.Unlock()
+		u.recorderPersistMu.Unlock()
 	}
 }
 
@@ -358,65 +358,65 @@ func (c *Unit) WireSessionRecorderPersistence(ctx context.Context, store session
 // recorder (best-effort, live data wins) so a recording resumed after a
 // restart includes what was captured before it. No-op when persistence is
 // unwired or no store is set.
-func (c *Unit) ReloadRecorderFromPersistence(ctx context.Context) {
-	if c == nil || c.Recorder == nil {
+func (u *Unit) ReloadRecorderFromPersistence(ctx context.Context) {
+	if u == nil || u.Recorder == nil {
 		return
 	}
-	c.recorderPersistMu.Lock()
-	store, slug := c.recorderStore, c.recorderSlug
-	c.recorderPersistMu.Unlock()
+	u.recorderPersistMu.Lock()
+	store, slug := u.recorderStore, u.recorderSlug
+	u.recorderPersistMu.Unlock()
 	if store == nil {
 		return
 	}
-	_ = c.Recorder.Load(ctx, store, c.cfg.Name, slug, session.DefaultMaxLoadEntries)
+	_ = u.Recorder.Load(ctx, store, u.cfg.Name, slug, session.DefaultMaxLoadEntries)
 }
 
 // Name returns the central's identifier.
-func (c *Unit) Name() string { return c.cfg.Name }
+func (u *Unit) Name() string { return u.cfg.Name }
 
 // InstanceName returns the daemon-global instance identity used as the
 // leading component of the wire interface_id. Empty when unset (the
 // interface_id then falls back to the legacy `<central_name>-<interface>`
 // form). See [Config.InstanceName] and ADR-0024.
-func (c *Unit) InstanceName() string { return c.cfg.InstanceName }
+func (u *Unit) InstanceName() string { return u.cfg.InstanceName }
 
 // WireDevicesCreatedGate subscribes to the event bus and sets the
 // devicesCreated flag on the first [hmevent.DeviceCreatedEvent]. This must be
 // called once at boot (before RegisterStandardJobs) if any hub jobs should be
 // gated behind device creation. Calling it again removes the previous
 // subscription before installing a new one.
-func (c *Unit) WireDevicesCreatedGate() {
-	c.devicesCreatedMu.Lock()
-	if c.devicesCreatedUnsub != nil {
-		c.devicesCreatedUnsub()
-		c.devicesCreatedUnsub = nil
+func (u *Unit) WireDevicesCreatedGate() {
+	u.devicesCreatedMu.Lock()
+	if u.devicesCreatedUnsub != nil {
+		u.devicesCreatedUnsub()
+		u.devicesCreatedUnsub = nil
 	}
-	c.devicesCreated = false
-	c.devicesCreatedMu.Unlock()
+	u.devicesCreated = false
+	u.devicesCreatedMu.Unlock()
 
-	unsub := events.Subscribe(c.EventBus, func(_ hmevent.DeviceCreatedEvent) {
-		c.devicesCreatedMu.Lock()
-		c.devicesCreated = true
-		c.devicesCreatedMu.Unlock()
+	unsub := events.Subscribe(u.EventBus, func(_ hmevent.DeviceCreatedEvent) {
+		u.devicesCreatedMu.Lock()
+		u.devicesCreated = true
+		u.devicesCreatedMu.Unlock()
 	})
-	c.devicesCreatedMu.Lock()
-	c.devicesCreatedUnsub = unsub
-	c.devicesCreatedMu.Unlock()
+	u.devicesCreatedMu.Lock()
+	u.devicesCreatedUnsub = unsub
+	u.devicesCreatedMu.Unlock()
 }
 
 // IsDevicesCreated reports whether at least one [hmevent.DeviceCreatedEvent]
 // has been observed since [WireDevicesCreatedGate] was last called.
 // Returns true unconditionally when [WireDevicesCreatedGate] has not been
 // called (no gate = no wait).
-func (c *Unit) IsDevicesCreated() bool {
-	c.devicesCreatedMu.RLock()
-	defer c.devicesCreatedMu.RUnlock()
+func (u *Unit) IsDevicesCreated() bool {
+	u.devicesCreatedMu.RLock()
+	defer u.devicesCreatedMu.RUnlock()
 	// If the gate was never wired (devicesCreatedUnsub == nil), treat as
 	// "already created" so gatedRunWithDevicesCreatedGate is a no-op.
-	if c.devicesCreatedUnsub == nil {
+	if u.devicesCreatedUnsub == nil {
 		return true
 	}
-	return c.devicesCreated
+	return u.devicesCreated
 }
 
 // SetLinkResolver installs the [coordinators.ClientResolver] used by
@@ -424,41 +424,41 @@ func (c *Unit) IsDevicesCreated() bool {
 // southbound wiring adapter calls this once the client coordinator
 // has at least one InterfaceClient registered. Pass nil to detach
 // (the LinkCoordinator falls back to "no client" responses).
-func (c *Unit) SetLinkResolver(r coordinators.ClientResolver) {
-	if c.Link == nil {
+func (u *Unit) SetLinkResolver(r coordinators.ClientResolver) {
+	if u.Link == nil {
 		return
 	}
-	c.Link.SetResolver(r)
+	u.Link.SetResolver(r)
 }
 
 // DB returns the shared database handle (may be nil).
-func (c *Unit) DB() *sql.DB { return c.cfg.DB }
+func (u *Unit) DB() *sql.DB { return u.cfg.DB }
 
 // QueryFacade returns the read-only aggregate view north-bound
 // adapters consume. The facade is built fresh on each call so the
 // caller sees the current set of sub-components.
-func (c *Unit) QueryFacade() *QueryFacade {
-	return newQueryFacadeWithModel(c.cfg.Name, c.DeviceRegistry, c.ModelRegistry, c.Health)
+func (u *Unit) QueryFacade() *QueryFacade {
+	return newQueryFacadeWithModel(u.cfg.Name, u.DeviceRegistry, u.ModelRegistry, u.Health)
 }
 
 // Available reports whether the central is currently operational. Returns
 // true when the overall health status is not [health.StatusUnknown] or
 // [health.StatusUnhealthy].
-func (c *Unit) Available() bool {
-	if c.Health == nil {
+func (u *Unit) Available() bool {
+	if u.Health == nil {
 		return false
 	}
-	s := c.Health.Overall()
+	s := u.Health.Overall()
 	return s == health.StatusHealthy || s == health.StatusDegraded
 }
 
 // HasPingPong reports whether at least one registered client supports the
 // ping/pong keepalive mechanism.
-func (c *Unit) HasPingPong() bool {
-	if c.Clients == nil {
+func (u *Unit) HasPingPong() bool {
+	if u.Clients == nil {
 		return false
 	}
-	for _, entry := range c.Clients.List() {
+	for _, entry := range u.Clients.List() {
 		if entry.Client != nil && entry.Client.Capabilities().PingPong {
 			return true
 		}
@@ -468,8 +468,8 @@ func (c *Unit) HasPingPong() bool {
 
 // GetChannel looks up the [*device.Channel] at channelAddress across
 // the current device model. Returns nil when the address is unknown.
-func (c *Unit) GetChannel(channelAddress string) *device.Channel {
-	return c.QueryFacade().GetChannel(channelAddress)
+func (u *Unit) GetChannel(channelAddress string) *device.Channel {
+	return u.QueryFacade().GetChannel(channelAddress)
 }
 
 // Start moves the central through STARTING → INITIALIZING → RUNNING
@@ -483,33 +483,33 @@ func (c *Unit) GetChannel(channelAddress string) *device.Channel {
 // automatically re-evaluates the overall central state, and performs
 // an initial EvaluateCentralState with fromStart=true to emit the
 // first SystemStatusChangedEvent before any client reports in.
-func (c *Unit) Start(ctx context.Context) error {
-	if err := c.StateMachine.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
+func (u *Unit) Start(ctx context.Context) error {
+	if err := u.StateMachine.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
 		return err
 	}
-	if err := c.Scheduler.Start(ctx); err != nil {
-		_ = c.StateMachine.TransitionTo(hmenum.CentralStateFailed, hmenum.FailureReasonInternal)
+	if err := u.Scheduler.Start(ctx); err != nil {
+		_ = u.StateMachine.TransitionTo(hmenum.CentralStateFailed, hmenum.FailureReasonInternal)
 		return err
 	}
-	if err := c.StateMachine.TransitionTo(hmenum.CentralStateRunning, hmenum.FailureReasonNone); err != nil {
+	if err := u.StateMachine.TransitionTo(hmenum.CentralStateRunning, hmenum.FailureReasonNone); err != nil {
 		return err
 	}
 
 	// Wire the health tracker so client-state changes automatically
 	// re-evaluate the central state.
-	if c.Health != nil {
-		c.Health.OnClientStateChange(func(_ health.Status) {
-			c.EvaluateCentralState("client_state_changed", false)
+	if u.Health != nil {
+		u.Health.OnClientStateChange(func(_ health.Status) {
+			u.EvaluateCentralState("client_state_changed", false)
 		})
 		// Perform the initial sync so the central state reflects the
 		// current health picture immediately after the scheduler starts,
 		// rather than waiting for the first client-state event.
-		c.Health.SyncCentralState(func(health.Status) {
-			c.EvaluateCentralState("start", true)
+		u.Health.SyncCentralState(func(health.Status) {
+			u.EvaluateCentralState("start", true)
 		})
 	} else {
 		// No health tracker — still emit the initial system-status event.
-		c.EvaluateCentralState("start", true)
+		u.EvaluateCentralState("start", true)
 	}
 	return nil
 }
@@ -532,91 +532,91 @@ func (c *Unit) Start(ctx context.Context) error {
 // 10. Event-bus full subscription clear
 // 11. Recorder-persistence teardown
 // 12. Transition to STOPPED
-func (c *Unit) Stop() {
-	if c.StateMachine.State() == hmenum.CentralStateStopped {
+func (u *Unit) Stop() {
+	if u.StateMachine.State() == hmenum.CentralStateStopped {
 		return
 	}
 
 	ctx := context.Background()
 
 	// 1. Persist cached state. Errors are logged but do not abort teardown.
-	c.serviceMu.RLock()
-	saveFn := c.saveFilesFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	saveFn := u.saveFilesFn
+	u.serviceMu.RUnlock()
 	if saveFn != nil {
-		if err := saveFn(ctx); err != nil && c.logger != nil {
-			c.logger.Warn("stop: save_files failed", "error", err)
+		if err := saveFn(ctx); err != nil && u.logger != nil {
+			u.logger.Warn("stop: save_files failed", "error", err)
 		}
 	}
 
 	// 2. Scheduler — bounded drain so a stuck job cannot block daemon
 	// shutdown indefinitely.
-	if c.Scheduler != nil {
-		c.Scheduler.StopWithTimeout(5 * time.Second)
+	if u.Scheduler != nil {
+		u.Scheduler.StopWithTimeout(5 * time.Second)
 	}
 
 	// 3. ConnectionRecovery coordinator.
-	if c.Recovery != nil {
-		c.Recovery.Stop()
+	if u.Recovery != nil {
+		u.Recovery.Stop()
 	}
 
 	// 4. Client coordinator — stops all InterfaceClients.
-	if c.Clients != nil {
-		if err := c.Clients.StopClients(ctx); err != nil && c.logger != nil {
-			c.logger.Warn("stop: stop_clients failed", "error", err)
+	if u.Clients != nil {
+		if err := u.Clients.StopClients(ctx); err != nil && u.logger != nil {
+			u.logger.Warn("stop: stop_clients failed", "error", err)
 		}
 	}
 
 	// 5. Hub JSON-RPC logout (optional). A bounded timeout guards against a
 	// stale connection blocking the entire shutdown sequence.
-	c.serviceMu.RLock()
-	logoutFn := c.hubLogoutFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	logoutFn := u.hubLogoutFn
+	u.serviceMu.RUnlock()
 	if logoutFn != nil {
 		logoutCtx, logoutCancel := context.WithTimeout(ctx, 5*time.Second)
 		defer logoutCancel()
-		if err := logoutFn(logoutCtx); err != nil && c.logger != nil {
-			c.logger.Warn("stop: hub_logout failed", "error", err)
+		if err := logoutFn(logoutCtx); err != nil && u.logger != nil {
+			u.logger.Warn("stop: hub_logout failed", "error", err)
 		}
 	}
 
 	// 6. Hub coordinator clear.
-	if c.Hub != nil {
-		c.Hub.Clear()
+	if u.Hub != nil {
+		u.Hub.Clear()
 	}
 
 	// 7. Cache coordinator: unsubscribe bus hooks + clear in-memory caches.
-	if c.Cache != nil {
-		c.Cache.UnsubscribeAll()
-		c.Cache.ClearOnStop()
+	if u.Cache != nil {
+		u.Cache.UnsubscribeAll()
+		u.Cache.ClearOnStop()
 	}
 
 	// 8. Event coordinator clear.
-	if c.Events != nil {
-		c.Events.Clear()
+	if u.Events != nil {
+		u.Events.Clear()
 	}
 
 	// 9 + 10. EventBus: clear external subscriptions then all subscriptions.
-	if c.EventBus != nil {
-		c.EventBus.ClearExternalSubscriptions()
-		c.EventBus.ClearAllSubscriptions()
+	if u.EventBus != nil {
+		u.EventBus.ClearExternalSubscriptions()
+		u.EventBus.ClearAllSubscriptions()
 	}
 
 	// 11. Recorder-persistence teardown.
-	c.recorderPersistMu.Lock()
-	if c.recorderPersistUnsub != nil {
-		c.recorderPersistUnsub()
-		c.recorderPersistUnsub = nil
+	u.recorderPersistMu.Lock()
+	if u.recorderPersistUnsub != nil {
+		u.recorderPersistUnsub()
+		u.recorderPersistUnsub = nil
 	}
-	c.recorderPersistMu.Unlock()
+	u.recorderPersistMu.Unlock()
 
 	// 12. Transition.
-	_ = c.StateMachine.TransitionTo(hmenum.CentralStateStopped, hmenum.FailureReasonNone)
+	_ = u.StateMachine.TransitionTo(hmenum.CentralStateStopped, hmenum.FailureReasonNone)
 
 	// 13. Post-stop hooks (registry unregister, tracker cleanup, etc.).
-	c.onStopHooksMu.Lock()
-	hooks := c.onStopHooks
-	c.onStopHooksMu.Unlock()
+	u.onStopHooksMu.Lock()
+	hooks := u.onStopHooks
+	u.onStopHooksMu.Unlock()
 	for _, fn := range hooks {
 		fn()
 	}
@@ -627,38 +627,38 @@ func (c *Unit) Stop() {
 // The hook should perform the `logout` call on the JSON-RPC session and
 // is called with a background context — the CCU session may already be
 // degraded at this point so errors are logged and ignored.
-func (c *Unit) SetHubLogoutFn(fn func(ctx context.Context) error) {
-	c.serviceMu.Lock()
-	c.hubLogoutFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetHubLogoutFn(fn func(ctx context.Context) error) {
+	u.serviceMu.Lock()
+	u.hubLogoutFn = fn
+	u.serviceMu.Unlock()
 }
 
 // SystemInformation returns the cached CCU-side metadata. The hub- wiring
 // adapter populates the cache after Login + `get_backend_info`; before then
 // the zero value is returned.
-func (c *Unit) SystemInformation() SystemInfo {
-	c.systemInfoMu.RLock()
-	defer c.systemInfoMu.RUnlock()
-	return c.systemInfo
+func (u *Unit) SystemInformation() SystemInfo {
+	u.systemInfoMu.RLock()
+	defer u.systemInfoMu.RUnlock()
+	return u.systemInfo
 }
 
 // SetSystemInformation overwrites the cached metadata. Called from
 // the hub-wiring adapter once `get_backend_info` returns.
-func (c *Unit) SetSystemInformation(info SystemInfo) {
-	c.systemInfoMu.Lock()
-	c.systemInfo = info
-	c.systemInfoMu.Unlock()
+func (u *Unit) SetSystemInformation(info SystemInfo) {
+	u.systemInfoMu.Lock()
+	u.systemInfo = info
+	u.systemInfoMu.Unlock()
 }
 
 // Model returns the CCU model string from the cached system info. Empty
 // string when system info has not been observed yet.
-func (c *Unit) Model() string {
-	return c.SystemInformation().Model
+func (u *Unit) Model() string {
+	return u.SystemInformation().Model
 }
 
 // Version returns the openccu-loom build version. Use [SystemInformation] for
 // the CCU-reported firmware version.
-func (c *Unit) Version() string {
+func (u *Unit) Version() string {
 	return build.Version
 }
 
@@ -668,8 +668,8 @@ func (c *Unit) Version() string {
 // get_backend_info). This is an alias for SystemInformation().Version
 // so callers that explicitly want the CCU version have an unambiguous
 // name.
-func (c *Unit) CCUVersion() string {
-	return c.SystemInformation().Version
+func (u *Unit) CCUVersion() string {
+	return u.SystemInformation().Version
 }
 
 // OnStateTransition registers a handler that fires every time the central
@@ -677,12 +677,12 @@ func (c *Unit) CCUVersion() string {
 // for `to` to receive all transitions regardless of the destination state.
 //
 // Returns an unsubscribe function; calling it is idempotent.
-func (c *Unit) OnStateTransition(to, from hmenum.CentralState, handler func(to, from hmenum.CentralState)) func() {
-	if c.EventBus == nil {
+func (u *Unit) OnStateTransition(to, from hmenum.CentralState, handler func(to, from hmenum.CentralState)) func() {
+	if u.EventBus == nil {
 		return func() {}
 	}
-	return events.Subscribe(c.EventBus, func(e hmevent.CentralStateChangedEvent) {
-		if e.CentralName != c.cfg.Name {
+	return events.Subscribe(u.EventBus, func(e hmevent.CentralStateChangedEvent) {
+		if e.CentralName != u.cfg.Name {
 			return
 		}
 		if to != "" && e.To != to {
@@ -698,11 +698,11 @@ func (c *Unit) OnStateTransition(to, from hmenum.CentralState, handler func(to, 
 // ResolveDeviceName returns a best-effort human-readable name for the device
 // at address: the operator-assigned `Device.Name` first, then `Model` as
 // fallback, then the address itself.
-func (c *Unit) ResolveDeviceName(address string) string {
-	if c.ModelRegistry == nil || address == "" {
+func (u *Unit) ResolveDeviceName(address string) string {
+	if u.ModelRegistry == nil || address == "" {
 		return address
 	}
-	dev, ok := c.ModelRegistry.Get(address)
+	dev, ok := u.ModelRegistry.Get(address)
 	if !ok || dev == nil {
 		return address
 	}
@@ -728,12 +728,12 @@ func (c *Unit) ResolveDeviceName(address string) string {
 // entry.
 //
 // Idempotent: returns false when no device matches the address.
-func (c *Unit) RemoveDevice(address string) bool {
-	if c == nil || c.ModelRegistry == nil || address == "" {
+func (u *Unit) RemoveDevice(address string) bool {
+	if u == nil || u.ModelRegistry == nil || address == "" {
 		return false
 	}
 	var interfaceID string
-	if dev, ok := c.ModelRegistry.Get(address); ok && dev != nil {
+	if dev, ok := u.ModelRegistry.Get(address); ok && dev != nil {
 		interfaceID = dev.InterfaceID
 		// Tear down each channel first: closes event groups, unsubscribes
 		// calculated DPs, and releases custom-DP bindings. The snapshot is
@@ -741,24 +741,24 @@ func (c *Unit) RemoveDevice(address string) bool {
 		for _, ch := range dev.Channels() {
 			dev.RemoveChannel(ch.Address)
 		}
-		if c.EventBus != nil {
+		if u.EventBus != nil {
 			for _, dp := range dev.AllDataPoints() {
-				if u, ok := dp.(interface{ UniqueID() string }); ok {
-					c.EventBus.ClearSubscriptionsByKey(u.UniqueID())
+				if idp, ok := dp.(interface{ UniqueID() string }); ok {
+					u.EventBus.ClearSubscriptionsByKey(idp.UniqueID())
 				}
 			}
 			for _, dp := range dev.AllMasterDataPoints() {
-				if u, ok := dp.(interface{ UniqueID() string }); ok {
-					c.EventBus.ClearSubscriptionsByKey(u.UniqueID())
+				if idp, ok := dp.(interface{ UniqueID() string }); ok {
+					u.EventBus.ClearSubscriptionsByKey(idp.UniqueID())
 				}
 			}
 		}
 	}
-	removed := c.ModelRegistry.Remove(address)
-	if removed && c.EventBus != nil {
-		events.Publish(c.EventBus, hmevent.DeviceRemovedEvent{
+	removed := u.ModelRegistry.Remove(address)
+	if removed && u.EventBus != nil {
+		events.Publish(u.EventBus, hmevent.DeviceRemovedEvent{
 			Base:        hmevent.NewBase(),
-			CentralName: c.cfg.Name,
+			CentralName: u.cfg.Name,
 			InterfaceID: interfaceID,
 			Address:     address,
 		})
@@ -773,10 +773,10 @@ func (c *Unit) RemoveDevice(address string) bool {
 // corresponding REST/WS adapter once the JSON-RPC session is up.
 //
 // Returns an error when no handler is wired yet (e.g. before Start).
-func (c *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
-	c.serviceMu.RLock()
-	fn := c.acceptInboxFn
-	c.serviceMu.RUnlock()
+func (u *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
+	u.serviceMu.RLock()
+	fn := u.acceptInboxFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return errors.New("central: AcceptDeviceInbox not wired")
 	}
@@ -785,18 +785,18 @@ func (c *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
 
 // SetAcceptInboxFn wires the inbox-accept handler. Pass nil to
 // detach.
-func (c *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
-	c.serviceMu.Lock()
-	c.acceptInboxFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
+	u.serviceMu.Lock()
+	u.acceptInboxFn = fn
+	u.serviceMu.Unlock()
 }
 
 // CreateBackup triggers a backup on the CCU and returns the downloaded
 // archive blob.
-func (c *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
-	c.serviceMu.RLock()
-	fn := c.createBackupFn
-	c.serviceMu.RUnlock()
+func (u *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
+	u.serviceMu.RLock()
+	fn := u.createBackupFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return nil, errors.New("central: CreateBackup not wired")
 	}
@@ -804,18 +804,18 @@ func (c *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
 }
 
 // SetCreateBackupFn wires the backup-and-download handler.
-func (c *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
-	c.serviceMu.Lock()
-	c.createBackupFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
+	u.serviceMu.Lock()
+	u.createBackupFn = fn
+	u.serviceMu.Unlock()
 }
 
 // SetInstallMode toggles the CCU's "install mode" (a.k.a. learning
 // mode). When enabled the CCU briefly accepts new device pairings.
-func (c *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
-	c.serviceMu.RLock()
-	fn := c.setInstallModeFn
-	c.serviceMu.RUnlock()
+func (u *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
+	u.serviceMu.RLock()
+	fn := u.setInstallModeFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return errors.New("central: SetInstallMode not wired")
 	}
@@ -823,53 +823,53 @@ func (c *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
 }
 
 // SetSetInstallModeFn wires the install-mode handler.
-func (c *Unit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
-	c.serviceMu.Lock()
-	c.setInstallModeFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
+	u.serviceMu.Lock()
+	u.setInstallModeFn = fn
+	u.serviceMu.Unlock()
 }
 
 // SetInstallModeForInterfaceFn wires the per-interface install-mode handler.
 // When wired, [SetInstallModeForInterface] uses this instead of the plain handler
 // so interfaceID and deviceAddress are actually forwarded to the backend.
-func (c *Unit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
-	c.serviceMu.Lock()
-	c.setInstallModeForInterfaceFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
+	u.serviceMu.Lock()
+	u.setInstallModeForInterfaceFn = fn
+	u.serviceMu.Unlock()
 }
 
 // SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
 // When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
 // the plain handler so interfaceID and paramset are actually forwarded.
-func (c *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
-	c.serviceMu.Lock()
-	c.loadAndRefreshForInterfaceFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
+	u.serviceMu.Lock()
+	u.loadAndRefreshForInterfaceFn = fn
+	u.serviceMu.Unlock()
 }
 
 // InitInstallMode is a convenience for `SetInstallMode(ctx, true,
 // DefaultDuration)`.
 // (`central_unit.py:453`). The default duration follows
 // (60 seconds).
-func (c *Unit) InitInstallMode(ctx context.Context) error {
+func (u *Unit) InitInstallMode(ctx context.Context) error {
 	const defaultInstallModeSeconds = 60
-	return c.SetInstallMode(ctx, true, defaultInstallModeSeconds)
+	return u.SetInstallMode(ctx, true, defaultInstallModeSeconds)
 }
 
 // RenameDevice changes the operator-visible name of a device.
 // Updates both the in-memory model and persists the new name through
 // the configured `RenameDeviceFn` hook.
-func (c *Unit) RenameDevice(ctx context.Context, address, name string) error {
+func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
 	if address == "" {
 		return errors.New("central: RenameDevice: empty address")
 	}
-	c.serviceMu.RLock()
-	fn := c.renameDeviceFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	fn := u.renameDeviceFn
+	u.serviceMu.RUnlock()
 	// In-memory rename — always applied so the UI reflects the change
 	// even when no persistent backend is wired (e.g. tests).
-	if c.ModelRegistry != nil {
-		if dev, ok := c.ModelRegistry.Get(address); ok && dev != nil {
+	if u.ModelRegistry != nil {
+		if dev, ok := u.ModelRegistry.Get(address); ok && dev != nil {
 			dev.Name = name
 		}
 	}
@@ -881,10 +881,10 @@ func (c *Unit) RenameDevice(ctx context.Context, address, name string) error {
 
 // SetRenameDeviceFn wires the persistent-rename handler. Pass nil to
 // detach.
-func (c *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name string) error) {
-	c.serviceMu.Lock()
-	c.renameDeviceFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name string) error) {
+	u.serviceMu.Lock()
+	u.renameDeviceFn = fn
+	u.serviceMu.Unlock()
 }
 
 // RenameDeviceWithChannels renames a device and, when includeChannels
@@ -894,23 +894,23 @@ func (c *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name stri
 // hook so the store stays consistent.
 //
 // When includeChannels is false this is equivalent to [RenameDevice].
-func (c *Unit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
-	if err := c.RenameDevice(ctx, address, name); err != nil {
+func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
+	if err := u.RenameDevice(ctx, address, name); err != nil {
 		return err
 	}
 	if !includeChannels {
 		return nil
 	}
-	if c.ModelRegistry == nil {
+	if u.ModelRegistry == nil {
 		return nil
 	}
-	dev, ok := c.ModelRegistry.Get(address)
+	dev, ok := u.ModelRegistry.Get(address)
 	if !ok || dev == nil {
 		return nil
 	}
-	c.serviceMu.RLock()
-	fn := c.renameDeviceFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	fn := u.renameDeviceFn
+	u.serviceMu.RUnlock()
 	var firstErr error
 	for _, ch := range dev.Channels() {
 		chName := name + ":" + strconv.Itoa(ch.Number)
@@ -927,10 +927,10 @@ func (c *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 // LoadAndRefreshDataPointData triggers a fetch of every readable VALUES data
 // point, seeds the data-cache and re-publishes value-changed events for any
 // cache miss.
-func (c *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
-	c.serviceMu.RLock()
-	fn := c.loadAndRefreshFn
-	c.serviceMu.RUnlock()
+func (u *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
+	u.serviceMu.RLock()
+	fn := u.loadAndRefreshFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return errors.New("central: LoadAndRefreshDataPointData not wired")
 	}
@@ -938,19 +938,19 @@ func (c *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
 }
 
 // SetLoadAndRefreshFn wires the data-point reload handler.
-func (c *Unit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
-	c.serviceMu.Lock()
-	c.loadAndRefreshFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
+	u.serviceMu.Lock()
+	u.loadAndRefreshFn = fn
+	u.serviceMu.Unlock()
 }
 
 // SaveFiles persists the in-memory descriptors and paramsets to the
 // configured store. Implementation is delegated through the `SaveFilesFn`
 // hook; for the SQLite backend the hook batches DB writes.
-func (c *Unit) SaveFiles(ctx context.Context) error {
-	c.serviceMu.RLock()
-	fn := c.saveFilesFn
-	c.serviceMu.RUnlock()
+func (u *Unit) SaveFiles(ctx context.Context) error {
+	u.serviceMu.RLock()
+	fn := u.saveFilesFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return errors.New("central: SaveFiles not wired")
 	}
@@ -958,18 +958,18 @@ func (c *Unit) SaveFiles(ctx context.Context) error {
 }
 
 // SetSaveFilesFn wires the persistence handler.
-func (c *Unit) SetSaveFilesFn(fn func(ctx context.Context) error) {
-	c.serviceMu.Lock()
-	c.saveFilesFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetSaveFilesFn(fn func(ctx context.Context) error) {
+	u.serviceMu.Lock()
+	u.saveFilesFn = fn
+	u.serviceMu.Unlock()
 }
 
 // ValidateConfigAndGetSystemInformation runs a config-validation pass against
 // the configured hub backend and returns the discovered SystemInfo.
-func (c *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
-	c.serviceMu.RLock()
-	fn := c.validateConfigFn
-	c.serviceMu.RUnlock()
+func (u *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
+	u.serviceMu.RLock()
+	fn := u.validateConfigFn
+	u.serviceMu.RUnlock()
 	if fn == nil {
 		return SystemInfo{}, errors.New("central: ValidateConfig not wired")
 	}
@@ -977,10 +977,10 @@ func (c *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (Syste
 }
 
 // SetValidateConfigFn wires the config-validation handler.
-func (c *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
-	c.serviceMu.Lock()
-	c.validateConfigFn = fn
-	c.serviceMu.Unlock()
+func (u *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
+	u.serviceMu.Lock()
+	u.validateConfigFn = fn
+	u.serviceMu.Unlock()
 }
 
 // ServiceWiringStatus reports, for each service-method hook on the
@@ -995,17 +995,17 @@ func (c *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, err
 // adapter has run the entries flip to true. Each service method
 // already returns a clean "not wired" error when invoked early, so
 // this map is purely informational.
-func (c *Unit) ServiceWiringStatus() map[string]bool {
-	c.serviceMu.RLock()
-	defer c.serviceMu.RUnlock()
+func (u *Unit) ServiceWiringStatus() map[string]bool {
+	u.serviceMu.RLock()
+	defer u.serviceMu.RUnlock()
 	return map[string]bool{
-		"accept_inbox":     c.acceptInboxFn != nil,
-		"create_backup":    c.createBackupFn != nil,
-		"set_install_mode": c.setInstallModeFn != nil,
-		"rename_device":    c.renameDeviceFn != nil,
-		"load_and_refresh": c.loadAndRefreshFn != nil,
-		"save_files":       c.saveFilesFn != nil,
-		"validate_config":  c.validateConfigFn != nil,
+		"accept_inbox":     u.acceptInboxFn != nil,
+		"create_backup":    u.createBackupFn != nil,
+		"set_install_mode": u.setInstallModeFn != nil,
+		"rename_device":    u.renameDeviceFn != nil,
+		"load_and_refresh": u.loadAndRefreshFn != nil,
+		"save_files":       u.saveFilesFn != nil,
+		"validate_config":  u.validateConfigFn != nil,
 	}
 }
 
@@ -1013,8 +1013,8 @@ func (c *Unit) ServiceWiringStatus() map[string]bool {
 // been wired. Returns false until the hub-wiring adapter finishes its
 // post-Start work. Convenience over [ServiceWiringStatus] for callers
 // that only care about the boolean.
-func (c *Unit) ServiceWiringComplete() bool {
-	for _, wired := range c.ServiceWiringStatus() {
+func (u *Unit) ServiceWiringComplete() bool {
+	for _, wired := range u.ServiceWiringStatus() {
 		if !wired {
 			return false
 		}
@@ -1037,13 +1037,13 @@ func (c *Unit) ServiceWiringComplete() bool {
 //     (RUNNING, DEGRADED, RECOVERING, INITIALIZING). The state machine's
 //     transition table already enforces the exact set — TransitionTo
 //     returns ErrInvalidTransition for anything else and we silently skip.
-func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
-	if c.Clients == nil || c.Health == nil {
+func (u *Unit) EvaluateCentralState(trigger string, fromStart bool) {
+	if u.Clients == nil || u.Health == nil {
 		return
 	}
-	allConnected := c.Clients.Available()
-	anyConnected := c.Clients.AnyClientActive()
-	allCallbacksAlive := c.Clients.IsAlive()
+	allConnected := u.Clients.Available()
+	anyConnected := u.Clients.AnyClientActive()
+	allCallbacksAlive := u.Clients.IsAlive()
 
 	// Determine the target state based on client connectivity and callback health:
 	//   RUNNING   — every client is connected and all callbacks are alive
@@ -1076,12 +1076,12 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	// recovery pipeline's early-stage failures (TCP_CHECK, RPC_CHECK) would
 	// never produce a Healthy=false event because the client remains
 	// Connected until the Reconnect stage explicitly transitions it.
-	inRecovery := c.Recovery != nil && c.Recovery.InRecovery()
+	inRecovery := u.Recovery != nil && u.Recovery.InRecovery()
 	if newState == hmenum.CentralStateRunning && inRecovery {
 		newState = hmenum.CentralStateDegraded
 	}
 
-	current := c.StateMachine.State()
+	current := u.StateMachine.State()
 	if !fromStart && current == newState {
 		return
 	}
@@ -1093,8 +1093,8 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 		// Pull per-interface failure reasons from the state machine which tracks
 		// them via MarkInterfaceDegraded. For interfaces not yet marked, use the
 		// catch-all FailureReasonNetwork.
-		smReasons := c.StateMachine.DegradedInterfaces()
-		for _, e := range c.Clients.List() {
+		smReasons := u.StateMachine.DegradedInterfaces()
+		for _, e := range u.Clients.List() {
 			if !e.Connected() {
 				degradedIfaces = append(degradedIfaces, e.InterfaceID)
 				if degradedReasons == nil {
@@ -1109,8 +1109,8 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 		}
 	}
 
-	if c.logger != nil {
-		c.logger.Debug(
+	if u.logger != nil {
+		u.logger.Debug(
 			"evaluate_central_state",
 			"trigger", trigger,
 			"all_connected", allConnected,
@@ -1129,7 +1129,7 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	if len(degradedReasons) > 0 {
 		smOpts = append(smOpts, statemachine.WithDegradedInterfaces(degradedReasons))
 	}
-	_ = c.StateMachine.TransitionTo(newState, hmenum.FailureReasonNone, smOpts...)
+	_ = u.StateMachine.TransitionTo(newState, hmenum.FailureReasonNone, smOpts...)
 
 	// Healthy reflects the operator-visible connection quality:
 	//   - false when no client is active (all disconnected)
@@ -1138,10 +1138,10 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	healthy := (allConnected || anyConnected) && !inRecovery
 
 	// Publish a system-status event so north-bound adapters observe the flip.
-	if c.EventBus != nil {
-		events.Publish(c.EventBus, hmevent.SystemStatusChangedEvent{
+	if u.EventBus != nil {
+		events.Publish(u.EventBus, hmevent.SystemStatusChangedEvent{
 			Base:                     hmevent.NewBase(),
-			CentralName:              c.cfg.Name,
+			CentralName:              u.cfg.Name,
 			Healthy:                  healthy,
 			CentralState:             newState,
 			DegradedInterfaces:       degradedIfaces,
@@ -1158,14 +1158,14 @@ func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 // The "force available" condition is: Healthy == true AND Reason contains the
 // literal token "force_available". Callers that build such events should set
 // Component = "" and Reason = "force_available".
-func (c *Unit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChangedEvent) {
+func (u *Unit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChangedEvent) {
 	if !e.Healthy || e.Reason != "force_available" {
 		return
 	}
-	if c.ModelRegistry == nil {
+	if u.ModelRegistry == nil {
 		return
 	}
-	for _, dev := range c.ModelRegistry.List() {
+	for _, dev := range u.ModelRegistry.List() {
 		if dev == nil {
 			continue
 		}
@@ -1176,15 +1176,15 @@ func (c *Unit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChanged
 // WireSystemStatusForceAvailability subscribes to the event bus and calls
 // [HandleSystemStatusForceAvailability] on every matching event. Returns an
 // unsubscribe function; call it on teardown.
-func (c *Unit) WireSystemStatusForceAvailability() func() {
-	if c.EventBus == nil {
+func (u *Unit) WireSystemStatusForceAvailability() func() {
+	if u.EventBus == nil {
 		return func() {}
 	}
-	return events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) {
-		if e.CentralName != c.cfg.Name && e.CentralName != "" {
+	return events.Subscribe(u.EventBus, func(e hmevent.SystemStatusChangedEvent) {
+		if e.CentralName != u.cfg.Name && e.CentralName != "" {
 			return
 		}
-		c.HandleSystemStatusForceAvailability(e)
+		u.HandleSystemStatusForceAvailability(e)
 	})
 }
 
@@ -1195,19 +1195,19 @@ func (c *Unit) WireSystemStatusForceAvailability() func() {
 // coalesce calls). Wire the per-interface hook via
 // [SetLoadAndRefreshForInterfaceFn] to forward the full scope to the backend;
 // without it the call falls back to the global [LoadAndRefreshDataPointData].
-func (c *Unit) LoadAndRefreshDataPointDataForInterface(
+func (u *Unit) LoadAndRefreshDataPointDataForInterface(
 	ctx context.Context,
 	interfaceID string,
 	paramset hmenum.ParamsetKey,
 	directCall bool,
 ) error {
-	c.serviceMu.RLock()
-	fn := c.loadAndRefreshForInterfaceFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	fn := u.loadAndRefreshForInterfaceFn
+	u.serviceMu.RUnlock()
 	if fn != nil {
 		return fn(ctx, interfaceID, paramset, directCall)
 	}
-	return c.LoadAndRefreshDataPointData(ctx)
+	return u.LoadAndRefreshDataPointData(ctx)
 }
 
 // SetInstallModeForInterface enables or disables install mode for a specific
@@ -1215,20 +1215,20 @@ func (c *Unit) LoadAndRefreshDataPointDataForInterface(
 // hook via [SetInstallModeForInterfaceFn] to forward interfaceID and
 // deviceAddress to the backend; without it the call falls back to the global
 // [SetInstallMode] (all interfaces, no device filter).
-func (c *Unit) SetInstallModeForInterface(
+func (u *Unit) SetInstallModeForInterface(
 	ctx context.Context,
 	interfaceID string,
 	mode bool,
 	deviceAddress string,
 	seconds int,
 ) error {
-	c.serviceMu.RLock()
-	fn := c.setInstallModeForInterfaceFn
-	c.serviceMu.RUnlock()
+	u.serviceMu.RLock()
+	fn := u.setInstallModeForInterfaceFn
+	u.serviceMu.RUnlock()
 	if fn != nil {
 		return fn(ctx, interfaceID, mode, deviceAddress, seconds)
 	}
-	return c.SetInstallMode(ctx, mode, seconds)
+	return u.SetInstallMode(ctx, mode, seconds)
 }
 
 // ReadableGenericDataPoints returns every VALUES-paramset data point across
@@ -1236,11 +1236,11 @@ func (c *Unit) SetInstallModeForInterface(
 //
 // Order: alphabetical by device address, then by channel address, then by
 // parameter name.
-func (c *Unit) ReadableGenericDataPoints() []device.ParameterDataPoint {
-	if c.ModelRegistry == nil {
+func (u *Unit) ReadableGenericDataPoints() []device.ParameterDataPoint {
+	if u.ModelRegistry == nil {
 		return nil
 	}
-	devs := c.ModelRegistry.List()
+	devs := u.ModelRegistry.List()
 	out := make([]device.ParameterDataPoint, 0)
 	for _, d := range devs {
 		for _, dp := range d.AllDataPoints() {

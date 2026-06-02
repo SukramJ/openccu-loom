@@ -60,12 +60,12 @@ func (p *SystemStatusPublisher) Start() {
 	if p.reg == nil || p.wiring == nil {
 		return
 	}
-	for _, c := range p.reg.List() {
-		bus := c.EventBus
+	for _, u := range p.reg.List() {
+		bus := u.EventBus
 		if bus == nil {
 			continue
 		}
-		centralName := c.Name()
+		centralName := u.Name()
 		unsub := events.Subscribe(bus, func(e hmevent.SystemStatusChangedEvent) {
 			pay := systemStatusPayload{
 				CentralName:        centralName,

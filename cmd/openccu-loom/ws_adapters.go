@@ -239,8 +239,8 @@ func (w *wsLinkQuery) LinkableChannels(ctx context.Context, deviceAddress string
 	if w.registry == nil {
 		return nil, errors.New("ws: registry not wired")
 	}
-	for _, c := range w.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range w.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -635,18 +635,18 @@ func (w *wsDeviceQuery) GetParamsetDescription(ctx context.Context, key configui
 	if w.registry == nil {
 		return nil, errors.New("ws: registry not wired")
 	}
-	for _, c := range w.registry.List() {
-		if key.CentralName != "" && c.Name() != key.CentralName {
+	for _, u := range w.registry.List() {
+		if key.CentralName != "" && u.Name() != key.CentralName {
 			continue
 		}
 		deviceAddr := deviceAddrFromChannel(key.ChannelAddress)
-		dev, ok := c.ModelRegistry.Get(deviceAddr)
+		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
 		}
-		backend, ok := w.writer.Backend(c.Name(), dev.InterfaceID)
+		backend, ok := w.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, fmt.Errorf("ws: no backend for %s/%s", c.Name(), dev.InterfaceID)
+			return nil, fmt.Errorf("ws: no backend for %s/%s", u.Name(), dev.InterfaceID)
 		}
 		psKey := key.ParamsetKey
 		if psKey == "" {

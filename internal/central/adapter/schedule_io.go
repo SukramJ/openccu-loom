@@ -76,8 +76,8 @@ func (s *SchedulesDomain) MaxProfilesForDevice(
 	if s.registry == nil {
 		return defaultProfileCap, nil
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}

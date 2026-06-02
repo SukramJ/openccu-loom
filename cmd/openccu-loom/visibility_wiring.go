@@ -115,11 +115,11 @@ func applyVisibilityUnIgnore(
 	//    IsUnIgnored bits reflect the persisted rules.
 	decider := visReg.Parameter()
 	deviceCount := 0
-	for _, c := range reg.List() {
-		if c == nil || c.ModelRegistry == nil {
+	for _, u := range reg.List() {
+		if u == nil || u.ModelRegistry == nil {
 			continue
 		}
-		for _, d := range c.ModelRegistry.List() {
+		for _, d := range u.ModelRegistry.List() {
 			visibility.ApplyUnIgnoredMarks(d, decider)
 			deviceCount++
 		}

@@ -66,7 +66,7 @@ type namingInitializer interface {
 // human-readable model label + icon filled in from the CCU translation
 // archive. When unset the raw model strings are used.
 type DevicePipeline struct {
-	central      *central.Unit
+	unit         *central.Unit
 	translations *ccudata.Translations
 	locale       string
 	// names maps device and channel addresses to their CCU-assigned
@@ -118,8 +118,8 @@ type DevicePipeline struct {
 }
 
 // NewDevicePipeline constructs a pipeline bound to c.
-func NewDevicePipeline(c *central.Unit) *DevicePipeline {
-	return &DevicePipeline{central: c}
+func NewDevicePipeline(u *central.Unit) *DevicePipeline {
+	return &DevicePipeline{unit: u}
 }
 
 // WithTranslations attaches an optional translation set + locale used
@@ -218,7 +218,7 @@ func (p *DevicePipeline) WithVisibility(v *visibility.Registry) *DevicePipeline 
 // `interfaceID` tags every device; it is typically the backend's
 // logical id (e.g. "HmIP-RF").
 func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface hmenum.Interface, descs []hmproto.DeviceDescription) error {
-	if p.central == nil {
+	if p.unit == nil {
 		return fmt.Errorf("pipeline: no central")
 	}
 	// First pass: build devices (only entries without PARENT — these
@@ -234,7 +234,7 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 		}
 		d := p.ensureDevice(dd, interfaceID, iface)
 		byAddress[dd.Address] = d
-		p.central.DeviceRegistry.Put(registry.DeviceEntry{
+		p.unit.DeviceRegistry.Put(registry.DeviceEntry{
 			Interface:    iface,
 			Address:      dd.Address,
 			Model:        dd.Type,
@@ -268,7 +268,7 @@ func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface h
 }
 
 func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID string, iface hmenum.Interface) *device.Device {
-	if existing, ok := p.central.ModelRegistry.Get(dd.Address); ok {
+	if existing, ok := p.unit.ModelRegistry.Get(dd.Address); ok {
 		return existing
 	}
 	var displayName string
@@ -320,7 +320,7 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		d.ModelLabel = p.translations.DeviceModelLabel(p.locale, d.Model, d.SubModel)
 		d.ModelIcon = p.translations.DeviceModelIcon(d.Model)
 	}
-	p.central.ModelRegistry.Put(d)
+	p.unit.ModelRegistry.Put(d)
 	return d
 }
 
@@ -357,8 +357,8 @@ func (p *DevicePipeline) IngestFromBackend(
 	// were already in the registry (from a previous run's persisted cache) but
 	// whose Device objects were not yet created — covers the warm-start path
 	// where the description registry outlives a reconnect cycle.
-	if p.central != nil && p.central.Devices != nil {
-		_ = p.central.Devices.CheckAndCreateDevicesFromCache(ctx)
+	if p.unit != nil && p.unit.Devices != nil {
+		_ = p.unit.Devices.CheckAndCreateDevicesFromCache(ctx)
 	}
 	if err := p.hydrateDataPoints(ctx, interfaceID, b, writer, logger); err != nil {
 		return err
@@ -392,12 +392,12 @@ func (p *DevicePipeline) IngestFromBackend(
 	// this hop the [hmevent.DataPointOptimisticRolledBackEvent] type
 	// exists in the catalogue but no producer surfaces it to north-bound
 	// consumers.
-	if p.central != nil && p.central.EventBus != nil {
-		for _, d := range p.central.ModelRegistry.List() {
+	if p.unit != nil && p.unit.EventBus != nil {
+		for _, d := range p.unit.ModelRegistry.List() {
 			if d.InterfaceID != interfaceID {
 				continue
 			}
-			bridgeDataPointRollbacksToBus(p.central.EventBus, d)
+			bridgeDataPointRollbacksToBus(p.unit.EventBus, d)
 		}
 	}
 	// Wire availability provider and event publisher on every DP so that:
@@ -406,13 +406,13 @@ func (p *DevicePipeline) IngestFromBackend(
 	//   "unavailable" state correctly when the device drops off the air.
 	// - WeekProfile DPs publish WeekProfileChangedEvent on FireScheduleUpdated
 	//   so MQTT/WS subscribers see schedule updates without polling.
-	if p.central != nil && p.central.EventBus != nil {
-		centralName := p.central.Name()
-		for _, d := range p.central.ModelRegistry.List() {
+	if p.unit != nil && p.unit.EventBus != nil {
+		centralName := p.unit.Name()
+		for _, d := range p.unit.ModelRegistry.List() {
 			if d.InterfaceID != interfaceID {
 				continue
 			}
-			wireDataPointLifecycle(p.central.EventBus, centralName, d)
+			wireDataPointLifecycle(p.unit.EventBus, centralName, d)
 		}
 	}
 	// Refine every attached week-profile descriptor with the device-
@@ -518,11 +518,11 @@ func (p *DevicePipeline) IngestFromBackend(
 // EventGroups() returns a populated slice. Must be called after all DP,
 // custom-DP, and event attachment passes have completed.
 func (p *DevicePipeline) finalizeChannelInit(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	centralName := p.central.Name()
-	for _, d := range p.central.ModelRegistry.List() {
+	centralName := p.unit.Name()
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -541,14 +541,14 @@ func (p *DevicePipeline) finalizeChannelInit(interfaceID string) {
 // `IsUnIgnored()` flag (which mirrors `_is_un_ignored` with
 // `custom_only=True`). Idempotent.
 func (p *DevicePipeline) applyInternalParameterMarks(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
 	var decider *visibility.ParameterDecider
 	if p.visibility != nil {
 		decider = p.visibility.Parameter()
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -561,11 +561,11 @@ func (p *DevicePipeline) applyInternalParameterMarks(interfaceID string) {
 // answer onto each VALUES DP via [BaseDataPointFields.MarkUnIgnored].
 // No-op when the pipeline carries no decider (test fixtures).
 func (p *DevicePipeline) applyUnIgnoredMarks(interfaceID string) {
-	if p.central == nil || p.visibility == nil {
+	if p.unit == nil || p.visibility == nil {
 		return
 	}
 	decider := p.visibility.Parameter()
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -576,10 +576,10 @@ func (p *DevicePipeline) applyUnIgnoredMarks(interfaceID string) {
 // applyForceSensorMarks walks every channel of every device on interfaceID
 // and runs [visibility.ApplyForceSensorMarks].
 func (p *DevicePipeline) applyForceSensorMarks(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -598,11 +598,11 @@ func (p *DevicePipeline) applyForceSensorMarks(interfaceID string) {
 //
 // Idempotent. Honours un-ignored marks via the decider chain.
 func (p *DevicePipeline) applyIgnoredParameterMarks(interfaceID string) {
-	if p.central == nil || p.visibility == nil {
+	if p.unit == nil || p.visibility == nil {
 		return
 	}
 	decider := p.visibility.Parameter()
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -616,14 +616,14 @@ func (p *DevicePipeline) applyIgnoredParameterMarks(interfaceID string) {
 // (un_ignore.txt) re-promotes a hidden parameter before the suppression
 // fires.
 func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
 	var decider *visibility.ParameterDecider
 	if p.visibility != nil {
 		decider = p.visibility.Parameter()
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -635,10 +635,10 @@ func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
 // interfaceID and runs [visibility.ApplyChannelOperationModeGating] against
 // it. Idempotent.
 func (p *DevicePipeline) applyChannelOperationModeGating(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -675,7 +675,7 @@ func (p *DevicePipeline) seedValues(
 		}
 		channelAddr, parameter := parts[1], parts[2]
 		deviceAddr := deviceAddressOf(channelAddr)
-		dev, ok := p.central.ModelRegistry.Get(deviceAddr)
+		dev, ok := p.unit.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
 		}
@@ -718,10 +718,10 @@ func (p *DevicePipeline) seedValues(
 // interfaceID and runs [custom.SuppressUndefinedGenericDataPoints] against
 // it. Idempotent.
 func (p *DevicePipeline) suppressUndefinedGenericDataPoints(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -739,11 +739,11 @@ func (p *DevicePipeline) suppressUndefinedGenericDataPoints(interfaceID string) 
 }
 
 func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger *slog.Logger) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
 	customReg := custom.DefaultRegistry()
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -782,12 +782,12 @@ func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger 
 // the channel address as the address — adapters can therefore treat derived
 // sensors uniformly with wire-level data points.
 func (p *DevicePipeline) materialiseCalculatedDataPoints(interfaceID string, logger *slog.Logger) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	bus := p.central.EventBus
-	centralName := p.central.Name()
-	for _, d := range p.central.ModelRegistry.List() {
+	bus := p.unit.EventBus
+	centralName := p.unit.Name()
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -1035,8 +1035,8 @@ func (p *DevicePipeline) hydrateDataPoints(
 	if b == nil {
 		return nil
 	}
-	bw := newBoundWriter(p.central.Name(), interfaceID, writer)
-	for _, d := range p.central.ModelRegistry.List() {
+	bw := newBoundWriter(p.unit.Name(), interfaceID, writer)
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
@@ -1084,7 +1084,7 @@ func (p *DevicePipeline) hydrateDeviceRoot(
 	}
 	root := d.EnsureRootChannel()
 	p.hydrateParamset(ctx, interfaceID, root, b, bw, hmenum.ParamsetKeyMaster, logger)
-	root.SetCentralName(p.central.Name())
+	root.SetCentralName(p.unit.Name())
 	if bw != nil {
 		root.SetWriter(&channelWriterAdapter{bw: bw, backend: b})
 		root.SetRefresher(b)
@@ -1110,8 +1110,8 @@ func (p *DevicePipeline) hydrateChannel(
 	// Stamp the Unit name on the channel so custom-DP
 	// constructors (valve, switch) can propagate it into the
 	// generic.Spec.CentralName of any sub-DPs they allocate.
-	if p.central != nil {
-		ch.SetCentralName(p.central.Name())
+	if p.unit != nil {
+		ch.SetCentralName(p.unit.Name())
 	}
 
 	// Wire the channel's write + refresh dispatchers so Channel.Set
@@ -1167,7 +1167,7 @@ func (p *DevicePipeline) hydrateParamset(
 	// otherwise bypass the patch step.
 	// (HM-CC-VG-1 SET_TEMPERATURE wire MIN/MAX 5.0/30.0 → patched
 	// 4.5/30.5 to match.
-	if reg := p.central.ParamsetReg; reg != nil {
+	if reg := p.unit.ParamsetReg; reg != nil {
 		reg.ApplyPatches(ch.Device().Model, ch.Address, key, paramset)
 	}
 
@@ -1203,7 +1203,7 @@ func (p *DevicePipeline) hydrateParamset(
 			// an equivalent one). The attached DP is what
 			// [device.Device.HasWeekProfile] consults; the slot leaves
 			// themselves are intentionally dropped here.
-			attachWeekProfileToChannel(ch, p.central.Name())
+			attachWeekProfileToChannel(ch, p.unit.Name())
 			continue
 		}
 
@@ -1224,7 +1224,7 @@ func (p *DevicePipeline) hydrateParamset(
 			Key:           dpKey,
 			Descriptor:    pd,
 			Writer:        bw,
-			CentralName:   p.central.Name(),
+			CentralName:   p.unit.Name(),
 			NoPushUpdates: !b.Capabilities().RPCCallback,
 		}
 		// HM-Sec-Key/HM-Sec-Win ERROR, HmIP-DLD/HmIP-DLP ERROR_JAMMED). Without
@@ -1383,11 +1383,11 @@ type valueCacheRestorer interface {
 func (p *DevicePipeline) restoreValuesFromCache(
 	ctx context.Context, interfaceID string, logger *slog.Logger,
 ) {
-	if p == nil || p.valuesCache == nil || p.centralName == "" || p.central == nil || p.central.ModelRegistry == nil {
+	if p == nil || p.valuesCache == nil || p.centralName == "" || p.unit == nil || p.unit.ModelRegistry == nil {
 		return
 	}
 	applied, skipped := 0, 0
-	for _, dev := range p.central.ModelRegistry.List() {
+	for _, dev := range p.unit.ModelRegistry.List() {
 		if dev == nil || dev.InterfaceID != interfaceID {
 			continue
 		}

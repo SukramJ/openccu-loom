@@ -136,18 +136,18 @@ func (a *linkClientAdapter) GetLinkInfo(ctx context.Context, sender, receiver st
 // Callers wire this once at daemon boot, after the LinksDomain has
 // been constructed. Returns an error when the central or domain is
 // nil.
-func WireLinkCoordinator(c *central.Unit, domain *LinksDomain) error {
-	if c == nil {
+func WireLinkCoordinator(u *central.Unit, domain *LinksDomain) error {
+	if u == nil {
 		return fmt.Errorf("link: WireLinkCoordinator: central is nil")
 	}
 	if domain == nil {
 		return fmt.Errorf("link: WireLinkCoordinator: domain is nil")
 	}
-	if c.Link == nil {
+	if u.Link == nil {
 		return fmt.Errorf("link: WireLinkCoordinator: central.Link is nil")
 	}
 	adapter := &linkClientAdapter{domain: domain}
-	c.SetLinkResolver(func(deviceAddress string) (coordinators.LinkClient, bool) {
+	u.SetLinkResolver(func(deviceAddress string) (coordinators.LinkClient, bool) {
 		if deviceAddress == "" {
 			return nil, false
 		}

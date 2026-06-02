@@ -97,9 +97,9 @@ func (a *HealthAdapter) trackers() []*health.Tracker {
 		out = append(out, a.fallback)
 	}
 	if a.registry != nil {
-		for _, c := range a.registry.List() {
-			if c.Health != nil {
-				out = append(out, c.Health)
+		for _, u := range a.registry.List() {
+			if u.Health != nil {
+				out = append(out, u.Health)
 			}
 		}
 	}

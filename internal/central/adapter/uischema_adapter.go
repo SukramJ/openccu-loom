@@ -569,8 +569,8 @@ func (a *UISchemaAdapter) lookupChannel(address string, channelNo int) (*device.
 	if a.registry == nil {
 		return nil, nil
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
 		}

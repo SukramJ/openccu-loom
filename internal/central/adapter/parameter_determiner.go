@@ -59,14 +59,14 @@ func (a *ParameterDeterminerAdapter) DetermineParameter(
 		return nil, ErrNoDetermineBackend
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(devAddr)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
 		}
-		b, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+		b, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoDetermineBackend, c.Name(), dev.InterfaceID)
+			return nil, fmt.Errorf("%w: %s/%s", ErrNoDetermineBackend, u.Name(), dev.InterfaceID)
 		}
 		value, err := b.DetermineParameter(ctx, channelAddress, parameterID)
 		if err != nil {

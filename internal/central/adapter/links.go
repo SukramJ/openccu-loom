@@ -268,8 +268,8 @@ func (d *LinksDomain) LinkableChannels(
 	}
 	sourceDev := deviceAddressOf(sourceChannelAddress)
 	out := make([]handlers.LinkableChannel, 0)
-	for _, c := range d.registry.List() {
-		for _, dev := range c.ModelRegistry.List() {
+	for _, u := range d.registry.List() {
+		for _, dev := range u.ModelRegistry.List() {
 			if dev.InterfaceID != interfaceID {
 				continue
 			}
@@ -277,7 +277,7 @@ func (d *LinksDomain) LinkableChannels(
 				if ch.Address == sourceChannelAddress {
 					continue
 				}
-				if !d.channelMatchesRole(ctx, c.Name(), dev.InterfaceID, ch.Address, role) {
+				if !d.channelMatchesRole(ctx, u.Name(), dev.InterfaceID, ch.Address, role) {
 					continue
 				}
 				out = append(out, handlers.LinkableChannel{
@@ -316,9 +316,9 @@ func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device
 	if d.registry == nil {
 		return nil, nil, ErrNoLinkBackend
 	}
-	for _, c := range d.registry.List() {
-		if dev, ok := c.ModelRegistry.Get(deviceAddress); ok {
-			return c, dev, nil
+	for _, u := range d.registry.List() {
+		if dev, ok := u.ModelRegistry.Get(deviceAddress); ok {
+			return u, dev, nil
 		}
 	}
 	// Device exists in no central — distinct from "central wired but
@@ -331,8 +331,8 @@ func (d *LinksDomain) findDevice(address string) *device.Device {
 	if d.registry == nil || address == "" {
 		return nil
 	}
-	for _, c := range d.registry.List() {
-		if dev, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range d.registry.List() {
+		if dev, ok := u.ModelRegistry.Get(address); ok {
 			return dev
 		}
 	}

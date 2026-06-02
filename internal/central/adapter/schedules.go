@@ -132,8 +132,8 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 	if s.registry == nil {
 		return 0, ErrNoScheduleBackend
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -148,9 +148,9 @@ func (s *SchedulesDomain) FindScheduleChannel(ctx context.Context, deviceAddress
 		// Path 2: climate channels carry the schedule directly in
 		// their MASTER paramset (P<n>_*). Probe the candidate types
 		// in order; return the first match.
-		backend, ok := s.writer.Backend(c.Name(), dev.InterfaceID)
+		backend, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return 0, fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, c.Name(), dev.InterfaceID)
+			return 0, fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
 		for _, ch := range dev.Channels() {
 			if _, isClimate := climateScheduleChannelTypes[ch.Type]; !isClimate {
@@ -290,8 +290,8 @@ func (s *SchedulesDomain) detectScheduleDomain(deviceAddress string, scheduleCha
 	if s.registry == nil {
 		return ""
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -1235,14 +1235,14 @@ func (s *SchedulesDomain) resolve(
 	if s.registry == nil || s.writer == nil {
 		return nil, "", ErrNoScheduleBackend
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
-		b, ok := s.writer.Backend(c.Name(), dev.InterfaceID)
+		b, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, c.Name(), dev.InterfaceID)
+			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
 		return b, fmt.Sprintf("%s:%d", deviceAddress, channelNo), nil
 	}

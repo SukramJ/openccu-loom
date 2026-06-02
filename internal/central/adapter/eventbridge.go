@@ -94,15 +94,15 @@ func (b *EventBridge) Start(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
-	for _, c := range b.registry.List() {
-		bus := c.EventBus
+	for _, u := range b.registry.List() {
+		bus := u.EventBus
 		unsub := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
-			b.onValueChanged(ctx, c.Name(), e)
+			b.onValueChanged(ctx, u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsub)
 
 		unsubCentral := events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
-			b.onCentralState(c.Name(), e)
+			b.onCentralState(u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsubCentral)
 
@@ -112,7 +112,7 @@ func (b *EventBridge) Start(ctx context.Context) {
 		// on value diff (HA without `force_update`) miss freshness
 		// flips. ADR 0019.
 		unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
-			b.onSourceChanged(ctx, c.Name(), e)
+			b.onSourceChanged(ctx, u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsubSrc)
 	}
@@ -172,9 +172,9 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
-	for _, c := range b.registry.List() {
-		centralName := c.Name()
-		for _, d := range c.ModelRegistry.List() {
+	for _, u := range b.registry.List() {
+		centralName := u.Name()
+		for _, d := range u.ModelRegistry.List() {
 			ifaceID := d.InterfaceID
 			// Publish per-device availability FIRST. The HA Discovery
 			// payload references the device-availability topic (with
@@ -1405,8 +1405,8 @@ func lookupDeviceObject(reg *central.Registry, address string) *device.Device {
 	if reg == nil {
 		return nil
 	}
-	for _, c := range reg.List() {
-		if d, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range reg.List() {
+		if d, ok := u.ModelRegistry.Get(address); ok {
 			return d
 		}
 	}
@@ -1417,8 +1417,8 @@ func lookupDevice(reg *central.Registry, address string) (model, name string) {
 	if reg == nil {
 		return "", ""
 	}
-	for _, c := range reg.List() {
-		if d, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range reg.List() {
+		if d, ok := u.ModelRegistry.Get(address); ok {
 			return d.Model, d.Name
 		}
 	}
@@ -1433,8 +1433,8 @@ func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *
 	if reg == nil {
 		return nil
 	}
-	for _, c := range reg.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range reg.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}

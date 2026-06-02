@@ -38,8 +38,8 @@ import (
 // [scheduleSelfReload]) are tracked with a [sync.WaitGroup] so [Stop] can
 // block until all in-flight tasks complete.
 type CallbackHandlers struct {
-	central *central.Unit
-	logger  *slog.Logger
+	unit   *central.Unit
+	logger *slog.Logger
 	// wg tracks every background goroutine spawned by this handler.
 	// Stop() blocks until all goroutines have returned.
 	wg sync.WaitGroup
@@ -55,12 +55,12 @@ type CallbackHandlers struct {
 }
 
 // NewCallbackHandlers wires the adapter for c.
-func NewCallbackHandlers(c *central.Unit, logger *slog.Logger) *CallbackHandlers {
+func NewCallbackHandlers(u *central.Unit, logger *slog.Logger) *CallbackHandlers {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &CallbackHandlers{central: c, logger: logger, ctx: ctx, cancel: cancel}
+	return &CallbackHandlers{unit: u, logger: logger, ctx: ctx, cancel: cancel}
 }
 
 // SetWriter wires the south-bound ValueWriter so UpdateDevice, ReplaceDevice,
@@ -77,10 +77,10 @@ func (h *CallbackHandlers) SetWriter(w *clientpkg.ValueWriter) {
 // every Error() callback automatically persists incidents without requiring
 // an explicit SetIncidentRecorder call on this handler.
 func (h *CallbackHandlers) incidentRecorder() reliability.IncidentRecorder {
-	if h.central == nil || h.central.Cache == nil {
+	if h.unit == nil || h.unit.Cache == nil {
 		return nil
 	}
-	return h.central.Cache.GetIncidentRecorder()
+	return h.unit.Cache.GetIncidentRecorder()
 }
 
 // Stop cancels all in-flight background goroutines and waits for them to
@@ -107,7 +107,7 @@ func (h *CallbackHandlers) Stop() {
 // and downstream topics never appear at the broker.
 func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value) error {
 	deviceAddr := deviceAddressOf(channelAddress)
-	dev, ok := h.central.ModelRegistry.Get(deviceAddr)
+	dev, ok := h.unit.ModelRegistry.Get(deviceAddr)
 	if !ok {
 		return nil
 	}
@@ -206,8 +206,8 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      parameter,
 	}
-	if coerced && h.central.Clients != nil {
-		if entry, ok := h.central.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
+	if coerced && h.unit.Clients != nil {
+		if entry, ok := h.unit.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
 			entry.Client.CommandTracker().ClearForKey(dpk)
 		}
 	}
@@ -216,8 +216,8 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 	// live callback path. Without this call the model is updated silently
 	// and no broker topic is ever published; PONG events would also never
 	// reach the ping-pong tracker.
-	if h.central.Events != nil {
-		h.central.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, value)
+	if h.unit.Events != nil {
+		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, value)
 	}
 	return nil
 }
@@ -246,7 +246,7 @@ func (h *CallbackHandlers) dispatchCombined(interfaceID, channelAddress, paramet
 		return
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	dev, _ := h.central.ModelRegistry.Get(deviceAddr)
+	dev, _ := h.unit.ModelRegistry.Get(deviceAddr)
 	if dev == nil {
 		return
 	}
@@ -319,7 +319,7 @@ func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, d
 	h.logger.Info("callback.new_devices",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(descs)))
-	if h.central.Devices == nil || len(descs) == 0 {
+	if h.unit.Devices == nil || len(descs) == 0 {
 		return nil
 	}
 	raw := make([]any, len(descs))
@@ -332,10 +332,10 @@ func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, d
 		return nil
 	}
 	// Store for deferred manual acceptance (operator inbox flow).
-	h.central.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
+	h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
 	// Immediately ingest so the device is reachable via the REST / MQTT
 	// surfaces without requiring a daemon restart or reconnect.
-	h.central.Devices.HandleNewDevices(ctx, iface, descriptions)
+	h.unit.Devices.HandleNewDevices(ctx, iface, descriptions)
 	return nil
 }
 
@@ -346,7 +346,7 @@ func (h *CallbackHandlers) DeleteDevices(_ context.Context, interfaceID string, 
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(addresses)))
 	for _, addr := range addresses {
-		h.central.RemoveDevice(addr)
+		h.unit.RemoveDevice(addr)
 	}
 	return nil
 }
@@ -362,15 +362,15 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		slog.String("address", address),
 		slog.Int("hint", hint))
 	const hintFirmware = 0
-	if hint != hintFirmware || h.central == nil || h.central.Devices == nil {
+	if hint != hintFirmware || h.unit == nil || h.unit.Devices == nil {
 		return nil
 	}
 	iface := hmenum.Interface(interfaceID)
-	h.central.Devices.InvalidateFirmwareCache(iface, address)
+	h.unit.Devices.InvalidateFirmwareCache(iface, address)
 	if h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.central.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
 	if !ok {
 		h.logger.Warn("callback.update_device.no_backend",
 			slog.String("interface", interfaceID))
@@ -382,7 +382,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		defer h.wg.Done()
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
-		if err := h.central.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
+		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
 			h.logger.Warn("callback.update_device.refresh_failed",
 				slog.String("interface", interfaceID),
 				slog.String("address", address),
@@ -400,10 +400,10 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 		slog.String("interface", interfaceID),
 		slog.String("old", oldAddress),
 		slog.String("new", newAddress))
-	if h.central == nil || h.central.Devices == nil || h.writer == nil {
+	if h.unit == nil || h.unit.Devices == nil || h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.central.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
 	if !ok {
 		h.logger.Warn("callback.replace_device.no_backend",
 			slog.String("interface", interfaceID))
@@ -416,7 +416,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 		defer h.wg.Done()
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
-		if err := h.central.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
+		if err := h.unit.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
 			h.logger.Warn("callback.replace_device.failed",
 				slog.String("interface", interfaceID),
 				slog.String("old", oldAddress),
@@ -434,10 +434,10 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	h.logger.Info("callback.readded_device",
 		slog.String("interface", interfaceID),
 		slog.Int("count", len(addresses)))
-	if len(addresses) == 0 || h.central == nil || h.central.Devices == nil || h.writer == nil {
+	if len(addresses) == 0 || h.unit == nil || h.unit.Devices == nil || h.writer == nil {
 		return nil
 	}
-	b, ok := h.writer.Backend(h.central.Name(), interfaceID)
+	b, ok := h.writer.Backend(h.unit.Name(), interfaceID)
 	if !ok {
 		h.logger.Warn("callback.readded_device.no_backend",
 			slog.String("interface", interfaceID))
@@ -451,8 +451,8 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		for _, addr := range addresses {
-			h.central.Devices.InvalidateFirmwareCache(iface, addr)
-			if err := h.central.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
+			h.unit.Devices.InvalidateFirmwareCache(iface, addr)
+			if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
 				h.logger.Warn("callback.readded_device.refresh_failed",
 					slog.String("interface", interfaceID),
 					slog.String("address", addr),
@@ -499,11 +499,11 @@ func (h *CallbackHandlers) Error(_ context.Context, interfaceID string, errorCod
 		slog.String("interface", interfaceID),
 		slog.Int("error_code", errorCode),
 		slog.String("msg", msg))
-	if h.central == nil {
+	if h.unit == nil {
 		return nil
 	}
-	centralName := h.central.Name()
-	bus := h.central.EventBus
+	centralName := h.unit.Name()
+	bus := h.unit.EventBus
 	if bus != nil {
 		events.Publish(bus, hmevent.SystemStatusChangedEvent{
 			Base:        hmevent.NewBase(),

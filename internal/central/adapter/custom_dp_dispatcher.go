@@ -116,8 +116,8 @@ func (d *CustomDPDispatcher) resolveCustomDP(deviceAddress, name string) (device
 	if d.registry == nil {
 		return nil, 0, fmt.Errorf("custom_dp: registry not configured")
 	}
-	for _, c := range d.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range d.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
