@@ -20,12 +20,12 @@ type AuditService interface {
 
 // auditFilter holds parsed query-parameter values for GET /audit.
 type auditFilter struct {
-	device  string    // device address prefix (case-insensitive)
-	op      string    // action/source substring match (case-insensitive)
-	central string    // exact CCU match (best-effort; empty = all)
-	since   time.Time // inclusive lower bound (zero = no bound)
-	until   time.Time // exclusive upper bound (zero = no bound)
-	limit   int       // max entries, default 1000
+	device      string    // device address prefix (case-insensitive)
+	op          string    // action/source substring match (case-insensitive)
+	centralName string    // exact CCU match (best-effort; empty = all)
+	since       time.Time // inclusive lower bound (zero = no bound)
+	until       time.Time // exclusive upper bound (zero = no bound)
+	limit       int       // max entries, default 1000
 }
 
 // AuditEntryDTO is one entry in `GET /api/v1/audit`. It embeds the change-log
@@ -47,10 +47,10 @@ const (
 func parseAuditFilter(r *http.Request) (f auditFilter, errMsg string) { //nolint:gocritic // named returns clarify dual-return semantics
 	q := r.URL.Query()
 	f = auditFilter{
-		device:  q.Get("device"),
-		op:      q.Get("op"),
-		central: q.Get("central"),
-		limit:   auditDefaultLimit,
+		device:      q.Get("device"),
+		op:          q.Get("op"),
+		centralName: q.Get("central"),
+		limit:       auditDefaultLimit,
 	}
 	if lq := q.Get("limit"); lq != "" {
 		if n, err := strconv.Atoi(lq); err == nil {
@@ -108,7 +108,7 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 		if centralOf != nil && e.DeviceAddress != "" {
 			centralName = centralOf(e.DeviceAddress)
 		}
-		if f.central != "" && centralName != f.central {
+		if f.centralName != "" && centralName != f.centralName {
 			continue
 		}
 		out = append(out, AuditEntryDTO{Entry: *e, Central: centralName})

@@ -38,10 +38,10 @@ type UpdateEvent struct {
 // AggregatedStateTopic to use the dedicated update state topic and
 // ServiceMethodCommandTopic("install") to use the update install topic.
 type updateDiscoveryCtx struct {
-	topics  *TopicBuilder
-	central string
-	iface   string
-	address string
+	topics      *TopicBuilder
+	centralName string
+	iface       string
+	address     string
 }
 
 func (c updateDiscoveryCtx) AggregatedStateTopic() string {
@@ -49,27 +49,27 @@ func (c updateDiscoveryCtx) AggregatedStateTopic() string {
 	// HADiscoveryContext interface for its retained state topic
 	// (`<addr>/update`). It has no CustomDP slot, so
 	// CustomDPStateTopic mirrors the same value.
-	return c.topics.DeviceUpdateState(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateState(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) CustomDPStateTopic() string {
-	return c.topics.DeviceUpdateState(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateState(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) ServiceMethodCommandTopic(_ string) string {
 	// For the update entity there is exactly one service method: "install".
 	// The payload_install HA field triggers it; always return the install
 	// command topic regardless of the method name argument.
-	return c.topics.DeviceUpdateCommand(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateCommand(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) WireParameterCommandTopic(parameter string) string {
 	// Update entities do not reference per-parameter command topics.
-	return c.topics.DataPointCommand(c.central, c.iface, c.address, 0, parameter)
+	return c.topics.DataPointCommand(c.centralName, c.iface, c.address, 0, parameter)
 }
 
 func (c updateDiscoveryCtx) WireParameterStateTopic(parameter string) string {
-	return c.topics.DataPointState(c.central, c.iface, c.address, 0, parameter)
+	return c.topics.DataPointState(c.centralName, c.iface, c.address, 0, parameter)
 }
 
 // BuildUpdateDiscovery builds the HA Discovery `update` payload for one
@@ -82,10 +82,10 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev Up
 		return DiscoveryItem{}
 	}
 	ctx := updateDiscoveryCtx{
-		topics:  d.TopicBuilder,
-		central: centralName,
-		iface:   ev.Interface,
-		address: ev.DeviceAddress,
+		topics:      d.TopicBuilder,
+		centralName: centralName,
+		iface:       ev.Interface,
+		address:     ev.DeviceAddress,
 	}
 	comp, body := ev.Update.HADiscoveryPayload(ctx)
 	if body == nil || comp == "" {

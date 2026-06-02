@@ -54,32 +54,32 @@ func TestDataPointUniqueIDFormat(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
-		central string
-		address string
-		key     string
-		want    string
+		name        string
+		centralName string
+		address     string
+		key         string
+		want        string
 	}{
 		{
-			name:    "production multi-CCU dp",
-			central: "ccu-prod",
-			address: "VCU0123456:1",
-			key:     "LEVEL",
-			want:    "ccu-prod:VCU0123456:1:LEVEL",
+			name:        "production multi-CCU dp",
+			centralName: "ccu-prod",
+			address:     "VCU0123456:1",
+			key:         "LEVEL",
+			want:        "ccu-prod:VCU0123456:1:LEVEL",
 		},
 		{
-			name:    "second central, same address",
-			central: "ccu-secondary",
-			address: "VCU0123456:1",
-			key:     "LEVEL",
-			want:    "ccu-secondary:VCU0123456:1:LEVEL",
+			name:        "second central, same address",
+			centralName: "ccu-secondary",
+			address:     "VCU0123456:1",
+			key:         "LEVEL",
+			want:        "ccu-secondary:VCU0123456:1:LEVEL",
 		},
 		{
-			name:    "test fixture without central",
-			central: "",
-			address: "A:1",
-			key:     "STATE",
-			want:    ":A:1:STATE",
+			name:        "test fixture without central",
+			centralName: "",
+			address:     "A:1",
+			key:         "STATE",
+			want:        ":A:1:STATE",
 		},
 	}
 
@@ -88,7 +88,7 @@ func TestDataPointUniqueIDFormat(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := baseCfg(hmenum.Parameter(tc.key), hmenum.ParameterTypeBool, hmenum.OperationsRead)
-			cfg.CentralName = tc.central
+			cfg.CentralName = tc.centralName
 			cfg.Key.ChannelAddress = tc.address
 			cfg.Key.Parameter = tc.key
 			dp := NewDataPoint[bool](cfg)

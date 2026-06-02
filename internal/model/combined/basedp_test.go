@@ -62,28 +62,28 @@ func TestHSColorSatisfiesBaseDataPoint(t *testing.T) {
 func TestHSColorUniqueID(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		central string
-		address string
-		want    string
+		name        string
+		centralName string
+		address     string
+		want        string
 	}{
 		{
-			name:    "production multi-CCU dp",
-			central: "ccu-prod",
-			address: "VCU0123:3",
-			want:    "ccu-prod:VCU0123:3:COMBINED/HSCOLOR",
+			name:        "production multi-CCU dp",
+			centralName: "ccu-prod",
+			address:     "VCU0123:3",
+			want:        "ccu-prod:VCU0123:3:COMBINED/HSCOLOR",
 		},
 		{
-			name:    "second central, same address",
-			central: "ccu-secondary",
-			address: "VCU0123:3",
-			want:    "ccu-secondary:VCU0123:3:COMBINED/HSCOLOR",
+			name:        "second central, same address",
+			centralName: "ccu-secondary",
+			address:     "VCU0123:3",
+			want:        "ccu-secondary:VCU0123:3:COMBINED/HSCOLOR",
 		},
 		{
-			name:    "legacy fixture (no central)",
-			central: "",
-			address: "A:1",
-			want:    ":A:1:COMBINED/HSCOLOR",
+			name:        "legacy fixture (no central)",
+			centralName: "",
+			address:     "A:1",
+			want:        ":A:1:COMBINED/HSCOLOR",
 		},
 	}
 	for _, tc := range cases {
@@ -91,7 +91,7 @@ func TestHSColorUniqueID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			c := NewHSColorWithCentral(
-				tc.central, tc.address, &stubWriter{},
+				tc.centralName, tc.address, &stubWriter{},
 				hmenum.ParameterHue, hmenum.ParameterSaturation,
 			)
 			if got := c.UniqueID(); got != tc.want {

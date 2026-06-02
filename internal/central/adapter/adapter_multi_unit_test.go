@@ -292,7 +292,7 @@ func TestIsValidWeekdayNameAllFalse(t *testing.T) {
 
 func TestBoundWriterSetValueNilWriterPath(t *testing.T) {
 	t.Parallel()
-	bw := &boundWriter{central: "ccu", interfaceID: "HmIP-RF", writer: nil}
+	bw := &boundWriter{centralName: "ccu", interfaceID: "HmIP-RF", writer: nil}
 	err := bw.SetValue(context.TODO(), "DEV:1", hmenum.ParameterState, true, hmenum.CommandPriorityLow)
 	if err == nil {
 		t.Fatal("SetValue nil writer must return error")

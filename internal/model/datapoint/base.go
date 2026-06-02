@@ -80,9 +80,9 @@ type EventPublisher interface {
 // via promotion. [generic.DataPoint[T]] carries its own shadowing
 // versions of these methods so its behaviour is unchanged.
 type BaseDataPointFields struct {
-	central string
-	address string
-	keyName string
+	centralName string
+	address     string
+	keyName     string
 
 	mu                   sync.RWMutex
 	forcedUsage          *hmenum.DataPointUsage
@@ -159,9 +159,9 @@ const publishedEventWindow = 500 * time.Millisecond
 // the calculated/combined identifier. Required.
 func NewBaseDataPointFields(central, address, keyName string) BaseDataPointFields {
 	return BaseDataPointFields{
-		central: central,
-		address: address,
-		keyName: keyName,
+		centralName: central,
+		address:     address,
+		keyName:     keyName,
 	}
 }
 
@@ -186,8 +186,8 @@ func NewBaseDataPointFields(central, address, keyName string) BaseDataPointField
 func (b *BaseDataPointFields) UniqueID() string {
 	var sb strings.Builder
 	// Pre-size: central + address + keyName + 2 separators (+ optional 7-byte "_sensor" suffix).
-	sb.Grow(len(b.central) + len(b.address) + len(b.keyName) + 9)
-	sb.WriteString(b.central)
+	sb.Grow(len(b.centralName) + len(b.address) + len(b.keyName) + 9)
+	sb.WriteString(b.centralName)
 	sb.WriteByte(':')
 	sb.WriteString(b.address)
 	sb.WriteByte(':')
@@ -199,7 +199,7 @@ func (b *BaseDataPointFields) UniqueID() string {
 }
 
 // Central returns the Unit name passed at construction.
-func (b *BaseDataPointFields) Central() string { return b.central }
+func (b *BaseDataPointFields) Central() string { return b.centralName }
 
 // Address returns the device / channel address passed at construction.
 func (b *BaseDataPointFields) Address() string { return b.address }

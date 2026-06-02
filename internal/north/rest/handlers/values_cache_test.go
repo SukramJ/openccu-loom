@@ -40,13 +40,13 @@ func (f *fakeValuesCacheService) Metrics() ValuesCacheMetrics {
 
 // fakeDeviceLookup is a minimal implementation of DeviceLookup for tests.
 type fakeDeviceLookup struct {
-	central string
-	iface   string
-	found   bool
+	centralName string
+	iface       string
+	found       bool
 }
 
 func (f *fakeDeviceLookup) LocateDevice(_ string) (centralName, interfaceID string, ok bool) {
-	return f.central, f.iface, f.found
+	return f.centralName, f.iface, f.found
 }
 
 // --- GetValuesCacheStats ---
@@ -130,7 +130,7 @@ func TestResetValuesCacheGlobal_DeleteError_Returns500(t *testing.T) {
 
 func TestResetValuesCacheDevice_NilService_Returns503(t *testing.T) {
 	t.Parallel()
-	lookup := &fakeDeviceLookup{found: true, central: "ccu", iface: "HmIP-RF"}
+	lookup := &fakeDeviceLookup{found: true, centralName: "ccu", iface: "HmIP-RF"}
 	r := chi.NewRouter()
 	r.Post("/devices/{addr}/values-cache/reset", ResetValuesCacheDevice(nil, lookup))
 	req := httptest.NewRequest(http.MethodPost, "/devices/DEV0001/values-cache/reset", http.NoBody)
@@ -159,7 +159,7 @@ func TestResetValuesCacheDevice_NilLookup_Returns503(t *testing.T) {
 func TestResetValuesCacheDevice_MissingAddrParam_Returns400(t *testing.T) {
 	t.Parallel()
 	svc := &fakeValuesCacheService{}
-	lookup := &fakeDeviceLookup{found: true, central: "ccu", iface: "HmIP-RF"}
+	lookup := &fakeDeviceLookup{found: true, centralName: "ccu", iface: "HmIP-RF"}
 	// Route without {addr} param means chi.URLParam returns ""
 	req := httptest.NewRequest(http.MethodPost, "/devices/values-cache/reset", http.NoBody)
 	w := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestResetValuesCacheDevice_DeviceNotFound_Returns404(t *testing.T) {
 func TestResetValuesCacheDevice_HappyPath_Returns204(t *testing.T) {
 	t.Parallel()
 	svc := &fakeValuesCacheService{}
-	lookup := &fakeDeviceLookup{found: true, central: "ccu", iface: "HmIP-RF"}
+	lookup := &fakeDeviceLookup{found: true, centralName: "ccu", iface: "HmIP-RF"}
 	r := chi.NewRouter()
 	r.Post("/devices/{addr}/values-cache/reset", ResetValuesCacheDevice(svc, lookup))
 	req := httptest.NewRequest(http.MethodPost, "/devices/DEV0001/values-cache/reset", http.NoBody)
@@ -203,7 +203,7 @@ func TestResetValuesCacheDevice_HappyPath_Returns204(t *testing.T) {
 func TestResetValuesCacheDevice_DeleteError_Returns500(t *testing.T) {
 	t.Parallel()
 	svc := &fakeValuesCacheService{deleteDeviceErr: errors.New("db error")}
-	lookup := &fakeDeviceLookup{found: true, central: "ccu", iface: "HmIP-RF"}
+	lookup := &fakeDeviceLookup{found: true, centralName: "ccu", iface: "HmIP-RF"}
 	r := chi.NewRouter()
 	r.Post("/devices/{addr}/values-cache/reset", ResetValuesCacheDevice(svc, lookup))
 	req := httptest.NewRequest(http.MethodPost, "/devices/DEV0001/values-cache/reset", http.NoBody)

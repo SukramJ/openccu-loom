@@ -1761,10 +1761,10 @@ func TestUpdateDiscoveryCtxTopics(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	ctx := updateDiscoveryCtx{
-		topics:  tb,
-		central: "ccu",
-		iface:   "HmIP-RF",
-		address: "0001ABCD",
+		topics:      tb,
+		centralName: "ccu",
+		iface:       "HmIP-RF",
+		address:     "0001ABCD",
 	}
 	cases := []struct {
 		name string

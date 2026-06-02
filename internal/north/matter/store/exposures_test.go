@@ -496,15 +496,15 @@ func TestExposures_CountEnabledWithFilter(t *testing.T) {
 
 	// Insert 2 enabled for "cntA", 1 enabled for "cntB", 1 disabled for "cntA".
 	for i, row := range []struct {
-		central string
-		enabled bool
+		centralName string
+		enabled     bool
 	}{
 		{"cntA", true},
 		{"cntA", false},
 		{"cntA", true},
 		{"cntB", true},
 	} {
-		key := testKey(row.central, "M:1", i+1, store.DPKindCustom, "P")
+		key := testKey(row.centralName, "M:1", i+1, store.DPKindCustom, "P")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: row.enabled, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure[%d]: %v", i, err)
 		}
