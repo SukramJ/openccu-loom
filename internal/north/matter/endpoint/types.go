@@ -11,7 +11,7 @@ import (
 
 // Snapshot is one central's contribution to a topology assembly.
 // The caller (typically the daemon bootstrap or the bridge core)
-// builds snapshots by reading each CentralUnit.ModelRegistry and
+// builds snapshots by reading each Unit.ModelRegistry and
 // passes the slice to [Assembler.Assemble].
 type Snapshot struct {
 	// CentralName scopes every endpoint produced from Devices to

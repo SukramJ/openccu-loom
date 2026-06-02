@@ -83,7 +83,7 @@ func (p *HubMQTTPublisher) addUnsub(u func()) {
 
 // wireOneCentral attaches subscriptions for all hub entities belonging
 // to c and performs the initial-state publish.
-func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, c *central.CentralUnit) {
+func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, c *central.Unit) {
 	hubModel := c.HubModel
 	centralName := c.Name()
 	w := p.wiring

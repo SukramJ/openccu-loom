@@ -1621,7 +1621,7 @@ func (f *fakeSysvarWriter) SetSysvar(_ context.Context, _ string, _ any) error {
 type boost13Fixture struct {
 	reg    *central.Registry
 	writer *client.ValueWriter
-	unit   *central.CentralUnit
+	unit   *central.Unit
 	dev    *device.Device
 }
 
@@ -2467,7 +2467,7 @@ func TestResolveCustomDP_NilRegistry_ReturnsError(t *testing.T) {
 // WireHealth — trigger every subscribed event handler
 // ---------------------------------------------------------------------------
 
-func buildWireHealthCentral(t *testing.T, name string) *central.CentralUnit {
+func buildWireHealthCentral(t *testing.T, name string) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: name})
 	if err != nil {
@@ -3513,8 +3513,8 @@ func TestSeedMasterValues_UnknownParameterSkipped(t *testing.T) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-// newCBH constructs a CallbackHandlers for a freshly created CentralUnit.
-func newCBH(t *testing.T, name string) (*CallbackHandlers, *central.CentralUnit) {
+// newCBH constructs a CallbackHandlers for a freshly created Unit.
+func newCBH(t *testing.T, name string) (*CallbackHandlers, *central.Unit) {
 	t.Helper()
 	c, err := central.New(central.Config{Name: name})
 	if err != nil {
@@ -3524,7 +3524,7 @@ func newCBH(t *testing.T, name string) (*CallbackHandlers, *central.CentralUnit)
 }
 
 // registerPlainDevice adds a device (no channels) to cu's ModelRegistry.
-func registerPlainDevice(cu *central.CentralUnit, addr string) *device.Device {
+func registerPlainDevice(cu *central.Unit, addr string) *device.Device {
 	d := device.New(device.Config{
 		InterfaceID: "HmIP-RF",
 		Interface:   hmenum.InterfaceHmIPRF,
@@ -3584,7 +3584,7 @@ func TestDispatchCombined_SubParamDpNil(t *testing.T) {
 // OnWireValue branch fires.
 // ---------------------------------------------------------------------------
 
-func buildCentralWithLevelDP(t *testing.T, centralName, devAddr string) *central.CentralUnit {
+func buildCentralWithLevelDP(t *testing.T, centralName, devAddr string) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: centralName})
 	if err != nil {
@@ -4117,10 +4117,10 @@ func (d *noOnWireValueDP) OnAnyUpdate(func(old, next any)) func() {
 	return func() {}
 }
 
-// buildCentralWithFloatDP creates a CentralUnit via IngestFromBackend so the
+// buildCentralWithFloatDP creates a Unit via IngestFromBackend so the
 // channel at devAddr+":1" has a real float DP for the given parameter name.
 // This DP implements OnWireValue; passing a string to it causes coerce-fail.
-func buildCentralWithFloatDP(t *testing.T, centralName, devAddr, paramName string) *central.CentralUnit {
+func buildCentralWithFloatDP(t *testing.T, centralName, devAddr, paramName string) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: centralName})
 	if err != nil {
@@ -4185,7 +4185,7 @@ func TestEvent_OnWireValue_CoerceFail(t *testing.T) {
 // the sub-value type. Use a BOOL DP for "LEVEL" and pass float sub-value.
 // ---------------------------------------------------------------------------
 
-func buildCentralWithBoolDP(t *testing.T, centralName, devAddr, paramName string) *central.CentralUnit {
+func buildCentralWithBoolDP(t *testing.T, centralName, devAddr, paramName string) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: centralName})
 	if err != nil {
@@ -4268,7 +4268,7 @@ func TestDispatchCombined_DpNoOnWireValue_Skipped(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type uisFixture struct {
-	c      *central.CentralUnit
+	c      *central.Unit
 	reg    *central.Registry
 	dev    *device.Device
 	ch     *device.Channel
@@ -5000,7 +5000,7 @@ var _ backends.Operations = (*errGetParamsetOps)(nil)
 // Helper: build a UISchemaAdapter backed by a real central+device.
 // ---------------------------------------------------------------------------
 
-func buildLinkSchemaAdapterFixture(t *testing.T) (*UISchemaAdapter, *central.CentralUnit, *device.Channel) {
+func buildLinkSchemaAdapterFixture(t *testing.T) (*UISchemaAdapter, *central.Unit, *device.Channel) {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "ccu-b24-link"})
 	if err != nil {
@@ -6391,7 +6391,7 @@ func buildScheduleEnvFull(
 	t *testing.T,
 	centralName, devAddr string,
 	getParamset func(ctx context.Context, addr string, key hmenum.ParamsetKey) (map[string]any, error),
-) (*central.CentralUnit, *central.Registry, *client.ValueWriter) {
+) (*central.Unit, *central.Registry, *client.ValueWriter) {
 	t.Helper()
 	c, err := central.New(central.Config{Name: centralName})
 	if err != nil {
@@ -6919,7 +6919,7 @@ func TestSeedRelevantInitParameters_LoadValueSucceeds(t *testing.T) {
 func buildReadableEventEnv(
 	t *testing.T,
 	centralName, devAddr string,
-) (*central.CentralUnit, *device.Device, *device.Channel) {
+) (*central.Unit, *device.Device, *device.Channel) {
 	t.Helper()
 	c, err := central.New(central.Config{Name: centralName})
 	if err != nil {
@@ -12231,7 +12231,7 @@ func buildLinksFixture(t *testing.T) (
 	*LinksDomain,
 	*linkClientAdapter,
 	*DeviceAdminDomain,
-	*central.CentralUnit,
+	*central.Unit,
 	*device.Device,
 ) {
 	t.Helper()
@@ -12880,7 +12880,7 @@ func TestHubJSONRPCWriter_CreateSysvar_WithUnit_UsesRega(t *testing.T) {
 type boost7Fixture struct {
 	reg    *central.Registry
 	writer *client.ValueWriter
-	unit   *central.CentralUnit
+	unit   *central.Unit
 	dev    *device.Device
 }
 
@@ -13282,7 +13282,7 @@ func (*configFakeOperations) SetMetadata(_ context.Context, _, _ string, _ any) 
 type boost8Fixture struct {
 	reg    *central.Registry
 	writer *client.ValueWriter
-	unit   *central.CentralUnit
+	unit   *central.Unit
 	dev    *device.Device
 	fake   *configFakeOperations
 }
@@ -13837,7 +13837,7 @@ func (f *fakeInboxAccepter) AcceptDeviceInInbox(_ context.Context, _ string) err
 
 func buildBoost9Fixture(t *testing.T) (
 	*DeviceAdminDomain,
-	*central.CentralUnit,
+	*central.Unit,
 	*device.Device,
 	*client.ValueWriter,
 ) {

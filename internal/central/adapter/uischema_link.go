@@ -243,7 +243,7 @@ func rawFloatGreaterThan(raw []byte, threshold float64) bool {
 }
 
 // findCentralFor returns the central that owns deviceAddress.
-func (a *UISchemaAdapter) findCentralFor(deviceAddress string) *central.CentralUnit {
+func (a *UISchemaAdapter) findCentralFor(deviceAddress string) *central.Unit {
 	if a.registry == nil {
 		return nil
 	}

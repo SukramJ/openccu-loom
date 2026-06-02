@@ -615,7 +615,7 @@ type MetricsHealthSummaryView struct {
 // wiring layer combines both providers into the final
 // [HealthMetrics] snapshot.
 //
-// Multi-CCU safe: each [CentralUnit] owns its own [Tracker]; the
+// Multi-CCU safe: each [Unit] owns its own [Tracker]; the
 // returned counts only reflect components recorded against that
 // tracker.
 func (t *Tracker) MetricsHealthSummary() MetricsHealthSummaryView {

@@ -19,7 +19,7 @@ import (
 // PublishHubDiscovery actually writes to the broker.
 func hubMQTTDiscoveryFixture(t *testing.T) (
 	reg *central.Registry,
-	c *central.CentralUnit,
+	c *central.Unit,
 	pub *mqtt.NoopClient,
 	publisher *HubMQTTPublisher,
 ) {

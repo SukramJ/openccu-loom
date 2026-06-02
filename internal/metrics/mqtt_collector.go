@@ -15,7 +15,7 @@ package metrics
 //
 // The central_name label is embedded in the metric name (pattern:
 // "mqtt.<central>.messages_sent") so multi-CCU daemons keep counters
-// separated per CentralUnit without a label-vec dependency.
+// separated per Unit without a label-vec dependency.
 type MqttCollector struct {
 	MessagesSent         *Counter
 	DiscoverySent        *Counter

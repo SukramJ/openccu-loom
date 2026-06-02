@@ -272,7 +272,7 @@ func TestConcurrentCancelBothRunsCleanup(t *testing.T) {
 // triggerRecovery() is called by the HeartbeatTimerFiredEvent handler. -
 // triggerRecovery() already guards against duplicate recoveries via the
 // `alreadyActive` check and the `stopped` flag. - The production caller
-// (CentralUnit) is responsible for only emitting HeartbeatTimerFiredEvent
+// (Unit) is responsible for only emitting HeartbeatTimerFiredEvent
 // when a failed/degraded recovery is needed. This is intentional: Go avoids a
 // mutable boolean that must be kept in sync across concurrent event handlers,
 // leaning instead on the existing active-map and stop-flag guards. The

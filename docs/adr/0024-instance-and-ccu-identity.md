@@ -23,7 +23,7 @@ three conceptually distinct roles:
    `internal/routingkey`), independent of this identifier.
 
 Roles 1 and 2 pull in **opposite directions** and only coincided because
-one `CentralUnit` = one CCU and `central_name` was per-CCU:
+one `central.Unit` = one CCU and `central_name` was per-CCU:
 
 - Role 1 needs the prefix to distinguish **daemons** (the same CCU,
   different clients).
@@ -42,49 +42,75 @@ case the prefix was meant to prevent.
 
 ## Decision
 
-Separate the two identities and carry both in the wire `interface_id`.
+Separate the two identities and carry both in the wire `interface_id`,
+and keep the existing **`central`** naming throughout — a CCU *is* a
+Zentrale/central, one `central.Unit` represents exactly one CCU, and the
+term is aiohomematic-aligned. (An exploratory `central → ccu` rename was
+considered and rolled back; see below.)
 
 - **`instance_name`** — the daemon's identity. Reuses the existing
   `config.InstanceName` (default: OS hostname, `.local` stripped).
   Appears **only** in the `interface_id` prefix. Operators override it
   for the rare same-hostname-multiple-daemons case.
-- **`ccu_name`** — the connected CCU's name (renamed from
-  `central_name`). **User-defined per connection** (required, unique per
-  daemon) — the operator owns the value, exactly as `central_name` is
-  chosen today. The UI may *suggest* a default seeded from the CCU's own
-  name/IP slug, but the stored value is operator-controlled and stable
-  thereafter (CCU name and IP can change; the scoping key must not). It
-  is the CCU discriminator: the `interface_id` middle component, the
-  callback path token, and the wire scoping field.
-- **`interface_id = <instance_name>-<ccu_name>-<interface>`** — satisfies
-  CCU-side client uniqueness (via `instance_name`) **and** daemon-internal
-  per-CCU uniqueness (via `ccu_name`) with no translation layer; the
-  `InterfaceID` stays the single internal key.
-- **Callback URL = `<host:port>/RPC2/<ccu_name>`** — the daemon is
+- **`central_name`** — the connected CCU's name. User-defined per
+  connection (`centrals[].name`, required, unique per daemon). It is the
+  CCU discriminator: the `interface_id` middle component, the callback
+  path token, and the wire scoping field (`payload.central`, MQTT topic
+  segment, REST `?central=`).
+- **`interface_id = <instance_name>-<central_name>-<interface>`** —
+  satisfies CCU-side client uniqueness (via `instance_name`) **and**
+  daemon-internal per-CCU uniqueness (via `central_name`) with no
+  translation layer; the `InterfaceID` stays the single internal key.
+- **Callback URL = `<host:port>/RPC2/<central_name>`** — the daemon is
   implicit in the callback server's `host:port`, so `instance_name` is
   not repeated in the path.
 
-The normative scoping equality from P4 carries over with the rename:
-`ccu_name == SystemCCUEntry.ccu_name == payload.ccu`.
+The normative scoping equality from P4 holds:
+`central_name == SystemCCUEntry.name == payload.central`.
+
+### Naming convention (binding)
+
+One word — **`central`** — for the per-CCU concept across every artefact;
+**`instance`** for the daemon; **CCU** only in prose / UI for the
+hardware. This homogeneity is the rule a future change must preserve.
+
+| Artefact | Name |
+|---|---|
+| Go package | `internal/central` |
+| Runtime type (one per CCU) | `central.Unit` |
+| Constructor | `central.New() (*Unit, error)` |
+| Registry | `central.Registry` |
+| Config type / section / name field | `config.CentralConfig` / `centrals:` / `centrals[].name` |
+| Scoping field — one-CCU context | `Name` |
+| Scoping field — cross-CCU tag | `Central` (`json:"central"`) |
+| Wire field / REST query / log key | `central` / `?central=` / `central` |
+| SQL column | `central_name` |
+| Local var / param | `centralName`; the unit var is `u` / `unit` |
+| Payload self-DTOs | `payload.CentralInfo` / `CentralConfig` / `CentralState` |
+| Daemon identity | `instance_name` / `InstanceName` |
+| interface_id | `<instance_name>-<central_name>-<interface>` |
 
 ## Consequences
 
 - The wire `interface_id` format changes
-  (`<ccu_name>-<iface>` → `<instance_name>-<ccu_name>-<iface>`). On
-  upgrade the daemon re-registers callbacks (deinit old, init new) and
-  the `values_cache` rows (keyed by `(ccu_name, interface_id, …)`) are
-  wiped and refetched — they are a cache, handled like the migration-003
-  schema-version wipe, not a hard data migration.
-- A repo-wide rename `central` → `ccu` follows and **is intentionally
-  breaking** (accepted pre-1.0, greenfield, no compatibility shim): the
-  config key, internal `CentralName`, the wire field `central` → `ccu`,
-  the MQTT topic segment, REST `?central=` → `?ccu=`, and the OpenAPI
-  schemas all move together. Sequenced so each phase builds and tests
-  green. ADR-0020's wire contract is updated accordingly.
+  (`<central_name>-<iface>` → `<instance_name>-<central_name>-<iface>`).
+  On upgrade the daemon re-registers callbacks (deinit old, init new) and
+  the `values_cache` rows (keyed by `(central_name, interface_id, …)`)
+  are wiped and refetched — they are a cache (`ValuesCacheSchemaVersion`
+  bump), not a hard data migration.
+- The runtime type was shortened `CentralUnit` → `central.Unit` (the
+  package qualifier already carries "central"), and the CCU-self payload
+  DTOs are `payload.Central{Info,Config,State}`. The `central` package,
+  `central.Registry` and `config.CentralConfig` keep their names; the
+  `central_name` SQL columns are unchanged.
+- **Rejected alternative — `central → ccu` rename.** Renaming everything
+  to `ccu` (package, wire field, config key, SQL) was prototyped as a
+  clean break from aiohomematic, then rolled back: `central` is the
+  correct domain term and stays aligned with the reference. The wire and
+  config surfaces therefore remain `central` / `centrals[].name`.
 - HA entity identity is unaffected (serial-based `loom_` scheme, P5).
-- The Svelte config UI surfaces `ccu_name` as a first-class facet:
-  a CCU filter/selector on the device (and hub-entity) views, and the
-  CCU shown per row, so a multi-CCU daemon is navigable per CCU. This
-  consumes the same `?ccu=` scoping the REST/WS surfaces expose.
+- The Svelte config UI may surface `central_name` as a first-class facet
+  (CCU filter/selector on the device + hub views) consuming the existing
+  `?central=` scoping — an open follow-up.
 - Supersedes the `central_name`-as-daemon-discriminator rationale that
   lived in `interface_id.go`.

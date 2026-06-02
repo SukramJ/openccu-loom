@@ -204,7 +204,7 @@ func TestLoadSystemUpdateNoAvailableVersion(t *testing.T) {
 // loadInbox — central-wide ReGa query
 // ============================================================
 
-func newMinimalUnit(t *testing.T, ifaceIDs ...string) *central.CentralUnit {
+func newMinimalUnit(t *testing.T, ifaceIDs ...string) *central.Unit {
 	t.Helper()
 	unit, err := central.New(central.Config{Name: "test-ccu"})
 	if err != nil {

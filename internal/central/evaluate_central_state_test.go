@@ -23,7 +23,7 @@ func newNopCaller() client.CallerFunc {
 }
 
 // registerConnectedClient registers a new InterfaceClient in CONNECTED state.
-func registerConnectedClient(t *testing.T, c *CentralUnit, ifaceID string, iface hmenum.Interface) *coordinators.ClientEntry {
+func registerConnectedClient(t *testing.T, c *Unit, ifaceID string, iface hmenum.Interface) *coordinators.ClientEntry {
 	t.Helper()
 	ic, err := client.New(client.Config{
 		CentralName:  c.cfg.Name,
@@ -48,7 +48,7 @@ func registerConnectedClient(t *testing.T, c *CentralUnit, ifaceID string, iface
 
 // registerDisconnectedClient registers a new InterfaceClient in DISCONNECTED
 // state. Connected() returns false for this entry.
-func registerDisconnectedClient(t *testing.T, c *CentralUnit, ifaceID string, iface hmenum.Interface) *coordinators.ClientEntry {
+func registerDisconnectedClient(t *testing.T, c *Unit, ifaceID string, iface hmenum.Interface) *coordinators.ClientEntry {
 	t.Helper()
 	ic, err := client.New(client.Config{
 		CentralName:  c.cfg.Name,
@@ -73,7 +73,7 @@ func registerDisconnectedClient(t *testing.T, c *CentralUnit, ifaceID string, if
 
 // drainSystemStatusEvents subscribes to the bus and returns a drain function
 // that unsubscribes and returns all collected events.
-func drainSystemStatusEvents(c *CentralUnit) func() []hmevent.SystemStatusChangedEvent {
+func drainSystemStatusEvents(c *Unit) func() []hmevent.SystemStatusChangedEvent {
 	var received []hmevent.SystemStatusChangedEvent
 	unsub := events.Subscribe(c.EventBus, func(e hmevent.SystemStatusChangedEvent) {
 		received = append(received, e)
@@ -84,8 +84,8 @@ func drainSystemStatusEvents(c *CentralUnit) func() []hmevent.SystemStatusChange
 	}
 }
 
-// mustNew creates a CentralUnit for testing and fails the test on error.
-func mustNew(t *testing.T, name string) *CentralUnit {
+// mustNew creates a Unit for testing and fails the test on error.
+func mustNew(t *testing.T, name string) *Unit {
 	t.Helper()
 	c, err := New(Config{Name: name})
 	if err != nil {
@@ -94,8 +94,8 @@ func mustNew(t *testing.T, name string) *CentralUnit {
 	return c
 }
 
-// mustStarted starts the CentralUnit and registers a cleanup that stops it.
-func mustStarted(t *testing.T, c *CentralUnit) context.CancelFunc {
+// mustStarted starts the Unit and registers a cleanup that stops it.
+func mustStarted(t *testing.T, c *Unit) context.CancelFunc {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	if err := c.Start(ctx); err != nil {
@@ -262,7 +262,7 @@ func TestEvaluateCentralState_InRecoveryBlocksRunning(t *testing.T) {
 // TestEvaluateCentralState_NilGuard verifies EvaluateCentralState is a no-op
 // when Clients or Health are nil.
 func TestEvaluateCentralState_NilGuard(t *testing.T) {
-	c := &CentralUnit{}
+	c := &Unit{}
 	// Must not panic.
 	c.EvaluateCentralState("nil-guard", false)
 }

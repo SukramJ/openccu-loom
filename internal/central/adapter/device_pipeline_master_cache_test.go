@@ -52,7 +52,7 @@ func newMasterFloatDP(param hmenum.Parameter, channelAddr string) *generic.DataP
 // MASTER float64 data point for the parameter name param.
 func buildChannelWithMasterParam(
 	t *testing.T,
-	c *central.CentralUnit,
+	c *central.Unit,
 	ifID string,
 	devAddr, channelAddr string,
 	param hmenum.Parameter,

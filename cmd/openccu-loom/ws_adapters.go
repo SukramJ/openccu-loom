@@ -276,7 +276,7 @@ func (w *wsLinkQuery) PutLinkParamset(ctx context.Context, channelAddress, peerA
 //
 // InstallMode methods read the per-interface InstallMode trackers via
 // hub.Hub.InstallModeDPs() / InstallModeDP(interfaceID). Each tracker
-// is registered by the CentralUnit boot sequence on the ServiceRegistry.
+// is registered by the Unit boot sequence on the ServiceRegistry.
 type wsHubQuery struct {
 	hub      *adapter.HubAdapter
 	registry *central.Registry

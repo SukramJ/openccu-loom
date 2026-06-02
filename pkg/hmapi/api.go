@@ -4,7 +4,7 @@
 // Package hmapi provides a high-level HomematicAPI facade that is the
 // single convenience entry-point into the openccu-loom daemon.
 //
-// The facade aggregates a [Registry] of [CentralUnit] instances and
+// The facade aggregates a [Registry] of [Unit] instances and
 // exposes the most commonly needed operations without requiring
 // callers to wire up the individual coordinators and registries.
 //
@@ -30,7 +30,7 @@ import (
 )
 
 // ErrNotConnected is returned by methods that require at least one
-// registered [CentralUnit] when none has been connected.
+// registered [Unit] when none has been connected.
 var ErrNotConnected = errors.New("hmapi: not connected — call Connect first")
 
 // ErrAlreadyConnected is returned when Connect is called on an API
@@ -43,10 +43,10 @@ var ErrAlreadyConnected = errors.New("hmapi: already connected")
 var ErrNotSupported = errors.New("hmapi: operation not supported by this central")
 
 // CentralHandle is the minimal interface that the facade requires of
-// each CentralUnit. Using an interface here keeps pkg/hmapi free of
+// each Unit. Using an interface here keeps pkg/hmapi free of
 // the internal/central import path.
 //
-// Implementations: *internal/central.CentralUnit.
+// Implementations: *internal/central.Unit.
 type CentralHandle interface {
 	// Name returns the operator-assigned identifier of the central.
 	Name() string
@@ -95,7 +95,7 @@ type UpdateSubscriber interface {
 }
 
 // HomematicAPI is the top-level facade over the configured set of
-// CentralUnits. Callers that want a single entry-point into the
+// Units. Callers that want a single entry-point into the
 // daemon create one API instance, register their centrals via
 // [HomematicAPI.Register], and then call [HomematicAPI.Connect].
 type HomematicAPI struct {
@@ -111,7 +111,7 @@ func New() *HomematicAPI {
 	}
 }
 
-// Register adds a CentralUnit to the API. Returns an error when a
+// Register adds a Unit to the API. Returns an error when a
 // central with the same name has already been registered.
 func (a *HomematicAPI) Register(c CentralHandle) error {
 	if c == nil || c.Name() == "" {

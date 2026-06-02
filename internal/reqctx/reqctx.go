@@ -35,7 +35,7 @@ type RequestContext struct {
 	// interface (e.g. "HmIP-RF", "CUxD").
 	InterfaceID string
 	// CentralName is optionally set when the request is scoped to a
-	// specific [internal/central.CentralUnit]. Multi-CCU log
+	// specific [internal/central.Unit]. Multi-CCU log
 	// correlation uses this field to disambiguate which CCU produced
 	// or received the work — without it, parallel call paths from two
 	// CCUs interleave indistinguishably in slog output.

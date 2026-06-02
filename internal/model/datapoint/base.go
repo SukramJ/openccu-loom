@@ -69,7 +69,7 @@ type EventPublisher interface {
 // captures only what is universally shared across all data-point families.
 //
 // Multi-CCU safety: the `central` field scopes the unique identifier;
-// callers MUST pass the per-CentralUnit name so two CCUs cannot
+// callers MUST pass the per-Unit name so two CCUs cannot
 // produce colliding identifiers.
 //
 // Foundation timestamps: [modifiedAt] and [refreshedAt] mirror
@@ -149,7 +149,7 @@ const publishedEventWindow = 500 * time.Millisecond
 
 // NewBaseDataPointFields constructs a [BaseDataPointFields].
 //
-// - `central` — the CentralUnit name for multi-CCU scoping. Empty
+// - `central` — the Unit name for multi-CCU scoping. Empty
 // is permitted at the type level (some test fixtures), but
 // production callers MUST set it.
 // - `address` — the device or channel address (e.g. "VCU0123:1").
@@ -198,7 +198,7 @@ func (b *BaseDataPointFields) UniqueID() string {
 	return sb.String()
 }
 
-// Central returns the CentralUnit name passed at construction.
+// Central returns the Unit name passed at construction.
 func (b *BaseDataPointFields) Central() string { return b.central }
 
 // Address returns the device / channel address passed at construction.

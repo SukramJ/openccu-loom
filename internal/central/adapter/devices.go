@@ -16,7 +16,7 @@ import (
 )
 
 // DevicesAdapter implements handlers.DeviceIndex across every
-// registered CentralUnit.
+// registered Unit.
 type DevicesAdapter struct {
 	registry *central.Registry
 	writer   *client.ValueWriter

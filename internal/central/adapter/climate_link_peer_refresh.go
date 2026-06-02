@@ -41,7 +41,7 @@ import (
 //
 // Returns a closer that drops both bus subscriptions. Safe to call on daemon
 // shutdown — it does not touch the Climate's own peer closers.
-func WireClimateLinkPeerRefresh(unit *central.CentralUnit) func() {
+func WireClimateLinkPeerRefresh(unit *central.Unit) func() {
 	if unit == nil || unit.EventBus == nil || unit.ModelRegistry == nil {
 		return func() {}
 	}

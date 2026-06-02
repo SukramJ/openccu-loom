@@ -56,8 +56,8 @@ func (s *UnobservedSweep) SweepUnobserved(ctx context.Context) (loaded, errored 
 }
 
 // sweepCentral walks a single central. Pulled out so callers (tests,
-// REST/UI manual triggers) can scope to one CentralUnit.
-func (s *UnobservedSweep) sweepCentral(ctx context.Context, unit *central.CentralUnit) (loaded, errored int) {
+// REST/UI manual triggers) can scope to one Unit.
+func (s *UnobservedSweep) sweepCentral(ctx context.Context, unit *central.Unit) (loaded, errored int) {
 	for _, d := range unit.ModelRegistry.List() {
 		l, e := s.sweepDevice(ctx, d)
 		loaded += l

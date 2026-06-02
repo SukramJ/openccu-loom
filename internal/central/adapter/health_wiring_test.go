@@ -17,7 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-func newCentralForHealthTest(t *testing.T) *central.CentralUnit {
+func newCentralForHealthTest(t *testing.T) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {

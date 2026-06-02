@@ -918,7 +918,7 @@ func (c *InterfaceClient) GetVersion() string {
 
 // SetVersion updates the software version string. Coordinators call this
 // after backend detection completes so that central-level aggregations
-// (e.g. CentralUnit collecting firmware versions across all clients) see
+// (e.g. Unit collecting firmware versions across all clients) see
 // the correct value.
 //
 // Mirrors the assignment to InterfaceClient._version that happens in

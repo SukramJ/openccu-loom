@@ -74,7 +74,7 @@ type HubDataPoint struct {
 // [datapoint.BaseDataPointFields] embedded, so UniqueID(), Visible(),
 // and EnabledByDefault() are meaningful from the first use.
 //
-// - central — the CentralUnit name, used to scope UniqueID.
+// - central — the Unit name, used to scope UniqueID.
 // - name — the sysvar/program name (becomes both HubDataPoint.Name
 // and the KeyName inside BaseDataPointFields).
 // - description — optional human-readable text.

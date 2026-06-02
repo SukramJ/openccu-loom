@@ -57,7 +57,7 @@ type Program struct {
 // NewProgram constructs a [Program] with a fully initialised
 // [datapoint.BaseDataPointFields] embedded in the [HubDataPoint] base.
 //
-// - central — the CentralUnit name for UniqueID scoping (multi-CCU safe).
+// - central — the Unit name for UniqueID scoping (multi-CCU safe).
 // - id — the CCU program ID (the ISE object ID).
 // - name — the CCU program name (used as both Name field and KeyName).
 // - description — optional human-readable description.

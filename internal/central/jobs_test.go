@@ -133,7 +133,7 @@ func TestRegisterStandardJobsRejectsNilUnit(t *testing.T) {
 
 // makeConnectedClient builds a minimal InterfaceClient + state-machine pair
 // in CONNECTED state and registers it with the central's ClientCoordinator.
-func makeConnectedClient(t *testing.T, c *CentralUnit, ifaceID string) *client.InterfaceClient {
+func makeConnectedClient(t *testing.T, c *Unit, ifaceID string) *client.InterfaceClient {
 	t.Helper()
 	ic, err := client.New(client.Config{
 		CentralName: c.cfg.Name,
@@ -169,7 +169,7 @@ func makeConnectedClient(t *testing.T, c *CentralUnit, ifaceID string) *client.I
 
 // findJobRun returns the Run function of the named job from the
 // scheduler's registered jobs, or nil when not found.
-func findJobRun(c *CentralUnit, name string) func(context.Context) error {
+func findJobRun(c *Unit, name string) func(context.Context) error {
 	for _, j := range c.Scheduler.Jobs() {
 		if j.Name == name {
 			return j.Run
@@ -470,7 +470,7 @@ func TestGatedRun_Operational_CallsFn(t *testing.T) {
 
 // advanceCentralToRunning walks the central state machine from its current
 // state to RUNNING via the valid transition path.
-func advanceCentralToRunning(t *testing.T, c *CentralUnit) {
+func advanceCentralToRunning(t *testing.T, c *Unit) {
 	t.Helper()
 	if err := c.StateMachine.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
 		t.Fatalf("transition to Initializing: %v", err)

@@ -782,7 +782,7 @@ func TestGetScheduleResolvesAcrossMultipleCentrals(t *testing.T) {
 		t.Fatalf("central B: %v", err)
 	}
 	reg := central.NewRegistry()
-	for _, c := range []*central.CentralUnit{c1, c2} {
+	for _, c := range []*central.Unit{c1, c2} {
 		if err := reg.Register(c); err != nil {
 			t.Fatalf("Register: %v", err)
 		}

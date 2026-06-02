@@ -359,7 +359,7 @@ func wireInterface(
 	ctx context.Context,
 	cc config.CentralConfig,
 	iface hmenum.Interface,
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
 	runner *rega.Runner,

@@ -88,12 +88,12 @@ func StartUnobservedSweepLoop(
 }
 
 // SweepUnobservedForCentral exposes the per-central walk so callers
-// that already hold a [*central.CentralUnit] handle (e.g. a future
+// that already hold a [*central.Unit] handle (e.g. a future
 // REST endpoint that triggers a manual sweep on one CCU) can target
 // it directly without going through the registry. The full
 // [UnobservedSweep.SweepUnobserved] still iterates every central,
 // which is what [StartUnobservedSweepLoop] uses on every tick.
-func (s *UnobservedSweep) SweepUnobservedForCentral(ctx context.Context, unit *central.CentralUnit) (loaded, errored int) {
+func (s *UnobservedSweep) SweepUnobservedForCentral(ctx context.Context, unit *central.Unit) (loaded, errored int) {
 	if s == nil || unit == nil {
 		return 0, 0
 	}

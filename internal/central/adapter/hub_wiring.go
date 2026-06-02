@@ -63,7 +63,7 @@ type HubData struct {
 func WireHub(
 	ctx context.Context,
 	cc config.CentralConfig,
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	logger *slog.Logger,
 ) (*rega.Runner, HubData, func(), error) {
 	endpoint := jsonrpcEndpoint(cc)
@@ -674,7 +674,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 // refreshes unit.HubModel.Inbox. The inbox is a central-wide ReGa query
 // (get_inbox_devices), not a per-interface JSON-RPC poll — the reference
 // stack reads it the same way.
-func loadInbox(ctx context.Context, r *rega.Runner, unit *central.CentralUnit) error {
+func loadInbox(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
 	if r == nil || unit == nil || unit.HubModel == nil {
 		return nil
 	}
@@ -702,7 +702,7 @@ func loadInbox(ctx context.Context, r *rega.Runner, unit *central.CentralUnit) e
 
 // loadServiceMessages fetches active service messages via the ReGa script
 // engine (get_service_messages) and refreshes unit.HubModel.ServiceMessages.
-func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.CentralUnit) error {
+func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
 	if r == nil || unit == nil || unit.HubModel == nil {
 		return nil
 	}
@@ -808,7 +808,7 @@ func loadSystemUpdate(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
 // rather than through the coordinator, because HubCoordinator.SetHubModel
 // is not called during standard daemon wiring — the model is the
 // authoritative registry.
-func loadInstallMode(ctx context.Context, jc *jsonrpc.Client, unit *central.CentralUnit) error {
+func loadInstallMode(ctx context.Context, jc *jsonrpc.Client, unit *central.Unit) error {
 	if unit == nil || unit.HubModel == nil || unit.Hub == nil {
 		return nil
 	}
@@ -835,7 +835,7 @@ func loadInstallMode(ctx context.Context, jc *jsonrpc.Client, unit *central.Cent
 // loadConnectivity probes the CCU's interface-reachability state via the
 // Reconciler and updates the per-interface connectivity data points.
 // When no Reconciler or Connectivity aggregate is wired, this is a no-op.
-func loadConnectivity(ctx context.Context, unit *central.CentralUnit) error {
+func loadConnectivity(ctx context.Context, unit *central.Unit) error {
 	if unit == nil || unit.Reconciler == nil {
 		return nil
 	}
@@ -1104,7 +1104,7 @@ var ErrSysvarCreatorNoPrimary = errors.New("sysvar_creator: no primary client av
 // order: the primary client is determined at the first actual CreateSysvar*
 // call, not at construction time.
 type clientSysvarCreator struct {
-	unit   *central.CentralUnit
+	unit   *central.Unit
 	writer *clientpkg.ValueWriter
 }
 
@@ -1120,7 +1120,7 @@ func (c *clientSysvarCreator) primaryBackend() (*clientpkg.InterfaceClient, back
 // the unit has no registered clients or the primary backend is not yet
 // registered. Shared by the sysvar-creator and backup-and-download wiring so
 // both bind late and stay independent of interface-wiring order.
-func primaryBackendOf(unit *central.CentralUnit, writer *clientpkg.ValueWriter) (*clientpkg.InterfaceClient, backends.Operations, error) {
+func primaryBackendOf(unit *central.Unit, writer *clientpkg.ValueWriter) (*clientpkg.InterfaceClient, backends.Operations, error) {
 	if unit == nil || unit.Clients == nil {
 		return nil, nil, ErrSysvarCreatorNoPrimary
 	}
@@ -1179,7 +1179,7 @@ func (c *clientSysvarCreator) CreateSysvarFloat(ctx context.Context, name string
 // so the primary client is available when the first CreateSysvar* call
 // arrives. Nil arguments are safe — SetSysvarCreator is skipped when
 // unit or unit.Hub is nil.
-func WireSysvarCreator(unit *central.CentralUnit, writer *clientpkg.ValueWriter) {
+func WireSysvarCreator(unit *central.Unit, writer *clientpkg.ValueWriter) {
 	if unit == nil || unit.Hub == nil {
 		return
 	}
@@ -1199,7 +1199,7 @@ func WireSysvarCreator(unit *central.CentralUnit, writer *clientpkg.ValueWriter)
 // Call this after [WireCentrals] has registered all interface clients, for
 // the same late-binding reason as [WireSysvarCreator]. Passing 0 for both
 // poll parameters selects the backend defaults (300 s wait, 5 s interval).
-func WireBackupAndDownload(unit *central.CentralUnit, writer *clientpkg.ValueWriter) {
+func WireBackupAndDownload(unit *central.Unit, writer *clientpkg.ValueWriter) {
 	if unit == nil {
 		return
 	}

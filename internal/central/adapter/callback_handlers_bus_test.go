@@ -360,9 +360,9 @@ func TestCallbackHandlersEventUnknownChannel(t *testing.T) {
 	}
 }
 
-// registryOf returns the first CentralUnit from a registry that already
+// registryOf returns the first Unit from a registry that already
 // holds the given device.
-func registryOf(t *testing.T, _ interface{}) *central.CentralUnit {
+func registryOf(t *testing.T, _ interface{}) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "ccu-tmp"})
 	if err != nil {

@@ -164,7 +164,7 @@ type ProfileDataPoint struct {
 
 // ProfileDataPointConfig holds construction parameters for [ProfileDataPoint].
 type ProfileDataPointConfig struct {
-	// CentralName is the CentralUnit name used to scope the embedded
+	// CentralName is the Unit name used to scope the embedded
 	// [datapoint.BaseDataPointFields.UniqueID]. Empty is permitted at the
 	// type level (test fixtures) but production callers MUST set it; ADR
 	// 0002 (multi-CCU first-class) requires the central segment so two

@@ -15,10 +15,10 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 )
 
-// buildRecorderRegistry returns a registry with one CentralUnit (named n)
+// buildRecorderRegistry returns a registry with one Unit (named n)
 // whose Recorder is already wired via central.New (which calls
 // cache.SetSessionRecorder during construction).
-func buildRecorderRegistry(t *testing.T, name string) (*central.Registry, *central.CentralUnit) {
+func buildRecorderRegistry(t *testing.T, name string) (*central.Registry, *central.Unit) {
 	t.Helper()
 	unit, err := central.New(central.Config{Name: name})
 	if err != nil {

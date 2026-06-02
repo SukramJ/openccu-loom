@@ -170,13 +170,13 @@ type SysvarConfig struct {
 	Writable       bool `json:"writable"`
 }
 
-// --- CentralUnit + InterfaceClient (top-level services) -------------
+// --- Unit + InterfaceClient (top-level services) -------------
 
-// CentralUnitConfig is the operator-tunable configuration of the
+// CentralConfig is the operator-tunable configuration of the
 // central. Today the central exposes few runtime-tunable knobs; the
 // struct shape lets adapters refer to the bucket without
 // special-casing.
-type CentralUnitConfig struct {
+type CentralConfig struct {
 	Name string `json:"name"`
 }
 

@@ -128,7 +128,7 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 // persists the resulting archive. It is the asynchronous tail of
 // [BackupAdapter.TriggerBackup]; failures are logged, not surfaced to the
 // original HTTP caller (which has already received its 202 + id).
-func (a *BackupAdapter) runBackup(c *central.CentralUnit, id string) {
+func (a *BackupAdapter) runBackup(c *central.Unit, id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), backupRunTimeout)
 	defer cancel()
 

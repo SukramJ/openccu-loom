@@ -43,7 +43,7 @@ func TestWSM_IrrigationValveSurface(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	// CentralUnit has no public Close — pipeline-only cleanup is enough.
+	// Unit has no public Close — pipeline-only cleanup is enough.
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	pipeline := adapter.NewDevicePipeline(c)

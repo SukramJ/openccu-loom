@@ -514,9 +514,9 @@ func TestWireSessionRecorderPersistence_NilStoreIsNoop(t *testing.T) {
 }
 
 // TestWireSessionRecorderPersistence_NilCentralIsNoop verifies a nil
-// CentralUnit receiver returns a callable no-op unsub.
+// Unit receiver returns a callable no-op unsub.
 func TestWireSessionRecorderPersistence_NilCentralIsNoop(t *testing.T) {
-	var c *CentralUnit
+	var c *Unit
 	unsub := c.WireSessionRecorderPersistence(context.Background(), nil, "slug", 0)
 	if unsub == nil {
 		t.Fatal("expected non-nil unsubscribe func even for nil receiver")

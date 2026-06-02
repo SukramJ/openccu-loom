@@ -68,7 +68,7 @@ func (s *sysvarOps) CreateSystemVariableFloat(_ context.Context, name string, mi
 	return map[string]any{"name": name, "type": "FLOAT"}, nil
 }
 
-// buildSysvarCreatorFixture sets up a minimal CentralUnit + ValueWriter
+// buildSysvarCreatorFixture sets up a minimal Unit + ValueWriter
 // with a fake backend registered, then wires the sysvar creator and
 // returns the hub coordinator for assertions.
 func buildSysvarCreatorFixture(t *testing.T) (

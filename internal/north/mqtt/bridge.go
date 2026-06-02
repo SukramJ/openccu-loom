@@ -445,7 +445,7 @@ func (b *Bridge) SetHubInfo(info HubInfo) {
 // daemon emits the right device-block (Name / Model / sw_version /
 // serial / configuration_url) for each CCU's hub + per-device
 // discovery payloads. central must match the value the daemon
-// passes into discovery-builder calls (i.e. CentralUnit.Name()).
+// passes into discovery-builder calls (i.e. Unit.Name()).
 func (b *Bridge) SetHubInfoFor(central string, info HubInfo) {
 	if b == nil || b.cfg.DiscoveryBuilder == nil {
 		return

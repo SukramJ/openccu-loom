@@ -241,14 +241,14 @@ type HubInfo struct {
 	Category    string `json:"category"`
 }
 
-// --- CentralUnit + InterfaceClient (top-level services) -------------
+// --- Unit + InterfaceClient (top-level services) -------------
 
-// CentralUnitInfo is the identity payload for a central. HA-canonical
+// CentralInfo is the identity payload for a central. HA-canonical
 // keys (`sw_version`, `serial_number`, `configuration_url`) are used
 // directly so the body can flow straight into the MQTT-Discovery
 // hub-device block without per-key renaming. Empty fields are omitted
 // — they are "not yet observed" rather than real data.
-type CentralUnitInfo struct {
+type CentralInfo struct {
 	Name             string `json:"name"`
 	Model            string `json:"model,omitempty"`
 	SWVersion        string `json:"sw_version,omitempty"`

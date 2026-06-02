@@ -99,7 +99,7 @@ func TestPanicInHandlerIsolation(t *testing.T) {
 
 // TestMultiCCUBusIsolation creates two independent Bus instances and verifies
 // that events published on bus A never reach subscribers on bus B — and vice
-// versa. This is the core multi-CCU correctness requirement: each CentralUnit
+// versa. This is the core multi-CCU correctness requirement: each Unit
 // has its own Bus; they must be hermetically isolated.
 //
 // openccu-loom ADR-0002 makes multi-CCU a first- class constraint; cross-talk

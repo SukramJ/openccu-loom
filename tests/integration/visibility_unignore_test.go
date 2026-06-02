@@ -7,7 +7,7 @@ package integration
 
 // TestVisibilityUnIgnore* exercises the /api/v1/visibility/unignore endpoints
 // end-to-end through a real in-memory SQLite store and a godevccu-backed
-// CentralUnit. The httptest.Server routes requests through the chi router so
+// Unit. The httptest.Server routes requests through the chi router so
 // the full handler chain (validation, diff, audit, loader) runs.
 //
 // Coverage goals (per the stream-A brief):
@@ -43,7 +43,7 @@ import (
 
 // visibilityTestFixture bundles the components used across the
 // visibility_unignore integration tests. It is wired against an
-// in-memory SQLite database and a godevccu-backed CentralUnit.
+// in-memory SQLite database and a godevccu-backed Unit.
 type visibilityTestFixture struct {
 	centralName string
 	store       *sqlite.VisibilityUnIgnoreStore
@@ -54,7 +54,7 @@ type visibilityTestFixture struct {
 }
 
 // newVisibilityTestFixture spins up a godevccu mock, ingests the default
-// device fleet into a CentralUnit, and wires an in-memory SQLite
+// device fleet into a Unit, and wires an in-memory SQLite
 // VisibilityUnIgnoreStore. The caller owns the httptest.Server and should
 // close it via t.Cleanup.
 func newVisibilityTestFixture(t *testing.T) *visibilityTestFixture {
@@ -134,7 +134,7 @@ func (l *integrationCentralLister) Names() []string {
 }
 
 // integrationCandidateProvider satisfies handlers.VisibilityCandidateProvider
-// by delegating to the CentralUnit's QueryFacade.
+// by delegating to the Unit's QueryFacade.
 type integrationCandidateProvider struct {
 	central string
 	qf      interface {
@@ -155,7 +155,7 @@ func (p *integrationCandidateProvider) UnIgnoreCandidates(centralName string, pa
 type integrationLoader struct {
 	reg     *visibility.Registry
 	store   *sqlite.VisibilityUnIgnoreStore
-	central *central.CentralUnit
+	central *central.Unit
 }
 
 func (l *integrationLoader) LoadUnIgnore(centralName string, patterns []string) (affectedDevices int, parseErrors []string, err error) {

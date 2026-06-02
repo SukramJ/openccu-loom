@@ -158,7 +158,7 @@ type Channel struct {
 	// because they rely on CONFIG_PENDING instead. Guarded by mu.
 	masterRefreshHook func(addr string, key hmenum.ParamsetKey)
 
-	// centralName is the owning CentralUnit's name. Set by the device
+	// centralName is the owning Unit's name. Set by the device
 	// pipeline after channel hydration so that custom-DP constructors
 	// that allocate new generic data points can propagate the correct
 	// CentralName into [generic.Spec]. Empty is valid in test fixtures
@@ -297,7 +297,7 @@ func (c *Channel) ChannelName() string {
 	return c.Name
 }
 
-// SetCentralName records the owning CentralUnit's name so custom-DP
+// SetCentralName records the owning Unit's name so custom-DP
 // constructors can populate [generic.Spec.CentralName] correctly.
 // Called by the device pipeline during channel hydration.
 func (c *Channel) SetCentralName(name string) {
@@ -306,7 +306,7 @@ func (c *Channel) SetCentralName(name string) {
 	c.mu.Unlock()
 }
 
-// CentralName returns the owning CentralUnit's name, or the empty
+// CentralName returns the owning Unit's name, or the empty
 // string when the channel was constructed in a test fixture where no
 // real CCU is involved.
 func (c *Channel) CentralName() string {

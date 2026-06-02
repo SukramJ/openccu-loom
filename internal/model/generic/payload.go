@@ -43,7 +43,7 @@ func (d *DataPoint[T]) CanonicalUniqueID(serialSuffix string) string {
 //   - parameter    — wire-level parameter name (SET_POINT_TEMPERATURE)
 //   - paramset_key — VALUES / MASTER / LINK marker
 //   - address      — owning channel address
-//   - central      — owning CentralUnit name (omitted in test fixtures)
+//   - central      — owning Unit name (omitted in test fixtures)
 //   - device_model — parent device's CCU model
 //   - category     — DataPointCategory bucket (sensor / switch / number)
 //   - kind         — resolved generic shape (Switch, Sensor, Number, …)

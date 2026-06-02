@@ -68,7 +68,7 @@ type Sysvar struct {
 // NewSysvar constructs a [Sysvar] with a fully initialised
 // [datapoint.BaseDataPointFields] embedded in the [HubDataPoint] base.
 //
-// - central — the CentralUnit name for UniqueID scoping (multi-CCU safe).
+// - central — the Unit name for UniqueID scoping (multi-CCU safe).
 // - name — the CCU sysvar name (used as both Name field and KeyName).
 // - description — optional human-readable description.
 // - valueType — the CCU-declared wire type.

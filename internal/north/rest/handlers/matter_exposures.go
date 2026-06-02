@@ -31,7 +31,7 @@ type MatterExposureStore interface {
 
 // MatterCandidateProvider yields the per-source classification result
 // the operator-facing UI lists. The daemon wires this to a closure
-// that walks every CentralUnit's model registry through
+// that walks every Unit's model registry through
 // `eligibility.CollectCandidates`.
 type MatterCandidateProvider interface {
 	MatterCandidates(ctx context.Context) []eligibility.Candidate

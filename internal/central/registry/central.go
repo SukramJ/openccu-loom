@@ -16,7 +16,7 @@ var ErrCentralExists = errors.New("registry: central already registered")
 // ErrCentralNotFound is returned on lookup of an unknown central.
 var ErrCentralNotFound = errors.New("registry: central not found")
 
-// Central is implemented by the concrete CentralUnit type. Kept here
+// Central is implemented by the concrete Unit type. Kept here
 // as an opaque handle so the registry does not depend on the full
 // central package.
 type Central any
@@ -31,7 +31,7 @@ type CentralRegistry struct {
 
 // NewCentralRegistry returns an empty registry.
 //
-// loom:reachable:reason="constructed in daemon.go bootstrap to hold all CentralUnit instances; multi-CCU-safe by design"
+// loom:reachable:reason="constructed in daemon.go bootstrap to hold all Unit instances; multi-CCU-safe by design"
 func NewCentralRegistry() *CentralRegistry {
 	return &CentralRegistry{items: make(map[string]Central)}
 }

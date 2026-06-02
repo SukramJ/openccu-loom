@@ -38,7 +38,7 @@ import (
 // [scheduleSelfReload]) are tracked with a [sync.WaitGroup] so [Stop] can
 // block until all in-flight tasks complete.
 type CallbackHandlers struct {
-	central *central.CentralUnit
+	central *central.Unit
 	logger  *slog.Logger
 	// wg tracks every background goroutine spawned by this handler.
 	// Stop() blocks until all goroutines have returned.
@@ -55,7 +55,7 @@ type CallbackHandlers struct {
 }
 
 // NewCallbackHandlers wires the adapter for c.
-func NewCallbackHandlers(c *central.CentralUnit, logger *slog.Logger) *CallbackHandlers {
+func NewCallbackHandlers(c *central.Unit, logger *slog.Logger) *CallbackHandlers {
 	if logger == nil {
 		logger = slog.Default()
 	}

@@ -721,7 +721,7 @@ func (c *ConnectionRecoveryCoordinator) AttemptCount(interfaceID string) int {
 // MetricsInRecovery reports whether at least one interface is
 // currently undergoing recovery. Multi-CCU safe — the coordinator
 // only reflects its own interfaces, scoped by the owning
-// [CentralUnit.Name].
+// [Unit.Name].
 func (c *ConnectionRecoveryCoordinator) MetricsInRecovery() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()

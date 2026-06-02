@@ -28,7 +28,7 @@ import (
 // recovery → gate not installed; missing unit/iface → early return with
 // no-ops.
 func WirePingPongBus(
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	ic *clientpkg.InterfaceClient,
 	interfaceID string,
 	recovery *coordinators.ConnectionRecoveryCoordinator,

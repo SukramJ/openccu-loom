@@ -50,7 +50,7 @@ type pushCapabilityReporter interface {
 // QueryFacade is the read-only aggregate view north-bound adapters
 // use instead of reaching into every sub-package. Handlers depend on
 // narrow interfaces; this facade is the concrete implementation a
-// [*CentralUnit] returns.
+// [*Unit] returns.
 type QueryFacade struct {
 	name        string
 	devices     *registry.DeviceRegistry
@@ -60,7 +60,7 @@ type QueryFacade struct {
 	installMode InstallModeProvider
 }
 
-// NewQueryFacade constructs a facade bound to the given CentralUnit
+// NewQueryFacade constructs a facade bound to the given Unit
 // components. Designed to be cheap — the caller may recreate it per
 // request if the dependency graph evolves.
 //

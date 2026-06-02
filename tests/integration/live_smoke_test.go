@@ -89,9 +89,9 @@ func liveCCUXMLRPCURL(host string) string {
 }
 
 // buildLivePipeline connects to the live CCU, ingests devices, and
-// returns the populated CentralUnit. It is the shared setup step for
+// returns the populated Unit. It is the shared setup step for
 // all TestLive_* sub-tests that need the full device graph.
-func buildLivePipeline(t *testing.T, env liveCCUEnv) *central.CentralUnit {
+func buildLivePipeline(t *testing.T, env liveCCUEnv) *central.Unit {
 	t.Helper()
 
 	xmlClient, err := xmlrpc.NewClient(xmlrpc.Config{

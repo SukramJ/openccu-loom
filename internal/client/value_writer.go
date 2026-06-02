@@ -67,7 +67,7 @@ type ValueWriter struct {
 // `internal/central/events` package.
 type eventBusLike interface{}
 
-// BusResolver maps a CentralUnit name to its event bus. Multi-CCU
+// BusResolver maps a Unit name to its event bus. Multi-CCU
 // deployments use this to route [WaitForStateChangeOrTimeout]
 // subscriptions to the correct bus per write call. The daemon
 // installs a closure that consults the [central.Registry].

@@ -32,7 +32,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
-// Config configures a [*CentralUnit]. Required fields: Name.
+// Config configures a [*Unit]. Required fields: Name.
 type Config struct {
 	// Name is the operator-assigned identifier of the central.
 	// Appears in every log and metric label.
@@ -55,12 +55,12 @@ type Config struct {
 	Logger *slog.Logger
 }
 
-// CentralUnit is the per-CCU domain orchestrator. The name mirrors
+// Unit is the per-CCU domain orchestrator. The name mirrors
 // SPECIFICATION §11.1 — renaming it to remove the stutter would
 // diverge from spec and from recorded session names.
 //
 //nolint:revive // deliberate: spec-aligned name
-type CentralUnit struct {
+type Unit struct {
 	cfg Config
 
 	// ServiceRegistry implements the write-half of [payload.Source].
@@ -84,7 +84,7 @@ type CentralUnit struct {
 	// Link is the LinkCoordinator that brokers LINK-paramset operations
 	// (AddLink, RemoveLink, GetLinks, GetLinkInfo). It becomes useful once a
 	// [coordinators.ClientResolver] is installed via
-	// [CentralUnit.SetLinkResolver] — without one the coordinator is present but
+	// [Unit.SetLinkResolver] — without one the coordinator is present but
 	// its methods short-circuit with `no client` errors.
 	Link      *coordinators.LinkCoordinator
 	Scheduler *scheduler.Scheduler
@@ -104,7 +104,7 @@ type CentralUnit struct {
 	// Recorder captures CCU command/response sessions for diagnostics +
 	// golden-file replay. Default config keeps the recorder inactive
 	// (StartSession-gated) so the daemon pays no overhead in normal operation.
-	// Disk-persistence is wired via [CentralUnit.WireSessionRecorderPersistence]
+	// Disk-persistence is wired via [Unit.WireSessionRecorderPersistence]
 	// when a SQLite store is available.
 	Recorder *session.Recorder
 
@@ -138,7 +138,7 @@ type CentralUnit struct {
 
 	// serviceMu guards the wired service-method hooks below. The
 	// hooks are populated by the hub-wiring adapter once the
-	// JSON-RPC session is up; CentralUnit.Service* methods delegate
+	// JSON-RPC session is up; Unit.Service* methods delegate
 	// through them to the actual transport.
 	serviceMu        sync.RWMutex
 	acceptInboxFn    func(ctx context.Context, address string) error
@@ -188,7 +188,7 @@ type CentralUnit struct {
 // attach registry-level teardown (e.g. CentralRegistry.Unregister, health
 // tracker deregistration) that cannot be expressed inside the central itself.
 // Thread-safe; hooks may be registered at any time before Stop is called.
-func (c *CentralUnit) AddOnStopHook(fn func()) {
+func (c *Unit) AddOnStopHook(fn func()) {
 	if fn == nil {
 		return
 	}
@@ -203,7 +203,7 @@ func (c *CentralUnit) AddOnStopHook(fn func()) {
 // via the public [Aggregator] field; REST handlers read it directly
 // without synchronisation because it is only written once before any
 // handler starts serving.
-func (c *CentralUnit) SetAggregator(agg *metrics.Aggregator) {
+func (c *Unit) SetAggregator(agg *metrics.Aggregator) {
 	c.Aggregator = agg
 }
 
@@ -211,7 +211,7 @@ func (c *CentralUnit) SetAggregator(agg *metrics.Aggregator) {
 // [observability.Recorder]-aware coordinator owned by the central.
 // Daemons call this once at boot, after constructing the metrics
 // recorder. Passing nil restores the no-op default.
-func (c *CentralUnit) SetObservabilityRecorder(rec observability.Recorder) {
+func (c *Unit) SetObservabilityRecorder(rec observability.Recorder) {
 	if rec == nil {
 		rec = observability.NoopRecorder{}
 	}
@@ -235,9 +235,9 @@ type SystemInfo struct {
 	IsHaApp  bool   `payload:"info,alt=is_ha_app"`
 }
 
-// New constructs a fully-wired CentralUnit. Call [Start] to begin
+// New constructs a fully-wired Unit. Call [Start] to begin
 // operation.
-func New(cfg Config) (*CentralUnit, error) {
+func New(cfg Config) (*Unit, error) {
 	if cfg.Name == "" {
 		return nil, errors.New("central: Config.Name is required")
 	}
@@ -256,7 +256,7 @@ func New(cfg Config) (*CentralUnit, error) {
 	// SET_TEMPERATURE MIN/MAX wire-vs-patched drift).
 	psReg := registry.NewParamsetRegistryWithPatches(patches.NewRegistry())
 
-	c := &CentralUnit{
+	c := &Unit{
 		cfg:            cfg,
 		logger:         logger,
 		StateMachine:   statemachine.NewCentral(cfg.Name, bus),
@@ -274,7 +274,7 @@ func New(cfg Config) (*CentralUnit, error) {
 		Hub:            coordinators.NewHubCoordinator(cfg.Name, bus),
 		Recovery:       coordinators.NewConnectionRecoveryCoordinator(cfg.Name, bus),
 		// Link starts with a nil resolver — the southbound wiring
-		// adapter installs one via [CentralUnit.SetLinkResolver]
+		// adapter installs one via [Unit.SetLinkResolver]
 		// once the client coordinator has at least one InterfaceClient.
 		Link:           coordinators.NewLinkCoordinator(nil),
 		Scheduler:      scheduler.New(logger, nil),
@@ -327,7 +327,7 @@ func New(cfg Config) (*CentralUnit, error) {
 // closes the production-replay path that was deferred
 // in the audit. Without this wiring the recorder works as before
 // (in-memory only), so existing callers are not affected.
-func (c *CentralUnit) WireSessionRecorderPersistence(ctx context.Context, store session.PersistStore, slug string, interval time.Duration) func() {
+func (c *Unit) WireSessionRecorderPersistence(ctx context.Context, store session.PersistStore, slug string, interval time.Duration) func() {
 	if c == nil || c.Recorder == nil || store == nil {
 		return func() {}
 	}
@@ -358,7 +358,7 @@ func (c *CentralUnit) WireSessionRecorderPersistence(ctx context.Context, store 
 // recorder (best-effort, live data wins) so a recording resumed after a
 // restart includes what was captured before it. No-op when persistence is
 // unwired or no store is set.
-func (c *CentralUnit) ReloadRecorderFromPersistence(ctx context.Context) {
+func (c *Unit) ReloadRecorderFromPersistence(ctx context.Context) {
 	if c == nil || c.Recorder == nil {
 		return
 	}
@@ -372,20 +372,20 @@ func (c *CentralUnit) ReloadRecorderFromPersistence(ctx context.Context) {
 }
 
 // Name returns the central's identifier.
-func (c *CentralUnit) Name() string { return c.cfg.Name }
+func (c *Unit) Name() string { return c.cfg.Name }
 
 // InstanceName returns the daemon-global instance identity used as the
 // leading component of the wire interface_id. Empty when unset (the
 // interface_id then falls back to the legacy `<central_name>-<interface>`
 // form). See [Config.InstanceName] and ADR-0024.
-func (c *CentralUnit) InstanceName() string { return c.cfg.InstanceName }
+func (c *Unit) InstanceName() string { return c.cfg.InstanceName }
 
 // WireDevicesCreatedGate subscribes to the event bus and sets the
 // devicesCreated flag on the first [hmevent.DeviceCreatedEvent]. This must be
 // called once at boot (before RegisterStandardJobs) if any hub jobs should be
 // gated behind device creation. Calling it again removes the previous
 // subscription before installing a new one.
-func (c *CentralUnit) WireDevicesCreatedGate() {
+func (c *Unit) WireDevicesCreatedGate() {
 	c.devicesCreatedMu.Lock()
 	if c.devicesCreatedUnsub != nil {
 		c.devicesCreatedUnsub()
@@ -408,7 +408,7 @@ func (c *CentralUnit) WireDevicesCreatedGate() {
 // has been observed since [WireDevicesCreatedGate] was last called.
 // Returns true unconditionally when [WireDevicesCreatedGate] has not been
 // called (no gate = no wait).
-func (c *CentralUnit) IsDevicesCreated() bool {
+func (c *Unit) IsDevicesCreated() bool {
 	c.devicesCreatedMu.RLock()
 	defer c.devicesCreatedMu.RUnlock()
 	// If the gate was never wired (devicesCreatedUnsub == nil), treat as
@@ -424,7 +424,7 @@ func (c *CentralUnit) IsDevicesCreated() bool {
 // southbound wiring adapter calls this once the client coordinator
 // has at least one InterfaceClient registered. Pass nil to detach
 // (the LinkCoordinator falls back to "no client" responses).
-func (c *CentralUnit) SetLinkResolver(r coordinators.ClientResolver) {
+func (c *Unit) SetLinkResolver(r coordinators.ClientResolver) {
 	if c.Link == nil {
 		return
 	}
@@ -432,19 +432,19 @@ func (c *CentralUnit) SetLinkResolver(r coordinators.ClientResolver) {
 }
 
 // DB returns the shared database handle (may be nil).
-func (c *CentralUnit) DB() *sql.DB { return c.cfg.DB }
+func (c *Unit) DB() *sql.DB { return c.cfg.DB }
 
 // QueryFacade returns the read-only aggregate view north-bound
 // adapters consume. The facade is built fresh on each call so the
 // caller sees the current set of sub-components.
-func (c *CentralUnit) QueryFacade() *QueryFacade {
+func (c *Unit) QueryFacade() *QueryFacade {
 	return newQueryFacadeWithModel(c.cfg.Name, c.DeviceRegistry, c.ModelRegistry, c.Health)
 }
 
 // Available reports whether the central is currently operational. Returns
 // true when the overall health status is not [health.StatusUnknown] or
 // [health.StatusUnhealthy].
-func (c *CentralUnit) Available() bool {
+func (c *Unit) Available() bool {
 	if c.Health == nil {
 		return false
 	}
@@ -454,7 +454,7 @@ func (c *CentralUnit) Available() bool {
 
 // HasPingPong reports whether at least one registered client supports the
 // ping/pong keepalive mechanism.
-func (c *CentralUnit) HasPingPong() bool {
+func (c *Unit) HasPingPong() bool {
 	if c.Clients == nil {
 		return false
 	}
@@ -468,7 +468,7 @@ func (c *CentralUnit) HasPingPong() bool {
 
 // GetChannel looks up the [*device.Channel] at channelAddress across
 // the current device model. Returns nil when the address is unknown.
-func (c *CentralUnit) GetChannel(channelAddress string) *device.Channel {
+func (c *Unit) GetChannel(channelAddress string) *device.Channel {
 	return c.QueryFacade().GetChannel(channelAddress)
 }
 
@@ -483,7 +483,7 @@ func (c *CentralUnit) GetChannel(channelAddress string) *device.Channel {
 // automatically re-evaluates the overall central state, and performs
 // an initial EvaluateCentralState with fromStart=true to emit the
 // first SystemStatusChangedEvent before any client reports in.
-func (c *CentralUnit) Start(ctx context.Context) error {
+func (c *Unit) Start(ctx context.Context) error {
 	if err := c.StateMachine.TransitionTo(hmenum.CentralStateInitializing, hmenum.FailureReasonNone); err != nil {
 		return err
 	}
@@ -532,7 +532,7 @@ func (c *CentralUnit) Start(ctx context.Context) error {
 // 10. Event-bus full subscription clear
 // 11. Recorder-persistence teardown
 // 12. Transition to STOPPED
-func (c *CentralUnit) Stop() {
+func (c *Unit) Stop() {
 	if c.StateMachine.State() == hmenum.CentralStateStopped {
 		return
 	}
@@ -627,7 +627,7 @@ func (c *CentralUnit) Stop() {
 // The hook should perform the `logout` call on the JSON-RPC session and
 // is called with a background context — the CCU session may already be
 // degraded at this point so errors are logged and ignored.
-func (c *CentralUnit) SetHubLogoutFn(fn func(ctx context.Context) error) {
+func (c *Unit) SetHubLogoutFn(fn func(ctx context.Context) error) {
 	c.serviceMu.Lock()
 	c.hubLogoutFn = fn
 	c.serviceMu.Unlock()
@@ -636,7 +636,7 @@ func (c *CentralUnit) SetHubLogoutFn(fn func(ctx context.Context) error) {
 // SystemInformation returns the cached CCU-side metadata. The hub- wiring
 // adapter populates the cache after Login + `get_backend_info`; before then
 // the zero value is returned.
-func (c *CentralUnit) SystemInformation() SystemInfo {
+func (c *Unit) SystemInformation() SystemInfo {
 	c.systemInfoMu.RLock()
 	defer c.systemInfoMu.RUnlock()
 	return c.systemInfo
@@ -644,7 +644,7 @@ func (c *CentralUnit) SystemInformation() SystemInfo {
 
 // SetSystemInformation overwrites the cached metadata. Called from
 // the hub-wiring adapter once `get_backend_info` returns.
-func (c *CentralUnit) SetSystemInformation(info SystemInfo) {
+func (c *Unit) SetSystemInformation(info SystemInfo) {
 	c.systemInfoMu.Lock()
 	c.systemInfo = info
 	c.systemInfoMu.Unlock()
@@ -652,13 +652,13 @@ func (c *CentralUnit) SetSystemInformation(info SystemInfo) {
 
 // Model returns the CCU model string from the cached system info. Empty
 // string when system info has not been observed yet.
-func (c *CentralUnit) Model() string {
+func (c *Unit) Model() string {
 	return c.SystemInformation().Model
 }
 
 // Version returns the openccu-loom build version. Use [SystemInformation] for
 // the CCU-reported firmware version.
-func (c *CentralUnit) Version() string {
+func (c *Unit) Version() string {
 	return build.Version
 }
 
@@ -668,7 +668,7 @@ func (c *CentralUnit) Version() string {
 // get_backend_info). This is an alias for SystemInformation().Version
 // so callers that explicitly want the CCU version have an unambiguous
 // name.
-func (c *CentralUnit) CCUVersion() string {
+func (c *Unit) CCUVersion() string {
 	return c.SystemInformation().Version
 }
 
@@ -677,7 +677,7 @@ func (c *CentralUnit) CCUVersion() string {
 // for `to` to receive all transitions regardless of the destination state.
 //
 // Returns an unsubscribe function; calling it is idempotent.
-func (c *CentralUnit) OnStateTransition(to, from hmenum.CentralState, handler func(to, from hmenum.CentralState)) func() {
+func (c *Unit) OnStateTransition(to, from hmenum.CentralState, handler func(to, from hmenum.CentralState)) func() {
 	if c.EventBus == nil {
 		return func() {}
 	}
@@ -698,7 +698,7 @@ func (c *CentralUnit) OnStateTransition(to, from hmenum.CentralState, handler fu
 // ResolveDeviceName returns a best-effort human-readable name for the device
 // at address: the operator-assigned `Device.Name` first, then `Model` as
 // fallback, then the address itself.
-func (c *CentralUnit) ResolveDeviceName(address string) string {
+func (c *Unit) ResolveDeviceName(address string) string {
 	if c.ModelRegistry == nil || address == "" {
 		return address
 	}
@@ -728,7 +728,7 @@ func (c *CentralUnit) ResolveDeviceName(address string) string {
 // entry.
 //
 // Idempotent: returns false when no device matches the address.
-func (c *CentralUnit) RemoveDevice(address string) bool {
+func (c *Unit) RemoveDevice(address string) bool {
 	if c == nil || c.ModelRegistry == nil || address == "" {
 		return false
 	}
@@ -773,7 +773,7 @@ func (c *CentralUnit) RemoveDevice(address string) bool {
 // corresponding REST/WS adapter once the JSON-RPC session is up.
 //
 // Returns an error when no handler is wired yet (e.g. before Start).
-func (c *CentralUnit) AcceptDeviceInbox(ctx context.Context, address string) error {
+func (c *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
 	c.serviceMu.RLock()
 	fn := c.acceptInboxFn
 	c.serviceMu.RUnlock()
@@ -785,7 +785,7 @@ func (c *CentralUnit) AcceptDeviceInbox(ctx context.Context, address string) err
 
 // SetAcceptInboxFn wires the inbox-accept handler. Pass nil to
 // detach.
-func (c *CentralUnit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
+func (c *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
 	c.serviceMu.Lock()
 	c.acceptInboxFn = fn
 	c.serviceMu.Unlock()
@@ -793,7 +793,7 @@ func (c *CentralUnit) SetAcceptInboxFn(fn func(ctx context.Context, address stri
 
 // CreateBackup triggers a backup on the CCU and returns the downloaded
 // archive blob.
-func (c *CentralUnit) CreateBackup(ctx context.Context) ([]byte, error) {
+func (c *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
 	c.serviceMu.RLock()
 	fn := c.createBackupFn
 	c.serviceMu.RUnlock()
@@ -804,7 +804,7 @@ func (c *CentralUnit) CreateBackup(ctx context.Context) ([]byte, error) {
 }
 
 // SetCreateBackupFn wires the backup-and-download handler.
-func (c *CentralUnit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
+func (c *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
 	c.serviceMu.Lock()
 	c.createBackupFn = fn
 	c.serviceMu.Unlock()
@@ -812,7 +812,7 @@ func (c *CentralUnit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, er
 
 // SetInstallMode toggles the CCU's "install mode" (a.k.a. learning
 // mode). When enabled the CCU briefly accepts new device pairings.
-func (c *CentralUnit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
+func (c *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
 	c.serviceMu.RLock()
 	fn := c.setInstallModeFn
 	c.serviceMu.RUnlock()
@@ -823,7 +823,7 @@ func (c *CentralUnit) SetInstallMode(ctx context.Context, on bool, seconds int) 
 }
 
 // SetSetInstallModeFn wires the install-mode handler.
-func (c *CentralUnit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
+func (c *Unit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
 	c.serviceMu.Lock()
 	c.setInstallModeFn = fn
 	c.serviceMu.Unlock()
@@ -832,7 +832,7 @@ func (c *CentralUnit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, 
 // SetInstallModeForInterfaceFn wires the per-interface install-mode handler.
 // When wired, [SetInstallModeForInterface] uses this instead of the plain handler
 // so interfaceID and deviceAddress are actually forwarded to the backend.
-func (c *CentralUnit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
+func (c *Unit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
 	c.serviceMu.Lock()
 	c.setInstallModeForInterfaceFn = fn
 	c.serviceMu.Unlock()
@@ -841,7 +841,7 @@ func (c *CentralUnit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, 
 // SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
 // When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
 // the plain handler so interfaceID and paramset are actually forwarded.
-func (c *CentralUnit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
+func (c *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
 	c.serviceMu.Lock()
 	c.loadAndRefreshForInterfaceFn = fn
 	c.serviceMu.Unlock()
@@ -851,7 +851,7 @@ func (c *CentralUnit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Contex
 // DefaultDuration)`.
 // (`central_unit.py:453`). The default duration follows
 // (60 seconds).
-func (c *CentralUnit) InitInstallMode(ctx context.Context) error {
+func (c *Unit) InitInstallMode(ctx context.Context) error {
 	const defaultInstallModeSeconds = 60
 	return c.SetInstallMode(ctx, true, defaultInstallModeSeconds)
 }
@@ -859,7 +859,7 @@ func (c *CentralUnit) InitInstallMode(ctx context.Context) error {
 // RenameDevice changes the operator-visible name of a device.
 // Updates both the in-memory model and persists the new name through
 // the configured `RenameDeviceFn` hook.
-func (c *CentralUnit) RenameDevice(ctx context.Context, address, name string) error {
+func (c *Unit) RenameDevice(ctx context.Context, address, name string) error {
 	if address == "" {
 		return errors.New("central: RenameDevice: empty address")
 	}
@@ -881,7 +881,7 @@ func (c *CentralUnit) RenameDevice(ctx context.Context, address, name string) er
 
 // SetRenameDeviceFn wires the persistent-rename handler. Pass nil to
 // detach.
-func (c *CentralUnit) SetRenameDeviceFn(fn func(ctx context.Context, address, name string) error) {
+func (c *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name string) error) {
 	c.serviceMu.Lock()
 	c.renameDeviceFn = fn
 	c.serviceMu.Unlock()
@@ -894,7 +894,7 @@ func (c *CentralUnit) SetRenameDeviceFn(fn func(ctx context.Context, address, na
 // hook so the store stays consistent.
 //
 // When includeChannels is false this is equivalent to [RenameDevice].
-func (c *CentralUnit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
+func (c *Unit) RenameDeviceWithChannels(ctx context.Context, address, name string, includeChannels bool) error {
 	if err := c.RenameDevice(ctx, address, name); err != nil {
 		return err
 	}
@@ -927,7 +927,7 @@ func (c *CentralUnit) RenameDeviceWithChannels(ctx context.Context, address, nam
 // LoadAndRefreshDataPointData triggers a fetch of every readable VALUES data
 // point, seeds the data-cache and re-publishes value-changed events for any
 // cache miss.
-func (c *CentralUnit) LoadAndRefreshDataPointData(ctx context.Context) error {
+func (c *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
 	c.serviceMu.RLock()
 	fn := c.loadAndRefreshFn
 	c.serviceMu.RUnlock()
@@ -938,7 +938,7 @@ func (c *CentralUnit) LoadAndRefreshDataPointData(ctx context.Context) error {
 }
 
 // SetLoadAndRefreshFn wires the data-point reload handler.
-func (c *CentralUnit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
+func (c *Unit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
 	c.serviceMu.Lock()
 	c.loadAndRefreshFn = fn
 	c.serviceMu.Unlock()
@@ -947,7 +947,7 @@ func (c *CentralUnit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
 // SaveFiles persists the in-memory descriptors and paramsets to the
 // configured store. Implementation is delegated through the `SaveFilesFn`
 // hook; for the SQLite backend the hook batches DB writes.
-func (c *CentralUnit) SaveFiles(ctx context.Context) error {
+func (c *Unit) SaveFiles(ctx context.Context) error {
 	c.serviceMu.RLock()
 	fn := c.saveFilesFn
 	c.serviceMu.RUnlock()
@@ -958,7 +958,7 @@ func (c *CentralUnit) SaveFiles(ctx context.Context) error {
 }
 
 // SetSaveFilesFn wires the persistence handler.
-func (c *CentralUnit) SetSaveFilesFn(fn func(ctx context.Context) error) {
+func (c *Unit) SetSaveFilesFn(fn func(ctx context.Context) error) {
 	c.serviceMu.Lock()
 	c.saveFilesFn = fn
 	c.serviceMu.Unlock()
@@ -966,7 +966,7 @@ func (c *CentralUnit) SetSaveFilesFn(fn func(ctx context.Context) error) {
 
 // ValidateConfigAndGetSystemInformation runs a config-validation pass against
 // the configured hub backend and returns the discovered SystemInfo.
-func (c *CentralUnit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
+func (c *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
 	c.serviceMu.RLock()
 	fn := c.validateConfigFn
 	c.serviceMu.RUnlock()
@@ -977,7 +977,7 @@ func (c *CentralUnit) ValidateConfigAndGetSystemInformation(ctx context.Context)
 }
 
 // SetValidateConfigFn wires the config-validation handler.
-func (c *CentralUnit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
+func (c *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
 	c.serviceMu.Lock()
 	c.validateConfigFn = fn
 	c.serviceMu.Unlock()
@@ -995,7 +995,7 @@ func (c *CentralUnit) SetValidateConfigFn(fn func(ctx context.Context) (SystemIn
 // adapter has run the entries flip to true. Each service method
 // already returns a clean "not wired" error when invoked early, so
 // this map is purely informational.
-func (c *CentralUnit) ServiceWiringStatus() map[string]bool {
+func (c *Unit) ServiceWiringStatus() map[string]bool {
 	c.serviceMu.RLock()
 	defer c.serviceMu.RUnlock()
 	return map[string]bool{
@@ -1013,7 +1013,7 @@ func (c *CentralUnit) ServiceWiringStatus() map[string]bool {
 // been wired. Returns false until the hub-wiring adapter finishes its
 // post-Start work. Convenience over [ServiceWiringStatus] for callers
 // that only care about the boolean.
-func (c *CentralUnit) ServiceWiringComplete() bool {
+func (c *Unit) ServiceWiringComplete() bool {
 	for _, wired := range c.ServiceWiringStatus() {
 		if !wired {
 			return false
@@ -1037,7 +1037,7 @@ func (c *CentralUnit) ServiceWiringComplete() bool {
 //     (RUNNING, DEGRADED, RECOVERING, INITIALIZING). The state machine's
 //     transition table already enforces the exact set — TransitionTo
 //     returns ErrInvalidTransition for anything else and we silently skip.
-func (c *CentralUnit) EvaluateCentralState(trigger string, fromStart bool) {
+func (c *Unit) EvaluateCentralState(trigger string, fromStart bool) {
 	if c.Clients == nil || c.Health == nil {
 		return
 	}
@@ -1158,7 +1158,7 @@ func (c *CentralUnit) EvaluateCentralState(trigger string, fromStart bool) {
 // The "force available" condition is: Healthy == true AND Reason contains the
 // literal token "force_available". Callers that build such events should set
 // Component = "" and Reason = "force_available".
-func (c *CentralUnit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChangedEvent) {
+func (c *Unit) HandleSystemStatusForceAvailability(e hmevent.SystemStatusChangedEvent) {
 	if !e.Healthy || e.Reason != "force_available" {
 		return
 	}
@@ -1176,7 +1176,7 @@ func (c *CentralUnit) HandleSystemStatusForceAvailability(e hmevent.SystemStatus
 // WireSystemStatusForceAvailability subscribes to the event bus and calls
 // [HandleSystemStatusForceAvailability] on every matching event. Returns an
 // unsubscribe function; call it on teardown.
-func (c *CentralUnit) WireSystemStatusForceAvailability() func() {
+func (c *Unit) WireSystemStatusForceAvailability() func() {
 	if c.EventBus == nil {
 		return func() {}
 	}
@@ -1195,7 +1195,7 @@ func (c *CentralUnit) WireSystemStatusForceAvailability() func() {
 // coalesce calls). Wire the per-interface hook via
 // [SetLoadAndRefreshForInterfaceFn] to forward the full scope to the backend;
 // without it the call falls back to the global [LoadAndRefreshDataPointData].
-func (c *CentralUnit) LoadAndRefreshDataPointDataForInterface(
+func (c *Unit) LoadAndRefreshDataPointDataForInterface(
 	ctx context.Context,
 	interfaceID string,
 	paramset hmenum.ParamsetKey,
@@ -1215,7 +1215,7 @@ func (c *CentralUnit) LoadAndRefreshDataPointDataForInterface(
 // hook via [SetInstallModeForInterfaceFn] to forward interfaceID and
 // deviceAddress to the backend; without it the call falls back to the global
 // [SetInstallMode] (all interfaces, no device filter).
-func (c *CentralUnit) SetInstallModeForInterface(
+func (c *Unit) SetInstallModeForInterface(
 	ctx context.Context,
 	interfaceID string,
 	mode bool,
@@ -1236,7 +1236,7 @@ func (c *CentralUnit) SetInstallModeForInterface(
 //
 // Order: alphabetical by device address, then by channel address, then by
 // parameter name.
-func (c *CentralUnit) ReadableGenericDataPoints() []device.ParameterDataPoint {
+func (c *Unit) ReadableGenericDataPoints() []device.ParameterDataPoint {
 	if c.ModelRegistry == nil {
 		return nil
 	}

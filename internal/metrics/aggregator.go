@@ -172,7 +172,7 @@ func (o *Observer) KeysByPrefix(prefix string) []string {
 // -----------------------------------------------------------------------
 
 // Aggregator collects metrics from various system components and exposes
-// typed snapshots. One Aggregator is created per CentralUnit.
+// typed snapshots. One Aggregator is created per Unit.
 //
 // All provider fields are optional. Nil providers cause the corresponding
 // snapshot section to return zero-value structs. Concrete implementations

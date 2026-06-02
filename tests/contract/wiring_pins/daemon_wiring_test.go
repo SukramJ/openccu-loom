@@ -10,7 +10,7 @@ import (
 )
 
 // TestPin_AddOnStopHook_CalledInDaemon pins that daemon.go registers at
-// least one AddOnStopHook on a CentralUnit.  Stop hooks are the only
+// least one AddOnStopHook on a Unit.  Stop hooks are the only
 // mechanism for graceful CCU teardown (unsubscribe, close connections);
 // losing them leaves the CCU with orphaned callbacks after a restart.
 func TestPin_AddOnStopHook_CalledInDaemon(t *testing.T) {

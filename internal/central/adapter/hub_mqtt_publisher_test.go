@@ -22,7 +22,7 @@ import (
 // wiring and a ready HubMQTTPublisher.
 func hubMQTTFixture(t *testing.T) (
 	reg *central.Registry,
-	c *central.CentralUnit,
+	c *central.Unit,
 	pub *mqtt.NoopClient,
 	publisher *HubMQTTPublisher,
 ) {

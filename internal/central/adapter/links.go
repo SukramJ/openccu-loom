@@ -312,7 +312,7 @@ func (d *LinksDomain) channelMatchesRole(ctx context.Context, centralName, inter
 	return true
 }
 
-func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.CentralUnit, *device.Device, error) {
+func (d *LinksDomain) lookupDevice(deviceAddress string) (*central.Unit, *device.Device, error) {
 	if d.registry == nil {
 		return nil, nil, ErrNoLinkBackend
 	}

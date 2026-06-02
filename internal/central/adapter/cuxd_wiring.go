@@ -34,7 +34,7 @@ import (
 func wireCUxDInterface(
 	ctx context.Context,
 	cc config.CentralConfig,
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
 	runner *rega.Runner,

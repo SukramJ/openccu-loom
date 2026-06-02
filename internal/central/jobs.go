@@ -16,7 +16,7 @@ import (
 )
 
 // StandardJobs is the configurable bundle of background jobs every
-// CentralUnit.Start should register. Slots default to no-op when their
+// Unit.Start should register. Slots default to no-op when their
 // callback is nil — that way callers register only the jobs whose
 // dependencies are wired (e.g. Hub connectivity needs the JSON-RPC
 // session to be up first).
@@ -175,11 +175,11 @@ const (
 )
 
 // defaultRefreshClientData returns a default RefreshClientData implementation
-// that delegates to [CentralUnit.LoadAndRefreshDataPointData] and wraps the
+// that delegates to [Unit.LoadAndRefreshDataPointData] and wraps the
 // call with [hmevent.DataRefreshTriggeredEvent] / [hmevent.DataRefreshCompletedEvent]
 // bookends. Returns nil when the central has no load-refresh function wired,
 // so the slot stays nil-by-default and is not registered.
-func defaultRefreshClientData(unit *CentralUnit) func(ctx context.Context) error {
+func defaultRefreshClientData(unit *Unit) func(ctx context.Context) error {
 	if unit == nil {
 		return nil
 	}
@@ -219,7 +219,7 @@ var timeNow = time.Now
 
 // isOperational returns true when unit's central state machine is in RUNNING
 // or DEGRADED — the two states where background jobs should execute.
-func isOperational(unit *CentralUnit) bool {
+func isOperational(unit *Unit) bool {
 	if unit == nil || unit.StateMachine == nil {
 		return false
 	}
@@ -231,7 +231,7 @@ func isOperational(unit *CentralUnit) bool {
 // CONNECTED. Background non-connection-check jobs should skip their work when
 // this is true to avoid producing spurious errors against a CCU that is
 // currently unreachable.
-func hasConnectionIssue(unit *CentralUnit) bool {
+func hasConnectionIssue(unit *Unit) bool {
 	if unit == nil || unit.Clients == nil {
 		return false
 	}
@@ -247,7 +247,7 @@ func hasConnectionIssue(unit *CentralUnit) bool {
 // (RUNNING or DEGRADED) AND has no connection issues. Pass
 // skipOnConnectionIssue=false for connection-management jobs that must
 // fire regardless of client health (e.g. check_connection itself).
-func gatedRun(unit *CentralUnit, skipOnConnectionIssue bool, fn func(context.Context) error) func(context.Context) error {
+func gatedRun(unit *Unit, skipOnConnectionIssue bool, fn func(context.Context) error) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if !isOperational(unit) {
 			return nil
@@ -261,16 +261,16 @@ func gatedRun(unit *CentralUnit, skipOnConnectionIssue bool, fn func(context.Con
 
 // gatedRunWithDevicesCreatedGate is like [gatedRun] but adds an additional
 // condition: the job only executes after at least one DeviceCreatedEvent has
-// been observed (i.e. [CentralUnit.IsDevicesCreated] returns true).
+// been observed (i.e. [Unit.IsDevicesCreated] returns true).
 //
 // This mirrors
 // `central/scheduler.py` which defers hub jobs (sysvar/program/alarm
 // refresh) until the device creation phase completes. Use this wrapper
 // for hub-level periodic jobs when device presence is a prerequisite.
 //
-// When [CentralUnit.WireDevicesCreatedGate] has not been called, this
+// When [Unit.WireDevicesCreatedGate] has not been called, this
 // behaves identically to [gatedRun] (gate is a no-op).
-func gatedRunWithDevicesCreatedGate(unit *CentralUnit, skipOnConnectionIssue bool, fn func(context.Context) error) func(context.Context) error {
+func gatedRunWithDevicesCreatedGate(unit *Unit, skipOnConnectionIssue bool, fn func(context.Context) error) func(context.Context) error {
 	return func(ctx context.Context) error {
 		if !isOperational(unit) {
 			return nil
@@ -289,7 +289,7 @@ func gatedRunWithDevicesCreatedGate(unit *CentralUnit, skipOnConnectionIssue boo
 // scheduler. Returns the names of registered jobs for diagnostics. The
 // scheduler must not have been started yet — same lifecycle constraint
 // as [scheduler.Scheduler.Add].
-func RegisterStandardJobs(unit *CentralUnit, cfg StandardJobs) ([]string, error) {
+func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) {
 	if unit == nil {
 		return nil, fmt.Errorf("central: nil unit")
 	}
@@ -519,7 +519,7 @@ func RegisterStandardJobs(unit *CentralUnit, cfg StandardJobs) ([]string, error)
 	//
 	// Provide a default implementation when the caller leaves this
 	// slot nil so that the sweep always runs even without custom wiring.
-	// The default delegates to [CentralUnit.LoadAndRefreshDataPointData]
+	// The default delegates to [Unit.LoadAndRefreshDataPointData]
 	// and wraps it in DataRefreshTriggeredEvent / DataRefreshCompletedEvent
 	// Bookends
 	// (central/scheduler.py:693).

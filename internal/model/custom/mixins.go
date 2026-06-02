@@ -175,7 +175,7 @@ func EncodeTimerDuration(d time.Duration) (value, unit int32) {
 // read+write+event. Cover, ModulatingValve, Light and every Color*
 // light variant share this shape.
 //
-// centralName must be the owning CentralUnit's name (from
+// centralName must be the owning Unit's name (from
 // [device.Channel.CentralName]) so that the data point's
 // [generic.Spec.CentralName] is correctly set and
 // [datapoint.BaseDataPointFields.UniqueID] does not collide across
@@ -201,7 +201,7 @@ func NewLevelFloat(address, centralName string, w Writer) *generic.Float {
 // on/off data point: VALUES paramset, parameter STATE,
 // read+write+event. Switch and IrrigationValve share this shape.
 //
-// centralName must be the owning CentralUnit's name (from
+// centralName must be the owning Unit's name (from
 // [device.Channel.CentralName]) so that the data point's
 // [generic.Spec.CentralName] is correctly set and
 // [datapoint.BaseDataPointFields.UniqueID] does not collide across

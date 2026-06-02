@@ -124,7 +124,7 @@ type CacheCoordinator struct {
 	bus *events.Bus
 
 	// centralName scopes emitted events (CacheInvalidatedEvent) to the
-	// owning [CentralUnit]. Empty when not wired — emitted events lose
+	// owning [Unit]. Empty when not wired — emitted events lose
 	// their multi-CCU scope but are still observable.
 	centralName string
 
@@ -149,7 +149,7 @@ func NewCacheCoordinator() *CacheCoordinator {
 // by the metrics provider. Pass nil for any unwired registry; the
 // metrics provider then reports size 0 for that field.
 //
-// Multi-CCU safe: each [CentralUnit] owns its own
+// Multi-CCU safe: each [Unit] owns its own
 // [CacheCoordinator] and wires its own registries — there is no
 // shared global state.
 func (c *CacheCoordinator) SetSizeProviders(deviceDescriptions, paramsetDescriptions, visibility CacheSizeProvider) {
@@ -441,7 +441,7 @@ func (c *CacheCoordinator) ClearAllWithReason(reason hmenum.CacheInvalidationRea
 }
 
 // SetCentralName scopes future emitted events ([CacheInvalidatedEvent])
-// to the owning [CentralUnit]. Wire this once at bootstrap from
+// to the owning [Unit]. Wire this once at bootstrap from
 // `central.go`; safe to call multiple times.
 func (c *CacheCoordinator) SetCentralName(name string) {
 	c.mu.Lock()

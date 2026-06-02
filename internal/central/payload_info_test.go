@@ -11,11 +11,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
 
-// TestCentralUnitInfoPayloadCarriesHACanonicalKeys pins the contract that
-// [CentralUnit.Info] marshals to HA-canonical keys (`sw_version`,
+// TestCentralInfoPayloadCarriesHACanonicalKeys pins the contract that
+// [Unit.Info] marshals to HA-canonical keys (`sw_version`,
 // `serial_number`, `configuration_url`) so the JSON output can flow
 // straight into the MQTT-Discovery hub-device block without renaming.
-func TestCentralUnitInfoPayloadCarriesHACanonicalKeys(t *testing.T) {
+func TestCentralInfoPayloadCarriesHACanonicalKeys(t *testing.T) {
 	t.Parallel()
 	unit, err := central.New(central.Config{Name: "GoOtto"})
 	if err != nil {
@@ -29,9 +29,9 @@ func TestCentralUnitInfoPayloadCarriesHACanonicalKeys(t *testing.T) {
 		URL:      "http://172.18.X.XX",
 		IsHaApp:  false,
 	})
-	info, _ := unit.Info().(*payload.CentralUnitInfo)
+	info, _ := unit.Info().(*payload.CentralInfo)
 	if info == nil {
-		t.Fatal("Info() returned nil — expected *payload.CentralUnitInfo")
+		t.Fatal("Info() returned nil — expected *payload.CentralInfo")
 	}
 
 	if info.Name != "GoOtto" {
@@ -76,19 +76,19 @@ func TestCentralUnitInfoPayloadCarriesHACanonicalKeys(t *testing.T) {
 	}
 }
 
-// TestCentralUnitInfoPayloadOmitsEmptyFields pins that pre-bootstrap
+// TestCentralInfoPayloadOmitsEmptyFields pins that pre-bootstrap
 // (SystemInfo with zero-values) the JSON wire output contains only
 // the always-stamped `name`. Empty strings must not surface as keys —
 // HA would render "Unknown" for them.
-func TestCentralUnitInfoPayloadOmitsEmptyFields(t *testing.T) {
+func TestCentralInfoPayloadOmitsEmptyFields(t *testing.T) {
 	t.Parallel()
 	unit, err := central.New(central.Config{Name: "GoOtto"})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	info, _ := unit.Info().(*payload.CentralUnitInfo)
+	info, _ := unit.Info().(*payload.CentralInfo)
 	if info == nil {
-		t.Fatal("Info() returned nil — expected *payload.CentralUnitInfo")
+		t.Fatal("Info() returned nil — expected *payload.CentralInfo")
 	}
 	if info.Name != "GoOtto" {
 		t.Errorf("Name = %q, want GoOtto", info.Name)

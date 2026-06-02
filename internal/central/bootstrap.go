@@ -12,7 +12,7 @@ import (
 )
 
 // Bootstrap is the composition root that turns a parsed [config.Config]
-// into a [*Registry] of wired [*CentralUnit]s.
+// into a [*Registry] of wired [*Unit]s.
 //
 // It is intentionally thin: it does not touch transports or the REST
 // layer. Those are composed in cmd/openccu-loom/main.go so unit tests

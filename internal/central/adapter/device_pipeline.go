@@ -66,7 +66,7 @@ type namingInitializer interface {
 // human-readable model label + icon filled in from the CCU translation
 // archive. When unset the raw model strings are used.
 type DevicePipeline struct {
-	central      *central.CentralUnit
+	central      *central.Unit
 	translations *ccudata.Translations
 	locale       string
 	// names maps device and channel addresses to their CCU-assigned
@@ -118,7 +118,7 @@ type DevicePipeline struct {
 }
 
 // NewDevicePipeline constructs a pipeline bound to c.
-func NewDevicePipeline(c *central.CentralUnit) *DevicePipeline {
+func NewDevicePipeline(c *central.Unit) *DevicePipeline {
 	return &DevicePipeline{central: c}
 }
 
@@ -1107,7 +1107,7 @@ func (p *DevicePipeline) hydrateChannel(
 	p.hydrateParamset(ctx, interfaceID, ch, b, bw, hmenum.ParamsetKeyMaster, logger)
 	_ = d // reserved for future per-device labeling
 
-	// Stamp the CentralUnit name on the channel so custom-DP
+	// Stamp the Unit name on the channel so custom-DP
 	// constructors (valve, switch) can propagate it into the
 	// generic.Spec.CentralName of any sub-DPs they allocate.
 	if p.central != nil {

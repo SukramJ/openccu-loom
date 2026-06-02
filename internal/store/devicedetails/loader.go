@@ -83,7 +83,7 @@ type Loader struct {
 }
 
 // NewLoader constructs a Loader wired to the given cache and JSON-RPC
-// client. `central` is the CentralUnit name (used in log messages).
+// client. `central` is the Unit name (used in log messages).
 func NewLoader(cache *Cache, client jsonClientLike, central string, logger *slog.Logger) *Loader {
 	return &Loader{
 		cache:   cache,

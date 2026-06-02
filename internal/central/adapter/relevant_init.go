@@ -30,7 +30,7 @@ var relevantInitParameters = []hmenum.Parameter{
 // yet observed (the rega seed already had a value). This is a best-effort
 // pass: failures are logged at debug level so a single CCU misbehaving on one
 // device does not abort the bootstrap of the rest.
-func seedRelevantInitParameters(ctx context.Context, unit *central.CentralUnit, iface hmenum.Interface, logger *slog.Logger) {
+func seedRelevantInitParameters(ctx context.Context, unit *central.Unit, iface hmenum.Interface, logger *slog.Logger) {
 	if unit == nil {
 		return
 	}
@@ -106,7 +106,7 @@ var readableEventCategories = map[hmenum.DataPointCategory]struct{}{
 // Errors are logged at debug level — events are inherently lossy
 // (the CCU may legitimately have no last-press timestamp) and a
 // failure is not actionable for the operator.
-func seedReadableEvents(ctx context.Context, unit *central.CentralUnit, iface hmenum.Interface, logger *slog.Logger) {
+func seedReadableEvents(ctx context.Context, unit *central.Unit, iface hmenum.Interface, logger *slog.Logger) {
 	if unit == nil {
 		return
 	}

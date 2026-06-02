@@ -44,7 +44,7 @@ import (
 type spaHarness struct {
 	t          *testing.T
 	mock       *mockCCU
-	central    *central.CentralUnit
+	central    *central.Unit
 	dispatcher *adapter.CustomDPDispatcher
 	xmlClient  *xmlrpc.Client
 	caller     *xmlrpcBackendCaller

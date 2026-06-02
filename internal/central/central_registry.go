@@ -12,18 +12,18 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 )
 
-// Registry holds every configured [*CentralUnit] keyed by name.
+// Registry holds every configured [*Unit] keyed by name.
 // Multi-CCU support (ADR 0002) requires this registry as the entry
 // point for every cross-cutting concern — REST, MQTT, UI iterate it
 // to aggregate state across CCUs.
 type Registry struct {
 	mu    sync.RWMutex
-	items map[string]*CentralUnit
+	items map[string]*Unit
 }
 
 // NewRegistry returns an empty registry.
 func NewRegistry() *Registry {
-	return &Registry{items: make(map[string]*CentralUnit)}
+	return &Registry{items: make(map[string]*Unit)}
 }
 
 // ErrAlreadyRegistered is returned on duplicate Register.
@@ -31,7 +31,7 @@ var ErrAlreadyRegistered = errors.New("central: name already registered")
 
 // Register adds c. Returns [ErrAlreadyRegistered] when the name is
 // already taken.
-func (r *Registry) Register(c *CentralUnit) error {
+func (r *Registry) Register(c *Unit) error {
 	if c == nil || c.Name() == "" {
 		return errors.New("central: cannot register nil / unnamed unit")
 	}
@@ -45,7 +45,7 @@ func (r *Registry) Register(c *CentralUnit) error {
 }
 
 // Get returns the unit bound to name.
-func (r *Registry) Get(name string) (*CentralUnit, bool) {
+func (r *Registry) Get(name string) (*Unit, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	c, ok := r.items[name]
@@ -54,10 +54,10 @@ func (r *Registry) Get(name string) (*CentralUnit, bool) {
 
 // List returns every registered unit sorted by name for stable
 // iteration.
-func (r *Registry) List() []*CentralUnit {
+func (r *Registry) List() []*Unit {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	out := make([]*CentralUnit, 0, len(r.items))
+	out := make([]*Unit, 0, len(r.items))
 	for _, c := range r.items {
 		out = append(out, c)
 	}

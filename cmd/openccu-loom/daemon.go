@@ -697,7 +697,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
 	// forced-availability override flipped accordingly so HA / REST / SPA stop
 	// showing stale "online" entities after a CCU-side disconnect. Per-central
-	// because the registry holds one CentralUnit per CCU; closer is chained into
+	// because the registry holds one Unit per CCU; closer is chained into
 	// the daemon shutdown.
 	var availClosers []func()
 	for _, c := range reg.List() {

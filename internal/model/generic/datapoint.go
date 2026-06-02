@@ -62,7 +62,7 @@ type Spec struct {
 	Descriptor hmproto.ParameterData
 	Writer     Writer
 
-	// CentralName is the CentralUnit name used to scope the data
+	// CentralName is the Unit name used to scope the data
 	// point's [datapoint.BaseDataPointFields.UniqueID]. Empty is
 	// permitted at the type level (test fixtures) but production
 	// callers MUST set it; otherwise two CCUs with the same channel
