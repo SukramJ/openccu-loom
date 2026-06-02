@@ -101,7 +101,7 @@ multi-central one.
 A `homematicip_local` entry identifies its CCU by **serial** (its HA
 `unique_id`). To scope (P2/P3) it needs the **`central_name`**.
 `SystemCCUEntry` carries both `serial` and `name`, so a client *can*
-resolve serial → name by listing `/system/ccus` — **iff** the daemon
+resolve serial → name by listing `/system/ccu` — **iff** the daemon
 guarantees `SystemCCUEntry.name == CentralRow.name == payload.central`.
 
 **Decision needed:** confirm/guarantee that equality (a single normative
@@ -144,6 +144,22 @@ discovered entities and WS-client entities are ever expected to share a
    "HA-compatible" wording in the `naming.go` doc comment to avoid the
    implication that they match.
 
+**Resolution (taken):** option 2. The daemon's three id namespaces are
+deliberately distinct and are now catalogued in
+[`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md):
+the MQTT-discovery `unique_id` stays daemon-namespaced and pinned (changing
+it would orphan existing MQTT entities); the WS/REST `unique_id` field is
+opaque daemon scoping; and the cross-backend HA routing key is now mirrored
+on the Go side in `internal/routingkey` (`GenerateUniqueID`,
+`GenerateChannelUniqueID`, `HubSlug`), locked bit-for-bit against the shared
+golden fixtures by a contract test under `tests/contract/`. The misleading
+"HA-compatible" wording on `internal/model/device/naming.go` has been
+removed; that generator is legacy/unused and new consumers use
+`internal/routingkey`. The HA drop-in client rebuilds the HA registry
+`unique_id` itself from `address` + `parameter` (+ its `entry_id[-10:]`
+prefix), which the WS/REST payloads already expose (raw `address`,
+`parameter`, `category`, and hub `name` = legacy name).
+
 ---
 
 ## Summary: who owns what
@@ -151,7 +167,7 @@ discovered entities and WS-client entities are ever expected to share a
 | Concern | Owner | Action |
 |---|---|---|
 | `unique_id` prefix = HA `entry_id[-10:]` | **client / homematicip_local** | inject `central_id` into `LoomCentralConfig` (loom path currently omits it) |
-| key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract` (done); daemon `naming.go` should too — **P5** |
+| key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
 | select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution — **P4** |
 | fetch one CCU's devices over REST | **daemon** | scoped routes or `central` param — **P2** |
 | receive one CCU's device events | **daemon contract + client** | filter by payload `central` (document it) — **P3** |

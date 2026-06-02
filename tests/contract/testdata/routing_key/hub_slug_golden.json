@@ -1,0 +1,12 @@
+{
+  "description": "Golden fixture for hub_slug(): the slug rule aiohomematic applies to hub data-point legacy names (sysvar/program/connectivity/metrics) before building the unique_id. It is python-slugify with default settings (dash separator, Unicode transliteration, lowercased). A consumer MUST reproduce this exactly; a naive replace()-based cleaner diverges on non-ASCII names and produces different unique_ids. See aiohomematic_contract/slug.py and docs/contract-gaps.md (P0b).",
+  "cases": [
+    {"name": "Battery Sensor", "slug": "battery-sensor"},
+    {"name": "Außen Temperatur", "slug": "aussen-temperatur"},
+    {"name": "Heizung Büro", "slug": "heizung-buro"},
+    {"name": "Wohnzimmer-Licht:1", "slug": "wohnzimmer-licht-1"},
+    {"name": "ÖlstandTank", "slug": "olstandtank"},
+    {"name": "SV_underscore_name", "slug": "sv-underscore-name"},
+    {"name": "Multiple   Spaces", "slug": "multiple-spaces"}
+  ]
+}
