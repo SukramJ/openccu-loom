@@ -124,8 +124,12 @@ name:
   correct domain term and stays aligned with the reference. The wire and
   config surfaces therefore remain `central` / `centrals[].name`.
 - HA entity identity is unaffected (serial-based `loom_` scheme, P5).
-- The Svelte config UI may surface `central_name` as a first-class facet
-  (CCU filter/selector on the device + hub views) consuming the existing
-  `?central=` scoping — an open follow-up.
+- The Svelte config UI surfaces the central as a first-class facet: a
+  per-view CCU selector + filter (DeviceList, Sysvar/Program/Message/Inbox/
+  Firmware/Audit lists, UnIgnore) and the owning CCU shown per row
+  (`DeviceCard` `· <central>`, message badges). It filters client-side on
+  the `central` field of the loaded items (right for the embedded UI's
+  scale); the server-side `?central=` scoping (P2) stays available for
+  external clients. svelte-check clean.
 - Supersedes the `central_name`-as-daemon-discriminator rationale that
   lived in `interface_id.go`.
