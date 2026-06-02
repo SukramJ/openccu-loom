@@ -1,6 +1,8 @@
-# HA drop-in: central identity & scoping — open problems
+# HA drop-in: central identity & scoping — resolved
 
-**Status:** Problem statement / decision request
+**Status:** Resolved — all daemon-side decisions taken (see the per-section
+*Resolution* notes below and [ADR-0024](../adr/0024-instance-and-ccu-identity.md)).
+One client-side follow-up remains, in the `homematicip_local` repo (see Summary).
 **Audience:** openccu-loom daemon maintainers
 **Related:** [`topic-hierarchy.md`](./topic-hierarchy.md), [`asks.md`](./asks.md),
 [ADR-0002 (multi-CCU first-class)](../adr/0002-multi-ccu-first-class.md)
@@ -30,18 +32,22 @@ any two breaks either identity or scoping.
 | `entry_id[-10:]` | Home Assistant config entry | `a1b2c3d4e5` | aiohomematic's `CentralConfig.central_id` → **the `unique_id` prefix already in HA's registry** |
 | CCU `serial` | the CCU | `3014F711A0001234` | the HA config-entry's HA-`unique_id`; the stable real-world CCU identity |
 | `central_name` | daemon config (`CentralRow.name`) | `home` | the daemon's per-CCU scoping discriminator; equals `payload.central` and `SystemCCUEntry.name` |
-| daemon `centralID` in `naming.go` | daemon | (the central's name) | prefix in the daemon's *own* unique-ID generator for MQTT / REST definition export |
+| daemon HA routing key in `internal/routingkey` | daemon | `loom_<serial[-10:]>_…` | the daemon's own loom-namespaced unique-id (MQTT discovery), mirrored from the shared contract — see P5 (this superseded the deleted `naming.go` generator) |
 
 Confirmed in code:
 - HA prefix: `homematicip_local/.../control_unit.py` — `central_id = self.entry_id[-10:]` (CCU path); the **loom path does not pass `central_id` at all**.
-- `payload.central` ← `CentralName`: `internal/model/generic/payload.go:56` (`Central: d.CentralName`).
+- `payload.central` ← `CentralName`: `internal/model/generic/payload.go:71` (`Central: d.CentralName`).
 - `central_name` is the `CentralRow.name` ("Daemon-local identifier; must be unique", `openapi.yaml` `CentralRow`).
 
-**Key consequence:** the `unique_id` prefix HA needs is the HA
-`entry_id[-10:]`, which the daemon *cannot* know and must not try to
-supply. The daemon's `central` is for **scoping**, never for HA key
-identity. The client injects the HA prefix; the daemon supplies the
-scoping discriminator. These must stay separate.
+**Key consequence:** the daemon's `central` is for **scoping**, never for
+HA key identity — those stay separate. The HA registry `unique_id` is
+owned by the client and built from the daemon-supplied raw fields
+(`address`, `parameter`, `category`, hub `name`) via the shared routing-key
+contract. **Resolved direction:** the drop-in migrates HA `unique_id`s to
+the loom/serial scheme (P5, [`ha-unique-id-migration.md`](./ha-unique-id-migration.md)),
+whose prefix is the CCU **serial** — which the client knows from its own
+config entry (`entry.unique_id == serial`) — so the daemon never supplies
+a prefix and the old `entry_id`-based `central_id` injection is unnecessary.
 
 ---
 
@@ -176,10 +182,10 @@ it would orphan existing MQTT entities); the WS/REST `unique_id` field is
 opaque daemon scoping; and the cross-backend HA routing key is now mirrored
 on the Go side in `internal/routingkey` (`GenerateUniqueID`,
 `GenerateChannelUniqueID`, `HubSlug`), locked bit-for-bit against the shared
-golden fixtures by a contract test under `tests/contract/`. The misleading
-"HA-compatible" wording on `internal/model/device/naming.go` has been
-removed; that generator is legacy/unused and new consumers use
-`internal/routingkey`. The HA drop-in client rebuilds the HA registry
+golden fixtures by a contract test under `tests/contract/`. The legacy
+`internal/model/device/naming.go:GenerateUniqueID` generator (which carried
+the misleading "HA-compatible" wording) has since been **deleted**;
+consumers use `internal/routingkey`. The HA drop-in client rebuilds the HA registry
 `unique_id` itself from `address` + `parameter` (+ its `entry_id[-10:]`
 prefix), which the WS/REST payloads already expose (raw `address`,
 `parameter`, `category`, and hub `name` = legacy name).
@@ -190,7 +196,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 
 | Concern | Owner | Action |
 |---|---|---|
-| `unique_id` prefix = HA `entry_id[-10:]` | **client / homematicip_local** | inject `central_id` into `LoomCentralConfig` (loom path currently omits it) |
+| HA `unique_id` for the drop-in | **client / homematicip_local** | run the one-time unique_id migration to the loom/serial scheme ([`ha-unique-id-migration.md`](./ha-unique-id-migration.md)); the old `entry_id`-based `central_id` injection is **obsolete** — **(open, client repo)** |
 | key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
 | select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution; equality normative in `openapi.yaml` — **P4 (resolved)** |
 | fetch one CCU's devices over REST | **daemon** | `central` query param on `/devices` + `/snapshot` (per-address already multi-CCU) — **P2 (resolved)** |
@@ -198,6 +204,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 | token = which CCU | **n/a** | token is daemon-wide; not a scoping axis — **P1** |
 
 The cleanest near-term contract is **one `homematicip_local` entry = one
-central**, the model `topic-hierarchy.md` already calls the status quo.
-Making that explicit (P2 option 3 + P4 guarantee) unblocks the drop-in;
-full multi-CCU-per-entry (P2 options 1/2) can follow.
+central**, the status quo `topic-hierarchy.md` already documents. P2 was
+resolved with the `?central=` query parameter (option 2) and P4 with the
+normative equality; together with the loom/serial unique_id migration (P5)
+the daemon side is fully unblocked. Full multi-CCU-per-entry can follow.
