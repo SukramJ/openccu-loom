@@ -108,6 +108,14 @@ for client authors, and it pairs with P2: REST single-central + WS
 filter-by-payload is a workable single-central story but an incomplete
 multi-central one.
 
+**Resolution (taken):** documented normatively in
+[`topic-hierarchy.md` → "device events scope by payload, not by topic"](./topic-hierarchy.md):
+`device.*` topics carry no central segment, so a multi-central client
+subscribes broadly and filters every device event by the payload
+`central` field; hub/lifecycle/status events may still be scoped by
+topic (`hub.{central}.*`, etc.). `central` is the canonical central
+name (ADR-0024), resolved from a `serial` via `GET /system/ccu`.
+
 ## P4 — `serial → central_name` resolution is not first-class
 
 A `homematicip_local` entry identifies its CCU by **serial** (its HA
@@ -186,7 +194,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 | key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
 | select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution; equality normative in `openapi.yaml` — **P4 (resolved)** |
 | fetch one CCU's devices over REST | **daemon** | `central` query param on `/devices` + `/snapshot` (per-address already multi-CCU) — **P2 (resolved)** |
-| receive one CCU's device events | **daemon contract + client** | filter by payload `central` (document it) — **P3** |
+| receive one CCU's device events | **daemon contract + client** | filter by payload `central`; normative in `topic-hierarchy.md` — **P3 (resolved)** |
 | token = which CCU | **n/a** | token is daemon-wide; not a scoping axis — **P1** |
 
 The cleanest near-term contract is **one `homematicip_local` entry = one

@@ -135,11 +135,34 @@ hierarchical topic prefix:
 | `hub.home.sysvars.*` | sysvar changes on the `home` central only |
 
 A single openccu-loom daemon can manage multiple CCUs (see ADR-0002).
-Topic prefixes embed the central name so a multi-central client
-distinguishes which CCU emitted each event without parsing the
-payload. Single-central deployments can subscribe to the broader
-wildcards (`device.*`, `central.*.state`) without ambiguity — there
-is only one central to fan out from.
+The `central.*`, `hub.*` and `system.*` topic prefixes embed the
+central name, so a multi-central client distinguishes which CCU emitted
+those events by topic alone. Single-central deployments can subscribe
+to the broader wildcards (`device.*`, `central.*.state`) without
+ambiguity — there is only one central to fan out from.
+
+### NORMATIVE — device events scope by payload, not by topic (P3)
+
+The **`device.*` / `device.{addr}.*` topics do NOT embed the central
+name** — there is no `device.{central}.*` form. A multi-central client
+therefore **cannot** restrict device value events to one CCU by topic.
+The binding contract for clients:
+
+- Subscribe broadly (`device.*`) and **filter every device event by the
+  payload `central` field**. This applies to at least
+  `datapoint.value_changed` and `custom_data_point.state_changed`
+  (and any future `device.*` event) — each carries `central`.
+- `central` equals the canonical central name
+  (`central == SystemCCUEntry.name == payload.central`, see
+  [ADR-0024](../adr/0024-instance-and-ccu-identity.md) and the openapi
+  `SystemCCUEntry` normative note); resolve it from a CCU `serial` via
+  `GET /system/ccu`.
+- Hub / lifecycle / status events, by contrast, MAY be scoped by topic
+  (`hub.{central}.*`, `central.{central}.state`, `system.{central}.*`).
+
+This pairs with the REST `?central=` filter on `/devices` and
+`/snapshot` (P2): single-central is a clean story either way; multi-CCU
+clients filter device events by payload and scope REST reads by query.
 
 HA today wires one `homematicip_local` config entry per central; the
 daemon's multi-central support is forward-compatible with a single
