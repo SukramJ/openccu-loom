@@ -85,10 +85,25 @@ hardware. This homogeneity is the rule a future change must preserve.
 | Scoping field — cross-CCU tag | `Central` (`json:"central"`) |
 | Wire field / REST query / log key | `central` / `?central=` / `central` |
 | SQL column | `central_name` |
-| Local var / param | `centralName`; the unit var is `u` / `unit` |
+| Local var / param | object → `u` / `unit`; name string → `centralName` |
 | Payload self-DTOs | `payload.CentralInfo` / `CentralConfig` / `CentralState` |
 | Daemon identity | `instance_name` / `InstanceName` |
 | interface_id | `<instance_name>-<central_name>-<interface>` |
+
+**Variable-naming rule (Go-idiomatic, binding).** `central` is the
+*package*; reach its API as `central.Unit`, `central.New`,
+`central.Registry`, `central.Config`. The two layers never collide in a
+name:
+
+- A variable/receiver of type `*central.Unit` is the **object** → name it
+  `u` (receiver and short scopes) or `unit` (clarity); a slice is `units`.
+  **Never** name a `*central.Unit` variable `central` — it would shadow
+  the package and make `central.X` unreachable.
+- The CCU's **name** (a string — *which* CCU) is `centralName` (var /
+  param), the exported `Central` field (`json:"central"`) when tagging a
+  cross-CCU payload, and `central_name` on the wire / config / SQL.
+- Rule of thumb: **object → `u`/`unit`, identity/scope → `centralName`**.
+  `central.Registry` keeps receiver `r`; `*Unit` methods use receiver `u`.
 
 ## Consequences
 
