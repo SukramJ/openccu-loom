@@ -90,6 +90,14 @@ func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 	}
 	bridge := mqtt.NewBridge(bridgeCfg, rec)
 
+	// Wire a representative CCU serial so hub / internal / virtual-remote
+	// unique_ids carry the serial suffix the production daemon emits
+	// (loom_<serial10>_...) rather than an empty slot (loom__...). The
+	// daemon populates HubInfo.Serial from SystemInformation after
+	// connect; this mirrors that so the dump is representative. The
+	// central key must match the Event.Central driven below ("ccu-01").
+	bridge.SetHubInfoFor("ccu-01", mqtt.HubInfo{Serial: "3014F711A0001234"})
+
 	// Drive every Generic-DP through the bridge so the discovery
 	// builder has a chance to emit a config payload. The bridge dedups
 	// per-topic, so iterating every parameter on an aggregated channel
