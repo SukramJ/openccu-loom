@@ -593,8 +593,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Visibility:           visReg,
 		MasterValues:         masterValuesStore,
 		ValuesCache:          valuesCacheStore,
-		ValuesCacheCentralFilter: func(central string) bool {
-			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(central)
+		ValuesCacheCentralFilter: func(centralName string) bool {
+			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every

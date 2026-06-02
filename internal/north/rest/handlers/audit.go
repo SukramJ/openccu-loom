@@ -104,14 +104,14 @@ func applyAuditFilter(entries []audit.Entry, f auditFilter, centralOf func(addre
 		if !f.until.IsZero() && !e.Timestamp.Before(f.until) {
 			continue
 		}
-		central := ""
+		centralName := ""
 		if centralOf != nil && e.DeviceAddress != "" {
-			central = centralOf(e.DeviceAddress)
+			centralName = centralOf(e.DeviceAddress)
 		}
-		if f.central != "" && central != f.central {
+		if f.central != "" && centralName != f.central {
 			continue
 		}
-		out = append(out, AuditEntryDTO{Entry: *e, Central: central})
+		out = append(out, AuditEntryDTO{Entry: *e, Central: centralName})
 		if len(out) == f.limit {
 			break
 		}

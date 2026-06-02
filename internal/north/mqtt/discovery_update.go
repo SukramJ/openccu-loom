@@ -77,13 +77,13 @@ func (c updateDiscoveryCtx) WireParameterStateTopic(parameter string) string {
 //
 // Returns DiscoveryItem{OK: false} when ev.Update is nil or JSON
 // marshalling fails.
-func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev UpdateEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev UpdateEvent) DiscoveryItem {
 	if ev.Update == nil {
 		return DiscoveryItem{}
 	}
 	ctx := updateDiscoveryCtx{
 		topics:  d.TopicBuilder,
-		central: central,
+		central: centralName,
 		iface:   ev.Interface,
 		address: ev.DeviceAddress,
 	}
@@ -92,13 +92,13 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 		return DiscoveryItem{}
 	}
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	// object_id is unique per device — there is exactly one update entity per device.
-	objectID := routingkey.CanonicalUniqueID(d.serialSuffix(central), ev.DeviceAddress, "update", "")
+	objectID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), ev.DeviceAddress, "update", "")
 
 	// Compose the mock Event needed by deviceDescriptor / channelBaseBody.
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -116,7 +116,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -163,7 +163,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 // No-ops when HA discovery is disabled on the bridge, when
 // BuildUpdateDiscovery returns OK=false, or when no DefaultDiscoveryBuilder
 // is wired.
-func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev UpdateEvent) error {
+func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, centralName string, ev UpdateEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -174,7 +174,7 @@ func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev 
 	if !ok {
 		return nil
 	}
-	item := builder.BuildUpdateDiscovery(central, ev)
+	item := builder.BuildUpdateDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -189,20 +189,20 @@ func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev 
 // "<state-string>" }
 //
 // No-ops when the raw plane is disabled or state is nil.
-func (b *Bridge) PublishUpdateState(ctx context.Context, central, iface, address string, state payload.StatePayload) error {
+func (b *Bridge) PublishUpdateState(ctx context.Context, centralName, iface, address string, state payload.StatePayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	if state == nil {
 		state = map[string]any{}
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	topic := b.topics.DeviceUpdateState(central, iface, address)
+	topic := b.topics.DeviceUpdateState(centralName, iface, address)
 	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }

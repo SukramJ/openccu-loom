@@ -83,11 +83,11 @@ type fakeCandidateProvider struct {
 	master map[string][]string
 }
 
-func (f *fakeCandidateProvider) UnIgnoreCandidates(central string, paramset hmenum.ParamsetKey) []string {
+func (f *fakeCandidateProvider) UnIgnoreCandidates(centralName string, paramset hmenum.ParamsetKey) []string {
 	if paramset == hmenum.ParamsetKeyMaster {
-		return append([]string(nil), f.master[central]...)
+		return append([]string(nil), f.master[centralName]...)
 	}
-	return append([]string(nil), f.values[central]...)
+	return append([]string(nil), f.values[centralName]...)
 }
 
 type fakeLoader struct {

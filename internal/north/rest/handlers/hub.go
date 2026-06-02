@@ -34,7 +34,7 @@ type HubIndex interface {
 	// Hubs returns every registered central's hub, in stable name order.
 	Hubs() []NamedHub
 	// HubFor returns the named central's hub, or nil when unknown.
-	HubFor(central string) *hub.Hub
+	HubFor(centralName string) *hub.Hub
 }
 
 // NamedHub pairs a central name with its hub for multi-CCU aggregation.
@@ -47,12 +47,12 @@ type NamedHub struct {
 // `central` query parameter names it explicitly; when omitted it falls back
 // to the sole central (single-CCU convenience) and is otherwise ambiguous
 // (nil → the handler answers 400/404).
-func resolveHubForMutation(idx HubIndex, central string) *hub.Hub {
+func resolveHubForMutation(idx HubIndex, centralName string) *hub.Hub {
 	if idx == nil {
 		return nil
 	}
-	if central != "" {
-		return idx.HubFor(central)
+	if centralName != "" {
+		return idx.HubFor(centralName)
 	}
 	hubs := idx.Hubs()
 	if len(hubs) == 1 {

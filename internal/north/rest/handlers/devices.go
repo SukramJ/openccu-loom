@@ -647,10 +647,10 @@ func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 	return ch, nil
 }
 
-func toDeviceSummary(d *device.Device, central string) DeviceSummary {
+func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
 		Address:                   d.Address,
-		Central:                   central,
+		Central:                   centralName,
 		Interface:                 string(d.Interface),
 		InterfaceID:               d.InterfaceID,
 		Model:                     d.Model,

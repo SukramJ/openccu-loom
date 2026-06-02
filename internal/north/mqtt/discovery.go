@@ -135,8 +135,8 @@ type DefaultDiscoveryBuilder struct {
 }
 
 // NewDefaultDiscoveryBuilder constructs the default builder.
-func NewDefaultDiscoveryBuilder(topics *TopicBuilder, central string) *DefaultDiscoveryBuilder {
-	return &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: central}
+func NewDefaultDiscoveryBuilder(topics *TopicBuilder, centralName string) *DefaultDiscoveryBuilder {
+	return &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: centralName}
 }
 
 // WithHubInfo stores CCU metadata in the builder. Subsequent hub
@@ -156,21 +156,21 @@ func (d *DefaultDiscoveryBuilder) WithHubInfo(info HubInfo) *DefaultDiscoveryBui
 // emits the correct device-block metadata for each CCU. central must
 // match the value passed into the discovery-builder method's
 // `central` argument.
-func (d *DefaultDiscoveryBuilder) SetHubInfoFor(central string, info HubInfo) {
-	if d == nil || central == "" {
+func (d *DefaultDiscoveryBuilder) SetHubInfoFor(centralName string, info HubInfo) {
+	if d == nil || centralName == "" {
 		return
 	}
 	if d.hubs == nil {
 		d.hubs = make(map[string]HubInfo)
 	}
-	d.hubs[central] = info
+	d.hubs[centralName] = info
 }
 
 // hubFor returns the HubInfo to use for the named central. Falls
 // back to the default [Hub] when no per-central entry is registered.
-func (d *DefaultDiscoveryBuilder) hubFor(central string) HubInfo {
+func (d *DefaultDiscoveryBuilder) hubFor(centralName string) HubInfo {
 	if d != nil && d.hubs != nil {
-		if hi, ok := d.hubs[central]; ok {
+		if hi, ok := d.hubs[centralName]; ok {
 			return hi
 		}
 	}
@@ -181,8 +181,8 @@ func (d *DefaultDiscoveryBuilder) hubFor(central string) HubInfo {
 // given central. It feeds the serial-prefix slot of [routingkey.CanonicalUniqueID]
 // for address classes whose addresses repeat across CCUs (hub roots, INT000*,
 // virtual remotes).
-func (d *DefaultDiscoveryBuilder) serialSuffix(central string) string {
-	return routingkey.SerialSuffix(d.hubFor(central).Serial)
+func (d *DefaultDiscoveryBuilder) serialSuffix(centralName string) string {
+	return routingkey.SerialSuffix(d.hubFor(centralName).Serial)
 }
 
 // hubAggregateUniqueID builds the unique_id for loom-specific hub
@@ -718,9 +718,9 @@ func jsonValueTemplate(comp HAComponent) string {
 // [naming.PathData.DiscoveryNodeID] form. Used by the few discovery
 // helpers (week-profile, update-entity) that don't yet build their
 // PathData up front.
-func discoveryNodeID(central, deviceAddress string) string {
+func discoveryNodeID(centralName, deviceAddress string) string {
 	pd := naming.NewDevicePathData("", deviceAddress)
-	return pd.DiscoveryNodeID(central)
+	return pd.DiscoveryNodeID(centralName)
 }
 
 // applyMultiplierSensor patches body["value_template"] when ev.Channel

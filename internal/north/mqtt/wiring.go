@@ -86,12 +86,12 @@ func (w *Wiring) Publish(ctx context.Context, ev Event) {
 
 // PublishProgramState is a convenience wrapper. `prog` is the model
 // object that owns its MQTT topics; the wiring is a pure pass-through.
-func (w *Wiring) PublishProgramState(ctx context.Context, central string, prog payload.MQTTAddressable, active bool) {
+func (w *Wiring) PublishProgramState(ctx context.Context, centralName string, prog payload.MQTTAddressable, active bool) {
 	b := w.bridge.Load()
 	if b == nil {
 		return
 	}
-	if err := b.PublishProgram(ctx, central, prog, active); err != nil {
+	if err := b.PublishProgram(ctx, centralName, prog, active); err != nil {
 		w.logger.Warn("mqtt.publish_program",
 			slog.String("err", err.Error()))
 	}
@@ -99,12 +99,12 @@ func (w *Wiring) PublishProgramState(ctx context.Context, central string, prog p
 
 // PublishSysvar is a convenience wrapper. `sv` is the model object
 // that owns its MQTT topics.
-func (w *Wiring) PublishSysvar(ctx context.Context, central string, sv payload.MQTTAddressable, value any) {
+func (w *Wiring) PublishSysvar(ctx context.Context, centralName string, sv payload.MQTTAddressable, value any) {
 	b := w.bridge.Load()
 	if b == nil {
 		return
 	}
-	if err := b.PublishSysvar(ctx, central, sv, value); err != nil {
+	if err := b.PublishSysvar(ctx, centralName, sv, value); err != nil {
 		w.logger.Warn("mqtt.publish_sysvar",
 			slog.String("err", err.Error()))
 	}

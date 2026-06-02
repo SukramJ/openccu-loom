@@ -23,8 +23,8 @@ type boundWriter struct {
 	writer      ValueWriter
 }
 
-func newBoundWriter(central, interfaceID string, w ValueWriter) *boundWriter {
-	return &boundWriter{central: central, interfaceID: interfaceID, writer: w}
+func newBoundWriter(centralName, interfaceID string, w ValueWriter) *boundWriter {
+	return &boundWriter{central: centralName, interfaceID: interfaceID, writer: w}
 }
 
 // SetValue routes to [ValueWriter.SetValue] with the captured tuple.

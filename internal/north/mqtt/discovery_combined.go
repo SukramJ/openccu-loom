@@ -50,19 +50,19 @@ type CombinedTimerEvent struct {
 //
 // Returns DiscoveryItem{OK: false} when required fields are missing or
 // JSON marshalling fails.
-func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(central string, ev CombinedTimerEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(centralName string, ev CombinedTimerEvent) DiscoveryItem {
 	if ev.Kind == "" || ev.DeviceAddress == "" {
 		return DiscoveryItem{}
 	}
-	stateTopic := d.TopicBuilder.CombinedState(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
-	commandTopic := d.TopicBuilder.CombinedCommand(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
+	stateTopic := d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
+	commandTopic := d.TopicBuilder.CombinedCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	objectID := fmt.Sprintf("openccu-loom_%s_%d_%s",
 		strings.ToLower(ev.DeviceAddress), ev.ChannelNo, ev.Kind)
 
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -78,7 +78,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(central string, ev
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -128,7 +128,7 @@ func (d *DefaultDiscoveryBuilder) BuildCombinedTimerDiscovery(central string, ev
 // shared discovery cache.
 //
 // No-ops when HA discovery is disabled or the builder declines the event.
-func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, central string, ev CombinedTimerEvent) error {
+func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, centralName string, ev CombinedTimerEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -139,7 +139,7 @@ func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, central stri
 	if !ok {
 		return nil
 	}
-	item := builder.BuildCombinedTimerDiscovery(central, ev)
+	item := builder.BuildCombinedTimerDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -152,7 +152,7 @@ func (b *Bridge) PublishCombinedTimerDiscovery(ctx context.Context, central stri
 // No-ops when the raw plane is disabled.
 func (b *Bridge) PublishCombinedTimerState(
 	ctx context.Context,
-	central, iface, address string,
+	centralName, iface, address string,
 	channel int,
 	kind string,
 	seconds float64,
@@ -160,13 +160,13 @@ func (b *Bridge) PublishCombinedTimerState(
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	if seconds < 0 {
 		seconds = 0
 	}
-	topic := b.topics.CombinedState(central, iface, address, channel, kind)
+	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
 	payload := []byte(formatSeconds(seconds))
 	return b.client.Publish(ctx, topic, payload, b.cfg.QoS.State, true)
 }

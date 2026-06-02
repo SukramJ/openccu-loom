@@ -37,12 +37,12 @@ func (t *testHubIndex) Hubs() []NamedHub {
 	return []NamedHub{{Central: name, Hub: t.h}}
 }
 
-func (t *testHubIndex) HubFor(central string) *hub.Hub {
+func (t *testHubIndex) HubFor(centralName string) *hub.Hub {
 	name := t.central
 	if name == "" {
 		name = "test-ccu"
 	}
-	if central == name {
+	if centralName == name {
 		return t.h
 	}
 	return nil

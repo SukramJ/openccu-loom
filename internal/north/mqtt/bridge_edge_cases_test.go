@@ -765,7 +765,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 	t.Parallel()
 	// central name "ccu" → node_id prefix "ccu_"
 	const base = "openccu-loom"
-	const central = "ccu"
+	const centralName = "ccu"
 
 	// pre-seed orphan (not in declared) and declared topic.
 	orphanTopic := "homeassistant/switch/ccu_old/orphan_obj/config"
@@ -777,7 +777,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 			{topic: declaredTopic, payload: []byte(`{}`)},
 		},
 	}
-	b := NewBridge(BridgeConfig{Base: base, HADiscoveryEnabled: true, CentralName: central}, mc)
+	b := NewBridge(BridgeConfig{Base: base, HADiscoveryEnabled: true, CentralName: centralName}, mc)
 	// Mark declaredTopic as known-live.
 	b.mu.Lock()
 	b.declared[declaredTopic] = []byte(`{}`)

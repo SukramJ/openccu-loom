@@ -44,5 +44,5 @@ func (t MQTTTopicSet) IsZero() bool {
 // this interface — the model exposes truth, the bridge decides how
 // many copies it ships.
 type MQTTAddressable interface {
-	MQTTTopics(base, central string) MQTTTopicSet
+	MQTTTopics(base, centralName string) MQTTTopicSet
 }

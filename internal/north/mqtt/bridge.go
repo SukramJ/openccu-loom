@@ -446,12 +446,12 @@ func (b *Bridge) SetHubInfo(info HubInfo) {
 // serial / configuration_url) for each CCU's hub + per-device
 // discovery payloads. central must match the value the daemon
 // passes into discovery-builder calls (i.e. Unit.Name()).
-func (b *Bridge) SetHubInfoFor(central string, info HubInfo) {
+func (b *Bridge) SetHubInfoFor(centralName string, info HubInfo) {
 	if b == nil || b.cfg.DiscoveryBuilder == nil {
 		return
 	}
 	if dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder); ok {
-		dd.SetHubInfoFor(central, info)
+		dd.SetHubInfoFor(centralName, info)
 	}
 }
 
@@ -599,7 +599,7 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 // `central`, `iface`, `address`, `channel` scope the topic; passing
 // an empty central falls back to the bridge's configured default.
 // Returns nil silently when the raw plane is disabled.
-func (b *Bridge) PublishSourceState(ctx context.Context, central, iface, address string, channel int, src interface{ State() pload.StatePayload }) error {
+func (b *Bridge) PublishSourceState(ctx context.Context, centralName, iface, address string, channel int, src interface{ State() pload.StatePayload }) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
@@ -614,10 +614,10 @@ func (b *Bridge) PublishSourceState(ctx context.Context, central, iface, address
 	if err != nil {
 		return err
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
-	topic := b.topics.AggregatedState(central, iface, address, channel)
+	topic := b.topics.AggregatedState(centralName, iface, address, channel)
 	return b.client.Publish(ctx, topic, payloadBytes, b.cfg.QoS.State, true)
 }
 
@@ -633,21 +633,21 @@ func (b *Bridge) PublishSourceState(ctx context.Context, central, iface, address
 // Mirrors ADR 0011 §"Custom-DP `custom/<kind>/state`" — the
 // aggregate carries derived fields only; direct wire values stay
 // under values/<param>/state.
-func (b *Bridge) PublishCustomDPState(ctx context.Context, central, iface string, slot pload.TopicSlot, state pload.StatePayload) error {
+func (b *Bridge) PublishCustomDPState(ctx context.Context, centralName, iface string, slot pload.TopicSlot, state pload.StatePayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	if state == nil {
 		state = map[string]any{}
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.SlotState(central, iface, slot), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.SlotState(centralName, iface, slot), body, b.cfg.QoS.State, true)
 }
 
 // PublishSlotConfig publishes a [pload.Source.ConfigPayload] map at the
@@ -661,15 +661,15 @@ func (b *Bridge) PublishCustomDPState(ctx context.Context, central, iface string
 // against the bridge's configCache: the EventBridge calls this on every value
 // event so DiscoveryDynamic capabilities (Climate's mode-aware preset_modes)
 // are reflected, but identical bytes do not generate any broker traffic.
-func (b *Bridge) PublishSlotConfig(ctx context.Context, central, iface string, slot pload.TopicSlot, config pload.ConfigPayload) error {
+func (b *Bridge) PublishSlotConfig(ctx context.Context, centralName, iface string, slot pload.TopicSlot, config pload.ConfigPayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	if config == nil {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(config)
 	if err != nil {
@@ -679,7 +679,7 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, central, iface string, s
 	if len(body) == 2 && body[0] == '{' && body[1] == '}' {
 		return nil
 	}
-	topic := b.topics.SlotConfig(central, iface, slot)
+	topic := b.topics.SlotConfig(centralName, iface, slot)
 	b.mu.Lock()
 	previous, declared := b.configCache[topic]
 	if declared && bytesEqual(previous, body) {
@@ -695,18 +695,18 @@ func (b *Bridge) PublishSlotConfig(ctx context.Context, central, iface string, s
 // per-DP state topic.
 //
 // Returns nil silently when the raw plane is disabled.
-func (b *Bridge) PublishSlotState(ctx context.Context, central, iface string, slot pload.TopicSlot, state pload.PerDPState) error {
+func (b *Bridge) PublishSlotState(ctx context.Context, centralName, iface string, slot pload.TopicSlot, state pload.PerDPState) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	topic := b.topics.SlotState(central, iface, slot)
+	topic := b.topics.SlotState(centralName, iface, slot)
 	if err := b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true); err != nil {
 		b.incPublishErrors()
 		return err
@@ -719,41 +719,41 @@ func (b *Bridge) PublishSlotState(ctx context.Context, central, iface string, sl
 // the per-device retained `<addr>/info` topic. The info shape is
 // declared in ADR 0011 §"Device info"; producers (typically a
 // device-pipeline adapter) hand a pre-built map[string]any.
-func (b *Bridge) PublishDeviceInfo(ctx context.Context, central, iface, address string, info pload.InfoPayload) error {
+func (b *Bridge) PublishDeviceInfo(ctx context.Context, centralName, iface, address string, info pload.InfoPayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(info)
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DeviceInfo(central, iface, address), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.DeviceInfo(centralName, iface, address), body, b.cfg.QoS.State, true)
 }
 
 // PublishDeviceDiagnostics publishes the per-device diagnostics
 // aggregate to `<addr>/diagnostics`. Same shape contract as
 // [PublishDeviceInfo] — caller composes the JSON body.
-func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, central, iface, address string, diag pload.StatePayload) error {
+func (b *Bridge) PublishDeviceDiagnostics(ctx context.Context, centralName, iface, address string, diag pload.StatePayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(diag)
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DeviceDiagnostics(central, iface, address), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.DeviceDiagnostics(centralName, iface, address), body, b.cfg.QoS.State, true)
 }
 
 // PublishAvailability toggles the retained availability topic.
 // LegacyAlias mirrors the availability flag under
 // `{legacy_base}/device/availability/{address}` when enabled.
-func (b *Bridge) PublishAvailability(ctx context.Context, central, iface, address string, online bool) error {
+func (b *Bridge) PublishAvailability(ctx context.Context, centralName, iface, address string, online bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
@@ -761,7 +761,7 @@ func (b *Bridge) PublishAvailability(ctx context.Context, central, iface, addres
 	if online {
 		body = []byte("online")
 	}
-	if err := b.client.Publish(ctx, b.topics.DeviceAvailability(central, iface, address), body, QoS1, true); err != nil {
+	if err := b.client.Publish(ctx, b.topics.DeviceAvailability(centralName, iface, address), body, QoS1, true); err != nil {
 		return err
 	}
 	if b.legacy != nil {
@@ -771,7 +771,7 @@ func (b *Bridge) PublishAvailability(ctx context.Context, central, iface, addres
 }
 
 // PublishEvent emits a pulse (non-retained) event on the raw plane.
-func (b *Bridge) PublishEvent(ctx context.Context, central, iface, address string, channel int, etype string, payload any) error {
+func (b *Bridge) PublishEvent(ctx context.Context, centralName, iface, address string, channel int, etype string, payload any) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
@@ -779,7 +779,7 @@ func (b *Bridge) PublishEvent(ctx context.Context, central, iface, address strin
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.DataPointEvent(central, iface, address, channel, etype), buf, QoS0, false)
+	return b.client.Publish(ctx, b.topics.DataPointEvent(centralName, iface, address, channel, etype), buf, QoS0, false)
 }
 
 // PublishChannelEventState emits a non-retained aggregate press-event
@@ -793,7 +793,7 @@ func (b *Bridge) PublishEvent(ctx context.Context, central, iface, address strin
 //
 // The topic is non-retained — HA event entities must receive a fresh
 // pulse per keypress, not a stale retained value.
-func (b *Bridge) PublishChannelEventState(ctx context.Context, central, iface, address string, channel int, pressType string) error {
+func (b *Bridge) PublishChannelEventState(ctx context.Context, centralName, iface, address string, channel int, pressType string) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
@@ -806,7 +806,7 @@ func (b *Bridge) PublishChannelEventState(ctx context.Context, central, iface, a
 	if err != nil {
 		return err
 	}
-	topic := b.topics.ChannelEvent(b.resolvedCentral(central), iface, address, channel)
+	topic := b.topics.ChannelEvent(b.resolvedCentral(centralName), iface, address, channel)
 	// QoS0, non-retained — mirrors HA's event entity contract: each
 	// keypress fires a fresh pulse; brokers must not replay a stale press.
 	return b.client.Publish(ctx, topic, buf, QoS0, false)
@@ -816,11 +816,11 @@ func (b *Bridge) PublishChannelEventState(ctx context.Context, central, iface, a
 // owned by the sysvar model object (`<base>/<central>/hub/sysvars/
 // <name>/state`). The bridge only fills in `base` and JSON-encodes
 // the value; it never decides the topic shape.
-func (b *Bridge) PublishSysvar(ctx context.Context, central string, sv pload.MQTTAddressable, value any) error {
+func (b *Bridge) PublishSysvar(ctx context.Context, centralName string, sv pload.MQTTAddressable, value any) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := sv.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := sv.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -835,11 +835,11 @@ func (b *Bridge) PublishSysvar(ctx context.Context, central string, sv pload.MQT
 // topics owned by the program model object. Active is mirrored to
 // both `…/state` and `…/trigger` so switch entities see it on either
 // reference.
-func (b *Bridge) PublishProgram(ctx context.Context, central string, prog pload.MQTTAddressable, active bool) error {
+func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pload.MQTTAddressable, active bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := prog.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := prog.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -858,11 +858,11 @@ func (b *Bridge) PublishProgram(ctx context.Context, central string, prog pload.
 
 // PublishInstallMode emits the install-mode countdown to the topic
 // owned by the [hub.InstallMode] aggregate.
-func (b *Bridge) PublishInstallMode(ctx context.Context, central string, mode pload.MQTTAddressable, seconds int) error {
+func (b *Bridge) PublishInstallMode(ctx context.Context, centralName string, mode pload.MQTTAddressable, seconds int) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := mode.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := mode.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -872,11 +872,11 @@ func (b *Bridge) PublishInstallMode(ctx context.Context, central string, mode pl
 
 // PublishAlarmMessages emits the active alarm-message list to the
 // topic owned by the [hub.AlarmMessages] aggregate.
-func (b *Bridge) PublishAlarmMessages(ctx context.Context, central string, agg pload.MQTTAddressable, items any) error {
+func (b *Bridge) PublishAlarmMessages(ctx context.Context, centralName string, agg pload.MQTTAddressable, items any) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -889,11 +889,11 @@ func (b *Bridge) PublishAlarmMessages(ctx context.Context, central string, agg p
 
 // PublishServiceMessages mirrors PublishAlarmMessages for the
 // service-messages aggregate.
-func (b *Bridge) PublishServiceMessages(ctx context.Context, central string, agg pload.MQTTAddressable, items any) error {
+func (b *Bridge) PublishServiceMessages(ctx context.Context, centralName string, agg pload.MQTTAddressable, items any) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -906,11 +906,11 @@ func (b *Bridge) PublishServiceMessages(ctx context.Context, central string, agg
 
 // PublishInbox emits the pending inbox-device list to the topic
 // owned by the inbox aggregate.
-func (b *Bridge) PublishInbox(ctx context.Context, central string, agg pload.MQTTAddressable, items any) error {
+func (b *Bridge) PublishInbox(ctx context.Context, centralName string, agg pload.MQTTAddressable, items any) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(central))
+	topics := agg.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
 	if topics.State == "" {
 		return nil
 	}
@@ -926,16 +926,16 @@ func (b *Bridge) PublishInbox(ctx context.Context, central string, agg pload.MQT
 // per-interface specialisation of [pload.MQTTAddressable] because
 // the aggregate spans many interfaces under one model object.
 type ConnectivityPublisher interface {
-	MQTTTopicsForInterface(base, central, iface string) pload.MQTTTopicSet
+	MQTTTopicsForInterface(base, centralName, iface string) pload.MQTTTopicSet
 }
 
 // PublishConnectivity flips the per-interface availability flag at
 // the topic owned by the [hub.Connectivity] aggregate.
-func (b *Bridge) PublishConnectivity(ctx context.Context, central string, conn ConnectivityPublisher, iface string, connected bool) error {
+func (b *Bridge) PublishConnectivity(ctx context.Context, centralName string, conn ConnectivityPublisher, iface string, connected bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topics := conn.MQTTTopicsForInterface(b.cfg.Base, b.resolvedCentral(central), iface)
+	topics := conn.MQTTTopicsForInterface(b.cfg.Base, b.resolvedCentral(centralName), iface)
 	if topics.State == "" {
 		return nil
 	}
@@ -953,16 +953,16 @@ func (b *Bridge) PublishConnectivity(ctx context.Context, central string, conn C
 // EvictState needs to clear; Discovery and slot topics are not erased
 // because they carry semantic metadata (config, modes, …) that does
 // not go stale in the same way a value payload does.
-func (b *Bridge) dataPointStateTopic(central, iface, address string, channel int, parameter string) string {
-	return b.topics.DataPointState(b.resolvedCentral(central), iface, address, channel, parameter)
+func (b *Bridge) dataPointStateTopic(centralName, iface, address string, channel int, parameter string) string {
+	return b.topics.DataPointState(b.resolvedCentral(centralName), iface, address, channel, parameter)
 }
 
 // resolvedCentral returns central if non-empty, otherwise the bridge's
 // configured default central name. Used by topic helpers that are
 // called with an empty central in some synthetic-event flows.
-func (b *Bridge) resolvedCentral(central string) string {
-	if central != "" {
-		return central
+func (b *Bridge) resolvedCentral(centralName string) string {
+	if centralName != "" {
+		return centralName
 	}
 	return b.cfg.CentralName
 }
@@ -983,14 +983,14 @@ func (b *Bridge) resolvedCentral(central string) string {
 // No-ops when the raw plane is disabled.
 func (b *Bridge) EvictState(
 	ctx context.Context,
-	central, iface, address string,
+	centralName, iface, address string,
 	channel int,
 	parameter string,
 ) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	topic := b.dataPointStateTopic(central, iface, address, channel, parameter)
+	topic := b.dataPointStateTopic(centralName, iface, address, channel, parameter)
 	// Empty payload with retain=true is the MQTT specification's
 	// mechanism for deleting a retained message. HA's docs explicitly
 	// recommend this pattern for clearing stale entity state.
@@ -1012,33 +1012,33 @@ func (b *Bridge) Topics() *TopicBuilder { return b.topics }
 // topic (`<base>/<central>/system/status`). Non-retained, QoS 0 — the
 // topic carries live events, not persistent state. Returns nil when
 // RawEnabled is false (disabled broker plane).
-func (b *Bridge) PublishSystemStatus(ctx context.Context, central string, payload []byte) error {
+func (b *Bridge) PublishSystemStatus(ctx context.Context, centralName string, payload []byte) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	return b.client.Publish(ctx, b.topics.SystemStatus(central), payload, QoS0, false)
+	return b.client.Publish(ctx, b.topics.SystemStatus(centralName), payload, QoS0, false)
 }
 
 // PublishHubSystemHealthScore publishes the system-health score (0–100) to
 // the retained topic `<base>/<central>/system/health_score`. Returns nil when
 // RawEnabled is false.
-func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, central string, score float64) error {
+func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName string, score float64) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	body := []byte(strconv.FormatFloat(score, 'f', -1, 64))
-	return b.client.Publish(ctx, b.topics.HubSystemHealthScore(central), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.HubSystemHealthScore(centralName), body, b.cfg.QoS.State, true)
 }
 
 // PublishHubConnectionLatency publishes the per-interface round-trip latency
 // (ms) to the retained topic `<base>/<central>/system/latency/<iface>`.
 // Returns nil when RawEnabled is false.
-func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, central, iface string, latencyMs float64) error {
+func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName, iface string, latencyMs float64) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	body := []byte(strconv.FormatFloat(latencyMs, 'f', -1, 64))
-	return b.client.Publish(ctx, b.topics.HubConnectionLatency(central, iface), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.HubConnectionLatency(centralName, iface), body, b.cfg.QoS.State, true)
 }
 
 // PublishHubUpdate publishes the CCU's firmware-update state to the
@@ -1046,7 +1046,7 @@ func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, central, iface
 // the fields expected by HA's MQTT Update entity:
 // `installed_version`, `latest_version`, and `in_progress`.
 // Returns nil when RawEnabled is false.
-func (b *Bridge) PublishHubUpdate(ctx context.Context, central, installedVersion, latestVersion string, inProgress bool) error {
+func (b *Bridge) PublishHubUpdate(ctx context.Context, centralName, installedVersion, latestVersion string, inProgress bool) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
@@ -1063,7 +1063,7 @@ func (b *Bridge) PublishHubUpdate(ctx context.Context, central, installedVersion
 	if err != nil {
 		return err
 	}
-	return b.client.Publish(ctx, b.topics.HubUpdate(central), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.HubUpdate(centralName), body, b.cfg.QoS.State, true)
 }
 
 // PublishChannelEventDiscovery publishes the HA Discovery payload for

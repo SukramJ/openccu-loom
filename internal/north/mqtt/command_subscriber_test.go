@@ -30,11 +30,11 @@ type fakeSink struct {
 	lastProgram struct{ central, id string }
 }
 
-func (f *fakeSink) SetValue(_ context.Context, central, iface, chanAddr string,
+func (f *fakeSink) SetValue(_ context.Context, centralName, iface, chanAddr string,
 	param hmenum.Parameter, v any, _ hmenum.CommandPriority,
 ) error {
 	f.setValues.Add(1)
-	f.lastVal.central = central
+	f.lastVal.central = centralName
 	f.lastVal.iface = iface
 	f.lastVal.chanAddr = chanAddr
 	f.lastVal.param = string(param)
@@ -42,17 +42,17 @@ func (f *fakeSink) SetValue(_ context.Context, central, iface, chanAddr string,
 	return nil
 }
 
-func (f *fakeSink) SetSysvar(_ context.Context, central, name string, v any) error {
+func (f *fakeSink) SetSysvar(_ context.Context, centralName, name string, v any) error {
 	f.setSysvars.Add(1)
-	f.lastSysvar.central = central
+	f.lastSysvar.central = centralName
 	f.lastSysvar.name = name
 	f.lastSysvar.value = v
 	return nil
 }
 
-func (f *fakeSink) TriggerProgram(_ context.Context, central, id string) error {
+func (f *fakeSink) TriggerProgram(_ context.Context, centralName, id string) error {
 	f.triggers.Add(1)
-	f.lastProgram.central = central
+	f.lastProgram.central = centralName
 	f.lastProgram.id = id
 	return nil
 }
@@ -115,11 +115,11 @@ type fakeCDPSink struct {
 	lastPrio                                  hmenum.CommandPriority
 }
 
-func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, central, device, name, op string,
+func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, centralName, device, name, op string,
 	params map[string]any, prio hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.lastCentral = central
+	f.lastCentral = centralName
 	f.lastDevice = device
 	f.lastName = name
 	f.lastOp = op
@@ -133,11 +133,11 @@ func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, central, device, name, o
 // in the same fields as InvokeCustomDP for assertion convenience —
 // `name` is reused for the channel suffix to keep the fake compact.
 func (f *fakeCDPSink) InvokeChannelService(_ context.Context,
-	central, _, device string, channel int,
+	centralName, _, device string, channel int,
 	method string, params map[string]any, prio hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.lastCentral = central
+	f.lastCentral = centralName
 	f.lastDevice = device
 	f.lastName = fmt.Sprintf("%s:%d", device, channel)
 	f.lastOp = method
@@ -343,11 +343,11 @@ type fakeWPSink struct {
 }
 
 func (f *fakeWPSink) SetActiveProfile(_ context.Context,
-	central, interfaceID, deviceAddress string, channel int,
+	centralName, interfaceID, deviceAddress string, channel int,
 	profileKey string, _ hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.last.central = central
+	f.last.central = centralName
 	f.last.iface = interfaceID
 	f.last.addr = deviceAddress
 	f.last.channel = channel

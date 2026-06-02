@@ -77,13 +77,13 @@ type CentralStateChangedPayload struct {
 // Topic follows the spec convention
 // `device.<addr>.channels.<no>.data_points.<parameter>`.
 func (h *Hub) PublishDataPointValueChanged(
-	central, iface, deviceAddr string,
+	centralName, iface, deviceAddr string,
 	channel int,
 	parameter, paramsetKey string,
 	value, previous any,
 	when time.Time,
 ) {
-	h.PublishDataPointValueChangedKind(KindChange, central, iface, deviceAddr, channel,
+	h.PublishDataPointValueChangedKind(KindChange, centralName, iface, deviceAddr, channel,
 		parameter, paramsetKey, value, previous, when, "", "")
 }
 
@@ -97,7 +97,7 @@ func (h *Hub) PublishDataPointValueChanged(
 // stripped per-client at write time unless the client opted into
 // `classify` — see [client.writePump]. Pass empty strings to omit.
 func (h *Hub) PublishDataPointValueChangedKind(
-	envKind, central, iface, deviceAddr string,
+	envKind, centralName, iface, deviceAddr string,
 	channel int,
 	parameter, paramsetKey string,
 	value, previous any,
@@ -110,7 +110,7 @@ func (h *Hub) PublishDataPointValueChangedKind(
 		Type:  string(hmevent.EventTypeDataPointValueChanged),
 		When:  when,
 		Payload: DataPointValueChangedPayload{
-			Central:       central,
+			Central:       centralName,
 			Interface:     iface,
 			DeviceAddress: deviceAddr,
 			Channel:       channel,
@@ -132,13 +132,13 @@ func (h *Hub) PublishDataPointValueChangedKind(
 // `kind` parameter here is the CDP widget hint (light, cover_blind,
 // …), not the envelope kind — those are separate axes.
 func (h *Hub) PublishCustomDataPointStateChanged(
-	central, deviceAddr string,
+	centralName, deviceAddr string,
 	channel int,
 	name, kind string,
 	state map[string]any,
 	when time.Time,
 ) {
-	h.PublishCustomDataPointStateChangedKind(KindChange, central, deviceAddr, channel,
+	h.PublishCustomDataPointStateChangedKind(KindChange, centralName, deviceAddr, channel,
 		name, kind, state, when)
 }
 
@@ -148,7 +148,7 @@ func (h *Hub) PublishCustomDataPointStateChanged(
 // [KindRefresh]); the per-CDP widget `kind` keeps its name on the
 // payload.
 func (h *Hub) PublishCustomDataPointStateChangedKind(
-	envKind, central, deviceAddr string,
+	envKind, centralName, deviceAddr string,
 	channel int,
 	name, kind string,
 	state map[string]any,
@@ -160,7 +160,7 @@ func (h *Hub) PublishCustomDataPointStateChangedKind(
 		Type:  string(hmevent.EventTypeCustomDataPointStateChanged),
 		When:  when,
 		Payload: CustomDataPointStateChangedPayload{
-			Central:       central,
+			Central:       centralName,
 			DeviceAddress: deviceAddr,
 			Channel:       channel,
 			Name:          name,
@@ -171,13 +171,13 @@ func (h *Hub) PublishCustomDataPointStateChangedKind(
 }
 
 // PublishCentralStateChanged emits a typed central-state envelope.
-func (h *Hub) PublishCentralStateChanged(central, oldState, newState string, when time.Time) {
+func (h *Hub) PublishCentralStateChanged(centralName, oldState, newState string, when time.Time) {
 	h.Publish(Event{
-		Topic: CentralStateTopic(central),
+		Topic: CentralStateTopic(centralName),
 		Type:  string(hmevent.EventTypeCentralStateChanged),
 		When:  when,
 		Payload: CentralStateChangedPayload{
-			Central:  central,
+			Central:  centralName,
 			OldState: oldState,
 			NewState: newState,
 		},
@@ -198,6 +198,6 @@ func CustomDataPointTopic(deviceAddr, name string) string {
 
 // CentralStateTopic builds the canonical topic for a central-state
 // event.
-func CentralStateTopic(central string) string {
-	return "central." + central + ".state"
+func CentralStateTopic(centralName string) string {
+	return "central." + centralName + ".state"
 }

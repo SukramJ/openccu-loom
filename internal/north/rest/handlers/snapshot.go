@@ -152,16 +152,16 @@ func snapshotIncludes(r *http.Request) snapshotInclude {
 // the hub entities (programs + sysvars) to that one CCU via exact match
 // on the canonical central name. Rooms and functions are not
 // central-tagged in the model and stay fleet-wide.
-func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, central string) SnapshotEnvelope {
+func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName string) SnapshotEnvelope {
 	env := SnapshotEnvelope{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if deps.Devices != nil {
 		devs := deps.Devices.Devices()
-		if central != "" {
+		if centralName != "" {
 			scoped := make([]*device.Device, 0, len(devs))
 			for _, d := range devs {
-				if deps.Devices.CentralOf(d.Address) == central {
+				if deps.Devices.CentralOf(d.Address) == centralName {
 					scoped = append(scoped, d)
 				}
 			}
@@ -179,8 +179,8 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, central strin
 		env.Functions = snapshotFunctions(deps.Devices)
 	}
 	if deps.Hub != nil {
-		env.Programs = filterProgramsByCentral(snapshotPrograms(deps.Hub), central)
-		env.Sysvars = filterSysvarsByCentral(snapshotSysvars(deps.Hub), central)
+		env.Programs = filterProgramsByCentral(snapshotPrograms(deps.Hub), centralName)
+		env.Sysvars = filterSysvarsByCentral(snapshotSysvars(deps.Hub), centralName)
 	}
 	if deps.Interfaces != nil {
 		env.Interfaces = snapshotInterfaces(deps.Interfaces)
@@ -190,13 +190,13 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, central strin
 
 // filterProgramsByCentral keeps only programs owned by central; an empty
 // central returns the input unchanged (fleet-wide).
-func filterProgramsByCentral(programs []ProgramSummary, central string) []ProgramSummary {
-	if central == "" {
+func filterProgramsByCentral(programs []ProgramSummary, centralName string) []ProgramSummary {
+	if centralName == "" {
 		return programs
 	}
 	out := make([]ProgramSummary, 0, len(programs))
 	for i := range programs {
-		if programs[i].Central == central {
+		if programs[i].Central == centralName {
 			out = append(out, programs[i])
 		}
 	}
@@ -205,13 +205,13 @@ func filterProgramsByCentral(programs []ProgramSummary, central string) []Progra
 
 // filterSysvarsByCentral keeps only sysvars owned by central; an empty
 // central returns the input unchanged (fleet-wide).
-func filterSysvarsByCentral(sysvars []SysvarSummary, central string) []SysvarSummary {
-	if central == "" {
+func filterSysvarsByCentral(sysvars []SysvarSummary, centralName string) []SysvarSummary {
+	if centralName == "" {
 		return sysvars
 	}
 	out := make([]SysvarSummary, 0, len(sysvars))
 	for i := range sysvars {
-		if sysvars[i].Central == central {
+		if sysvars[i].Central == centralName {
 			out = append(out, sysvars[i])
 		}
 	}
