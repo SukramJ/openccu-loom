@@ -889,7 +889,11 @@ func (d *DataPoint[T]) MarkStale() (oldSource hmenum.ValueSource, changed bool) 
 	v := d.value
 	d.mu.Unlock()
 	for _, cb := range cbs {
-		cb(v, v)
+		// Skip nilled-out slots: OnConfirmedUpdate's unsubscribe leaves a
+		// nil in the slice. Mirrors the nil-guard in the OnEvent fire path.
+		if cb != nil {
+			cb(v, v)
+		}
 	}
 	return oldSource, true
 }
@@ -916,7 +920,11 @@ func (d *DataPoint[T]) MarkLive() (oldSource hmenum.ValueSource, changed bool) {
 	v := d.value
 	d.mu.Unlock()
 	for _, cb := range cbs {
-		cb(v, v)
+		// Skip nilled-out slots: OnConfirmedUpdate's unsubscribe leaves a
+		// nil in the slice. Mirrors the nil-guard in the OnEvent fire path.
+		if cb != nil {
+			cb(v, v)
+		}
 	}
 	return oldSource, true
 }
