@@ -63,10 +63,14 @@ type Listener struct {
 	closed bool
 }
 
-// New opens the UDP socket per cfg and returns a Listener ready to
-// Serve.
-func New(cfg Config) (*Listener, error) {
-	addr := cfg.LocalAddr
+// bindAddr resolves the (network, address) pair New binds for cfg,
+// applying the empty-LocalAddr default. Split out from New so the
+// default-address branches are unit-testable without occupying the
+// well-known MatterPort (binding 5540 in a test races any other 5540
+// listener — e.g. a parallel dual-stack [::]:5540 socket also claims
+// IPv4 5540 — and flakes on shared CI runners).
+func bindAddr(cfg Config) (network, addr string) {
+	addr = cfg.LocalAddr
 	if addr == "" {
 		if cfg.PreferIPv4 {
 			addr = fmt.Sprintf("0.0.0.0:%d", MatterPort)
@@ -74,10 +78,17 @@ func New(cfg Config) (*Listener, error) {
 			addr = fmt.Sprintf("[::]:%d", MatterPort)
 		}
 	}
-	network := "udp"
+	network = "udp"
 	if cfg.PreferIPv4 {
 		network = "udp4"
 	}
+	return network, addr
+}
+
+// New opens the UDP socket per cfg and returns a Listener ready to
+// Serve.
+func New(cfg Config) (*Listener, error) {
+	network, addr := bindAddr(cfg)
 	udpAddr, err := net.ResolveUDPAddr(network, addr)
 	if err != nil {
 		return nil, fmt.Errorf("udp: resolve %s: %w", addr, err)

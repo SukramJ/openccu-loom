@@ -21,7 +21,7 @@ func TestPublishDataPointValueChangedKind_DefaultsViaWrapper(t *testing.T) {
 func TestPublishDataPointValueChangedKind_InitialPropagates(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	h.PublishDataPointValueChangedKind(KindInitial, "home", "HmIP-RF", "VCU123", 1, "LEVEL", "VALUES", 1.0, nil, time.Now(), "", "")
+	h.PublishDataPointValueChangedKind(KindInitial, "home", "HmIP-RF", "VCU123", 1, "LEVEL", "VALUES", 1.0, nil, time.Now(), "", "", "")
 	res := h.Replay(0, nil)
 	if len(res.Events) != 1 || res.Events[0].Kind != KindInitial {
 		t.Fatalf("Kind = %q, want initial", res.Events[0].Kind)
@@ -35,7 +35,7 @@ func TestPublishCustomDataPointStateChangedKind_RefreshPropagates(t *testing.T) 
 	t.Parallel()
 	h := NewHub()
 	h.PublishCustomDataPointStateChangedKind(KindRefresh, "home", "VCU123", 1,
-		"main", "light", map[string]any{"on": true}, time.Now())
+		"main", "light", map[string]any{"on": true}, time.Now(), "")
 	res := h.Replay(0, nil)
 	if len(res.Events) != 1 || res.Events[0].Kind != KindRefresh {
 		t.Fatalf("Kind = %q, want refresh", res.Events[0].Kind)

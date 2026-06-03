@@ -8,6 +8,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -23,7 +24,12 @@ type DeviceTriggerPayload struct {
 	Channel       int    `json:"channel"`
 	EventType     string `json:"event_type"`
 	Parameter     string `json:"parameter"`
-	Value         any    `json:"value,omitempty"`
+	// UniqueID is the canonical loom-namespaced routing key for the data
+	// point this trigger fires on; it matches the value-changed entity's
+	// key (a trigger and a value change on the same DP route to the same
+	// HA entity). Optional; see [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id,omitempty"`
+	Value    any    `json:"value,omitempty"`
 }
 
 // DeviceTriggerTopic returns the canonical topic for a device-trigger
@@ -59,7 +65,9 @@ func (s *DeviceTriggerSubscriber) Start() {
 			continue
 		}
 		hub := s.hub
+		reg := s.reg
 		unsub := events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) {
+			channelAddr := e.DeviceAddress + ":" + strconv.Itoa(e.ChannelNo)
 			hub.Publish(Event{
 				Topic: DeviceTriggerTopic(e.DeviceAddress, e.ChannelNo),
 				Type:  string(hmevent.EventTypeDeviceTrigger),
@@ -71,7 +79,10 @@ func (s *DeviceTriggerSubscriber) Start() {
 					Channel:       e.ChannelNo,
 					EventType:     string(e.EventType_),
 					Parameter:     e.Parameter,
-					Value:         e.Value.Unwrap(),
+					UniqueID: routingkey.CanonicalUniqueID(
+						reg.SerialSuffix(e.CentralName), channelAddr, e.Parameter, "",
+					),
+					Value: e.Value.Unwrap(),
 				},
 			})
 		})

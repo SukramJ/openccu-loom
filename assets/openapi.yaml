@@ -4219,6 +4219,14 @@ components:
         channel: { type: integer, minimum: 0 }
         parameter: { type: string }
         paramset_key: { type: string, description: "VALUES, MASTER, or LINK" }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key (`loom_<routing-key>`)
+            for this data point. Optional — omitted when the producer
+            cannot resolve it. Clients consume it directly instead of
+            rebuilding from raw fields; see
+            docs/external-clients/ha-unique-id-migration.md.
         value:
           description: New value in its native CCU type (bool/int/float/string/list/null).
         previous:
@@ -4246,6 +4254,12 @@ components:
         kind:
           type: string
           description: "Widget hint matching CustomDPSummary.kind (e.g. `light`, `cover_blind`)."
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key (`loom_<routing-key>`)
+            for this custom data point. Optional — see
+            DataPointValueChangedPayload.unique_id.
         state:
           type: object
           additionalProperties: true
@@ -4303,6 +4317,12 @@ components:
         value_type:
           type: string
           description: "hmenum.HubValueType (BOOL, FLOAT, INTEGER, STRING, …)."
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key
+            (`loom_<serial10>_sysvar_<hub-slug>`) for this sysvar.
+            Optional — see DataPointValueChangedPayload.unique_id.
         value:
           description: New sysvar value in its native CCU type.
         previous:
@@ -4322,6 +4342,13 @@ components:
           type: string
           description: "hmenum.ProgramTrigger (MANUAL, SCHEDULE, EVENT, …)."
         success: { type: boolean }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key
+            (`loom_<serial10>_program_<hub-slug(name)>`) for this program.
+            Optional — omitted when the program name cannot be resolved;
+            see DataPointValueChangedPayload.unique_id.
 
     InstallModeChangedPayload:
       type: object
@@ -4384,6 +4411,13 @@ components:
         parameter: { type: string }
         paramset_key: { type: string, description: "VALUES, MASTER, or LINK" }
         reason: { type: string, description: "Why the optimistic value was rolled back (TTL expiry or CCU rejection)." }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key (`loom_<routing-key>`)
+            for the rolled-back data point; matches the
+            `datapoint.value_changed` entity key. Optional — see
+            DataPointValueChangedPayload.unique_id.
         sent:
           description: The optimistic value that was rolled back. Omitted when not tracked.
         present:
@@ -4406,6 +4440,14 @@ components:
         channel: { type: integer, minimum: 0 }
         event_type: { type: string }
         parameter: { type: string }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key (`loom_<routing-key>`)
+            for the data point this trigger fires on; matches the
+            `datapoint.value_changed` entity key (a trigger and a value
+            change on the same DP route to the same entity). Optional —
+            see DataPointValueChangedPayload.unique_id.
         value:
           description: Optional value carried by the trigger event in its native CCU type. Omitted when absent.
 

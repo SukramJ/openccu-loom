@@ -55,7 +55,8 @@ func TestDeviceTriggerSubscriberNilSafe(t *testing.T) {
 
 // TestDeviceTriggerSubscriberEndToEnd publishes a [hmevent.DeviceTriggerEvent]
 // on the central's bus and verifies the hub receives an event on the correct
-// topic with the expected payload shape.
+// topic with the expected payload shape, including the unique_id for a normal
+// device (no serial prefix needed).
 func TestDeviceTriggerSubscriberEndToEnd(t *testing.T) {
 	t.Parallel()
 
@@ -111,9 +112,68 @@ func TestDeviceTriggerSubscriberEndToEnd(t *testing.T) {
 			if p.Parameter != "PRESS_SHORT" {
 				t.Fatalf("parameter = %q, want PRESS_SHORT", p.Parameter)
 			}
+			// DEV001 is a normal device (no serial prefix); serial not set.
+			if want := "loom_dev001_3_press_short"; p.UniqueID != want {
+				t.Fatalf("unique_id = %q, want %q", p.UniqueID, want)
+			}
 			return
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatal("DeviceTriggerEvent did not reach the hub within deadline")
+}
+
+// TestDeviceTriggerSubscriberVirtualRemoteUniqueID verifies that a trigger
+// event originating on a virtual-remote address (BidCoS-RF) carries the
+// serial-prefixed unique_id because virtual-remote channel addresses repeat
+// across CCUs and need the central discriminator.
+func TestDeviceTriggerSubscriberVirtualRemoteUniqueID(t *testing.T) {
+	t.Parallel()
+
+	hub := NewHub()
+
+	reg := central.NewRegistry()
+	cu, err := central.New(central.Config{Name: "test-ccu"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	if err := reg.Register(cu); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	// Set the serial so the suffix is "11a0001234".
+	cu.SetSystemInformation(central.SystemInfo{Serial: "3014F711A0001234"})
+
+	sub := NewDeviceTriggerSubscriber(reg, hub)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	val := hmtypes.BoolValue(false)
+	events.Publish(cu.EventBus, hmevent.DeviceTriggerEvent{
+		CentralName:   "test-ccu",
+		InterfaceID:   "BidCoS-RF",
+		DeviceAddress: "BidCoS-RF",
+		ChannelNo:     1,
+		EventType_:    hmenum.DeviceTriggerEventTypeKeypress,
+		Parameter:     "PRESS_SHORT",
+		Value:         val,
+	})
+
+	wantTopic := DeviceTriggerTopic("BidCoS-RF", 1)
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		res := hub.Replay(0, func(topic string) bool { return topic == wantTopic })
+		if len(res.Events) > 0 {
+			p, ok := res.Events[0].Payload.(DeviceTriggerPayload)
+			if !ok {
+				t.Fatalf("payload type %T, want DeviceTriggerPayload", res.Events[0].Payload)
+			}
+			// BidCoS-RF:1 is a virtual-remote address → serial prefix required.
+			if want := "loom_11a0001234_bidcos_rf_1_press_short"; p.UniqueID != want {
+				t.Fatalf("unique_id = %q, want %q", p.UniqueID, want)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("virtual-remote DeviceTriggerEvent did not reach the hub within deadline")
 }

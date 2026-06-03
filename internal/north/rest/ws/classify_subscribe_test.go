@@ -32,7 +32,7 @@ func TestClassifyOptIn_WithClassify_ReceivesClassificationFields(t *testing.T) {
 	hub.PublishDataPointValueChangedKind(
 		KindChange, "home", "HmIP-RF", "DEV001", 4,
 		"LEVEL", "VALUES", 0.75, 0.0, time.Now(),
-		"sensor", "float",
+		"sensor", "float", "",
 	)
 
 	var ev outboundEvent
@@ -76,7 +76,7 @@ func TestClassifyOptOut_WithoutClassify_StripsClassificationFields(t *testing.T)
 	hub.PublishDataPointValueChangedKind(
 		KindChange, "home", "HmIP-RF", "DEV001", 4,
 		"LEVEL", "VALUES", 0.5, 0.0, time.Now(),
-		"actuator", "float",
+		"actuator", "float", "",
 	)
 
 	var ev outboundEvent
@@ -136,7 +136,7 @@ func TestClassifyNoCrossTalk_TwoClients(t *testing.T) {
 	hub.PublishDataPointValueChangedKind(
 		KindChange, "home", "HmIP-RF", "DEV002", 1,
 		"STATE", "VALUES", true, false, time.Now(),
-		"switch", "bool",
+		"switch", "bool", "",
 	)
 
 	// Both clients receive the event; order between the two is not specified,

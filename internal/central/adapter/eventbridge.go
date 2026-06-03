@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -530,13 +531,15 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 		// aggregate below. The look-up is in-memory and nil-safe.
 		ch := lookupChannel(b.registry, deviceAddr, channelNo)
 		category, dpType := valueChangedClassification(ch, e.Key.Parameter)
+		serialSuffix := b.registry.SerialSuffix(centralName)
+		uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
 		b.wsHub.PublishDataPointValueChangedKind(
 			envKind,
 			centralName, iface, deviceAddr, channelNo,
 			e.Key.Parameter, string(e.Key.ParamsetKey),
 			e.NewValue.Unwrap(), e.OldValue.Unwrap(),
 			e.Timestamp(),
-			category, dpType,
+			category, dpType, uniqueID,
 		)
 		// CDP-state aggregate: when the affected channel hosts a
 		// Custom-DP, also emit a state snapshot on
@@ -552,6 +555,7 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 						cdp.DataPointKey().Parameter,
 						cdpkind.Of(cdp),
 						state, e.Timestamp(),
+						routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
 					)
 				}
 			}

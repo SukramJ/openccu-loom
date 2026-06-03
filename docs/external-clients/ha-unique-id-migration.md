@@ -1,8 +1,11 @@
 # HA `unique_id` migration — legacy → loom canonical schema
 
-**Status:** Proposed (depends on the canonical-`unique_id` schema change
-landing in the daemon; see the implementation plan referenced from
-[`ha-drop-in-identity-and-scoping.md`](./ha-drop-in-identity-and-scoping.md)).
+**Status:** Ready to implement (client-side). The daemon-side
+prerequisite has landed — the value-bearing push payloads now carry the
+optional canonical `unique_id` (P6, see
+[`ha-drop-in-identity-and-scoping.md`](./ha-drop-in-identity-and-scoping.md)),
+so the client can both consume the key and verify its own rebuild. This
+document specifies the one-time HA registry migration the client runs.
 **Audience:** `homematicip_local` / `py-openccu-loom-client` authors.
 **Related:** [`ha-drop-in-identity-and-scoping.md`](./ha-drop-in-identity-and-scoping.md),
 [`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md).
@@ -136,19 +139,63 @@ for that entry, so newly-created entities already see the migrated keys.
   before the first connect. (The daemon, by contrast, only learns the
   serial post-connect — but it builds hub keys only for entities that are
   themselves discovered post-connect, so the two sides stay consistent.)
-- **Verification.** After migration, a device entity's
-  `unique_id` should equal the daemon's `unique_id` field verbatim
-  (devices carry no central prefix, so daemon key == HA key). Hub
-  entities differ only in that the daemon may use a different prefix slot;
-  the client owns the HA value.
+- **Verification.** The daemon now carries the `unique_id` field on its
+  value-bearing payloads (see *Recommended daemon change* below, now
+  landed), so a device entity's migrated `unique_id` should equal that
+  field verbatim (devices carry no central prefix, so daemon key == HA
+  key) — a cheap built-in drift check. The client still owns the HA value
+  and keeps the rebuild path as a fallback for payloads that omit the
+  field (e.g. before the CCU serial is known).
 
 ## Relationship to the daemon schema
 
-The daemon exposes the canonical `unique_id` on its WS/REST payloads and
-uses it for MQTT discovery; the client may consume it directly or rebuild
-it from `address` + `parameter` + `category` + hub `name` (all exposed on
-the payloads) using the shared routing-key contract. Either way the
-result is bit-identical, because both sides run the same contract. The
-namespace split (why three id producers exist and which is the HA key) is
-catalogued in
+The daemon runs the same routing-key contract on the Go side
+(`internal/routingkey`) and uses the canonical `loom_` key for **MQTT
+discovery**. The **value-bearing WS payloads now carry the canonical
+`unique_id`** as an optional field (P6) — built from the same raw inputs
+(`device_address` + `channel` → address, `parameter`, and the hub `name`)
+at the publish boundary, which holds the central → serial mapping. The
+client consumes `payload.unique_id` when present and **rebuilds** the key
+from the raw fields when it is absent. Because both sides run the same
+contract, the rebuilt key is bit-identical to the daemon's.
+
+The namespace split (why three id producers exist and which is the HA key)
+is catalogued in
 [`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md).
+
+### Recommended daemon change: carry `unique_id` on the value-bearing payloads (landed, P6)
+
+Rebuilding works, but it re-implements the contract on every consumer and
+leaves a silent-drift risk: a client that rebuilds slightly wrong routes
+to the wrong entity (or none), and nothing catches it. Carrying the
+canonical key on the payload removes that — the client consumes it
+directly and, at most, *verifies* its own rebuild against it.
+
+**Done:** an **optional** `unique_id` field (the canonical
+`loom_<routing-key>`) is now carried on the per-entity push payloads:
+
+- `DataPointValueChangedPayload`
+- `CustomDataPointStateChangedPayload`
+- `SysvarChangedPayload`, `ProgramExecutedPayload` — hub keys; these use
+  the post-connect serial suffix the daemon already has (it builds them
+  only for post-connect entities, so this stays consistent — see
+  *Serial availability* above). The program key resolves the program
+  *name* from the hub model (the event carries only the id); it is
+  omitted until the program is known.
+- `OptimisticRollbackPayload`, `DeviceTriggerPayload` — ride the same
+  per-data-point topics and route to the same entity, so they carry the
+  same key as the value-change.
+
+How it landed:
+
+1. `unique_id string` was added to the payload structs
+   (`internal/north/rest/ws/`), populated at the publish boundary via
+   `routingkey.CanonicalUniqueID(serialSuffix, address, parameter, eventPrefix)`
+   — the serial suffix comes from `(*central.Registry).SerialSuffix`;
+2. the `unique_id` property was added to each schema in `assets/openapi.yaml`;
+3. `openccu-loom-types` is regenerated downstream from that spec;
+4. the client consumes `payload.unique_id` when present, and keeps the
+   rebuild path as a **verifiable fallback** for payloads that omit it.
+
+The field is **optional** so the contract stays backward-compatible:
+clients fall back to rebuild when it is absent.

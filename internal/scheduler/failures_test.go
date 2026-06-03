@@ -4,8 +4,13 @@
 // failures_test.go covers the per-job and aggregate failure counters
 // exposed by Scheduler.JobFailures and Scheduler.TotalFailures.
 //
-// Every test uses clock.NewFake for deterministic ticking so no real-time
-// sleeps are needed to drive the scheduler.
+// Synchronisation with the scheduler goroutines is driven off the fake
+// clock's pending-timer count rather than fixed real-time sleeps: the
+// run loop re-registers its interval timer only after an invocation
+// returns (by which point the failure counter is already updated), so a
+// pending timer is a race-free signal that the prior invocation
+// completed. This keeps the assertions deterministic on slow or loaded
+// CI runners.
 package scheduler_test
 
 import (
@@ -19,13 +24,41 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 )
 
-// advanceTick moves the fake clock forward by one interval and yields briefly
-// so the scheduler goroutine can process the fired timer and complete the job
-// invocation before the caller inspects counters.
-func advanceTick(fake *clock.Fake, interval time.Duration) {
-	time.Sleep(5 * time.Millisecond) // let goroutine reach NewTimer
+// waitUntil polls cond every millisecond until it holds or a generous
+// deadline elapses, failing the test on timeout. It replaces fixed
+// real-time sleeps so a slow runner cannot flake the result.
+func waitUntil(t *testing.T, cond func() bool, msg string) {
+	t.Helper()
+	const deadline = 2 * time.Second
+	start := time.Now()
+	for time.Since(start) < deadline {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("%s (waited %s)", msg, deadline)
+}
+
+// syncReady blocks until the scheduler has at least want interval timers
+// parked — i.e. every RunOnStart / prior invocation has returned and the
+// run loop is waiting on NewTimer. After this returns the corresponding
+// failure counters are settled.
+func syncReady(t *testing.T, fake *clock.Fake, want int) {
+	t.Helper()
+	waitUntil(t, func() bool { return fake.PendingCount() >= want },
+		"scheduler did not register expected interval timers")
+}
+
+// advanceTick waits for the running job to park on its interval timer,
+// fires that timer, then waits for the resulting invocation to finish
+// (the loop re-registers a fresh timer only after invoke returns).
+// Counter inspection after advanceTick is therefore race-free.
+func advanceTick(t *testing.T, fake *clock.Fake, interval time.Duration) {
+	t.Helper()
+	syncReady(t, fake, 1)
 	fake.Advance(interval)
-	time.Sleep(10 * time.Millisecond) // let job run to completion
+	syncReady(t, fake, 1)
 }
 
 // TestJobFailures_SuccessfulJobDoesNotIncrement verifies that a job whose
@@ -51,10 +84,10 @@ func TestJobFailures_SuccessfulJobDoesNotIncrement(t *testing.T) {
 	defer s.Stop()
 
 	// RunOnStart fires immediately; wait for it to finish.
-	time.Sleep(10 * time.Millisecond)
+	syncReady(t, fake, 1)
 
 	// Trigger one additional tick.
-	advanceTick(fake, 100*time.Millisecond)
+	advanceTick(t, fake, 100*time.Millisecond)
 
 	s.Stop()
 
@@ -89,14 +122,14 @@ func TestJobFailures_ErrorJobIncrementsPerTick(t *testing.T) {
 	defer s.Stop()
 
 	// RunOnStart fires immediately; wait for completion → counter = 1.
-	time.Sleep(10 * time.Millisecond)
+	syncReady(t, fake, 1)
 
 	if got := s.JobFailures("bad"); got != 1 {
 		t.Errorf("after first run: JobFailures(%q) = %d, want 1", "bad", got)
 	}
 
 	// Trigger a second tick → counter = 2.
-	advanceTick(fake, 100*time.Millisecond)
+	advanceTick(t, fake, 100*time.Millisecond)
 
 	if got := s.JobFailures("bad"); got != 2 {
 		t.Errorf("after second run: JobFailures(%q) = %d, want 2", "bad", got)
@@ -131,14 +164,14 @@ func TestJobFailures_PanicIncrementsAndGoroutineSurvives(t *testing.T) {
 	defer s.Stop()
 
 	// RunOnStart fires immediately; wait for recovery → counter = 1.
-	time.Sleep(10 * time.Millisecond)
+	syncReady(t, fake, 1)
 
 	if got := s.JobFailures("panicker"); got < 1 {
 		t.Errorf("after first panic: JobFailures(%q) = %d, want >= 1", "panicker", got)
 	}
 
 	// Trigger a second tick — verifies the goroutine survived the panic.
-	advanceTick(fake, 100*time.Millisecond)
+	advanceTick(t, fake, 100*time.Millisecond)
 
 	if got := s.JobFailures("panicker"); got < 2 {
 		t.Errorf("after second panic: JobFailures(%q) = %d, want >= 2", "panicker", got)
@@ -177,8 +210,8 @@ func TestJobFailures_MultipleJobsSeparateCounters(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// RunOnStart fires for both jobs immediately.
-	time.Sleep(15 * time.Millisecond)
+	// RunOnStart fires for both jobs immediately; wait for both to park.
+	syncReady(t, fake, 2)
 
 	s.Stop()
 

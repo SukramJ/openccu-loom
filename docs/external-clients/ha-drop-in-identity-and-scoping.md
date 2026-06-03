@@ -1,8 +1,12 @@
-# HA drop-in: central identity & scoping — resolved
+# HA drop-in: central identity & scoping — daemon side resolved
 
-**Status:** Resolved — all daemon-side decisions taken (see the per-section
-*Resolution* notes below and [ADR-0024](../adr/0024-instance-and-ccu-identity.md)).
-One client-side follow-up remains, in the `homematicip_local` repo (see Summary).
+**Status:** Daemon side resolved — every daemon-side decision (P1–P6) is
+taken (see the per-section *Resolution* notes below and
+[ADR-0024](../adr/0024-instance-and-ccu-identity.md)). The optional
+daemon enhancement **P6** (carry `unique_id` on the value-bearing push
+payloads) has landed. One follow-up remains and it is **client-side**:
+the one-time `unique_id` registry migration in the `homematicip_local` /
+`py-openccu-loom-client` repos (see Summary).
 **Audience:** openccu-loom daemon maintainers
 **Related:** [`topic-hierarchy.md`](./topic-hierarchy.md), [`asks.md`](./asks.md),
 [ADR-0002 (multi-CCU first-class)](../adr/0002-multi-ccu-first-class.md)
@@ -178,17 +182,33 @@ discovered entities and WS-client entities are ever expected to share a
 deliberately distinct and are now catalogued in
 [`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md):
 the MQTT-discovery `unique_id` stays daemon-namespaced and pinned (changing
-it would orphan existing MQTT entities); the WS/REST `unique_id` field is
-opaque daemon scoping; and the cross-backend HA routing key is now mirrored
+it would orphan existing MQTT entities); the daemon's internal data-point
+identity stays opaque to clients; and the cross-backend HA routing key is now mirrored
 on the Go side in `internal/routingkey` (`GenerateUniqueID`,
 `GenerateChannelUniqueID`, `HubSlug`), locked bit-for-bit against the shared
 golden fixtures by a contract test under `tests/contract/`. The legacy
 `internal/model/device/naming.go:GenerateUniqueID` generator (which carried
 the misleading "HA-compatible" wording) has since been **deleted**;
-consumers use `internal/routingkey`. The HA drop-in client rebuilds the HA registry
-`unique_id` itself from `address` + `parameter` (+ its `entry_id[-10:]`
-prefix), which the WS/REST payloads already expose (raw `address`,
-`parameter`, `category`, and hub `name` = legacy name).
+consumers use `internal/routingkey`. The HA drop-in client rebuilds the HA
+registry `unique_id` itself via the shared contract from the raw fields the
+WS/REST payloads expose (`device_address` + `channel`, `parameter`,
+`category`, hub `name` = legacy name), using the **CCU serial suffix** in
+the central slot and the `loom_` namespace (see
+[`ha-unique-id-migration.md`](./ha-unique-id-migration.md)). The legacy
+`entry_id[-10:]` prefix is only the *source* side of the one-time registry
+migration, not the new key.
+
+**Resolved (P6):** the canonical `unique_id` is now carried on the
+value-bearing push payloads (`datapoint.value_changed`,
+`custom_data_point.state_changed`, `hub.sysvar_changed`,
+`hub.program_executed`, `datapoint.optimistic_rolled_back`,
+`device.trigger`) as an optional field, so the client consumes it
+directly rather than re-implementing the contract — and can verify its
+own rebuild against it. It is built by `internal/routingkey` at the
+publish boundary (which holds the central → serial mapping) and omitted
+when the serial / program name is not yet known, keeping the field
+backward-compatible. See
+[`ha-unique-id-migration.md` → "Recommended daemon change"](./ha-unique-id-migration.md).
 
 ---
 
@@ -198,6 +218,7 @@ prefix), which the WS/REST payloads already expose (raw `address`,
 |---|---|---|
 | HA `unique_id` for the drop-in | **client / homematicip_local** | run the one-time unique_id migration to the loom/serial scheme ([`ha-unique-id-migration.md`](./ha-unique-id-migration.md)); the old `entry_id`-based `central_id` injection is **obsolete** — **(open, client repo)** |
 | key algorithm bit-identical to aiohomematic | **shared contract** | client adopts `aiohomematic_contract`; daemon mirrors it in `internal/routingkey` + golden-fixture test; id namespaces documented as by-design — **P5 (resolved)** |
+| canonical `unique_id` on push payloads | **daemon** | optional `unique_id` now carried on the value-bearing payloads so clients consume + verify (rebuild stays a fallback when absent) — **P6 (resolved)** |
 | select *which* CCU per HA entry | **daemon contract** | serial→central_name resolution; equality normative in `openapi.yaml` — **P4 (resolved)** |
 | fetch one CCU's devices over REST | **daemon** | `central` query param on `/devices` + `/snapshot` (per-address already multi-CCU) — **P2 (resolved)** |
 | receive one CCU's device events | **daemon contract + client** | filter by payload `central`; normative in `topic-hierarchy.md` — **P3 (resolved)** |
@@ -208,3 +229,13 @@ central**, the status quo `topic-hierarchy.md` already documents. P2 was
 resolved with the `?central=` query parameter (option 2) and P4 with the
 normative equality; together with the loom/serial unique_id migration (P5)
 the daemon side is fully unblocked. Full multi-CCU-per-entry can follow.
+
+The daemon-side enhancement **P6** has landed: the canonical `unique_id`
+is now carried on the value-bearing payloads, so clients consume it
+directly and verify their own rebuild against it. It is optional and
+backward-compatible (omitted when unresolved; clients fall back to
+rebuild), so it does not change the drop-in contract — see
+[`ha-unique-id-migration.md` → "Recommended daemon change"](./ha-unique-id-migration.md).
+The only remaining work is **client-side**: the one-time HA registry
+`unique_id` migration in the `homematicip_local` / `py-openccu-loom-client`
+repos.

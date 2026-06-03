@@ -7,6 +7,39 @@ import (
 	"testing"
 )
 
+// TestRegistrySerialSuffix verifies that SerialSuffix returns the correct
+// per-CCU routing-key discriminator (last-10 chars lower-cased) and
+// returns "" for unknown or not-yet-connected centrals.
+func TestRegistrySerialSuffix(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry()
+
+	// Unknown central → empty string.
+	if got := r.SerialSuffix("no-such-ccu"); got != "" {
+		t.Fatalf("unknown central SerialSuffix = %q, want %q", got, "")
+	}
+
+	// Registered central with a full-length serial.
+	c, err := New(Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := r.Register(c); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	c.SetSystemInformation(SystemInfo{Serial: "3014F711A0001234"})
+	if got, want := r.SerialSuffix("ccu-01"), "11a0001234"; got != want {
+		t.Fatalf("SerialSuffix(full serial) = %q, want %q", got, want)
+	}
+
+	// Short serial — returned whole, lower-cased.
+	c.SetSystemInformation(SystemInfo{Serial: "ABC"})
+	if got, want := r.SerialSuffix("ccu-01"), "abc"; got != want {
+		t.Fatalf("SerialSuffix(short serial) = %q, want %q", got, want)
+	}
+}
+
 // TestRegistryUnregister verifies atomic remove with bool return.
 func TestRegistryUnregister(t *testing.T) {
 	r := NewRegistry()

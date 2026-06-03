@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **WebSocket payloads carry the canonical `unique_id`.** The
+  value-bearing push payloads (`datapoint.value_changed`,
+  `custom_data_point.state_changed`, `hub.sysvar_changed`,
+  `hub.program_executed`, `datapoint.optimistic_rolled_back`,
+  `device.trigger`) now include an optional `unique_id` field — the
+  loom-namespaced routing key (`loom_<routing-key>`) external clients
+  use as the Home Assistant entity key. Clients consume it directly
+  instead of rebuilding it from the raw fields; the field is omitted
+  when the producer cannot resolve it, so the change is
+  backward-compatible. See
+  `docs/external-clients/ha-unique-id-migration.md`.
+
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that

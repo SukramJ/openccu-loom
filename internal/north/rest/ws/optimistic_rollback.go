@@ -6,6 +6,7 @@ package ws
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
@@ -23,6 +24,11 @@ type OptimisticRollbackPayload struct {
 	Parameter     string `json:"parameter"`
 	ParamsetKey   string `json:"paramset_key"`
 	Reason        string `json:"reason"`
+	// UniqueID is the canonical loom-namespaced routing key for the data
+	// point that rolled back; it matches the value-changed entity's key
+	// (the rollback rides the same DP topic and routes to the same HA
+	// entity). Optional; see [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id,omitempty"`
 	// Sent is the optimistic value that was rolled back; Present is the
 	// value the DP reverted to (the last CCU-confirmed value).
 	Sent    any `json:"sent,omitempty"`
@@ -55,6 +61,7 @@ func (s *OptimisticRollbackSubscriber) Start() {
 		}
 		centralName := u.Name()
 		hub := s.hub
+		reg := s.reg
 		unsub := events.Subscribe(bus, func(e hmevent.DataPointOptimisticRolledBackEvent) {
 			channel, _ := e.Key.ChannelNo()
 			hub.Publish(Event{
@@ -68,8 +75,11 @@ func (s *OptimisticRollbackSubscriber) Start() {
 					Parameter:     e.Key.Parameter,
 					ParamsetKey:   string(e.Key.ParamsetKey),
 					Reason:        string(e.Reason),
-					Sent:          e.Sent.Unwrap(),
-					Present:       e.Present.Unwrap(),
+					UniqueID: routingkey.CanonicalUniqueID(
+						reg.SerialSuffix(centralName), e.Key.ChannelAddress, e.Key.Parameter, "",
+					),
+					Sent:    e.Sent.Unwrap(),
+					Present: e.Present.Unwrap(),
 				},
 			})
 		})

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // Registry holds every configured [*Unit] keyed by name.
@@ -50,6 +51,25 @@ func (r *Registry) Get(name string) (*Unit, bool) {
 	defer r.mu.RUnlock()
 	c, ok := r.items[name]
 	return c, ok
+}
+
+// SerialSuffix returns the routing-key central-id discriminator for the
+// named central: the CCU serial's last-10 lower suffix
+// ([routingkey.SerialSuffix]). It feeds the canonical external
+// unique_id for hub / internal / virtual-remote addresses (normal
+// devices need no prefix). The serial is only known post-connect, so an
+// unknown or not-yet-connected central yields an empty suffix; callers
+// building hub-level keys must tolerate that (hub keys are themselves
+// only built for post-connect entities — see
+// docs/external-clients/ha-unique-id-migration.md).
+func (r *Registry) SerialSuffix(name string) string {
+	r.mu.RLock()
+	c, ok := r.items[name]
+	r.mu.RUnlock()
+	if !ok || c == nil {
+		return ""
+	}
+	return routingkey.SerialSuffix(c.SystemInformation().Serial)
 }
 
 // List returns every registered unit sorted by name for stable
