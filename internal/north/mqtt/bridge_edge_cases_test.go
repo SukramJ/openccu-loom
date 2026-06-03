@@ -2071,7 +2071,13 @@ func TestCommandSubscriberStartSubscribeError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetOriginVersion(t *testing.T) {
-	t.Parallel()
+	// Not marked Parallel — mutates the shared originVersionStore, which is
+	// read by every Discovery emit. A parallel mutation here would flip the
+	// `origin.sw_version` baked into another test's payload mid-run and break
+	// payload-dedup expectations (see TestPublishWeekProfileDiscoveryDeduplicates).
+	orig := originVersion()
+	t.Cleanup(func() { SetOriginVersion(orig) })
+
 	// Non-empty → should update the package-level atomic store without panic.
 	SetOriginVersion("1.2.3")
 	// Empty → no-op.
