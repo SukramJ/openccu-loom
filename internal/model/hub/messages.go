@@ -77,9 +77,9 @@ func NewAlarmMessages(ack MessageAcknowledger) *AlarmMessages {
 // to set `central`.
 //
 // loom:reachable:reason="called by NewAlarmMessages (legacy wrapper) which is used by hub.NewHub to populate the Hub.Messages field"
-func NewAlarmMessagesWithCentral(central string, ack MessageAcknowledger) *AlarmMessages {
+func NewAlarmMessagesWithCentral(centralName string, ack MessageAcknowledger) *AlarmMessages {
 	a := &AlarmMessages{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "", "alarm_messages"),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "alarm_messages"),
 		Ack:                 ack,
 		messages:            map[string]AlarmMessage{},
 	}
@@ -96,9 +96,9 @@ func NewAlarmMessagesWithCentral(central string, ack MessageAcknowledger) *Alarm
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 alarm-messages aggregate is published to
 // `<base>/<central>/hub/alarm_messages`. Read-only; no Set topic.
-func (a *AlarmMessages) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (a *AlarmMessages) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
-		State: naming.MQTTHubAlarmMessages(base, central),
+		State: naming.MQTTHubAlarmMessages(base, centralName),
 	}
 }
 
@@ -260,9 +260,9 @@ func NewServiceMessages(ack MessageAcknowledger) *ServiceMessages {
 }
 
 // NewServiceMessagesWithCentral is the multi-CCU-safe constructor.
-func NewServiceMessagesWithCentral(central string, ack MessageAcknowledger) *ServiceMessages {
+func NewServiceMessagesWithCentral(centralName string, ack MessageAcknowledger) *ServiceMessages {
 	s := &ServiceMessages{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "", "service_messages"),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", "service_messages"),
 		Ack:                 ack,
 		messages:            map[string]ServiceMessage{},
 	}
@@ -279,9 +279,9 @@ func NewServiceMessagesWithCentral(central string, ack MessageAcknowledger) *Ser
 // MQTTTopics implements [payload.MQTTAddressable] — the canonical
 // ADR-0011 service-messages aggregate is published to
 // `<base>/<central>/hub/service_messages`. Read-only; no Set topic.
-func (s *ServiceMessages) MQTTTopics(base, central string) payload.MQTTTopicSet {
+func (s *ServiceMessages) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return payload.MQTTTopicSet{
-		State: naming.MQTTHubServiceMessages(base, central),
+		State: naming.MQTTHubServiceMessages(base, centralName),
 	}
 }
 

@@ -412,3 +412,57 @@ func TestPublishDeviceDiagnosticsNilMQTT(t *testing.T) {
 	dev := device.New(device.Config{Address: "DIAGDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-STH"})
 	b.publishDeviceDiagnostics(context.Background(), "ccu-01", "HmIP-RF", dev)
 }
+
+// ============================================================
+// EventBridge WS unique_id propagation
+// ============================================================
+
+// TestEventBridgeDataPointValueChangedUniqueID verifies that the EventBridge
+// fans a DataPointValueChangedEvent to the WebSocket hub with the correct
+// canonical unique_id on the DataPointValueChangedPayload. Normal device
+// addresses carry no serial prefix; the hub receives the correct loom-namespaced
+// key.
+func TestEventBridgeDataPointValueChangedUniqueID(t *testing.T) {
+	t.Parallel()
+
+	reg, _ := registryWithDevice(t)
+	// Fetch the central to publish on its bus.
+	c, ok := reg.Get("ccu-01")
+	if !ok {
+		t.Fatal("central ccu-01 not found in registry")
+	}
+
+	wsHub := ws.NewHub()
+	bridge := NewEventBridge(reg, wsHub, nil)
+	bridge.Start(context.Background())
+	defer bridge.Stop()
+
+	events.Publish(c.EventBus, hmevent.DataPointValueChangedEvent{
+		Base: hmevent.NewBaseAt(time.Now()),
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
+			ChannelAddress: "0001ABCD:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		NewValue: hmtypes.BoolValue(true),
+	})
+
+	wantTopic := ws.DataPointTopic("0001ABCD", 1, "STATE")
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		res := wsHub.Replay(0, func(topic string) bool { return topic == wantTopic })
+		if len(res.Events) > 0 {
+			p, castOK := res.Events[0].Payload.(ws.DataPointValueChangedPayload)
+			if !castOK {
+				t.Fatalf("payload type %T, want DataPointValueChangedPayload", res.Events[0].Payload)
+			}
+			if want := "loom_0001abcd_1_state"; p.UniqueID != want {
+				t.Fatalf("unique_id = %q, want %q", p.UniqueID, want)
+			}
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("DataPointValueChangedEvent did not reach the WS hub within deadline")
+}

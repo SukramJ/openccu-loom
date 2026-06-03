@@ -275,8 +275,8 @@ func (p *ParamsetsDomain) refreshAfterPut(
 		return
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	for _, c := range p.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddr)
+	for _, u := range p.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
 		}
@@ -428,8 +428,8 @@ func (p *ParamsetsDomain) resolveChannelInfo(channelAddress string) (model, chan
 		return "", ""
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, c := range p.registry.List() {
-		dev, ok := c.ModelRegistry.Get(devAddr)
+	for _, u := range p.registry.List() {
+		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
 		}
@@ -450,14 +450,14 @@ func (p *ParamsetsDomain) resolve(deviceOrChannel string) (paramsetBackend, erro
 		return nil, ErrNoParamsetBackend
 	}
 	addr := deviceAddressOf(deviceOrChannel)
-	for _, c := range p.registry.List() {
-		dev, ok := c.ModelRegistry.Get(addr)
+	for _, u := range p.registry.List() {
+		dev, ok := u.ModelRegistry.Get(addr)
 		if !ok {
 			continue
 		}
-		b, ok := p.writer.Backend(c.Name(), dev.InterfaceID)
+		b, ok := p.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, c.Name(), dev.InterfaceID)
+			return nil, fmt.Errorf("%w: %s/%s", ErrNoParamsetBackend, u.Name(), dev.InterfaceID)
 		}
 		return b, nil
 	}
@@ -472,8 +472,8 @@ func (p *ParamsetsDomain) resolveChannel(channelAddress string) *device.Channel 
 		return nil
 	}
 	devAddr := deviceAddressOf(channelAddress)
-	for _, c := range p.registry.List() {
-		dev, ok := c.ModelRegistry.Get(devAddr)
+	for _, u := range p.registry.List() {
+		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
 		}

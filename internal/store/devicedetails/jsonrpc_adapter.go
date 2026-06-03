@@ -57,6 +57,6 @@ func (a *jsonClientAdapter) GetAllFunctionsRaw(ctx context.Context) ([]rawEntry,
 // daemon's [*jsonrpc.Client] and get back a fully-wired [Loader]. The
 // daemon is the single caller; tests use [NewLoader] directly with a
 // fake [jsonClientLike].
-func NewLoaderForJSONRPC(cache *Cache, jc *jsonrpc.Client, central string, logger *slog.Logger) *Loader {
-	return NewLoader(cache, &jsonClientAdapter{jc: jc}, central, logger)
+func NewLoaderForJSONRPC(cache *Cache, jc *jsonrpc.Client, centralName string, logger *slog.Logger) *Loader {
+	return NewLoader(cache, &jsonClientAdapter{jc: jc}, centralName, logger)
 }

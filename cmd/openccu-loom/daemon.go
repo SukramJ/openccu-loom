@@ -246,8 +246,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// `IsDevicesCreated()` returns true automatically once the first
 	// `DeviceCreatedEvent` lands on the bus during WireCentrals.
 	// follow-up.
-	for _, c := range reg.List() {
-		c.WireDevicesCreatedGate()
+	for _, u := range reg.List() {
+		u.WireDevicesCreatedGate()
 	}
 
 	// Register the standard per-central background jobs BEFORE
@@ -258,17 +258,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// other unconditional job — it advances each interface's
 	// circuit-breaker OPEN → HALF_OPEN → CLOSED on its own probe
 	// cadence, no caller need invoke it.
-	for _, c := range reg.List() {
+	for _, u := range reg.List() {
 		jobs := central.StandardJobs{}
 		// Apply per-central overrides from the configuration. Currently
 		// only check_connection_interval is overridable; zero means "use
 		// the compiled-in default".
 		for i := range cfg.Centrals {
-			if cfg.Centrals[i].Name == c.Name() && cfg.Centrals[i].CheckConnectionInterval > 0 {
+			if cfg.Centrals[i].Name == u.Name() && cfg.Centrals[i].CheckConnectionInterval > 0 {
 				jobs.CheckConnectionInterval = cfg.Centrals[i].CheckConnectionInterval
 			}
 		}
-		if c.Hub != nil {
+		if u.Hub != nil {
 			// Hub-Refresh-Hooks delegate through the HubCoordinator's
 			// RefreshXxx methods. The inner hooks (loadPrograms,
 			// loadSysvars, …) are wired by WireHub after the JSON-RPC
@@ -276,15 +276,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			// registering the jobs unconditionally here, the scheduler
 			// picks up the cadence and starts firing the moment WireHub
 			// installs the closures.
-			jobs.ProgramRefresh = c.Hub.RefreshPrograms
-			jobs.SysvarRefresh = c.Hub.RefreshSysvars
-			jobs.InboxRefresh = c.Hub.RefreshInbox
-			jobs.ServiceMessagesRefresh = c.Hub.RefreshServiceMessages
-			jobs.AlarmMessagesRefresh = c.Hub.RefreshAlarmMessages
-			jobs.SystemUpdateRefresh = c.Hub.RefreshSystemUpdate
-			jobs.InstallModeRefresh = c.Hub.RefreshInstallMode
-			jobs.HubMetricsRefresh = c.Hub.RefreshMetrics
-			jobs.HubConnectivityRefresh = c.Hub.RefreshConnectivity
+			jobs.ProgramRefresh = u.Hub.RefreshPrograms
+			jobs.SysvarRefresh = u.Hub.RefreshSysvars
+			jobs.InboxRefresh = u.Hub.RefreshInbox
+			jobs.ServiceMessagesRefresh = u.Hub.RefreshServiceMessages
+			jobs.AlarmMessagesRefresh = u.Hub.RefreshAlarmMessages
+			jobs.SystemUpdateRefresh = u.Hub.RefreshSystemUpdate
+			jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
+			jobs.HubMetricsRefresh = u.Hub.RefreshMetrics
+			jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
 		}
 		// Wire and register the Reconciler so the slow-cadence
 		// connectivity/health pass emits ConnectivityChangedEvent on
@@ -294,18 +294,18 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// reconcileConnectivity / reconcileSystemHealth passes would
 		// land on nil and short-circuit — the slow drift sweep would
 		// never fire even though the job slot was registered.
-		if c.Reconciler == nil {
-			c.Reconciler = &coordinators.Reconciler{
-				CentralName:  c.Name(),
-				Bus:          c.EventBus,
-				Connectivity: c.HubModel.ConnectivityDataPoints(),
-				Metrics:      c.HubModel.Metrics,
+		if u.Reconciler == nil {
+			u.Reconciler = &coordinators.Reconciler{
+				CentralName:  u.Name(),
+				Bus:          u.EventBus,
+				Connectivity: u.HubModel.ConnectivityDataPoints(),
+				Metrics:      u.HubModel.Metrics,
 			}
 		}
-		jobs.Reconcile = c.Reconciler.Reconcile
-		if _, err := central.RegisterStandardJobs(c, jobs); err != nil {
+		jobs.Reconcile = u.Reconciler.Reconcile
+		if _, err := central.RegisterStandardJobs(u, jobs); err != nil {
 			logger.Warn("central.standard_jobs.register_failed",
-				slog.String("central", c.Name()),
+				slog.String("central", u.Name()),
 				slog.String("err", err.Error()))
 		}
 	}
@@ -332,9 +332,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// sample so the `/health` endpoint reports green as soon as the
 	// daemon hits its signal loop.
 	obsRecorder := observability.LogRecorder{Logger: logger.With(slog.String("component", "observability"))}
-	for _, c := range reg.List() {
-		c.Health.Record("central", health.Sample{Healthy: true, Note: "started"})
-		c.SetObservabilityRecorder(obsRecorder)
+	for _, u := range reg.List() {
+		u.Health.Record("central", health.Sample{Healthy: true, Note: "started"})
+		u.SetObservabilityRecorder(obsRecorder)
 
 		// Pin the primary interface explicitly when the operator
 		// configured `primary_interface` for this central. Empty
@@ -343,10 +343,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// installations rely on this to score the right interface
 		// as the central's primary.
 		for i := range cfg.Centrals {
-			if cfg.Centrals[i].Name == c.Name() && cfg.Centrals[i].PrimaryInterface != "" {
-				c.Health.SetPrimaryInterface(cfg.Centrals[i].PrimaryInterface)
+			if cfg.Centrals[i].Name == u.Name() && cfg.Centrals[i].PrimaryInterface != "" {
+				u.Health.SetPrimaryInterface(cfg.Centrals[i].PrimaryInterface)
 				logger.Info("health.primary_interface.pinned",
-					slog.String("central", c.Name()),
+					slog.String("central", u.Name()),
 					slog.String("interface", cfg.Centrals[i].PrimaryInterface))
 				break
 			}
@@ -355,10 +355,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// Surface the event-bus deferred high-water gauge through the
 		// health tracker so admin endpoints can alert on pathological
 		// handler recursion without owning the events package directly.
-		bus := c.EventBus
-		c.Health.RegisterGauge("event_bus.deferred_depth",
+		bus := u.EventBus
+		u.Health.RegisterGauge("event_bus.deferred_depth",
 			func() float64 { return float64(bus.DeferredDepth()) })
-		c.Health.RegisterGauge("event_bus.deferred_high_water",
+		u.Health.RegisterGauge("event_bus.deferred_high_water",
 			func() float64 { return float64(bus.DeferredHighWater()) })
 		// Audit durability telemetry (O12 / R11). Surfaces the durable-
 		// sink overflow counter so admin endpoints can alert on
@@ -366,20 +366,20 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// when the durable sink was not wired (in-memory-only audit).
 		if auditDurableStats != nil {
 			s := auditDurableStats
-			c.Health.RegisterGauge("audit.dropped",
+			u.Health.RegisterGauge("audit.dropped",
 				func() float64 { return float64(s.Dropped()) })
-			c.Health.RegisterGauge("audit.sink_errors",
+			u.Health.RegisterGauge("audit.sink_errors",
 				func() float64 { return float64(s.SinkErrors()) })
 		}
 		// Scheduler coverage: job-count + cumulative failure counter
 		// (errors + recovered panics). Per-job breakdown is reachable
 		// via the diagnostics-dump component map; the gauge gives the
 		// SPA a single number for the at-a-glance tile.
-		if c.Scheduler != nil {
-			scheduler := c.Scheduler
-			c.Health.RegisterGauge("scheduler.jobs",
+		if u.Scheduler != nil {
+			scheduler := u.Scheduler
+			u.Health.RegisterGauge("scheduler.jobs",
 				func() float64 { return float64(len(scheduler.Jobs())) })
-			c.Health.RegisterGauge("scheduler.failures",
+			u.Health.RegisterGauge("scheduler.failures",
 				func() float64 { return float64(scheduler.TotalFailures()) })
 		}
 
@@ -389,18 +389,18 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// All providers are wired with the components owned by this central;
 		// nil providers are safe — Aggregator degrades to zero-value sections.
 		obs := metrics.NewObserver()
-		unsubMetrics := metricswiring.SubscribeObserver(c.EventBus, obs)
+		unsubMetrics := metricswiring.SubscribeObserver(u.EventBus, obs)
 		_ = unsubMetrics // lifetime matches the central; detach on shutdown is best-effort
 
 		agg := metrics.NewAggregator(
-			c.Name(), obs,
-			metrics.WithClientProvider(metricswiring.NewClientProvider(c.MetricsClients)),
-			metrics.WithCacheProvider(metricswiring.NewCacheProvider(c.Cache)),
-			metrics.WithRecoveryProvider(metricswiring.NewRecoveryProvider(c.Recovery)),
-			metrics.WithEventBus(metricswiring.NewEventBusProvider(c.EventBus)),
-			metrics.WithHealthTracker(metricswiring.NewHealthProvider(c.Health, c.Recovery)),
+			u.Name(), obs,
+			metrics.WithClientProvider(metricswiring.NewClientProvider(u.MetricsClients)),
+			metrics.WithCacheProvider(metricswiring.NewCacheProvider(u.Cache)),
+			metrics.WithRecoveryProvider(metricswiring.NewRecoveryProvider(u.Recovery)),
+			metrics.WithEventBus(metricswiring.NewEventBusProvider(u.EventBus)),
+			metrics.WithHealthTracker(metricswiring.NewHealthProvider(u.Health, u.Recovery)),
 		)
-		c.SetAggregator(agg)
+		u.SetAggregator(agg)
 	}
 
 	// --- shared infrastructure ---------------------------------
@@ -593,8 +593,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		Visibility:           visReg,
 		MasterValues:         masterValuesStore,
 		ValuesCache:          valuesCacheStore,
-		ValuesCacheCentralFilter: func(central string) bool {
-			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(central)
+		ValuesCacheCentralFilter: func(centralName string) bool {
+			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every
@@ -660,8 +660,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// ClientStateChanged / CircuitBreakerStateChanged / Recovery
 	// events fly past with no Tracker subscriber, leaving the
 	// diagnostics dump's `clients[]` array permanently empty.
-	for _, c := range reg.List() {
-		_ = adapter.WireHealth(c)
+	for _, u := range reg.List() {
+		_ = adapter.WireHealth(u)
+		// WireCentrals connected the interfaces BEFORE WireHealth
+		// subscribed, so the startup ClientStateChanged transitions fired
+		// with no health subscriber and the central kept the FAILED
+		// evaluation taken at boot (before any interface was connected) —
+		// surfacing as a permanently "degraded" CCU even though the
+		// interfaces are connected and callbacks are flowing. Re-evaluate
+		// now that the InterfaceClient registry reflects the connected
+		// clients so the central state matches reality.
+		u.EvaluateCentralState("post_wire", true)
 	}
 
 	// Register a post-stop hook on each central so the shared registry
@@ -669,9 +678,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// ensures that a central which has been stopped (e.g. due to a
 	// fatal init error or a graceful reload) is no longer visible to
 	// north-bound adapters that iterate the registry.
-	for _, c := range reg.List() {
-		centralName := c.Name()
-		c.AddOnStopHook(func() {
+	for _, u := range reg.List() {
+		centralName := u.Name()
+		u.AddOnStopHook(func() {
 			reg.Unregister(centralName)
 		})
 	}
@@ -688,11 +697,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
 	// forced-availability override flipped accordingly so HA / REST / SPA stop
 	// showing stale "online" entities after a CCU-side disconnect. Per-central
-	// because the registry holds one CentralUnit per CCU; closer is chained into
+	// because the registry holds one Unit per CCU; closer is chained into
 	// the daemon shutdown.
 	var availClosers []func()
-	for _, c := range reg.List() {
-		if closer := adapter.WireDeviceAvailability(c); closer != nil {
+	for _, u := range reg.List() {
+		if closer := adapter.WireDeviceAvailability(u); closer != nil {
 			availClosers = append(availClosers, closer)
 		}
 	}
@@ -709,8 +718,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// LinkPeerChangedEvent re-wires on topology changes (links.add / remove).
 	// Per-central, closer chained into daemon shutdown.
 	var climateClosers []func()
-	for _, c := range reg.List() {
-		if closer := adapter.WireClimateLinkPeerRefresh(c); closer != nil {
+	for _, u := range reg.List() {
+		if closer := adapter.WireClimateLinkPeerRefresh(u); closer != nil {
 			climateClosers = append(climateClosers, closer)
 		}
 	}
@@ -733,10 +742,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// serial / configuration_url in HA.
 	if mqttWiring != nil {
 		bridge := mqttWiring.Bridge()
-		for _, cu := range reg.List() {
-			si := cu.SystemInformation()
-			bridge.SetHubInfoFor(cu.Name(), mqtt.HubInfo{
-				Name:    cu.Name(),
+		for _, u := range reg.List() {
+			si := u.SystemInformation()
+			bridge.SetHubInfoFor(u.Name(), mqtt.HubInfo{
+				Name:    u.Name(),
 				Model:   si.Model,
 				Version: si.Version,
 				Serial:  si.Serial,
@@ -1034,12 +1043,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// dead. The Reachable attribute itself reads dev.Available() live
 		// per dispatch (endpoint/materialize.go); this supplies the push
 		// half so active subscriptions are notified, not just polled reads.
-		for _, c := range reg.List() {
-			if c == nil || c.EventBus == nil {
+		for _, u := range reg.List() {
+			if u == nil || u.EventBus == nil {
 				continue
 			}
-			cName := c.Name()
-			unsub := events.Subscribe(c.EventBus, func(e hmevent.DeviceLifecycleEvent) {
+			cName := u.Name()
+			unsub := events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
 				if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
 					return
 				}
@@ -1288,11 +1297,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		matterCandidates = &matterCandidateProviderAdapter{
 			walk: func() []eligibility.Candidate {
 				var out []eligibility.Candidate
-				for _, c := range reg.List() {
-					if c == nil || c.ModelRegistry == nil {
+				for _, u := range reg.List() {
+					if u == nil || u.ModelRegistry == nil {
 						continue
 					}
-					out = append(out, eligibility.CollectCandidates(c.Name(), c.ModelRegistry.List())...)
+					out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List())...)
 				}
 				return out
 			},
@@ -1324,9 +1333,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Previously gated by `cfg.North.REST.Enabled`,
 	// which left `central.Link.resolver==nil` when REST was off and
 	// broke link operations from MQTT/WS adapters that bypass REST.
-	for _, c := range reg.List() {
-		if err := adapter.WireLinkCoordinator(c, linksDomain); err != nil {
-			logger.Warn("wire link coordinator", slog.String("central", c.Name()), slog.String("err", err.Error()))
+	for _, u := range reg.List() {
+		if err := adapter.WireLinkCoordinator(u, linksDomain); err != nil {
+			logger.Warn("wire link coordinator", slog.String("central", u.Name()), slog.String("err", err.Error()))
 		}
 	}
 
@@ -1349,8 +1358,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The closure looks up the IC via Clients.Get(interfaceID) on the
 	// owning central.
 	valueWriter.SetCommandTrackerFn(func(interfaceID, channelAddress string, parameter hmenum.Parameter, paramsetKey hmenum.ParamsetKey, value any) {
-		for _, c := range reg.List() {
-			if entry, ok := c.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
+		for _, u := range reg.List() {
+			if entry, ok := u.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
 				entry.Client.WriteUnconfirmedValue(channelAddress, parameter, paramsetKey, value)
 				return
 			}
@@ -1407,6 +1416,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	wsDeviceLifecycle := ws.NewDeviceLifecycleSubscriber(reg, wsHub)
 	wsDeviceLifecycle.Start()
 	defer wsDeviceLifecycle.Stop()
+
+	wsDeviceTrigger := ws.NewDeviceTriggerSubscriber(reg, wsHub)
+	wsDeviceTrigger.Start()
+	defer wsDeviceTrigger.Stop()
+
+	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
+	wsOptimisticRollback.Start()
+	defer wsOptimisticRollback.Stop()
 
 	if mqttWiring != nil {
 		mqttSysStatus := mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
@@ -2174,13 +2191,13 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	snap := func(_ context.Context) []endpoint.Snapshot {
 		var out []endpoint.Snapshot
-		for _, c := range reg.List() {
-			if c == nil || c.ModelRegistry == nil {
+		for _, u := range reg.List() {
+			if u == nil || u.ModelRegistry == nil {
 				continue
 			}
 			out = append(out, endpoint.Snapshot{
-				CentralName: c.Name(),
-				Devices:     c.ModelRegistry.List(),
+				CentralName: u.Name(),
+				Devices:     u.ModelRegistry.List(),
 			})
 		}
 		return out

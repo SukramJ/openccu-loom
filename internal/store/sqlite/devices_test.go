@@ -17,9 +17,9 @@ func freshDeviceStore(t *testing.T) *DeviceStore {
 	return NewDeviceStore(openTestDB(t, "dev.db"))
 }
 
-func baseDeviceRecord(central, iface, addr string) DeviceRecord {
+func baseDeviceRecord(centralName, iface, addr string) DeviceRecord {
 	return DeviceRecord{
-		CentralName:  central,
+		CentralName:  centralName,
 		InterfaceID:  iface,
 		Address:      addr,
 		Type:         "HM-CC-RT-DN",
@@ -588,10 +588,10 @@ func TestDeviceStoreClearRemovesOnlyMatchingRows(t *testing.T) {
 	s := NewDeviceStore(db)
 	ctx := context.Background()
 
-	upsert := func(central, iface, addr string) {
+	upsert := func(centralName, iface, addr string) {
 		t.Helper()
 		err := s.Upsert(ctx, DeviceRecord{
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			Address:     addr,
 			Type:        "DEVICE",

@@ -89,7 +89,7 @@ func TestSourceNoDualStatePayload(t *testing.T) {
 		reflect.TypeOf((*hub.Metrics)(nil)).Elem(),
 		reflect.TypeOf((*hub.Hub)(nil)).Elem(),
 
-		reflect.TypeOf((*central.CentralUnit)(nil)).Elem(),
+		reflect.TypeOf((*central.Unit)(nil)).Elem(),
 		reflect.TypeOf((*client.InterfaceClient)(nil)).Elem(),
 	}
 

@@ -129,8 +129,8 @@ func (a *LinkProfilesAdapter) resolveChannelType(channelAddr string) string {
 		return ""
 	}
 	devAddr := deviceAddressOf(channelAddr)
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(devAddr)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(devAddr)
 		if !ok {
 			continue
 		}

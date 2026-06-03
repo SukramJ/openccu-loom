@@ -19,7 +19,7 @@ const ExportVersion = "1.0"
 // (e.g. internal/central); tests provide a fake.
 //
 // CentralName scopes the lookup to one of the potentially many active
-// CentralUnits (multi-CCU safe).
+// Units (multi-CCU safe).
 type ParamsetReader interface {
 	// ReadParamset fetches the named paramset (usually "MASTER" or "VALUES")
 	// for the given channel address on the given central.

@@ -321,3 +321,30 @@ func TestThermostatServer_Write_OccupiedHeatingSetpoint(t *testing.T) {
 		t.Errorf("OccupiedHeatingSetpoint after write = %v, want 2200", raw)
 	}
 }
+
+// TestMatterWriteAcceptsDecoderWidths locks the fix for the live
+// "matter.tx.im.write_status … cluster=513 attribute=28 status=Failure"
+// bug: the bridge's TLV attribute decoder surfaces a written enum8/int16
+// as uint64/int64, so MatterWrite must accept those widths and narrow —
+// a strict value.(uint8)/value.(int16) rejected the decoded value and
+// failed the whole Write.
+func TestMatterWriteAcceptsDecoderWidths(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+
+	const (
+		attrSystemMode              = 0x001C
+		attrOccupiedHeatingSetpoint = 0x0012
+	)
+
+	// SystemMode (enum8) arrives as uint64 from the decoder.
+	srv := newHeatCool()
+	if err := srv.MatterWrite(ctx, attrSystemMode, uint64(4), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("SystemMode write with uint64(4) must succeed, got: %v", err)
+	}
+
+	// Heating setpoint (int16) arrives as int64 from the decoder.
+	if err := srv.MatterWrite(ctx, attrOccupiedHeatingSetpoint, int64(2100), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OccupiedHeatingSetpoint write with int64(2100) must succeed, got: %v", err)
+	}
+}

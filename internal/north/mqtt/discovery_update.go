@@ -6,9 +6,9 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // UpdateEvent carries the per-device context needed to build discovery
@@ -38,10 +38,10 @@ type UpdateEvent struct {
 // AggregatedStateTopic to use the dedicated update state topic and
 // ServiceMethodCommandTopic("install") to use the update install topic.
 type updateDiscoveryCtx struct {
-	topics  *TopicBuilder
-	central string
-	iface   string
-	address string
+	topics      *TopicBuilder
+	centralName string
+	iface       string
+	address     string
 }
 
 func (c updateDiscoveryCtx) AggregatedStateTopic() string {
@@ -49,27 +49,27 @@ func (c updateDiscoveryCtx) AggregatedStateTopic() string {
 	// HADiscoveryContext interface for its retained state topic
 	// (`<addr>/update`). It has no CustomDP slot, so
 	// CustomDPStateTopic mirrors the same value.
-	return c.topics.DeviceUpdateState(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateState(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) CustomDPStateTopic() string {
-	return c.topics.DeviceUpdateState(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateState(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) ServiceMethodCommandTopic(_ string) string {
 	// For the update entity there is exactly one service method: "install".
 	// The payload_install HA field triggers it; always return the install
 	// command topic regardless of the method name argument.
-	return c.topics.DeviceUpdateCommand(c.central, c.iface, c.address)
+	return c.topics.DeviceUpdateCommand(c.centralName, c.iface, c.address)
 }
 
 func (c updateDiscoveryCtx) WireParameterCommandTopic(parameter string) string {
 	// Update entities do not reference per-parameter command topics.
-	return c.topics.DataPointCommand(c.central, c.iface, c.address, 0, parameter)
+	return c.topics.DataPointCommand(c.centralName, c.iface, c.address, 0, parameter)
 }
 
 func (c updateDiscoveryCtx) WireParameterStateTopic(parameter string) string {
-	return c.topics.DataPointState(c.central, c.iface, c.address, 0, parameter)
+	return c.topics.DataPointState(c.centralName, c.iface, c.address, 0, parameter)
 }
 
 // BuildUpdateDiscovery builds the HA Discovery `update` payload for one
@@ -77,28 +77,28 @@ func (c updateDiscoveryCtx) WireParameterStateTopic(parameter string) string {
 //
 // Returns DiscoveryItem{OK: false} when ev.Update is nil or JSON
 // marshalling fails.
-func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev UpdateEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(centralName string, ev UpdateEvent) DiscoveryItem {
 	if ev.Update == nil {
 		return DiscoveryItem{}
 	}
 	ctx := updateDiscoveryCtx{
-		topics:  d.TopicBuilder,
-		central: central,
-		iface:   ev.Interface,
-		address: ev.DeviceAddress,
+		topics:      d.TopicBuilder,
+		centralName: centralName,
+		iface:       ev.Interface,
+		address:     ev.DeviceAddress,
 	}
 	comp, body := ev.Update.HADiscoveryPayload(ctx)
 	if body == nil || comp == "" {
 		return DiscoveryItem{}
 	}
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	// object_id is unique per device — there is exactly one update entity per device.
-	objectID := "openccu-loom_" + strings.ToLower(ev.DeviceAddress) + "_update"
+	objectID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), ev.DeviceAddress, "update", "")
 
 	// Compose the mock Event needed by deviceDescriptor / channelBaseBody.
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -116,7 +116,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -163,7 +163,7 @@ func (d *DefaultDiscoveryBuilder) BuildUpdateDiscovery(central string, ev Update
 // No-ops when HA discovery is disabled on the bridge, when
 // BuildUpdateDiscovery returns OK=false, or when no DefaultDiscoveryBuilder
 // is wired.
-func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev UpdateEvent) error {
+func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, centralName string, ev UpdateEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -174,7 +174,7 @@ func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev 
 	if !ok {
 		return nil
 	}
-	item := builder.BuildUpdateDiscovery(central, ev)
+	item := builder.BuildUpdateDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -189,20 +189,20 @@ func (b *Bridge) PublishUpdateDiscovery(ctx context.Context, central string, ev 
 // "<state-string>" }
 //
 // No-ops when the raw plane is disabled or state is nil.
-func (b *Bridge) PublishUpdateState(ctx context.Context, central, iface, address string, state payload.StatePayload) error {
+func (b *Bridge) PublishUpdateState(ctx context.Context, centralName, iface, address string, state payload.StatePayload) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	if state == nil {
 		state = map[string]any{}
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
-	topic := b.topics.DeviceUpdateState(central, iface, address)
+	topic := b.topics.DeviceUpdateState(centralName, iface, address)
 	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }

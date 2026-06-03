@@ -359,7 +359,7 @@ func wireInterface(
 	ctx context.Context,
 	cc config.CentralConfig,
 	iface hmenum.Interface,
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	pipeline *DevicePipeline,
 	writer *client.ValueWriter,
 	runner *rega.Runner,
@@ -384,18 +384,20 @@ func wireInterface(
 		return nil, err
 	}
 
-	// wireID is the central-prefixed interface identifier the CCU
-	// sees during init() and echoes back in every callback envelope
-	// (see [WireInterfaceID]). Using the bare `string(iface)` would
-	// collide on the CCU when two daemons share the same physical
-	// interface — see ADR-style note in interface_id.go.
+	// wireID is the canonical, host-independent interface identifier used
+	// for all daemon-internal wiring (writer, registries, bus, stamping,
+	// MQTT/REST surfaces). initID is the wire-boundary triple advertised to
+	// the CCU at init()/deinit() — the CCU echoes it back in callbacks and
+	// the inbound handler strips it back to wireID. See [WireInterfaceID] /
+	// [InitInterfaceID] (ADR-0024).
 	wireID := WireInterfaceID(cc.Name, iface)
+	initID := InitInterfaceID(unit.InstanceName(), cc.Name, iface)
 
 	xmlClient, err := xmlrpc.NewClient(xmlrpc.Config{
 		URL:                url,
 		Username:           cc.Username,
 		Password:           cc.Password,
-		Interface:          wireID,
+		Interface:          initID,
 		Host:               cc.Host,
 		InsecureSkipVerify: cc.TLSInsecureSkipVerify,
 		Logger:             logger.With(slog.String("interface", wireID)),
@@ -547,6 +549,18 @@ func wireInterface(
 		unit.MetricsClients.Register(ic)
 	}
 
+	// Publish a ClientStateChangedEvent on every state-machine transition
+	// so WireHealth (health tracker → central-state re-evaluation) and
+	// WireDeviceAvailability learn when the client connects. Keyed by
+	// wireID to match the Clients registry + health component names.
+	// Without this the startup connect (created→…→connected) is silent:
+	// the health tracker never sees the client become healthy and the
+	// central stays DEGRADED even though the interface is connected and
+	// receiving callbacks.
+	if unit.EventBus != nil {
+		ic.SetStateChangedBus(unit.EventBus, wireID)
+	}
+
 	// W6: wire the IC's PingPong tracker to the central event bus and
 	// the connection-recovery coordinator so threshold-crossing events
 	// are published and false-alarm PING tracking is suppressed during
@@ -562,6 +576,7 @@ func wireInterface(
 		captured := ic
 		capturedBackend := backend
 		capturedWireID := wireID
+		capturedInitID := initID
 		capturedCallbackURL := callbackURL
 		// Wire hub refresh into recovery so sysvar/program data is
 		// reloaded after a successful reconnect.
@@ -589,14 +604,14 @@ func wireInterface(
 				return nil
 			},
 			RPCProbe: func(ctx context.Context) error {
-				return capturedBackend.Ping(ctx, capturedWireID)
+				return capturedBackend.Ping(ctx, capturedInitID)
 			},
 			StabilityProbe: func(ctx context.Context) error {
-				return capturedBackend.Ping(ctx, capturedWireID)
+				return capturedBackend.Ping(ctx, capturedInitID)
 			},
 			Reconnect: func(rctx context.Context) error {
 				attempts := 0
-				ok, err := captured.Reconnect(rctx, capturedBackend, capturedWireID, capturedCallbackURL, nil, &attempts)
+				ok, err := captured.Reconnect(rctx, capturedBackend, capturedInitID, capturedCallbackURL, nil, &attempts)
 				if err != nil {
 					return err
 				}
@@ -808,10 +823,10 @@ func wireInterface(
 		// indefinitely. Best-effort: a Deinit failure does not abort
 		// the subsequent Init (the CCU may already have timed the
 		// old registration out, or this is a first-ever boot).
-		if err := backend.Deinit(ctx, wireID); err != nil {
+		if err := backend.Deinit(ctx, initID); err != nil {
 			logger.Debug("wire.deinit.pre_init",
 				slog.String("central", cc.Name),
-				slog.String("interface", wireID),
+				slog.String("interface", initID),
 				slog.String("err", err.Error()))
 		}
 		// Snapshot the last-event monotonic timestamp before the init
@@ -830,7 +845,7 @@ func wireInterface(
 				preInitEventAt = at
 			}
 		}
-		if err := backend.Init(ctx, wireID, callbackURL); err != nil {
+		if err := backend.Init(ctx, initID, callbackURL); err != nil {
 			callbackSeen := false
 			if unit.Events != nil {
 				if at, ok := unit.Events.LastEventMonotonicForInterface(wireID); ok && at.After(preInitEventAt) {
@@ -876,6 +891,7 @@ func wireInterface(
 	// on daemon shutdown. The XML-RPC client itself is stateless.
 	centralName := cc.Name
 	ifaceID := wireID
+	deinitID := initID
 	closer := func() {
 		// Stop the connection-probe goroutine first so the next tick
 		// does not race against the backend being torn down.
@@ -887,10 +903,10 @@ func wireInterface(
 		}
 		if callbackURL != "" {
 			deinitCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			if err := backend.Deinit(deinitCtx, ifaceID); err != nil {
+			if err := backend.Deinit(deinitCtx, deinitID); err != nil {
 				logger.Debug("wire.deinit",
 					slog.String("central", centralName),
-					slog.String("interface", ifaceID),
+					slog.String("interface", deinitID),
 					slog.String("err", err.Error()))
 			}
 			cancel()

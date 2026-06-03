@@ -31,8 +31,8 @@ func (f *fakeHubIndex) Hubs() []handlers.NamedHub {
 	return []handlers.NamedHub{{Central: "test-ccu", Hub: f.h}}
 }
 
-func (f *fakeHubIndex) HubFor(central string) *hub.Hub {
-	if central == "test-ccu" {
+func (f *fakeHubIndex) HubFor(centralName string) *hub.Hub {
+	if centralName == "test-ccu" {
 		return f.h
 	}
 	return nil

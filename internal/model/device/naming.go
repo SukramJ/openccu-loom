@@ -31,46 +31,6 @@ func (c *Channel) CustomDataPointFullName(parameter, postfix string) string {
 	return c.DataPointFullName(strings.ToUpper(postfix))
 }
 
-// GenerateUniqueID builds the lower-case unique identifier.
-// Format follows the reference generate_unique_id shape:
-//
-//	<address with "-" or ":" → "_">                       (no parameter)
-//	<address>_<parameter>                                  (with parameter)
-//	<prefix>_<address>[_<parameter>]                       (with prefix)
-//
-// Special-prefix addresses (HUB, INSTALL_MODE, PROGRAM, SYSVAR,
-// INT000* and virtual remotes) are namespaced by the central_id so
-// callers can disambiguate identical IDs across CCUs.
-//
-// loom:reachable:reason="used by MQTT entity-ID generation and REST definition export to produce stable HA-compatible IDs"
-func GenerateUniqueID(centralID, address, parameter, prefix string) string {
-	uid := strings.ReplaceAll(address, ":", "_")
-	uid = strings.ReplaceAll(uid, "-", "_")
-	if parameter != "" {
-		uid = uid + "_" + parameter
-	}
-	if prefix != "" {
-		uid = prefix + "_" + uid
-	}
-	switch {
-	case address == "BidCoS-RF" || address == "BidCoS-Wir" || address == "HmIP-RCV-1" ||
-		address == "Sysvar" || address == "Programs" || address == "InstallMode":
-		// Exact virtual-remote root addresses (no channel suffix) are
-		// namespaced with central_id to avoid collisions when two CCUs
-		// each expose the same logical virtual bus.
-		uid = centralID + "_" + uid
-	case strings.HasPrefix(address, "INT000"):
-		uid = centralID + "_" + uid
-	case strings.HasPrefix(address, "BidCoS-RF") || strings.HasPrefix(address, "BidCoS-Wir") ||
-		strings.HasPrefix(address, "HmIP-RCV-1") || strings.HasPrefix(address, "VCU"):
-		// Channel addresses derived from virtual-remote roots (e.g.
-		// "BidCoS-Wir:1", "HmIP-RCV-1:3") also carry the central_id so
-		// multi-CCU unique-IDs stay collision-free.
-		uid = centralID + "_" + uid
-	}
-	return strings.ToLower(uid)
-}
-
 // GenerateTranslationKey converts a free-form name into the slug
 // Mirrors
 // `support.py:generate_translation_key` — slugify-then-replace dots

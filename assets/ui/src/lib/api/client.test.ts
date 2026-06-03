@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { api } from "./client";
+import { api, setUnauthorizedHandler } from "./client";
 
 // The daemon mounts a double-submit CSRF guard on the whole REST router
 // (internal/auth/csrf.go). The SPA must echo the JS-readable csrf cookie
@@ -63,6 +63,26 @@ describe("api request — CSRF double-submit", () => {
     await api.logout();
     const headers = headersOf(fetchMock.mock.calls[0]);
     expect(headers["X-CSRF-Token"]).toBe("a+b=c");
+  });
+});
+
+describe("api request — 401 session-expiry hook", () => {
+  afterEach(() => setUnauthorizedHandler(null));
+
+  it("invokes the unauthorized handler on a 401 from a non-login call", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "no creds" }, 401));
+    const onUnauth = vi.fn();
+    setUnauthorizedHandler(onUnauth);
+    await expect(api.getInstallMode()).rejects.toBeTruthy();
+    expect(onUnauth).toHaveBeenCalledOnce();
+  });
+
+  it("does not invoke the handler on a 401 from /auth/login", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "bad creds" }, 401));
+    const onUnauth = vi.fn();
+    setUnauthorizedHandler(onUnauth);
+    await expect(api.login("x", "y")).rejects.toBeTruthy();
+    expect(onUnauth).not.toHaveBeenCalled();
   });
 });
 

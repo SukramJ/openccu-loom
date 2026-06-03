@@ -35,7 +35,7 @@ func buildTestRegistry(t *testing.T, names ...string) *central.Registry {
 }
 
 // TestDaemonBootInstantiatesAggregatorPerCentral verifies that after
-// daemonServe boots, every CentralUnit in the registry has a non-nil
+// daemonServe boots, every Unit in the registry has a non-nil
 // Aggregator, and that each aggregator is scoped to the correct
 // central name.
 func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {

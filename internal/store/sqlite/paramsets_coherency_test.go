@@ -45,14 +45,14 @@ func TestParamsetUpsertOverwriteWithDifferentSchemaShape(t *testing.T) {
 	ctx := context.Background()
 
 	const (
-		central = "ccu1"
-		iface   = "HmIP-RF"
-		ch      = "SCHEMA:1"
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
+		ch          = "SCHEMA:1"
 	)
 
 	// First write: three parameters A, B, C.
 	if err := s.Upsert(ctx, ParamsetRecord{
-		CentralName:    central,
+		CentralName:    centralName,
 		InterfaceID:    iface,
 		ChannelAddress: ch,
 		ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -68,7 +68,7 @@ func TestParamsetUpsertOverwriteWithDifferentSchemaShape(t *testing.T) {
 
 	// Second write on same PK: only A and D (B and C are gone).
 	if err := s.Upsert(ctx, ParamsetRecord{
-		CentralName:    central,
+		CentralName:    centralName,
 		InterfaceID:    iface,
 		ChannelAddress: ch,
 		ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -81,7 +81,7 @@ func TestParamsetUpsertOverwriteWithDifferentSchemaShape(t *testing.T) {
 		t.Fatalf("second upsert: %v", err)
 	}
 
-	got, err := s.Get(ctx, central, iface, ch, hmenum.ParamsetKeyValues)
+	got, err := s.Get(ctx, centralName, iface, ch, hmenum.ParamsetKeyValues)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
@@ -126,10 +126,10 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 	ctx := context.Background()
 
 	const (
-		central    = "ccu1"
-		iface      = "HmIP-RF"
-		ch         = "CONC:1"
-		goroutines = 20
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
+		ch          = "CONC:1"
+		goroutines  = 20
 	)
 
 	var (
@@ -145,7 +145,7 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 			defer wg.Done()
 			hash := fmt.Sprintf("h-%d", i)
 			err := s.Upsert(ctx, ParamsetRecord{
-				CentralName:    central,
+				CentralName:    centralName,
 				InterfaceID:    iface,
 				ChannelAddress: ch,
 				ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -171,7 +171,7 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 	row := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM paramsets
 		 WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND paramset_key = ?`,
-		central, iface, ch, string(hmenum.ParamsetKeyValues))
+		centralName, iface, ch, string(hmenum.ParamsetKeyValues))
 	if err := row.Scan(&count); err != nil {
 		t.Fatalf("count query: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 	// Get must return a valid record whose hash matches one that was
 	// actually committed (not necessarily "the last" — SQLite serialises
 	// writes so the surviving hash is whichever writer held the lock last).
-	got, err := s.Get(ctx, central, iface, ch, hmenum.ParamsetKeyValues)
+	got, err := s.Get(ctx, centralName, iface, ch, hmenum.ParamsetKeyValues)
 	if err != nil {
 		t.Fatalf("get after concurrent upserts: %v", err)
 	}
@@ -208,15 +208,15 @@ func TestParamsetGetUnaffectedByOtherChannelDelete(t *testing.T) {
 	ctx := context.Background()
 
 	const (
-		central = "ccu1"
-		iface   = "HmIP-RF"
-		chA     = "NODELA:1"
-		chB     = "NODELB:1"
+		centralName = "ccu1"
+		iface       = "HmIP-RF"
+		chA         = "NODELA:1"
+		chB         = "NODELB:1"
 	)
 
 	for _, ch := range []string{chA, chB} {
 		if err := s.Upsert(ctx, ParamsetRecord{
-			CentralName:    central,
+			CentralName:    centralName,
 			InterfaceID:    iface,
 			ChannelAddress: ch,
 			ParamsetKey:    hmenum.ParamsetKeyValues,
@@ -228,17 +228,17 @@ func TestParamsetGetUnaffectedByOtherChannelDelete(t *testing.T) {
 	}
 
 	// Delete channel B; channel A must survive.
-	if err := s.DeleteChannel(ctx, central, iface, chB); err != nil {
+	if err := s.DeleteChannel(ctx, centralName, iface, chB); err != nil {
 		t.Fatalf("deleteChannel B: %v", err)
 	}
 
 	// Channel B must be gone.
-	if _, err := s.Get(ctx, central, iface, chB, hmenum.ParamsetKeyValues); !errors.Is(err, ErrParamsetNotFound) {
+	if _, err := s.Get(ctx, centralName, iface, chB, hmenum.ParamsetKeyValues); !errors.Is(err, ErrParamsetNotFound) {
 		t.Errorf("chB: expected ErrParamsetNotFound, got %v", err)
 	}
 
 	// Channel A must still be present.
-	got, err := s.Get(ctx, central, iface, chA, hmenum.ParamsetKeyValues)
+	got, err := s.Get(ctx, centralName, iface, chA, hmenum.ParamsetKeyValues)
 	if err != nil {
 		t.Fatalf("get chA after deleting chB: %v", err)
 	}
@@ -387,17 +387,17 @@ func TestParamsetMultiCCUDeleteScopedByCentral(t *testing.T) {
 // none of the active tests call it; kept as a future helper.
 //
 //nolint:unused // future helper
-func assertRowCount(t *testing.T, db *sql.DB, central, iface, ch string, want int) {
+func assertRowCount(t *testing.T, db *sql.DB, centralName, iface, ch string, want int) {
 	t.Helper()
 	var count int
 	err := db.QueryRowContext(context.Background(),
 		`SELECT COUNT(*) FROM paramsets
 		 WHERE central_name = ? AND interface_id = ? AND channel_address = ?`,
-		central, iface, ch).Scan(&count)
+		centralName, iface, ch).Scan(&count)
 	if err != nil {
 		t.Fatalf("assertRowCount: %v", err)
 	}
 	if count != want {
-		t.Errorf("row count=%d want %d (central=%s iface=%s ch=%s)", count, want, central, iface, ch)
+		t.Errorf("row count=%d want %d (central=%s iface=%s ch=%s)", count, want, centralName, iface, ch)
 	}
 }

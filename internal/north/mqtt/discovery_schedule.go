@@ -42,19 +42,19 @@ type ScheduleEntityEvent struct {
 // The entity lives on a **sub-device** "<device-name> Zeitplan" linked
 // to the parent device via HA's `via_device` mechanism so each
 // schedule surface gets its own HA device card.
-func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(central string, ev ScheduleEntityEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(centralName string, ev ScheduleEntityEvent) DiscoveryItem {
 	if ev.DeviceAddress == "" {
 		return DiscoveryItem{}
 	}
-	stateTopic := d.TopicBuilder.ScheduleEntityState(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
-	attrsTopic := d.TopicBuilder.ScheduleEntityAttrs(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	stateTopic := d.TopicBuilder.ScheduleEntityState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	attrsTopic := d.TopicBuilder.ScheduleEntityAttrs(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	objectID := fmt.Sprintf("openccu-loom_%s_%d_schedule",
 		strings.ToLower(ev.DeviceAddress), ev.ChannelNo)
 
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -70,7 +70,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(central string, e
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -108,7 +108,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleEntityDiscovery(central string, e
 // discovery cache.
 //
 // No-ops when HA discovery is disabled.
-func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, central string, ev ScheduleEntityEvent) error {
+func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, centralName string, ev ScheduleEntityEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -119,7 +119,7 @@ func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, central str
 	if !ok {
 		return nil
 	}
-	item := builder.BuildScheduleEntityDiscovery(central, ev)
+	item := builder.BuildScheduleEntityDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -132,16 +132,16 @@ func (b *Bridge) PublishScheduleEntityDiscovery(ctx context.Context, central str
 // No-ops when the raw plane is disabled.
 func (b *Bridge) PublishScheduleEntityState(
 	ctx context.Context,
-	central, iface, address string,
+	centralName, iface, address string,
 	channel, count int,
 ) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
-	topic := b.topics.ScheduleEntityState(central, iface, address, channel)
+	topic := b.topics.ScheduleEntityState(centralName, iface, address, channel)
 	return b.client.Publish(ctx, topic, []byte(fmt.Sprintf("%d", count)), b.cfg.QoS.State, true)
 }
 
@@ -153,15 +153,15 @@ func (b *Bridge) PublishScheduleEntityState(
 // No-ops when the raw plane is disabled.
 func (b *Bridge) PublishScheduleEntityAttrs(
 	ctx context.Context,
-	central, iface, address string,
+	centralName, iface, address string,
 	channel int,
 	attrs map[string]any,
 ) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	if attrs == nil {
 		attrs = map[string]any{}
@@ -170,7 +170,7 @@ func (b *Bridge) PublishScheduleEntityAttrs(
 	if err != nil {
 		return err
 	}
-	topic := b.topics.ScheduleEntityAttrs(central, iface, address, channel)
+	topic := b.topics.ScheduleEntityAttrs(centralName, iface, address, channel)
 	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }
 
@@ -199,19 +199,19 @@ type ScheduleSwitchEvent struct {
 // for one ScheduleChannelSwitch. Each schedule device emits N switches
 // (one per available target channel); HA renders them as a row of
 // toggles for enabling / disabling the schedule per receiver.
-func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(central string, ev ScheduleSwitchEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(centralName string, ev ScheduleSwitchEvent) DiscoveryItem {
 	if ev.Key == "" || ev.DeviceAddress == "" {
 		return DiscoveryItem{}
 	}
-	stateTopic := d.TopicBuilder.ScheduleSwitchState(central, ev.Interface, ev.DeviceAddress, ev.ScheduleChannelNo, ev.Key)
-	commandTopic := d.TopicBuilder.ScheduleSwitchCommand(central, ev.Interface, ev.DeviceAddress, ev.ScheduleChannelNo, ev.Key)
+	stateTopic := d.TopicBuilder.ScheduleSwitchState(centralName, ev.Interface, ev.DeviceAddress, ev.ScheduleChannelNo, ev.Key)
+	commandTopic := d.TopicBuilder.ScheduleSwitchCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ScheduleChannelNo, ev.Key)
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 	objectID := fmt.Sprintf("openccu-loom_%s_%d_schedule_%s",
 		strings.ToLower(ev.DeviceAddress), ev.ScheduleChannelNo, ev.Key)
 
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -227,7 +227,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(central string, e
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -266,7 +266,7 @@ func (d *DefaultDiscoveryBuilder) BuildScheduleSwitchDiscovery(central string, e
 
 // PublishScheduleSwitchDiscovery publishes the HA Discovery payload for
 // one ScheduleChannelSwitch entity. Retained + deduplicated.
-func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, central string, ev ScheduleSwitchEvent) error {
+func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, centralName string, ev ScheduleSwitchEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -277,7 +277,7 @@ func (b *Bridge) PublishScheduleSwitchDiscovery(ctx context.Context, central str
 	if !ok {
 		return nil
 	}
-	item := builder.BuildScheduleSwitchDiscovery(central, ev)
+	item := builder.BuildScheduleSwitchDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -349,7 +349,7 @@ func scheduleSubDeviceDescriptor(ev Event, hubURL string) map[string]any {
 // ScheduleChannelSwitch (true=enabled, false=disabled). Retained.
 func (b *Bridge) PublishScheduleSwitchState(
 	ctx context.Context,
-	central, iface, address string,
+	centralName, iface, address string,
 	channel int,
 	key string,
 	enabled bool,
@@ -357,13 +357,13 @@ func (b *Bridge) PublishScheduleSwitchState(
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
 	msg := []byte("false")
 	if enabled {
 		msg = []byte("true")
 	}
-	topic := b.topics.ScheduleSwitchState(central, iface, address, channel, key)
+	topic := b.topics.ScheduleSwitchState(centralName, iface, address, channel, key)
 	return b.client.Publish(ctx, topic, msg, b.cfg.QoS.State, true)
 }

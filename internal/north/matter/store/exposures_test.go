@@ -124,8 +124,8 @@ func TestEnabledKeys_FilterByCentral(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"aa", "bb"} {
-		key := testKey(central, "Z:"+string(rune('1'+i)), 1, store.DPKindGeneric, "V")
+	for i, centralName := range []string{"aa", "bb"} {
+		key := testKey(centralName, "Z:"+string(rune('1'+i)), 1, store.DPKindGeneric, "V")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: true, Actor: "sys"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -146,8 +146,8 @@ func TestEnabledKeys_NoFilter_ReturnsAll(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"cc", "dd"} {
-		key := testKey(central, "W:"+string(rune('1'+i)), 1, store.DPKindGeneric, "V")
+	for i, centralName := range []string{"cc", "dd"} {
+		key := testKey(centralName, "W:"+string(rune('1'+i)), 1, store.DPKindGeneric, "V")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: true, Actor: "sys"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -183,8 +183,8 @@ func TestListExposures_FilterByCentral(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"ee", "ff", "ee"} {
-		key := testKey(central, "Q:1", i+1, store.DPKindCustom, "K")
+	for i, centralName := range []string{"ee", "ff", "ee"} {
+		key := testKey(centralName, "Q:1", i+1, store.DPKindCustom, "K")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: true, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -205,8 +205,8 @@ func TestListExposures_NoFilter(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"gg", "hh"} {
-		key := testKey(central, "P:1", i+1, store.DPKindCustom, "K")
+	for i, centralName := range []string{"gg", "hh"} {
+		key := testKey(centralName, "P:1", i+1, store.DPKindCustom, "K")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: false, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -297,8 +297,8 @@ func TestCountEnabled_FilterByCentral(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"m1", "m2", "m1"} {
-		key := testKey(central, "U:1", i+1, store.DPKindCustom, "K")
+	for i, centralName := range []string{"m1", "m2", "m1"} {
+		key := testKey(centralName, "U:1", i+1, store.DPKindCustom, "K")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: true, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -376,8 +376,8 @@ func TestCountEnabled_Global(t *testing.T) {
 	s := store.New(db)
 	ctx := context.Background()
 
-	for i, central := range []string{"n1", "n2"} {
-		key := testKey(central, "V:1", i+1, store.DPKindCustom, "K")
+	for i, centralName := range []string{"n1", "n2"} {
+		key := testKey(centralName, "V:1", i+1, store.DPKindCustom, "K")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: true, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure: %v", err)
 		}
@@ -496,15 +496,15 @@ func TestExposures_CountEnabledWithFilter(t *testing.T) {
 
 	// Insert 2 enabled for "cntA", 1 enabled for "cntB", 1 disabled for "cntA".
 	for i, row := range []struct {
-		central string
-		enabled bool
+		centralName string
+		enabled     bool
 	}{
 		{"cntA", true},
 		{"cntA", false},
 		{"cntA", true},
 		{"cntB", true},
 	} {
-		key := testKey(row.central, "M:1", i+1, store.DPKindCustom, "P")
+		key := testKey(row.centralName, "M:1", i+1, store.DPKindCustom, "P")
 		if err := s.UpsertExposure(ctx, store.ExposureRecord{Key: key, Enabled: row.enabled, Actor: "u"}); err != nil {
 			t.Fatalf("UpsertExposure[%d]: %v", i, err)
 		}

@@ -309,14 +309,14 @@ var _ generic.Writer = (*scheduleWriteForwarder)(nil)
 // attachNonClimateWeekProfiles walks every device on interfaceID and
 // runs [attachNonClimateWeekProfileToDevice]. Idempotent.
 func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}
-		attachNonClimateWeekProfileToDevice(d, p.central.Name())
+		attachNonClimateWeekProfileToDevice(d, p.unit.Name())
 	}
 }
 
@@ -336,11 +336,11 @@ func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
 // When neither pointer DP is present the helper leaves ProfileCount
 // at its construction default (6) — the same conservative fallback
 func (p *DevicePipeline) refineAttachedWeekProfiles(interfaceID string, logger *slog.Logger) {
-	if p.central == nil {
+	if p.unit == nil {
 		return
 	}
 	refined := 0
-	for _, d := range p.central.ModelRegistry.List() {
+	for _, d := range p.unit.ModelRegistry.List() {
 		if d.InterfaceID != interfaceID {
 			continue
 		}

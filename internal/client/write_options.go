@@ -120,7 +120,7 @@ var ErrMissingDescriptor = fmt.Errorf("client: WriteOptions.CheckAgainstPD requi
 // need the option surface; it is implemented in terms of this method.
 func (w *ValueWriter) SetValueWithOptions(
 	ctx context.Context,
-	central, interfaceID, channelAddress string,
+	centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter,
 	value any,
 	opts WriteOptions,
@@ -145,15 +145,15 @@ func (w *ValueWriter) SetValueWithOptions(
 	// PurgeAddresses: cancel pending retry chains for the listed addresses
 	// BEFORE issuing the new wire write.
 	w.mu.RLock()
-	key := valueWriterKey{Central: central, Interface: interfaceID}
+	key := valueWriterKey{Central: centralName, Interface: interfaceID}
 	b, bOK := w.backends[key]
 	ic := w.icSetters[key]
-	resolved := resolveBus(w.busResolver, w.bus, central)
+	resolved := resolveBus(w.busResolver, w.bus, centralName)
 	retrier := w.retrier
 	ctFn := w.commandTracker
 	w.mu.RUnlock()
 	if !bOK {
-		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, central, interfaceID)
+		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, centralName, interfaceID)
 	}
 	if retrier != nil {
 		for _, addr := range opts.PurgeAddresses {
@@ -213,9 +213,9 @@ func (w *ValueWriter) SetValueWithOptions(
 // single-bus SetEventBus value otherwise. Returns nil when neither
 // is set or the resolver yields no match — caller treats nil as
 // "skip wait path".
-func resolveBus(resolver BusResolver, single eventBusLike, central string) *events.Bus {
+func resolveBus(resolver BusResolver, single eventBusLike, centralName string) *events.Bus {
 	if resolver != nil {
-		if bus, ok := resolver(central); ok {
+		if bus, ok := resolver(centralName); ok {
 			if cb, ok := bus.(*events.Bus); ok {
 				return cb
 			}
@@ -243,7 +243,7 @@ func resolveBus(resolver BusResolver, single eventBusLike, central string) *even
 // method.
 func (w *ValueWriter) PutParamsetWithOptions(
 	ctx context.Context,
-	central, interfaceID, channelAddress string,
+	centralName, interfaceID, channelAddress string,
 	paramsetKey hmenum.ParamsetKey,
 	values map[string]any,
 	opts WriteOptions,
@@ -268,14 +268,14 @@ func (w *ValueWriter) PutParamsetWithOptions(
 	}
 
 	w.mu.RLock()
-	ppKey := valueWriterKey{Central: central, Interface: interfaceID}
+	ppKey := valueWriterKey{Central: centralName, Interface: interfaceID}
 	b, bOK := w.backends[ppKey]
 	ic := w.icSetters[ppKey]
-	resolved := resolveBus(w.busResolver, w.bus, central)
+	resolved := resolveBus(w.busResolver, w.bus, centralName)
 	retrier := w.retrier
 	w.mu.RUnlock()
 	if !bOK {
-		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, central, interfaceID)
+		return fmt.Errorf("%w: central=%s interface=%s", ErrNoBackend, centralName, interfaceID)
 	}
 	if retrier != nil {
 		for _, addr := range opts.PurgeAddresses {

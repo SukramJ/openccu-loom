@@ -20,8 +20,8 @@ import (
 
 // testHubIndex wraps a real *hub.Hub as a HubIndex.
 type testHubIndex struct {
-	h       *hub.Hub
-	central string // optional; defaults to "test-ccu" when empty
+	h           *hub.Hub
+	centralName string // optional; defaults to "test-ccu" when empty
 }
 
 func (t *testHubIndex) Hub() *hub.Hub { return t.h }
@@ -30,19 +30,19 @@ func (t *testHubIndex) Hubs() []NamedHub {
 	if t.h == nil {
 		return nil
 	}
-	name := t.central
+	name := t.centralName
 	if name == "" {
 		name = "test-ccu"
 	}
 	return []NamedHub{{Central: name, Hub: t.h}}
 }
 
-func (t *testHubIndex) HubFor(central string) *hub.Hub {
-	name := t.central
+func (t *testHubIndex) HubFor(centralName string) *hub.Hub {
+	name := t.centralName
 	if name == "" {
 		name = "test-ccu"
 	}
-	if central == name {
+	if centralName == name {
 		return t.h
 	}
 	return nil

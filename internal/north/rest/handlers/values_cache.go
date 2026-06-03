@@ -122,13 +122,13 @@ func ResetValuesCacheDevice(svc ValuesCacheService, lookup DeviceLookup) http.Ha
 				problem.New(problem.TypeBadRequest, r, "missing address", ""))
 			return
 		}
-		central, iface, ok := lookup.LocateDevice(addr)
+		centralName, iface, ok := lookup.LocateDevice(addr)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "device not found", ""))
 			return
 		}
-		if err := svc.DeleteDevice(r.Context(), central, iface, addr); err != nil {
+		if err := svc.DeleteDevice(r.Context(), centralName, iface, addr); err != nil {
 			problem.Write(w, http.StatusInternalServerError,
 				problem.New(problem.TypeInternal, r, "reset failed", err.Error()))
 			return

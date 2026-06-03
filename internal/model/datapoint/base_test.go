@@ -55,39 +55,39 @@ func TestBaseDataPointUniqueIDFormat(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
-		central string
-		address string
-		key     string
-		want    string
+		name        string
+		centralName string
+		address     string
+		key         string
+		want        string
 	}{
 		{
-			name:    "channel-bound parameter",
-			central: "ccu-prod",
-			address: "VCU0123456:1",
-			key:     "LEVEL",
-			want:    "ccu-prod:VCU0123456:1:LEVEL",
+			name:        "channel-bound parameter",
+			centralName: "ccu-prod",
+			address:     "VCU0123456:1",
+			key:         "LEVEL",
+			want:        "ccu-prod:VCU0123456:1:LEVEL",
 		},
 		{
-			name:    "hub sysvar without address",
-			central: "ccu-prod",
-			address: "",
-			key:     "energy_today",
-			want:    "ccu-prod::energy_today",
+			name:        "hub sysvar without address",
+			centralName: "ccu-prod",
+			address:     "",
+			key:         "energy_today",
+			want:        "ccu-prod::energy_today",
 		},
 		{
-			name:    "device-level dp",
-			central: "ccu-test",
-			address: "VCU000001",
-			key:     "RSSI_DEVICE",
-			want:    "ccu-test:VCU000001:RSSI_DEVICE",
+			name:        "device-level dp",
+			centralName: "ccu-test",
+			address:     "VCU000001",
+			key:         "RSSI_DEVICE",
+			want:        "ccu-test:VCU000001:RSSI_DEVICE",
 		},
 		{
-			name:    "second central with same address",
-			central: "ccu-secondary",
-			address: "VCU0123456:1",
-			key:     "LEVEL",
-			want:    "ccu-secondary:VCU0123456:1:LEVEL",
+			name:        "second central with same address",
+			centralName: "ccu-secondary",
+			address:     "VCU0123456:1",
+			key:         "LEVEL",
+			want:        "ccu-secondary:VCU0123456:1:LEVEL",
 		},
 	}
 
@@ -95,7 +95,7 @@ func TestBaseDataPointUniqueIDFormat(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			b := datapoint.NewBaseDataPointFields(tc.central, tc.address, tc.key)
+			b := datapoint.NewBaseDataPointFields(tc.centralName, tc.address, tc.key)
 			if got := b.UniqueID(); got != tc.want {
 				t.Fatalf("UniqueID() = %q, want %q", got, tc.want)
 			}

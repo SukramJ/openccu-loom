@@ -280,7 +280,7 @@ func (p *HealthProvider) HealthSummary() metrics.HealthSummary {
 // gauge and health. Health events translate to a 0/1 gauge so the
 // metrics aggregator can surface them without a dedicated map.
 //
-// Multi-CCU safe: pass the bus owned by the [CentralUnit] whose
+// Multi-CCU safe: pass the bus owned by the [Unit] whose
 // metrics this observer aggregates. Two centrals on the same daemon
 // each call SubscribeObserver(bus_a, observer_a) and
 // SubscribeObserver(bus_b, observer_b) — no shared state.

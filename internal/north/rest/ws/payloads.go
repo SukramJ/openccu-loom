@@ -37,9 +37,22 @@ type DataPointValueChangedPayload struct {
 	Channel       int    `json:"channel"`
 	Parameter     string `json:"parameter"`
 	ParamsetKey   string `json:"paramset_key"`
-	Value         any    `json:"value"`
-	Previous      any    `json:"previous,omitempty"`
-	ModifiedAt    string `json:"modified_at"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// data point (loom_<routing-key>), supplied so a client consumes it
+	// directly instead of rebuilding it from the raw fields. Optional and
+	// backward-compatible: omitted (empty) when the producer cannot
+	// resolve it. See docs/external-clients/ha-unique-id-migration.md.
+	UniqueID   string `json:"unique_id,omitempty"`
+	Value      any    `json:"value"`
+	Previous   any    `json:"previous,omitempty"`
+	ModifiedAt string `json:"modified_at"`
+	// Category and DataPointType classify the DP inline so a client that
+	// reconnects mid-stream can route the event without a prior catalogue
+	// lookup. They are quasi-static, so they ride a high-frequency message
+	// only when a client opts in with `classify` on its subscribe frame;
+	// the per-client write pump strips them otherwise (default off).
+	Category      string `json:"category,omitempty"`
+	DataPointType string `json:"data_point_type,omitempty"`
 }
 
 // CustomDataPointStateChangedPayload carries the aggregated CDP-state
@@ -48,12 +61,16 @@ type DataPointValueChangedPayload struct {
 // CDP-scoped topic per tile rather than reassembling state from N
 // per-DP events.
 type CustomDataPointStateChangedPayload struct {
-	Central       string         `json:"central"`
-	DeviceAddress string         `json:"device_address"`
-	Channel       int            `json:"channel"`
-	Name          string         `json:"name"`
-	Kind          string         `json:"kind,omitempty"`
-	State         map[string]any `json:"state"`
+	Central       string `json:"central"`
+	DeviceAddress string `json:"device_address"`
+	Channel       int    `json:"channel"`
+	Name          string `json:"name"`
+	Kind          string `json:"kind,omitempty"`
+	// UniqueID is the canonical loom-namespaced routing key for the
+	// custom data point this snapshot describes. Optional; see
+	// [DataPointValueChangedPayload.UniqueID].
+	UniqueID string         `json:"unique_id,omitempty"`
+	State    map[string]any `json:"state"`
 }
 
 // CentralStateChangedPayload mirrors `EventTypeCentralStateChanged`.
@@ -70,14 +87,14 @@ type CentralStateChangedPayload struct {
 // Topic follows the spec convention
 // `device.<addr>.channels.<no>.data_points.<parameter>`.
 func (h *Hub) PublishDataPointValueChanged(
-	central, iface, deviceAddr string,
+	centralName, iface, deviceAddr string,
 	channel int,
 	parameter, paramsetKey string,
 	value, previous any,
 	when time.Time,
 ) {
-	h.PublishDataPointValueChangedKind(KindChange, central, iface, deviceAddr, channel,
-		parameter, paramsetKey, value, previous, when)
+	h.PublishDataPointValueChangedKind(KindChange, centralName, iface, deviceAddr, channel,
+		parameter, paramsetKey, value, previous, when, "", "", "")
 }
 
 // PublishDataPointValueChangedKind is the kind-aware variant of
@@ -85,12 +102,18 @@ func (h *Hub) PublishDataPointValueChanged(
 // initial-snapshot pushes from incremental changes pass [KindInitial]
 // or [KindRefresh] here; the default [KindChange] is what
 // [Hub.PublishDataPointValueChanged] uses.
+// The trailing category / dataPointType arguments classify the DP. They
+// are always carried on the buffered payload (so a replay keeps them) and
+// stripped per-client at write time unless the client opted into
+// `classify` — see [client.writePump]. Pass empty strings to omit.
+// uniqueID is the canonical loom routing key; pass "" to omit it.
 func (h *Hub) PublishDataPointValueChangedKind(
-	envKind, central, iface, deviceAddr string,
+	envKind, centralName, iface, deviceAddr string,
 	channel int,
 	parameter, paramsetKey string,
 	value, previous any,
 	when time.Time,
+	category, dataPointType, uniqueID string,
 ) {
 	h.Publish(Event{
 		Kind:  envKind,
@@ -98,15 +121,18 @@ func (h *Hub) PublishDataPointValueChangedKind(
 		Type:  string(hmevent.EventTypeDataPointValueChanged),
 		When:  when,
 		Payload: DataPointValueChangedPayload{
-			Central:       central,
+			Central:       centralName,
 			Interface:     iface,
 			DeviceAddress: deviceAddr,
 			Channel:       channel,
 			Parameter:     parameter,
 			ParamsetKey:   paramsetKey,
+			UniqueID:      uniqueID,
 			Value:         value,
 			Previous:      previous,
 			ModifiedAt:    when.UTC().Format(time.RFC3339Nano),
+			Category:      category,
+			DataPointType: dataPointType,
 		},
 	})
 }
@@ -118,27 +144,28 @@ func (h *Hub) PublishDataPointValueChangedKind(
 // `kind` parameter here is the CDP widget hint (light, cover_blind,
 // …), not the envelope kind — those are separate axes.
 func (h *Hub) PublishCustomDataPointStateChanged(
-	central, deviceAddr string,
+	centralName, deviceAddr string,
 	channel int,
 	name, kind string,
 	state map[string]any,
 	when time.Time,
 ) {
-	h.PublishCustomDataPointStateChangedKind(KindChange, central, deviceAddr, channel,
-		name, kind, state, when)
+	h.PublishCustomDataPointStateChangedKind(KindChange, centralName, deviceAddr, channel,
+		name, kind, state, when, "")
 }
 
 // PublishCustomDataPointStateChangedKind is the envelope-kind-aware
 // variant of [Hub.PublishCustomDataPointStateChanged]. The first
 // argument is the envelope kind ([KindInitial] / [KindChange] /
 // [KindRefresh]); the per-CDP widget `kind` keeps its name on the
-// payload.
+// payload. uniqueID is the canonical loom routing key; pass "" to omit.
 func (h *Hub) PublishCustomDataPointStateChangedKind(
-	envKind, central, deviceAddr string,
+	envKind, centralName, deviceAddr string,
 	channel int,
 	name, kind string,
 	state map[string]any,
 	when time.Time,
+	uniqueID string,
 ) {
 	h.Publish(Event{
 		Kind:  envKind,
@@ -146,24 +173,25 @@ func (h *Hub) PublishCustomDataPointStateChangedKind(
 		Type:  string(hmevent.EventTypeCustomDataPointStateChanged),
 		When:  when,
 		Payload: CustomDataPointStateChangedPayload{
-			Central:       central,
+			Central:       centralName,
 			DeviceAddress: deviceAddr,
 			Channel:       channel,
 			Name:          name,
 			Kind:          kind,
+			UniqueID:      uniqueID,
 			State:         state,
 		},
 	})
 }
 
 // PublishCentralStateChanged emits a typed central-state envelope.
-func (h *Hub) PublishCentralStateChanged(central, oldState, newState string, when time.Time) {
+func (h *Hub) PublishCentralStateChanged(centralName, oldState, newState string, when time.Time) {
 	h.Publish(Event{
-		Topic: CentralStateTopic(central),
+		Topic: CentralStateTopic(centralName),
 		Type:  string(hmevent.EventTypeCentralStateChanged),
 		When:  when,
 		Payload: CentralStateChangedPayload{
-			Central:  central,
+			Central:  centralName,
 			OldState: oldState,
 			NewState: newState,
 		},
@@ -184,6 +212,6 @@ func CustomDataPointTopic(deviceAddr, name string) string {
 
 // CentralStateTopic builds the canonical topic for a central-state
 // event.
-func CentralStateTopic(central string) string {
-	return "central." + central + ".state"
+func CentralStateTopic(centralName string) string {
+	return "central." + centralName + ".state"
 }

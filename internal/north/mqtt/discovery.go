@@ -14,14 +14,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
-
-// daemonDiscoveryPrefix is the constant identity prefix every
-// HA-Discovery `unique_id` carries. Pinning it here keeps the value
-// one source-of-truth — HA persists the unique_id in its registry, so
-// changing the prefix orphans every entity HA already knows about.
-const daemonDiscoveryPrefix = "openccu-loom"
 
 // valueJSONValueTemplate is the canonical Jinja extractor for the
 // PerDPState `value` field. The defensive `is defined` guard avoids
@@ -140,8 +135,8 @@ type DefaultDiscoveryBuilder struct {
 }
 
 // NewDefaultDiscoveryBuilder constructs the default builder.
-func NewDefaultDiscoveryBuilder(topics *TopicBuilder, central string) *DefaultDiscoveryBuilder {
-	return &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: central}
+func NewDefaultDiscoveryBuilder(topics *TopicBuilder, centralName string) *DefaultDiscoveryBuilder {
+	return &DefaultDiscoveryBuilder{TopicBuilder: topics, BridgeBase: topics.Base, Central: centralName}
 }
 
 // WithHubInfo stores CCU metadata in the builder. Subsequent hub
@@ -161,25 +156,42 @@ func (d *DefaultDiscoveryBuilder) WithHubInfo(info HubInfo) *DefaultDiscoveryBui
 // emits the correct device-block metadata for each CCU. central must
 // match the value passed into the discovery-builder method's
 // `central` argument.
-func (d *DefaultDiscoveryBuilder) SetHubInfoFor(central string, info HubInfo) {
-	if d == nil || central == "" {
+func (d *DefaultDiscoveryBuilder) SetHubInfoFor(centralName string, info HubInfo) {
+	if d == nil || centralName == "" {
 		return
 	}
 	if d.hubs == nil {
 		d.hubs = make(map[string]HubInfo)
 	}
-	d.hubs[central] = info
+	d.hubs[centralName] = info
 }
 
 // hubFor returns the HubInfo to use for the named central. Falls
 // back to the default [Hub] when no per-central entry is registered.
-func (d *DefaultDiscoveryBuilder) hubFor(central string) HubInfo {
+func (d *DefaultDiscoveryBuilder) hubFor(centralName string) HubInfo {
 	if d != nil && d.hubs != nil {
-		if hi, ok := d.hubs[central]; ok {
+		if hi, ok := d.hubs[centralName]; ok {
 			return hi
 		}
 	}
 	return d.Hub
+}
+
+// serialSuffix returns the last-10-characters serial discriminator for the
+// given central. It feeds the serial-prefix slot of [routingkey.CanonicalUniqueID]
+// for address classes whose addresses repeat across CCUs (hub roots, INT000*,
+// virtual remotes).
+func (d *DefaultDiscoveryBuilder) serialSuffix(centralName string) string {
+	return routingkey.SerialSuffix(d.hubFor(centralName).Serial)
+}
+
+// hubAggregateUniqueID builds the unique_id for loom-specific hub
+// aggregate entities that have no equivalent in the canonical
+// routing-key contract (alarm_messages, service_messages, inbox,
+// connectivity_<iface>, system_health_score, latency_<iface>,
+// hub update). The shape is "loom_<serial10>_<kind>".
+func hubAggregateUniqueID(serial10, kind string) string {
+	return "loom_" + serial10 + "_" + kind
 }
 
 // WithSubDevices toggles per-channel-group sub-device splitting in the
@@ -270,7 +282,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	)
 	nodeID = pd.DiscoveryNodeID(d.Central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
-	uniqueID := pd.DiscoveryUniqueID(daemonDiscoveryPrefix, "", ev.Parameter)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
 
 	stateTopic := pd.MQTTState(d.TopicBuilder.Base, d.Central)
 	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, d.Central)
@@ -706,9 +718,9 @@ func jsonValueTemplate(comp HAComponent) string {
 // [naming.PathData.DiscoveryNodeID] form. Used by the few discovery
 // helpers (week-profile, update-entity) that don't yet build their
 // PathData up front.
-func discoveryNodeID(central, deviceAddress string) string {
+func discoveryNodeID(centralName, deviceAddress string) string {
 	pd := naming.NewDevicePathData("", deviceAddress)
-	return pd.DiscoveryNodeID(central)
+	return pd.DiscoveryNodeID(centralName)
 }
 
 // applyMultiplierSensor patches body["value_template"] when ev.Channel

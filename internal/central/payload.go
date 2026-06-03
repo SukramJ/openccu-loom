@@ -10,18 +10,18 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Compile-time guarantee that *CentralUnit satisfies the universal
+// Compile-time guarantee that *Unit satisfies the universal
 // Source contract. ADR 0007 step 8 — top-level service.
-var _ payload.Source = (*CentralUnit)(nil)
+var _ payload.Source = (*Unit)(nil)
 
 // Info returns the typed identity payload of the central.
-func (c *CentralUnit) Info() payload.InfoPayload {
-	if c == nil {
+func (u *Unit) Info() payload.InfoPayload {
+	if u == nil {
 		return nil
 	}
-	si := c.SystemInformation()
-	return &payload.CentralUnitInfo{
-		Name:             c.cfg.Name,
+	si := u.SystemInformation()
+	return &payload.CentralInfo{
+		Name:             u.cfg.Name,
 		Model:            si.Model,
 		SWVersion:        si.Version,
 		Hostname:         si.Hostname,
@@ -34,36 +34,36 @@ func (c *CentralUnit) Info() payload.InfoPayload {
 // Config returns the operator-tunable configuration of the central.
 // Today the central exposes few runtime-tunable knobs; the typed
 // shape lets adapters refer to the bucket without special-casing.
-func (c *CentralUnit) Config() payload.ConfigPayload {
-	if c == nil {
+func (u *Unit) Config() payload.ConfigPayload {
+	if u == nil {
 		return nil
 	}
-	return &payload.CentralUnitConfig{Name: c.cfg.Name}
+	return &payload.CentralConfig{Name: u.cfg.Name}
 }
 
 // State returns the central's runtime status. The state-machine
 // bucket and the registered-device count are the two metrics
 // northbound adapters consume — health page, connectivity badges,
 // REST `/info` endpoint.
-func (c *CentralUnit) State() payload.StatePayload {
-	if c == nil {
+func (u *Unit) State() payload.StatePayload {
+	if u == nil {
 		return nil
 	}
-	out := &payload.CentralUnitState{}
-	if c.StateMachine != nil {
-		out.State = string(c.StateMachine.State())
+	out := &payload.CentralState{}
+	if u.StateMachine != nil {
+		out.State = string(u.StateMachine.State())
 	}
-	if c.DeviceRegistry != nil {
-		out.DeviceCount = c.DeviceRegistry.Len()
+	if u.DeviceRegistry != nil {
+		out.DeviceCount = u.DeviceRegistry.Len()
 	}
 	return out
 }
 
 // registerCentralServices wires the externally invocable operations
 // onto the embedded ServiceRegistry. Called once from [New] after the
-// CentralUnit is fully constructed.
-func (c *CentralUnit) registerCentralServices() {
-	c.RegisterService("set_install_mode", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
+// Unit is fully constructed.
+func (u *Unit) registerCentralServices() {
+	u.RegisterService("set_install_mode", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		on, err := payload.ParamBool(params, "on")
 		if err != nil {
 			return err
@@ -74,9 +74,9 @@ func (c *CentralUnit) registerCentralServices() {
 				seconds = int(f)
 			}
 		}
-		return c.SetInstallMode(ctx, on, seconds)
+		return u.SetInstallMode(ctx, on, seconds)
 	})
-	c.RegisterService("rename_device", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
+	u.RegisterService("rename_device", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		address, err := payload.ParamString(params, "address")
 		if err != nil {
 			return err
@@ -85,17 +85,17 @@ func (c *CentralUnit) registerCentralServices() {
 		if err != nil {
 			return err
 		}
-		return c.RenameDevice(ctx, address, name)
+		return u.RenameDevice(ctx, address, name)
 	})
-	c.RegisterService("accept_device_inbox", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
+	u.RegisterService("accept_device_inbox", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		address, err := payload.ParamString(params, "address")
 		if err != nil {
 			return err
 		}
-		return c.AcceptDeviceInbox(ctx, address)
+		return u.AcceptDeviceInbox(ctx, address)
 	})
-	c.RegisterService("create_backup", func(ctx context.Context, _ map[string]any, _ hmenum.CommandPriority) error {
-		_, err := c.CreateBackup(ctx)
+	u.RegisterService("create_backup", func(ctx context.Context, _ map[string]any, _ hmenum.CommandPriority) error {
+		_, err := u.CreateBackup(ctx)
 		return err
 	})
 }

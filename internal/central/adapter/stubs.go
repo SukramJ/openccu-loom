@@ -110,15 +110,15 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 	if a.registry == nil {
 		return "", ErrUnimplemented
 	}
-	for _, c := range a.registry.List() {
-		if c == nil {
+	for _, u := range a.registry.List() {
+		if u == nil {
 			continue
 		}
-		id := backupID(c.Name())
+		id := backupID(u.Name())
 		// The backup deliberately outlives the request context: the handler
 		// returns 202 immediately, which cancels the request ctx, so runBackup
 		// must use its own background context with [backupRunTimeout].
-		go a.runBackup(c, id) //nolint:gosec // G118: detached on purpose; see comment above
+		go a.runBackup(u, id) //nolint:gosec // G118: detached on purpose; see comment above
 		return id, nil
 	}
 	return "", ErrUnimplemented
@@ -128,34 +128,34 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 // persists the resulting archive. It is the asynchronous tail of
 // [BackupAdapter.TriggerBackup]; failures are logged, not surfaced to the
 // original HTTP caller (which has already received its 202 + id).
-func (a *BackupAdapter) runBackup(c *central.CentralUnit, id string) {
+func (a *BackupAdapter) runBackup(u *central.Unit, id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), backupRunTimeout)
 	defer cancel()
 
-	data, err := c.CreateBackup(ctx)
+	data, err := u.CreateBackup(ctx)
 	if err != nil {
 		a.log().Error("backup.create.failed",
-			slog.String("central", c.Name()),
+			slog.String("central", u.Name()),
 			slog.String("id", id),
 			slog.String("err", err.Error()))
 		return
 	}
 	if a.storage == nil {
 		a.log().Warn("backup.create.no_storage",
-			slog.String("central", c.Name()),
+			slog.String("central", u.Name()),
 			slog.String("id", id),
 			slog.Int("bytes", len(data)))
 		return
 	}
 	if err := a.storage.Save(ctx, id, data); err != nil {
 		a.log().Error("backup.save.failed",
-			slog.String("central", c.Name()),
+			slog.String("central", u.Name()),
 			slog.String("id", id),
 			slog.String("err", err.Error()))
 		return
 	}
 	a.log().Info("backup.create.ok",
-		slog.String("central", c.Name()),
+		slog.String("central", u.Name()),
 		slog.String("id", id),
 		slog.Int("bytes", len(data)))
 }

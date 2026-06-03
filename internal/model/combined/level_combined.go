@@ -86,12 +86,12 @@ func NewLevelCombined(address string, w Writer, levelParam, slatsParam, combined
 // callers that want LevelCombined surfaced as a regular DP must
 // explicitly call SetForcedUsage with a visible usage.
 func NewLevelCombinedWithCentral(
-	central, address string,
+	centralName, address string,
 	w Writer,
 	levelParam, slatsParam, combinedParam hmenum.Parameter,
 ) *LevelCombined {
 	lc := &LevelCombined{
-		BaseDataPointFields:    datapoint.NewBaseDataPointFields(central, address, levelCombinedKeyName),
+		BaseDataPointFields:    datapoint.NewBaseDataPointFields(centralName, address, levelCombinedKeyName),
 		Address:                address,
 		Writer:                 w,
 		LevelParameter:         levelParam,

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -73,8 +74,8 @@ type HubInfo struct {
 // literal "central" so HA can distinguish the hub-device card from
 // the per-physical-device cards.
 // When info carries non-zero fields they override the static defaults.
-func hubDeviceBlock(central string, info HubInfo) map[string]any {
-	name := central
+func hubDeviceBlock(centralName string, info HubInfo) map[string]any {
+	name := centralName
 	if info.Name != "" {
 		name = info.Name
 	}
@@ -83,7 +84,7 @@ func hubDeviceBlock(central string, info HubInfo) map[string]any {
 		model = info.Model
 	}
 	block := map[string]any{
-		"identifiers":  []string{"openccu-loom_central_" + safeLower(central)},
+		"identifiers":  []string{"openccu-loom_central_" + safeLower(centralName)},
 		"name":         name,
 		"manufacturer": "eQ-3",
 		"model":        model,
@@ -110,8 +111,8 @@ func hubAvailability(t *TopicBuilder) []map[string]string {
 	}
 }
 
-func hubNodeID(central, kind string) string {
-	return safeLower(central) + "_" + kind
+func hubNodeID(centralName, kind string) string {
+	return safeLower(centralName) + "_" + kind
 }
 
 // safeLower turns name into an HA-Discovery-safe identifier suitable
@@ -202,17 +203,17 @@ func safeLower(s string) string {
 // - NUMBER, FLOAT,
 // INTEGER → number (writable) / sensor
 //
-// The stable HA `unique_id` is `openccu-loom_<central>_sysvar_<name>`
-// (lower-cased), independent of the friendly description so renames
-// in the CCU don't orphan HA history.
-func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(central string, sv HubSysvarSpec) DiscoveryItem {
+// The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
+// independent of the friendly description so renames in the CCU don't
+// orphan HA history.
+func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem {
 	if sv.Name == "" {
 		return DiscoveryItem{}
 	}
 	var component string
-	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, central, sv.Name)
-	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, central, sv.Name)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_sysvar_" + safeLower(sv.Name)
+	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, centralName, sv.Name)
+	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, centralName, sv.Name)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "sysvar", routingkey.HubSlug(sv.Name), "")
 
 	body := map[string]any{
 		"name":              displaySysvarName(sv),
@@ -221,7 +222,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(central string, sv HubSys
 		"state_topic":       stateTopic,
 		"availability":      hubAvailability(d.TopicBuilder),
 		"availability_mode": "all",
-		"device":            hubDeviceBlock(central, d.hubFor(central)),
+		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":            BuildOriginInfo(),
 	}
 
@@ -323,7 +324,7 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(central string, sv HubSys
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: component, NodeID: hubNodeID(central, "sysvars"), ObjectID: safeLower(sv.Name), Payload: buf, OK: true}
+	return DiscoveryItem{Component: component, NodeID: hubNodeID(centralName, "sysvars"), ObjectID: safeLower(sv.Name), Payload: buf, OK: true}
 }
 
 func displaySysvarName(sv HubSysvarSpec) string {
@@ -338,13 +339,19 @@ func displaySysvarName(sv HubSysvarSpec) string {
 // BuildProgramDiscovery emits one HA `switch` per CCU program.
 // `turn_on` triggers the program (write to /trigger); state reflects
 // the most recent execution active flag.
-func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(central, id, name string) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name string) DiscoveryItem {
 	if id == "" {
 		return DiscoveryItem{}
 	}
-	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, central, id)
-	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, central, id)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_program_" + safeLower(id)
+	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, centralName, id)
+	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, centralName, id)
+	// Programs are keyed by NAME (slug), not by ID. When no name is supplied,
+	// fall back to the ID slug so the unique_id stays stable across renames.
+	programSlug := routingkey.HubSlug(name)
+	if programSlug == "" {
+		programSlug = routingkey.HubSlug(id)
+	}
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "program", programSlug, "")
 	displayName := name
 	if displayName == "" {
 		displayName = id
@@ -362,14 +369,14 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(central, id, name string
 		"optimistic":        false,
 		"availability":      hubAvailability(d.TopicBuilder),
 		"availability_mode": "all",
-		"device":            hubDeviceBlock(central, d.hubFor(central)),
+		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":            BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSwitch), NodeID: hubNodeID(central, "programs"), ObjectID: safeLower(id), Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSwitch), NodeID: hubNodeID(centralName, "programs"), ObjectID: safeLower(id), Payload: buf, OK: true}
 }
 
 // ------------------- AlarmMessages / ServiceMessages -------------
@@ -378,9 +385,9 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(central, id, name string
 // `sensor` whose value is the message count and whose `json_attributes_topic`
 // carries the full list. `device_class: problem` belongs to binary_sensor and
 // would be rejected on a sensor entity, so it is intentionally omitted.
-func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(central string) DiscoveryItem {
-	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_alarm_messages"
+func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string) DiscoveryItem {
+	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, centralName)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "alarm_messages")
 	body := map[string]any{
 		"name":                     "Alarm Messages",
 		"unique_id":                uniqueID,
@@ -393,22 +400,22 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(central string) Di
 		"entity_category":          "diagnostic",
 		"availability":             hubAvailability(d.TopicBuilder),
 		"availability_mode":        "all",
-		"device":                   hubDeviceBlock(central, d.hubFor(central)),
+		"device":                   hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                   BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(central, "messages"), ObjectID: "alarm", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "messages"), ObjectID: "alarm", Payload: buf, OK: true}
 }
 
 // BuildServiceMessagesDiscovery is the maintenance-list counterpart
 // to [BuildAlarmMessagesDiscovery]. Diagnostic category, no
 // device_class (HA shows a neutral icon).
-func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(central string) DiscoveryItem {
-	topic := naming.MQTTHubServiceMessages(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_service_messages"
+func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName string) DiscoveryItem {
+	topic := naming.MQTTHubServiceMessages(d.BridgeBase, centralName)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "service_messages")
 	body := map[string]any{
 		"name":                     "Service Messages",
 		"unique_id":                uniqueID,
@@ -420,14 +427,14 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(central string) 
 		"entity_category":          "diagnostic",
 		"availability":             hubAvailability(d.TopicBuilder),
 		"availability_mode":        "all",
-		"device":                   hubDeviceBlock(central, d.hubFor(central)),
+		"device":                   hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                   BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(central, "messages"), ObjectID: "service", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "messages"), ObjectID: "service", Payload: buf, OK: true}
 }
 
 // ------------------------- Inbox ----------------------------------
@@ -438,9 +445,9 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(central string) 
 // the raw device list for automations that need the details.
 // Mirrors the inbox sensor in the hub model (translation_key="inbox",
 // state_class="measurement", enabled_default=True).
-func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(central string) DiscoveryItem {
-	topic := naming.MQTTHubInbox(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_inbox"
+func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) DiscoveryItem {
+	topic := naming.MQTTHubInbox(d.BridgeBase, centralName)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "inbox")
 	body := map[string]any{
 		"name":                     "Inbox",
 		"unique_id":                uniqueID,
@@ -453,14 +460,14 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(central string) DiscoveryI
 		"icon":                     "mdi:tray-arrow-down",
 		"availability":             hubAvailability(d.TopicBuilder),
 		"availability_mode":        "all",
-		"device":                   hubDeviceBlock(central, d.hubFor(central)),
+		"device":                   hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                   BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(central, "messages"), ObjectID: "inbox", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "messages"), ObjectID: "inbox", Payload: buf, OK: true}
 }
 
 // ----------------------- InstallMode ------------------------------
@@ -469,9 +476,9 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(central string) DiscoveryI
 // CCU's pairing-install mode. Surfaced as a `sensor` (not a number)
 // because the value is read-only — actual install-mode toggling
 // happens through REST.
-func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(central string) DiscoveryItem {
-	topic := naming.MQTTHubInstallMode(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_install_mode"
+func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(centralName string) DiscoveryItem {
+	topic := naming.MQTTHubInstallMode(d.BridgeBase, centralName)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "install_mode", "", "")
 	body := map[string]any{
 		"name":                "Install Mode",
 		"unique_id":           uniqueID,
@@ -483,14 +490,14 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(central string) Disc
 		"entity_category":     "diagnostic",
 		"availability":        hubAvailability(d.TopicBuilder),
 		"availability_mode":   "all",
-		"device":              hubDeviceBlock(central, d.hubFor(central)),
+		"device":              hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":              BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(central, "central"), ObjectID: "install_mode", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "central"), ObjectID: "install_mode", Payload: buf, OK: true}
 }
 
 // ---------------------- Connectivity ------------------------------
@@ -498,12 +505,12 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(central string) Disc
 // BuildConnectivityDiscovery is one HA `binary_sensor` per
 // CCU-interface (HmIP-RF, BidCos-RF, …). `device_class: connectivity`
 // flips the icon between connected / disconnected.
-func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(central, iface string) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface string) DiscoveryItem {
 	if iface == "" {
 		return DiscoveryItem{}
 	}
-	topic := naming.MQTTHubConnectivity(d.BridgeBase, central, iface)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_connectivity_" + safeLower(iface)
+	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "connectivity_"+safeLower(iface))
 	body := map[string]any{
 		"name":              fmt.Sprintf("Connectivity %s", iface),
 		"unique_id":         uniqueID,
@@ -515,14 +522,14 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(central, iface stri
 		"entity_category":   "diagnostic",
 		"availability":      hubAvailability(d.TopicBuilder),
 		"availability_mode": "all",
-		"device":            hubDeviceBlock(central, d.hubFor(central)),
+		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":            BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentBinarySensor), NodeID: hubNodeID(central, "connectivity"), ObjectID: safeLower(iface), Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentBinarySensor), NodeID: hubNodeID(centralName, "connectivity"), ObjectID: safeLower(iface), Payload: buf, OK: true}
 }
 
 // ----------------------- System-Health / Latency ------------------
@@ -531,12 +538,12 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(central, iface stri
 // system-health score (0–100). The score is published on
 // `<base>/<central>/system/health_score`. Mirrors the entry in
 // `hubDescriptionsByKind["system_health"]` (entity_descriptions.go:404).
-func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(central string) DiscoveryItem {
-	if central == "" {
+func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string) DiscoveryItem {
+	if centralName == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := "openccu-loom_" + safeLower(central) + "_system_health_score"
-	topic := d.TopicBuilder.Base + "/" + safeLower(central) + "/system/health_score"
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "system_health_score")
+	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/health_score"
 	body := map[string]any{
 		"name":                        "System Health Score",
 		"unique_id":                   uniqueID,
@@ -550,28 +557,28 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(central string) Dis
 		"enabled_by_default":          true,
 		"availability":                hubAvailability(d.TopicBuilder),
 		"availability_mode":           "all",
-		"device":                      hubDeviceBlock(central, d.hubFor(central)),
+		"device":                      hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                      BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(central, "system"), ObjectID: "health_score", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "health_score", Payload: buf, OK: true}
 }
 
 // BuildConnectionLatencyDiscovery emits a HA `sensor` (duration, ms) for
 // the per-interface round-trip latency. The measurement topic is
 // `<base>/<central>/system/latency/<iface>`. Mirrors
 // `hubDescriptionsByKind["connection_latency"]` (entity_descriptions.go:409).
-func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(central, iface string) DiscoveryItem {
-	if central == "" || iface == "" {
+func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, iface string) DiscoveryItem {
+	if centralName == "" || iface == "" {
 		return DiscoveryItem{}
 	}
-	nodeID := hubNodeID(central, "latency")
+	nodeID := hubNodeID(centralName, "latency")
 	objID := safeLower(iface)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_latency_" + objID
-	topic := d.TopicBuilder.Base + "/" + safeLower(central) + "/system/latency/" + objID
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "latency_"+objID)
+	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency/" + objID
 	body := map[string]any{
 		"name":                        fmt.Sprintf("Latency %s", iface),
 		"unique_id":                   uniqueID,
@@ -585,7 +592,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(central, iface
 		"enabled_by_default":          true,
 		"availability":                hubAvailability(d.TopicBuilder),
 		"availability_mode":           "all",
-		"device":                      hubDeviceBlock(central, d.hubFor(central)),
+		"device":                      hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                      BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
@@ -602,9 +609,9 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(central, iface
 // `installed_version`, `latest_version`, and `in_progress` fields.
 // Mirrors the hub update entity (Category=HubUpdate,
 // translation_key="update", enabled_default=True).
-func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(central string) DiscoveryItem {
-	topic := naming.MQTTHubUpdate(d.BridgeBase, central)
-	uniqueID := "openccu-loom_" + safeLower(central) + "_update"
+func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) DiscoveryItem {
+	topic := naming.MQTTHubUpdate(d.BridgeBase, centralName)
+	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "update")
 	body := map[string]any{
 		"name":                    "System Update",
 		"unique_id":               uniqueID,
@@ -618,14 +625,14 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(central string) Discov
 		"enabled_by_default":      true,
 		"availability":            hubAvailability(d.TopicBuilder),
 		"availability_mode":       "all",
-		"device":                  hubDeviceBlock(central, d.hubFor(central)),
+		"device":                  hubDeviceBlock(centralName, d.hubFor(centralName)),
 		"origin":                  BuildOriginInfo(),
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentUpdate), NodeID: hubNodeID(central, "system"), ObjectID: "update", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentUpdate), NodeID: hubNodeID(centralName, "system"), ObjectID: "update", Payload: buf, OK: true}
 }
 
 // ----------------------- Bridge plumbing --------------------------

@@ -34,10 +34,10 @@ func richParamset() hmproto.Paramset {
 	}
 }
 
-func upsertTestParamset(t *testing.T, s *ParamsetStore, central, iface, chAddr string, psKey hmenum.ParamsetKey) {
+func upsertTestParamset(t *testing.T, s *ParamsetStore, centralName, iface, chAddr string, psKey hmenum.ParamsetKey) {
 	t.Helper()
 	rec := ParamsetRecord{
-		CentralName:    central,
+		CentralName:    centralName,
 		InterfaceID:    iface,
 		ChannelAddress: chAddr,
 		ParamsetKey:    psKey,
@@ -48,7 +48,7 @@ func upsertTestParamset(t *testing.T, s *ParamsetStore, central, iface, chAddr s
 		},
 	}
 	if err := s.Upsert(context.Background(), rec); err != nil {
-		t.Fatalf("Upsert %s/%s/%s/%s: %v", central, iface, chAddr, psKey, err)
+		t.Fatalf("Upsert %s/%s/%s/%s: %v", centralName, iface, chAddr, psKey, err)
 	}
 }
 
@@ -607,10 +607,10 @@ func TestParamsetStoreClearForInterfaceRemovesOnlyMatchingRows(t *testing.T) {
 	s := NewParamsetStore(db)
 	ctx := context.Background()
 
-	upsertClear := func(central, iface, channel string) {
+	upsertClear := func(centralName, iface, channel string) {
 		t.Helper()
 		err := s.Upsert(ctx, ParamsetRecord{
-			CentralName:    central,
+			CentralName:    centralName,
 			InterfaceID:    iface,
 			ChannelAddress: channel,
 			ParamsetKey:    hmenum.ParamsetKeyValues,

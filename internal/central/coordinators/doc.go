@@ -6,7 +6,7 @@
 // consumes events from the internal bus and acts on a specific domain
 // (cache, clients, events, devices, hub, connection recovery).
 //
-// Coordinators are owned by [*central.CentralUnit] — they have a 1:1
+// Coordinators are owned by [*central.Unit] — they have a 1:1
 // relationship with their central. Instances are safe for concurrent
 // use from multiple handlers.
 package coordinators

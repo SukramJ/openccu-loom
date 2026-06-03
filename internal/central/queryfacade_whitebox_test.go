@@ -31,10 +31,10 @@ func newStubPersistStore() *stubPersistStore {
 	return &stubPersistStore{rows: make(map[string][]session.LoadRow)}
 }
 
-func (s *stubPersistStore) PersistAll(_ context.Context, central, slug string, rows []session.PersistRow) error {
+func (s *stubPersistStore) PersistAll(_ context.Context, centralName, slug string, rows []session.PersistRow) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	k := central + "/" + slug
+	k := centralName + "/" + slug
 	out := make([]session.LoadRow, 0, len(rows))
 	for i := range rows {
 		out = append(out, session.LoadRow{
@@ -46,10 +46,10 @@ func (s *stubPersistStore) PersistAll(_ context.Context, central, slug string, r
 	return nil
 }
 
-func (s *stubPersistStore) Load(_ context.Context, central, slug string, _ int) ([]session.LoadRow, error) {
+func (s *stubPersistStore) Load(_ context.Context, centralName, slug string, _ int) ([]session.LoadRow, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.rows[central+"/"+slug], nil
+	return s.rows[centralName+"/"+slug], nil
 }
 
 // minimalDP is a bare-minimum ParameterDataPoint used for

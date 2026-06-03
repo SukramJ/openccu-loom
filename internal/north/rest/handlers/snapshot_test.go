@@ -11,8 +11,11 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // testInterfaceIndex is an InterfaceIndex stub for snapshot tests.
@@ -368,5 +371,463 @@ func TestSnapshotFunctions_MultipleDevices(t *testing.T) {
 	fns := snapshotFunctions(idx)
 	if len(fns) != 2 {
 		t.Fatalf("expected 2 functions, got %d", len(fns))
+	}
+}
+
+// --- ?include= nested channels / data_points ---
+
+// newSnapshotDevice builds a device at addr with one channel (number 1, type
+// chType) and one BinarySensor DP (STATE). Kind is set so Category() returns
+// DataPointCategoryBinarySensor, matching the production ingest pipeline.
+func newSnapshotDevice(addr, chType string) *device.Device {
+	d := newTestDevice(addr, "HmIP-TEST")
+	chAddr := addr + ":1"
+	ch := d.AddChannel(chAddr, 1, chType, hmenum.ParamsetKeyValues)
+	dp := generic.NewBinarySensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterState),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+		Kind: generic.KindBinarySensor,
+	})
+	ch.Put(dp)
+	return d
+}
+
+// TestSnapshot_NoInclude_DeviceChannelsAbsent pins the omitempty contract:
+// without ?include= the device_channels field must be absent from the JSON.
+func TestSnapshot_NoInclude_DeviceChannelsAbsent(t *testing.T) {
+	t.Parallel()
+	d := newSnapshotDevice("0001ABCD", "SWITCH")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var env SnapshotEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.DeviceChannels) != 0 {
+		t.Errorf("device_channels must be absent without ?include=, got %d entries", len(env.DeviceChannels))
+	}
+	if len(env.Devices) != 1 {
+		t.Errorf("flat devices list must still contain 1 entry, got %d", len(env.Devices))
+	}
+}
+
+// TestSnapshot_IncludeChannels_ChannelsPopulated verifies that ?include=channels
+// nests each device's channels but leaves data_points empty.
+func TestSnapshot_IncludeChannels_ChannelsPopulated(t *testing.T) {
+	t.Parallel()
+	d := newSnapshotDevice("0001ABCD", "SWITCH")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?include=channels", http.NoBody)
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var env SnapshotEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.DeviceChannels) != 1 {
+		t.Fatalf("expected 1 device_channels entry, got %d", len(env.DeviceChannels))
+	}
+	dc := env.DeviceChannels[0]
+	if dc.DeviceAddress != "0001ABCD" {
+		t.Errorf("device_address = %q, want 0001ABCD", dc.DeviceAddress)
+	}
+	if len(dc.Channels) != 1 {
+		t.Fatalf("expected 1 channel, got %d", len(dc.Channels))
+	}
+	if len(dc.Channels[0].DataPoints) != 0 {
+		t.Errorf("channels-only include must not expand data_points, got %d", len(dc.Channels[0].DataPoints))
+	}
+}
+
+// TestSnapshot_IncludeChannelsAndDataPoints_DataPointsExpanded verifies that
+// ?include=channels,data_points nests data points with category populated.
+func TestSnapshot_IncludeChannelsAndDataPoints_DataPointsExpanded(t *testing.T) {
+	t.Parallel()
+	d := newSnapshotDevice("0001ABCD", "SWITCH")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?include=channels,data_points", http.NoBody)
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var env SnapshotEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.DeviceChannels) != 1 {
+		t.Fatalf("expected 1 device_channels entry, got %d", len(env.DeviceChannels))
+	}
+	ch := env.DeviceChannels[0].Channels[0]
+	if len(ch.DataPoints) != 1 {
+		t.Fatalf("expected 1 data_point, got %d", len(ch.DataPoints))
+	}
+	dp := ch.DataPoints[0]
+	if dp.Category == "" {
+		t.Error("data_point.category must not be empty when KindBinarySensor DP is present")
+	}
+}
+
+// TestSnapshot_DataPointsAloneImpliesChannels verifies that ?include=data_points
+// (without explicitly listing channels) still populates device_channels.
+func TestSnapshot_DataPointsAloneImpliesChannels(t *testing.T) {
+	t.Parallel()
+	d := newSnapshotDevice("0001ABCD", "SWITCH")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?include=data_points", http.NoBody)
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var env SnapshotEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.DeviceChannels) == 0 {
+		t.Error("?include=data_points must imply channels and populate device_channels")
+	}
+	if len(env.DeviceChannels[0].Channels) == 0 {
+		t.Error("nested channels must be present when data_points include is requested")
+	}
+	if len(env.DeviceChannels[0].Channels[0].DataPoints) == 0 {
+		t.Error("data_points must be expanded when ?include=data_points is requested")
+	}
+}
+
+// TestSnapshot_NDJSON_WithInclude verifies that the NDJSON stream emits
+// kind:"channel" and kind:"data_point" lines when ?include=channels,data_points
+// is requested, and that each carries the correct parent coordinate.
+func TestSnapshot_NDJSON_WithInclude(t *testing.T) {
+	t.Parallel()
+	d := newSnapshotDevice("0001ABCD", "SWITCH")
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?include=channels,data_points", http.NoBody)
+	req.Header.Set("Accept", "application/x-ndjson")
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	lines := splitNDJSON(t, w.Body.Bytes())
+
+	var channelLine, dpLine map[string]any
+	for _, l := range lines {
+		switch l["kind"] {
+		case "channel":
+			channelLine = l
+		case "data_point":
+			dpLine = l
+		}
+	}
+	if channelLine == nil {
+		t.Fatal("no kind:channel line found in NDJSON stream")
+	}
+	if dpLine == nil {
+		t.Fatal("no kind:data_point line found in NDJSON stream")
+	}
+
+	// Channel line must carry device_address.
+	chData, _ := channelLine["data"].(map[string]any)
+	if chData["device_address"] == "" || chData["device_address"] == nil {
+		t.Errorf("channel line must carry device_address, got %v", chData["device_address"])
+	}
+
+	// Data-point line must carry channel_address.
+	dpData, _ := dpLine["data"].(map[string]any)
+	if dpData["channel_address"] == "" || dpData["channel_address"] == nil {
+		t.Errorf("data_point line must carry channel_address, got %v", dpData["channel_address"])
+	}
+}
+
+// --- Snapshot central filter ---
+
+// multiCentralSnapshotIndex is a DeviceIndex stub that maps device addresses
+// to named centrals, used by multi-CCU snapshot filter tests.
+type multiCentralSnapshotIndex struct {
+	devices  map[string]*device.Device
+	centrals map[string]string
+}
+
+func (m *multiCentralSnapshotIndex) Devices() []*device.Device {
+	out := make([]*device.Device, 0, len(m.devices))
+	for _, d := range m.devices {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (m *multiCentralSnapshotIndex) Device(address string) (*device.Device, bool) {
+	d, ok := m.devices[address]
+	return d, ok
+}
+
+func (m *multiCentralSnapshotIndex) CentralOf(address string) string {
+	return m.centrals[address]
+}
+
+// TestSnapshot_CentralScope verifies that ?central=<name> scopes devices (and
+// device_channels when included) plus the hub entities (programs, sysvars,
+// which carry their owning central) to the named central, while rooms and
+// functions remain fleet-wide because the model does not tag them by central.
+func TestSnapshot_CentralScope(t *testing.T) {
+	t.Parallel()
+
+	homeAddr := "HOME0001"
+	officeAddr := "OFFC0002"
+
+	dHome := newSnapshotDevice(homeAddr, "SWITCH")
+	dHome.Rooms = []string{"Living Room"}
+	dHome.Functions = []string{"Lighting"}
+
+	dOffice := newSnapshotDevice(officeAddr, "SWITCH")
+	dOffice.Rooms = []string{"Meeting Room"}
+	dOffice.Functions = []string{"Lighting"}
+
+	devIdx := &multiCentralSnapshotIndex{
+		devices: map[string]*device.Device{
+			homeAddr:   dHome,
+			officeAddr: dOffice,
+		},
+		centrals: map[string]string{
+			homeAddr:   "home",
+			officeAddr: "office",
+		},
+	}
+
+	h := hub.NewHub("home")
+	h.PutProgram(hub.NewProgram("home", "P1", "Morning", "", false, nil))
+	h.PutSysvar(hub.NewSysvar("home", "Flag", "", hmenum.HubValueTypeLogic, nil))
+	hubIdx := &testHubIndex{h: h}
+
+	t.Run("central=home scopes devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx, Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 1 {
+			t.Fatalf("expected 1 device for central=home, got %d", len(env.Devices))
+		}
+		if env.Devices[0].Address != homeAddr {
+			t.Errorf("expected home device %q, got %q", homeAddr, env.Devices[0].Address)
+		}
+	})
+
+	t.Run("central=office scopes devices to office only", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=office", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 1 {
+			t.Fatalf("expected 1 device for central=office, got %d", len(env.Devices))
+		}
+		if env.Devices[0].Address != officeAddr {
+			t.Errorf("expected office device %q, got %q", officeAddr, env.Devices[0].Address)
+		}
+	})
+
+	t.Run("no central returns all devices", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Devices) != 2 {
+			t.Fatalf("expected 2 devices without central filter, got %d", len(env.Devices))
+		}
+	})
+
+	t.Run("rooms and functions are fleet-wide regardless of central", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// Rooms and functions are not scoped by central; both devices contribute.
+		if len(env.Rooms) != 2 {
+			t.Errorf("expected 2 rooms (fleet-wide), got %d: %+v", len(env.Rooms), env.Rooms)
+		}
+		if len(env.Functions) != 1 {
+			t.Errorf("expected 1 function (both devices share Lighting), got %d: %+v", len(env.Functions), env.Functions)
+		}
+	})
+
+	t.Run("central=home with include=channels scopes device_channels", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home&include=channels", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Devices: devIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.DeviceChannels) != 1 {
+			t.Fatalf("expected 1 device_channels entry for central=home, got %d", len(env.DeviceChannels))
+		}
+		if env.DeviceChannels[0].DeviceAddress != homeAddr {
+			t.Errorf("expected device_channels[0] for %q, got %q", homeAddr, env.DeviceChannels[0].DeviceAddress)
+		}
+	})
+
+	t.Run("central=home keeps matching programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=home", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		// Programs / sysvars carry their owning central, so a matching
+		// filter keeps them (one home program + one home sysvar).
+		if len(env.Programs) != 1 {
+			t.Errorf("expected 1 program for central=home, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 1 {
+			t.Errorf("expected 1 sysvar for central=home, got %d", len(env.Sysvars))
+		}
+	})
+
+	t.Run("non-matching central drops all programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?central=office", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Programs) != 0 {
+			t.Errorf("expected 0 programs for central=office, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 0 {
+			t.Errorf("expected 0 sysvars for central=office, got %d", len(env.Sysvars))
+		}
+	})
+
+	t.Run("empty central returns all programs and sysvars", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
+		w := httptest.NewRecorder()
+		Snapshot(SnapshotDeps{Hub: hubIdx}).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", w.Code)
+		}
+		var env SnapshotEnvelope
+		if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(env.Programs) != 1 {
+			t.Fatalf("expected 1 program for no central filter, got %d", len(env.Programs))
+		}
+		if len(env.Sysvars) != 1 {
+			t.Fatalf("expected 1 sysvar for no central filter, got %d", len(env.Sysvars))
+		}
+	})
+}
+
+// TestSnapshot_Anonymise_NestedChannelNames verifies that ?anonymize=1 with
+// ?include=channels tokenises channel names while leaving addresses intact.
+func TestSnapshot_Anonymise_NestedChannelNames(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("0001ABCD", "HmIP-TEST")
+	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	ch.Name = "Bookshelf Lamp"
+
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001ABCD": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?include=channels&anonymize=1", http.NoBody)
+	w := httptest.NewRecorder()
+	Snapshot(SnapshotDeps{Devices: idx}).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var env SnapshotEnvelope
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(env.DeviceChannels) != 1 {
+		t.Fatalf("expected 1 device_channels entry, got %d", len(env.DeviceChannels))
+	}
+	channels := env.DeviceChannels[0].Channels
+	if len(channels) != 1 {
+		t.Fatalf("expected 1 channel, got %d", len(channels))
+	}
+	ch0 := channels[0]
+	if ch0.Name == "Bookshelf Lamp" {
+		t.Error("channel name must be anonymised, but original value was returned")
+	}
+	if ch0.Address != "0001ABCD:1" {
+		t.Errorf("channel address must not be anonymised, got %q", ch0.Address)
 	}
 }

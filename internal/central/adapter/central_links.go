@@ -62,8 +62,8 @@ func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (handlers.
 	if c.registry == nil {
 		return handlers.CentralLinksStatus{}, ErrNoCentralLinkBackend
 	}
-	for _, cu := range c.registry.List() {
-		dev, ok := cu.ModelRegistry.Get(deviceAddress)
+	for _, u := range c.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -91,17 +91,17 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 	if c.registry == nil || c.writer == nil {
 		return handlers.CentralLinksReport{}, ErrNoCentralLinkBackend
 	}
-	for _, cu := range c.registry.List() {
-		dev, ok := cu.ModelRegistry.Get(deviceAddress)
+	for _, u := range c.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
 		if !isCentralLinkInterface(dev.Interface) {
 			return handlers.CentralLinksReport{}, handlers.ErrCentralLinksUnsupported
 		}
-		backend, ok := c.writer.Backend(cu.Name(), dev.InterfaceID)
+		backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return handlers.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, cu.Name(), dev.InterfaceID)
+			return handlers.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, u.Name(), dev.InterfaceID)
 		}
 		caller, ok := backend.(centralLinkBackend)
 		if !ok {

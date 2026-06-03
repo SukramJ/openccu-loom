@@ -92,9 +92,14 @@ func (s *Sensor[T]) OnEvent(v T) {
 }
 
 // OnWireValue is the untyped-wire entry point. For RSSI parameters the
-// raw wire integer is normalised via [FixRSSI] before being forwarded;
-// invalid readings cause OnWireValue to return false without updating
-// the stored value. Non-RSSI parameters are forwarded unchanged.
+// raw wire integer is normalised via [FixRSSI] before being forwarded.
+// An invalid reading (the HmIP 127/128/129 "no signal" sentinels) is
+// intentionally discarded WITHOUT updating the stored value, but still
+// reported as handled (returns true): it is a well-formed wire message
+// the sensor chose to drop, not a type-coercion failure. Returning false
+// here would make the callback handler log a misleading "coerce_failed"
+// and fire a pointless getValue self-reload on every invalid RSSI push.
+// Non-RSSI parameters are forwarded unchanged.
 func (s *Sensor[T]) OnWireValue(v any) bool {
 	if IsRSSIParameter(s.Parameter()) {
 		// Only int32 sensors carry RSSI parameters; wire delivers int or int32.
@@ -109,7 +114,8 @@ func (s *Sensor[T]) OnWireValue(v any) bool {
 		}
 		fixed, valid := FixRSSI(raw)
 		if !valid {
-			return false
+			// Invalid sentinel — handled by dropping it; no reload needed.
+			return true
 		}
 		normalized, ok := any(fixed).(T)
 		if !ok {

@@ -20,10 +20,10 @@ import (
 // CommandSink is the domain-facing write contract. The composition
 // root wires this to the central's ValueWriter; tests can stub it.
 type CommandSink interface {
-	SetValue(ctx context.Context, central, interfaceID, channelAddress string,
+	SetValue(ctx context.Context, centralName, interfaceID, channelAddress string,
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
-	SetSysvar(ctx context.Context, central, name string, payload any) error
-	TriggerProgram(ctx context.Context, central, id string) error
+	SetSysvar(ctx context.Context, centralName, name string, payload any) error
+	TriggerProgram(ctx context.Context, centralName, id string) error
 }
 
 // WeekProfileSink is the optional domain-facing contract for
@@ -40,7 +40,7 @@ type CommandSink interface {
 // validates the key against the channel's [AvailableProfiles].
 type WeekProfileSink interface {
 	SetActiveProfile(ctx context.Context,
-		central, interfaceID, deviceAddress string, channel int,
+		centralName, interfaceID, deviceAddress string, channel int,
 		profileKey string,
 		priority hmenum.CommandPriority) error
 }
@@ -55,7 +55,7 @@ type WeekProfileSink interface {
 // SetScheduleEnabled.
 type ScheduleSwitchSink interface {
 	SetScheduleSwitch(ctx context.Context,
-		central, interfaceID, deviceAddress string, channel int,
+		centralName, interfaceID, deviceAddress string, channel int,
 		key string, enabled bool,
 		priority hmenum.CommandPriority) error
 }
@@ -71,7 +71,7 @@ type ScheduleSwitchSink interface {
 // dispatches the typed write.
 type CombinedDPSink interface {
 	SetCombinedTimerSeconds(ctx context.Context,
-		central, interfaceID, deviceAddress string, channel int,
+		centralName, interfaceID, deviceAddress string, channel int,
 		kind string, seconds float64,
 		priority hmenum.CommandPriority) error
 }
@@ -85,7 +85,7 @@ type CombinedDPSink interface {
 // can scope the device lookup to the right central registry entry.
 type CDPInvocationSink interface {
 	InvokeCustomDP(ctx context.Context,
-		central, deviceAddress, name, operation string,
+		centralName, deviceAddress, name, operation string,
 		params map[string]any,
 		priority hmenum.CommandPriority) error
 
@@ -100,7 +100,7 @@ type CDPInvocationSink interface {
 	// Returns an error when no custom DP is attached or when the
 	// service method is unknown.
 	InvokeChannelService(ctx context.Context,
-		central, interfaceID, deviceAddress string, channel int,
+		centralName, interfaceID, deviceAddress string, channel int,
 		method string, params map[string]any,
 		priority hmenum.CommandPriority) error
 }
@@ -276,7 +276,7 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 		c.logger.Warn("mqtt.command.schedule.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	central, iface, deviceAddr, channelStr, key := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralName, iface, deviceAddr, channelStr, key := parts[1], parts[2], parts[3], parts[4], parts[6]
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.schedule.bad_channel", slog.String("topic", topic))
@@ -303,7 +303,7 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.schedSink.SetScheduleSwitch(ctx, central, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
+	if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.schedule.set",
 			slog.String("topic", topic),
 			slog.String("key", key),
@@ -327,7 +327,7 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 		c.logger.Warn("mqtt.command.wp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	central, iface, deviceAddr, channelStr := parts[1], parts[2], parts[3], parts[4]
+	centralName, iface, deviceAddr, channelStr := parts[1], parts[2], parts[3], parts[4]
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.wp.bad_channel", slog.String("topic", topic))
@@ -346,7 +346,7 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.wpSink.SetActiveProfile(ctx, central, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
+	if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.wp.set_active_profile",
 			slog.String("topic", topic),
 			slog.String("profile", profile),
@@ -371,7 +371,7 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 		c.logger.Warn("mqtt.command.combined.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	central, iface, deviceAddr, channelStr, kind := parts[1], parts[2], parts[3], parts[4], parts[6]
+	centralName, iface, deviceAddr, channelStr, kind := parts[1], parts[2], parts[3], parts[4], parts[6]
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.combined.bad_channel", slog.String("topic", topic))
@@ -392,7 +392,7 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.cmbSink.SetCombinedTimerSeconds(ctx, central, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
+	if err := c.cmbSink.SetCombinedTimerSeconds(ctx, centralName, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.combined.set",
 			slog.String("topic", topic),
 			slog.String("kind", kind),
@@ -419,7 +419,7 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 		c.logger.Warn("mqtt.command.svc.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	central, iface, deviceAddr, channelStr, method := parts[1], parts[2], parts[3], parts[4], parts[8]
+	centralName, iface, deviceAddr, channelStr, method := parts[1], parts[2], parts[3], parts[4], parts[8]
 	channel, err := strconv.Atoi(channelStr)
 	if err != nil {
 		c.logger.Warn("mqtt.command.svc.bad_channel", slog.String("topic", topic))
@@ -440,7 +440,7 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.cdpSink.InvokeChannelService(ctx, central, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
+	if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.svc.invoke",
 			slog.String("topic", topic),
 			slog.String("method", method),
@@ -479,10 +479,10 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	var central, iface, device, channelStr, parameter string
+	var centralName, iface, device, channelStr, parameter string
 	switch len(parts) {
 	case 7:
-		central, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
+		centralName, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
 	case 8:
 		bucket := parts[5]
 		if bucket != "values" {
@@ -495,7 +495,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 				slog.String("bucket", bucket))
 			return
 		}
-		central, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[6]
+		centralName, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[6]
 	default:
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
@@ -510,7 +510,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	c.incReceivedCommands()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.sink.SetValue(ctx, central, iface, channelAddress,
+	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
 		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.setvalue",
 			slog.String("topic", topic),
@@ -528,12 +528,12 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "sysvars" || parts[5] != "set" {
 		return
 	}
-	central, name := parts[1], parts[4]
+	centralName, name := parts[1], parts[4]
 	value := parseCommandPayload(body)
 	c.incReceivedCommands()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.sink.SetSysvar(ctx, central, name, value); err != nil {
+	if err := c.sink.SetSysvar(ctx, centralName, name, value); err != nil {
 		c.logger.Warn("mqtt.command.setsysvar",
 			slog.String("topic", topic), slog.String("err", err.Error()))
 	}
@@ -549,11 +549,11 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "programs" || parts[5] != "trigger" {
 		return
 	}
-	central, id := parts[1], parts[4]
+	centralName, id := parts[1], parts[4]
 	c.incReceivedCommands()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.sink.TriggerProgram(ctx, central, id); err != nil {
+	if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
 		c.logger.Warn("mqtt.command.program",
 			slog.String("topic", topic), slog.String("err", err.Error()))
 	}
@@ -570,7 +570,7 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 		c.logger.Warn("mqtt.command.cdp.unknown_topic", slog.String("topic", topic))
 		return
 	}
-	central, deviceAddr, name, operation := parts[1], parts[3], parts[5], parts[6]
+	centralName, deviceAddr, name, operation := parts[1], parts[3], parts[5], parts[6]
 
 	if c.cdpSink == nil {
 		c.logger.Warn("mqtt.command.cdp.no_sink",
@@ -592,7 +592,7 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 	priority := parseMQTTPriority(body.Priority)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.cdpSink.InvokeCustomDP(ctx, central, deviceAddr, name, operation, body.Params, priority); err != nil {
+	if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
 		c.logger.Warn("mqtt.command.cdp.invoke",
 			slog.String("topic", topic),
 			slog.String("err", err.Error()))

@@ -5,6 +5,7 @@ package generic
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // Compile-time guarantees that the concrete generic data-point types
@@ -20,6 +21,20 @@ var (
 	_ payload.Source = (*Text)(nil)
 )
 
+// CanonicalUniqueID builds the external, loom-namespaced unique_id for
+// this data point. The serialSuffix (the CCU serial's last-10 lower
+// suffix) is supplied by the north boundary, which holds the central →
+// serial mapping; the data point contributes its channel address and
+// wire parameter. Normal devices come out unprefixed
+// (loom_vcu1234567_1_state); internal / virtual-remote addresses carry
+// the serial suffix. See docs/external-clients/ha-unique-id-migration.md.
+func (d *DataPoint[T]) CanonicalUniqueID(serialSuffix string) string {
+	if d == nil {
+		return ""
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, d.Address(), string(d.Parameter()), "")
+}
+
 // Info returns identity-level fields that uniquely describe
 // the data point and its wire-level provenance.
 //
@@ -28,7 +43,7 @@ var (
 //   - parameter    — wire-level parameter name (SET_POINT_TEMPERATURE)
 //   - paramset_key — VALUES / MASTER / LINK marker
 //   - address      — owning channel address
-//   - central      — owning CentralUnit name (omitted in test fixtures)
+//   - central      — owning Unit name (omitted in test fixtures)
 //   - device_model — parent device's CCU model
 //   - category     — DataPointCategory bucket (sensor / switch / number)
 //   - kind         — resolved generic shape (Switch, Sensor, Number, …)

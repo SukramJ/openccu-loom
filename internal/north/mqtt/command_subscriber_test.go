@@ -19,22 +19,22 @@ type fakeSink struct {
 	setSysvars atomic.Int32
 	triggers   atomic.Int32
 	lastVal    struct {
-		central, iface, chanAddr string
-		param                    string
-		value                    any
+		centralName, iface, chanAddr string
+		param                        string
+		value                        any
 	}
 	lastSysvar struct {
-		central, name string
-		value         any
+		centralName, name string
+		value             any
 	}
-	lastProgram struct{ central, id string }
+	lastProgram struct{ centralName, id string }
 }
 
-func (f *fakeSink) SetValue(_ context.Context, central, iface, chanAddr string,
+func (f *fakeSink) SetValue(_ context.Context, centralName, iface, chanAddr string,
 	param hmenum.Parameter, v any, _ hmenum.CommandPriority,
 ) error {
 	f.setValues.Add(1)
-	f.lastVal.central = central
+	f.lastVal.centralName = centralName
 	f.lastVal.iface = iface
 	f.lastVal.chanAddr = chanAddr
 	f.lastVal.param = string(param)
@@ -42,17 +42,17 @@ func (f *fakeSink) SetValue(_ context.Context, central, iface, chanAddr string,
 	return nil
 }
 
-func (f *fakeSink) SetSysvar(_ context.Context, central, name string, v any) error {
+func (f *fakeSink) SetSysvar(_ context.Context, centralName, name string, v any) error {
 	f.setSysvars.Add(1)
-	f.lastSysvar.central = central
+	f.lastSysvar.centralName = centralName
 	f.lastSysvar.name = name
 	f.lastSysvar.value = v
 	return nil
 }
 
-func (f *fakeSink) TriggerProgram(_ context.Context, central, id string) error {
+func (f *fakeSink) TriggerProgram(_ context.Context, centralName, id string) error {
 	f.triggers.Add(1)
-	f.lastProgram.central = central
+	f.lastProgram.centralName = centralName
 	f.lastProgram.id = id
 	return nil
 }
@@ -73,7 +73,7 @@ func TestCommandSubscriberDataPointTopic(t *testing.T) {
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("calls=%d", sink.setValues.Load())
 	}
-	if sink.lastVal.central != "ccu-01" || sink.lastVal.chanAddr != "0001ABCD:1" ||
+	if sink.lastVal.centralName != "ccu-01" || sink.lastVal.chanAddr != "0001ABCD:1" ||
 		sink.lastVal.param != "STATE" || sink.lastVal.value != true {
 		t.Fatalf("last=%+v", sink.lastVal)
 	}
@@ -115,11 +115,11 @@ type fakeCDPSink struct {
 	lastPrio                                  hmenum.CommandPriority
 }
 
-func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, central, device, name, op string,
+func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, centralName, device, name, op string,
 	params map[string]any, prio hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.lastCentral = central
+	f.lastCentral = centralName
 	f.lastDevice = device
 	f.lastName = name
 	f.lastOp = op
@@ -133,11 +133,11 @@ func (f *fakeCDPSink) InvokeCustomDP(_ context.Context, central, device, name, o
 // in the same fields as InvokeCustomDP for assertion convenience —
 // `name` is reused for the channel suffix to keep the fake compact.
 func (f *fakeCDPSink) InvokeChannelService(_ context.Context,
-	central, _, device string, channel int,
+	centralName, _, device string, channel int,
 	method string, params map[string]any, prio hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.lastCentral = central
+	f.lastCentral = centralName
 	f.lastDevice = device
 	f.lastName = fmt.Sprintf("%s:%d", device, channel)
 	f.lastOp = method
@@ -336,18 +336,18 @@ func TestParseCommandPayloadFlavours(t *testing.T) {
 type fakeWPSink struct {
 	calls atomic.Int32
 	last  struct {
-		central, iface, addr string
-		channel              int
-		profile              string
+		centralName, iface, addr string
+		channel                  int
+		profile                  string
 	}
 }
 
 func (f *fakeWPSink) SetActiveProfile(_ context.Context,
-	central, interfaceID, deviceAddress string, channel int,
+	centralName, interfaceID, deviceAddress string, channel int,
 	profileKey string, _ hmenum.CommandPriority,
 ) error {
 	f.calls.Add(1)
-	f.last.central = central
+	f.last.centralName = centralName
 	f.last.iface = interfaceID
 	f.last.addr = deviceAddress
 	f.last.channel = channel
@@ -374,8 +374,8 @@ func TestCommandSubscriberWeekProfileTopic(t *testing.T) {
 		t.Fatalf("calls=%d, want 1", wpSink.calls.Load())
 	}
 	last := wpSink.last
-	if last.central != "ccu-01" {
-		t.Errorf("central: got %q want %q", last.central, "ccu-01")
+	if last.centralName != "ccu-01" {
+		t.Errorf("central: got %q want %q", last.centralName, "ccu-01")
 	}
 	if last.iface != "HmIP-RF" {
 		t.Errorf("iface: got %q want %q", last.iface, "HmIP-RF")

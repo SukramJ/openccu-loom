@@ -231,10 +231,17 @@ func TestConcurrentCancelBothRunsCleanup(t *testing.T) {
 	// Give G2 time to reach the <-existing block.
 	time.Sleep(20 * time.Millisecond)
 
-	// Cancel both.
-	cancelFirst()
-	// Cancel G2 before it even gets to run its stage.
+	// Cancel G2 first, while it is still parked on <-existing waiting for
+	// G1's done channel. G2 cannot enter its stage until G1 releases the
+	// lock, and G1 only releases once cancelFirst fires below. Cancelling
+	// G2 first therefore guarantees its context is already done by the time
+	// it runs its stage — without this ordering, cancelSecond races the
+	// G1-unblock chain and G2's stage can observe a still-live context and
+	// return Success.
 	cancelSecond()
+	// Now unblock G1; its defer closes the done channel and lets G2 proceed
+	// into its already-cancelled stage.
+	cancelFirst()
 
 	done := make(chan struct{})
 	go func() { wg.Wait(); close(done) }()
@@ -272,7 +279,7 @@ func TestConcurrentCancelBothRunsCleanup(t *testing.T) {
 // triggerRecovery() is called by the HeartbeatTimerFiredEvent handler. -
 // triggerRecovery() already guards against duplicate recoveries via the
 // `alreadyActive` check and the `stopped` flag. - The production caller
-// (CentralUnit) is responsible for only emitting HeartbeatTimerFiredEvent
+// (Unit) is responsible for only emitting HeartbeatTimerFiredEvent
 // when a failed/degraded recovery is needed. This is intentional: Go avoids a
 // mutable boolean that must be kept in sync across concurrent event handlers,
 // leaning instead on the existing active-map and stop-flag guards. The

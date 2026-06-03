@@ -313,13 +313,13 @@ type HubState struct {
 	SysvarCount  int `json:"sysvar_count"`
 }
 
-// --- CentralUnit + InterfaceClient (top-level services) -------------
+// --- Unit + InterfaceClient (top-level services) -------------
 
-// CentralUnitState is the live runtime status of the central. The
+// CentralState is the live runtime status of the central. The
 // state-machine bucket and the registered-device count are the two
 // metrics northbound adapters consume — health page, connectivity
 // badge, REST /info endpoint.
-type CentralUnitState struct {
+type CentralState struct {
 	State       string `json:"state,omitempty"`
 	DeviceCount int    `json:"device_count,omitempty"`
 }

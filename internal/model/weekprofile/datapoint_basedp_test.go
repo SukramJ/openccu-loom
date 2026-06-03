@@ -52,28 +52,28 @@ func TestProfileDataPointEmbedsBaseDataPointFields(t *testing.T) {
 func TestProfileDataPointUniqueID(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		central string
-		address string
-		want    string
+		name        string
+		centralName string
+		address     string
+		want        string
 	}{
 		{
-			name:    "production multi-CCU dp",
-			central: "ccu-prod",
-			address: "VCU0123:1",
-			want:    "ccu-prod:VCU0123:1:WEEKPROFILE",
+			name:        "production multi-CCU dp",
+			centralName: "ccu-prod",
+			address:     "VCU0123:1",
+			want:        "ccu-prod:VCU0123:1:WEEKPROFILE",
 		},
 		{
-			name:    "second central, same address",
-			central: "ccu-secondary",
-			address: "VCU0123:1",
-			want:    "ccu-secondary:VCU0123:1:WEEKPROFILE",
+			name:        "second central, same address",
+			centralName: "ccu-secondary",
+			address:     "VCU0123:1",
+			want:        "ccu-secondary:VCU0123:1:WEEKPROFILE",
 		},
 		{
-			name:    "legacy fixture (no identity)",
-			central: "",
-			address: "",
-			want:    "::WEEKPROFILE",
+			name:        "legacy fixture (no identity)",
+			centralName: "",
+			address:     "",
+			want:        "::WEEKPROFILE",
 		},
 	}
 	for _, tc := range cases {
@@ -81,7 +81,7 @@ func TestProfileDataPointUniqueID(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dp := NewProfileDataPoint(ProfileDataPointConfig{
-				CentralName:    tc.central,
+				CentralName:    tc.centralName,
 				ChannelAddress: tc.address,
 				ScheduleType:   ScheduleTypeClimate,
 				ProfileCount:   3,

@@ -179,11 +179,19 @@
     },
     {
       "category": "datapoint",
-      "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple.",
+      "description": "Server-pushed: the value of a wire data-point changed on the CCU. One topic per (device, channel, parameter) tuple. Subscribe with `classify:true` to receive inline category / data_point_type on the payload (default off).",
       "kind": "broadcast",
       "name": "datapoint.value_changed",
       "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
       "payload": "DataPointValueChangedPayload"
+    },
+    {
+      "category": "datapoint",
+      "description": "Server-pushed: an optimistic write was rolled back (CCU never confirmed within TTL, or rejected it). Rides the same data_points topic as datapoint.value_changed — subscribers route by envelope `type`.",
+      "kind": "broadcast",
+      "name": "datapoint.optimistic_rolled_back",
+      "topic": "device.{address}.channels.{channel}.data_points.{parameter}",
+      "payload": "OptimisticRollbackPayload"
     },
     {
       "category": "devices",
@@ -209,6 +217,14 @@
       "name": "device.removed",
       "topic": "device.{address}.lifecycle",
       "payload": "DeviceRemovedPayload"
+    },
+    {
+      "category": "devices",
+      "description": "Server-pushed: a non-state device event fired (keypress, impulse, device error) — one topic per (device, channel). Payload event_type / parameter disambiguate which trigger fired. Distinct from datapoint.value_changed.",
+      "kind": "broadcast",
+      "name": "device.trigger",
+      "topic": "device.{address}.channels.{channel}.trigger",
+      "payload": "DeviceTriggerPayload"
     },
     {
       "category": "devices",

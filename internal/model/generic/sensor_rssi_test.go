@@ -154,14 +154,20 @@ func TestSensorOnWireValue_RSSI_ValidInt32(t *testing.T) {
 }
 
 // TestSensorOnWireValue_RSSI_InvalidValue verifies that the canonical
-// "no reading" sentinel 0 is rejected by OnWireValue.
+// "no reading" sentinel is dropped WITHOUT updating the stored value,
+// yet reported as handled (true): a well-formed sentinel the sensor
+// chose to discard is not a coercion failure, so the callback handler
+// must not log "coerce_failed" or fire a pointless getValue reload.
 func TestSensorOnWireValue_RSSI_InvalidValue(t *testing.T) {
 	t.Parallel()
 	s := NewIntegerSensor(baseCfg(hmenum.ParameterRSSIDevice, hmenum.ParameterTypeInteger, hmenum.OperationsRead|hmenum.OperationsEvent))
-	// 0 is the canonical "no reading" sentinel → FixRSSI returns false.
-	ok := s.OnWireValue(int(0))
-	if ok {
-		t.Error("RSSI 0 sentinel should return false")
+	// 0 is the canonical "no reading" sentinel → FixRSSI returns invalid.
+	if !s.OnWireValue(int(0)) {
+		t.Error("invalid RSSI sentinel should be reported as handled (true), not coerce-failed")
+	}
+	// The invalid reading must NOT have been stored.
+	if _, ok := s.Value(); ok {
+		t.Error("invalid RSSI sentinel must not update the stored value")
 	}
 }
 
@@ -193,12 +199,13 @@ func TestSensorRSSIOnWireValueAppliesFixRSSI(t *testing.T) {
 		t.Fatalf("OnWireValue(int(60)): got (%d, %v), want (-60, true)", v, ok)
 	}
 
-	// Out-of-range via wire must be rejected (return false, no update).
-	if s.OnWireValue(int(0)) {
-		t.Fatal("OnWireValue(int(0)) must return false for invalid RSSI")
+	// An invalid sentinel is handled by dropping it: OnWireValue reports
+	// true (not a coercion failure) but the stored value stays unchanged.
+	if !s.OnWireValue(int(0)) {
+		t.Fatal("OnWireValue(int(0)) must return true (handled-by-discard) for invalid RSSI")
 	}
 	v, ok = s.Value()
 	if !ok || v != -60 {
-		t.Fatalf("after invalid wire value: got (%d, %v), want (-60, true)", v, ok)
+		t.Fatalf("after invalid wire value: got (%d, %v), want (-60, true) — value must be unchanged", v, ok)
 	}
 }

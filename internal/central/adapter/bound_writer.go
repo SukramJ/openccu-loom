@@ -18,13 +18,13 @@ import (
 // every constructed data point, and the point dispatches to the
 // configured [ValueWriter].
 type boundWriter struct {
-	central     string
+	centralName string
 	interfaceID string
 	writer      ValueWriter
 }
 
-func newBoundWriter(central, interfaceID string, w ValueWriter) *boundWriter {
-	return &boundWriter{central: central, interfaceID: interfaceID, writer: w}
+func newBoundWriter(centralName, interfaceID string, w ValueWriter) *boundWriter {
+	return &boundWriter{centralName: centralName, interfaceID: interfaceID, writer: w}
 }
 
 // SetValue routes to [ValueWriter.SetValue] with the captured tuple.
@@ -35,7 +35,7 @@ func (b *boundWriter) SetValue(
 	if b == nil || b.writer == nil {
 		return ErrNoWriter
 	}
-	return b.writer.SetValue(ctx, b.central, b.interfaceID, channelAddress, parameter, value, priority)
+	return b.writer.SetValue(ctx, b.centralName, b.interfaceID, channelAddress, parameter, value, priority)
 }
 
 var _ generic.Writer = (*boundWriter)(nil)

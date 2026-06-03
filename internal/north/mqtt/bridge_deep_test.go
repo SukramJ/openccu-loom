@@ -402,11 +402,11 @@ func TestBridgePublishProgramAvailability(t *testing.T) {
 func TestBridgePublishSysvarValueRendering(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		value   any
-		want    string
-		central string
-		sysvar  string
+		name        string
+		value       any
+		want        string
+		centralName string
+		sysvar      string
 	}{
 		{"int", 42, "42", "c1", "Counter"},
 		{"float", 3.25, "3.25", "c1", "Temperature"},
@@ -422,9 +422,9 @@ func TestBridgePublishSysvarValueRendering(t *testing.T) {
 			rec := &recordingPublisher{}
 			b := newDeepBridge(t, rec)
 
-			wantTopic := "openccu-loom/" + tc.central + "/hub/sysvars/" + tc.sysvar + "/state"
+			wantTopic := "openccu-loom/" + tc.centralName + "/hub/sysvars/" + tc.sysvar + "/state"
 			sv := fakeAddressable{state: wantTopic}
-			if err := b.PublishSysvar(context.Background(), tc.central, sv, tc.value); err != nil {
+			if err := b.PublishSysvar(context.Background(), tc.centralName, sv, tc.value); err != nil {
 				t.Fatalf("PublishSysvar: %v", err)
 			}
 			r, ok := rec.findTopic(wantTopic)

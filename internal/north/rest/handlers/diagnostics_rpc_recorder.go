@@ -29,7 +29,7 @@ type RPCRecorderService interface {
 	// Export serialises a central's recorded trace. format selects the shape
 	// ("golden" = ordered replay slice, else the keyed map). Returns false
 	// when the central is unknown.
-	Export(central, format string) (any, bool)
+	Export(centralName, format string) (any, bool)
 }
 
 // RPCRecordingStatus is one central's recorder status.
@@ -123,19 +123,19 @@ func DownloadRPCRecording(svc RPCRecorderService) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "RPC recorder unavailable", ""))
 			return
 		}
-		central := chi.URLParam(r, "central")
+		centralName := chi.URLParam(r, "central")
 		format := r.URL.Query().Get("format")
 		if format != "golden" {
 			format = "map"
 		}
-		out, ok := svc.Export(central, format)
+		out, ok := svc.Export(centralName, format)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
-				problem.New(problem.TypeNotFound, r, "Central not found", central))
+				problem.New(problem.TypeNotFound, r, "Central not found", centralName))
 			return
 		}
 		w.Header().Set("Content-Disposition",
-			"attachment; filename=\"rpc-recording-"+central+"-"+format+".json\"")
+			"attachment; filename=\"rpc-recording-"+centralName+"-"+format+".json\"")
 		JSON(w, http.StatusOK, out)
 	}
 }

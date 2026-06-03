@@ -115,9 +115,8 @@ type ChannelSummary struct {
 	ParamsetKey string `json:"paramset_key"`
 	DataPoints  int    `json:"data_points_count"`
 	// Category is the OCCU channel-type string (same as Type), exposed
-	// Under the key name so consumers can route
-	// on channel purpose without parsing the Type string.
-	// Closes H-036.
+	// under its own `category` key so consumers can route on channel
+	// purpose without parsing the Type string.
 	Category string `json:"category,omitempty"`
 	// CustomDpName is the stable name of the Custom-DP that owns this
 	// channel — empty when the channel is not attached to any CDP.
@@ -168,6 +167,17 @@ type DataPointSummary struct {
 	// render.
 	ValueAgeSeconds int64               `json:"value_age_seconds,omitempty"`
 	Operations      DataPointSummaryOps `json:"operations"`
+	// Category is the fine-grained DataPointCategory ("light", "cover",
+	// "climate", "sensor", "binary_sensor", "switch", …) the daemon
+	// derives internally. External clients (the HA drop-in) spawn entities
+	// off this instead of re-deriving categories from raw paramsets.
+	// Empty only when the DP does not implement the categorised surface.
+	Category string `json:"category,omitempty"`
+	// DataPointType is the consumer-facing functional type mapped from
+	// Category via hmenum.CategoryToType ("light", "number", "select",
+	// "sensor", …). Distinct from Type above, which is the CCU descriptor
+	// primitive (BOOL/INTEGER/FLOAT/ENUM); the two must not be conflated.
+	DataPointType string `json:"data_point_type,omitempty"`
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
 	// "DIMMER.LEVEL"). Drives the SPA's CONTROL-aware widget resolver
@@ -366,8 +376,16 @@ func ListDevices(idx DeviceIndex) http.HandlerFunc {
 		modelFilter := strings.ToLower(strings.TrimSpace(q.Get("model")))
 		nameFilter := strings.ToLower(strings.TrimSpace(q.Get("name")))
 		addrFilter := strings.ToLower(strings.TrimSpace(q.Get("address")))
+		// `central` is the per-CCU scoping discriminator, matched exactly
+		// (not substring): it is the canonical central name
+		// (`SystemCCUEntry.name == CentralRow.name == payload.central`), so
+		// a multi-CCU client can fetch exactly one CCU's device list.
+		centralFilter := strings.TrimSpace(q.Get("central"))
 		filtered := devs[:0:0]
 		for _, d := range devs {
+			if centralFilter != "" && idx.CentralOf(d.Address) != centralFilter {
+				continue
+			}
 			if ifaceFilter != "" && !strings.Contains(strings.ToLower(string(d.Interface)), ifaceFilter) {
 				continue
 			}
@@ -469,7 +487,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		Number:      ch.Number,
 		Type:        ch.Type,
 		TypeLabel:   channelTypeLabel(labels, ch.Type),
-		Category:    ch.Type, // H-036
+		Category:    ch.Type,
 		Name:        ch.Name,
 		ParamsetKey: string(ch.ParamsetIn),
 		DataPoints:  ch.Len(),
@@ -629,10 +647,10 @@ func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 	return ch, nil
 }
 
-func toDeviceSummary(d *device.Device, central string) DeviceSummary {
+func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
 		Address:                   d.Address,
-		Central:                   central,
+		Central:                   centralName,
 		Interface:                 string(d.Interface),
 		InterfaceID:               d.InterfaceID,
 		Model:                     d.Model,
@@ -670,6 +688,14 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// instead of the bare-parameter "Leistung". Falls back to the
 	// un-typed translation when the channel-type entry is missing.
 	s.ParameterLabel = channelTypedParameterLabel(labels, channelType, s.Parameter)
+	// Category + functional type let a client classify the DP declaratively.
+	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:
+	// every concrete generic.DataPoint implements CategorisedDataPoint.
+	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
+		cat := cdp.Category()
+		s.Category = string(cat)
+		s.DataPointType = string(hmenum.CategoryToType[cat])
+	}
 	s.Control = pd.Control
 	s.Type = string(pd.Type)
 	s.Unit = pd.Unit

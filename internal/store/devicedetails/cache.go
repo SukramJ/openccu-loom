@@ -25,7 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// Cache holds the runtime device-detail metadata for one CentralUnit.
+// Cache holds the runtime device-detail metadata for one Unit.
 //
 // - `names`        — channel/device address → operator-assigned name. -
 // `iseIDs`       — channel/device address → CCU ISE-ID (used for

@@ -339,6 +339,15 @@ func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 			problem.New(problem.TypeNotFound, r, "Channel has no climate schedule", ""))
 		return
 	}
-	problem.Write(w, http.StatusInternalServerError,
+	// A schedule write reaches the CCU through the backend; any remaining
+	// failure is an upstream/gateway problem, not an internal one. Mirror
+	// the value-write handler (devices.go) and return 502 — never 500
+	// (TestRESTMutationWalker treats a mutation 500 as a bug).
+	if problem.IsUpstreamUnavailable(err) {
+		problem.Write(w, http.StatusBadGateway,
+			problem.New(problem.TypeUpstreamUnavailable, r, "Upstream temporarily unavailable", err.Error()))
+		return
+	}
+	problem.Write(w, http.StatusBadGateway,
 		problem.New(problem.TypeInternal, r, "Schedule request failed", err.Error()))
 }

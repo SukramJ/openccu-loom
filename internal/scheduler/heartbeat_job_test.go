@@ -6,7 +6,7 @@
 // must not stop the scheduler, and Stop must cleanly cancel running jobs.
 // The integration between the heartbeat job and HeartbeatTimerFiredEvent
 // is tested in internal/central (jobs_test.go) because it requires the
-// full CentralUnit context.
+// full Unit context.
 package scheduler
 
 import (

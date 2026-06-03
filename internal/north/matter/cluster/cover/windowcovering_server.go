@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -128,9 +129,9 @@ func (s *WindowCoveringServer) MatterWrite(_ context.Context, attrID uint32, val
 	if attrID != wire.WindowCoveringAttrMode {
 		return fmt.Errorf("windowcovering: attribute 0x%04X is not writable", attrID)
 	}
-	v, ok := value.(uint8)
+	v, ok := cluster.AsUint8(value)
 	if !ok {
-		return fmt.Errorf("windowcovering: Mode: expected uint8, got %T", value)
+		return fmt.Errorf("windowcovering: Mode: expected numeric, got %T", value)
 	}
 	// Constraint max 15 per matter.js window-covering-cluster.element.ts:79.
 	if v > 15 {

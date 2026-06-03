@@ -6,6 +6,7 @@ package ws
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -35,8 +36,12 @@ type SysvarChangedPayload struct {
 	Central   string              `json:"central"`
 	Name      string              `json:"name"`
 	ValueType hmenum.HubValueType `json:"value_type,omitempty"`
-	Value     any                 `json:"value"`
-	Previous  any                 `json:"previous,omitempty"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// sysvar (loom_<serial10>_sysvar_<hub-slug>). Optional; see
+	// [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id,omitempty"`
+	Value    any    `json:"value"`
+	Previous any    `json:"previous,omitempty"`
 }
 
 // ProgramExecutedPayload is the WebSocket payload published on the
@@ -47,6 +52,11 @@ type ProgramExecutedPayload struct {
 	ProgramID string                `json:"program_id"`
 	Trigger   hmenum.ProgramTrigger `json:"trigger,omitempty"`
 	Success   bool                  `json:"success"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// program (loom_<serial10>_program_<hub-slug(name)>). Optional and
+	// empty when the program name cannot be resolved; see
+	// [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id,omitempty"`
 }
 
 // SysvarTopic returns the canonical topic for a sysvar-change event:
@@ -61,6 +71,27 @@ func SysvarTopic(centralName, name string) string {
 //	hub.<central>.programs.<id>
 func ProgramTopic(centralName, programID string) string {
 	return "hub." + centralName + ".programs." + programID
+}
+
+// programUniqueID builds the canonical loom routing key for a program.
+// The routing key keys on the program *name* slug, but the execution
+// event carries only the program id, so the name is resolved from the
+// central's hub model. Returns "" when the central or program is not
+// known yet (the field is optional). See
+// docs/external-clients/ha-unique-id-migration.md.
+func programUniqueID(reg *central.Registry, centralName, programID string) string {
+	if reg == nil {
+		return ""
+	}
+	h := reg.HubFor(centralName)
+	if h == nil {
+		return ""
+	}
+	p, ok := h.Program(programID)
+	if !ok || p == nil {
+		return ""
+	}
+	return p.CanonicalUniqueID(reg.SerialSuffix(centralName))
 }
 
 // HubEventsSubscriber bridges per-central [hmevent.SysvarChangedEvent]
@@ -84,13 +115,14 @@ func (s *HubEventsSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, c := range s.reg.List() {
-		bus := c.EventBus
+	for _, u := range s.reg.List() {
+		bus := u.EventBus
 		if bus == nil {
 			continue
 		}
-		centralName := c.Name()
+		centralName := u.Name()
 		hub := s.hub
+		reg := s.reg
 		unsubSv := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
 			hub.Publish(Event{
 				Topic: SysvarTopic(centralName, e.Name),
@@ -100,8 +132,11 @@ func (s *HubEventsSubscriber) Start() {
 					Central:   centralName,
 					Name:      e.Name,
 					ValueType: e.ValueType,
-					Value:     e.NewValue.Unwrap(),
-					Previous:  e.OldValue.Unwrap(),
+					UniqueID: routingkey.CanonicalUniqueID(
+						reg.SerialSuffix(centralName), "sysvar", routingkey.HubSlug(e.Name), "",
+					),
+					Value:    e.NewValue.Unwrap(),
+					Previous: e.OldValue.Unwrap(),
 				},
 			})
 		})
@@ -115,6 +150,7 @@ func (s *HubEventsSubscriber) Start() {
 					ProgramID: e.ProgramID,
 					Trigger:   e.Trigger,
 					Success:   e.Success,
+					UniqueID:  programUniqueID(reg, centralName, e.ProgramID),
 				},
 			})
 		})

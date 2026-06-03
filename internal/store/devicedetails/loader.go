@@ -76,20 +76,20 @@ type channelWireEntry struct {
 // The Loader is intentionally thin: it has no scheduler of its own
 // and is called by the cache coordinator at the right time.
 type Loader struct {
-	cache   *Cache
-	client  jsonClientLike
-	central string
-	logger  *slog.Logger
+	cache       *Cache
+	client      jsonClientLike
+	centralName string
+	logger      *slog.Logger
 }
 
 // NewLoader constructs a Loader wired to the given cache and JSON-RPC
-// client. `central` is the CentralUnit name (used in log messages).
-func NewLoader(cache *Cache, client jsonClientLike, central string, logger *slog.Logger) *Loader {
+// client. `central` is the Unit name (used in log messages).
+func NewLoader(cache *Cache, client jsonClientLike, centralName string, logger *slog.Logger) *Loader {
 	return &Loader{
-		cache:   cache,
-		client:  client,
-		central: central,
-		logger:  logger,
+		cache:       cache,
+		client:      client,
+		centralName: centralName,
+		logger:      logger,
 	}
 }
 
@@ -104,7 +104,7 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 		age := time.Since(l.cache.RefreshedAt())
 		if age < loadWindow {
 			l.logger.Debug("devicedetails.load.skip",
-				slog.String("central", l.central),
+				slog.String("central", l.centralName),
 				slog.Duration("age", age),
 				slog.Duration("window", loadWindow))
 			return nil
@@ -115,11 +115,11 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 
 	// ── Step 1: names, ISE-IDs, interfaces ──────────────────────────
 	l.logger.Debug("devicedetails.load.names",
-		slog.String("central", l.central))
+		slog.String("central", l.centralName))
 
 	rawDetails, err := l.client.GetDeviceDetails(ctx)
 	if err != nil {
-		return fmt.Errorf("devicedetails.load %s: GetDeviceDetails: %w", l.central, err)
+		return fmt.Errorf("devicedetails.load %s: GetDeviceDetails: %w", l.centralName, err)
 	}
 
 	// iseToAddress is built here so the room / function phases can
@@ -131,7 +131,7 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 		d, err := decodeDeviceDetail(raw)
 		if err != nil {
 			l.logger.Warn("devicedetails.load.decode",
-				slog.String("central", l.central),
+				slog.String("central", l.centralName),
 				slog.String("err", err.Error()))
 			continue
 		}
@@ -167,11 +167,11 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 
 	// ── Step 2: room assignments ─────────────────────────────────────
 	l.logger.Debug("devicedetails.load.rooms",
-		slog.String("central", l.central))
+		slog.String("central", l.centralName))
 
 	rooms, err := l.client.GetAllRoomsRaw(ctx)
 	if err != nil {
-		return fmt.Errorf("devicedetails.load %s: GetAllRoomsRaw: %w", l.central, err)
+		return fmt.Errorf("devicedetails.load %s: GetAllRoomsRaw: %w", l.centralName, err)
 	}
 
 	for _, r := range rooms {
@@ -187,11 +187,11 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 
 	// ── Step 3: function (Gewerk) assignments ────────────────────────
 	l.logger.Debug("devicedetails.load.functions",
-		slog.String("central", l.central))
+		slog.String("central", l.centralName))
 
 	fns, err := l.client.GetAllFunctionsRaw(ctx)
 	if err != nil {
-		return fmt.Errorf("devicedetails.load %s: GetAllFunctionsRaw: %w", l.central, err)
+		return fmt.Errorf("devicedetails.load %s: GetAllFunctionsRaw: %w", l.centralName, err)
 	}
 
 	for _, f := range fns {
@@ -207,7 +207,7 @@ func (l *Loader) Load(ctx context.Context, directCall bool) error {
 
 	l.cache.MarkRefreshed(time.Now())
 	l.logger.Debug("devicedetails.load.done",
-		slog.String("central", l.central))
+		slog.String("central", l.centralName))
 	return nil
 }
 

@@ -338,8 +338,8 @@ func TestProgramBuilderHappyPath(t *testing.T) {
 	if m["name"] != "Morning Lights" {
 		t.Fatalf("name: got %v want %q", m["name"], "Morning Lights")
 	}
-	if m["unique_id"] != "openccu-loom_ccu-01_program_prg_42" {
-		t.Fatalf("unique_id: got %v", m["unique_id"])
+	if m["unique_id"] != "loom__program_morning-lights" {
+		t.Fatalf("unique_id: got %v want loom__program_morning-lights", m["unique_id"])
 	}
 	if _, hasCmd := m["command_topic"]; !hasCmd {
 		t.Fatal("expected command_topic")
@@ -672,11 +672,14 @@ func TestSysvarUniqueIDFormat(t *testing.T) {
 	})
 	m := jsonMap(t, item)
 	uid, _ := m["unique_id"].(string)
-	if !strings.HasPrefix(uid, "openccu-loom_ccu-01_sysvar_") {
-		t.Fatalf("unique_id %q does not match expected prefix", uid)
+	if !strings.HasPrefix(uid, "loom_") {
+		t.Fatalf("unique_id %q does not have loom_ prefix", uid)
 	}
-	if !strings.HasSuffix(uid, "_myvar") {
-		t.Fatalf("unique_id %q does not end with _myvar", uid)
+	if !strings.Contains(uid, "_sysvar_") {
+		t.Fatalf("unique_id %q does not contain _sysvar_", uid)
+	}
+	if !strings.HasSuffix(uid, "myvar") {
+		t.Fatalf("unique_id %q does not end with myvar", uid)
 	}
 }
 

@@ -110,7 +110,7 @@ func TestSourceCompletenessAcrossModelLayers(t *testing.T) {
 
 	// Top-level services
 	var (
-		_ payload.Source = (*central.CentralUnit)(nil)
+		_ payload.Source = (*central.Unit)(nil)
 		_ payload.Source = (*client.InterfaceClient)(nil)
 	)
 

@@ -40,14 +40,14 @@ func vcOpenDB(t *testing.T, path string) *sqlite.ValuesCacheStore {
 	return sqlite.NewValuesCacheStore(db)
 }
 
-// vcIngestPipeline sets up a godevccu-backed CentralUnit, ingests the mock-CCU
+// vcIngestPipeline sets up a godevccu-backed Unit, ingests the mock-CCU
 // fleet into it, and optionally attaches a ValuesCacheStore for the restore
 // pass. Returns the populated unit and the pipeline used to hydrate it.
 func vcIngestPipeline(
 	t *testing.T,
 	centralName string,
 	vc *sqlite.ValuesCacheStore,
-) *central.CentralUnit {
+) *central.Unit {
 	t.Helper()
 	srv := startMockCCU(t)
 	xmlClient := newXMLRPCClient(t, srv.URL())
@@ -78,7 +78,7 @@ func vcIngestPipeline(
 // firstLiveDP returns the first wire VALUES data point from any channel of any
 // device in c that implements sourceMarker (i.e. generic.DataPoint). Returns
 // nil when the registry is empty or no DP is found.
-func firstLiveDP(c *central.CentralUnit) interface {
+func firstLiveDP(c *central.Unit) interface {
 	Source() hmenum.ValueSource
 	OnWireValue(any) bool
 } {

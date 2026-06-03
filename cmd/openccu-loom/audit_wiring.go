@@ -82,11 +82,11 @@ func wireSessionRecorderPersistence(cfg *config.Config, reg *central.Registry, l
 	}
 	store := sqlite.NewSessionRecorderStore(db)
 	var closers []func()
-	for _, c := range reg.List() {
-		if c == nil || c.Recorder == nil {
+	for _, u := range reg.List() {
+		if u == nil || u.Recorder == nil {
 			continue
 		}
-		closer := c.WireSessionRecorderPersistence(context.Background(), store, "default", 0)
+		closer := u.WireSessionRecorderPersistence(context.Background(), store, "default", 0)
 		if closer != nil {
 			closers = append(closers, closer)
 		}
@@ -139,11 +139,11 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 		return func() {}
 	}
 	recorder := sqlite.NewIncidentStore(db)
-	for _, c := range reg.List() {
-		if c == nil || c.Cache == nil {
+	for _, u := range reg.List() {
+		if u == nil || u.Cache == nil {
 			continue
 		}
-		c.Cache.SetIncidentRecorder(recorder)
+		u.Cache.SetIncidentRecorder(recorder)
 	}
 	logger.Info(
 		"incident.recorder.ready",

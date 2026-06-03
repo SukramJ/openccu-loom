@@ -9,8 +9,7 @@
     "parameter": "LEVEL",
     "postfix": "",
     "prefix": "",
-    "translation_key": "wohnzimmer_licht_kanal_level",
-    "unique_id": "abc0001_1_level"
+    "translation_key": "wohnzimmer_licht_kanal_level"
   },
   {
     "case_no": 2,
@@ -22,8 +21,7 @@
     "parameter": "LOW_BAT",
     "postfix": "",
     "prefix": "",
-    "translation_key": "sensor_low_bat",
-    "unique_id": "abc0001_0_low_bat"
+    "translation_key": "sensor_low_bat"
   },
   {
     "case_no": 3,
@@ -35,8 +33,7 @@
     "parameter": "",
     "postfix": "",
     "prefix": "",
-    "translation_key": "heizkoerper_bad",
-    "unique_id": "abc0001_1"
+    "translation_key": "heizkoerper_bad"
   },
   {
     "case_no": 4,
@@ -48,8 +45,7 @@
     "parameter": "LEVEL",
     "postfix": "color",
     "prefix": "",
-    "translation_key": "wohnzimmer_licht_kanal_color",
-    "unique_id": "abc0001_1_level"
+    "translation_key": "wohnzimmer_licht_kanal_color"
   },
   {
     "case_no": 5,
@@ -61,8 +57,7 @@
     "parameter": "BUTTON_LOCK",
     "postfix": "BUTTON_LOCK",
     "prefix": "",
-    "translation_key": "aussentuere_button_lock",
-    "unique_id": "def0002_1_button_lock"
+    "translation_key": "aussentuere_button_lock"
   },
   {
     "case_no": 6,
@@ -74,8 +69,7 @@
     "parameter": "PRES",
     "postfix": "",
     "prefix": "",
-    "translation_key": "system_pres",
-    "unique_id": "central42_sysvar_pres"
+    "translation_key": "system_pres"
   },
   {
     "case_no": 7,
@@ -87,8 +81,7 @@
     "parameter": "STATE",
     "postfix": "",
     "prefix": "",
-    "translation_key": "virtual_state",
-    "unique_id": "central42_int0000001_state"
+    "translation_key": "virtual_state"
   },
   {
     "case_no": 8,
@@ -100,8 +93,7 @@
     "parameter": "DOOR_STATE",
     "postfix": "",
     "prefix": "",
-    "translation_key": "garage_door_state",
-    "unique_id": "abc_0003_1_door_state"
+    "translation_key": "garage_door_state"
   },
   {
     "case_no": 9,
@@ -113,8 +105,7 @@
     "parameter": "PRESS_SHORT",
     "postfix": "",
     "prefix": "event",
-    "translation_key": "funk_taster_press_short",
-    "unique_id": "event_abc0004_1_press_short"
+    "translation_key": "funk_taster_press_short"
   },
   {
     "case_no": 10,
@@ -126,8 +117,7 @@
     "parameter": "LEVEL",
     "postfix": "color_temp",
     "prefix": "",
-    "translation_key": "tisch_lampe_color_temp",
-    "unique_id": "ghi0005_2_level"
+    "translation_key": "tisch_lampe_color_temp"
   },
   {
     "case_no": 11,
@@ -139,8 +129,7 @@
     "parameter": "PROGRAM",
     "postfix": "effect",
     "prefix": "",
-    "translation_key": "rgb_strip_effect",
-    "unique_id": "jkl0006_1_program"
+    "translation_key": "rgb_strip_effect"
   },
   {
     "case_no": 12,
@@ -152,8 +141,7 @@
     "parameter": "HUE",
     "postfix": "hs",
     "prefix": "",
-    "translation_key": "decken_spot_hs",
-    "unique_id": "mno0007_3_hue"
+    "translation_key": "decken_spot_hs"
   },
   {
     "case_no": 13,
@@ -165,8 +153,7 @@
     "parameter": "",
     "postfix": "",
     "prefix": "",
-    "translation_key": "rolladen",
-    "unique_id": "pqr0008_1"
+    "translation_key": "rolladen"
   },
   {
     "case_no": 14,
@@ -178,8 +165,7 @@
     "parameter": "WIND_SPEED",
     "postfix": "",
     "prefix": "",
-    "translation_key": "wetterstation_wind_wind_speed",
-    "unique_id": "stu0009_5_wind_speed"
+    "translation_key": "wetterstation_wind_wind_speed"
   },
   {
     "case_no": 15,
@@ -191,8 +177,7 @@
     "parameter": "STATE",
     "postfix": "",
     "prefix": "",
-    "translation_key": "steckdose_state",
-    "unique_id": "vwx0010_1_state"
+    "translation_key": "steckdose_state"
   },
   {
     "case_no": 16,
@@ -204,8 +189,7 @@
     "parameter": "ACTUAL_TEMPERATURE",
     "postfix": "",
     "prefix": "",
-    "translation_key": "smart_home_heizung_1_actual_temperature",
-    "unique_id": "yza0011_1_actual_temperature"
+    "translation_key": "smart_home_heizung_1_actual_temperature"
   },
   {
     "case_no": 17,
@@ -217,8 +201,7 @@
     "parameter": "LEVEL",
     "postfix": "sound",
     "prefix": "",
-    "translation_key": "mp3_player_sound",
-    "unique_id": "bcd0012_2_level"
+    "translation_key": "mp3_player_sound"
   },
   {
     "case_no": 18,
@@ -230,8 +213,7 @@
     "parameter": "PRESS_SHORT",
     "postfix": "",
     "prefix": "",
-    "translation_key": "bidcos_rf_press_short",
-    "unique_id": "central13_bidcos_rf_press_short"
+    "translation_key": "bidcos_rf_press_short"
   },
   {
     "case_no": 19,
@@ -243,8 +225,7 @@
     "parameter": "DISPLAY_DATA_STRING",
     "postfix": "",
     "prefix": "",
-    "translation_key": "display_display_data_string",
-    "unique_id": "efg0014_3_display_data_string"
+    "translation_key": "display_display_data_string"
   },
   {
     "case_no": 20,
@@ -256,7 +237,6 @@
     "parameter": "",
     "postfix": "",
     "prefix": "",
-    "translation_key": "wohnung_kanal",
-    "unique_id": "hij0015_1"
+    "translation_key": "wohnung_kanal"
   }
 ]

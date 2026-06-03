@@ -1379,16 +1379,16 @@ func TestRenderSourceKey_NilPointer(t *testing.T) {
 
 // centralAddressKey implements Central() + Address() for the interface branch.
 type centralAddressKey struct {
-	central, address string
+	centralName, address string
 }
 
-func (c centralAddressKey) Central() string { return c.central }
+func (c centralAddressKey) Central() string { return c.centralName }
 func (c centralAddressKey) Address() string { return c.address }
 
 // TestRenderSourceKey_CentralAddress verifies the Central()+Address() branch.
 func TestRenderSourceKey_CentralAddress(t *testing.T) {
 	t.Parallel()
-	k := centralAddressKey{central: "ccu1", address: "DEV001"}
+	k := centralAddressKey{centralName: "ccu1", address: "DEV001"}
 	got := renderSourceKey(k)
 	want := "ccu1:DEV001"
 	if got != want {

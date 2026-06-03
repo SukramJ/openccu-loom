@@ -208,7 +208,7 @@ func (t *testBackendOps) GetMetadata(_ context.Context, _, _ string) (any, error
 func (t *testBackendOps) SetMetadata(_ context.Context, _, _ string, _ any) error { return nil }
 
 // buildHubQueryWithLiveHub creates a wsHubQuery backed by a real registry
-// whose first CentralUnit has a non-nil HubModel. Callers that need
+// whose first Unit has a non-nil HubModel. Callers that need
 // specific hub state (programs, sysvars, …) should operate on the hub
 // returned alongside.
 func buildHubQueryWithLiveHub(t *testing.T) (*wsHubQuery, *hubmodel.Hub) {

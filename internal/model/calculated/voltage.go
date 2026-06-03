@@ -56,9 +56,9 @@ func NewOperatingVoltageLevelSensor() *OperatingVoltageLevelSensor {
 // NewOperatingVoltageLevelSensorWithIdentity constructs the sensor
 // rooted at
 // `<central>:<channelAddress>:CALCULATED/OPERATING_VOLTAGE_LEVEL`.
-func NewOperatingVoltageLevelSensorWithIdentity(central, channelAddress string) *OperatingVoltageLevelSensor {
+func NewOperatingVoltageLevelSensorWithIdentity(centralName, channelAddress string) *OperatingVoltageLevelSensor {
 	return &OperatingVoltageLevelSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterOperatingVoltageLevel, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterOperatingVoltageLevel, centralName, channelAddress),
 	}
 }
 

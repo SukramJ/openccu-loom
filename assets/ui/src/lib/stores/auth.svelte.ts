@@ -1,4 +1,10 @@
-import { api, ApiError, type Identity } from "$lib/api/client";
+import {
+  api,
+  ApiError,
+  setUnauthorizedHandler,
+  type Identity,
+} from "$lib/api/client";
+import { t } from "$lib/i18n";
 
 /**
  * Auth state for the SPA. The store probes `/api/v1/auth/me` on boot
@@ -34,7 +40,7 @@ function createAuthStore() {
     } catch (err) {
       error =
         err instanceof ApiError && err.status === 401
-          ? "Ungültige Anmeldedaten"
+          ? t("auth.error.invalid_credentials")
           : err instanceof Error
             ? err.message
             : String(err);
@@ -50,6 +56,21 @@ function createAuthStore() {
       // UI returns to the login screen.
     }
     identity = null;
+  }
+
+  // expire is called by the API client when any non-login call returns
+  // 401 — the session cookie is stale (typically the daemon restarted and
+  // lost its in-memory sessions). Dropping the identity makes App.svelte
+  // render the login view, which unmounts the app shell and stops its
+  // background pollers (install-mode, event stream). Guarded so a 401 while
+  // already logged out is a no-op and never clobbers an in-flight login.
+  function expire() {
+    if (identity === null) return;
+    identity = null;
+    // Reuse the shared "session expired" string (de/en) the API-error
+    // formatter already exposes, so the login screen shows it in the
+    // active locale instead of a hard-coded German line.
+    error = t("api.error.unauthorized");
   }
 
   return {
@@ -68,7 +89,12 @@ function createAuthStore() {
     probe,
     login,
     logout,
+    expire,
   };
 }
 
 export const authStore = createAuthStore();
+
+// Route every client-side 401 (stale session) through the store so the
+// SPA self-heals back to the login view instead of looping on 401s.
+setUnauthorizedHandler(() => authStore.expire());

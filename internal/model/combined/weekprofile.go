@@ -101,13 +101,13 @@ func NewWeekProfile(
 // The wrapper subscribes to the underlying profile so external
 // callbacks fire whenever the profile is reloaded or saved.
 func NewCombinedWeekProfile(
-	central, address string,
+	centralName, address string,
 	w Writer,
 	profile *weekprofile.ClimateProfile,
 	combinedParam hmenum.Parameter,
 ) *WeekProfile {
 	wp := &WeekProfile{
-		BaseDataPointFields:    datapoint.NewBaseDataPointFields(central, address, weekProfileKeyName),
+		BaseDataPointFields:    datapoint.NewBaseDataPointFields(centralName, address, weekProfileKeyName),
 		Address:                address,
 		Writer:                 w,
 		CombinedWriteParameter: combinedParam,

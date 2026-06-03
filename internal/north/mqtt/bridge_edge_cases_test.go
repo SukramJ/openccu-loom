@@ -765,7 +765,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 	t.Parallel()
 	// central name "ccu" → node_id prefix "ccu_"
 	const base = "openccu-loom"
-	const central = "ccu"
+	const centralName = "ccu"
 
 	// pre-seed orphan (not in declared) and declared topic.
 	orphanTopic := "homeassistant/switch/ccu_old/orphan_obj/config"
@@ -777,7 +777,7 @@ func TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted(t *testing.T) {
 			{topic: declaredTopic, payload: []byte(`{}`)},
 		},
 	}
-	b := NewBridge(BridgeConfig{Base: base, HADiscoveryEnabled: true, CentralName: central}, mc)
+	b := NewBridge(BridgeConfig{Base: base, HADiscoveryEnabled: true, CentralName: centralName}, mc)
 	// Mark declaredTopic as known-live.
 	b.mu.Lock()
 	b.declared[declaredTopic] = []byte(`{}`)
@@ -1761,10 +1761,10 @@ func TestUpdateDiscoveryCtxTopics(t *testing.T) {
 	t.Parallel()
 	tb := NewTopicBuilder("gh")
 	ctx := updateDiscoveryCtx{
-		topics:  tb,
-		central: "ccu",
-		iface:   "HmIP-RF",
-		address: "0001ABCD",
+		topics:      tb,
+		centralName: "ccu",
+		iface:       "HmIP-RF",
+		address:     "0001ABCD",
 	}
 	cases := []struct {
 		name string
@@ -2071,7 +2071,13 @@ func TestCommandSubscriberStartSubscribeError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSetOriginVersion(t *testing.T) {
-	t.Parallel()
+	// Not marked Parallel — mutates the shared originVersionStore, which is
+	// read by every Discovery emit. A parallel mutation here would flip the
+	// `origin.sw_version` baked into another test's payload mid-run and break
+	// payload-dedup expectations (see TestPublishWeekProfileDiscoveryDeduplicates).
+	orig := originVersion()
+	t.Cleanup(func() { SetOriginVersion(orig) })
+
 	// Non-empty → should update the package-level atomic store without panic.
 	SetOriginVersion("1.2.3")
 	// Empty → no-op.

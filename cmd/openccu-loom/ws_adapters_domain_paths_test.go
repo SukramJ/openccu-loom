@@ -522,25 +522,25 @@ func TestWSDeviceQuery_GetParamsetDescription_DeviceFound_EmptyKey_DefaultMaster
 // ── visibility_adapter.go: UnIgnoreCandidates with nil QueryFacade ─────────────
 
 // TestVisibilityAdapter_UnIgnoreCandidates_NilQueryFacade exercises the
-// `if q == nil { return nil }` guard at line 70. A CentralUnit with a nil
+// `if q == nil { return nil }` guard at line 70. A Unit with a nil
 // QueryFacade (fresh unit without a query set) hits this path.
 func TestVisibilityAdapter_UnIgnoreCandidates_NilQueryFacade(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-01")
 	a := newVisibilityAdapter(nil, nil, reg)
 	// "ccu-01" exists; QueryFacade() returns a non-nil QueryFacade for a properly
-	// initialised CentralUnit. If it returns nil the nil-guard fires.
+	// initialised Unit. If it returns nil the nil-guard fires.
 	// Either way, must not panic.
 	got := a.UnIgnoreCandidates("ccu-01", hmenum.ParamsetKeyMaster)
 	// Result may be nil or empty (empty device model → no candidates).
 	_ = got
 }
 
-// ── audit_wiring.go: wireIncidentRecorder with CentralUnit that has a Cache ──
+// ── audit_wiring.go: wireIncidentRecorder with Unit that has a Cache ──
 
 // TestWireIncidentRecorder_WithRegistryContainingCache exercises the
 // `c.Cache.SetIncidentRecorder(recorder)` path at line 138 of audit_wiring.go.
-// buildTestRegistry creates CentralUnits with a Cache coordinator.
+// buildTestRegistry creates Units with a Cache coordinator.
 func TestWireIncidentRecorder_WithRegistryContainingCache_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
@@ -613,7 +613,7 @@ func TestApplyVisibilityUnIgnore_OverlappingPatterns(t *testing.T) {
 
 // TestWireSessionRecorderPersistence_WithCentralHavingRecorder exercises the
 // `c.WireSessionRecorderPersistence` call path at line 88 of audit_wiring.go.
-// buildTestRegistry creates CentralUnits that have a Recorder set.
+// buildTestRegistry creates Units that have a Recorder set.
 func TestWireSessionRecorderPersistence_WithCentralHavingRecorder(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()

@@ -69,7 +69,7 @@ type EventPublisher interface {
 // captures only what is universally shared across all data-point families.
 //
 // Multi-CCU safety: the `central` field scopes the unique identifier;
-// callers MUST pass the per-CentralUnit name so two CCUs cannot
+// callers MUST pass the per-Unit name so two CCUs cannot
 // produce colliding identifiers.
 //
 // Foundation timestamps: [modifiedAt] and [refreshedAt] mirror
@@ -80,9 +80,9 @@ type EventPublisher interface {
 // via promotion. [generic.DataPoint[T]] carries its own shadowing
 // versions of these methods so its behaviour is unchanged.
 type BaseDataPointFields struct {
-	central string
-	address string
-	keyName string
+	centralName string
+	address     string
+	keyName     string
 
 	mu                   sync.RWMutex
 	forcedUsage          *hmenum.DataPointUsage
@@ -149,7 +149,7 @@ const publishedEventWindow = 500 * time.Millisecond
 
 // NewBaseDataPointFields constructs a [BaseDataPointFields].
 //
-// - `central` — the CentralUnit name for multi-CCU scoping. Empty
+// - `central` — the Unit name for multi-CCU scoping. Empty
 // is permitted at the type level (some test fixtures), but
 // production callers MUST set it.
 // - `address` — the device or channel address (e.g. "VCU0123:1").
@@ -157,11 +157,11 @@ const publishedEventWindow = 500 * time.Millisecond
 // the `keyName` then carries the full identity.
 // - `keyName` — the parameter name, the program/sysvar name, or
 // the calculated/combined identifier. Required.
-func NewBaseDataPointFields(central, address, keyName string) BaseDataPointFields {
+func NewBaseDataPointFields(centralName, address, keyName string) BaseDataPointFields {
 	return BaseDataPointFields{
-		central: central,
-		address: address,
-		keyName: keyName,
+		centralName: centralName,
+		address:     address,
+		keyName:     keyName,
 	}
 }
 
@@ -186,8 +186,8 @@ func NewBaseDataPointFields(central, address, keyName string) BaseDataPointField
 func (b *BaseDataPointFields) UniqueID() string {
 	var sb strings.Builder
 	// Pre-size: central + address + keyName + 2 separators (+ optional 7-byte "_sensor" suffix).
-	sb.Grow(len(b.central) + len(b.address) + len(b.keyName) + 9)
-	sb.WriteString(b.central)
+	sb.Grow(len(b.centralName) + len(b.address) + len(b.keyName) + 9)
+	sb.WriteString(b.centralName)
 	sb.WriteByte(':')
 	sb.WriteString(b.address)
 	sb.WriteByte(':')
@@ -198,8 +198,8 @@ func (b *BaseDataPointFields) UniqueID() string {
 	return sb.String()
 }
 
-// Central returns the CentralUnit name passed at construction.
-func (b *BaseDataPointFields) Central() string { return b.central }
+// Central returns the Unit name passed at construction.
+func (b *BaseDataPointFields) Central() string { return b.centralName }
 
 // Address returns the device / channel address passed at construction.
 func (b *BaseDataPointFields) Address() string { return b.address }

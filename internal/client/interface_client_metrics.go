@@ -66,7 +66,7 @@ func (c *InterfaceClient) MetricsLastFailureTime() (time.Time, bool) {
 // aggregator iterates over the snapshot on each tick.
 //
 // All methods are safe for concurrent use. The provider is multi-CCU
-// safe: each [CentralUnit] constructs its own [MetricsClientProvider]
+// safe: each [Unit] constructs its own [MetricsClientProvider]
 // scoped by `central_name` so client counters never bleed across
 // centrals.
 type MetricsClientProvider struct {
@@ -77,7 +77,7 @@ type MetricsClientProvider struct {
 }
 
 // NewMetricsClientProvider returns an empty provider scoped to the
-// given central. centralName must match the owning [CentralUnit] so
+// given central. centralName must match the owning [Unit] so
 // the metrics aggregator can attribute counters correctly.
 func NewMetricsClientProvider(centralName string) *MetricsClientProvider {
 	return &MetricsClientProvider{

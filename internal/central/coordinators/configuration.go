@@ -45,7 +45,7 @@ type paramKey struct {
 }
 
 // NewConfigurationCoordinator wires the coordinator against the
-// registries owned by a [central.CentralUnit]. Either registry may be
+// registries owned by a [central.Unit]. Either registry may be
 // nil — calls that need an absent registry simply report "not found".
 func NewConfigurationCoordinator(
 	descriptions *registry.DeviceDescriptionRegistry,
@@ -484,7 +484,7 @@ func validateParamValue(pd hmproto.ParameterData, value any) string {
 
 // CopyParamset copies writable paramset values from source channel to target
 // channel. Both channels may belong to different interfaces within the same
-// CentralUnit.
+// Unit.
 //
 // The copy filter is: only parameters that exist in the target description
 // AND are writable (OPERATIONS & WRITE) are forwarded. Parameters missing

@@ -33,35 +33,35 @@ var (
 func TestCalculatedDewPointUniqueID(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name    string
-		central string
-		address string
-		want    string
+		name        string
+		centralName string
+		address     string
+		want        string
 	}{
 		{
-			name:    "production multi-CCU dp",
-			central: "ccu-prod",
-			address: "VCU0123:1",
-			want:    "ccu-prod:VCU0123:1:CALCULATED/DEW_POINT",
+			name:        "production multi-CCU dp",
+			centralName: "ccu-prod",
+			address:     "VCU0123:1",
+			want:        "ccu-prod:VCU0123:1:CALCULATED/DEW_POINT",
 		},
 		{
-			name:    "second central, same address",
-			central: "ccu-secondary",
-			address: "VCU0123:1",
-			want:    "ccu-secondary:VCU0123:1:CALCULATED/DEW_POINT",
+			name:        "second central, same address",
+			centralName: "ccu-secondary",
+			address:     "VCU0123:1",
+			want:        "ccu-secondary:VCU0123:1:CALCULATED/DEW_POINT",
 		},
 		{
-			name:    "legacy fixture (no central)",
-			central: "",
-			address: "",
-			want:    "::CALCULATED/DEW_POINT",
+			name:        "legacy fixture (no central)",
+			centralName: "",
+			address:     "",
+			want:        "::CALCULATED/DEW_POINT",
 		},
 	}
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			s := NewDewPointSensorWithIdentity(tc.central, tc.address)
+			s := NewDewPointSensorWithIdentity(tc.centralName, tc.address)
 			if got := s.UniqueID(); got != tc.want {
 				t.Fatalf("UniqueID() = %q, want %q", got, tc.want)
 			}

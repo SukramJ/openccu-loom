@@ -6,7 +6,10 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
+
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // WeekProfileDescriptor is the narrow read-side contract on a week-profile
@@ -63,7 +66,7 @@ type WeekProfileEvent struct {
 //
 // Inbound writes on the command topic flow through
 // [CommandSubscriber.handleWeekProfile] → [WeekProfileSink].
-func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev WeekProfileEvent) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(centralName string, ev WeekProfileEvent) DiscoveryItem {
 	if ev.WP == nil {
 		return DiscoveryItem{}
 	}
@@ -72,24 +75,28 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev W
 		return DiscoveryItem{}
 	}
 
-	stateTopic := d.TopicBuilder.WeekProfileState(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
-	commandTopic := d.TopicBuilder.WeekProfileCommand(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	stateTopic := d.TopicBuilder.WeekProfileState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	commandTopic := d.TopicBuilder.WeekProfileCommand(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 
-	uniqueID := ev.WP.UniqueID()
-	// Normalise the unique_id to lower-case and replace colons (which occur
-	// in the "<central>:<addr>:WEEKPROFILE" form) with underscores so it is
-	// safe as both a topic segment and an HA object_id.
-	objectID := strings.NewReplacer(":", "_").Replace(strings.ToLower(uniqueID))
-	// Prefix with "openccu-loom_" to match the pattern used by all other entities.
+	// Build the canonical unique_id from the channel address and the
+	// "WEEKPROFILE" parameter. The WeekProfileEvent carries DeviceAddress and
+	// ChannelNo directly, so we compose the channel address string here.
+	channelAddr := ev.DeviceAddress + ":" + strconv.Itoa(ev.ChannelNo)
+	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), channelAddr, "WEEKPROFILE", "")
+	// object_id is the normalised (colon→underscore, lower-case) form of the
+	// legacy "<central>:<addr>:WEEKPROFILE" identifier — kept for HA topic
+	// continuity. The unique_id is the canonical routing-key form.
+	rawUID := ev.WP.UniqueID()
+	objectID := strings.NewReplacer(":", "_").Replace(strings.ToLower(rawUID))
 	if !strings.HasPrefix(objectID, "openccu-loom_") {
 		objectID = "openccu-loom_" + objectID
 	}
 
-	nodeID := discoveryNodeID(central, ev.DeviceAddress)
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
 
 	// Compose the Event-like value needed by deviceDescriptor + channelBaseBody.
 	mockEv := Event{
-		Central:       central,
+		Central:       centralName,
 		Interface:     ev.Interface,
 		DeviceAddress: ev.DeviceAddress,
 		DeviceName:    ev.DeviceName,
@@ -100,12 +107,12 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev W
 
 	body := map[string]any{
 		"name":              "Week Profile",
-		"unique_id":         objectID,
+		"unique_id":         uniqueID,
 		"object_id":         objectID,
 		"state_topic":       stateTopic,
 		"command_topic":     commandTopic,
 		"options":           profiles,
-		"availability":      buildWeekProfileAvailability(d, central, ev),
+		"availability":      buildWeekProfileAvailability(d, centralName, ev),
 		"availability_mode": "all",
 		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
 		"origin":            BuildOriginInfo(),
@@ -127,7 +134,7 @@ func (d *DefaultDiscoveryBuilder) BuildWeekProfileDiscovery(central string, ev W
 // buildWeekProfileAvailability builds the two-entry availability list
 // (bridge/status + per-device availability) that mirrors every other
 // channel entity.
-func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, central string, ev WeekProfileEvent) []map[string]string {
+func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, centralName string, ev WeekProfileEvent) []map[string]string {
 	return []map[string]string{
 		{
 			"topic":                 d.TopicBuilder.BridgeStatus(),
@@ -135,7 +142,7 @@ func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, central string, ev
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -150,7 +157,7 @@ func buildWeekProfileAvailability(d *DefaultDiscoveryBuilder, central string, ev
 // No-ops when HA discovery is disabled on the bridge or when
 // BuildWeekProfileDiscovery returns OK=false (non-climate channels,
 // empty profile list).
-func (b *Bridge) PublishWeekProfileDiscovery(ctx context.Context, central string, ev WeekProfileEvent) error {
+func (b *Bridge) PublishWeekProfileDiscovery(ctx context.Context, centralName string, ev WeekProfileEvent) error {
 	if !b.cfg.HADiscoveryEnabled {
 		return nil
 	}
@@ -161,7 +168,7 @@ func (b *Bridge) PublishWeekProfileDiscovery(ctx context.Context, central string
 	if !ok {
 		return nil
 	}
-	item := builder.BuildWeekProfileDiscovery(central, ev)
+	item := builder.BuildWeekProfileDiscovery(centralName, ev)
 	if !item.OK {
 		return nil
 	}
@@ -175,13 +182,13 @@ func (b *Bridge) PublishWeekProfileDiscovery(ctx context.Context, central string
 // which HA interprets as "no state". Retained.
 //
 // No-ops when the raw plane is disabled.
-func (b *Bridge) PublishWeekProfileState(ctx context.Context, central, iface, address string, channel int, currentProfile string) error {
+func (b *Bridge) PublishWeekProfileState(ctx context.Context, centralName, iface, address string, channel int, currentProfile string) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
-	if central == "" {
-		central = b.cfg.CentralName
+	if centralName == "" {
+		centralName = b.cfg.CentralName
 	}
-	topic := b.topics.WeekProfileState(central, iface, address, channel)
+	topic := b.topics.WeekProfileState(centralName, iface, address, channel)
 	return b.client.Publish(ctx, topic, []byte(currentProfile), b.cfg.QoS.State, true)
 }

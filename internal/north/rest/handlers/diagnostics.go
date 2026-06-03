@@ -101,7 +101,7 @@ type HealthExtras interface {
 	PrimaryClientHealthy() bool
 	ClientScore(name string) float64
 	ClientDetail(name string) (health.ClientHealth, bool)
-	CentralScoreInt(central string) int
+	CentralScoreInt(centralName string) int
 }
 
 // Diagnostics renders the combined dump. The endpoint is anonymous by

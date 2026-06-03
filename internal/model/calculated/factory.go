@@ -31,7 +31,7 @@ func CreateCalculatedDataPoints(ch *device.Channel, model string) []Sensor {
 	if ch == nil {
 		return nil
 	}
-	central := ch.CentralName()
+	centralName := ch.CentralName()
 	channelAddr := ch.Address
 
 	var out []Sensor
@@ -40,29 +40,29 @@ func CreateCalculatedDataPoints(ch *device.Channel, model string) []Sensor {
 	if IsTemperatureHumiditySensorRelevant(ch) {
 		out = append(
 			out,
-			NewDewPointSensorWithIdentity(central, channelAddr),
-			NewDewPointSpreadSensorWithIdentity(central, channelAddr),
-			NewVaporConcentrationSensorWithIdentity(central, channelAddr),
-			NewEnthalpySensorWithIdentity(central, channelAddr),
+			NewDewPointSensorWithIdentity(centralName, channelAddr),
+			NewDewPointSpreadSensorWithIdentity(centralName, channelAddr),
+			NewVaporConcentrationSensorWithIdentity(centralName, channelAddr),
+			NewEnthalpySensorWithIdentity(centralName, channelAddr),
 		)
 	}
 
 	// FrostPoint: temperature + humidity + model whitelist (HmIP-STHO,
 	// HmIP-SWO).
 	if IsFrostPointRelevant(ch, model) {
-		out = append(out, NewFrostPointSensorWithIdentity(central, channelAddr))
+		out = append(out, NewFrostPointSensorWithIdentity(centralName, channelAddr))
 	}
 
 	// ApparentTemperature: temperature + humidity + wind speed + model
 	// whitelist (HmIP-SWO).
 	if IsApparentTemperatureRelevant(ch, model) {
-		out = append(out, NewApparentTemperatureSensorWithIdentity(central, channelAddr))
+		out = append(out, NewApparentTemperatureSensorWithIdentity(centralName, channelAddr))
 	}
 
 	// OperatingVoltageLevel: per-model battery table + OPERATING_VOLTAGE
 	// (or BATTERY_STATE) on the channel.
 	if IsOperatingVoltageLevelRelevant(ch, model) {
-		out = append(out, NewOperatingVoltageLevelSensorWithIdentity(central, channelAddr))
+		out = append(out, NewOperatingVoltageLevelSensorWithIdentity(centralName, channelAddr))
 	}
 
 	// DerivedBinary mappings: per-model registry filtered by channel number. A
@@ -77,7 +77,7 @@ func CreateCalculatedDataPoints(ch *device.Channel, model string) []Sensor {
 			continue
 		}
 		out = append(out, NewDerivedBinarySensorWithIdentity(
-			central, channelAddr,
+			centralName, channelAddr,
 			m.CalculatedParameter, m.SourceParameter,
 			m.OnValues, m.OffValues,
 		))

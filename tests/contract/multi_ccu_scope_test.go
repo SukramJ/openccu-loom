@@ -198,7 +198,7 @@ func TestCoordinatorMethodsCarryCentralName(t *testing.T) {
 	// reason: these methods are correct-by-design — their receiver
 	// struct carries centralName injected at construction time, so the
 	// method doesn't need a separate central param. OR the coordinator
-	// is a per-CentralUnit instance already (only one central reaches
+	// is a per-Unit instance already (only one central reaches
 	// it), making an explicit central param redundant.
 	//
 	// Key: "ReceiverType.MethodName"
@@ -220,39 +220,39 @@ func TestCoordinatorMethodsCarryCentralName(t *testing.T) {
 		// ConnectionRecoveryCoordinator stores centralName.
 		"ConnectionRecoveryCoordinator.Run":           "reason: ConnectionRecoveryCoordinator.centralName carries scope",
 		"ConnectionRecoveryCoordinator.ResetAttempts": "reason: ConnectionRecoveryCoordinator.centralName carries scope",
-		// CacheCoordinator is per-CentralUnit (one instance per central
-		// owned by CentralUnit). DataPointKey carries InterfaceID which
+		// CacheCoordinator is per-Unit (one instance per central
+		// owned by Unit). DataPointKey carries InterfaceID which
 		// is already unique per central — no separate central key needed.
 		// All cache callers hold an already-scoped coordinator reference.
-		"CacheCoordinator.Set":                    "reason: CacheCoordinator is per-CentralUnit; DataPointKey is the discriminator — no additional central param needed",
-		"CacheCoordinator.Get":                    "reason: CacheCoordinator is per-CentralUnit; DataPointKey is the discriminator",
-		"CacheCoordinator.Delete":                 "reason: CacheCoordinator is per-CentralUnit; DataPointKey is the discriminator",
+		"CacheCoordinator.Set":                    "reason: CacheCoordinator is per-Unit; DataPointKey is the discriminator — no additional central param needed",
+		"CacheCoordinator.Get":                    "reason: CacheCoordinator is per-Unit; DataPointKey is the discriminator",
+		"CacheCoordinator.Delete":                 "reason: CacheCoordinator is per-Unit; DataPointKey is the discriminator",
 		"CacheCoordinator.SetSizeProviders":       "reason: wiring method only — installs size providers at central-construction time, not a data-path I/O operation",
 		"CacheCoordinator.SetParamsetInvalidator": "reason: wiring method only — installs a paramset-invalidator hook at construction time, not a data-path I/O operation",
-		// ClientCoordinator is per-CentralUnit — one instance per central.
+		// ClientCoordinator is per-Unit — one instance per central.
 		// The map is keyed by interface_id which is unique within a central.
-		"ClientCoordinator.Get":               "reason: ClientCoordinator is per-CentralUnit; interface_id is the discriminator within one central",
-		"ClientCoordinator.List":              "reason: ClientCoordinator is per-CentralUnit; returns only that central's clients",
-		"ClientCoordinator.CreateClient":      "reason: ClientCoordinator is per-CentralUnit; CreateClientConfig.InterfaceID is the discriminator within one central",
-		"ClientCoordinator.RecordLastFailure": "reason: ClientCoordinator is per-CentralUnit; interface_id passed in already identifies the failing wire",
-		// EventCoordinator is per-CentralUnit. HandleRawEvent is invoked
+		"ClientCoordinator.Get":               "reason: ClientCoordinator is per-Unit; interface_id is the discriminator within one central",
+		"ClientCoordinator.List":              "reason: ClientCoordinator is per-Unit; returns only that central's clients",
+		"ClientCoordinator.CreateClient":      "reason: ClientCoordinator is per-Unit; CreateClientConfig.InterfaceID is the discriminator within one central",
+		"ClientCoordinator.RecordLastFailure": "reason: ClientCoordinator is per-Unit; interface_id passed in already identifies the failing wire",
+		// EventCoordinator is per-Unit. HandleRawEvent is invoked
 		// by the callback server which has already routed to the correct
 		// central's coordinator via the URL path / envelope interface_id.
 		// SetOnConfigSettled is a wiring method, not a data-path method.
-		"EventCoordinator.HandleRawEvent":     "reason: EventCoordinator is per-CentralUnit; callback server pre-routes to the correct instance",
+		"EventCoordinator.HandleRawEvent":     "reason: EventCoordinator is per-Unit; callback server pre-routes to the correct instance",
 		"EventCoordinator.SetOnConfigSettled": "reason: wiring/hook method, not a data-path I/O operation; SetOnConfigSettled configures behaviour at startup",
 		// LinkCoordinator has no centralName field; it delegates through
 		// ClientResolver which is already scoped to one central's clients.
 		"LinkCoordinator.SetRecorder":                  "reason: wiring method only — installs an observability recorder, not a data operation",
 		"LinkCoordinator.SetResolver":                  "reason: wiring method only — installs the client resolver, not a data operation",
-		"LinkCoordinator.AddLink":                      "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped to one central's clients",
-		"LinkCoordinator.RemoveLink":                   "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped",
-		"LinkCoordinator.GetLinks":                     "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped",
-		"LinkCoordinator.GetLinkableChannels":          "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped",
-		"LinkCoordinator.GetLinksForLocale":            "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped; locale/role-filtered variant",
-		"LinkCoordinator.GetLinkableChannelsForLocale": "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped; locale/role-filtered variant",
-		"LinkCoordinator.SetLinkInfo":                  "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped",
-		"LinkCoordinator.GetLinkInfo":                  "reason: LinkCoordinator is per-CentralUnit; resolver is pre-scoped",
+		"LinkCoordinator.AddLink":                      "reason: LinkCoordinator is per-Unit; resolver is pre-scoped to one central's clients",
+		"LinkCoordinator.RemoveLink":                   "reason: LinkCoordinator is per-Unit; resolver is pre-scoped",
+		"LinkCoordinator.GetLinks":                     "reason: LinkCoordinator is per-Unit; resolver is pre-scoped",
+		"LinkCoordinator.GetLinkableChannels":          "reason: LinkCoordinator is per-Unit; resolver is pre-scoped",
+		"LinkCoordinator.GetLinksForLocale":            "reason: LinkCoordinator is per-Unit; resolver is pre-scoped; locale/role-filtered variant",
+		"LinkCoordinator.GetLinkableChannelsForLocale": "reason: LinkCoordinator is per-Unit; resolver is pre-scoped; locale/role-filtered variant",
+		"LinkCoordinator.SetLinkInfo":                  "reason: LinkCoordinator is per-Unit; resolver is pre-scoped",
+		"LinkCoordinator.GetLinkInfo":                  "reason: LinkCoordinator is per-Unit; resolver is pre-scoped",
 		// ConfigurationCoordinator reads registries scoped to one central
 		// — no runtime central param needed.
 		"ConfigurationCoordinator.GetParameterData":           "reason: ConfigurationCoordinator wraps per-central registries; scope is established at construction",
@@ -270,13 +270,13 @@ func TestCoordinatorMethodsCarryCentralName(t *testing.T) {
 		"ConfigurationCoordinator.ConfigurableChannels":       "reason: per-central registries",
 		"ConfigurationCoordinator.GetAllParamsetDescriptions": "reason: per-central registries — paramset registry is pre-scoped to one central at construction",
 		"ConfigurationCoordinator.GetConfigurableDevices":     "reason: per-central registries — description + paramset registries are pre-scoped at construction",
-		// CacheCoordinator is per-CentralUnit; SetPersister wires a storage
+		// CacheCoordinator is per-Unit; SetPersister wires a storage
 		// back-end at construction time — no runtime central param needed.
-		"CacheCoordinator.SetPersister": "reason: CacheCoordinator is per-CentralUnit; persister is pre-scoped to the central",
+		"CacheCoordinator.SetPersister": "reason: CacheCoordinator is per-Unit; persister is pre-scoped to the central",
 		// SetDataCacheInitializationComplete and IsDataCacheInitializationComplete
-		// are per-CentralUnit lifecycle markers — no runtime central param needed.
-		"CacheCoordinator.SetDataCacheInitializationComplete": "reason: CacheCoordinator is per-CentralUnit; lifecycle state needs no runtime central scoping",
-		"CacheCoordinator.IsDataCacheInitializationComplete":  "reason: CacheCoordinator is per-CentralUnit; query on per-central lifecycle state",
+		// are per-Unit lifecycle markers — no runtime central param needed.
+		"CacheCoordinator.SetDataCacheInitializationComplete": "reason: CacheCoordinator is per-Unit; lifecycle state needs no runtime central scoping",
+		"CacheCoordinator.IsDataCacheInitializationComplete":  "reason: CacheCoordinator is per-Unit; query on per-central lifecycle state",
 		// SessionRecorder + IncidentRecorder slots — wired at construction time
 		// ( ), per-central by design. The slots themselves carry no
 		// scope; they are looked up from the already-scoped CacheCoordinator.
@@ -424,7 +424,7 @@ func TestNoPackageLevelMutableSingletons(t *testing.T) {
 							pos := fset.Position(vs.Pos())
 							t.Errorf("MULTI-CCU SINGLETON RISK: %s/%s (%s:%d) — "+
 								"package-level composite var may hold CCU-scoped state. "+
-								"Use a per-CentralUnit field or per-call parameter instead. "+
+								"Use a per-Unit field or per-call parameter instead. "+
 								"If benign (e.g. an immutable lookup table), add to the allow-list "+
 								"with a documented reason.",
 								d.label, name.Name, filepath.Base(pos.Filename), pos.Line)
@@ -596,7 +596,7 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 
 	// Methods that must carry a name/string param.
 	// Note: "Register" is intentionally excluded here — the concrete
-	// Registry.Register takes a *CentralUnit (which carries Name()
+	// Registry.Register takes a *Unit (which carries Name()
 	// internally) rather than a plain string. Only lookup / removal
 	// methods must take an explicit name string.
 	mustHaveNameParam := []string{"Get", "Remove"}

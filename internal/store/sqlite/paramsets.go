@@ -245,18 +245,18 @@ ON CONFLICT(central_name, interface_id, channel_address, paramset_key) DO UPDATE
 // schema_version other than [ParamsetCacheSchemaVersion] are treated as
 // missing — the bootstrap-time wipe pass removes them on the next
 // daemon restart.
-func (s *ParamsetStore) Get(ctx context.Context, central, ifaceID, channelAddress string, psKey hmenum.ParamsetKey) (ParamsetRecord, error) {
+func (s *ParamsetStore) Get(ctx context.Context, centralName, ifaceID, channelAddress string, psKey hmenum.ParamsetKey) (ParamsetRecord, error) {
 	const q = `
 SELECT hash, paramset_json
 FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND paramset_key = ? AND schema_version = ?`
 	rec := ParamsetRecord{
-		CentralName:    central,
+		CentralName:    centralName,
 		InterfaceID:    ifaceID,
 		ChannelAddress: channelAddress,
 		ParamsetKey:    psKey,
 	}
 	var raw string
-	err := s.db.QueryRowContext(ctx, q, central, ifaceID, channelAddress, string(psKey), ParamsetCacheSchemaVersion).
+	err := s.db.QueryRowContext(ctx, q, centralName, ifaceID, channelAddress, string(psKey), ParamsetCacheSchemaVersion).
 		Scan(&rec.Hash, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ParamsetRecord{}, ErrParamsetNotFound
@@ -271,10 +271,10 @@ FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address =
 }
 
 // Size returns the total number of paramset records stored for central.
-func (s *ParamsetStore) Size(ctx context.Context, central string) (int, error) {
+func (s *ParamsetStore) Size(ctx context.Context, centralName string) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM paramsets WHERE central_name = ?`, central).Scan(&n)
+		`SELECT COUNT(*) FROM paramsets WHERE central_name = ?`, centralName).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: paramset size: %w", err)
 	}
@@ -283,11 +283,11 @@ func (s *ParamsetStore) Size(ctx context.Context, central string) (int, error) {
 
 // GetChannelParamsetDescriptions returns all paramsets for (central,
 // interface, channelAddress) as a map keyed by ParamsetKey.
-func (s *ParamsetStore) GetChannelParamsetDescriptions(ctx context.Context, central, ifaceID, channelAddress string) (map[hmenum.ParamsetKey]hmproto.Paramset, error) {
+func (s *ParamsetStore) GetChannelParamsetDescriptions(ctx context.Context, centralName, ifaceID, channelAddress string) (map[hmenum.ParamsetKey]hmproto.Paramset, error) {
 	const q = `
 SELECT paramset_key, paramset_json
 FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND schema_version = ?`
-	rows, err := s.db.QueryContext(ctx, q, central, ifaceID, channelAddress, ParamsetCacheSchemaVersion)
+	rows, err := s.db.QueryContext(ctx, q, centralName, ifaceID, channelAddress, ParamsetCacheSchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get channel paramsets: %w", err)
 	}
@@ -309,10 +309,10 @@ FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address =
 
 // GetParamsetKeys returns all paramset keys available for (central,
 // interface, channelAddress).
-func (s *ParamsetStore) GetParamsetKeys(ctx context.Context, central, ifaceID, channelAddress string) ([]hmenum.ParamsetKey, error) {
+func (s *ParamsetStore) GetParamsetKeys(ctx context.Context, centralName, ifaceID, channelAddress string) ([]hmenum.ParamsetKey, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT paramset_key FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND schema_version = ? ORDER BY paramset_key`,
-		central, ifaceID, channelAddress, ParamsetCacheSchemaVersion)
+		centralName, ifaceID, channelAddress, ParamsetCacheSchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get paramset keys: %w", err)
 	}
@@ -330,11 +330,11 @@ func (s *ParamsetStore) GetParamsetKeys(ctx context.Context, central, ifaceID, c
 
 // HasInterfaceID reports whether any paramsets exist for (central,
 // interface).
-func (s *ParamsetStore) HasInterfaceID(ctx context.Context, central, ifaceID string) (bool, error) {
+func (s *ParamsetStore) HasInterfaceID(ctx context.Context, centralName, ifaceID string) (bool, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM paramsets WHERE central_name = ? AND interface_id = ? LIMIT 1`,
-		central, ifaceID).Scan(&n)
+		centralName, ifaceID).Scan(&n)
 	if err != nil {
 		return false, fmt.Errorf("sqlite: has interface id: %w", err)
 	}
@@ -343,8 +343,8 @@ func (s *ParamsetStore) HasInterfaceID(ctx context.Context, central, ifaceID str
 
 // HasParameter reports whether a specific parameter exists for (central,
 // interface, channelAddress, paramsetKey).
-func (s *ParamsetStore) HasParameter(ctx context.Context, central, ifaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (bool, error) {
-	rec, err := s.Get(ctx, central, ifaceID, channelAddress, psKey)
+func (s *ParamsetStore) HasParameter(ctx context.Context, centralName, ifaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (bool, error) {
+	rec, err := s.Get(ctx, centralName, ifaceID, channelAddress, psKey)
 	if errors.Is(err, ErrParamsetNotFound) {
 		return false, nil
 	}
@@ -358,8 +358,8 @@ func (s *ParamsetStore) HasParameter(ctx context.Context, central, ifaceID, chan
 // GetParameterData returns the parameter descriptor for a single parameter in
 // (central, interface, channelAddress, paramsetKey, parameter). Returns nil
 // when not found.
-func (s *ParamsetStore) GetParameterData(ctx context.Context, central, ifaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (*hmproto.ParameterData, error) {
-	rec, err := s.Get(ctx, central, ifaceID, channelAddress, psKey)
+func (s *ParamsetStore) GetParameterData(ctx context.Context, centralName, ifaceID, channelAddress string, psKey hmenum.ParamsetKey, parameter string) (*hmproto.ParameterData, error) {
+	rec, err := s.Get(ctx, centralName, ifaceID, channelAddress, psKey)
 	if errors.Is(err, ErrParamsetNotFound) {
 		return nil, nil //nolint:nilnil // nil,nil is the documented "not found" contract for this query method
 	}
@@ -376,7 +376,7 @@ func (s *ParamsetStore) GetParameterData(ctx context.Context, central, ifaceID, 
 // GetChannelAddressesByParamsetKey returns a mapping from paramset key to the
 // set of channel addresses that have that paramset for (central, interface,
 // deviceAddress).
-func (s *ParamsetStore) GetChannelAddressesByParamsetKey(ctx context.Context, central, ifaceID, deviceAddress string) (map[hmenum.ParamsetKey][]string, error) {
+func (s *ParamsetStore) GetChannelAddressesByParamsetKey(ctx context.Context, centralName, ifaceID, deviceAddress string) (map[hmenum.ParamsetKey][]string, error) {
 	const q = `
 SELECT channel_address, paramset_key
 FROM paramsets
@@ -385,7 +385,7 @@ WHERE central_name = ? AND interface_id = ?
   AND schema_version = ?
 ORDER BY paramset_key, channel_address`
 	like := deviceAddress + ":%"
-	rows, err := s.db.QueryContext(ctx, q, central, ifaceID, deviceAddress, like, ParamsetCacheSchemaVersion)
+	rows, err := s.db.QueryContext(ctx, q, centralName, ifaceID, deviceAddress, like, ParamsetCacheSchemaVersion)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: get channel addresses by paramset key: %w", err)
 	}
@@ -422,7 +422,7 @@ ORDER BY paramset_key, channel_address`
 // Is_in_multiple_channels
 // (store/persistent/paramset.py:195) and the _address_parameter_cache
 // pattern (paramset.py:75).
-func (s *ParamsetStore) IsInMultipleChannels(ctx context.Context, central, ifaceID, channelAddress, parameter string) (bool, error) {
+func (s *ParamsetStore) IsInMultipleChannels(ctx context.Context, centralName, ifaceID, channelAddress, parameter string) (bool, error) {
 	// Extract the device address (the part before the first ':').
 	dev, _, ok := splitChannelAddress(channelAddress)
 	if !ok {
@@ -449,7 +449,7 @@ SELECT COUNT(DISTINCT channel_address) FROM (
 WHERE json_extract(paramset_json, '$.' || ?) IS NOT NULL`
 	like := dev + ":%"
 	var count int
-	err := s.db.QueryRowContext(ctx, q, central, ifaceID, dev, like, ParamsetCacheSchemaVersion, parameter).Scan(&count)
+	err := s.db.QueryRowContext(ctx, q, centralName, ifaceID, dev, like, ParamsetCacheSchemaVersion, parameter).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("sqlite: is_in_multiple_channels: %w", err)
 	}
@@ -483,10 +483,10 @@ func (s *ParamsetStore) RegisterAdditionalParameter(_ context.Context, channelAd
 // subsequent [Upsert] calls or a new [WarmCache] call.
 //
 // Returns the number of rows deleted.
-func (s *ParamsetStore) ClearForInterface(ctx context.Context, central, ifaceID string) (int64, error) {
+func (s *ParamsetStore) ClearForInterface(ctx context.Context, centralName, ifaceID string) (int64, error) {
 	res, err := s.db.ExecContext(ctx,
 		`DELETE FROM paramsets WHERE central_name = ? AND interface_id = ?`,
-		central, ifaceID)
+		centralName, ifaceID)
 	if err != nil {
 		return 0, fmt.Errorf("sqlite: clear paramsets: %w", err)
 	}
@@ -508,15 +508,15 @@ func (s *ParamsetStore) ClearForInterface(ctx context.Context, central, ifaceID 
 // the database AND removes the channel's contribution to the
 // address-parameter cache (decrements the channel set for each
 // parameter that was in the channel's paramset).
-func (s *ParamsetStore) DeleteChannel(ctx context.Context, central, ifaceID, channelAddress string) error {
+func (s *ParamsetStore) DeleteChannel(ctx context.Context, centralName, ifaceID, channelAddress string) error {
 	// Read the paramset before deleting so we know which parameters to
 	// remove from the cache. We may have multiple paramset keys per
 	// channel; use GetChannelParamsetDescriptions for a single round-trip.
-	existing, _ := s.GetChannelParamsetDescriptions(ctx, central, ifaceID, channelAddress)
+	existing, _ := s.GetChannelParamsetDescriptions(ctx, centralName, ifaceID, channelAddress)
 
 	_, err := s.db.ExecContext(ctx,
 		`DELETE FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address = ?`,
-		central, ifaceID, channelAddress)
+		centralName, ifaceID, channelAddress)
 	if err != nil {
 		return fmt.Errorf("sqlite: delete paramsets: %w", err)
 	}

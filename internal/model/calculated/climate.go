@@ -95,9 +95,9 @@ func NewDewPointSensor() *DewPointSensor {
 // NewDewPointSensorWithIdentity constructs a DewPointSensor rooted at
 // `<central>:<channelAddress>:CALCULATED/DEW_POINT`. ADR 0002 (multi-
 // CCU first-class) requires production callers to set both segments.
-func NewDewPointSensorWithIdentity(central, channelAddress string) *DewPointSensor {
+func NewDewPointSensorWithIdentity(centralName, channelAddress string) *DewPointSensor {
 	return &DewPointSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPoint, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPoint, centralName, channelAddress),
 	}
 }
 
@@ -149,9 +149,9 @@ func NewDewPointSpreadSensor() *DewPointSpreadSensor {
 
 // NewDewPointSpreadSensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/DEW_POINT_SPREAD`.
-func NewDewPointSpreadSensorWithIdentity(central, channelAddress string) *DewPointSpreadSensor {
+func NewDewPointSpreadSensorWithIdentity(centralName, channelAddress string) *DewPointSpreadSensor {
 	return &DewPointSpreadSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPointSpread, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterDewPointSpread, centralName, channelAddress),
 	}
 }
 
@@ -203,9 +203,9 @@ func NewFrostPointSensor() *FrostPointSensor {
 
 // NewFrostPointSensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/FROST_POINT`.
-func NewFrostPointSensorWithIdentity(central, channelAddress string) *FrostPointSensor {
+func NewFrostPointSensorWithIdentity(centralName, channelAddress string) *FrostPointSensor {
 	return &FrostPointSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterFrostPoint, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterFrostPoint, centralName, channelAddress),
 	}
 }
 
@@ -257,9 +257,9 @@ func NewVaporConcentrationSensor() *VaporConcentrationSensor {
 
 // NewVaporConcentrationSensorWithIdentity constructs the sensor rooted
 // at `<central>:<channelAddress>:CALCULATED/VAPOR_CONCENTRATION`.
-func NewVaporConcentrationSensorWithIdentity(central, channelAddress string) *VaporConcentrationSensor {
+func NewVaporConcentrationSensorWithIdentity(centralName, channelAddress string) *VaporConcentrationSensor {
 	return &VaporConcentrationSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterVaporConcentration, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterVaporConcentration, centralName, channelAddress),
 	}
 }
 
@@ -312,9 +312,9 @@ func NewEnthalpySensor() *EnthalpySensor {
 
 // NewEnthalpySensorWithIdentity constructs the sensor rooted at
 // `<central>:<channelAddress>:CALCULATED/ENTHALPY`.
-func NewEnthalpySensorWithIdentity(central, channelAddress string) *EnthalpySensor {
+func NewEnthalpySensorWithIdentity(centralName, channelAddress string) *EnthalpySensor {
 	return &EnthalpySensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterEnthalpy, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterEnthalpy, centralName, channelAddress),
 	}
 }
 
@@ -376,9 +376,9 @@ func NewApparentTemperatureSensor() *ApparentTemperatureSensor {
 
 // NewApparentTemperatureSensorWithIdentity constructs the sensor rooted
 // at `<central>:<channelAddress>:CALCULATED/APPARENT_TEMPERATURE`.
-func NewApparentTemperatureSensorWithIdentity(central, channelAddress string) *ApparentTemperatureSensor {
+func NewApparentTemperatureSensorWithIdentity(centralName, channelAddress string) *ApparentTemperatureSensor {
 	return &ApparentTemperatureSensor{
-		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterApparentTemperature, central, channelAddress),
+		Sensor: newDerivedFloatSensor(hmenum.CalculatedParameterApparentTemperature, centralName, channelAddress),
 	}
 }
 
@@ -444,13 +444,13 @@ func derivedFloatSensorUnit(p hmenum.CalculatedParameter) string {
 // emits a matching `unit_of_measurement` and accepts the entity's
 // `device_class` (without the unit, HA logs a `device_class …
 // expected one of […]` warning per entity).
-func newDerivedFloatSensor(p hmenum.CalculatedParameter, central, channelAddress string) *generic.Sensor[float64] {
+func newDerivedFloatSensor(p hmenum.CalculatedParameter, centralName, channelAddress string) *generic.Sensor[float64] {
 	return generic.NewFloatSensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: channelAddress,
 			Parameter:      string(p),
 		},
-		CentralName:     central,
+		CentralName:     centralName,
 		KeyNameOverride: calculatedKeyName(p),
 		// Stamp KindSensor so (*DataPoint).Category() returns the
 		// proper DataPointCategory.SENSOR — without it the resolver-

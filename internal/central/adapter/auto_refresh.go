@@ -69,7 +69,7 @@ func isHmIPInterface(iface hmenum.Interface) bool {
 // It is idempotent (installs a new closure each call; callers must not
 // call it more than once per central).
 func wireConfigPendingHook(
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	masterValues *sqlite.MasterValuesStore,
 	centralName string,
 	getterFor func(interfaceID string) backends.MasterGetter,
@@ -207,7 +207,7 @@ func applyMasterValuesToChannel(ch *device.Channel, values map[string]any) {
 // The caller is responsible for calling poller.Close() on shutdown.
 func newMasterPollerForInterface(
 	iface hmenum.Interface,
-	unit *central.CentralUnit,
+	unit *central.Unit,
 	getter backends.MasterGetter,
 	masterValues *sqlite.MasterValuesStore,
 	interfaceID, centralName string,

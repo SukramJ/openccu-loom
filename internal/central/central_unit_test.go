@@ -16,9 +16,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestCentralUnitAvailable_DegradedHealthIsAvailable verifies that
+// TestUnitAvailable_DegradedHealthIsAvailable verifies that
 // Available returns true when health is DEGRADED.
-func TestCentralUnitAvailable_DegradedHealthIsAvailable(t *testing.T) {
+func TestUnitAvailable_DegradedHealthIsAvailable(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -32,9 +32,9 @@ func TestCentralUnitAvailable_DegradedHealthIsAvailable(t *testing.T) {
 	}
 }
 
-// TestCentralUnitAvailable_UnhealthyIsNotAvailable verifies that
+// TestUnitAvailable_UnhealthyIsNotAvailable verifies that
 // Available returns false when health is UNHEALTHY.
-func TestCentralUnitAvailable_UnhealthyIsNotAvailable(t *testing.T) {
+func TestUnitAvailable_UnhealthyIsNotAvailable(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -48,9 +48,9 @@ func TestCentralUnitAvailable_UnhealthyIsNotAvailable(t *testing.T) {
 	}
 }
 
-// TestCentralUnitAvailable_NilHealthIsFalse verifies that Available
+// TestUnitAvailable_NilHealthIsFalse verifies that Available
 // returns false when the health tracker is nil.
-func TestCentralUnitAvailable_NilHealthIsFalse(t *testing.T) {
+func TestUnitAvailable_NilHealthIsFalse(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -61,9 +61,9 @@ func TestCentralUnitAvailable_NilHealthIsFalse(t *testing.T) {
 	}
 }
 
-// TestCentralUnitHasPingPong_NoPingPong verifies HasPingPong returns
+// TestUnitHasPingPong_NoPingPong verifies HasPingPong returns
 // false when no clients are registered.
-func TestCentralUnitHasPingPong_NoPingPong(t *testing.T) {
+func TestUnitHasPingPong_NoPingPong(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -73,9 +73,9 @@ func TestCentralUnitHasPingPong_NoPingPong(t *testing.T) {
 	}
 }
 
-// TestCentralUnitHasPingPong_WithPingPongCapable verifies HasPingPong
+// TestUnitHasPingPong_WithPingPongCapable verifies HasPingPong
 // returns true when a client with PingPong=true is registered.
-func TestCentralUnitHasPingPong_WithPingPongCapable(t *testing.T) {
+func TestUnitHasPingPong_WithPingPongCapable(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -106,9 +106,9 @@ func TestCentralUnitHasPingPong_WithPingPongCapable(t *testing.T) {
 	}
 }
 
-// TestCentralUnitGetChannel_NotFound verifies GetChannel returns nil
+// TestUnitGetChannel_NotFound verifies GetChannel returns nil
 // for an unknown address.
-func TestCentralUnitGetChannel_NotFound(t *testing.T) {
+func TestUnitGetChannel_NotFound(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
@@ -118,9 +118,9 @@ func TestCentralUnitGetChannel_NotFound(t *testing.T) {
 	}
 }
 
-// TestCentralUnitGetChannel_Found verifies GetChannel returns the
+// TestUnitGetChannel_Found verifies GetChannel returns the
 // channel for a registered device's channel address.
-func TestCentralUnitGetChannel_Found(t *testing.T) {
+func TestUnitGetChannel_Found(t *testing.T) {
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {
 		t.Fatal(err)

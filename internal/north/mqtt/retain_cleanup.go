@@ -327,15 +327,15 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	if !ok {
 		return 0, errCleanupClientLacksSubscribe
 	}
-	central := strings.ToLower(b.resolvedCentral(""))
-	if central == "" {
+	centralName := strings.ToLower(b.resolvedCentral(""))
+	if centralName == "" {
 		// Without a central name we cannot scope the orphan filter to
 		// our own node_id namespace; refuse rather than risk wiping
 		// another integration's discovery configs.
 		return 0, nil
 	}
 	prefix := "homeassistant/"
-	nodePrefix := central + "_"
+	nodePrefix := centralName + "_"
 
 	var (
 		mu      sync.Mutex

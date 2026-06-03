@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 )
 
 // SnapshotEnvelope is the wire shape of `GET /api/v1/snapshot`.
@@ -27,6 +29,45 @@ type SnapshotEnvelope struct {
 	Rooms       []RoomEntry      `json:"rooms,omitempty"`
 	Functions   []FunctionEntry  `json:"functions,omitempty"`
 	Interfaces  []InterfaceState `json:"interfaces,omitempty"`
+	// DeviceChannels is populated only when the caller opts in via
+	// `?include=channels` (or `data_points`). It nests each device's
+	// channels — and, with `data_points`, their data points — so an
+	// external client can bootstrap structure + values in one round trip
+	// instead of N×M per-channel calls. Kept parallel to Devices so the
+	// flat summary list stays byte-identical for clients that do not ask
+	// for nesting.
+	DeviceChannels []SnapshotDeviceChannels `json:"device_channels,omitempty"`
+}
+
+// SnapshotDeviceChannels groups one device's channels under its address
+// for the nested snapshot shape. A slice (not a map) keeps the ordering
+// deterministic.
+type SnapshotDeviceChannels struct {
+	DeviceAddress string                 `json:"device_address"`
+	Channels      []SnapshotChannelEntry `json:"channels"`
+}
+
+// SnapshotChannelEntry is a ChannelSummary plus, when `?include=data_points`
+// is set, the channel's data points. The embedded summary's
+// `data_points_count` stays alongside the expanded `data_points` list.
+type SnapshotChannelEntry struct {
+	ChannelSummary
+	DataPoints []DataPointSummary `json:"data_points,omitempty"`
+}
+
+// snapshotChannelLine is the NDJSON `kind:"channel"` shape: a channel
+// summary stamped with its parent device address so the stream stays
+// self-routable line by line.
+type snapshotChannelLine struct {
+	DeviceAddress string `json:"device_address"`
+	ChannelSummary
+}
+
+// snapshotDataPointLine is the NDJSON `kind:"data_point"` shape: a data
+// point summary stamped with its parent channel address.
+type snapshotDataPointLine struct {
+	ChannelAddress string `json:"channel_address"`
+	DataPointSummary
 }
 
 // SnapshotDeps bundles the indices Snapshot pulls from. Every field
@@ -36,6 +77,15 @@ type SnapshotDeps struct {
 	Devices    DeviceIndex
 	Hub        HubIndex
 	Interfaces InterfaceIndex
+	// Labels resolves channel-type and parameter labels for the nested
+	// `?include=` shape. Nil is safe — entries then carry empty labels.
+	Labels ParameterLabeler
+}
+
+// snapshotInclude captures which nested entities the caller asked for.
+type snapshotInclude struct {
+	channels   bool
+	dataPoints bool
 }
 
 // Snapshot dumps the structural state. Negotiates response shape by
@@ -60,7 +110,7 @@ type SnapshotDeps struct {
 // useful for diagnostics. Applies to both response shapes.
 func Snapshot(deps SnapshotDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		env := buildSnapshotEnvelope(deps)
+		env := buildSnapshotEnvelope(deps, snapshotIncludes(r), strings.TrimSpace(r.URL.Query().Get("central")))
 		if wantsAnonymise(r) {
 			anonymiseSnapshot(&env)
 		}
@@ -72,31 +122,100 @@ func Snapshot(deps SnapshotDeps) http.HandlerFunc {
 	}
 }
 
+// snapshotIncludes parses the `?include=` query parameter. Tokens are
+// comma-separated; `channels` nests each device's channels and
+// `data_points` additionally expands each channel's data points (and
+// implies `channels`, since a data point only makes sense under its
+// channel). Unknown tokens are ignored.
+func snapshotIncludes(r *http.Request) snapshotInclude {
+	var inc snapshotInclude
+	if r == nil {
+		return inc
+	}
+	for _, tok := range strings.Split(r.URL.Query().Get("include"), ",") {
+		switch strings.TrimSpace(tok) {
+		case "channels":
+			inc.channels = true
+		case "data_points", "data-points":
+			inc.dataPoints = true
+			inc.channels = true
+		}
+	}
+	return inc
+}
+
 // buildSnapshotEnvelope assembles the envelope from the deps. Pulled
 // out of [Snapshot] so the NDJSON path can reuse the same source-of-truth
 // projection.
-func buildSnapshotEnvelope(deps SnapshotDeps) SnapshotEnvelope {
+//
+// A non-empty `central` scopes the device tree (devices + channels) and
+// the hub entities (programs + sysvars) to that one CCU via exact match
+// on the canonical central name. Rooms and functions are not
+// central-tagged in the model and stay fleet-wide.
+func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName string) SnapshotEnvelope {
 	env := SnapshotEnvelope{
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339Nano),
 	}
 	if deps.Devices != nil {
 		devs := deps.Devices.Devices()
+		if centralName != "" {
+			scoped := make([]*device.Device, 0, len(devs))
+			for _, d := range devs {
+				if deps.Devices.CentralOf(d.Address) == centralName {
+					scoped = append(scoped, d)
+				}
+			}
+			devs = scoped
+		}
 		sort.Slice(devs, func(i, j int) bool { return devs[i].Address < devs[j].Address })
 		env.Devices = make([]DeviceSummary, 0, len(devs))
 		for _, d := range devs {
 			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address)))
 		}
+		if inc.channels {
+			env.DeviceChannels = snapshotDeviceChannels(devs, deps.Labels, inc.dataPoints)
+		}
 		env.Rooms = snapshotRooms(deps.Devices)
 		env.Functions = snapshotFunctions(deps.Devices)
 	}
 	if deps.Hub != nil {
-		env.Programs = snapshotPrograms(deps.Hub)
-		env.Sysvars = snapshotSysvars(deps.Hub)
+		env.Programs = filterProgramsByCentral(snapshotPrograms(deps.Hub), centralName)
+		env.Sysvars = filterSysvarsByCentral(snapshotSysvars(deps.Hub), centralName)
 	}
 	if deps.Interfaces != nil {
 		env.Interfaces = snapshotInterfaces(deps.Interfaces)
 	}
 	return env
+}
+
+// filterProgramsByCentral keeps only programs owned by central; an empty
+// central returns the input unchanged (fleet-wide).
+func filterProgramsByCentral(programs []ProgramSummary, centralName string) []ProgramSummary {
+	if centralName == "" {
+		return programs
+	}
+	out := make([]ProgramSummary, 0, len(programs))
+	for i := range programs {
+		if programs[i].Central == centralName {
+			out = append(out, programs[i])
+		}
+	}
+	return out
+}
+
+// filterSysvarsByCentral keeps only sysvars owned by central; an empty
+// central returns the input unchanged (fleet-wide).
+func filterSysvarsByCentral(sysvars []SysvarSummary, centralName string) []SysvarSummary {
+	if centralName == "" {
+		return sysvars
+	}
+	out := make([]SysvarSummary, 0, len(sysvars))
+	for i := range sysvars {
+		if sysvars[i].Central == centralName {
+			out = append(out, sysvars[i])
+		}
+	}
+	return out
 }
 
 // wantsNDJSON reports whether the client opts into the streaming
@@ -143,6 +262,25 @@ func writeSnapshotNDJSON(w http.ResponseWriter, env SnapshotEnvelope) {
 	}
 	for i := range env.Devices {
 		emit("device", env.Devices[i])
+	}
+	// Nested channels / data points (only present when the caller opted
+	// in via ?include=). Each line carries the parent coordinate so a
+	// stream consumer can route it without buffering the whole device.
+	for i := range env.DeviceChannels {
+		dc := &env.DeviceChannels[i]
+		for j := range dc.Channels {
+			ch := &dc.Channels[j]
+			emit("channel", snapshotChannelLine{
+				DeviceAddress:  dc.DeviceAddress,
+				ChannelSummary: ch.ChannelSummary,
+			})
+			for k := range ch.DataPoints {
+				emit("data_point", snapshotDataPointLine{
+					ChannelAddress:   ch.Address,
+					DataPointSummary: ch.DataPoints[k],
+				})
+			}
+		}
 	}
 	for i := range env.Rooms {
 		emit("room", env.Rooms[i])
@@ -193,6 +331,16 @@ func anonymiseSnapshot(env *SnapshotEnvelope) {
 			d.Functions[j] = anonToken("fn", d.Functions[j])
 		}
 	}
+	// Nested channels carry operator-assigned channel + sub-device names;
+	// tokenise them like the flat device names above. Data-point fields
+	// are CCU-derived (parameter names, descriptor labels) and stay intact.
+	for i := range env.DeviceChannels {
+		for j := range env.DeviceChannels[i].Channels {
+			ch := &env.DeviceChannels[i].Channels[j]
+			ch.Name = anonToken("channel", ch.Name)
+			ch.SubDeviceName = anonToken("channel", ch.SubDeviceName)
+		}
+	}
 	for i := range env.Programs {
 		p := &env.Programs[i]
 		p.Name = anonToken("program", p.Name)
@@ -220,6 +368,31 @@ func anonToken(kind, value string) string {
 	}
 	h := sha256.Sum256([]byte(kind + ":" + value))
 	return kind + "_" + hex.EncodeToString(h[:6])
+}
+
+// snapshotDeviceChannels nests each device's channels (and, when
+// withDataPoints is set, their data points) using the same projection
+// helpers the per-channel REST endpoints use. devs is expected pre-sorted
+// by the caller so the output ordering is deterministic.
+func snapshotDeviceChannels(devs []*device.Device, labels ParameterLabeler, withDataPoints bool) []SnapshotDeviceChannels {
+	out := make([]SnapshotDeviceChannels, 0, len(devs))
+	for _, d := range devs {
+		chans := d.Channels()
+		entries := make([]SnapshotChannelEntry, 0, len(chans))
+		for _, ch := range chans {
+			entry := SnapshotChannelEntry{ChannelSummary: toChannelSummary(ch, labels)}
+			if withDataPoints {
+				dps := ch.DataPoints()
+				entry.DataPoints = make([]DataPointSummary, 0, len(dps))
+				for _, dp := range dps {
+					entry.DataPoints = append(entry.DataPoints, toDataPointSummary(dp, labels, ch.Type))
+				}
+			}
+			entries = append(entries, entry)
+		}
+		out = append(out, SnapshotDeviceChannels{DeviceAddress: d.Address, Channels: entries})
+	}
+	return out
 }
 
 // snapshotRooms mirrors ListRooms's aggregation. Kept inline rather
@@ -268,7 +441,7 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 	out := make([]ProgramSummary, 0, len(progs))
 	for _, p := range progs {
 		active, observed := p.Active()
-		entry := ProgramSummary{ID: p.ID, Name: p.Name, Description: p.Description}
+		entry := ProgramSummary{ID: p.ID, Name: p.Name, Description: p.Description, Central: p.Central()}
 		if observed {
 			v := active
 			entry.Active = &v

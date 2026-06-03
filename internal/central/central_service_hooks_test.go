@@ -16,7 +16,7 @@ import (
 // Service-method hook tests — every "Set*Fn / call" pair in central.go
 // ---------------------------------------------------------------------------
 
-func newTestCentral(t *testing.T) *CentralUnit {
+func newTestCentral(t *testing.T) *Unit {
 	t.Helper()
 	c, err := New(Config{Name: "test"})
 	if err != nil {
@@ -284,7 +284,7 @@ func TestRenameDeviceWithChannelsFnError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestWireSessionRecorderPersistenceNilSafe(t *testing.T) {
-	var c *CentralUnit
+	var c *Unit
 	closer := c.WireSessionRecorderPersistence(context.Background(), nil, "slug", 0)
 	if closer == nil {
 		t.Fatal("expected non-nil closer even on nil central")
@@ -381,12 +381,12 @@ func TestQueryFacadeGetInstallModeByIDNoProvider(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// CentralUnit.ConfigPayload / StatePayload
+// Unit.ConfigPayload / StatePayload
 // ---------------------------------------------------------------------------
 
 func TestConfigPayloadContainsName(t *testing.T) {
 	c := newTestCentral(t)
-	cfg, _ := c.Config().(*payload.CentralUnitConfig)
+	cfg, _ := c.Config().(*payload.CentralConfig)
 	if cfg == nil {
 		t.Fatal("Config must not be nil")
 	}
@@ -396,15 +396,15 @@ func TestConfigPayloadContainsName(t *testing.T) {
 }
 
 func TestConfigPayloadNilCentralReturnsNil(t *testing.T) {
-	var c *CentralUnit
+	var c *Unit
 	if c.Config() != nil {
-		t.Fatal("expected nil from nil CentralUnit")
+		t.Fatal("expected nil from nil Unit")
 	}
 }
 
 func TestStatePayloadContainsState(t *testing.T) {
 	c := newTestCentral(t)
-	st, _ := c.State().(*payload.CentralUnitState)
+	st, _ := c.State().(*payload.CentralState)
 	if st == nil {
 		t.Fatal("State must not be nil")
 	}
@@ -414,9 +414,9 @@ func TestStatePayloadContainsState(t *testing.T) {
 }
 
 func TestStatePayloadNilCentralReturnsNil(t *testing.T) {
-	var c *CentralUnit
+	var c *Unit
 	if c.State() != nil {
-		t.Fatal("expected nil from nil CentralUnit")
+		t.Fatal("expected nil from nil Unit")
 	}
 }
 
@@ -579,7 +579,7 @@ func TestInfoPayloadWithSystemInfo(t *testing.T) {
 		URL:     "http://192.168.1.1/",
 		IsHaApp: true,
 	})
-	info, _ := c.Info().(*payload.CentralUnitInfo)
+	info, _ := c.Info().(*payload.CentralInfo)
 	if info == nil {
 		t.Fatal("Info must not be nil")
 	}

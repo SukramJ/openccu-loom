@@ -31,7 +31,7 @@ type MatterExposureStore interface {
 
 // MatterCandidateProvider yields the per-source classification result
 // the operator-facing UI lists. The daemon wires this to a closure
-// that walks every CentralUnit's model registry through
+// that walks every Unit's model registry through
 // `eligibility.CollectCandidates`.
 type MatterCandidateProvider interface {
 	MatterCandidates(ctx context.Context) []eligibility.Candidate
@@ -306,8 +306,8 @@ func MatterExposeBulk(store MatterExposureStore, publisher MatterEventPublisher,
 // validateExposureKey enforces required-field invariants. Channel
 // numbers are 0..n bounded by the channel space; we only check
 // non-negativity.
-func validateExposureKey(central, addr, kind, key string) error {
-	if central == "" || addr == "" || kind == "" || key == "" {
+func validateExposureKey(centralName, addr, kind, key string) error {
+	if centralName == "" || addr == "" || kind == "" || key == "" {
 		return errors.New("central_name, device_address, dp_kind, dp_key are all required")
 	}
 	switch matterstore.DPKind(kind) {

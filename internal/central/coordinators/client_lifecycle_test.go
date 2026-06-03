@@ -286,7 +286,7 @@ func TestClientCoordinator_DeInitClients(t *testing.T) {
 // Python: _init_clients skips (and removes) clients whose interface is absent
 // from central.system_information.available_interfaces.
 // Go: ClientCoordinator has no availability-filter step; filtering by
-// available interface is the responsibility of the CentralUnit wiring layer
+// available interface is the responsibility of the Unit wiring layer
 // (central/adapter).  We confirm the coordinator does not remove entries
 // on its own by registering an entry and verifying it survives StartClients.
 

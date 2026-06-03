@@ -6,10 +6,12 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -291,16 +293,10 @@ func (d *DefaultDiscoveryBuilder) channelObjectID(ev Event, suffix string) strin
 }
 
 // channelUniqueID is the cross-broker-stable id used for HA's
-// `unique_id` payload field. Delegates to
-// [naming.PathData.DiscoveryUniqueID] — the model layer owns the
-// `<prefix>_<address>_<channel>_<suffix>` derivation.
-//
-// Note: the unique_id format pins HA's entity registry, so the
-// `central` argument is intentionally omitted here (the legacy
-// channel-aggregate unique_id has never carried it). Use
-// [naming.PathData.DiscoveryUniqueID] with central="" for parity.
+// `unique_id` payload field. Uses [routingkey.CanonicalUniqueID] with
+// the channel address (device:channel) and suffix as the parameter.
 func (d *DefaultDiscoveryBuilder) channelUniqueID(ev Event, suffix string) string {
-	return channelPathData(ev).DiscoveryUniqueID(daemonDiscoveryPrefix, "", suffix)
+	return routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), suffix, "")
 }
 
 // channelPathData builds the channel-scoped [naming.PathData] used

@@ -94,7 +94,7 @@ func TestWsDeviceQuery_GetParamsetDescription_DeviceFound_NoBackend_Errors(t *te
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-01")
 
-	// Put a minimal device into the CentralUnit's ModelRegistry.
+	// Put a minimal device into the Unit's ModelRegistry.
 	cu, ok := reg.Get("ccu-01")
 	if !ok {
 		t.Fatal("ccu-01 not found in registry")

@@ -46,7 +46,7 @@ type sourceMarker interface {
 // EventBus avoids cross-central interference in multi-CCU
 // deployments. Returns a closer that unsubscribes both handlers;
 // safe to call on daemon shutdown.
-func WireValueSourceLifecycle(unit *central.CentralUnit, logger *slog.Logger) func() {
+func WireValueSourceLifecycle(unit *central.Unit, logger *slog.Logger) func() {
 	if unit == nil || unit.EventBus == nil || unit.ModelRegistry == nil {
 		return func() {}
 	}
@@ -114,7 +114,7 @@ func WireValueSourceLifecycle(unit *central.CentralUnit, logger *slog.Logger) fu
 // walkWireDPs invokes fn on every wire-side data point of every
 // channel of every device that lives on interfaceID. Returns the
 // total number of data points visited.
-func walkWireDPs(unit *central.CentralUnit, interfaceID string, fn func(any)) int {
+func walkWireDPs(unit *central.Unit, interfaceID string, fn func(any)) int {
 	if unit == nil || unit.ModelRegistry == nil {
 		return 0
 	}

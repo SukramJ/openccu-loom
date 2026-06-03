@@ -150,8 +150,8 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 	if s.registry == nil {
 		return scheduleActorChannelBitmasks["1_1"], nil
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -189,8 +189,8 @@ func (s *SchedulesDomain) applyScheduleEnabledToModel(deviceAddress, channelKey 
 	if s.registry == nil {
 		return
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -215,14 +215,14 @@ func (s *SchedulesDomain) resolveOps(
 	if s.registry == nil || s.writer == nil {
 		return nil, "", ErrNoScheduleBackend
 	}
-	for _, c := range s.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range s.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
-		b, ok := s.writer.Backend(c.Name(), dev.InterfaceID)
+		b, ok := s.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, c.Name(), dev.InterfaceID)
+			return nil, "", fmt.Errorf("%w: %s/%s", ErrNoScheduleBackend, u.Name(), dev.InterfaceID)
 		}
 		channelAddr := fmt.Sprintf("%s:%d", deviceAddress, channelNo)
 		return b, channelAddr, nil

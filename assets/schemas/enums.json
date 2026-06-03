@@ -1309,6 +1309,10 @@
         {
           "go_name": "IncidentTypeRecoveryFailed",
           "wire_value": "recovery_failed"
+        },
+        {
+          "go_name": "IncidentTypeRetryExhausted",
+          "wire_value": "retry_exhausted"
         }
       ]
     },
@@ -1560,6 +1564,10 @@
         {
           "go_name": "ParameterDisplayDataIcon",
           "wire_value": "DISPLAY_DATA_ICON"
+        },
+        {
+          "go_name": "ParameterDisplayDataScrolling",
+          "wire_value": "DISPLAY_DATA_SCROLLING"
         },
         {
           "go_name": "ParameterDisplayDataString",
@@ -2570,6 +2578,10 @@
           "wire_value": "stability_check"
         },
         {
+          "go_name": "RecoveryStageSyncHubData",
+          "wire_value": "sync_hub_data"
+        },
+        {
           "go_name": "RecoveryStageTCPChecking",
           "wire_value": "tcp_checking"
         },
@@ -2678,6 +2690,63 @@
         {
           "go_name": "RollbackReasonValueMismatch",
           "wire_value": "mismatch"
+        }
+      ]
+    },
+    {
+      "name": "ScheduleField",
+      "values": [
+        {
+          "go_name": "ScheduleFieldAstroOffset",
+          "wire_value": "ASTRO_OFFSET"
+        },
+        {
+          "go_name": "ScheduleFieldAstroType",
+          "wire_value": "ASTRO_TYPE"
+        },
+        {
+          "go_name": "ScheduleFieldCondition",
+          "wire_value": "CONDITION"
+        },
+        {
+          "go_name": "ScheduleFieldDurationBase",
+          "wire_value": "DURATION_BASE"
+        },
+        {
+          "go_name": "ScheduleFieldDurationFactor",
+          "wire_value": "DURATION_FACTOR"
+        },
+        {
+          "go_name": "ScheduleFieldFixedHour",
+          "wire_value": "FIXED_HOUR"
+        },
+        {
+          "go_name": "ScheduleFieldFixedMinute",
+          "wire_value": "FIXED_MINUTE"
+        },
+        {
+          "go_name": "ScheduleFieldLevel",
+          "wire_value": "LEVEL"
+        },
+        {
+          "go_name": "ScheduleFieldLevel2",
+          "wire_value": "LEVEL_2"
+        },
+        {
+          "go_name": "ScheduleFieldRampTimeBase",
+          "wire_value": "RAMP_TIME_BASE"
+        },
+        {
+          "go_name": "ScheduleFieldRampTimeFactor",
+          "wire_value": "RAMP_TIME_FACTOR"
+        },
+        {
+          "go_name": "ScheduleFieldTargetChannels",
+          "wire_value": "TARGET_CHANNELS"
+        },
+        {
+          "go_name": "ScheduleFieldWeekday",
+          "wire_value": "WEEKDAY"
         }
       ]
     },

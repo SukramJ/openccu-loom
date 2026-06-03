@@ -72,6 +72,48 @@ These items are NOT implementation gaps; they are idiomatic Go solutions for Typ
 |----|--------------|-------------|---------|---------|------------|---------|
 | M1177 | `_ise_id` | device.py:246 | Separate ReGa integration | `internal/central/adapter/hub_wiring.go` | ReGa feature: ISE ID in CCU ReGa scope; Go handles via separate ReGa integration | W4 |
 
+### BD-Identity-RoutingKeyNamespaces — three deliberately distinct unique-id namespaces
+
+OpenCCU-Loom carries **three** unique-id producers and they are
+intentionally *not* unified. Conflating them would either orphan
+existing Home Assistant entities or break the HA drop-in's
+entity-identity stability.
+
+1. **MQTT-Discovery `unique_id`** —
+   `PathData.DiscoveryUniqueID` (`internal/model/naming/pathdata.go`)
+   emits `<openccu-loom>_<central?>_<address>_<channel>_<suffix>`. It is
+   daemon-namespaced (the `openccu-loom` prefix) and **pinned**: HA
+   persists this value in its registry, so changing the format orphans
+   every MQTT-discovered entity. It is by design *not* the
+   `aiohomematic` routing key — an MQTT-discovery user and an
+   `aiohomematic`/loom-client user are two separate integrations with
+   two separate registries.
+
+2. **WS / REST `unique_id` field** —
+   `BaseDataPointFields.UniqueID()` (`internal/model/datapoint/base.go`)
+   emits `<central>:<address>:<keyName>`. This is an **opaque
+   daemon-internal scoping / routing token**, not the HA registry key.
+   External clients must not feed it to HA as a `unique_id`.
+
+3. **Cross-backend HA routing key** — `internal/routingkey`
+   (`GenerateUniqueID`, `GenerateChannelUniqueID`, `HubSlug`) mirrors the
+   shared routing-key contract bit-for-bit and is locked by a
+   golden-fixture test under `tests/contract/`. It exists so the Go side
+   can reproduce / validate the key that the HA drop-in client rebuilds
+   from `address` + `parameter` (+ `entry_id[-10:]` as the HA-owned
+   prefix, which the daemon cannot know). The WS / REST payloads expose
+   the raw `address`, `parameter`, `category`, and hub `name`
+   (= legacy name) the client needs to rebuild it.
+
+`internal/model/device/naming.go:GenerateUniqueID` is a fourth,
+**legacy** generator that is currently unused by production code (only
+the naming-pipeline golden test references it). Its rules diverge from
+the contract (it central-prefixes VCU channels and capitalises the hub
+roots), so it must not be used where the HA routing key is expected; new
+consumers use `internal/routingkey` instead. See
+`docs/external-clients/ha-drop-in-identity-and-scoping.md` for the full
+owner split (client injects the HA prefix; daemon supplies scoping).
+
 ### CCU Link Management (v1.0 scope exclusion)
 
 | ID | Python symbol | File:line | Go idiom | Go path | Rationale | Marked |

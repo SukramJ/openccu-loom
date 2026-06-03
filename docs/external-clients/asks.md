@@ -231,6 +231,18 @@ danach kann jeder Code-Generator in jeder Sprache sie verwenden. Heute
 muss man Go-AST parsen, um zu wissen, dass `ParamsetKey.VALUES ==
 "VALUES"`.
 
+**Breaking-Change-Achse `DataPointCategory` / `DataPointType`:** Diese
+beiden Enums liegen auf dem Wire — `DataPointSummary.category`
++ `data_point_type`, optional auf dem WS-Value-Changed-Payload, und
+die genesteten Snapshot-Einträge. `homematicip_local` filtert direkt
+auf `DataPointCategory`. **Jede Änderung an einem Wert dieser beiden
+Enums (Hinzufügen, Entfernen, Umbenennen) ist ein Breaking Wire
+Change** und muss mit einem `api_version`-Bump einhergehen. Ein
+Drift-Detektor-Contract-Test (`tests/contract/`) hält `enums.json`
+und die Go-Konstanten in Lockstep — `assets/schemas/enums.json` ist
+generiert (`go run ./script/export_schemas.go`) und darf nicht von
+Hand editiert werden.
+
 ### C2. WS-Envelope-Schema offiziell publizieren
 
 **Befund:** Das Envelope-Schema `{topic, type, ts, payload}` ist nur

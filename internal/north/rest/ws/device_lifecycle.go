@@ -61,12 +61,12 @@ func (s *DeviceLifecycleSubscriber) Start() {
 	if s.reg == nil || s.hub == nil {
 		return
 	}
-	for _, c := range s.reg.List() {
-		bus := c.EventBus
+	for _, u := range s.reg.List() {
+		bus := u.EventBus
 		if bus == nil {
 			continue
 		}
-		centralName := c.Name()
+		centralName := u.Name()
 		hub := s.hub
 		unsubCreated := events.Subscribe(bus, func(e hmevent.DeviceCreatedEvent) {
 			hub.Publish(Event{

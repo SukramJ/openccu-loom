@@ -550,7 +550,7 @@ type SystemStatusChangedEvent struct {
 	// DegradedInterfaceReasons maps each degraded interface ID to the
 	// failure reason that caused the degradation. It is a superset of
 	// [DegradedInterfaces]: every key in this map is also present in
-	// [DegradedInterfaces]. Populated by [CentralUnit.EvaluateCentralState]
+	// [DegradedInterfaces]. Populated by [Unit.EvaluateCentralState]
 	// when the state machine carries per-interface failure information.
 	DegradedInterfaceReasons map[string]hmenum.FailureReason
 

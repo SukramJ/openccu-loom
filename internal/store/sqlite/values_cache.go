@@ -33,6 +33,11 @@ const (
 // are dropped on the next restore (and recreated as new values arrive)
 // so old rows cannot ship a value through the cast layer that the
 // current code can no longer interpret.
+//
+// The cached rows are keyed by the canonical two-part interface_id
+// (`<ccu_name>-<interface>`, ADR-0024) — the same id stamped on devices
+// and DataPointKeys. The host-independent instance name is never part of
+// this key.
 const ValuesCacheSchemaVersion = 1
 
 // ValueType is the small discriminator stored alongside value_json
@@ -259,10 +264,10 @@ func (s *ValuesCacheStore) LoadAll(ctx context.Context) (
 	out := make(map[string]map[string]map[string][]CachedValue)
 	for rows.Next() {
 		var (
-			central, iface, addr, name, raw, typ string
-			seen, changed                        int64
+			centralName, iface, addr, name, raw, typ string
+			seen, changed                            int64
 		)
-		if err := rows.Scan(&central, &iface, &addr, &name, &raw, &typ, &seen, &changed); err != nil {
+		if err := rows.Scan(&centralName, &iface, &addr, &name, &raw, &typ, &seen, &changed); err != nil {
 			return nil, fmt.Errorf("values_cache.LoadAll scan: %w", err)
 		}
 		var v any
@@ -271,10 +276,10 @@ func (s *ValuesCacheStore) LoadAll(ctx context.Context) (
 				continue
 			}
 		}
-		byInterface, ok := out[central]
+		byInterface, ok := out[centralName]
 		if !ok {
 			byInterface = make(map[string]map[string][]CachedValue)
-			out[central] = byInterface
+			out[centralName] = byInterface
 		}
 		byChannel, ok := byInterface[iface]
 		if !ok {
@@ -486,17 +491,17 @@ func (s *ValuesCacheStore) GCDeadRows(
 	if err != nil {
 		return GCResult{}, fmt.Errorf("values_cache.GCDeadRows scan: %w", err)
 	}
-	type tuple struct{ central, iface, channel, param string }
+	type tuple struct{ centralName, iface, channel, param string }
 	var dead []tuple
 	scanned := 0
 	for rows.Next() {
 		var t tuple
-		if err := rows.Scan(&t.central, &t.iface, &t.channel, &t.param); err != nil {
+		if err := rows.Scan(&t.centralName, &t.iface, &t.channel, &t.param); err != nil {
 			_ = rows.Close()
 			return GCResult{}, fmt.Errorf("values_cache.GCDeadRows row: %w", err)
 		}
 		scanned++
-		key := t.central + "|" + t.iface + "|" + t.channel + "|" + t.param
+		key := t.centralName + "|" + t.iface + "|" + t.channel + "|" + t.param
 		if _, live := alive[key]; !live {
 			dead = append(dead, t)
 		}
@@ -526,7 +531,7 @@ func (s *ValuesCacheStore) GCDeadRows(
 	}
 	defer func() { _ = stmt.Close() }()
 	for _, t := range dead {
-		if _, err := stmt.ExecContext(ctx, t.central, t.iface, t.channel, t.param); err != nil {
+		if _, err := stmt.ExecContext(ctx, t.centralName, t.iface, t.channel, t.param); err != nil {
 			return GCResult{Scanned: scanned}, fmt.Errorf("values_cache.GCDeadRows del: %w", err)
 		}
 	}
@@ -542,8 +547,8 @@ func (s *ValuesCacheStore) GCDeadRows(
 // with the scan comparison.
 //
 // loom:reachable:reason="called by GC callers building the alive-set before invoking GCDeadRows; exported so coordinator code can construct keys without importing internal format"
-func AliveKey(central, interfaceID, channelAddress, parameterName string) string {
-	return central + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
+func AliveKey(centralName, interfaceID, channelAddress, parameterName string) string {
+	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
 }
 
 // Stats reports the current row count and approximate byte size of

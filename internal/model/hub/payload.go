@@ -5,6 +5,7 @@ package hub
 
 import (
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // Compile-time guarantees that every hub-domain type satisfies the
@@ -28,6 +29,18 @@ var (
 )
 
 // --- Program ---
+
+// CanonicalUniqueID builds the external, loom-namespaced unique_id for
+// this program: loom_<serialSuffix>_program_<hub-slug(name)>. The
+// serialSuffix is supplied by the north boundary (central → serial);
+// hub entities always carry it because their names repeat across CCUs.
+// See docs/external-clients/ha-unique-id-migration.md.
+func (p *Program) CanonicalUniqueID(serialSuffix string) string {
+	if p == nil {
+		return ""
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, "program", routingkey.HubSlug(p.Name), "")
+}
 
 // Info returns identity-level fields for a Program.
 func (p *Program) Info() payload.InfoPayload {
@@ -75,6 +88,17 @@ func (p *Program) State() payload.StatePayload {
 }
 
 // --- Sysvar ---
+
+// CanonicalUniqueID builds the external, loom-namespaced unique_id for
+// this system variable: loom_<serialSuffix>_sysvar_<hub-slug(name)>.
+// See [Program.CanonicalUniqueID] and
+// docs/external-clients/ha-unique-id-migration.md.
+func (s *Sysvar) CanonicalUniqueID(serialSuffix string) string {
+	if s == nil {
+		return ""
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, "sysvar", routingkey.HubSlug(s.Name), "")
+}
 
 // Info returns identity-level fields for a Sysvar.
 func (s *Sysvar) Info() payload.InfoPayload {

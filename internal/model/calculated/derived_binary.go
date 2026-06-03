@@ -59,13 +59,13 @@ func NewDerivedBinarySensor(calcParam hmenum.CalculatedParameter, onValues, offV
 // into; pass empty when the source is wired manually by the caller
 // (e.g. test fixtures invoking [DerivedBinarySensor.OnLabel] directly).
 func NewDerivedBinarySensorWithIdentity(
-	central, channelAddress string,
+	centralName, channelAddress string,
 	calcParam hmenum.CalculatedParameter,
 	source hmenum.Parameter,
 	onValues, offValues []string,
 ) *DerivedBinarySensor {
 	return &DerivedBinarySensor{
-		BinarySensor:    newDerivedBinarySensor(calcParam, central, channelAddress),
+		BinarySensor:    newDerivedBinarySensor(calcParam, centralName, channelAddress),
 		SourceParameter: source,
 		OnValues:        toSet(onValues),
 		OffValues:       toSet(offValues),
@@ -294,13 +294,13 @@ func toSet(values []string) map[string]struct{} {
 // inner DataPoint produces the family-prefixed UniqueID directly
 // no outer BaseDataPointFields embed needed on the calculated
 // sensor type.
-func newDerivedBinarySensor(p hmenum.CalculatedParameter, central, channelAddress string) *generic.BinarySensor {
+func newDerivedBinarySensor(p hmenum.CalculatedParameter, centralName, channelAddress string) *generic.BinarySensor {
 	return generic.NewBinarySensor(generic.Spec{
 		Key: hmtypes.DataPointKey{
 			ChannelAddress: channelAddress,
 			Parameter:      string(p),
 		},
-		CentralName:     central,
+		CentralName:     centralName,
 		KeyNameOverride: calculatedKeyName(p),
 		// Stamp KindBinarySensor so (*DataPoint).Category() returns
 		// DataPointCategory.BINARY_SENSOR. Same fix as the

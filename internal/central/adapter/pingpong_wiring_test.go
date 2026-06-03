@@ -38,8 +38,8 @@ func newTestInterfaceClient(t *testing.T, centralName, iface string, threshold i
 	return ic
 }
 
-// newTestCentralNamed builds a CentralUnit with a custom name.
-func newTestCentralNamed(t *testing.T, name string) *central.CentralUnit {
+// newTestCentralNamed builds a Unit with a custom name.
+func newTestCentralNamed(t *testing.T, name string) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: name})
 	if err != nil {

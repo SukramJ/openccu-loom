@@ -197,7 +197,7 @@ func (*fakeOperations) SetMetadata(_ context.Context, _, _ string, _ any) error 
 // returns everything the caller needs to assert on.
 func buildUnpairFixture(t *testing.T, backendErr error) (
 	domain *DeviceAdminDomain,
-	centralUnit *central.CentralUnit,
+	centralUnit *central.Unit,
 	dev *device.Device,
 	fake *fakeOperations,
 ) {

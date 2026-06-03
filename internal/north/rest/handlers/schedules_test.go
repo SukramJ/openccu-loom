@@ -159,8 +159,8 @@ func TestPostActiveProfile_ServiceError(t *testing.T) {
 	w := httptest.NewRecorder()
 	PostActiveProfile(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", w.Code)
 	}
 }
 
@@ -220,7 +220,7 @@ func TestPutScheduleAuto_InvalidJSON_Returns400(t *testing.T) {
 	}
 }
 
-func TestPutScheduleAuto_ServiceError_Returns500(t *testing.T) {
+func TestPutScheduleAuto_ServiceError_Returns502(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{autoPutErr: errors.New("CCU error")}
 	body := strings.NewReader(`{"kind":"simple"}`)
@@ -229,8 +229,8 @@ func TestPutScheduleAuto_ServiceError_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutScheduleAuto(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -248,7 +248,7 @@ func TestGetScheduleAuto_NilService_Returns503(t *testing.T) {
 	}
 }
 
-func TestGetScheduleAuto_ServiceError_Returns500(t *testing.T) {
+func TestGetScheduleAuto_ServiceError_Returns502(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{autoGetErr: errors.New("CCU error")}
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -256,8 +256,8 @@ func TestGetScheduleAuto_ServiceError_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	GetScheduleAuto(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -302,7 +302,7 @@ func TestPostActiveProfileAuto_InvalidJSON_Returns400(t *testing.T) {
 	}
 }
 
-func TestPostActiveProfileAuto_ServiceError_Returns500(t *testing.T) {
+func TestPostActiveProfileAuto_ServiceError_Returns502(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{autoProfileErr: errors.New("CCU error")}
 	body := strings.NewReader(`{"profile":"P2"}`)
@@ -311,8 +311,8 @@ func TestPostActiveProfileAuto_ServiceError_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	PostActiveProfileAuto(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -373,7 +373,7 @@ func TestPutSchedule_NilService_Returns503(t *testing.T) {
 	}
 }
 
-func TestPutSchedule_ServiceError_Returns500(t *testing.T) {
+func TestPutSchedule_ServiceError_Returns502(t *testing.T) {
 	t.Parallel()
 	svc := &stubScheduleService{putErr: errors.New("write failed")}
 	body := strings.NewReader(`{"kind":"climate","channel":{"address":"DEV001:1","number":1,"device_address":"DEV001"}}`)
@@ -382,8 +382,8 @@ func TestPutSchedule_ServiceError_Returns500(t *testing.T) {
 	w := httptest.NewRecorder()
 	PutSchedule(svc).ServeHTTP(w, req)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -409,12 +409,12 @@ func TestWriteScheduleError_NoScheduleParams_Returns404(t *testing.T) {
 	}
 }
 
-func TestWriteScheduleError_GenericError_Returns500(t *testing.T) {
+func TestWriteScheduleError_GenericError_Returns502(t *testing.T) {
 	t.Parallel()
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	writeScheduleError(w, r, errors.New("some unexpected error"))
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d", w.Code)
 	}
 }

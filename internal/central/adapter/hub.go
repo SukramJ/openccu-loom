@@ -10,7 +10,7 @@ import (
 )
 
 // HubAdapter satisfies handlers.HubIndex by projecting every
-// registered CentralUnit's hub onto one aggregated hub view.
+// registered Unit's hub onto one aggregated hub view.
 type HubAdapter struct {
 	registry *central.Registry
 }

@@ -38,14 +38,14 @@ func (a *DeviceAdminDomain) resolve(deviceAddress string) (backends.Operations, 
 	if a.registry == nil || a.writer == nil {
 		return nil, ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, c.Name(), dev.InterfaceID)
+			return nil, fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
 		return backend, nil
 	}
@@ -66,14 +66,14 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) er
 	if a.registry == nil || a.writer == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
 		}
-		backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+		backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, c.Name(), dev.InterfaceID)
+			return fmt.Errorf("%w: %s/%s", ErrNoDeviceBackend, u.Name(), dev.InterfaceID)
 		}
 		if err := backend.DeleteDevice(ctx, address); err != nil {
 			return err
@@ -81,10 +81,10 @@ func (a *DeviceAdminDomain) UnpairDevice(ctx context.Context, address string) er
 		// Drop the local caches. The CCU's `deleteDevices` callback
 		// will re-publish the deletion event; doing it eagerly here
 		// keeps the SPA snappy.
-		c.RemoveDevice(address)
-		c.DeviceRegistry.Remove(dev.Interface, address)
-		c.DescRegistry.Delete(dev.Interface, address)
-		c.ParamsetReg.DeleteChannel(dev.Interface, address)
+		u.RemoveDevice(address)
+		u.DeviceRegistry.Remove(dev.Interface, address)
+		u.DescRegistry.Delete(dev.Interface, address)
+		u.ParamsetReg.DeleteChannel(dev.Interface, address)
 		return nil
 	}
 	return fmt.Errorf("%w: device %s", ErrNoDeviceBackend, address)
@@ -97,8 +97,8 @@ func (a *DeviceAdminDomain) RenameDevice(ctx context.Context, address, name stri
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
 		}
@@ -118,11 +118,11 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(ctx context.Context, address strin
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		if c.HubModel == nil {
+	for _, u := range a.registry.List() {
+		if u.HubModel == nil {
 			continue
 		}
-		if err := c.HubModel.AcceptInboxDeviceRemote(ctx, address); err != nil {
+		if err := u.HubModel.AcceptInboxDeviceRemote(ctx, address); err != nil {
 			// Try the next central — the inbox may live on another CCU.
 			continue
 		}
@@ -132,11 +132,11 @@ func (a *DeviceAdminDomain) AcceptInboxDevice(ctx context.Context, address strin
 		if a.writer == nil {
 			return nil
 		}
-		dev, ok := c.ModelRegistry.Get(address)
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			return nil
 		}
-		if backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID); ok {
+		if backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID); ok {
 			_, _ = backend.ListDevices(ctx)
 		}
 		return nil
@@ -175,15 +175,15 @@ func (a *DeviceAdminDomain) SetRooms(
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
 		}
-		if c.HubModel == nil {
-			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, c.Name())
+		if u.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, u.Name())
 		}
-		if err := c.HubModel.SetDeviceRoomsRemote(ctx, address, rooms); err != nil {
+		if err := u.HubModel.SetDeviceRoomsRemote(ctx, address, rooms); err != nil {
 			return err
 		}
 		dev.Rooms = append([]string(nil), rooms...)
@@ -200,15 +200,15 @@ func (a *DeviceAdminDomain) SetFunctions(
 	if a.registry == nil {
 		return ErrNoDeviceBackend
 	}
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(address)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(address)
 		if !ok {
 			continue
 		}
-		if c.HubModel == nil {
-			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, c.Name())
+		if u.HubModel == nil {
+			return fmt.Errorf("%w: hub not wired for %s", ErrNoDeviceBackend, u.Name())
 		}
-		if err := c.HubModel.SetDeviceFunctionsRemote(ctx, address, functions); err != nil {
+		if err := u.HubModel.SetDeviceFunctionsRemote(ctx, address, functions); err != nil {
 			return err
 		}
 		dev.Functions = append([]string(nil), functions...)

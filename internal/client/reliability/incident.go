@@ -52,7 +52,7 @@ func (f CoalesceEventPublisherFunc) PublishRequestCoalesced(e hmevent.RequestCoa
 //
 // `central` and `iface` are baked into every event so subscribers
 // can route by interface.
-func WireCoalesceBus(co *Coalescer, pub CoalesceEventPublisher, central, iface string) {
+func WireCoalesceBus(co *Coalescer, pub CoalesceEventPublisher, centralName, iface string) {
 	if co == nil {
 		return
 	}
@@ -63,7 +63,7 @@ func WireCoalesceBus(co *Coalescer, pub CoalesceEventPublisher, central, iface s
 	co.SetHook(func(key string, waiters int) {
 		pub.PublishRequestCoalesced(hmevent.RequestCoalescedEvent{
 			Base:        hmevent.NewBase(),
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			Key:         key,
 			Waiters:     waiters,
@@ -79,14 +79,14 @@ func WireCoalesceBus(co *Coalescer, pub CoalesceEventPublisher, central, iface s
 //
 // `central` and `iface` are baked into every event so subscribers
 // (e.g. `WireHealth`) can route by interface.
-func WireCircuitBus(cb *CircuitBreaker, pub CircuitEventPublisher, central, iface string) {
+func WireCircuitBus(cb *CircuitBreaker, pub CircuitEventPublisher, centralName, iface string) {
 	if cb == nil || pub == nil {
 		return
 	}
 	cb.AddOnStateChange(func(from, to hmenum.CircuitState) {
 		pub.PublishCircuitBreakerStateChange(hmevent.CircuitBreakerStateChangedEvent{
 			Base:        hmevent.NewBase(),
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			From:        from,
 			To:          to,
@@ -126,7 +126,7 @@ type IncidentRecord struct {
 // Severity defaults to Warning for pending-mismatches (PING sent but
 // no PONG within TTL) and Error for unknown-mismatches (PONG arrived
 // without a matching PING — possible CCU restart).
-func WirePingPongIncidents(t *PingPongTracker, rec IncidentRecorder, central, iface string) {
+func WirePingPongIncidents(t *PingPongTracker, rec IncidentRecorder, centralName, iface string) {
 	if t == nil || rec == nil {
 		return
 	}
@@ -139,7 +139,7 @@ func WirePingPongIncidents(t *PingPongTracker, rec IncidentRecorder, central, if
 			msg = "ping/pong: unknown PONG (CCU restart?)"
 		}
 		_ = rec.RecordIncident(context.Background(), IncidentRecord{
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			Type:        hmenum.IncidentTypePingPongMismatch,
 			Severity:    sev,
@@ -169,7 +169,7 @@ func (f IncidentSinkFunc) ReportRetryExhausted(err error) { f(err) }
 // WireRetryIncidents returns an [IncidentSink] that records exhausted retry
 // chains as [hmenum.IncidentTypeRetryExhausted] incidents via rec.
 // Pass nil rec to get a no-op sink.
-func WireRetryIncidents(rec IncidentRecorder, central, iface string) IncidentSink {
+func WireRetryIncidents(rec IncidentRecorder, centralName, iface string) IncidentSink {
 	if rec == nil {
 		return nil
 	}
@@ -179,7 +179,7 @@ func WireRetryIncidents(rec IncidentRecorder, central, iface string) IncidentSin
 			msg = fmt.Sprintf("retry: all attempts exhausted: %s", err.Error())
 		}
 		_ = rec.RecordIncident(context.Background(), IncidentRecord{
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			Type:        hmenum.IncidentTypeRetryExhausted,
 			Severity:    hmenum.IncidentSeverityWarning,
@@ -197,7 +197,7 @@ func WireRetryIncidents(rec IncidentRecorder, central, iface string) IncidentSin
 // The hook is fire-and-forget: incident-recording errors are
 // swallowed (the circuit breaker must not be coupled to the DB
 // availability).
-func WireCircuitIncidents(cb *CircuitBreaker, rec IncidentRecorder, central, iface string) {
+func WireCircuitIncidents(cb *CircuitBreaker, rec IncidentRecorder, centralName, iface string) {
 	if cb == nil || rec == nil {
 		return
 	}
@@ -226,7 +226,7 @@ func WireCircuitIncidents(cb *CircuitBreaker, rec IncidentRecorder, central, ifa
 			incType = hmenum.IncidentTypeCircuitBreakerOpen
 		}
 		_ = rec.RecordIncident(context.Background(), IncidentRecord{
-			CentralName: central,
+			CentralName: centralName,
 			InterfaceID: iface,
 			Type:        incType,
 			Severity:    sev,

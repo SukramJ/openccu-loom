@@ -16,7 +16,7 @@ import (
 )
 
 // DevicesAdapter implements handlers.DeviceIndex across every
-// registered CentralUnit.
+// registered Unit.
 type DevicesAdapter struct {
 	registry *central.Registry
 	writer   *client.ValueWriter
@@ -42,8 +42,8 @@ func (a *DevicesAdapter) Devices() []*device.Device {
 		return nil
 	}
 	var out []*device.Device
-	for _, c := range a.registry.List() {
-		out = append(out, c.ModelRegistry.List()...)
+	for _, u := range a.registry.List() {
+		out = append(out, u.ModelRegistry.List()...)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Address < out[j].Address })
 	return out
@@ -56,8 +56,8 @@ func (a *DevicesAdapter) Device(address string) (*device.Device, bool) {
 	if a.registry == nil {
 		return nil, false
 	}
-	for _, c := range a.registry.List() {
-		if d, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range a.registry.List() {
+		if d, ok := u.ModelRegistry.Get(address); ok {
 			return d, true
 		}
 	}
@@ -76,16 +76,16 @@ func (a *DevicesAdapter) RefreshDevices(ctx context.Context) error {
 		// return success — the periodic pipeline will catch up.
 		return nil
 	}
-	for _, c := range a.registry.List() {
+	for _, u := range a.registry.List() {
 		// The registry knows interface ids only via devices; iterate
 		// the unique interfaces seen on this central.
 		seen := make(map[string]struct{})
-		for _, dev := range c.ModelRegistry.List() {
+		for _, dev := range u.ModelRegistry.List() {
 			if _, dup := seen[dev.InterfaceID]; dup {
 				continue
 			}
 			seen[dev.InterfaceID] = struct{}{}
-			backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
+			backend, ok := a.writer.Backend(u.Name(), dev.InterfaceID)
 			if !ok {
 				continue
 			}
@@ -103,9 +103,9 @@ func (a *DevicesAdapter) CentralOf(address string) string {
 	if a.registry == nil {
 		return ""
 	}
-	for _, c := range a.registry.List() {
-		if _, ok := c.ModelRegistry.Get(address); ok {
-			return c.Name()
+	for _, u := range a.registry.List() {
+		if _, ok := u.ModelRegistry.Get(address); ok {
+			return u.Name()
 		}
 	}
 	return ""
@@ -146,12 +146,12 @@ func (a *DataPointWriterAdapter) SetValue(
 		return ErrNoWriter
 	}
 	deviceAddr := deviceAddressOf(channelAddress)
-	for _, c := range a.registry.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddr)
+	for _, u := range a.registry.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddr)
 		if !ok {
 			continue
 		}
-		return a.writer.SetValue(ctx, c.Name(), dev.InterfaceID, channelAddress, parameter, value, priority)
+		return a.writer.SetValue(ctx, u.Name(), dev.InterfaceID, channelAddress, parameter, value, priority)
 	}
 	return fmt.Errorf("adapter: device %s not found", deviceAddr)
 }

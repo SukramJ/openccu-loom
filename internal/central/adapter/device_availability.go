@@ -29,7 +29,7 @@ import (
 // Returns a closer that drops the subscription and clears the matching
 // `MarkAllDevicesForced` flag on every InterfaceClient — safe to call during
 // shutdown so a restart starts from a clean slate.
-func WireDeviceAvailability(unit *central.CentralUnit) func() {
+func WireDeviceAvailability(unit *central.Unit) func() {
 	if unit == nil || unit.EventBus == nil || unit.ModelRegistry == nil {
 		return func() {}
 	}

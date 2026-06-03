@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 )
 
-func newTestCentral(t *testing.T) *central.CentralUnit {
+func newTestCentral(t *testing.T) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "test"})
 	if err != nil {

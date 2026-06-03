@@ -12,7 +12,7 @@ import (
 )
 
 // Bootstrap is the composition root that turns a parsed [config.Config]
-// into a [*Registry] of wired [*CentralUnit]s.
+// into a [*Registry] of wired [*Unit]s.
 //
 // It is intentionally thin: it does not touch transports or the REST
 // layer. Those are composed in cmd/openccu-loom/main.go so unit tests
@@ -33,10 +33,19 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 		logger = slog.Default()
 	}
 
+	// Daemon-global instance identity — the leading component of every
+	// central's wire interface_id (`<instance_name>-<ccu_name>-<iface>`,
+	// ADR-0024). Same for every central in this daemon.
+	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
+
 	reg := NewRegistry()
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
-		unit, err := New(Config{Name: cc.Name, Logger: logger.With(slog.String("central", cc.Name))})
+		unit, err := New(Config{
+			Name:         cc.Name,
+			InstanceName: instanceName,
+			Logger:       logger.With(slog.String("central", cc.Name)),
+		})
 		if err != nil {
 			return nil, func() {}, fmt.Errorf("central.Bootstrap(%s): %w", cc.Name, err)
 		}

@@ -74,14 +74,14 @@ type HubDataPoint struct {
 // [datapoint.BaseDataPointFields] embedded, so UniqueID(), Visible(),
 // and EnabledByDefault() are meaningful from the first use.
 //
-// - central — the CentralUnit name, used to scope UniqueID.
+// - central — the Unit name, used to scope UniqueID.
 // - name — the sysvar/program name (becomes both HubDataPoint.Name
 // and the KeyName inside BaseDataPointFields).
 // - description — optional human-readable text.
 // - enabledDefault — initial value for the EnabledDefault field.
-func NewHubDataPoint(central, name, description string, enabledDefault bool) HubDataPoint {
+func NewHubDataPoint(centralName, name, description string, enabledDefault bool) HubDataPoint {
 	return HubDataPoint{
-		BaseDataPointFields: datapoint.NewBaseDataPointFields(central, "", name),
+		BaseDataPointFields: datapoint.NewBaseDataPointFields(centralName, "", name),
 		Name:                name,
 		Description:         description,
 		EnabledDefault:      enabledDefault,

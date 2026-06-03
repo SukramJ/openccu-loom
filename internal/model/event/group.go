@@ -51,10 +51,10 @@ func NewGroup(channelAddress string, k Kind) *Group {
 // [datapoint.BaseDataPointFields] carries the `central` scope so that
 // the resulting [UniqueID] is `<central>:<channelAddress>:event_group/<kind>`.
 // ADR 0002 requires production callers to set `central`.
-func NewGroupWithCentral(central, channelAddress string, k Kind) *Group {
+func NewGroupWithCentral(centralName, channelAddress string, k Kind) *Group {
 	return &Group{
 		BaseDataPointFields: datapoint.NewBaseDataPointFields(
-			central,
+			centralName,
 			channelAddress,
 			"event_group/"+string(k),
 		),

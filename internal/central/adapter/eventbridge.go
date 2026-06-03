@@ -24,6 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -94,15 +95,15 @@ func (b *EventBridge) Start(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
-	for _, c := range b.registry.List() {
-		bus := c.EventBus
+	for _, u := range b.registry.List() {
+		bus := u.EventBus
 		unsub := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
-			b.onValueChanged(ctx, c.Name(), e)
+			b.onValueChanged(ctx, u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsub)
 
 		unsubCentral := events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
-			b.onCentralState(c.Name(), e)
+			b.onCentralState(u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsubCentral)
 
@@ -112,7 +113,7 @@ func (b *EventBridge) Start(ctx context.Context) {
 		// on value diff (HA without `force_update`) miss freshness
 		// flips. ADR 0019.
 		unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
-			b.onSourceChanged(ctx, c.Name(), e)
+			b.onSourceChanged(ctx, u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsubSrc)
 	}
@@ -172,9 +173,9 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
-	for _, c := range b.registry.List() {
-		centralName := c.Name()
-		for _, d := range c.ModelRegistry.List() {
+	for _, u := range b.registry.List() {
+		centralName := u.Name()
+		for _, d := range u.ModelRegistry.List() {
 			ifaceID := d.InterfaceID
 			// Publish per-device availability FIRST. The HA Discovery
 			// payload references the device-availability topic (with
@@ -525,19 +526,27 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 	model, name := lookupDevice(b.registry, deviceAddr)
 
 	if b.wsHub != nil {
+		// Resolve the channel once: it feeds both the inline DP
+		// classification (category / functional type) and the CDP-state
+		// aggregate below. The look-up is in-memory and nil-safe.
+		ch := lookupChannel(b.registry, deviceAddr, channelNo)
+		category, dpType := valueChangedClassification(ch, e.Key.Parameter)
+		serialSuffix := b.registry.SerialSuffix(centralName)
+		uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
 		b.wsHub.PublishDataPointValueChangedKind(
 			envKind,
 			centralName, iface, deviceAddr, channelNo,
 			e.Key.Parameter, string(e.Key.ParamsetKey),
 			e.NewValue.Unwrap(), e.OldValue.Unwrap(),
 			e.Timestamp(),
+			category, dpType, uniqueID,
 		)
 		// CDP-state aggregate: when the affected channel hosts a
 		// Custom-DP, also emit a state snapshot on
 		// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
 		// once per CDP instead of N times per slot. The look-up is
 		// cheap (in-memory) and only runs when a CDP exists.
-		if ch := lookupChannel(b.registry, deviceAddr, channelNo); ch != nil {
+		if ch != nil {
 			if cdp := ch.CustomDataPoint(); cdp != nil {
 				if state, ok := customDPStatePayload(cdp); ok {
 					b.wsHub.PublishCustomDataPointStateChangedKind(
@@ -546,6 +555,7 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 						cdp.DataPointKey().Parameter,
 						cdpkind.Of(cdp),
 						state, e.Timestamp(),
+						routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
 					)
 				}
 			}
@@ -1399,8 +1409,8 @@ func lookupDeviceObject(reg *central.Registry, address string) *device.Device {
 	if reg == nil {
 		return nil
 	}
-	for _, c := range reg.List() {
-		if d, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range reg.List() {
+		if d, ok := u.ModelRegistry.Get(address); ok {
 			return d
 		}
 	}
@@ -1411,8 +1421,8 @@ func lookupDevice(reg *central.Registry, address string) (model, name string) {
 	if reg == nil {
 		return "", ""
 	}
-	for _, c := range reg.List() {
-		if d, ok := c.ModelRegistry.Get(address); ok {
+	for _, u := range reg.List() {
+		if d, ok := u.ModelRegistry.Get(address); ok {
 			return d.Model, d.Name
 		}
 	}
@@ -1427,8 +1437,8 @@ func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *
 	if reg == nil {
 		return nil
 	}
-	for _, c := range reg.List() {
-		dev, ok := c.ModelRegistry.Get(deviceAddress)
+	for _, u := range reg.List() {
+		dev, ok := u.ModelRegistry.Get(deviceAddress)
 		if !ok {
 			continue
 		}
@@ -1439,6 +1449,28 @@ func lookupChannel(reg *central.Registry, deviceAddress string, channelNo int) *
 		}
 	}
 	return nil
+}
+
+// valueChangedClassification resolves the (category, functional type)
+// pair for the DP named by parameter on ch, mirroring the assertion the
+// REST DataPointSummary and MQTT discovery use. Returns empty strings
+// when the channel or DP is unknown, or the DP does not implement the
+// categorised surface — the WS write pump only surfaces these to clients
+// that opted into `classify`, so empty is a safe no-op.
+func valueChangedClassification(ch *device.Channel, parameter string) (category, dataPointType string) {
+	if ch == nil {
+		return "", ""
+	}
+	dp := ch.Parameter(hmenum.Parameter(parameter))
+	if dp == nil {
+		return "", ""
+	}
+	cdp, ok := dp.(device.CategorisedDataPoint)
+	if !ok {
+		return "", ""
+	}
+	cat := cdp.Category()
+	return string(cat), string(hmenum.CategoryToType[cat])
 }
 
 // lookupCalculatedUnit resolves the canonical unit of a calculated
