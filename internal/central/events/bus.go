@@ -19,6 +19,7 @@ package events
 import (
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -327,6 +328,11 @@ func (b *Bus) callHandler(h *registered, e hmevent.Event) {
 				"handler_id", h.id,
 				"event_type", string(e.Type()),
 				"panic", fmt.Sprintf("%v", r),
+				// Without the stack a recovered handler panic is
+				// undiagnosable in the field — the message alone cannot
+				// point at the offending subscriber. Capture it so the
+				// log carries the exact call site.
+				"stack", string(debug.Stack()),
 			)
 		}
 	}()
