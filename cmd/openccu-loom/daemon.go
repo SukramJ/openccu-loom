@@ -450,257 +450,38 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- southbound wiring -------------------------------------
-	// Build the XML-RPC client per (central, interface), wrap it into
-	// a backend, register it with the ValueWriter, then pull the device
-	// snapshot through the DevicePipeline and load per-channel VALUES
-	// paramset descriptions so channels carry their data points.
+	// Per-central XML-RPC/BIN-RPC client wiring, device pipeline and
+	// paramset hydration, VALUES-cache flusher + health gauges,
+	// per-central health / availability / climate-link subscriptions,
+	// visibility un-ignore application, HubInfo stamping, boot-time MQTT
+	// cleanup + initial snapshot, and the periodic unobserved-DP sweep.
+	// Extracted into wireSouthbound (daemon_southbound.go).
 	//
-	// The backup adapter is constructed up-front because WireCentrals
-	// injects the live HTTPBackupRestorer into it after the first
-	// successful hub handshake.
-	backupAdapter := buildBackupAdapter(cfg, reg, logger)
-	wireCtx, wireCancel := context.WithTimeout(ctx, 60*time.Second)
-	wireTeardown, wireErr := adapter.WireCentrals(wireCtx, cfg, reg, adapter.WireDeps{
-		Writer:               valueWriter,
-		Translations:         translations,
-		CallbackServer:       callbackSrv,
-		CallbackBaseURL:      callbackBaseURL,
-		BINRPCCallbackServer: binRPCSrv,
-		BINRPCCallbackAddr:   binRPCAddr,
-		Backup:               backupAdapter,
-		Visibility:           visReg,
-		MasterValues:         masterValuesStore,
-		ValuesCache:          valuesCacheStore,
-		ValuesCacheCentralFilter: func(centralName string) bool {
-			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
-		},
-	}, logger)
-	// Background flusher for the persistent VALUES cache. Runs every
-	// flush_interval (default 60 s; override via
-	// persistence.values_cache.flush_interval) and once more on
-	// graceful shutdown. nil-store / nil-registry guards make this a
-	// no-op when the feature is disabled.
-	flushInterval := cfg.Persistence.ValuesCache.FlushInterval
-	if flushInterval <= 0 {
-		flushInterval = adapter.DefaultValuesCacheFlushInterval
-	}
-	if stopFlusher := adapter.WireValuesCacheFlusher(reg, valuesCacheStore, flushInterval, logger); stopFlusher != nil { //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
-		defer stopFlusher()
-	}
-	// Surface the values-cache counters as health gauges so the
-	// /diagnostics surface and any Prometheus scraper see how many
-	// rows survived the last restart, how many got cast-rejected,
-	// and how the periodic flusher is doing.
-	if healthTracker != nil && valuesCacheStore != nil {
-		store := valuesCacheStore
-		healthTracker.RegisterGauge("values_cache.restored_rows",
-			func() float64 { return float64(store.MetricsSnapshot().RestoredRows) })
-		healthTracker.RegisterGauge("values_cache.cast_failures",
-			func() float64 { return float64(store.MetricsSnapshot().CastFailures) })
-		healthTracker.RegisterGauge("values_cache.gc_rows_deleted",
-			func() float64 { return float64(store.MetricsSnapshot().GCRowsDeleted) })
-		healthTracker.RegisterGauge("values_cache.flush_batches",
-			func() float64 { return float64(store.MetricsSnapshot().FlushBatches) })
-		healthTracker.RegisterGauge("values_cache.flushed_entries",
-			func() float64 { return float64(store.MetricsSnapshot().FlushedEntries) })
-		healthTracker.RegisterGauge("values_cache.row_count",
-			func() float64 { //nolint:contextcheck // gauge callback fires on demand; must not inherit the (cancelled) daemon ctx
-				gaugeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				stats, err := store.Stats(gaugeCtx)
-				if err != nil {
-					return 0
-				}
-				return float64(stats.Rows)
-			})
-		healthTracker.RegisterGauge("values_cache.value_json_bytes",
-			func() float64 { //nolint:contextcheck // gauge callback fires on demand; must not inherit the (cancelled) daemon ctx
-				gaugeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-				defer cancel()
-				stats, err := store.Stats(gaugeCtx)
-				if err != nil {
-					return 0
-				}
-				return float64(stats.ValueJSONSize)
-			})
-	}
-	wireCancel()
-	if wireErr != nil {
-		logger.Warn("wire.partial", slog.String("err", wireErr.Error()))
-	}
-	if wireTeardown != nil {
-		defer wireTeardown()
-	}
-
-	// Wire per-central health subscriptions AFTER WireCentrals so
-	// the InterfaceClient registry is populated when the initial-
-	// sync pass walks `unit.Clients.List()`. Without this hook,
-	// ClientStateChanged / CircuitBreakerStateChanged / Recovery
-	// events fly past with no Tracker subscriber, leaving the
-	// diagnostics dump's `clients[]` array permanently empty.
-	for _, u := range reg.List() {
-		_ = adapter.WireHealth(u)
-		// WireCentrals connected the interfaces BEFORE WireHealth
-		// subscribed, so the startup ClientStateChanged transitions fired
-		// with no health subscriber and the central kept the FAILED
-		// evaluation taken at boot (before any interface was connected) —
-		// surfacing as a permanently "degraded" CCU even though the
-		// interfaces are connected and callbacks are flowing. Re-evaluate
-		// now that the InterfaceClient registry reflects the connected
-		// clients so the central state matches reality.
-		u.EvaluateCentralState("post_wire", true)
-	}
-
-	// Register a post-stop hook on each central so the shared registry
-	// entry is cleaned up after Stop() transitions to STOPPED. This
-	// ensures that a central which has been stopped (e.g. due to a
-	// fatal init error or a graceful reload) is no longer visible to
-	// north-bound adapters that iterate the registry.
-	for _, u := range reg.List() {
-		centralName := u.Name()
-		u.AddOnStopHook(func() {
-			reg.Unregister(centralName)
-		})
-	}
-
-	// Apply the per-central un_ignore lists from SQLite (seeded from
-	// config.yaml when the table is empty) onto the shared visibility
-	// registry. Runs after WireCentrals so every central's
-	// ModelRegistry is populated with materialised devices that the
-	// suppression-mark pass can flip. See docs/ui/unignore-concept.md
-	// and visibility_wiring.go.
-	applyVisibilityUnIgnore(ctx, cfg, reg, visibilityUnIgnoreStore, visReg, logger)
-
-	// Wire device-availability propagation: when an InterfaceClient reports
-	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
-	// forced-availability override flipped accordingly so HA / REST / SPA stop
-	// showing stale "online" entities after a CCU-side disconnect. Per-central
-	// because the registry holds one Unit per CCU; closer is chained into
-	// the daemon shutdown.
-	var availClosers []func()
-	for _, u := range reg.List() {
-		if closer := adapter.WireDeviceAvailability(u); closer != nil {
-			availClosers = append(availClosers, closer)
-		}
-	}
-	defer func() {
-		for _, close := range availClosers {
-			close()
-		}
-	}()
-
-	// Wire climate link-peer activity-source refresh: on every successful
-	// RecoveryCompletedEvent the wiring re-subscribes all Climate custom DPs
-	// on the recovered interface to their linked valve/switch peer channels
-	// (LEVEL / STATE) so the activity field stays accurate after a reconnect.
-	// LinkPeerChangedEvent re-wires on topology changes (links.add / remove).
-	// Per-central, closer chained into daemon shutdown.
-	var climateClosers []func()
-	for _, u := range reg.List() {
-		if closer := adapter.WireClimateLinkPeerRefresh(u); closer != nil {
-			climateClosers = append(climateClosers, closer)
-		}
-	}
-	defer func() {
-		for _, close := range climateClosers {
-			close()
-		}
-	}()
-
-	// Stamp HubInfo onto the MQTT-Discovery builder now that
-	// SystemInformation has been populated by WireCentrals (it set
-	// the URL; model / version / serial follow once the JSON-RPC
-	// system-info calls land). Without this the per-device
-	// `configuration_url` and the synthetic hub device's metadata
-	// stay empty.
-	//
-	// Multi-CCU: each registered central contributes its own HubInfo
-	// entry. The discovery builder looks it up per `central` argument
-	// so two CCUs display the right Name / Model / sw_version /
-	// serial / configuration_url in HA.
-	if mqttWiring != nil {
-		bridge := mqttWiring.Bridge()
-		for _, u := range reg.List() {
-			si := u.SystemInformation()
-			bridge.SetHubInfoFor(u.Name(), mqtt.HubInfo{
-				Name:    u.Name(),
-				Model:   si.Model,
-				Version: si.Version,
-				Serial:  si.Serial,
-				URL:     si.URL,
-			})
-		}
-	}
-
-	// Boot-time stale cleanup — clear retained channel-aggregate
-	// state topics from the previous build before the inventory wave.
-	// Necessary when the discovery payload structure changes and
-	// brokers still hold incompatible JSON: HA refuses to bind the
-	// stale message and the entity stays unavailable until the
-	// retained content is replaced. Runs against the legacy aggregate
-	// shape (`<base>/<central>/<iface>/<addr>/<ch>/state`) — the
-	// follow-up PublishInitialSnapshot republishes the current view
-	// for every observed DP.
-	//
-	// Best-effort: a broker that doesn't support the cleanup
-	// subscription path returns errCleanupClientLacksSubscribe; the
-	// daemon logs and proceeds.
-	if mqttWiring != nil {
-		if mqttBridge := mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
-			n, cleanupErr := mqttBridge.RunRetainCleanupOnce(cleanupCtx, 2*time.Second)
-			cleanupCancel()
-			if cleanupErr != nil {
-				logger.Warn("mqtt.retain_cleanup", slog.String("err", cleanupErr.Error()))
-			} else if n > 0 {
-				logger.Info("mqtt.retain_cleanup", slog.Int("evicted", n))
-			}
-		}
-	}
-
-	// Push the post-hydration snapshot of every observed VALUES data
-	// point through the EventBridge so the broker carries retained
-	// state (and HA Discovery configs) for every device immediately
-	// after start, not just after the first CCU-driven change.
-	bridge.PublishInitialSnapshot(ctx)
-
-	// Orphan HA-Discovery cleanup — after the initial snapshot has
-	// repopulated `Bridge.declared` with every HA-Discovery topic the
-	// daemon currently owns, evict every retained `homeassistant/...`
-	// config topic for our device-namespace that is *not* in
-	// `declared`. Catches entities that previous builds published
-	// (e.g. MASTER-paramset spam for unlisted models like
-	// HmIP-STE2-PCB / HmIP-SFD before the default-skip rule landed,
-	// or BOOST_TIME_PERIOD on HmIP-BWTH before the MASTER-lookup fix);
-	// without this pass the broker keeps the orphans retained
-	// indefinitely and HA shows phantom entities the daemon no longer
-	// drives. Best-effort — a broker that lacks subscribe support
-	// just skips.
-	if mqttWiring != nil {
-		if mqttBridge := mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
-			n, cleanupErr := mqttBridge.RunDiscoveryOrphanCleanupOnce(cleanupCtx, 2*time.Second)
-			cleanupCancel()
-			if cleanupErr != nil {
-				logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", cleanupErr.Error()))
-			} else if n > 0 {
-				logger.Info("mqtt.discovery_orphan_cleanup", slog.Int("evicted", n))
-			}
-		}
-	}
-
-	// Periodic unobserved-DP sweep — retries LoadValue for the
-	// RELEVANT_INIT + readable-event whitelist on a slow cadence.
-	// Catches stragglers that fetch_all_device_data omitted (event
-	// DPs that have not fired) and fills any holes that opened
-	// during a brief CCU outage between push events. 5-minute
-	// cadence (DefaultUnobservedSweepInterval) — long enough that
-	// steady-state operation costs nothing extra on the CCU.
-	unobservedSweep := adapter.NewUnobservedSweep(reg, logger)
-	stopSweep := adapter.StartUnobservedSweepLoop(
-		ctx, unobservedSweep, 0, logger,
-	)
-	defer stopSweep()
+	// availClosers is declared here (not inside the helper) because the
+	// Matter phase appends its own closers to the same slice further
+	// down; the helper appends through the pointer and its returned
+	// teardown drains the slice at exit, after the Matter append landed.
+	var availClosers []func() //nolint:prealloc // length unknown: appended per-central in wireSouthbound and again by the Matter phase
+	sb, southboundTeardown := wireSouthbound(ctx, southboundWiringDeps{
+		cfg:                     cfg,
+		reg:                     reg,
+		logger:                  logger,
+		valueWriter:             valueWriter,
+		translations:            translations,
+		callbackSrv:             callbackSrv,
+		callbackBaseURL:         callbackBaseURL,
+		binRPCSrv:               binRPCSrv,
+		binRPCAddr:              binRPCAddr,
+		visReg:                  visReg,
+		masterValuesStore:       masterValuesStore,
+		valuesCacheStore:        valuesCacheStore,
+		healthTracker:           healthTracker,
+		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
+		mqttWiring:              mqttWiring,
+		bridge:                  bridge,
+	}, &availClosers)
+	defer southboundTeardown()
+	backupAdapter := sb.backupAdapter
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)
