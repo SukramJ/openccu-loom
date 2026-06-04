@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: 2026-06-04T15:31:07Z
-HEAD: e3c405a
+Generated: 2026-06-04T16:02:49Z
+HEAD: 069f654
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 22380 |
+| Total Exported | 22219 |
 | Reachable | 3696 |
-| Whitelisted | 15990 |
+| Whitelisted | 15829 |
 | **Unreachable** | **2694** |
 
 ## Top-20 Packages by Dead Code
@@ -42,51 +42,51 @@ HEAD: e3c405a
 | Package | Identifier | File | Line |
 |---|---|---|---|
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
+| pkg/hmerr | ErrorContext | pkg/hmerr/errors.go | 153 |
 | pkg/hmerr | LogBoundaryError | pkg/hmerr/boundary.go | 61 |
 | pkg/hmerr | ExceptionToFailureReason | pkg/hmerr/errors.go | 395 |
-| pkg/hmerr | ErrorContext | pkg/hmerr/errors.go | 153 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | pkg/hmevent | NewBaseAt | pkg/hmevent/event.go | 45 |
 | internal/central/events | WithPriority | internal/central/events/bus.go | 57 |
-| internal/central/events | WithKey | internal/central/events/bus.go | 64 |
-| internal/central/events | Subscribe | internal/central/events/bus.go | 152 |
-| internal/central/events | Publish | internal/central/events/bus.go | 202 |
 | internal/central/events | PublishSync | internal/central/events/bus.go | 274 |
 | internal/central/events | Add | internal/central/events/batch.go | 41 |
+| internal/central/events | Subscribe | internal/central/events/bus.go | 152 |
+| internal/central/events | Publish | internal/central/events/bus.go | 202 |
+| internal/central/events | WithKey | internal/central/events/bus.go | 64 |
 | internal/model/event | Sources | internal/model/event/event.go | 76 |
 | internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
 | internal/payload | For | internal/payload/payload.go | 37 |
 | internal/payload | Merge | internal/payload/payload.go | 89 |
 | internal/routingkey | GenerateChannelUniqueID | internal/routingkey/uniqueid.go | 107 |
 | internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
-| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
+| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
 | internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
+| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
 | internal/client | SanitizeErrorMessage | internal/client/errors.go | 33 |
 | internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
 | internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
-| internal/health | NewConnection | internal/health/connection.go | 70 |
-| internal/health | WithConnectionClock | internal/health/connection.go | 90 |
 | internal/health | NewConnectionRegistry | internal/health/connection.go | 311 |
+| internal/health | WithConnectionClock | internal/health/connection.go | 90 |
+| internal/health | NewConnection | internal/health/connection.go | 70 |
 | internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
 | pkg/hmlog | Get | pkg/hmlog/contextual.go | 59 |
-| pkg/hmlog | WatchSlow | pkg/hmlog/slowquery.go | 35 |
-| pkg/hmlog | New | pkg/hmlog/contextual.go | 45 |
-| pkg/hmlog | WithContext | pkg/hmlog/contextual.go | 73 |
 | pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 120 |
+| pkg/hmlog | WatchSlow | pkg/hmlog/slowquery.go | 35 |
+| pkg/hmlog | WithContext | pkg/hmlog/contextual.go | 73 |
+| pkg/hmlog | New | pkg/hmlog/contextual.go | 45 |
 | internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
 | internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
-| internal/configui | EncodeTimeValue | internal/configui/link_param_metadata.go | 308 |
-| internal/configui | DetermineWidget | internal/configui/widget.go | 62 |
-| internal/configui | Humanize | internal/configui/labels.go | 118 |
-| internal/configui | Generate | internal/configui/generator.go | 147 |
-| internal/configui | GetTimePresets | internal/configui/link_param_metadata.go | 272 |
 | internal/configui | ClassifyLinkParameter | internal/configui/link_param_metadata.go | 181 |
+| internal/configui | GetTimePresets | internal/configui/link_param_metadata.go | 272 |
+| internal/configui | Generate | internal/configui/generator.go | 147 |
 | internal/configui | DecodeTimeValue | internal/configui/link_param_metadata.go | 294 |
+| internal/configui | Humanize | internal/configui/labels.go | 118 |
+| internal/configui | DetermineWidget | internal/configui/widget.go | 62 |
+| internal/configui | EncodeTimeValue | internal/configui/link_param_metadata.go | 308 |
 | internal/configui | ParameterStep | internal/configui/step.go | 21 |
-| internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
+| internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
 | internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
 | internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 101 |
 | internal/north/matter/schema | ClusterRevision | internal/north/matter/schema/lookup.go | 11 |

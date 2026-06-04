@@ -309,8 +309,8 @@ openccu-loom/
 │   ├── scheduler/           — periodic jobs
 │   └── store/               — SQLite persistence (migrations, sessions,
 │                              paramsets, devices, incidents, audit)
-│                              + in-memory caches (dynamic, visibility,
-│                              patches, master/link profile, devicedetails)
+│                              + in-memory caches (visibility, patches,
+│                              master/link profile, devicedetails)
 ├── assets/
 │   ├── ui/                  — Svelte 5 SPA source (Tailwind 4, Vite)
 │   ├── openapi.yaml         — REST spec

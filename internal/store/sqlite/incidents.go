@@ -314,9 +314,8 @@ func (s *IncidentStore) RecordWithLimits(ctx context.Context, inc Incident, maxA
 }
 
 // RecordIncidentCtx is a convenience wrapper around [RecordWithLimits] that
-// accepts individual fields rather than a full [Incident] struct. It
-// satisfies the [dynamic.IncidentRecorder] interface used by
-// [dynamic.PingPongCombinedTracker]. Default retention limits apply.
+// accepts individual fields rather than a full [Incident] struct. Default
+// retention limits apply.
 func (s *IncidentStore) RecordIncidentCtx(ctx context.Context, centralName, interfaceID string,
 	incType hmenum.IncidentType, severity hmenum.IncidentSeverity, message string,
 ) error {

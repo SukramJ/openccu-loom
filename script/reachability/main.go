@@ -583,10 +583,6 @@ func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) 
 	if strings.Contains(relFile, "internal/config/") {
 		return autoWhitelistGenericHelper, true
 	}
-	// internal/store/dynamic cache constructors: called by central.go factory.
-	if strings.Contains(relFile, "internal/store/dynamic/") {
-		return autoWhitelistGenericHelper, true
-	}
 	// internal/central/statemachine option functions: functional-option pattern
 	// called via state-machine builder.
 	if strings.Contains(relFile, "internal/central/statemachine/") {

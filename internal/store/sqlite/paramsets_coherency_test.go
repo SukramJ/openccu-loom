@@ -8,8 +8,8 @@ package sqlite
 // Audit items covered:
 // §7.3/5 Store-Cache-Coherency: cache-invalidation paths must be
 // transactional against SQLite. These tests lock down the
-// SQLite side of that contract (DataCache is tested in
-// internal/store/dynamic/coherency_test.go).
+// SQLite side of that contract (the in-memory data cache lives in
+// internal/central/coordinators).
 //
 // Tests skipped due to overlap with existing coverage:
 // TestParamsetDeleteChannelRemovesAllKeysButLeavesOtherChannels —

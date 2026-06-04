@@ -28,10 +28,6 @@ Items mit klarer Production-Verwendung, die derzeit in keinem Production-Caller 
 | `NewCircuitRecoveryWaiter` | `internal/client/reliability` | Konstruktor für Recovery-Waiter. Wire in Reliability-Setup-Code. |
 | `NewPersistentCache` | `internal/store/sqlite` | SQLite-backed cache. Wire in `central/central.go` oder `daemon.go` bei der Cache-Initialisierung. |
 | `NewDeviceStore` | `internal/store/sqlite` | SQLite device store. Wire in `central/central.go` bei der Store-Initialisierung. |
-| `NewDataCache` | `internal/store/dynamic` | In-Memory data cache. Wire in `central/central.go` oder Interface-Client-Setup. |
-| `NewCommandCache` | `internal/store/dynamic` | In-Memory command cache. Wire in Interface-Client-Setup. |
-| `NewPingPongJournal` | `internal/store/dynamic` | PingPong-Journal. Wire in Interface-Client-Setup. |
-| `NewPingPongCombinedTracker` | `internal/store/dynamic` | Combined PingPong-Tracker. Wire zusammen mit Journal. |
 | `WireSchedulerEvents` | `internal/central/adapter` | Verdrahtet Scheduler-Events auf den Bus. Wire in Scheduler-Initialisierung in `daemon.go`. |
 | `SafeGo` | `internal/central/adapter` | Goroutine-Starter mit Panic-Recovery. Wire überall wo goroutines ohne Lifecycle-Kontrolle gestartet werden. |
 | `StaticCallbackBaseURL` | `internal/central/adapter` | Statische Callback-URL-Factory. Wire in XML-RPC-Announcer-Setup. |
