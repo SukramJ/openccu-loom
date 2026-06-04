@@ -14,14 +14,19 @@
   import SysvarList from "./routes/SysvarList.svelte";
   import ProgramList from "./routes/ProgramList.svelte";
   import MessageList from "./routes/MessageList.svelte";
-  import AuditLog from "./routes/AuditLog.svelte";
-  import Diagnostics from "./routes/Diagnostics.svelte";
-  import Logs from "./routes/Logs.svelte";
   import Settings from "./routes/Settings.svelte";
   import Inbox from "./routes/Inbox.svelte";
   import FirmwareList from "./routes/FirmwareList.svelte";
-  import Matter from "./routes/matter/Matter.svelte";
   import UnIgnoreList from "./routes/UnIgnoreList.svelte";
+  // Matter is the heaviest route subtree and is opt-in (the bridge
+  // defaults to off), so it is code-split via dynamic import — most
+  // installs never load its JS. See the {#await} in the router below.
+  const loadMatter = () => import("./routes/matter/Matter.svelte");
+  // Admin / diagnostic routes are infrequently visited and not part of
+  // the core device-control surface, so they are code-split too.
+  const loadAuditLog = () => import("./routes/AuditLog.svelte");
+  const loadDiagnostics = () => import("./routes/Diagnostics.svelte");
+  const loadLogs = () => import("./routes/Logs.svelte");
   import Toaster from "$lib/components/ui/Toaster.svelte";
   import ShortcutHelp from "$lib/components/ui/ShortcutHelp.svelte";
   import ConnectionBadge from "$lib/components/ui/ConnectionBadge.svelte";
@@ -189,12 +194,18 @@
         {:else if route.kind === "messages"}
           <MessageList {locale} />
         {:else if route.kind === "audit"}
-          <AuditLog {locale} />
+          {#await loadAuditLog() then { default: AuditLog }}
+            <AuditLog {locale} />
+          {/await}
         {:else if route.kind === "diagnostics"}
-          <Diagnostics {locale} />
+          {#await loadDiagnostics() then { default: Diagnostics }}
+            <Diagnostics {locale} />
+          {/await}
         {:else if route.kind === "logs"}
           {#if authStore.identity?.role === "admin"}
-            <Logs {locale} />
+            {#await loadLogs() then { default: Logs }}
+              <Logs {locale} />
+            {/await}
           {:else}
             <section class="mx-auto max-w-6xl px-6 py-8">
               <p style="color: var(--ha-secondary-text-color);">{t("logs.forbidden")}</p>
@@ -207,7 +218,9 @@
         {:else if route.kind === "firmware"}
           <FirmwareList />
         {:else if route.kind === "matter"}
-          <Matter subpath={route.subpath} />
+          {#await loadMatter() then { default: Matter }}
+            <Matter subpath={route.subpath} />
+          {/await}
         {:else if route.kind === "visibility"}
           <UnIgnoreList />
         {:else}

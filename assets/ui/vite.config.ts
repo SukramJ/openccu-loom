@@ -25,6 +25,19 @@ export default defineConfig({
     // Every chunk stays below 500 kB — the daemon embeds the whole
     // bundle, so silent 5 MB regressions would be invisible.
     chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        // Split third-party code into its own long-lived chunk so the
+        // app chunk stays small and browser caches survive app-only
+        // redeploys. bits-ui + lucide icons dominate vendor weight.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port: 5173,
