@@ -20,17 +20,17 @@ jobs:
     name: goreleaser
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       # Build the Svelte SPA BEFORE goreleaser so the daemon binary it
       # compiles has the Config UI embedded (spa_dist is gitignored, so a
       # fresh checkout would otherwise embed an empty SPA → "SPA not built").
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
