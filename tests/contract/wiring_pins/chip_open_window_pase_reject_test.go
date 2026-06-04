@@ -30,7 +30,7 @@ func TestPin_OpenWindow_PaseReject(t *testing.T) {
 func TestPin_OpenWindow_FailSafeCheck(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/matter/cluster/wire", "SetIsFailSafeArmed",
 	)
 }

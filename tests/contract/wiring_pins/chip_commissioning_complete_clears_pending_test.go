@@ -20,7 +20,7 @@ import (
 func TestPin_CommissioningComplete_ClearsPendingFabric(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/matter/cluster/core", "SetOnCommissioningComplete",
 	)
 }

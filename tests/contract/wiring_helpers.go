@@ -8,6 +8,7 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -29,18 +30,40 @@ func repoRootForHelpers(t *testing.T) string {
 	return abs
 }
 
-// parseFile parses a single Go source file and returns its AST.
-// callerFile is a repo-root-relative path such as "cmd/openccu-loom/daemon.go".
-func parseFile(t *testing.T, callerFile string) *ast.File {
+// parseFiles parses callerPath and returns the AST of every Go source file it
+// covers. callerPath is repo-root-relative; it may be a single file
+// ("cmd/openccu-loom/daemon.go") or a package directory ("cmd/openccu-loom"),
+// in which case all non-_test.go files are parsed. Passing the directory keeps
+// a wiring pin valid when the code moves between files of the same package.
+func parseFiles(t *testing.T, callerPath string) []*ast.File {
 	t.Helper()
 	root := repoRootForHelpers(t)
-	absPath := filepath.Join(root, callerFile)
+	absPath := filepath.Join(root, callerPath)
 	fset := token.NewFileSet()
+	info, err := os.Stat(absPath)
+	if err != nil {
+		t.Fatalf("wiring_helpers: cannot stat %s: %v", callerPath, err)
+	}
+	if info.IsDir() {
+		pkgs, err := parser.ParseDir(fset, absPath, func(fi fs.FileInfo) bool { //nolint:staticcheck // parser.ParseDir is deprecated in Go 1.25 but sufficient for this lightweight name-based AST scan; go/packages would pull in a full type-checker dependency out of scope for a contract pin
+			return !strings.HasSuffix(fi.Name(), "_test.go")
+		}, 0)
+		if err != nil {
+			t.Fatalf("wiring_helpers: cannot parse dir %s: %v", callerPath, err)
+		}
+		var out []*ast.File
+		for _, pkg := range pkgs {
+			for _, f := range pkg.Files {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
 	f, err := parser.ParseFile(fset, absPath, nil, 0)
 	if err != nil {
-		t.Fatalf("wiring_helpers: cannot parse %s: %v", callerFile, err)
+		t.Fatalf("wiring_helpers: cannot parse %s: %v", callerPath, err)
 	}
-	return f
+	return []*ast.File{f}
 }
 
 // MustFindCallerInFile asserts that callerFile (repo-root-relative) contains
@@ -61,13 +84,15 @@ func parseFile(t *testing.T, callerFile string) *ast.File {
 //	    "internal/metrics", "NewMqttCollector")
 func MustFindCallerInFile(t *testing.T, callerFile, calleePackage, calleeIdent string) {
 	t.Helper()
-	f := parseFile(t, callerFile)
-	if !astContainsIdentNotDefinition(f, calleeIdent) {
-		t.Errorf(
-			"wiring pin: %s not found in %s\n  expected a call to %s.%s",
-			calleeIdent, callerFile, calleePackage, calleeIdent,
-		)
+	for _, f := range parseFiles(t, callerFile) {
+		if astContainsIdentNotDefinition(f, calleeIdent) {
+			return
+		}
 	}
+	t.Errorf(
+		"wiring pin: %s not found in %s\n  expected a call to %s.%s",
+		calleeIdent, callerFile, calleePackage, calleeIdent,
+	)
 }
 
 // MustFindMethodCall asserts that callerFile contains a SelectorExpr whose
@@ -75,26 +100,30 @@ func MustFindCallerInFile(t *testing.T, callerFile, calleePackage, calleeIdent s
 // method-call wiring such as HubCoordinator.SetProgramExecutor.
 func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName string) {
 	t.Helper()
-	f := parseFile(t, callerFile)
 	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
+	for _, f := range parseFiles(t, callerFile) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if sel.Sel.Name != methodName {
+				return true
+			}
+			// Accept any expression whose string representation ends with receiverIdent.
+			xStr := exprString(sel.X)
+			if strings.HasSuffix(xStr, receiverIdent) || strings.Contains(xStr, receiverIdent+".") {
+				found = true
+			}
+			return true
+		})
 		if found {
-			return false
+			break
 		}
-		sel, ok := n.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if sel.Sel.Name != methodName {
-			return true
-		}
-		// Accept any expression whose string representation ends with receiverIdent.
-		xStr := exprString(sel.X)
-		if strings.HasSuffix(xStr, receiverIdent) || strings.Contains(xStr, receiverIdent+".") {
-			found = true
-		}
-		return true
-	})
+	}
 	if !found {
 		t.Errorf(
 			"wiring pin: method call %s.%s not found in %s",
@@ -107,32 +136,36 @@ func MustFindMethodCall(t *testing.T, callerFile, receiverIdent, methodName stri
 // literal whose type ends with structName and that sets fieldName.
 func MustFindStructLiteralField(t *testing.T, callerFile, structName, fieldName string) {
 	t.Helper()
-	f := parseFile(t, callerFile)
 	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
-		if found {
-			return false
-		}
-		cl, ok := n.(*ast.CompositeLit)
-		if !ok {
-			return true
-		}
-		typeName := exprString(cl.Type)
-		if !strings.HasSuffix(typeName, structName) {
-			return true
-		}
-		for _, elt := range cl.Elts {
-			kv, ok := elt.(*ast.KeyValueExpr)
-			if !ok {
-				continue
-			}
-			if id, ok := kv.Key.(*ast.Ident); ok && id.Name == fieldName {
-				found = true
+	for _, f := range parseFiles(t, callerFile) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if found {
 				return false
 			}
+			cl, ok := n.(*ast.CompositeLit)
+			if !ok {
+				return true
+			}
+			typeName := exprString(cl.Type)
+			if !strings.HasSuffix(typeName, structName) {
+				return true
+			}
+			for _, elt := range cl.Elts {
+				kv, ok := elt.(*ast.KeyValueExpr)
+				if !ok {
+					continue
+				}
+				if id, ok := kv.Key.(*ast.Ident); ok && id.Name == fieldName {
+					found = true
+					return false
+				}
+			}
+			return true
+		})
+		if found {
+			break
 		}
-		return true
-	})
+	}
 	if !found {
 		t.Errorf(
 			"wiring pin: struct literal %s{%s: ...} not found in %s",
@@ -218,28 +251,32 @@ func MustFindInterfaceImpl(t *testing.T, ifacePkg, ifaceName string, minImpls in
 //	    "Interface.setInstallModeHMIP")
 func MustFindStringLiteralInFile(t *testing.T, callerFile, wantValue string) {
 	t.Helper()
-	f := parseFile(t, callerFile)
 	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
-		if found {
-			return false
-		}
-		lit, ok := n.(*ast.BasicLit)
-		if !ok {
+	for _, f := range parseFiles(t, callerFile) {
+		ast.Inspect(f, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+			lit, ok := n.(*ast.BasicLit)
+			if !ok {
+				return true
+			}
+			if lit.Kind == token.STRING {
+				// Strip surrounding quotes.
+				v := lit.Value
+				if len(v) >= 2 && v[0] == '"' {
+					v = v[1 : len(v)-1]
+				}
+				if v == wantValue {
+					found = true
+				}
+			}
 			return true
+		})
+		if found {
+			break
 		}
-		if lit.Kind == token.STRING {
-			// Strip surrounding quotes.
-			v := lit.Value
-			if len(v) >= 2 && v[0] == '"' {
-				v = v[1 : len(v)-1]
-			}
-			if v == wantValue {
-				found = true
-			}
-		}
-		return true
-	})
+	}
 	if !found {
 		t.Errorf(
 			"wiring pin: string literal %q not found in %s",
