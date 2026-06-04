@@ -45,7 +45,7 @@ func TestPublishPreservesExplicitKind(t *testing.T) {
 func TestReplay_FromZeroReturnsEverything(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		h.Publish(Event{Topic: "a", Type: "t", When: time.Now()})
 	}
 	res := h.Replay(0, nil)
@@ -86,7 +86,7 @@ func TestReplay_LostWhenSinceIsBelowOldest(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
 	h.SetReplayCapacity(3)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		h.Publish(Event{Topic: "a", Type: "t", When: time.Now()})
 	}
 	// Buffer now holds seq 3, 4, 5 (oldest=3). since=0 must be Lost.
@@ -117,7 +117,7 @@ func TestSetReplayCapacity_Zero_DisablesBuffer(t *testing.T) {
 func TestSetReplayCapacity_Shrink_TruncatesExisting(t *testing.T) {
 	t.Parallel()
 	h := NewHub()
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		h.Publish(Event{Topic: "a", Type: "t", When: time.Now()})
 	}
 	h.SetReplayCapacity(3)

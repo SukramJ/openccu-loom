@@ -6,6 +6,7 @@ package client
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -169,12 +170,7 @@ func (sm *ClientStateMachine) CanTransitionTo(target hmenum.ClientState) bool {
 }
 
 func (sm *ClientStateMachine) canTransitLocked(from, to hmenum.ClientState) bool {
-	for _, allowed := range validTransitions[from] {
-		if allowed == to {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(validTransitions[from], to)
 }
 
 // TransitionTo moves the machine to target. reason is a human-readable

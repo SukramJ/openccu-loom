@@ -6,6 +6,7 @@ package bridge
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -62,7 +63,7 @@ type scenario struct {
 type scenarioGiven struct {
 	SessionID               uint16            `json:"session_id,omitempty"`
 	PeerSubscribeExchangeID uint16            `json:"peer_subscribe_exchange_id,omitempty"`
-	Subscription            scenarioAttrPath  `json:"subscription,omitempty"`
+	Subscription            scenarioAttrPath  `json:"subscription,omitzero"`
 	Subscriptions           []scenarioSubSpec `json:"subscriptions,omitempty"`
 
 	// Topology names a predefined recipe under
@@ -89,7 +90,7 @@ type scenarioGiven struct {
 type scenarioSubSpec struct {
 	SessionID               uint16             `json:"session_id"`
 	PeerSubscribeExchangeID uint16             `json:"peer_subscribe_exchange_id"`
-	Subscription            scenarioAttrPath   `json:"subscription,omitempty"`
+	Subscription            scenarioAttrPath   `json:"subscription,omitzero"`
 	Paths                   []scenarioAttrPath `json:"paths,omitempty"`
 
 	// SkipAutoSubscribe defaults to false so existing scenarios get
@@ -297,7 +298,7 @@ func normalizeGiven(g *scenarioGiven) {
 // time, which keeps failure attribution honest.
 func validateScenario(s *scenario) error {
 	if s.Name == "" {
-		return fmt.Errorf("scenario.name is empty")
+		return errors.New("scenario.name is empty")
 	}
 	if len(s.Steps) == 0 {
 		return fmt.Errorf("scenario %q has no steps", s.Name)

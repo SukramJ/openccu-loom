@@ -62,7 +62,6 @@ func TestFixRSSITable(t *testing.T) {
 		{name: "boundary_neg256", input: -256, want: 0, valid: false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got, ok := FixRSSI(tc.input)
@@ -84,7 +83,6 @@ func TestSensorRSSIOnEventAppliesFixRSSI(t *testing.T) {
 	t.Parallel()
 
 	for _, param := range []hmenum.Parameter{hmenum.ParameterRSSIDevice, hmenum.ParameterRSSIPeer} {
-		param := param
 		t.Run(string(param), func(t *testing.T) {
 			t.Parallel()
 			s := NewIntegerSensor(rssiCfg(param))

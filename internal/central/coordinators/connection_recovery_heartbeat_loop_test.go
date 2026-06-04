@@ -12,6 +12,7 @@ package coordinators
 // connection_recovery_backoff_statemachine_test.go).
 
 import (
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -56,11 +57,9 @@ func TestHeartbeatLoopEmitsEventForExhaustedInterface(t *testing.T) {
 		if e.CentralName != "hbl-central" {
 			return
 		}
-		for _, id := range e.InterfaceIDs {
-			if id == "HmIP-RF" {
-				fired.Store(true)
-				return
-			}
+		if slices.Contains(e.InterfaceIDs, "HmIP-RF") {
+			fired.Store(true)
+			return
 		}
 	})
 

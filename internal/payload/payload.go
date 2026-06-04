@@ -4,6 +4,7 @@
 package payload
 
 import (
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -87,12 +88,8 @@ func ForKinds(obj any, opts Options) map[Kind]map[string]any {
 // on key collisions.
 func Merge(a, b map[string]any) map[string]any {
 	out := make(map[string]any, len(a)+len(b))
-	for k, v := range a {
-		out[k] = v
-	}
-	for k, v := range b {
-		out[k] = v
-	}
+	maps.Copy(out, a)
+	maps.Copy(out, b)
 	return out
 }
 
@@ -124,7 +121,7 @@ func describe(t reflect.Type) *typeDesc {
 }
 
 func collectFields(t reflect.Type, prefix []int, out *typeDesc) {
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		f := t.Field(i)
 		idx := append(append([]int(nil), prefix...), i)
 
@@ -149,10 +146,10 @@ func collectFields(t reflect.Type, prefix []int, out *typeDesc) {
 			continue
 		}
 		altName := ""
-		for _, opt := range strings.Split(rest, ",") {
+		for opt := range strings.SplitSeq(rest, ",") {
 			opt = strings.TrimSpace(opt)
-			if strings.HasPrefix(opt, "alt=") {
-				altName = strings.TrimPrefix(opt, "alt=")
+			if after, ok := strings.CutPrefix(opt, "alt="); ok {
+				altName = after
 			}
 		}
 		out.fields = append(out.fields, fieldDesc{

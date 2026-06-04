@@ -157,9 +157,7 @@ func (p *PerExchangePaseProvider) StartReaper(parent context.Context, interval, 
 	p.cancel = cancel
 	p.mu.Unlock()
 
-	p.reaperWG.Add(1)
-	go func() {
-		defer p.reaperWG.Done()
+	p.reaperWG.Go(func() {
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
@@ -170,7 +168,7 @@ func (p *PerExchangePaseProvider) StartReaper(parent context.Context, interval, 
 				p.reapBefore(now.Add(-ttl))
 			}
 		}
-	}()
+	})
 }
 
 // Stop cancels the background reaper started by [StartReaper] and

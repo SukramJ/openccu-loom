@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -44,7 +45,7 @@ func NewJSONRPCConnectivityProbe(client *jsonrpc.Client) *JSONRPCConnectivityPro
 // to the MQTT bridge for the per-interface latency sensor.
 func (p *JSONRPCConnectivityProbe) Probe(ctx context.Context) ([]coordinators.InterfaceReachability, error) {
 	if p == nil || p.client == nil {
-		return nil, fmt.Errorf("connectivity_probe: client is nil")
+		return nil, errors.New("connectivity_probe: client is nil")
 	}
 	var raw []map[string]any
 	start := time.Now()

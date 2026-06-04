@@ -33,7 +33,7 @@ func TestDataVersionTracker_DistinctInitialAcrossInstances(t *testing.T) {
 	t.Parallel()
 
 	seen := make(map[uint32]struct{}, 100)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		var dv cluster.DataVersionTracker
 		seen[dv.Current()] = struct{}{}
 	}
@@ -81,7 +81,7 @@ func TestDataVersionTracker_ConcurrentBumps(t *testing.T) {
 	start := dv.Current()
 	var wg sync.WaitGroup
 	wg.Add(n)
-	for i := 0; i < n; i++ {
+	for range n {
 		go func() {
 			defer wg.Done()
 			dv.Bump()

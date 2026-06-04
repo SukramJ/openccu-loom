@@ -165,7 +165,7 @@ func (u *Update) SetVersionBeforeUpdate(version string) {
 // changes, or maxPoll iterations are exhausted.
 func (u *Update) MonitorProgress(ctx context.Context, pollFn func(ctx context.Context) (string, error), maxPoll int) {
 	before, hasBefore := u.VersionBeforeUpdate()
-	for i := 0; i < maxPoll; i++ {
+	for range maxPoll {
 		if ctx.Err() != nil {
 			return
 		}

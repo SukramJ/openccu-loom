@@ -6,6 +6,7 @@ package generic
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -170,10 +171,8 @@ func checkEnumString(desc hmproto.ParameterData, v string) error {
 	if len(desc.ValueList) == 0 {
 		return nil
 	}
-	for _, label := range desc.ValueList {
-		if label == v {
-			return nil
-		}
+	if slices.Contains(desc.ValueList, v) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q not in VALUE_LIST", ErrUnknownLabel, v)
 }

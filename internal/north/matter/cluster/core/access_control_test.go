@@ -16,11 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// ---- helpers ----
-
-func u32(v uint32) *uint32 { return &v }
-func u16(v uint16) *uint16 { return &v }
-
 // fakeACLStore is a minimal ACLStoreFacade for AccessControl tests.
 type fakeACLStore struct {
 	replaceACLErr error
@@ -140,11 +135,11 @@ func TestAccessControl_ACLWriteValidation(t *testing.T) {
 					AuthMode:  2,
 					Subjects:  []uint64{1},
 					Targets: []core.ACLTargetStruct{
-						{Cluster: u32(0x0006)},
-						{Cluster: u32(0x0008)},
-						{Cluster: u32(0x0300)},
-						{Cluster: u32(0x0101)},
-						{Cluster: u32(0x0201)},
+						{Cluster: new(uint32(0x0006))},
+						{Cluster: new(uint32(0x0008))},
+						{Cluster: new(uint32(0x0300))},
+						{Cluster: new(uint32(0x0101))},
+						{Cluster: new(uint32(0x0201))},
 					},
 					FabricIndex: 1,
 				},
@@ -189,7 +184,7 @@ func TestAccessControl_ACLWriteValidation(t *testing.T) {
 					AuthMode:  2,
 					Subjects:  []uint64{1},
 					Targets: []core.ACLTargetStruct{
-						{DeviceType: u32(0x0100), Endpoint: u16(1)}, // mutually exclusive
+						{DeviceType: new(uint32(0x0100)), Endpoint: new(uint16(1))}, // mutually exclusive
 					},
 					FabricIndex: 1,
 				},
@@ -240,10 +235,10 @@ func TestAccessControl_ACLWriteValidation(t *testing.T) {
 						uint64(i*4 + 4),
 					}
 					targets := []core.ACLTargetStruct{
-						{Cluster: u32(0x0006)},
-						{Endpoint: u16(uint16(i + 1))},
-						{DeviceType: u32(0x0100)},
-						{Cluster: u32(0x0008), Endpoint: nil, DeviceType: nil},
+						{Cluster: new(uint32(0x0006))},
+						{Endpoint: new(uint16(i + 1))},
+						{DeviceType: new(uint32(0x0100))},
+						{Cluster: new(uint32(0x0008)), Endpoint: nil, DeviceType: nil},
 					}
 					out[i] = core.AccessControlEntryStruct{
 						Privilege:   5,

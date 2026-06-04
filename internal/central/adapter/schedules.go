@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -591,7 +592,7 @@ func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationF
 	return dBase, dFactor
 }
 
-func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry {
+func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry { //nolint:gocognit,gocyclo,funlen // single-purpose schedule parsing logic with many branches
 	type slot struct {
 		weekday          int
 		hour             int
@@ -851,8 +852,8 @@ func parseTimeBaseFactor(s string) (base, factor int, ok bool) {
 	// by put_paramset (xml-rpc fault -5). The encoder therefore promotes
 	// to a larger base instead of emitting the same seconds with a higher
 	// factor.
-	for i := len(timeBaseSecondsScheduleField) - 1; i >= 0; i-- {
-		unit := timeBaseSecondsScheduleField[i]
+	for i, unit := range slices.Backward(timeBaseSecondsScheduleField) {
+
 		f := seconds / unit
 		if f >= 1 && f <= maxScheduleFactor && math.Abs(f-math.Round(f)) < 1e-6 {
 			return i, int(math.Round(f)), true
@@ -942,7 +943,7 @@ func applyLockEncoding(e handlers.SimpleScheduleEntry) handlers.SimpleScheduleEn
 	return e
 }
 
-func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) {
+func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
 	out := make(map[string]any, len(entries)*8+48)
 	used := make(map[int]bool, len(entries))
 	for i := range entries {
@@ -1048,15 +1049,15 @@ func splitTime(hhmm string) (hour, minute int, err error) {
 	if len(hhmm) < 4 || len(hhmm) > 5 {
 		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
 	}
-	idx := strings.IndexByte(hhmm, ':')
-	if idx < 0 {
+	before, after, ok := strings.Cut(hhmm, ":")
+	if !ok {
 		return 0, 0, fmt.Errorf("invalid time %q", hhmm)
 	}
-	h, err := strconv.Atoi(hhmm[:idx])
+	h, err := strconv.Atoi(before)
 	if err != nil || h < 0 || h > 23 {
 		return 0, 0, fmt.Errorf("invalid hour in %q", hhmm)
 	}
-	m, err := strconv.Atoi(hhmm[idx+1:])
+	m, err := strconv.Atoi(after)
 	if err != nil || m < 0 || m > 59 {
 		return 0, 0, fmt.Errorf("invalid minute in %q", hhmm)
 	}
@@ -1093,7 +1094,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		return err
 	}
 	if sched == nil {
-		return fmt.Errorf("schedules: nil payload")
+		return errors.New("schedules: nil payload")
 	}
 	var raw map[string]any
 	switch sched.Kind {
@@ -1137,7 +1138,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		return err
 	}
 	if len(raw) == 0 {
-		return fmt.Errorf("schedules: empty payload")
+		return errors.New("schedules: empty payload")
 	}
 	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, raw, hmenum.CommandRxModeUnset); err != nil {
 		if !isCCUScheduleFalsePositive(err) {
@@ -1526,7 +1527,7 @@ func expandWeekday(wd handlers.ClimateWeekday) ([]rawSlot, error) {
 	}
 	// Pad mit (24:00, base) bis zu 13 Slots.
 	out := make([]rawSlot, 13)
-	for i := 0; i < 13; i++ {
+	for i := range 13 {
 		if i < len(stretches) {
 			out[i] = rawSlot{endMin: stretches[i].end, temp: stretches[i].temp}
 		} else {
@@ -1547,12 +1548,7 @@ func isValidProfileID(s string) bool {
 }
 
 func isValidWeekdayName(s string) bool {
-	for _, wd := range scheduleWeekdays {
-		if wd == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(scheduleWeekdays, s)
 }
 
 func coerceInt(v any) (int, bool) {
@@ -1609,15 +1605,15 @@ func minutesFromTime(s string) int {
 	if s == "24:00" {
 		return 1440
 	}
-	idx := strings.IndexByte(s, ':')
-	if idx < 0 {
+	before, after, ok := strings.Cut(s, ":")
+	if !ok {
 		return -1
 	}
-	h, err := strconv.Atoi(s[:idx])
+	h, err := strconv.Atoi(before)
 	if err != nil {
 		return -1
 	}
-	m, err := strconv.Atoi(s[idx+1:])
+	m, err := strconv.Atoi(after)
 	if err != nil {
 		return -1
 	}

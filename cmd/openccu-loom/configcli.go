@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -20,7 +21,7 @@ import (
 func runConfigCLI(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printConfigUsage(stderr)
-		return fmt.Errorf("config: missing subcommand")
+		return errors.New("config: missing subcommand")
 	}
 	switch args[0] {
 	case "export":
@@ -159,7 +160,7 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func configImport(args []string, stdout, stderr io.Writer) error {
+func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("config import", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml")
@@ -170,12 +171,12 @@ func configImport(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("config import: missing <file> argument")
+		return errors.New("config import: missing <file> argument")
 	}
 	importFile := fs.Arg(0)
 
 	if *mergeMode && *replaceMode {
-		return fmt.Errorf("config import: --merge and --replace are mutually exclusive")
+		return errors.New("config import: --merge and --replace are mutually exclusive")
 	}
 	// Default is merge.
 	if !*replaceMode {

@@ -121,11 +121,10 @@ func TestCacheConcurrentSetIsRaceFree(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
-		g := g
+	for g := range goroutines {
 		go func() {
 			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				key := dpKey("iface", "E:1", "RACE")
 				c.Set(key, hmtypes.IntValue(g*iterations+i), "goroutine")
 				_, _ = c.Get(key)

@@ -40,8 +40,8 @@ func buildTestRegistry(t *testing.T, names ...string) *central.Registry {
 // central name.
 func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.Centrals = []config.CentralConfig{
 		{Name: "ccu-alpha", Host: "127.0.0.1"},
 		{Name: "ccu-beta", Host: "127.0.0.1"},

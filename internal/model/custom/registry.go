@@ -17,6 +17,7 @@ package custom
 
 import (
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -74,7 +75,7 @@ func (e *ExtendedDeviceConfig) RequiredParameters() []hmenum.Parameter {
 	for param := range seen {
 		out = append(out, param)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -337,13 +338,7 @@ func (r *Registry) Blacklist(models ...string) {
 	for _, m := range models {
 		normalized := normalizeModel(m)
 		// Avoid duplicates.
-		found := false
-		for _, existing := range r.blacklist {
-			if existing == normalized {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(r.blacklist, normalized)
 		if !found {
 			r.blacklist = append(r.blacklist, normalized)
 		}

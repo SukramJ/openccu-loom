@@ -6,7 +6,6 @@ package mqtt
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -206,7 +205,7 @@ func safeLower(s string) string {
 // The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
 // independent of the friendly description so renames in the CCU don't
 // orphan HA history.
-func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem { //nolint:funlen // single-purpose sysvar discovery builder with many type branches
 	if sv.Name == "" {
 		return DiscoveryItem{}
 	}
@@ -512,7 +511,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
 	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "connectivity_"+safeLower(iface))
 	body := map[string]any{
-		"name":              fmt.Sprintf("Connectivity %s", iface),
+		"name":              "Connectivity " + iface,
 		"unique_id":         uniqueID,
 		"object_id":         uniqueID,
 		"state_topic":       topic,
@@ -580,7 +579,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, i
 	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "latency_"+objID)
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency/" + objID
 	body := map[string]any{
-		"name":                        fmt.Sprintf("Latency %s", iface),
+		"name":                        "Latency " + iface,
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
 		"state_topic":                 topic,

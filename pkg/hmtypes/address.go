@@ -69,8 +69,8 @@ func ChannelNo(address string) (n int, ok bool) {
 //
 // Python equivalent: support/address.get_device_address
 func DeviceAddress(address string) string {
-	if i := strings.IndexByte(address, addressSeparator); i >= 0 {
-		return address[:i]
+	if before, _, ok := strings.Cut(address, ":"); ok {
+		return before
 	}
 	return address
 }
@@ -82,19 +82,19 @@ func DeviceAddress(address string) string {
 //
 // Python equivalent: support/address.get_split_channel_address
 func SplitChannelAddress(address string) (deviceAddress string, channelNo int, ok bool) {
-	i := strings.IndexByte(address, addressSeparator)
-	if i < 0 {
+	before, after, ok := strings.Cut(address, ":")
+	if !ok {
 		return address, -1, false
 	}
-	suffix := address[i+1:]
+	suffix := after
 	if suffix == "" || suffix == "None" {
-		return address[:i], -1, false
+		return before, -1, false
 	}
 	v, err := strconv.Atoi(suffix)
 	if err != nil || v < 0 {
-		return address[:i], -1, false
+		return before, -1, false
 	}
-	return address[:i], v, true
+	return before, v, true
 }
 
 // IsChannelAddress reports whether s matches the CCU channel-address format

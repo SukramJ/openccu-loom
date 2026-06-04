@@ -110,14 +110,12 @@ func TestBusEventStatsRaceSafe(t *testing.T) {
 			}
 		}()
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range publishes * goroutines {
 			_ = bus.EventStats()
 			_ = bus.TotalSubscriptionCount()
 		}
-	}()
+	})
 	wg.Wait()
 
 	if got := bus.EventStats()["metrics.test.alpha"]; got != goroutines*publishes {

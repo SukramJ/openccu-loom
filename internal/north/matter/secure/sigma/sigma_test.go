@@ -380,7 +380,7 @@ func TestProcessSigma1ConcurrentReplayDeterministic(t *testing.T) {
 	}
 	results := make(chan result, fanout)
 	start := make(chan struct{})
-	for i := 0; i < fanout; i++ {
+	for range fanout {
 		go func() {
 			<-start
 			s2, err := responder.ProcessSigma1(sigma1Bytes)

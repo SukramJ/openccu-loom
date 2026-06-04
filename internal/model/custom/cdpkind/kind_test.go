@@ -39,6 +39,7 @@ func TestOf_LightVariants(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := Of(tc.dp); got != tc.want {
 				t.Fatalf("Of(%s) = %q, want %q", tc.name, got, tc.want)
 			}
@@ -59,6 +60,7 @@ func TestOf_CoverVariants(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := Of(tc.dp); got != tc.want {
 				t.Fatalf("Of(%s) = %q, want %q", tc.name, got, tc.want)
 			}
@@ -79,6 +81,7 @@ func TestOf_ClimateVariants(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			dp := &climate.Climate{Kind: tc.kind}
 			if got := Of(dp); got != tc.want {
 				t.Fatalf("Of(Climate{Kind=%v}) = %q, want %q", tc.kind, got, tc.want)
@@ -103,6 +106,7 @@ func TestOf_SingleFlavourCategories(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			if got := Of(tc.dp); got != tc.want {
 				t.Fatalf("Of(%s) = %q, want %q", tc.name, got, tc.want)
 			}
@@ -154,6 +158,7 @@ func TestCapabilities_Light(t *testing.T) {
 	}
 	for _, tc := range checks {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := Capabilities(tc.dp)
 			assertCapsEqual(t, got, want)
 		})
@@ -186,6 +191,7 @@ func TestCapabilities_Cover(t *testing.T) {
 	}
 	for _, tc := range checks {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			got := Capabilities(tc.dp)
 			assertCapsEqual(t, got, want)
 		})

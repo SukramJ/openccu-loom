@@ -20,8 +20,10 @@
 package weekprofile
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,7 +133,7 @@ func BuildClimateRawParamset(sched rawClimateSchedule) (map[string]any, error) {
 // `set_schedule` / `set_profile` / `set_weekday` in
 func ClimateToRaw(c *schedule.Climate) (rawClimateSchedule, error) { //nolint:revive // rawClimateSchedule is a type alias for a concrete map type; callers see the underlying type.
 	if c == nil {
-		return nil, fmt.Errorf("weekprofile: nil climate schedule")
+		return nil, errors.New("weekprofile: nil climate schedule")
 	}
 	out := make(rawClimateSchedule)
 	for _, profileKey := range c.Keys() {
@@ -163,7 +165,7 @@ func ClimateToRaw(c *schedule.Climate) (rawClimateSchedule, error) { //nolint:re
 // source is authoritative CCU data that may not span the whole day.
 func ClimateToRawWire(c *schedule.Climate) (rawClimateSchedule, error) { //nolint:revive // rawClimateSchedule is a type alias; callers see the underlying type.
 	if c == nil {
-		return nil, fmt.Errorf("weekprofile: nil climate schedule")
+		return nil, errors.New("weekprofile: nil climate schedule")
 	}
 	out := make(rawClimateSchedule)
 	for _, profileKey := range c.Keys() {
@@ -234,12 +236,7 @@ func isValidProfileKey(k string) bool {
 
 // isValidWeekday checks whether a string is a known CCU weekday.
 func isValidWeekday(w schedule.Weekday) bool {
-	for _, v := range schedule.Weekdays {
-		if v == w {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(schedule.Weekdays, w)
 }
 
 // ---------------------------------------------------------------------------

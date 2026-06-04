@@ -4,7 +4,7 @@
 package event
 
 import (
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -80,21 +80,21 @@ func Sources(k Kind) []hmenum.Parameter {
 		for p := range clickParams {
 			out = append(out, p)
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		slices.Sort(out)
 		return out
 	case KindImpulse:
 		out := make([]hmenum.Parameter, 0, len(impulseParams))
 		for p := range impulseParams {
 			out = append(out, p)
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		slices.Sort(out)
 		return out
 	case KindDeviceError:
 		out := make([]hmenum.Parameter, 0, len(errorPrefixes))
 		for _, pfx := range errorPrefixes {
 			out = append(out, hmenum.Parameter(pfx))
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		slices.Sort(out)
 		return out
 	default:
 		return nil
@@ -367,7 +367,7 @@ func GenerateTranslationKey(k Kind) string {
 	}
 	// Replace remaining dots (none in current kinds, but future-proof).
 	out := make([]byte, 0, len(s))
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == '.' {
 			out = append(out, '_')
 		} else {

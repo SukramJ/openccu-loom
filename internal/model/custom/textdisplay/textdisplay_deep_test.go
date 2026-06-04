@@ -6,6 +6,7 @@ package textdisplay
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -79,13 +80,7 @@ func TestTextDisplayClearWritesEmptyAndCommits(t *testing.T) {
 		t.Errorf("last param = %q, want DISPLAY_DATA_COMMIT", params[len(params)-1])
 	}
 	// STRING must appear (empty string clears the row on the CCU).
-	found := false
-	for _, p := range params {
-		if p == hmenum.ParameterDisplayDataString {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(params, hmenum.ParameterDisplayDataString)
 	if !found {
 		t.Error("DISPLAY_DATA_STRING must be written by Clear() to clear the row on the CCU")
 	}

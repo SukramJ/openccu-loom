@@ -333,7 +333,7 @@ type OpcredsConfig struct {
 // NewOperationalCredentials constructs the cluster.
 func NewOperationalCredentials(s StoreFacade, cfg OpcredsConfig) (*OperationalCredentials, error) {
 	if s == nil {
-		return nil, fmt.Errorf("matter: OperationalCredentials store is required")
+		return nil, errors.New("matter: OperationalCredentials store is required")
 	}
 	if cfg.SupportedFabrics == 0 {
 		// Mirrors matter.js packages/node/src/behaviors/
@@ -507,7 +507,7 @@ type NOCStruct struct {
 }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) {
+func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	ctx := context.Background()
 	switch attrID {
 	case opcredsAttrNOCs:
@@ -695,7 +695,7 @@ func (o *OperationalCredentials) MatterReadFiltered(ctx context.Context, attrID 
 	// When no filter is active (PASE / fabricIndex==0 / FabricFiltered=false),
 	// fall through so the unfiltered MatterRead path serves the attribute.
 	if !filtered || fabricIndex == 0 {
-		return o.MatterRead(attrID)
+		return o.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 
 	switch attrID {
@@ -743,7 +743,7 @@ func (o *OperationalCredentials) MatterReadFiltered(ctx context.Context, attrID 
 	default:
 		// All other attributes (scalars, TrustedRootCertificates, …) are
 		// not fabric-scoped per Matter §11.18; forward to MatterRead.
-		return o.MatterRead(attrID)
+		return o.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 }
 
@@ -1110,7 +1110,7 @@ func (o *OperationalCredentials) handleCSRRequest(ctx context.Context, fields an
 	// is the bootstrap channel and only AddNOC is valid over it.
 	_, sessFabric := im.FabricFilterFromContext(ctx)
 	if req.IsForUpdateNOC && sessFabric == 0 {
-		return nil, fmt.Errorf("matter: CSRRequest: invalid command argument: IsForUpdateNOC requires CASE session (got PASE)")
+		return nil, errors.New("matter: CSRRequest: invalid command argument: IsForUpdateNOC requires CASE session (got PASE)")
 	}
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -1216,7 +1216,7 @@ func hkdfSHA256(ikm, salt, info []byte, length int) ([]byte, error) {
 	return hkdfPkg.Key(sha256.New, ikm, salt, string(info), length)
 }
 
-func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (any, error) {
+func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (any, error) { //nolint:funlen // single-purpose NOC install handler with many validation/crypto branches
 	req, ok := fields.(AddNOCRequest)
 	if !ok {
 		return nil, fmt.Errorf("%w: AddNOCRequest expected, got %T", errOpcredsInvalidArg, fields)
@@ -1729,10 +1729,10 @@ func (o *OperationalCredentials) handleAddTrustedRootCertificate(fields any) (an
 	nocInvoked := o.nocWasInvoked
 	o.mu.RUnlock()
 	if dupRoot {
-		return nil, fmt.Errorf("matter: AddTrustedRootCertificate: constraint error: root already set for this FailSafe window")
+		return nil, errors.New("matter: AddTrustedRootCertificate: constraint error: root already set for this FailSafe window")
 	}
 	if nocInvoked {
-		return nil, fmt.Errorf("matter: AddTrustedRootCertificate: constraint error: NOC command already invoked in this FailSafe window")
+		return nil, errors.New("matter: AddTrustedRootCertificate: constraint error: NOC command already invoked in this FailSafe window")
 	}
 
 	root, err := mattercert.Decode(req.RootCACertificate)

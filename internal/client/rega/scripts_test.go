@@ -19,7 +19,6 @@ import (
 func TestEveryRegaScriptIsLoadable(t *testing.T) {
 	t.Parallel()
 	for _, s := range hmenum.AllRegaScripts {
-		s := s
 		t.Run(string(s), func(t *testing.T) {
 			t.Parallel()
 			body, err := loadScript(s)
@@ -61,7 +60,6 @@ func TestLoadScriptUnknownReturnsError(t *testing.T) {
 func TestEveryScriptIsValidUTF8AndHasNoBOM(t *testing.T) {
 	t.Parallel()
 	for _, s := range hmenum.AllRegaScripts {
-		s := s
 		t.Run(string(s), func(t *testing.T) {
 			t.Parallel()
 			body, err := loadScript(s)
@@ -127,7 +125,6 @@ func TestScriptBodyContainsExpectedPlaceholders(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.script), func(t *testing.T) {
 			t.Parallel()
 			body, err := loadScript(tc.script)
@@ -164,7 +161,6 @@ func TestScriptsWithoutPlaceholdersAreParamFree(t *testing.T) {
 	}
 
 	for _, s := range noParamScripts {
-		s := s
 		t.Run(string(s), func(t *testing.T) {
 			t.Parallel()
 			body, err := loadScript(s)

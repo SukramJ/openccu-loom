@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -28,7 +27,7 @@ func TestMatterStatusAdapter_WithLiveBridge_Enabled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping live bridge test")
 	}
@@ -72,7 +71,7 @@ func TestMatterStatusAdapter_WithStore_EmptyFabrics(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping store test")
 	}

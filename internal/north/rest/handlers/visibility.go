@@ -129,7 +129,7 @@ func ListVisibilityUnIgnore(centrals VisibilityCentralLister, store VisibilityUn
 // that fail parsing surface in `parse_errors` but the well-formed subset
 // still applies. Audit-logs the (added / removed) diff. Wires
 // PUT /api/v1/visibility/unignore.
-func UpdateVisibilityUnIgnore(
+func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility update handler with many validation/diff branches
 	store VisibilityUnIgnoreStore,
 	loader VisibilityRegistryLoader,
 	auditRec audit.Recorder,

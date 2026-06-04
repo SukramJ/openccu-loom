@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -102,7 +103,7 @@ type WriteOptions struct {
 // ErrMissingDescriptor is returned by SetValueWithOptions
 // PutParamsetWithOptions when CheckAgainstPD is true but the
 // WriteOptions does not carry a descriptor.
-var ErrMissingDescriptor = fmt.Errorf("client: WriteOptions.CheckAgainstPD requires a Descriptor")
+var ErrMissingDescriptor = errors.New("client: WriteOptions.CheckAgainstPD requires a Descriptor")
 
 // SetValueWithOptions is the high-level set_value entry point that
 // accepts a [WriteOptions] for fine-grained control. It mirrors the

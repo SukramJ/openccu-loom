@@ -28,7 +28,6 @@ func TestIgnoredParametersContainment(t *testing.T) {
 		"WIN_RELEASE",
 	}
 	for _, p := range positives {
-		p := p
 		t.Run("positive/"+p, func(t *testing.T) {
 			t.Parallel()
 			if _, ok := ignoredParameters[p]; !ok {
@@ -46,7 +45,6 @@ func TestIgnoredParametersContainment(t *testing.T) {
 		"OPERATING_VOLTAGE",
 	}
 	for _, p := range negatives {
-		p := p
 		t.Run("negative/"+p, func(t *testing.T) {
 			t.Parallel()
 			if _, ok := ignoredParameters[p]; ok {
@@ -97,7 +95,6 @@ func TestParameterIsWildcardIgnored(t *testing.T) {
 		{"OVERFLOW", false}, // no underscore prefix → not matched by end pattern
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := parameterIsWildcardIgnored(tc.name); got != tc.want {
@@ -133,7 +130,6 @@ func TestHiddenParametersContainment(t *testing.T) {
 		hmenum.ParameterWorking,
 	}
 	for _, p := range positives {
-		p := p
 		t.Run("positive/"+string(p), func(t *testing.T) {
 			t.Parallel()
 			if _, ok := hiddenParameters[p]; !ok {
@@ -148,7 +144,6 @@ func TestHiddenParametersContainment(t *testing.T) {
 		hmenum.ParameterTemperature,
 	}
 	for _, p := range negatives {
-		p := p
 		t.Run("negative/"+string(p), func(t *testing.T) {
 			t.Parallel()
 			if _, ok := hiddenParameters[p]; ok {
@@ -205,7 +200,6 @@ func TestUnIgnoreParametersByDevice(t *testing.T) {
 		{"HmIP-STH", hmenum.ParameterWeekProgramPointer, false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.model+"/"+string(tc.parameter), func(t *testing.T) {
 			t.Parallel()
 			params, ok := unIgnoreParametersByDevice[tc.model]
@@ -260,7 +254,6 @@ func TestIgnoreParametersByDevice(t *testing.T) {
 		{"STATE", "HmIP-SMI", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.parameter+"/"+tc.model, func(t *testing.T) {
 			t.Parallel()
 			models, ok := ignoreParametersByDevice[tc.parameter]
@@ -310,7 +303,6 @@ func TestRelevantMasterParamsetsByDeviceContainment(t *testing.T) {
 		{"HmIP-BS2", 1, hmenum.ParameterChannelOperationMode, false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.model+"/ch"+string(rune('0'+tc.channel))+"/"+string(tc.param), func(t *testing.T) { //nolint:gosec // G115: tc.channel is a small channel number (0..9); '0'+channel is 48..57
 			t.Parallel()
 			entry, ok := relevantMasterParamsetsByDevice[tc.model]
@@ -395,7 +387,6 @@ func TestClimateMasterParameters(t *testing.T) {
 		hmenum.ParameterWeekProgramPointer,
 	}
 	for _, p := range must {
-		p := p
 		t.Run("positive/"+string(p), func(t *testing.T) {
 			t.Parallel()
 			if _, ok := climateMasterParameters[p]; !ok {

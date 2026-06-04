@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 )
@@ -105,12 +106,7 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 	has := func(c string) bool {
-		for _, x := range body.Capabilities {
-			if x == c {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(body.Capabilities, c)
 	}
 	if !has(CapabilityMQTTDiscovery) {
 		t.Error("mqtt.discovery.v1 missing")

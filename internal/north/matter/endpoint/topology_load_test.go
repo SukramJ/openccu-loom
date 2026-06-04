@@ -41,7 +41,7 @@ func TestAssemble_LargeFleet600Endpoints(t *testing.T) {
 	wantEndpoints := devices*channels + 2 // +2 for root (ID 0) + aggregator (ID 1)
 
 	devs := make([]*device.Device, 0, devices)
-	for d := 0; d < devices; d++ {
+	for d := range devices {
 		dev := newDevice(fmt.Sprintf("LRG%05d", d), fmt.Sprintf("device-%d", d))
 		for c := 1; c <= channels; c++ {
 			chAddr := fmt.Sprintf("LRG%05d:%d", d, c)

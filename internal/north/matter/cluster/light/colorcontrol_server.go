@@ -69,13 +69,7 @@ type ColorControlServer struct {
 // configuration. cfg.InitialMireds is clamped to [cfg.MinMireds,
 // cfg.MaxMireds].
 func NewColorControlServer(cfg ColorControlServerConfig) *ColorControlServer {
-	init := cfg.InitialMireds
-	if init < cfg.MinMireds {
-		init = cfg.MinMireds
-	}
-	if init > cfg.MaxMireds {
-		init = cfg.MaxMireds
-	}
+	init := min(max(cfg.InitialMireds, cfg.MinMireds), cfg.MaxMireds)
 	return &ColorControlServer{cfg: cfg, current: init}
 }
 

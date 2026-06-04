@@ -4,6 +4,7 @@
 package hub
 
 import (
+	"maps"
 	"sync"
 	"time"
 
@@ -96,9 +97,7 @@ func (m *Metrics) Snapshot() map[MetricKind]MetricSample {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	out := make(map[MetricKind]MetricSample, len(m.state))
-	for k, v := range m.state {
-		out[k] = v
-	}
+	maps.Copy(out, m.state)
 	return out
 }
 

@@ -183,7 +183,7 @@ func (s *Store) ChannelTypes(deviceType string) ([]string, error) {
 // where one of the keys is the catch-all "KEY".
 func (s *Store) load(deviceType string) (map[string][]Profile, error) {
 	if deviceType == "" {
-		return nil, fmt.Errorf("masterprofile: empty device type")
+		return nil, errors.New("masterprofile: empty device type")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

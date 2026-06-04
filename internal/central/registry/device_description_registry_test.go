@@ -69,15 +69,13 @@ func TestDeviceDescriptionRegistryConcurrent(t *testing.T) {
 	r := NewDeviceDescriptionRegistry()
 	var wg sync.WaitGroup
 	const n = 20
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			r.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "shared"})
 			_, _ = r.Get(hmenum.InterfaceHmIPRF, "shared")
 			_ = r.All(hmenum.InterfaceHmIPRF)
 			_ = r.Len()
-		}()
+		})
 	}
 	wg.Wait()
 }

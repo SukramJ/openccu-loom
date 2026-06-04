@@ -114,15 +114,13 @@ func TestModelRegistryConcurrent(t *testing.T) {
 	r := NewModelRegistry()
 	var wg sync.WaitGroup
 	const n = 30
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			r.Put(newTestDevice("shared"))
 			_, _ = r.Get("shared")
 			_ = r.List()
 			_ = r.Len()
-		}()
+		})
 	}
 	wg.Wait()
 }

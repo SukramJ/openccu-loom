@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"maps"
 	"strings"
 	"sync"
 )
@@ -70,9 +71,7 @@ type MemoryTokenStore struct {
 // NewMemoryTokenStore constructs a store pre-populated with tokens.
 func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
 	cp := make(map[string]Identity, len(tokens))
-	for k, v := range tokens {
-		cp[k] = v
-	}
+	maps.Copy(cp, tokens)
 	return &MemoryTokenStore{tokens: cp}
 }
 

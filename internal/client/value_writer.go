@@ -65,7 +65,7 @@ type ValueWriter struct {
 // [WaitForStateChangeOrTimeout] consumes — keeping this internal so
 // the value writer does not become coupled to the full
 // `internal/central/events` package.
-type eventBusLike interface{}
+type eventBusLike any
 
 // BusResolver maps a Unit name to its event bus. Multi-CCU
 // deployments use this to route [WaitForStateChangeOrTimeout]

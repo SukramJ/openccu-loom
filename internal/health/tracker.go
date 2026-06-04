@@ -17,6 +17,8 @@
 package health
 
 import (
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -501,8 +503,8 @@ func (t *Tracker) CanReceiveEvents(name string, freshness time.Duration) bool {
 		return false
 	}
 	cutoff := t.clk.Now().Add(-freshness)
-	for i := len(src) - 1; i >= 0; i-- {
-		s := src[i]
+	for _, s := range slices.Backward(src) {
+
 		if s.Timestamp.Before(cutoff) {
 			return false
 		}
@@ -817,9 +819,9 @@ func (t *Tracker) ClientScore(name string) float64 {
 // closed (the default state at construction). Caller must hold mu.
 func (t *Tracker) lastBreakerNoteLocked(name string) string {
 	src := t.history[name]
-	for i := len(src) - 1; i >= 0; i-- {
-		if strings.Contains(src[i].Note, "breaker") {
-			return src[i].Note
+	for _, s := range slices.Backward(src) {
+		if strings.Contains(s.Note, "breaker") {
+			return s.Note
 		}
 	}
 	return ""
@@ -857,8 +859,7 @@ func (t *Tracker) PrimaryClientHealthy() bool {
 // such sample exists. Caller must hold mu.
 func (t *Tracker) lastEventReceivedLocked(name string) time.Time {
 	src := t.history[name]
-	for i := len(src) - 1; i >= 0; i-- {
-		s := src[i]
+	for _, s := range slices.Backward(src) {
 		if s.Note == "event-received" {
 			return s.Timestamp
 		}
@@ -952,9 +953,7 @@ func (t *Tracker) RegisterGauge(name string, fn GaugeFunc) {
 func (t *Tracker) Gauges() map[string]float64 {
 	t.gaugesMu.RLock()
 	fns := make(map[string]GaugeFunc, len(t.gauges))
-	for k, v := range t.gauges {
-		fns[k] = v
-	}
+	maps.Copy(fns, t.gauges)
 	t.gaugesMu.RUnlock()
 	out := make(map[string]float64, len(fns))
 	for k, fn := range fns {

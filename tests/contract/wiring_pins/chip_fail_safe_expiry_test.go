@@ -19,7 +19,7 @@ import (
 func TestPin_FailSafeExpiry_RollsBackHalfPairedFabric(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/matter/cluster/core", "OnFailSafeExpiry",
 	)
 }

@@ -5,6 +5,7 @@ package core_test
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -897,16 +898,8 @@ func TestGencomm_Reportable(t *testing.T) {
 	t.Parallel()
 	gc := defaultGencomm(t)
 	attrs := gc.MatterReportable()
-	contains := func(list []uint32, id uint32) bool {
-		for _, v := range list {
-			if v == id {
-				return true
-			}
-		}
-		return false
-	}
 	for _, want := range []uint32{0x0000, 0x0002} {
-		if !contains(attrs, want) {
+		if !slices.Contains(attrs, want) {
 			t.Errorf("MatterReportable missing attr 0x%04X", want)
 		}
 	}

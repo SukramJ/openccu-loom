@@ -6,6 +6,7 @@ package sqlite
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -171,7 +172,7 @@ func (c *PersistentCache) Flush(content map[string]any) error {
 	}
 	// Persist content if it has changed.
 	if res := c.Save(content); res == DataOperationResultSaveFail {
-		return fmt.Errorf("cache: flush save: storage error")
+		return errors.New("cache: flush save: storage error")
 	}
 	return nil
 }

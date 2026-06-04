@@ -494,7 +494,6 @@ func TestClearSubscriptionsRaceSafe(t *testing.T) {
 	wg.Add(goroutines)
 
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			for range iterations {
@@ -652,13 +651,11 @@ func TestHandlerStatDurationStableUnderConcurrentPublish(t *testing.T) {
 		}()
 	}
 	// Simultaneously read HandlerStats to exercise concurrent read/write.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range goroutines * iterations {
 			_ = b.HandlerStats()
 		}
-	}()
+	})
 	wg.Wait()
 
 	stats := b.HandlerStats()

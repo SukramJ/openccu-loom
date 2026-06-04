@@ -27,9 +27,9 @@ Related design notes:
 │   translations, easymode, openccu-data extracts, Matter schema  │
 ├─────────────────────────────────────────────────────────────────┤
 │ In-memory caches (volatile — rebuilt on restart)                │
-│   Device.valueCache, dynamic.DataCache, CommandCache,           │
-│   PingPongJournal, hub catalogues, devicedetails, visibility,   │
-│   patches, masterprofile, linkprofile                           │
+│   Device.valueCache, coordinators data cache, reliability       │
+│   command + ping/pong trackers, hub catalogues, devicedetails,  │
+│   visibility, patches, masterprofile, linkprofile               │
 ├─────────────────────────────────────────────────────────────────┤
 │ Persistent stores (SQLite, survive restart)                     │
 │   ValuesCacheStore, MasterValuesStore, paramset patches,        │
@@ -106,11 +106,11 @@ all `Device.LoadValue` calls.
   - Persistent VALUES cache restore on boot
   - Explicit `LoadValue` calls (rare; see §7)
 
-### `dynamic.DataCache` — last-observed VALUES per channel
+### coordinators data cache — last-observed VALUES per channel
 
-`internal/store/dynamic/data.go`. The bridge sits between the wire
-and the domain layer; every channel carries its last observed
-VALUES paramset here.
+`internal/central/coordinators/cache.go` (`DataCacheEntry` +
+`CachePersister`). The cache sits between the wire and the domain
+layer; every channel carries its last observed VALUES paramset here.
 
 - Populated by callback events as they arrive.
 - Consumed by REST snapshot, MQTT publish, Matter Subscribe report.
@@ -119,16 +119,18 @@ VALUES paramset here.
   `OnWireValue` so steady-state code paths see a hydrated cache
   even before the first CCU push.
 
-### `dynamic.CommandCache` — echo suppression
+### reliability command tracker — echo suppression
 
-Tracks the last command the daemon sent per `(channel,
+`internal/client/reliability/command_tracker.go`. Tracks the last
+command the daemon sent per `(channel,
 parameter)`. When the CCU echoes the change back (the device
 acknowledged + state-change event fired) we suppress the
 re-publish because the daemon already announced the optimistic
 state to its consumers.
 
-### `dynamic.PingPongJournal` — health window
+### reliability ping/pong tracker — health window
 
+`internal/client/reliability/pingpong.go` (`PingPongTracker`).
 Rolling window of ping/pong events used by the health tracker.
 Drives the per-interface health score (see [ADR 0018](adr/0018-health-parity-with-aiohomematic.md)).
 

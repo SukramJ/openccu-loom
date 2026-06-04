@@ -172,7 +172,7 @@ func TestCircuitAddOnStateChangeDoesNotDisplacePrimary(t *testing.T) {
 	c.AddOnStateChange(func(_, _ hmenum.CircuitState) { addCount.Add(1) }) // two additional
 
 	// Cause 2 failures to trip.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = c.Do(context.Background(), "setValue", func(_ context.Context) error {
 			return errors.New("fail")
 		})
@@ -361,7 +361,7 @@ func TestThrottlePurgeWithMixedPriorityQueue(t *testing.T) {
 	// Queue 3 HIGH-priority waiters for "purge-me".
 	const numPurge = 3
 	purgeResults := make(chan error, numPurge)
-	for i := 0; i < numPurge; i++ {
+	for range numPurge {
 		go func() {
 			purgeResults <- tt.AcquireFor(context.Background(), hmenum.CommandPriorityHigh, "purge-me")
 		}()
@@ -394,7 +394,7 @@ func TestThrottlePurgeWithMixedPriorityQueue(t *testing.T) {
 
 	// All "purge-me" goroutines must return ErrSuperseded promptly.
 	purgeTimeout := time.After(500 * time.Millisecond)
-	for i := 0; i < numPurge; i++ {
+	for i := range numPurge {
 		select {
 		case err := <-purgeResults:
 			if !errors.Is(err, ErrSuperseded) {
@@ -527,7 +527,7 @@ func TestThrottleCloseSuspendsBurstWaiters(t *testing.T) {
 	})
 
 	// Saturate the burst window.
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("burst fill %d: %v", i, err)
 		}
@@ -538,12 +538,10 @@ func TestThrottleCloseSuspendsBurstWaiters(t *testing.T) {
 	const blocked = 4
 	results := make(chan error, blocked)
 	var wg sync.WaitGroup
-	for i := 0; i < blocked; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range blocked {
+		wg.Go(func() {
 			results <- tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
-		}()
+		})
 	}
 
 	// Wait for goroutines to park; they are in waitForBurstSlot (not the

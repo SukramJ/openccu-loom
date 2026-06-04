@@ -5,6 +5,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -165,7 +166,7 @@ type ACLTargetStruct struct {
 // NewAccessControl constructs the cluster.
 func NewAccessControl(s ACLStoreFacade) (*AccessControl, error) {
 	if s == nil {
-		return nil, fmt.Errorf("matter: AccessControl store is required")
+		return nil, errors.New("matter: AccessControl store is required")
 	}
 	return &AccessControl{store: s}, nil
 }
@@ -300,7 +301,7 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 	if attrID == accessControlAttrExtension {
 		_, fabricIndex := im.FabricFilterFromContext(ctx)
 		if fabricIndex == 0 {
-			return a.MatterRead(attrID)
+			return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 		}
 		a.mu.RLock()
 		exts := a.extensions[fabricIndex]
@@ -313,13 +314,13 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 		return out, true
 	}
 	if attrID != accessControlAttrACL {
-		return a.MatterRead(attrID)
+		return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 	_, fabricIndex := im.FabricFilterFromContext(ctx)
 	if fabricIndex == 0 {
 		// PASE (pre-AddNOC) or no FabricFilter set: fall through to
 		// MatterRead which uses a.currentFabric (the last write target).
-		return a.MatterRead(attrID)
+		return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 	entries, err := a.store.ListACL(ctx, fabricIndex)
 	if err != nil {
@@ -356,7 +357,7 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 // Apple times out after 10 s and tears the fabric down via
 // RemoveFabric. Extension (0x0001) is not implemented — matter.js does
 // the same and Apple does not write it.
-func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if attrID == accessControlAttrACL {
 		entries, ok := value.([]AccessControlEntryStruct)
 		if !ok {

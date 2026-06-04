@@ -5,6 +5,7 @@ package valve
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -94,9 +95,7 @@ func (p *putWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKe
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	p.puts = append(p.puts, cp)
 	return nil
 }

@@ -40,7 +40,6 @@ type Vector struct {
 func RunVectorSet(t *testing.T, vs []Vector) {
 	t.Helper()
 	for _, v := range vs {
-		v := v
 		t.Run(v.Name, func(t *testing.T) {
 			t.Parallel()
 			value, err := v.Decode(v.Wire)
@@ -89,7 +88,7 @@ func MustHex(s string) []byte {
 	out := make([]byte, 0, len(s)/2)
 	var nibble byte
 	high := true
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c == ' ' || c == '\n' || c == '\t' {
 			continue

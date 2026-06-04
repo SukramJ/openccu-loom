@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -154,12 +155,12 @@ func auditRecord(rec audit.Recorder, action string, centrals []string) {
 }
 
 func joinComma(s []string) string {
-	out := ""
+	var out strings.Builder
 	for i, v := range s {
 		if i > 0 {
-			out += ","
+			out.WriteString(",")
 		}
-		out += v
+		out.WriteString(v)
 	}
-	return out
+	return out.String()
 }

@@ -68,7 +68,7 @@ func calcDataPointNamePostfix() string { return "" }
 func calcTranslationKey(p hmenum.CalculatedParameter) string {
 	s := string(p)
 	result := make([]byte, len(s))
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c >= 'A' && c <= 'Z' {
 			result[i] = c + 32

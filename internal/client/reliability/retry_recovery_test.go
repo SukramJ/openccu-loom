@@ -26,7 +26,7 @@ func TestRetryWithRecoveryWaiterShortcuts(t *testing.T) {
 	})
 	// Trip the breaker so subsequent calls reject immediately.
 	cb.Reset()
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error {
 			return errors.New("forced failure")
 		})

@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"math"
 	"net"
+	"slices"
 	"testing"
 
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
@@ -624,11 +625,8 @@ func TestFabricDescriptorStruct_VidVerificationStatement_TLVOmittedWhenNil(t *te
 	// or just check that the raw bytes don't contain 0x26 in a struct context).
 	// TLV context tag 6 in a struct field is encoded as byte 0x26 (tag type=2,
 	// tag number=6, element type prefix).
-	for _, b := range raw {
-		if b == 0x26 {
-			t.Error("VidVerificationStatement tag 0x06 present in TLV but field is nil")
-			break
-		}
+	if slices.Contains(raw, 0x26) {
+		t.Error("VidVerificationStatement tag 0x06 present in TLV but field is nil")
 	}
 }
 
@@ -652,13 +650,7 @@ func TestFabricDescriptorStruct_VidVerificationStatement_TLVPresentWhenSet(t *te
 	}
 	raw := encodeFabricList(t, fabrics)
 	// Verify byte 0xAB appears (the payload content).
-	found := false
-	for _, b := range raw {
-		if b == 0xAB {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(raw, 0xAB)
 	if !found {
 		t.Error("VidVerificationStatement payload byte 0xAB not found in TLV")
 	}

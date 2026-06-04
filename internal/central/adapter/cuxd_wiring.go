@@ -31,7 +31,7 @@ import (
 // HmIP-RF / BidCos / VirtualDevices is not applicable here. Each
 // CUxD interface gets its own outbound [binrpc.Client] plus a
 // registration on the shared [rpcserver.BINRPCServer] callback listener.
-func wireCUxDInterface(
+func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
 	unit *central.Unit,
@@ -163,14 +163,14 @@ func wireCUxDInterface(
 			handlers.SetWriter(writer)
 		}
 		binrpcCallbackServer.Register(initID, handlers)
-		callbackURL = fmt.Sprintf("binary://%s", binrpcCallbackAddr)
+		callbackURL = "binary://" + binrpcCallbackAddr
 		closerSrv := binrpcCallbackServer
 		capturedInitID := initID
 		_ = closerSrv // avoid unused-var lint for deregister call in closer
 		_ = capturedInitID
 	}
 
-	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger)
+	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
 		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
 	} else {

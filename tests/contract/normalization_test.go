@@ -5,6 +5,7 @@ package contract
 
 import (
 	"encoding/json"
+	"maps"
 	"reflect"
 	"testing"
 
@@ -56,11 +57,9 @@ func TestHashStableAcrossParamsetMapOrder(t *testing.T) {
 		"WORKING":         {Type: hmenum.ParameterTypeBool},
 	}
 	ps2 := hmproto.Paramset{}
-	for k, v := range ps1 {
-		ps2[k] = v
-	}
+	maps.Copy(ps2, ps1)
 
-	for i := 0; i < 64; i++ {
+	for i := range 64 {
 		h1, err := hmproto.HashParamset(ps1)
 		if err != nil {
 			t.Fatal(err)

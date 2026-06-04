@@ -145,7 +145,7 @@ func TestCSRFTokenFromContext(t *testing.T) {
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		expectedToken = CSRFToken(r.Context())
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	mw.ServeHTTP(rr, req)
 	if expectedToken == "" {
@@ -162,9 +162,9 @@ func TestCSRFMiddlewareExemptBasicAuth(t *testing.T) {
 	hit := 0
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hit++
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest("POST", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	// Stamp Basic identity in the context (as Middleware.Resolve would).
 	req = req.WithContext(ContextWithIdentity(req.Context(), Identity{
 		Subject: "ops",
@@ -184,9 +184,9 @@ func TestCSRFMiddlewareExemptBearerAuth(t *testing.T) {
 	hit := 0
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hit++
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest("POST", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(ContextWithIdentity(req.Context(), Identity{
 		Subject: "api-token-1",
 		Scheme:  SchemeBearer,
@@ -206,7 +206,7 @@ func TestCSRFMiddlewareEnforcesOnSession(t *testing.T) {
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("session POST without CSRF token must not reach handler")
 	}))
-	req := httptest.NewRequest("POST", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	req = req.WithContext(ContextWithIdentity(req.Context(), Identity{
 		Subject: "alice",
 		Scheme:  SchemeSession,
@@ -227,7 +227,7 @@ func TestCSRFMiddlewareEnforcesOnAnonymous(t *testing.T) {
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("anonymous POST without CSRF token must not reach handler")
 	}))
-	req := httptest.NewRequest("POST", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
 	// No identity → must 403.
 	rr := httptest.NewRecorder()
 	mw.ServeHTTP(rr, req)
@@ -241,11 +241,11 @@ func TestCSRFMiddlewareFormField(t *testing.T) {
 	hit := 0
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hit++
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	// Submit via form field instead of header.
 	body := strings.NewReader(CSRFFormField + "=match-form")
-	req := httptest.NewRequest("POST", "/", body)
+	req := httptest.NewRequest(http.MethodPost, "/", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: "match-form"})
 	rr := httptest.NewRecorder()
@@ -261,10 +261,10 @@ func TestMiddlewareRequireRolePassesForAdmin(t *testing.T) {
 	us := NewMemoryUserStore()
 	us.Put("admin", "s", RoleAdmin)
 	mw := NewMiddleware(us, nil)
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	h := mw.Resolve(mw.RequireRole(RoleAdmin, next))
 
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.SetBasicAuth("admin", "s")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -279,7 +279,7 @@ func TestMiddlewareRequireRoleUnauthenticated(t *testing.T) {
 	h := mw.RequireRole(RoleViewer, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("next should not run")
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != 401 {
@@ -297,9 +297,9 @@ func TestSessionMiddlewareNilStore(t *testing.T) {
 		if ok {
 			t.Fatal("nil store should not attach identity")
 		}
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if hit != 1 {

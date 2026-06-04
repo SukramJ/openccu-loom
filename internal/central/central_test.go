@@ -216,8 +216,7 @@ func TestCCUVersion(t *testing.T) {
 // matching transitions.
 func TestOnStateTransition(t *testing.T) {
 	c, _ := New(Config{Name: "main"})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	var toStates []hmenum.CentralState
 	unsub := c.OnStateTransition(hmenum.CentralStateRunning, "", func(to, from hmenum.CentralState) {
@@ -243,8 +242,7 @@ func TestOnStateTransition(t *testing.T) {
 // TestOnStateTransitionFromFilter verifies that the `from` filter works.
 func TestOnStateTransitionFromFilter(t *testing.T) {
 	c, _ := New(Config{Name: "main"})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	var fired int
 	// Only care about transitions from Initializing to Running.

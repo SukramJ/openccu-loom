@@ -5,7 +5,7 @@ package measurement
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"testing"
 
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
@@ -83,6 +83,7 @@ func TestParityMatterJS_MeasurementClusterRevisions(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			if c.codeRevision != js.Revision {
 				t.Errorf("code revision %d != matter.js %d for %s (0x%04X)",
 					c.codeRevision, js.Revision, js.Name, js.ID)
@@ -158,6 +159,7 @@ func TestParityMatterJS_ConcentrationClustersShareRevision(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			if concentrationClusterRevision != js.Revision {
 				t.Errorf("code revision %d != matter.js %d for %s (0x%04X)",
 					concentrationClusterRevision, js.Revision, js.Name, js.ID)
@@ -172,7 +174,7 @@ func TestParityMatterJS_ConcentrationClustersShareRevision(t *testing.T) {
 			revs = append(revs, js.Revision)
 		}
 	}
-	sort.Slice(revs, func(i, j int) bool { return revs[i] < revs[j] })
+	slices.Sort(revs)
 	if len(revs) > 0 && revs[0] != revs[len(revs)-1] {
 		t.Errorf("concentration cluster revisions diverge in matter.js: %v — split the constants", revs)
 	}

@@ -9,6 +9,7 @@ package cover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -356,7 +357,7 @@ func (c *Cover) SetPosition(ctx context.Context, target float64, priority hmenum
 		}
 	}
 	if c.Float == nil {
-		return fmt.Errorf("cover: SET level: channel has no LEVEL data point")
+		return errors.New("cover: SET level: channel has no LEVEL data point")
 	}
 	if err := c.Set(custom.EnsureContext(ctx), wire, priority); err != nil {
 		return fmt.Errorf("cover: SET level: %w", err)
@@ -375,7 +376,7 @@ func (c *Cover) Stop(ctx context.Context, _ hmenum.CommandPriority) error {
 		return nil
 	}
 	if c.writer == nil {
-		return fmt.Errorf("cover: STOP: no writer configured")
+		return errors.New("cover: STOP: no writer configured")
 	}
 	return c.writer.SetValue(custom.EnsureContext(ctx), c.address, hmenum.ParameterStop, true, hmenum.CommandPriorityCritical)
 }

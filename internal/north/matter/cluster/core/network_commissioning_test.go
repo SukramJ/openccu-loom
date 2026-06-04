@@ -6,6 +6,7 @@ package core_test
 import (
 	"bytes"
 	"context"
+	"slices"
 	"sync"
 	"testing"
 
@@ -258,16 +259,8 @@ func TestNetcomm_Reportable_ContainsExpected(t *testing.T) {
 	t.Parallel()
 	nc := defaultNetcomm()
 	attrs := nc.MatterReportable()
-	contains := func(list []uint32, id uint32) bool {
-		for _, v := range list {
-			if v == id {
-				return true
-			}
-		}
-		return false
-	}
 	for _, want := range []uint32{0x0001, 0x0004, 0x0005} { // Networks, InterfaceEnabled, LastNetworkingStatus
-		if !contains(attrs, want) {
+		if !slices.Contains(attrs, want) {
 			t.Errorf("MatterReportable missing attr 0x%04X", want)
 		}
 	}

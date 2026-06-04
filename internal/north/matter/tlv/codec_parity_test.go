@@ -471,7 +471,6 @@ func TestCodecParity_UintWidthBoundaries(t *testing.T) {
 		{math.MaxUint64, TypeUnsignedInt8, "max-uint64"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 			enc := NewEncoder()
@@ -499,7 +498,6 @@ func TestCodecParity_UintWidthBoundaries(t *testing.T) {
 func TestCodecParity_BoolByteLength(t *testing.T) {
 	t.Parallel()
 	for _, v := range []bool{true, false} {
-		v := v
 		t.Run(func() string {
 			if v {
 				return "true"
@@ -583,7 +581,6 @@ func TestCodecParity_IntWidthBoundaries(t *testing.T) {
 		{int64(math.MaxInt32) + 1, TypeSignedInt8, "above-int32"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.label, func(t *testing.T) {
 			t.Parallel()
 			enc := NewEncoder()

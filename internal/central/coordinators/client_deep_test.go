@@ -169,7 +169,7 @@ func TestClientCoordinatorConcurrentRegisterRemove(t *testing.T) {
 	const count = 30
 	var wg sync.WaitGroup
 	wg.Add(count * 2)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		id := "iface-" + string(rune('A'+i%26))
 		go func(id string) {
 			defer wg.Done()

@@ -48,15 +48,15 @@ func classifyByErrors(err error) *hmenum.FailureReason {
 		return nil // signal: "keep default"
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return failureReasonPtr(hmenum.FailureReasonTimeout)
+		return new(hmenum.FailureReasonTimeout)
 	}
 	if errors.Is(err, hmerr.ErrAuthFailure) {
-		return failureReasonPtr(hmenum.FailureReasonAuth)
+		return new(hmenum.FailureReasonAuth)
 	}
 	if errors.Is(err, hmerr.ErrNoConnection) {
-		return failureReasonPtr(hmenum.FailureReasonNetwork)
+		return new(hmenum.FailureReasonNetwork)
 	}
-	return failureReasonPtr(hmenum.FailureReasonUnknown)
+	return new(hmenum.FailureReasonUnknown)
 }
 
 // ─── Cluster A: Pipeline.Classify edge cases ──────────────────────────────────
@@ -143,7 +143,7 @@ func TestClassifyContextCanceledFallsBackToInternal(t *testing.T) {
 			if errors.Is(err, context.Canceled) {
 				return nil // signal: "keep default"
 			}
-			return failureReasonPtr(hmenum.FailureReasonUnknown)
+			return new(hmenum.FailureReasonUnknown)
 		},
 	}}
 	c.Run(context.Background(), "cancel-iface", pipeline)
@@ -217,7 +217,7 @@ func TestRecoveryStateAttemptsAndConsecutiveIncrementTogether(t *testing.T) {
 		Stage: hmenum.RecoveryStageDetecting,
 		Run:   func(_ context.Context) error { return errors.New("down") },
 	}}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		c.Run(context.Background(), "iface5", failing)
 	}
 
@@ -249,7 +249,7 @@ func TestRecoveryStateConsecutiveResetsOnSuccessAttemptsKeepCumulative(t *testin
 		Run:   func(_ context.Context) error { return nil },
 	}}
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		c.Run(context.Background(), "iface-mix", failing)
 	}
 	c.Run(context.Background(), "iface-mix", success)
@@ -305,7 +305,7 @@ func TestNextRetryDelayMonotonicallyNonDecreasing(t *testing.T) {
 	}}
 
 	var prev time.Duration
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		c.Run(context.Background(), "mono-iface", failing)
 		d := c.NextRetryDelay("mono-iface")
 		if d < prev {
@@ -351,7 +351,7 @@ func TestNextRetryDelayIsDeterministic(t *testing.T) {
 		Stage: hmenum.RecoveryStageDetecting,
 		Run:   func(_ context.Context) error { return errors.New("x") },
 	}}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		c.Run(context.Background(), "det-iface", failing)
 	}
 
@@ -377,19 +377,19 @@ func TestHistoryRingBufferKeepsMostRecent20(t *testing.T) {
 	const total = 30
 
 	// 10 runs with FailureReasonNetwork (will be dropped).
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		c.Run(context.Background(), "ring30", []Pipeline{{
 			Stage:    hmenum.RecoveryStageDetecting,
 			Run:      func(_ context.Context) error { return errors.New("old") },
-			Classify: func(_ error) *hmenum.FailureReason { return failureReasonPtr(hmenum.FailureReasonNetwork) },
+			Classify: func(_ error) *hmenum.FailureReason { return new(hmenum.FailureReasonNetwork) },
 		}})
 	}
 	// 20 runs with FailureReasonAuth (kept).
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		c.Run(context.Background(), "ring30", []Pipeline{{
 			Stage:    hmenum.RecoveryStageDetecting,
 			Run:      func(_ context.Context) error { return errors.New("new") },
-			Classify: func(_ error) *hmenum.FailureReason { return failureReasonPtr(hmenum.FailureReasonAuth) },
+			Classify: func(_ error) *hmenum.FailureReason { return new(hmenum.FailureReasonAuth) },
 		}})
 	}
 
@@ -417,7 +417,7 @@ func TestHistoryEntryCarriesFailureReasonFromClassify(t *testing.T) {
 	c.Run(context.Background(), "reason-iface", []Pipeline{{
 		Stage:    hmenum.RecoveryStageDetecting,
 		Run:      func(_ context.Context) error { return errors.New("cb open") },
-		Classify: func(_ error) *hmenum.FailureReason { return failureReasonPtr(want) },
+		Classify: func(_ error) *hmenum.FailureReason { return new(want) },
 	}})
 
 	hist := c.History("reason-iface")

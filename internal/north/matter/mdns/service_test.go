@@ -5,8 +5,8 @@ package mdns_test
 
 import (
 	"errors"
-	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -463,7 +463,7 @@ func TestBuildCommissionableService_PairingHint_Zero_EmitsDefault(t *testing.T) 
 	if !hasTXTKey(svc, "PH") {
 		t.Fatal("expected PH key to be emitted with default when PairingHint is 0")
 	}
-	assertTXTValue(t, svc, "PH", fmt.Sprintf("%d", mdns.PairingHintDefault))
+	assertTXTValue(t, svc, "PH", strconv.FormatUint(uint64(mdns.PairingHintDefault), 10))
 }
 
 func TestBuildCommissionableService_PairingInstruction_SetsPI(t *testing.T) {

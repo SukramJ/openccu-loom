@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -379,10 +380,8 @@ func (t *TextDisplay) validateIcon(icon string) error {
 	if icon == "" || !t.iconsFromDevice || len(t.availableIcons) == 0 {
 		return nil
 	}
-	for _, v := range t.availableIcons {
-		if v == icon {
-			return nil
-		}
+	if slices.Contains(t.availableIcons, icon) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidIcon, icon)
 }
@@ -394,10 +393,8 @@ func (t *TextDisplay) validateSound(sound string) error {
 	if sound == "" || !t.soundsFromDevice || len(t.availableSounds) == 0 {
 		return nil
 	}
-	for _, v := range t.availableSounds {
-		if v == sound {
-			return nil
-		}
+	if slices.Contains(t.availableSounds, sound) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidSound, sound)
 }
@@ -409,10 +406,8 @@ func (t *TextDisplay) validateBackgroundColor(label *string) error {
 	if label == nil || *label == "" || len(t.availableBackgroundColors) == 0 {
 		return nil
 	}
-	for _, v := range t.availableBackgroundColors {
-		if v == *label {
-			return nil
-		}
+	if slices.Contains(t.availableBackgroundColors, *label) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidBackgroundColor, *label)
 }
@@ -424,10 +419,8 @@ func (t *TextDisplay) validateTextColor(label *string) error {
 	if label == nil || *label == "" || len(t.availableTextColors) == 0 {
 		return nil
 	}
-	for _, v := range t.availableTextColors {
-		if v == *label {
-			return nil
-		}
+	if slices.Contains(t.availableTextColors, *label) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidTextColor, *label)
 }
@@ -439,10 +432,8 @@ func (t *TextDisplay) validateAlignment(a *string) error {
 	if a == nil || *a == "" || len(t.availableAlignments) == 0 {
 		return nil
 	}
-	for _, v := range t.availableAlignments {
-		if v == *a {
-			return nil
-		}
+	if slices.Contains(t.availableAlignments, *a) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidAlignment, *a)
 }
@@ -453,10 +444,8 @@ func (t *TextDisplay) validateInterval(interval string) error {
 	if interval == "" || len(t.availableIntervals) == 0 {
 		return nil
 	}
-	for _, v := range t.availableIntervals {
-		if v == interval {
-			return nil
-		}
+	if slices.Contains(t.availableIntervals, interval) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidInterval, interval)
 }
@@ -685,7 +674,7 @@ func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, rowAddr, 
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority) error {
+func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority) error { //nolint:gocyclo // single-purpose text-display write with many option/validation branches
 	if r.ID < 1 || r.ID > maxDisplayID {
 		return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
 	}
@@ -715,13 +704,7 @@ func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptio
 	// Validate repetitions label against the device's available list when a list
 	// has been populated.
 	if opts.Repetitions != "" && len(t.availableRepetitions) > 0 {
-		found := false
-		for _, rep := range t.availableRepetitions {
-			if rep == opts.Repetitions {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(t.availableRepetitions, opts.Repetitions)
 		if !found {
 			return fmt.Errorf("%w: %q", ErrInvalidRepetitions, opts.Repetitions)
 		}

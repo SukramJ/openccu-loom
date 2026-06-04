@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -106,9 +107,7 @@ func (f *fakeChannelRefresher) GetParamset(
 		return nil, f.failGet
 	}
 	out := make(map[string]any, len(f.values))
-	for k, v := range f.values {
-		out[k] = v
-	}
+	maps.Copy(out, f.values)
 	return out, nil
 }
 

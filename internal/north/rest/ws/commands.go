@@ -161,8 +161,7 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 	}
 	data, err := fn(ctx, args)
 	if err != nil {
-		var ce *CommandError
-		if errors.As(err, &ce) {
+		if ce, ok := errors.AsType[*CommandError](err); ok {
 			res := Result{Error: ce}
 			r.logOutcome(ctx, command, res, time.Since(start))
 			return res

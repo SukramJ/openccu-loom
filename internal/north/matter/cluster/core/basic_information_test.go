@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 
@@ -831,13 +832,7 @@ func TestBasicInfo_MatterEventsIncludesReachableChanged(t *testing.T) {
 
 	events := bi.MatterEvents()
 	const wantID uint32 = 0x0003
-	found := false
-	for _, id := range events {
-		if id == wantID {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(events, wantID)
 	if !found {
 		t.Errorf("MatterEvents() = %v, want to contain 0x%04X (ReachableChanged)", events, wantID)
 	}

@@ -16,6 +16,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -24,7 +25,7 @@ import (
 
 // ErrNoDetermineBackend is returned when no backend can be resolved for
 // the given channel address.
-var ErrNoDetermineBackend = fmt.Errorf("parameter_determiner: no backend for device")
+var ErrNoDetermineBackend = errors.New("parameter_determiner: no backend for device")
 
 // ParameterDeterminerAdapter implements ws.ParameterDeterminer by
 // routing DetermineParameter calls through the central registry and the

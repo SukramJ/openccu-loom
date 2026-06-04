@@ -92,7 +92,7 @@ func newHmIPBwthDevice() *device.Device {
 		Model:        "HmIP-BWTH",
 		ProductGroup: hmenum.ProductGroupHmIP,
 	})
-	for i := 0; i <= 8; i++ {
+	for i := range 9 {
 		d.AddChannel("0001D7:"+itoaSmall(i), i, "T", hmenum.ParamsetKeyValues)
 	}
 	return d
@@ -539,14 +539,12 @@ func TestRegisterConstructorParallelLookup(t *testing.T) {
 
 	var hits int64
 	var wg sync.WaitGroup
-	for i := 0; i < 16; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 16 {
+		wg.Go(func() {
 			if _, ok := registry.Constructor("IPSwitch"); ok {
 				atomic.AddInt64(&hits, 1)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if hits != 16 {

@@ -6,7 +6,7 @@ package endpoint
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -338,7 +338,7 @@ func (d *TopologyDispatcher) attributesFor(srv interfaces.MatterClusterServer, p
 		seen[id] = struct{}{}
 		out = append(out, id)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -444,7 +444,7 @@ func synthesizeGlobalRead(srv interfaces.MatterClusterServer, attrID uint32) (an
 			seen[id] = struct{}{}
 			out = append(out, id)
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+		slices.Sort(out)
 		return out, true
 	case cluster.AttrGlobalAcceptedCommandList:
 		if lister, ok := srv.(interfaces.MatterClusterCommandLister); ok {
@@ -496,8 +496,7 @@ func classifyError(err error, classify func(error) im.StatusCode) (im.StatusCode
 	if err == nil {
 		return im.StatusSuccess, 0, false
 	}
-	var cse im.MatterClusterStatusError
-	if errors.As(err, &cse) {
+	if cse, ok := errors.AsType[im.MatterClusterStatusError](err); ok {
 		return cse.MatterStatusCode(), cse.MatterClusterStatus(), true
 	}
 	return classify(err), 0, false
@@ -514,8 +513,7 @@ func writeErrorStatus(err error) im.StatusCode {
 		return im.StatusSuccess
 	}
 	// Type-assert first: StatusCodeError carries an exact code.
-	var sce im.StatusCodeError
-	if errors.As(err, &sce) {
+	if sce, ok := errors.AsType[im.StatusCodeError](err); ok {
 		return sce.MatterStatusCode()
 	}
 	// Legacy string-heuristic fallback — migrate callers to StatusCodeError.
@@ -545,8 +543,7 @@ func invokeErrorStatus(err error) im.StatusCode {
 		return im.StatusSuccess
 	}
 	// Type-assert first: StatusCodeError carries an exact code.
-	var sce im.StatusCodeError
-	if errors.As(err, &sce) {
+	if sce, ok := errors.AsType[im.StatusCodeError](err); ok {
 		return sce.MatterStatusCode()
 	}
 	// Legacy string-heuristic fallback — migrate callers to StatusCodeError.

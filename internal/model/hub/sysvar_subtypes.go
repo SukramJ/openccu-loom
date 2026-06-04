@@ -6,6 +6,7 @@ package hub
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -276,7 +277,7 @@ func (s *SysvarDpSensor) SensorValue() (label string, observed bool) {
 		}
 		return "false", true
 	case hmtypes.ValueKindInt:
-		return fmt.Sprintf("%d", v.Int), true
+		return strconv.Itoa(v.Int), true
 	case hmtypes.ValueKindFloat:
 		return fmt.Sprintf("%g", v.Float), true
 	default:

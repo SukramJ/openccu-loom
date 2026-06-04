@@ -139,7 +139,7 @@ func TestWireVisibilityUnIgnoreStore_BlockedDataDir_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = blockDir // subdir doesn't exist inside tmp → open fails OR blocked
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	// Use the blocked path; either the store opens (unlikely) or returns nil.
 	got := wireVisibilityUnIgnoreStore(cfg, logger)
 	// Either nil (open failed) or non-nil (file system handled it). Do not panic.
@@ -158,7 +158,7 @@ func TestWireVisibilityUnIgnoreStore_FileAsDataDir_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = fileAsDir // file, not directory → DB open fails
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	got := wireVisibilityUnIgnoreStore(cfg, logger)
 	gooseMigrateMu.Unlock()
@@ -192,7 +192,7 @@ func TestApplyVisibilityUnIgnore_ClosedDB_SeedAndPatternsErrors(t *testing.T) {
 
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	cfg := config.Default()
 	// Central has un_ignore patterns → SeedIfEmpty call will fail (closed DB).
 	cfg.Centrals = []config.CentralConfig{{
@@ -228,7 +228,7 @@ func TestMatterStatusReaderAdapter_WindowNonNil_SetsWindowOpenFalse(t *testing.T
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -259,7 +259,7 @@ func TestMatterEphemeralProvider_NilBridge_GenerateAndInstallErrors(t *testing.T
 	p := &matterEphemeralProvider{
 		bridge: nil, // nil bridge → error
 		opMgr:  nil,
-		logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		logger: slog.New(slog.DiscardHandler),
 	}
 	_, err := p.GenerateAndInstall(context.Background())
 	if err == nil {
@@ -277,7 +277,7 @@ func TestStartCallbackServer_InvalidPortRange_ReturnsError(t *testing.T) {
 	cfg := config.Default()
 	cfg.Callback.Port = 0                // forces PortRange path
 	cfg.Callback.PortRange = "notarange" // malformed → ParsePortRange fails
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	ctx := context.Background()
 	_, _, err := startCallbackServer(ctx, cfg, logger)
@@ -302,7 +302,7 @@ func TestLoadTranslations_InvalidGzip_LogsWarnFallsBack(t *testing.T) {
 	cfg := config.Default()
 	cfg.CCUData.TranslationsPath = badPath
 
-	tr := loadTranslations(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	tr := loadTranslations(cfg, slog.New(slog.DiscardHandler))
 	// Falls back to embedded translations after warn → non-nil result.
 	if tr == nil {
 		t.Error("expected non-nil translations after fallback from bad file")
@@ -318,7 +318,7 @@ func TestLoadPersistentCaseIdentity_EmptyStore_NotPersisted(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, config.NorthMatterCASE{}, store, logger)
 	if err != nil {
@@ -337,7 +337,7 @@ func TestLoadPersistentCaseIdentity_FabricWithoutIdentity_ReturnsNotPersisted(t 
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// Generate a valid 65-byte P-256 uncompressed public key.
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -377,7 +377,7 @@ func TestBuildCaseAdapter_LoadIdentityError_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -432,7 +432,7 @@ func TestLoadPersistentCaseIdentity_ClosedDB_ListFabricsError(t *testing.T) {
 		t.Fatalf("db.Close: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, config.NorthMatterCASE{}, store, logger)
 	if err != nil {
 		t.Fatalf("unexpected error (warn path should return nil err): %v", err)
@@ -479,7 +479,7 @@ func TestApplyVisibilityUnIgnore_WithPatternsAndDevices_SetsMarks(t *testing.T) 
 	store := buildVisibilityStore(t)
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	cfg := config.Default()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
 

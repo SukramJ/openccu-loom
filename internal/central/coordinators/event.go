@@ -461,7 +461,7 @@ func isFalseBool(v hmtypes.ParamValue) bool {
 // to every channel of the device, so callers operate on the device
 // address (everything before the first colon).
 func splitDeviceAddress(channelAddress string) string {
-	for i := 0; i < len(channelAddress); i++ {
+	for i := range len(channelAddress) {
 		if channelAddress[i] == ':' {
 			return channelAddress[:i]
 		}

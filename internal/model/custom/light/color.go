@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -105,10 +106,10 @@ func (l *ColorLight) SetColor(ctx context.Context, hue int32, saturation float64
 		return nil
 	}
 	if l.hue == nil || l.saturation == nil {
-		return fmt.Errorf("colorlight: channel missing HUE or SATURATION")
+		return errors.New("colorlight: channel missing HUE or SATURATION")
 	}
 	if l.hue.Writer == nil {
-		return fmt.Errorf("colorlight: no writer")
+		return errors.New("colorlight: no writer")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(l.hue.Writer), generic.WithPriority(priority))
@@ -205,7 +206,7 @@ func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum
 		return nil
 	}
 	if l.kelvin == nil {
-		return fmt.Errorf("colortemp: channel missing COLOR_TEMPERATURE")
+		return errors.New("colortemp: channel missing COLOR_TEMPERATURE")
 	}
 	if err := l.kelvin.Set(custom.EnsureContext(ctx), v, priority); err != nil {
 		return fmt.Errorf("colortemp: SET: %w", err)
@@ -335,10 +336,10 @@ func (l *FixedColorLight) Color() (FixedColor, bool) {
 // the new value immediately, before the CCU echo arrives.
 func (l *FixedColorLight) SetColor(ctx context.Context, c FixedColor, priority hmenum.CommandPriority) error {
 	if l.color == nil {
-		return fmt.Errorf("fixedcolor: channel missing COLOR")
+		return errors.New("fixedcolor: channel missing COLOR")
 	}
 	if l.Writer == nil {
-		return fmt.Errorf("fixedcolor: no writer configured")
+		return errors.New("fixedcolor: no writer configured")
 	}
 	name, ok := fixedColorNames[c]
 	if !ok {
@@ -394,7 +395,7 @@ func (l *FixedColorLight) CurrentColorBehaviour() (string, bool) {
 // SetColorBehaviour writes a new COLOR_BEHAVIOUR value by label.
 func (l *FixedColorLight) SetColorBehaviour(ctx context.Context, behaviour ColorBehaviour, priority hmenum.CommandPriority) error {
 	if l.colorBehaviour == nil {
-		return fmt.Errorf("fixedcolor: channel missing COLOR_BEHAVIOUR")
+		return errors.New("fixedcolor: channel missing COLOR_BEHAVIOUR")
 	}
 	if err := l.colorBehaviour.SetLabel(custom.EnsureContext(ctx), string(behaviour), priority); err != nil {
 		return fmt.Errorf("fixedcolor: SET COLOR_BEHAVIOUR: %w", err)
@@ -499,12 +500,12 @@ type FixedColorOnConfig struct {
 // forward-compatible batching.
 func (l *FixedColorLight) TurnOnFixedColor(ctx context.Context, cfg FixedColorOnConfig, priority hmenum.CommandPriority) error {
 	if l.Float == nil {
-		return fmt.Errorf("fixedcolor: channel missing LEVEL")
+		return errors.New("fixedcolor: channel missing LEVEL")
 	}
 	addr := l.DataPointKey().ChannelAddress
 	w := l.Writer
 	if w == nil {
-		return fmt.Errorf("fixedcolor: no writer configured")
+		return errors.New("fixedcolor: no writer configured")
 	}
 	level := l.LastLevel()
 	if cfg.Brightness != nil {

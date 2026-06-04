@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync/atomic"
 	"testing"
 
@@ -35,9 +36,7 @@ func (g *perChannelGetter) GetParamset(_ context.Context, addr string, _ hmenum.
 	if g.results != nil {
 		if m, ok := g.results[addr]; ok {
 			out := make(map[string]any, len(m))
-			for k, v := range m {
-				out[k] = v
-			}
+			maps.Copy(out, m)
 			return out, nil
 		}
 	}

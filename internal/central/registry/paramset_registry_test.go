@@ -67,14 +67,12 @@ func TestParamsetRegistryConcurrent(t *testing.T) {
 	ps := hmproto.Paramset{"LEVEL": hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}}
 	var wg sync.WaitGroup
 	const n = 20
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			r.Put(hmenum.InterfaceHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues, ps)
 			_, _ = r.Get(hmenum.InterfaceHmIPRF, "ADDR:1", hmenum.ParamsetKeyValues)
 			_ = r.Len()
-		}()
+		})
 	}
 	wg.Wait()
 }

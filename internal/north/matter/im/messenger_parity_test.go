@@ -95,7 +95,7 @@ func TestMessengerParity_ReadRequestWithManyDataVersionFilters(t *testing.T) {
 	_ = enc.EndContainer()               // end AttributeRequests
 	enc.PutBool(tlv.ContextTag(3), true) // FabricFiltered
 	enc.StartArray(tlv.ContextTag(4))    // DataVersionFilters
-	for i := 0; i < n; i++ {
+	for i := range n {
 		enc.StartStruct(tlv.AnonymousTag())             // DataVersionFilterIB
 		enc.StartList(tlv.ContextTag(0))                //   Path (ClusterPathIB)
 		enc.PutUint(tlv.ContextTag(1), uint64(i))       // EndpointID
@@ -194,7 +194,7 @@ func TestMessengerParity_SubscribeRequestWithManyDataVersionFilters(t *testing.T
 	_ = enc.EndContainer()               // end AttributeRequests
 	enc.PutBool(tlv.ContextTag(7), true) // FabricFiltered
 	enc.StartArray(tlv.ContextTag(8))    // DataVersionFilters (tag 8)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		enc.StartStruct(tlv.AnonymousTag())             // DataVersionFilterIB
 		enc.StartList(tlv.ContextTag(0))                //   Path
 		enc.PutUint(tlv.ContextTag(1), uint64(i))       //     EndpointID

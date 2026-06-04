@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -197,6 +198,7 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	case im.InteractionModelProtocolID:
 		return b.handleIMOpcode(ctx, src, &hdr, proto, payload)
 	case mrp.SecureChannelProtocolID:
+		//nolint:contextcheck // secure-channel handshake (PASE/CASE) runs on the bridge handler context internally; the per-datagram dispatch + test harness keep a ctx-free signature
 		return b.dispatchSecureChannel(src, &hdr, proto, payload)
 	default:
 		err := fmt.Errorf("%w: 0x%04X", ErrUnknownProtocol, proto.ProtocolID)
@@ -287,7 +289,7 @@ func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []
 //     deadline is stamped into `Bridge.timedDeadlines` and the
 //     matching follow-up Write/Invoke is gated against it via
 //     `Bridge.checkTimedGate` per Matter §8.7.
-func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, payload []byte) error {
+func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, payload []byte) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	// StatusResponse is the spec-mandated ACK for a ReportData /
 	// SubscribeResponse / Invoke / Write reply we sent earlier (Matter
 	// §8.6.2). Apple Home, Google Home, and chip-tool all emit it
@@ -395,11 +397,11 @@ func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHd
 			b.logger.Debug("matter.rx.im.read_path",
 				slog.String("src", srcString(src)),
 				slog.Any("endpoint", p.Endpoint),
-				slog.String("endpoint_set", fmt.Sprintf("%v", p.HasEndpoint)),
+				slog.String("endpoint_set", strconv.FormatBool(p.HasEndpoint)),
 				slog.Any("cluster", p.Cluster),
-				slog.String("cluster_set", fmt.Sprintf("%v", p.HasCluster)),
+				slog.String("cluster_set", strconv.FormatBool(p.HasCluster)),
 				slog.Any("attribute", p.Attribute),
-				slog.String("attribute_set", fmt.Sprintf("%v", p.HasAttribute)))
+				slog.String("attribute_set", strconv.FormatBool(p.HasAttribute)))
 		}
 		// Stamp the FabricFiltered flag + the requesting FabricIndex
 		// into the context so fabric-scoped cluster servers

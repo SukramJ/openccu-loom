@@ -96,7 +96,7 @@ func TestAuditStoreLimit(t *testing.T) {
 	t.Parallel()
 	s := freshAuditStore(t)
 	ctx := context.Background()
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = s.Append(ctx, audit.Entry{Action: audit.ActionParamsetWrite, DeviceAddress: "A"})
 	}
 	got, err := s.List(ctx, "", 2)

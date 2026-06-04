@@ -99,7 +99,6 @@ func TestValidate_Passcode(t *testing.T) {
 		{"max_plus1_invalid", 99999999, true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			p := base
@@ -341,7 +340,6 @@ func TestManualCode_KnownVectors(t *testing.T) {
 		{0, 1, "00000100007"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
 			t.Parallel()
 			got, err := ManualCode(tc.disc, tc.pass)

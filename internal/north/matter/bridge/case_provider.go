@@ -151,9 +151,7 @@ func (p *PerExchangeCaseProvider) StartReaper(parent context.Context, interval, 
 	p.cancel = cancel
 	p.mu.Unlock()
 
-	p.reaperWG.Add(1)
-	go func() {
-		defer p.reaperWG.Done()
+	p.reaperWG.Go(func() {
 		t := time.NewTicker(interval)
 		defer t.Stop()
 		for {
@@ -164,7 +162,7 @@ func (p *PerExchangeCaseProvider) StartReaper(parent context.Context, interval, 
 				p.reapLocked(ttl)
 			}
 		}
-	}()
+	})
 }
 
 // StopReaper stops the reaper goroutine and waits for it to exit.

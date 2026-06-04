@@ -41,7 +41,7 @@ func (f *fakeEphemeralProvider) GenerateAndInstall(_ context.Context) (bridge.Ep
 
 func TestRandomDiscriminator_HighBitsClear(t *testing.T) {
 	t.Parallel()
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		d, err := bridge.RandomDiscriminator()
 		if err != nil {
 			t.Fatalf("iteration %d: unexpected error: %v", i, err)
@@ -70,7 +70,7 @@ func TestRandomPasscode_RangeAndInvalidSet(t *testing.T) {
 		12345678: {},
 		87654321: {},
 	}
-	for i := 0; i < 200; i++ {
+	for i := range 200 {
 		p, err := bridge.RandomPasscode()
 		if err != nil {
 			t.Fatalf("iteration %d: unexpected error: %v", i, err)

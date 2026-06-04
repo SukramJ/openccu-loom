@@ -120,7 +120,7 @@ func TestParityMatterJS_OnOffServer_ObservedValuesSequence(t *testing.T) {
 	observed := make([]bool, 0, 2)
 
 	// Simulate two toggles and record what each CCU-confirmed state would be.
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if _, err := s.MatterInvoke(ctx, matterCmdToggle, nil, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("toggle %d: %v", i, err)
 		}
@@ -318,7 +318,6 @@ func TestParityMatterJS_OnOffServer_TlvBooleanWireEncoding(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.wantTypeHex, func(t *testing.T) {
 			t.Parallel()
 

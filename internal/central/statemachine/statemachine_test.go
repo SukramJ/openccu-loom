@@ -355,10 +355,8 @@ func TestCentralConcurrentTransitions(t *testing.T) {
 	_ = m.TransitionTo(hmenum.CentralStateRunning, hmenum.FailureReasonNone)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			_ = m.State()
 			_ = m.FailureReason()
 			_ = m.LastStateChange()
@@ -367,7 +365,7 @@ func TestCentralConcurrentTransitions(t *testing.T) {
 			_ = m.DegradedInterfaces()
 			m.MarkInterfaceDegraded("HmIP-RF", hmenum.FailureReasonNetwork)
 			m.ClearInterfaceDegraded("HmIP-RF")
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -769,13 +767,11 @@ func TestClientConcurrentReadWrite(t *testing.T) {
 	_ = m.TransitionTo(hmenum.ClientStateInitialized, hmenum.FailureReasonNone)
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			_ = m.State()
 			_ = m.FailureReason()
-		}()
+		})
 	}
 	wg.Wait()
 }

@@ -5,6 +5,7 @@ package cover
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -40,9 +41,7 @@ func (p *putWriter) SetValue(_ context.Context, _ string, parameter hmenum.Param
 
 func (p *putWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	p.mu.Lock()
 	p.puts = append(p.puts, cp)
 	p.mu.Unlock()

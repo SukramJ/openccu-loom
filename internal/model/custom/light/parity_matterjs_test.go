@@ -116,7 +116,6 @@ func TestParityMatterJS_LevelControlMandatoryAttributes(t *testing.T) {
 func TestParityMatterJS_GroupsMandatoryAttributes(t *testing.T) {
 	t.Parallel()
 	for _, dimmable := range []bool{true, false} {
-		dimmable := dimmable
 		t.Run(map[bool]string{true: "dimmable", false: "non-dimmable"}[dimmable], func(t *testing.T) {
 			t.Parallel()
 			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: dimmable})

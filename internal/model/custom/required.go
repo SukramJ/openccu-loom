@@ -4,7 +4,7 @@
 package custom
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -115,6 +115,6 @@ func sortedParameters(seen map[hmenum.Parameter]struct{}) []hmenum.Parameter {
 	for p := range seen {
 		out = append(out, p)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }

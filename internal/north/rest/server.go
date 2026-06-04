@@ -47,7 +47,8 @@ func NewServer(listen string, handler http.Handler, logger *slog.Logger) *Server
 // server is shut down. Returns [http.ErrServerClosed] on a clean
 // shutdown.
 func (s *Server) Start() error {
-	ln, err := net.Listen("tcp", s.listen)
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", s.listen)
 	if err != nil {
 		return err
 	}

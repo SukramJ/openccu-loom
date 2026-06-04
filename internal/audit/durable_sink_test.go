@@ -24,7 +24,7 @@ func TestDurableSinkPersistsEntries(t *testing.T) {
 	enqueue, stats, stop := NewDurableSink(sink, DurableSinkOptions{Capacity: 8})
 	defer stop()
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
 			t.Fatalf("enqueue: %v", err)
 		}

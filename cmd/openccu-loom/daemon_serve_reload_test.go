@@ -70,8 +70,8 @@ func TestBuildOpenAPIValidator_EmptyPath_UsesDefaultAndReturnsNilOrValidator(t *
 func TestDaemonServeWithReload_EmptyConfigPath_DelegatesDirectly(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -100,11 +100,10 @@ func TestDaemonServeWithReload_EmptyConfigPath_DelegatesDirectly(t *testing.T) {
 func TestDaemonServeWithReload_InvalidConfigPath_ReturnsError(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	err := daemonServeWithReload(ctx, cfg, "/nonexistent/config.yaml", &bytes.Buffer{}, &bytes.Buffer{})
 	if err == nil {

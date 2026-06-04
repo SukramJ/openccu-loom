@@ -241,7 +241,7 @@ func TestDispatchSC_Sigma1MulticastReplayDropped(t *testing.T) {
 
 	// Five identical Sigma1 arrivals on the same exchange — Apple's
 	// multicast burst.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := b.dispatchSecureChannel(loopbackSrc(), scHdr(), proto, payload); err != nil {
 			t.Fatalf("dispatch[%d]: %v", i, err)
 		}
@@ -719,7 +719,7 @@ func TestHandleCase_SigmaRejectSendsStatusReport(t *testing.T) {
 	t.Run("genuine_error_returns_original_error", func(t *testing.T) {
 		t.Parallel()
 		b := newStartedBridge(t)
-		wantErr := fmt.Errorf("sigma: bogus decode failure")
+		wantErr := errors.New("sigma: bogus decode failure")
 		h := &errorCaseHandler{err: wantErr}
 		b.AttachCaseHandler(h)
 		proto := scProto(mrp.SCOpcodeSigma1, 42, false, 0)

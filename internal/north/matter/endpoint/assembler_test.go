@@ -97,7 +97,6 @@ func TestConfigValidate_ZeroProductID(t *testing.T) {
 func TestConfigValidate_EmptyNodeLabel(t *testing.T) {
 	t.Parallel()
 	for _, lbl := range []string{"", "   ", "\t"} {
-		lbl := lbl
 		t.Run("label="+lbl, func(t *testing.T) {
 			t.Parallel()
 			cfg := validConfig()

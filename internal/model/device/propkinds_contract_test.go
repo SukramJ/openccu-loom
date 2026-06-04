@@ -33,11 +33,10 @@ func TestPropKindsByTypeMatchesLiveReflection(t *testing.T) {
 	// Map of type-name → live reflect.Type for the structs we expect
 	// to be in the generated table.
 	live := map[string]reflect.Type{
-		"Device": reflect.TypeOf(Device{}),
+		"Device": reflect.TypeFor[Device](),
 	}
 
 	for name, want := range PropKindsByType {
-		name, want := name, want
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			rt, ok := live[name]
@@ -57,18 +56,17 @@ func TestPropKindsByTypeMatchesLiveReflection(t *testing.T) {
 // triples in the same shape and sort order as the generator.
 func reflectEntries(t reflect.Type) []PropKindEntry {
 	var out []PropKindEntry
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag := f.Tag.Get("payload")
 		if tag == "" || tag == "-" {
 			continue
 		}
 		kind, rest, _ := strings.Cut(tag, ",")
 		var alt string
-		for _, opt := range strings.Split(rest, ",") {
+		for opt := range strings.SplitSeq(rest, ",") {
 			opt = strings.TrimSpace(opt)
-			if strings.HasPrefix(opt, "alt=") {
-				alt = strings.TrimPrefix(opt, "alt=")
+			if after, ok := strings.CutPrefix(opt, "alt="); ok {
+				alt = after
 			}
 		}
 		out = append(out, PropKindEntry{Kind: strings.TrimSpace(kind), Field: f.Name, Alt: alt})

@@ -4,6 +4,7 @@
 package light_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/light"
@@ -35,13 +36,7 @@ func TestColorControlServer_NumberOfPrimaries_InAttributeList(t *testing.T) {
 	t.Parallel()
 	srv := light.NewColorControlServer(light.DefaultColorControlServerConfig())
 
-	found := false
-	for _, id := range srv.MatterAttributes() {
-		if id == wire.ColorCtrlAttrNumberOfPrimaries {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(srv.MatterAttributes(), wire.ColorCtrlAttrNumberOfPrimaries)
 	if !found {
 		t.Errorf("MatterAttributes() missing NumberOfPrimaries (0x%04X)", wire.ColorCtrlAttrNumberOfPrimaries)
 	}

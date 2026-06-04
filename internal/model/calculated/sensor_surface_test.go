@@ -655,7 +655,6 @@ func TestAllSensorsLoadDataPointValue(t *testing.T) {
 	}
 
 	for _, s := range sensors {
-		s := s
 		t.Run(s.name, func(t *testing.T) {
 			var called bool
 			s.loader(func(_, _ string) { called = true })

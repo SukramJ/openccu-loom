@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -22,17 +23,17 @@ import (
 //
 // Port of the LINK branch in
 // (form_schema.py:generate with paramset_key=LINK).
-func (a *UISchemaAdapter) buildLinkSchema(
+func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose link schema assembly with many paramset branches
 	ctx context.Context,
 	dev *device.Device,
 	ch *device.Channel,
 	peer, locale string,
 ) (*handlers.UISchema, error) {
 	if peer == "" {
-		return nil, fmt.Errorf("ui-schema: LINK paramset requires peer query parameter")
+		return nil, errors.New("ui-schema: LINK paramset requires peer query parameter")
 	}
 	if a.writer == nil {
-		return nil, fmt.Errorf("ui-schema: LINK paramset requires wired value writer")
+		return nil, errors.New("ui-schema: LINK paramset requires wired value writer")
 	}
 	c := a.findCentralFor(dev.Address)
 	if c == nil {

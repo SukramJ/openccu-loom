@@ -5,11 +5,13 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -125,7 +127,7 @@ type WireDeps struct {
 // backend + ingest + value seeding), and — when [WireDeps.CallbackServer]
 // is set — registers the callback handler + announces the daemon's
 // callback URL to the CCU so live events start flowing.
-func WireCentrals(
+func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cfg *config.Config,
 	reg *central.Registry,
@@ -143,15 +145,15 @@ func WireCentrals(
 		joined  []string
 	)
 	teardown := func() {
-		for i := len(closers) - 1; i >= 0; i-- {
-			closers[i]()
+		for _, closer := range slices.Backward(closers) {
+			closer()
 		}
 	}
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
 		unit, ok := reg.Get(cc.Name)
 		if !ok {
-			joined = append(joined, fmt.Sprintf("%s: not registered", cc.Name))
+			joined = append(joined, cc.Name+": not registered")
 			continue
 		}
 		// Register callback handlers first so events that arrive during
@@ -224,7 +226,7 @@ func WireCentrals(
 		// only justification for this hook running at all. Anything
 		// more aggressive (periodic refresh, recovery-triggered roll
 		// across the whole installation) is unsafe.
-		wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger)
+		wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger) //nolint:contextcheck // hook installs a background goroutine that must outlive the wiring ctx
 
 		// Wire the source-token lifecycle on the central's event bus.
 		// ConnectionLost flips every wire DP to `stale`;
@@ -355,6 +357,7 @@ func (r *backendRegistry) getter(interfaceID string) backends.MasterGetter {
 	return b
 }
 
+//nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup
 func wireInterface(
 	ctx context.Context,
 	cc config.CentralConfig,
@@ -616,7 +619,7 @@ func wireInterface(
 					return err
 				}
 				if !ok {
-					return fmt.Errorf("reconnect: CanReconnect returned false")
+					return errors.New("reconnect: CanReconnect returned false")
 				}
 				return nil
 			},
@@ -627,7 +630,7 @@ func wireInterface(
 		// recovery.completed / recovery.failed surface in the log
 		// alongside the existing wire.init.ok / wire.reinit.ok lines.
 		unit.Recovery.SetLogger(logger)
-		unit.Recovery.Subscribe()
+		unit.Recovery.Subscribe() //nolint:contextcheck // Subscribe starts a background goroutine; it has no ctx parameter by design
 	}
 
 	// Per-interface connection probe — pings the CCU every 30 s so the
@@ -644,6 +647,7 @@ func wireInterface(
 	probeWireID := wireID
 	probeIC := ic
 	probeBus := unit.EventBus
+	//nolint:contextcheck // probe goroutine must outlive the wiring ctx (60s timeout); daemon-lifetime background context is intentional
 	probeCtx, probeCancel := context.WithCancel(context.Background())
 	go func() {
 		ticker := time.NewTicker(connectionCheckerInterval)
@@ -712,7 +716,7 @@ func wireInterface(
 	// CUxD), construct a MasterPoller and wire its SchedulePoll as the
 	// post-MASTER-write hook on every channel. HmIP interfaces use the
 	// CONFIG_PENDING event path instead and get a nil hook (no polling).
-	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger)
+	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
 		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
 	} else {
@@ -761,6 +765,7 @@ func wireInterface(
 			}
 		}
 		if len(deviceAddrs) > 0 {
+			//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
 			unit.Devices.ScheduleParamsetConsistencyCheck(
 				context.Background(), iface, deviceAddrs, backend,
 				func(inconsistencies []coordinators.ParamsetInconsistency) {
@@ -892,6 +897,7 @@ func wireInterface(
 	centralName := cc.Name
 	ifaceID := wireID
 	deinitID := initID
+	//nolint:contextcheck // teardown closure: deinit runs on a fresh short-timeout ctx, not the already-cancelled wiring ctx
 	closer := func() {
 		// Stop the connection-probe goroutine first so the next tick
 		// does not race against the backend being torn down.
@@ -902,6 +908,7 @@ func wireInterface(
 			poller.Close()
 		}
 		if callbackURL != "" {
+			//nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
 			deinitCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			if err := backend.Deinit(deinitCtx, deinitID); err != nil {
 				logger.Debug("wire.deinit",
@@ -981,7 +988,7 @@ func ensureConnectedClientState(ic *client.InterfaceClient, logger *slog.Logger)
 // BIN-RPC caller separately.
 func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, error) {
 	if iface == hmenum.InterfaceCUxD {
-		return "", fmt.Errorf("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+		return "", errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
 	}
 	ports, ok := hmenum.DetectionPorts[iface]
 	if !ok {

@@ -284,7 +284,7 @@ func TestLevelRegistry_Permanent_SurvivesSweep(t *testing.T) {
 	reg := hmlog.NewLevelRegistry(slog.LevelInfo)
 	reg.Set("a", slog.LevelDebug, 0)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		removed := reg.Sweep()
 		if removed != 0 {
 			t.Errorf("Sweep iteration %d removed a permanent override", i)
@@ -516,17 +516,14 @@ func TestLevelRegistry_ConcurrentSetResolve_NoRace(t *testing.T) {
 	var wg sync.WaitGroup
 	const n = 100
 
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		i := i
-		go func() {
-			defer wg.Done()
+	for i := range n {
+		wg.Go(func() {
 			if i%2 == 0 {
 				reg.Set("concurrent.path", slog.LevelDebug, 0)
 			} else {
 				_ = reg.Resolve("concurrent.path")
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

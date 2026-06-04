@@ -115,7 +115,7 @@ func TestIdempotency_NoKeyFlowsThrough(t *testing.T) {
 	handler := Idempotency()(inner)
 
 	// Two requests without any Idempotency-Key header.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		req := httptest.NewRequest(http.MethodPost, "/api/devices", http.NoBody)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
@@ -136,7 +136,7 @@ func TestIdempotency_GetBypassesCache(t *testing.T) {
 	})
 	handler := Idempotency()(inner)
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		req := httptest.NewRequest(http.MethodGet, "/api/devices", http.NoBody)
 		req.Header.Set("Idempotency-Key", "key-get")
 		rec := httptest.NewRecorder()
@@ -152,7 +152,6 @@ func TestIdempotency_PutAndPatchAreCached(t *testing.T) {
 	t.Parallel()
 
 	for _, method := range []string{http.MethodPut, http.MethodPatch} {
-		method := method
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
 
@@ -163,7 +162,7 @@ func TestIdempotency_PutAndPatchAreCached(t *testing.T) {
 			})
 			handler := Idempotency()(inner)
 
-			for i := 0; i < 2; i++ {
+			for range 2 {
 				req := httptest.NewRequest(method, "/api/devices/1", http.NoBody)
 				req.Header.Set("Idempotency-Key", "key-"+method)
 				rec := httptest.NewRecorder()
@@ -187,7 +186,7 @@ func TestIdempotency_DeleteIsCached(t *testing.T) {
 	})
 	handler := Idempotency()(inner)
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		req := httptest.NewRequest(http.MethodDelete, "/api/devices/42", http.NoBody)
 		req.Header.Set("Idempotency-Key", "key-del")
 		rec := httptest.NewRecorder()

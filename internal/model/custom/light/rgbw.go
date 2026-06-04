@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -268,10 +269,10 @@ func (r *RGBWLight) Kelvin() (int32, bool) {
 // the current mode does not support colour-temperature input.
 func (r *RGBWLight) SetKelvin(ctx context.Context, v int32, priority hmenum.CommandPriority) error {
 	if !r.HasColorTemperature() {
-		return fmt.Errorf("rgbw: current mode does not support colour temperature")
+		return errors.New("rgbw: current mode does not support colour temperature")
 	}
 	if r.kelvin == nil {
-		return fmt.Errorf("rgbw: channel missing COLOR_TEMPERATURE")
+		return errors.New("rgbw: channel missing COLOR_TEMPERATURE")
 	}
 	if v < r.MinKelvin {
 		v = r.MinKelvin
@@ -300,10 +301,10 @@ func (r *RGBWLight) Effects() []string {
 // label is not in the available effects list.
 func (r *RGBWLight) SetEffect(ctx context.Context, label string, priority hmenum.CommandPriority) error {
 	if !r.HasEffects() {
-		return fmt.Errorf("rgbw: current mode does not support effects")
+		return errors.New("rgbw: current mode does not support effects")
 	}
 	if r.effect == nil {
-		return fmt.Errorf("rgbw: channel missing EFFECT")
+		return errors.New("rgbw: channel missing EFFECT")
 	}
 	if err := r.effect.TriggerLabel(custom.EnsureContext(ctx), label, priority); err != nil {
 		return fmt.Errorf("rgbw: SET EFFECT: %w", err)
@@ -315,7 +316,7 @@ func (r *RGBWLight) SetEffect(ctx context.Context, label string, priority hmenum
 // [ColorLight] only when the current mode honours colour input.
 func (r *RGBWLight) SetColor(ctx context.Context, hue int32, saturation float64, priority hmenum.CommandPriority) error {
 	if !r.HasColor() {
-		return fmt.Errorf("rgbw: current mode does not support HSV colour")
+		return errors.New("rgbw: current mode does not support HSV colour")
 	}
 	return r.ColorLight.SetColor(ctx, hue, saturation, priority)
 }

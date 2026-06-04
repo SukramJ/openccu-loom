@@ -5,6 +5,7 @@ package cover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -186,7 +187,7 @@ func (b *Blind) SetTilt(ctx context.Context, target float64, priority hmenum.Com
 		target = 1
 	}
 	if b.level2 == nil {
-		return fmt.Errorf("blind: SET tilt: channel has no LEVEL_2 data point")
+		return errors.New("blind: SET tilt: channel has no LEVEL_2 data point")
 	}
 	b.muTarget.Lock()
 	wasMoving := b.hasTgt || b.hasTgt2

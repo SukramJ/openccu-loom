@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -342,12 +343,7 @@ func DeleteConfigSection(svc ConfigAdminService, rec audit.Recorder) http.Handle
 }
 
 func validSection(s configstore.Section) bool {
-	for _, k := range configstore.AllSections() {
-		if k == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(configstore.AllSections(), s)
 }
 
 // validateSection runs structural validation by unmarshalling into

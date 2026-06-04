@@ -37,7 +37,6 @@ func TestIncidentTypeParityConstants(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.id, func(t *testing.T) {
 			t.Parallel()
 			if string(tc.got) != tc.want {

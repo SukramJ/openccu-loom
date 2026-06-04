@@ -128,13 +128,11 @@ func TestCallbackHandlersGracefulShutdown(t *testing.T) {
 	// Add three goroutines manually using the handler's WaitGroup.
 	const n = 3
 	for range n {
-		h.wg.Add(1)
-		go func() {
-			defer h.wg.Done()
+		h.wg.Go(func() {
 			// Simulate work that respects the handler's context.
 			<-h.ctx.Done()
 			completed.Add(1)
-		}()
+		})
 	}
 
 	// Stop must cancel the context and wait for all goroutines.
@@ -362,7 +360,7 @@ func TestCallbackHandlersEventUnknownChannel(t *testing.T) {
 
 // registryOf returns the first Unit from a registry that already
 // holds the given device.
-func registryOf(t *testing.T, _ interface{}) *central.Unit {
+func registryOf(t *testing.T, _ any) *central.Unit {
 	t.Helper()
 	c, err := central.New(central.Config{Name: "ccu-tmp"})
 	if err != nil {

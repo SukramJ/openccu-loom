@@ -4,7 +4,7 @@ Generated: 2026-05-29T06:43:46Z
 
 Total annotated items: 57 — PRODUCTIVE: 4 — MASKED: 53
 
-## MASKED — Annotation hides genuine dead code (53 items)
+## MASKED — Annotation hides genuine dead code (51 items)
 
 These items have zero production callers outside their definition file.
 **Action required:** either wire them into a real production call site, or
@@ -15,7 +15,6 @@ A `loom:reachable` annotation alone is not sufficient justification.
 |---|---|---|---|
 | `ContextWithIdentity` | `internal/auth/middleware.go` | 115 | used by WS upgrade handler and integration tests to inject pre-resolved identity |
 | `NewJWKSCache` | `internal/auth/oidc/jwks.go` | 61 | used by OIDC auth middleware to verify JWT signatures against the provider's keyset |
-| `ExecuteResult` | `internal/boundary/execute.go` | 107 | generic helper used by any boundary caller that needs to extract a typed result |
 | `LoadEasymode` | `internal/ccudata/easymode.go` | 182 | called by ccudata loader during daemon boot to populate easymode registry |
 | `BridgeCombinedDataPoint` | `internal/central/adapter/combined_bridge.go` | 47 | installed at combined-DP materialise time in device pipeline; the HSColor/LevelCombined/WeekProfile surface is scaffolding wired incrementally per device type |
 | `SafeGo` | `internal/central/adapter/safego.go` | 25 | utility wrapper for panic-safe goroutines; callers in adapter background tasks are added incrementally |
@@ -65,7 +64,6 @@ A `loom:reachable` annotation alone is not sufficient justification.
 | `BuildStack` | `pkg/hmlog/factory.go` | 87 | legacy two-return-value variant used by tests and tooling that do not need TeeHandler |
 | `DefaultSensitiveKeys` | `pkg/hmlog/redact.go` | 98 | used by config-UI and REST handlers that need to extend the redaction list |
 | `NewRequestContextFilter` | `pkg/hmlog/request_filter.go` | 36 | used by BuildFullStack to enrich log records with per-request fields |
-| `Delegated` | `pkg/hmproperty/delegated.go` | 38 | used by device-profile paramset-config and MQTT entity descriptions to resolve delegated property paths |
 
 ## PRODUCTIVE — Has production callers (4 items)
 

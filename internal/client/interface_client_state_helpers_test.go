@@ -130,7 +130,7 @@ func TestCanReconnect(t *testing.T) {
 func TestResetCircuitBreakers(t *testing.T) {
 	c := newTestClientForState(t)
 	// Trip the breaker.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		c.cfg.Circuit.RecordFailure()
 	}
 	if c.cfg.Circuit.State() == hmenum.CircuitStateClosed {

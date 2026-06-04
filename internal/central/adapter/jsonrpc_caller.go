@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
@@ -32,7 +33,7 @@ func (c *jsonrpcCaller) Call(ctx context.Context, method string, args ...any) (a
 			return nil, fmt.Errorf("jsonrpcCaller: single arg must be map[string]any, got %T", args[0])
 		}
 	default:
-		return nil, fmt.Errorf("jsonrpcCaller: variadic args not supported for JSON-RPC; use a single map[string]any")
+		return nil, errors.New("jsonrpcCaller: variadic args not supported for JSON-RPC; use a single map[string]any")
 	}
 
 	var out any

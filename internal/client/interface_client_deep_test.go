@@ -293,7 +293,6 @@ func TestInterfaceClientCapabilitiesDefaultsFromInterface(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.iface), func(t *testing.T) {
 			t.Parallel()
 			c, err := New(Config{
@@ -626,8 +625,7 @@ func TestInterfaceClientConcurrentSetStateAndStateRead(t *testing.T) {
 	wg.Add(10)
 
 	// 5 writers.
-	for i := 0; i < 5; i++ {
-		i := i
+	for i := range 5 {
 		go func() {
 			defer wg.Done()
 			c.SetState(writeStates[i])

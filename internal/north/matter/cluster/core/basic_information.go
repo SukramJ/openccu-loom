@@ -174,13 +174,13 @@ type Config struct {
 // missing or zero-valued.
 func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 	if cfg.VendorID == 0 {
-		return nil, fmt.Errorf("matter: BasicInformation Config.VendorID must be non-zero")
+		return nil, errors.New("matter: BasicInformation Config.VendorID must be non-zero")
 	}
 	if cfg.ProductID == 0 {
-		return nil, fmt.Errorf("matter: BasicInformation Config.ProductID must be non-zero")
+		return nil, errors.New("matter: BasicInformation Config.ProductID must be non-zero")
 	}
 	if cfg.NodeLabel == "" {
-		return nil, fmt.Errorf("matter: BasicInformation Config.NodeLabel must be non-empty")
+		return nil, errors.New("matter: BasicInformation Config.NodeLabel must be non-empty")
 	}
 	loc := cfg.Location
 	if loc == "" {
@@ -341,7 +341,7 @@ var (
 func (b *BasicInformation) MatterClusterID() uint32 { return basicInfoClusterID }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) {
+func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	switch attrID {
@@ -484,8 +484,8 @@ func (b *BasicInformation) uniqueID() string {
 	// Mix in the per-boot salt so Apple's HAP cache sees a fresh
 	// fingerprint after every daemon restart; see package bootid.
 	salt := bootid.Salt()
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%04X|%04X|%s|%s",
-		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber)))
+	h := sha256.Sum256(fmt.Appendf(nil, "%s|%04X|%04X|%s|%s",
+		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber))
 	return hex.EncodeToString(h[:16])
 }
 
@@ -499,7 +499,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 			return fmt.Errorf("matter: NodeLabel write expected string, got %T", value)
 		}
 		if len(s) > 32 {
-			return fmt.Errorf("matter: NodeLabel exceeds 32 utf-8 bytes")
+			return errors.New("matter: NodeLabel exceeds 32 utf-8 bytes")
 		}
 		b.mu.Lock()
 		b.nodeLabel = s
@@ -604,7 +604,7 @@ func (b *BasicInformation) MatterAttributes() []uint32 {
 // as the Matter write path.
 func (b *BasicInformation) SetNodeLabel(s string) error {
 	if len(s) > 32 {
-		return fmt.Errorf("matter: NodeLabel exceeds 32 utf-8 bytes")
+		return errors.New("matter: NodeLabel exceeds 32 utf-8 bytes")
 	}
 	b.mu.Lock()
 	b.nodeLabel = s

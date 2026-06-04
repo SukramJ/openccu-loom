@@ -149,7 +149,7 @@ func TestParityBackoffSaturatesAtMax(t *testing.T) {
 	c.SetBackoff(100*time.Millisecond, 400*time.Millisecond)
 
 	failing := simpleFailPipeline(hmenum.RecoveryStageDetecting)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		c.Run(context.Background(), "sat-iface", failing)
 	}
 	got := c.NextRetryDelay("sat-iface")
@@ -299,7 +299,7 @@ func TestParityCBStateChangedOpenTriggers(t *testing.T) {
 		From:        hmenum.CircuitStateClosed,
 		To:          hmenum.CircuitStateOpen,
 	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery not triggered by CB→Open within 2s (count=%d)", count.Load())
 	}
 }
@@ -325,7 +325,7 @@ func TestParityConnectionLostSubscriptionWiring(t *testing.T) {
 		CentralName: "parity-lost",
 		InterfaceID: "BidCos-RF",
 	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery not triggered after ConnectionLost (count=%d)", count.Load())
 	}
 
@@ -475,12 +475,9 @@ func TestParityMultiInterfaceRecoveryRun(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for _, id := range []string{"iface-A", "iface-B"} {
-		id := id
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c.Run(context.Background(), id, simpleFailPipeline(hmenum.RecoveryStageRPCChecking))
-		}()
+		})
 	}
 	wg.Wait()
 

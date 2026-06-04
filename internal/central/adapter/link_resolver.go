@@ -6,7 +6,6 @@ package adapter
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -138,13 +137,13 @@ func (a *linkClientAdapter) GetLinkInfo(ctx context.Context, sender, receiver st
 // nil.
 func WireLinkCoordinator(u *central.Unit, domain *LinksDomain) error {
 	if u == nil {
-		return fmt.Errorf("link: WireLinkCoordinator: central is nil")
+		return errors.New("link: WireLinkCoordinator: central is nil")
 	}
 	if domain == nil {
-		return fmt.Errorf("link: WireLinkCoordinator: domain is nil")
+		return errors.New("link: WireLinkCoordinator: domain is nil")
 	}
 	if u.Link == nil {
-		return fmt.Errorf("link: WireLinkCoordinator: central.Link is nil")
+		return errors.New("link: WireLinkCoordinator: central.Link is nil")
 	}
 	adapter := &linkClientAdapter{domain: domain}
 	u.SetLinkResolver(func(deviceAddress string) (coordinators.LinkClient, bool) {

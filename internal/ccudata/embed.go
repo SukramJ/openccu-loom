@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
 	"strings"
 )
@@ -168,9 +169,7 @@ func applyCustomTable(t *Translations, stem string, table map[string]string) {
 }
 
 func mergeInto(dst, src map[string]string) {
-	for k, v := range src {
-		dst[k] = v
-	}
+	maps.Copy(dst, src)
 }
 
 func mergeLocaleInto(dst map[string]map[string]string, locale string, src map[string]string) {

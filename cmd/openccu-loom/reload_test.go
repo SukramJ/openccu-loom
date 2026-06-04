@@ -88,8 +88,8 @@ func TestHotReloadHandlerNilDiffNoOp(t *testing.T) {
 func TestDaemonServeWithReload_EmptyConfigPath_CallsDaemonServe(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -127,8 +127,8 @@ func TestDaemonServeWithReload_WithConfigPath_StartsWatcher(t *testing.T) {
 	}
 
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0

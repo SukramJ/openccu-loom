@@ -223,7 +223,6 @@ func TestConvertPlayRepetitionsIndex(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(fmt.Sprintf("index_%d", tc.index), func(t *testing.T) {
 			t.Parallel()
 			got, err := ConvertPlayRepetitionsIndex(tc.index, avail)
@@ -272,7 +271,6 @@ func TestPlaySoundRepetitionsSemantics(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			sp, w := newSoundPlayerRig(t)

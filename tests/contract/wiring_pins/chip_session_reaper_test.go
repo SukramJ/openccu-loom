@@ -16,7 +16,7 @@ import (
 func TestPin_StartReaper_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/matter", "StartReaper",
 	)
 }

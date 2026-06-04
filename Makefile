@@ -12,6 +12,9 @@ GOFUMPT         ?= gofumpt
 GOIMPORTS       ?= goimports
 GOLANGCI_LINT   ?= golangci-lint
 GORELEASER      ?= goreleaser
+GOVULNCHECK     ?= govulncheck
+GOLICENSES      ?= go-licenses
+GREMLINS        ?= gremlins
 
 export CGO_ENABLED := 0
 
@@ -42,6 +45,9 @@ setup: ## install developer tooling and the pre-commit hook
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO) install github.com/pressly/goose/v3/cmd/goose@latest
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	$(GO) install github.com/google/go-licenses@latest
+	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@latest
 	@if [ -d .git ]; then \
 		install -m 0755 script/git/pre-commit .git/hooks/pre-commit 2>/dev/null || \
 			echo "note: script/git/pre-commit not present yet (Phase 0)"; \
@@ -286,12 +292,30 @@ bench: ## run benchmarks (requires -tags=bench)
 		echo "benchmarks not implemented yet (Phase 10)"; \
 	fi
 
+MUTATION_PKGS ?= ./internal/parameter/ ./internal/payload/ ./internal/routingkey/ ./pkg/hmtypes/ ./pkg/hmenum/
+
+.PHONY: mutation
+mutation: ## run mutation testing (gremlins) on core packages — slow; report-only
+	@for p in $(MUTATION_PKGS); do \
+		echo "-> gremlins unleash $$p"; \
+		$(GREMLINS) unleash "$$p" || true; \
+	done
+
+# Fuzz smoke budget. Iteration-based (`<n>x`) on purpose: a wall-clock
+# budget (`5s`) makes go's fuzzing coordinator cancel mid-execution on a
+# CPU-starved CI runner and report a spurious "context deadline exceeded"
+# failure. A fixed execution count is immune to runner load — it just takes
+# a little longer — while still replaying the full seed corpus and exploring
+# new inputs. Override for a deeper nightly run, e.g. FUZZTIME=2000000x.
+FUZZTIME     ?= 100000x
+FUZZ_TIMEOUT ?= 120s
+
 .PHONY: fuzz
-fuzz: ## run each fuzz target for 5s as a smoke test
+fuzz: ## run each fuzz target for $(FUZZTIME) executions as a smoke test
 	@for pkg in $$($(GO) list ./internal/client/transport/xmlrpc/... ./internal/client/transport/binrpc/... ./internal/client/transport/jsonrpc/... ./internal/north/matter/im/... ./internal/north/matter/tlv/...); do \
 		for fn in $$($(GO) test -list 'Fuzz.*' $$pkg 2>/dev/null | grep '^Fuzz'); do \
-			echo "-> fuzz $$pkg :: $$fn (5s)"; \
-			$(GO) test $$pkg -fuzz=^$${fn}$$ -fuzztime=5s -run=^$$ || exit 1; \
+			echo "-> fuzz $$pkg :: $$fn ($(FUZZTIME))"; \
+			$(GO) test $$pkg -fuzz=^$${fn}$$ -fuzztime=$(FUZZTIME) -timeout=$(FUZZ_TIMEOUT) -run=^$$ || exit 1; \
 		done; \
 	done
 
@@ -334,6 +358,14 @@ coverage-check-per-package: ## fail when any package drops below its tier thresh
 .PHONY: lint
 lint: ## run golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+.PHONY: vuln
+vuln: ## scan dependencies + reachable code for known vulnerabilities (govulncheck)
+	$(GOVULNCHECK) ./...
+
+.PHONY: licenses
+licenses: ## fail on copyleft dependency licenses (GPL/AGPL/LGPL forbidden; MPL = reciprocal)
+	$(GOLICENSES) check ./... --disallowed_types=forbidden,restricted,reciprocal
 
 .PHONY: fmt
 fmt: ## run gofumpt + goimports

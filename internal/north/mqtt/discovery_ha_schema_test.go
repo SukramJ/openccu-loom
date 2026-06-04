@@ -134,7 +134,6 @@ func TestMaintenanceParametersClassifiedForDiscovery(t *testing.T) {
 		{hmenum.DataPointCategoryBinarySensor, HAComponentBinarySensor},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.category), func(t *testing.T) {
 			t.Parallel()
 			comp, ok := componentFromCategory(tc.category)
@@ -247,7 +246,6 @@ func TestClimateBuilderBoundsPassThrough(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			src := &stubBuilder{component: "climate", body: tc.body}

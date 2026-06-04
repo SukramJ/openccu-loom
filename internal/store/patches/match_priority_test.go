@@ -91,7 +91,7 @@ func TestFirstMatchOnlyOnePatchFires(t *testing.T) {
 
 	counter := 0
 	r := &Registry{}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		r.Register(Patch{
 			Parameter: hmenum.ParameterHumidity,
 			Apply: func(pd *hmproto.ParameterData) bool {

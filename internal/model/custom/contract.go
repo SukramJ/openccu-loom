@@ -43,4 +43,4 @@ type AggregateDataPoint interface {
 // Cover.IsStateChange(float64), Climate.IsStateChange(Mode, Profile,
 // float64), …). This interface only documents the convention, no shared
 // method.
-type StateChanger interface{}
+type StateChanger any

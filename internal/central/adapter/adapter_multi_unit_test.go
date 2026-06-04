@@ -7124,7 +7124,7 @@ func TestApplyScheduleEnabledToModel_WithWeekProfile(t *testing.T) {
 	// applyScheduleEnabledToModel is called internally by SetScheduleEnabled,
 	// but we can call it directly since it's a method on SchedulesDomain
 	// (unexported but accessible within the same package).
-	s.applyScheduleEnabledToModel("ASE1DEV01B28", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "ASE1DEV01B28", "1_1", true)
 	// Must not panic.
 }
 
@@ -8645,7 +8645,7 @@ func TestReadActiveProfile_GetParamsetError(t *testing.T) {
 		getParamsetFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]any, error) {
 			if key == hmenum.ParamsetKeyValues {
 				// readActiveProfile call → return error → (false,"") path.
-				return nil, fmt.Errorf("values unavailable")
+				return nil, errors.New("values unavailable")
 			}
 			// MASTER call: return valid climate schedule.
 			return climateScheduleValues(), nil
@@ -8788,7 +8788,7 @@ func TestWireSchedulerEvents_OnCompleteWithError(t *testing.T) {
 		t.Fatalf("expected 1 wired job, got %d", len(wired))
 	}
 	// Call OnComplete with a non-nil error — exercises line 44-46.
-	wired[0].OnComplete("test-job", 42, false, fmt.Errorf("job failed"))
+	wired[0].OnComplete("test-job", 42, false, errors.New("job failed"))
 }
 
 // TestWireSchedulerEvents_OnCompleteNoError exercises the nil err path
@@ -8859,7 +8859,7 @@ func TestRecoveryReconnector_FailedResult(t *testing.T) {
 	}
 	// A step that always fails → Recovery.Run returns "failed" → result != "success".
 	step := coordinators.RecoveryStep(func(_ context.Context) error {
-		return fmt.Errorf("reinit failed")
+		return errors.New("reinit failed")
 	})
 	rc := NewRecoveryReconnector(reg, step)
 	err = rc.Reconnect(context.Background(), "ccu-b32-rr-fail", "HmIP-RF")
@@ -9741,7 +9741,7 @@ func TestApplyScheduleEnabledToModel_DeviceNotInFirstCentral(t *testing.T) {
 	s := NewSchedulesDomain(reg, w)
 
 	// applyScheduleEnabledToModel → c1 doesn't have device → continue → c2 has it.
-	s.applyScheduleEnabledToModel("ASEDEV36", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "ASEDEV36", "1_1", true)
 }
 
 // ---------------------------------------------------------------------------
@@ -11417,8 +11417,7 @@ func TestSweepDevice_ObservedLoadableDP(t *testing.T) {
 // covering the empty function body {}.
 func TestStartUnobservedSweepLoop_NilSweepNoopBodyCovered(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// sweep == nil → returns noop at line 53.
 	stop := StartUnobservedSweepLoop(ctx, nil, time.Second, nil)
 	if stop == nil {
@@ -14215,7 +14214,7 @@ func TestBackupAdapter_TriggerBackup_AsyncSaveSucceeds(t *testing.T) {
 
 	// Poll the fake storage until the async goroutine saves the entry.
 	var got []byte
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		if b, ok := fake.lookup(id); ok {
 			got = b
 			break

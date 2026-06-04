@@ -70,6 +70,7 @@ func TestParityMatterJS_WireClusterRevisions(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			if c.codeRevision != js.Revision {
 				t.Errorf("code revision %d != matter.js %d for %s (0x%04X)",
 					c.codeRevision, js.Revision, js.Name, js.ID)

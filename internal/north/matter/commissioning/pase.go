@@ -127,7 +127,7 @@ func (r *PASEResponder) Session() (*channel.Session, error) {
 	}
 	shared := r.verifier.SharedSecret()
 	if len(shared) == 0 {
-		return nil, fmt.Errorf("commissioning: PASE shared secret unavailable")
+		return nil, errors.New("commissioning: PASE shared secret unavailable")
 	}
 	encKey, decKey, err := derivePASESessionKeys(shared)
 	if err != nil {

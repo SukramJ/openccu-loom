@@ -832,7 +832,7 @@ func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum
 		return nil
 	}
 	if c.writer == nil {
-		return fmt.Errorf("climate: set temperature: no setpoint data point and no writer")
+		return errors.New("climate: set temperature: no setpoint data point and no writer")
 	}
 	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature: %w", err)
@@ -854,7 +854,7 @@ func (c *Climate) SetTemperatureRaw(ctx context.Context, v float64, priority hme
 		return nil
 	}
 	if c.writer == nil {
-		return fmt.Errorf("climate: set temperature raw: no setpoint data point and no writer")
+		return errors.New("climate: set temperature raw: no setpoint data point and no writer")
 	}
 	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature raw: %w", err)
@@ -1428,7 +1428,7 @@ func replayCurrentValue(dp interface {
 // replays the wire DP's currently observed value through the same handler so
 // the Climate cache lands in sync with the CCU state at boot, not only on the
 // next push.
-func (c *Climate) Subscribe(ch *device.Channel) func() {
+func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyclo,funlen // single-purpose climate subscription wiring with many data-point branches
 	if ch == nil {
 		return func() {}
 	}
@@ -1904,13 +1904,7 @@ func (c *Climate) numWeekPrograms() int {
 	if !loOK || !hiOK {
 		return 0
 	}
-	count := int(hi-lo) + 1
-	if count < 0 {
-		count = 0
-	}
-	if count > 6 {
-		count = 6
-	}
+	count := min(max(int(hi-lo)+1, 0), 6)
 	return count
 }
 

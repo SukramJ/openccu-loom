@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -54,7 +55,7 @@ func NewUISchemaAdapter(
 }
 
 // UISchema implements [handlers.UISchemaService].
-func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaRequest) (*handlers.UISchema, error) {
+func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaRequest) (*handlers.UISchema, error) { //nolint:funlen // single-purpose UI schema assembly with many paramset branches
 	address, channelNo, paramset, peer, locale := req.Address, req.Channel, req.Paramset, req.Peer, req.Locale
 	dev, ch := a.lookupChannel(address, channelNo)
 	if dev == nil || ch == nil {
@@ -228,7 +229,7 @@ func (a *UISchemaAdapter) buildSubsetGroups(
 			out = append(out, bucket{
 				key: k,
 				group: handlers.UISchemaSubsetGroup{
-					ID:           fmt.Sprintf("subset_%s", ss.MemberParams[0]),
+					ID:           "subset_" + ss.MemberParams[0],
 					Label:        a.errorLabel(locale, ss.NameKey),
 					MemberParams: append([]string(nil), ss.MemberParams...),
 					Options:      opts,
@@ -783,10 +784,8 @@ func humanizeRaw(v string) string {
 
 func groupForParam(meta *ccudata.SenderTypeMetadata, parameter string) string {
 	for _, g := range meta.ParameterGroups {
-		for _, p := range g.Parameters {
-			if p == parameter {
-				return g.ID
-			}
+		if slices.Contains(g.Parameters, parameter) {
+			return g.ID
 		}
 	}
 	return ""

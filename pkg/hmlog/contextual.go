@@ -25,6 +25,7 @@ package hmlog
 import (
 	"context"
 	"log/slog"
+	"maps"
 )
 
 // Fields is a free-form set of key-value pairs attached to every log
@@ -75,12 +76,8 @@ func WithContext(ctx context.Context, fields Fields) context.Context {
 	}
 	existing, _ := ctx.Value(contextKey{}).(Fields)
 	merged := make(Fields, len(existing)+len(fields))
-	for k, v := range existing {
-		merged[k] = v
-	}
-	for k, v := range fields {
-		merged[k] = v
-	}
+	maps.Copy(merged, existing)
+	maps.Copy(merged, fields)
 	return context.WithValue(ctx, contextKey{}, merged)
 }
 

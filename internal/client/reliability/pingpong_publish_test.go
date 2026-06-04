@@ -41,7 +41,7 @@ func TestPingPongPublishHookFiresAboveThreshold(t *testing.T) {
 		mu.Unlock()
 	})
 
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		tr.RecordPing(string(rune('A' + i)))
 	}
 
@@ -80,7 +80,7 @@ func TestPingPongPublishHookFiresOnUnknownAboveThreshold(t *testing.T) {
 	})
 
 	// Send 4 orphan PONGs — each lands in the Unknown table.
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		tr.RecordPong(string(rune('X' + i)))
 	}
 

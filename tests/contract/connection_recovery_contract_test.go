@@ -61,7 +61,7 @@ func TestRecoveryContractMaxRetryDelayIs120s(t *testing.T) {
 	t.Parallel()
 	c := newRecoveryCoord(t)
 	// Drive many failures; delay must saturate at 120 s.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		runFailing(t, c, "iface")
 	}
 	if got := c.NextRetryDelay("iface"); got != 120*time.Second {
@@ -204,7 +204,7 @@ func TestRecoveryContractCanRetryFalseAtMaxAttempts(t *testing.T) {
 	t.Parallel()
 	const limit = 3
 	c := newRecoveryCoordWithLimit(t, limit)
-	for i := 0; i < limit; i++ {
+	for range limit {
 		runFailing(t, c, "iface")
 	}
 	// Next run: pipeline step must NOT be called (cap exhausted).
@@ -258,7 +258,7 @@ func TestRecoveryContractBackoffSequence(t *testing.T) {
 func TestRecoveryContractDelayCapAtMax(t *testing.T) {
 	t.Parallel()
 	c := newRecoveryCoord(t)
-	for i := 0; i < 15; i++ {
+	for range 15 {
 		runFailing(t, c, "iface")
 	}
 	got := c.NextRetryDelay("iface")
@@ -331,7 +331,7 @@ func TestRecoveryContractMaxAttemptsExhausted(t *testing.T) {
 	t.Parallel()
 	const limit = 4
 	c := newRecoveryCoordWithLimit(t, limit)
-	for i := 0; i < limit; i++ {
+	for range limit {
 		runFailing(t, c, "iface")
 	}
 	st := c.State("iface")
@@ -443,7 +443,7 @@ func TestRecoveryContractResetReleasesExhaustedCap(t *testing.T) {
 	t.Parallel()
 	const limit = 2
 	c := newRecoveryCoordWithLimit(t, limit)
-	for i := 0; i < limit; i++ {
+	for range limit {
 		runFailing(t, c, "iface")
 	}
 	c.ResetAttempts("iface")
@@ -466,7 +466,7 @@ func TestRecoveryContractResetReleasesExhaustedCap(t *testing.T) {
 func TestRecoveryContractHistoryCapsBound(t *testing.T) {
 	t.Parallel()
 	c := newRecoveryCoordWithLimit(t, 0) // unlimited attempts
-	for i := 0; i < 30; i++ {
+	for range 30 {
 		runFailing(t, c, "iface")
 	}
 	hist := c.History("iface")

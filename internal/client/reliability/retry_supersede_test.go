@@ -92,7 +92,7 @@ func TestRetrierCancelKey(t *testing.T) {
 	}()
 
 	// Let the goroutine register itself, then cancel.
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if r.ActiveRetryCount() == 1 {
 			break
 		}
@@ -120,7 +120,7 @@ func TestRetrierDoForKeyDifferentKeysIndependent(t *testing.T) {
 
 	var done atomic.Int32
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		wg.Add(1)
 		k := keyFor("LEVEL_" + string(rune('A'+i)))
 		go func() {

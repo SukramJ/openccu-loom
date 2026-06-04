@@ -15,8 +15,8 @@ package client
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -741,7 +741,7 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	callerID := string(c.cfg.Interface)
 	if handlePingPong && c.cfg.Capabilities.PingPong {
 		seq := c.pingSeq.Add(1)
-		token := fmt.Sprintf("%d", seq)
+		token := strconv.FormatUint(seq, 10)
 		callerID = string(c.cfg.Interface) + "#" + token
 		// Record the pending ping before sending — the CCU may deliver the
 		// PONG event before the RPC call returns on fast transports.

@@ -364,7 +364,7 @@ func TestJSONRPCSemaphoreSerializesConcurrentCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	errs := make(chan error, goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			errs <- c.Call(context.Background(), "Ping", nil, nil)

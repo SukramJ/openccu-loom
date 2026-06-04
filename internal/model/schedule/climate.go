@@ -62,7 +62,7 @@ func (d ClimateWeekday) validateWeekdayStructure() (sorted []ClimatePeriod, err 
 			return nil, fmt.Errorf("period[%d]: %w", i, err)
 		}
 	}
-	for i := 0; i < len(sorted)-1; i++ {
+	for i := range len(sorted) - 1 {
 		curEnd := toMinutes(sorted[i].EndTime)
 		nextStart := toMinutes(sorted[i+1].StartTime)
 		if curEnd > nextStart {
@@ -96,7 +96,7 @@ func (d ClimateWeekday) Validate() error {
 			return fmt.Errorf("schedule: last period must end at 24:00 (got %s)",
 				last.EndTime)
 		}
-		for i := 0; i < len(sorted)-1; i++ {
+		for i := range len(sorted) - 1 {
 			if toMinutes(sorted[i].EndTime) != toMinutes(sorted[i+1].StartTime) {
 				return fmt.Errorf("schedule: gap between %s and %s",
 					sorted[i].EndTime, sorted[i+1].StartTime)
@@ -255,7 +255,7 @@ func IdentifyBaseTemperature(day ClimateWeekday) float64 {
 	// Sort periods by start time for deterministic iteration.
 	sorted := make([]ClimatePeriod, len(day.Periods))
 	copy(sorted, day.Periods)
-	for i := 0; i < len(sorted)-1; i++ {
+	for i := range len(sorted) - 1 {
 		for j := i + 1; j < len(sorted); j++ {
 			if toMinutes(sorted[j].StartTime) < toMinutes(sorted[i].StartTime) {
 				sorted[i], sorted[j] = sorted[j], sorted[i]
@@ -319,12 +319,12 @@ func toMinutes(s string) int {
 	if s == "24:00" {
 		return 24 * 60
 	}
-	idx := strings.IndexByte(s, ':')
-	if idx < 0 {
+	before, after, ok := strings.Cut(s, ":")
+	if !ok {
 		return -1
 	}
-	h, errH := parseDigit2(s[:idx])
-	m, errM := parseDigit2(s[idx+1:])
+	h, errH := parseDigit2(before)
+	m, errM := parseDigit2(after)
 	if errH != nil || errM != nil {
 		return -1
 	}

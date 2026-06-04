@@ -102,7 +102,7 @@ func TestAllFieldsUnique(t *testing.T) {
 func TestAllFieldsLowercase(t *testing.T) {
 	for _, f := range AllFields() {
 		v := string(f)
-		for i := 0; i < len(v); i++ {
+		for i := range len(v) {
 			c := v[i]
 			if c >= 'A' && c <= 'Z' {
 				t.Errorf("Field %q contains uppercase character %q at pos %d", v, c, i)

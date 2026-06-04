@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,7 +30,7 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printUsage(stderr)
-		return fmt.Errorf("missing subcommand")
+		return errors.New("missing subcommand")
 	}
 
 	switch args[0] {

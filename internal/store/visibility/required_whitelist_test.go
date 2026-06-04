@@ -115,7 +115,6 @@ func TestSetRequiredParametersSafeAfterUse(t *testing.T) {
 	// Reader goroutines.
 	wg.Add(goroutines)
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			for j := range ops {
@@ -126,9 +125,7 @@ func TestSetRequiredParametersSafeAfterUse(t *testing.T) {
 	}
 
 	// Writer goroutine: alternately set and clear the whitelist.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for j := range goroutines * ops / 4 {
 			if j%2 == 0 {
 				d.SetRequiredParameters([]hmenum.Parameter{hmenum.ParameterInhibit, hmenum.ParameterLevel})
@@ -136,7 +133,7 @@ func TestSetRequiredParametersSafeAfterUse(t *testing.T) {
 				d.SetRequiredParameters(nil)
 			}
 		}
-	}()
+	})
 
 	wg.Wait()
 }

@@ -349,7 +349,7 @@ func TestHeartbeatTriggerIsIdempotentWhileActiveRecovery(t *testing.T) {
 
 	// Release the first recovery and let it finish.
 	close(release)
-	if !waitFor(t, func() bool { return !c.MetricsInRecovery() }, 2*time.Second) {
+	if !waitFor(t, func() bool { return !c.MetricsInRecovery() }, eventWaitTimeout) {
 		t.Fatal("recovery did not finish after release")
 	}
 }
@@ -385,7 +385,7 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 	})
 
 	// Wait for it to complete.
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatal("first recovery did not complete within 2 s")
 	}
 
@@ -399,7 +399,7 @@ func TestHeartbeatTriggerStartsRecoveryAfterPreviousCompleted(t *testing.T) {
 	})
 
 	// A second recovery must start and complete.
-	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, eventWaitTimeout) {
 		t.Fatalf("heartbeat did not trigger a second recovery; runCount=%d", runCount.Load())
 	}
 }
@@ -470,7 +470,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatal("first attempt did not run")
 	}
 	events.Publish(bus, hmevent.ConnectionLostEvent{
@@ -478,7 +478,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 		CentralName: "hb-revive",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, eventWaitTimeout) {
 		t.Fatal("second attempt did not run")
 	}
 
@@ -491,7 +491,7 @@ func TestHeartbeatRevivesExhaustedInterface(t *testing.T) {
 		InterfaceIDs: []string{"HmIP-RF"},
 	})
 
-	if !waitFor(t, func() bool { return runCount.Load() >= 3 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 3 }, eventWaitTimeout) {
 		t.Fatalf("heartbeat must revive an exhausted lane: runCount=%d, want >=3", runCount.Load())
 	}
 }
@@ -524,7 +524,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatal("first attempt did not run")
 	}
 
@@ -534,7 +534,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 		CentralName:  "hb-floor",
 		InterfaceIDs: []string{"HmIP-RF"},
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, eventWaitTimeout) {
 		t.Fatal("heartbeat did not run on non-exhausted lane")
 	}
 
@@ -542,17 +542,26 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	// MUST be exhausted (counter at 4, maxAttempts=4). If the heartbeat
 	// floor had reset attempts to 3 every time, the cap would never be
 	// reached.
+	//
+	// Publish the two triggers one at a time, waiting for each run before
+	// the next: the coordinator drops a ConnectionLost that arrives while a
+	// recovery for the same lane is still in-flight (the duplicate guard,
+	// see TestSubscribeSkipsDuplicateRecovery), so back-to-back publishes
+	// would race and collapse into a single run.
 	events.Publish(bus, hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
+	if !waitFor(t, func() bool { return runCount.Load() >= 3 }, eventWaitTimeout) {
+		t.Fatalf("third attempt did not run, got %d", runCount.Load())
+	}
 	events.Publish(bus, hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 4 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 4 }, eventWaitTimeout) {
 		t.Fatalf("expected 4 runs before exhaustion, got %d", runCount.Load())
 	}
 

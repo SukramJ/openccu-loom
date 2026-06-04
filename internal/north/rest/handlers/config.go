@@ -16,7 +16,7 @@ import (
 type ConfigSnapshot struct {
 	Locale        string            `json:"locale,omitempty"`
 	Centrals      []ConfigCentral   `json:"centrals,omitempty"`
-	CallbackPorts ConfigPorts       `json:"callback_ports,omitempty"`
+	CallbackPorts ConfigPorts       `json:"callback_ports,omitzero"`
 	Features      map[string]bool   `json:"features,omitempty"`
 	Extras        map[string]string `json:"extras,omitempty"`
 	// Policies surfaces static daemon-side behaviour switches that

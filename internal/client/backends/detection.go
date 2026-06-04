@@ -5,7 +5,7 @@ package backends
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 )
 
@@ -66,10 +66,10 @@ type BackendDetectionResult struct {
 // and not treat a nil error return as "all probes passed".
 func DetectBackend(ctx context.Context, cfg DetectionConfig) (BackendDetectionResult, error) {
 	if cfg.XMLRPCCaller == nil {
-		return BackendDetectionResult{}, fmt.Errorf("backends.DetectBackend: XMLRPCCaller is required")
+		return BackendDetectionResult{}, errors.New("backends.DetectBackend: XMLRPCCaller is required")
 	}
 	if cfg.InterfaceID == "" {
-		return BackendDetectionResult{}, fmt.Errorf("backends.DetectBackend: InterfaceID is required")
+		return BackendDetectionResult{}, errors.New("backends.DetectBackend: InterfaceID is required")
 	}
 
 	// Step 1 — try BIN-RPC ping (CUxD uses BIN-RPC exclusively).

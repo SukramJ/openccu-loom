@@ -151,8 +151,7 @@ func WithContext(err error, ctx Context) error {
 // ErrorContext returns the [Context] carried by err (or its chain), and
 // reports whether one was present.
 func ErrorContext(err error) (Context, bool) {
-	var ce *ContextualError
-	if errors.As(err, &ce) {
+	if ce, ok := errors.AsType[*ContextualError](err); ok {
 		return ce.Ctx, true
 	}
 	return Context{}, false
@@ -340,7 +339,7 @@ func isHex(c byte) bool {
 // replacement.
 func redactIPv4(msg string, start int) (end int, ok bool) {
 	pos := start
-	for octet := 0; octet < 4; octet++ {
+	for octet := range 4 {
 		if octet > 0 {
 			if pos >= len(msg) || msg[pos] != '.' {
 				return 0, false

@@ -43,7 +43,7 @@ func TestWSHandlerOriginCheckWiredInDaemon(t *testing.T) {
 	t.Parallel()
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/rest/ws",
 		"wsAllowedOrigins",
 	)

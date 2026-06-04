@@ -985,7 +985,7 @@ func TestRouter_SnapshotNDJSON_ContentType(t *testing.T) {
 		t.Fatalf("content-type=%q want application/x-ndjson", ct)
 	}
 	// First line should be the meta record.
-	first := strings.SplitN(rr.Body.String(), "\n", 2)[0]
+	first, _, _ := strings.Cut(rr.Body.String(), "\n")
 	var m map[string]any
 	if err := json.Unmarshal([]byte(first), &m); err != nil {
 		t.Fatalf("first line not JSON: %v", err)

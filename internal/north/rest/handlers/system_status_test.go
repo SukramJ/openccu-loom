@@ -47,7 +47,7 @@ func TestSystemStatusBuffer_AppendAndRead(t *testing.T) {
 func TestSystemStatusBuffer_Ring_EvictsOldest(t *testing.T) {
 	t.Parallel()
 	b := NewSystemStatusBuffer(3)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		b.append(SystemStatusEntry{Component: string(rune('a' + i))})
 	}
 	entries := b.SystemStatusEntries()

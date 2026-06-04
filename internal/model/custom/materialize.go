@@ -631,7 +631,7 @@ func lookupProfileForCustomDP(registry *Registry, model string, dp device.Attach
 // pulling `strings` / `strconv` into this file. The channel
 // numbers we deal with never exceed two digits.
 func indexOfColon(s string) int {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == ':' {
 			return i
 		}
@@ -644,7 +644,7 @@ func atoiSmall(s string) (int, error) {
 		return 0, errEmpty
 	}
 	n := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c < '0' || c > '9' {
 			return 0, errBadDigit

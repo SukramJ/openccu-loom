@@ -66,7 +66,6 @@ func TestClientStateChangedEventToConnectivityMapping(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.state), func(t *testing.T) {
 			t.Parallel()
 			// Build a minimal event as the statemachine would publish.

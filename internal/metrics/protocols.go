@@ -30,7 +30,7 @@ type InterfaceClientMetrics interface {
 	CircuitState() int
 	// LastFailureTime returns the wall time of the most recent failure; nil
 	// if no failure has occurred.
-	LastFailureTime() *interface{} //nolint:gocritic // *time.Time boxed as *interface{} to avoid import cycle; callers cast
+	LastFailureTime() *any //nolint:gocritic // *time.Time boxed as *interface{} to avoid import cycle; callers cast
 }
 
 // DeviceForMetrics is the minimal interface needed to collect model metrics.

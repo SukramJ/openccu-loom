@@ -96,7 +96,7 @@ const (
 // NewGroupKeyManagement constructs the cluster.
 func NewGroupKeyManagement(s GroupStoreFacade, cfg GroupKeyMgmtConfig) (*GroupKeyManagement, error) {
 	if s == nil {
-		return nil, fmt.Errorf("matter: GroupKeyManagement store is required")
+		return nil, errors.New("matter: GroupKeyManagement store is required")
 	}
 	if cfg.MaxGroupsPerFabric == 0 {
 		cfg.MaxGroupsPerFabric = defaultMaxGroupsPerFabric
@@ -348,7 +348,7 @@ func (g *GroupKeyManagement) MatterInvoke(ctx context.Context, cmdID uint32, fie
 		g.mu.RUnlock()
 	}
 	if fabric == 0 {
-		return nil, fmt.Errorf("matter: GroupKeyManagement command without active fabric")
+		return nil, errors.New("matter: GroupKeyManagement command without active fabric")
 	}
 
 	switch cmdID {
@@ -487,31 +487,31 @@ func (g *GroupKeyManagement) handleKeySetWrite(ctx context.Context, fabric uint8
 	}
 
 	if len(gks.EpochKey0) == 0 || gks.EpochStartTime0 == 0 {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochKey0 and EpochStartTime0 must be set")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochKey0 and EpochStartTime0 must be set")
 	}
 	if gks.EpochStartTime0 <= ipkDefaultEpochStartTime {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochStartTime0 must be > IPK default")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochStartTime0 must be > IPK default")
 	}
 
 	if len(gks.EpochKey1) > 0 && (gks.EpochStartTime1 == 0 || gks.EpochStartTime1 <= gks.EpochStartTime0) {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochStartTime1 must be set and greater than EpochStartTime0")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochStartTime1 must be set and greater than EpochStartTime0")
 	}
 	if len(gks.EpochKey1) == 0 && gks.EpochStartTime1 != 0 {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochKey1 must be set if EpochStartTime1 is set")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochKey1 must be set if EpochStartTime1 is set")
 	}
 
 	if len(gks.EpochKey2) > 0 && len(gks.EpochKey1) == 0 {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochKey1 must be set if EpochKey2 is set")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochKey1 must be set if EpochKey2 is set")
 	}
 	if len(gks.EpochKey2) > 0 && (gks.EpochStartTime2 == 0 || gks.EpochStartTime1 == 0 || gks.EpochStartTime2 <= gks.EpochStartTime1) {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochStartTime2 must be set and greater than EpochStartTime1")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochStartTime2 must be set and greater than EpochStartTime1")
 	}
 	if len(gks.EpochKey2) == 0 && gks.EpochStartTime2 != 0 {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: EpochKey2 must be set if EpochStartTime2 is set")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: EpochKey2 must be set if EpochStartTime2 is set")
 	}
 
 	if store.SecurityPolicy(gks.GroupKeySecurityPolicy) != store.SecurityPolicyTrustFirst {
-		return nil, fmt.Errorf("matter: KeySetWrite: invalid command argument: GroupKeySecurityPolicy must be TrustFirst")
+		return nil, errors.New("matter: KeySetWrite: invalid command argument: GroupKeySecurityPolicy must be TrustFirst")
 	}
 
 	rec := store.GroupKeySet{
@@ -573,7 +573,7 @@ func (g *GroupKeyManagement) handleKeySetRemove(ctx context.Context, fabric uint
 	// status by emitting a sentinel substring picked up by
 	// `invokeErrorStatus` in dispatcher.go.
 	if req.GroupKeySetID == 0 {
-		return nil, fmt.Errorf("matter: KeySetRemove: invalid command argument: GroupKeySet 0 (IPK) cannot be removed")
+		return nil, errors.New("matter: KeySetRemove: invalid command argument: GroupKeySet 0 (IPK) cannot be removed")
 	}
 	if err := g.store.RemoveGroupKeySet(ctx, fabric, req.GroupKeySetID); err != nil {
 		return nil, fmt.Errorf("matter: KeySetRemove: %w", err)

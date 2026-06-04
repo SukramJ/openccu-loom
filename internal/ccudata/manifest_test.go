@@ -47,7 +47,7 @@ func TestManifestHashesMatchEmbedded(t *testing.T) {
 	}
 
 	for _, entry := range m.Files {
-		entry := entry // capture
+		// capture
 		t.Run(entry.Path, func(t *testing.T) {
 			t.Parallel()
 			embedPath := "embedded/" + entry.Path

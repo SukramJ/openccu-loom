@@ -5,6 +5,7 @@ package coordinators
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -102,7 +103,7 @@ type Reconciler struct {
 // probes still execute so a partial drift can be corrected.
 func (r *Reconciler) Reconcile(ctx context.Context) error {
 	if r == nil {
-		return fmt.Errorf("reconciler: nil receiver")
+		return errors.New("reconciler: nil receiver")
 	}
 	rec := r.Recorder
 	if rec == nil {

@@ -8,8 +8,8 @@ package sqlite
 // Audit items covered:
 // §7.3/5 Store-Cache-Coherency: cache-invalidation paths must be
 // transactional against SQLite. These tests lock down the
-// SQLite side of that contract (DataCache is tested in
-// internal/store/dynamic/coherency_test.go).
+// SQLite side of that contract (the in-memory data cache lives in
+// internal/central/coordinators).
 //
 // Tests skipped due to overlap with existing coverage:
 // TestParamsetDeleteChannelRemovesAllKeysButLeavesOtherChannels —
@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 
@@ -140,7 +141,6 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 
 	wg.Add(goroutines)
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			hash := fmt.Sprintf("h-%d", i)
@@ -186,13 +186,7 @@ func TestParamsetUpsertConcurrentSamePKLastWriteWins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get after concurrent upserts: %v", err)
 	}
-	found := false
-	for _, h := range succeeded {
-		if got.Hash == h {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(succeeded, got.Hash)
 	if !found {
 		t.Errorf("returned hash %q does not match any of the %d committed hashes %v",
 			got.Hash, len(succeeded), succeeded)

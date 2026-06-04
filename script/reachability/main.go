@@ -23,6 +23,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -37,7 +38,6 @@ import (
 	"sort"
 	"strings"
 	"text/template"
-	"time"
 
 	"golang.org/x/tools/go/callgraph/rta"
 	"golang.org/x/tools/go/packages"
@@ -158,7 +158,7 @@ func main() {
 	}
 }
 
-func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionOnly bool) error {
+func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionOnly bool) error { //nolint:gocognit,gocyclo,funlen // build tooling; many CLI branches
 	absRoot, err := filepath.Abs(repoRoot)
 	if err != nil {
 		return fmt.Errorf("resolve repo root: %w", err)
@@ -349,8 +349,42 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	byPackage := buildPackageSummary(unreachableItems)
 
 	// --- 8. Inventory schreiben ---
+	// Deterministic output: sort every slice by a stable key and use the
+	// git HEAD (not a wall-clock timestamp) as the "generated" marker, so
+	// re-running the analysis at the same commit yields a byte-identical
+	// file — no spurious per-run diffs.
+	if head == "" {
+		head = "unknown"
+	}
+	sort.Strings(entryPointNames)
+	sort.Slice(unreachableItems, func(i, j int) bool {
+		a, b := unreachableItems[i], unreachableItems[j]
+		switch {
+		case a.Package != b.Package:
+			return a.Package < b.Package
+		case a.Identifier != b.Identifier:
+			return a.Identifier < b.Identifier
+		case a.File != b.File:
+			return a.File < b.File
+		default:
+			return a.Line < b.Line
+		}
+	})
+	sort.Slice(whitelistedItems, func(i, j int) bool {
+		a, b := whitelistedItems[i], whitelistedItems[j]
+		switch {
+		case a.Package != b.Package:
+			return a.Package < b.Package
+		case a.Identifier != b.Identifier:
+			return a.Identifier < b.Identifier
+		case a.File != b.File:
+			return a.File < b.File
+		default:
+			return a.Line < b.Line
+		}
+	})
 	inv := Inventory{
-		Generated:   time.Now().UTC().Format(time.RFC3339),
+		Generated:   head,
 		Head:        head,
 		EntryPoints: entryPointNames,
 		Summary: Summary{
@@ -405,10 +439,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 
 	if len(byPackage) > 0 {
 		fmt.Println("\nTop-10 Pakete nach Dead-Code-Count:")
-		limit := 10
-		if len(byPackage) < limit {
-			limit = len(byPackage)
-		}
+		limit := min(len(byPackage), 10)
 		for _, ps := range byPackage[:limit] {
 			fmt.Printf("  %-60s funcs=%d types=%d\n", ps.Package, ps.UnreachableFuncs, ps.UnreachableTypes)
 		}
@@ -419,7 +450,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 
 // checkAutoWhitelist prüft ob ein Item automatisch whitelisted werden soll.
 // Gibt den Reason-String zurück wenn ja, sonst ("", false).
-func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) {
+func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) { //nolint:gocognit,gocyclo,funlen // build tooling; many CLI branches
 	// Verfeinerung 2: _test.go Files
 	if strings.HasSuffix(relFile, "_test.go") {
 		return autoWhitelistTestFile, true
@@ -585,10 +616,6 @@ func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) 
 	if strings.Contains(relFile, "internal/config/") {
 		return autoWhitelistGenericHelper, true
 	}
-	// internal/store/dynamic cache constructors: called by central.go factory.
-	if strings.Contains(relFile, "internal/store/dynamic/") {
-		return autoWhitelistGenericHelper, true
-	}
 	// internal/central/statemachine option functions: functional-option pattern
 	// called via state-machine builder.
 	if strings.Contains(relFile, "internal/central/statemachine/") {
@@ -752,8 +779,8 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 			return false
 		}
 		// Value-Receiver-Methoden: direkt über named.Method(i) zugänglich
-		for i := range named.NumMethods() {
-			fn := pkg.Prog.FuncValue(named.Method(i))
+		for method := range named.Methods() {
+			fn := pkg.Prog.FuncValue(method)
 			if fn != nil && reachable[fn] {
 				return true
 			}
@@ -761,8 +788,7 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 		// Pointer-Receiver-Methoden: über MethodSet des Pointer-Typs
 		ptrType := types.NewPointer(named)
 		mset := types.NewMethodSet(ptrType)
-		for j := range mset.Len() {
-			sel := mset.At(j)
+		for sel := range mset.Methods() {
 			if sel == nil {
 				continue
 			}
@@ -805,7 +831,7 @@ func memberKind(member ssa.Member) string {
 
 // collectWhitelisted liest alle Go-Dateien und sammelt Identifiers mit
 // `// loom:reachable:reason="..."` Kommentaren direkt über der Deklaration.
-func collectWhitelisted(pkgs []*packages.Package, absRoot string, out map[whitelistKey]WhitelistEntry, logger *slog.Logger) {
+func collectWhitelisted(pkgs []*packages.Package, absRoot string, out map[whitelistKey]WhitelistEntry, logger *slog.Logger) { //nolint:gocognit // build tooling; many CLI branches
 	seen := make(map[string]bool)
 
 	packages.Visit(pkgs, func(p *packages.Package) bool {
@@ -899,8 +925,8 @@ func findWhitelistComment(f *ast.File, fset *token.FileSet, decl ast.Decl) (stri
 			if commentLine >= declLine-1 && commentLine < declLine {
 				text := strings.TrimPrefix(c.Text, "//")
 				text = strings.TrimSpace(text)
-				if strings.HasPrefix(text, "loom:reachable:reason=") {
-					reason := strings.TrimPrefix(text, "loom:reachable:reason=")
+				if after, ok := strings.CutPrefix(text, "loom:reachable:reason="); ok {
+					reason := after
 					reason = strings.Trim(reason, `"`)
 					return reason, true
 				}
@@ -912,7 +938,7 @@ func findWhitelistComment(f *ast.File, fset *token.FileSet, decl ast.Decl) (stri
 
 // gitHead liest die aktuelle Git-Revision.
 func gitHead(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--short", "HEAD")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

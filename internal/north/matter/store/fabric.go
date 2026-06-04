@@ -250,7 +250,7 @@ func nextFabricIndexFromCounter(ctx context.Context, tx *sql.Tx) (uint8, error) 
 	}
 
 	// Walk forward from candidate until we find a free slot, wrapping at 255→1.
-	for i := 0; i < 254; i++ {
+	for range 254 {
 		if _, taken := occupied[candidate]; !taken {
 			return candidate, nil
 		}

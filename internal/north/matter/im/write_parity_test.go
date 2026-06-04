@@ -13,6 +13,7 @@ package im
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
@@ -263,16 +264,7 @@ func TestWriteParity_WriteResponseMarshal(t *testing.T) {
 	// non-trivial encoded field is the PutUint at tag 0xFF.
 	// Presence of the 0xFF context tag is a necessary (though not
 	// sufficient) proxy that the revision was emitted.
-	found := false
-	for _, b := range wire {
-		// TLV context tag 0xFF is encoded as the tag byte alone; the
-		// exact byte depends on the TLV element type prefix but 0xFF is
-		// always present in the stream for this field.
-		if b == 0xFF {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(wire, 0xFF)
 	if !found {
 		t.Fatal("WriteResponse TLV missing IM-revision tag 0xFF")
 	}

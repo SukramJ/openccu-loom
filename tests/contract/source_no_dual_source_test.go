@@ -40,57 +40,57 @@ func TestSourceNoDualStatePayload(t *testing.T) {
 	// Same set as TestSourceCompletenessAcrossModelLayers — the
 	// canonical roster of Source implementors.
 	types := []reflect.Type{
-		reflect.TypeOf((*device.Channel)(nil)).Elem(),
+		reflect.TypeFor[device.Channel](),
 
-		reflect.TypeOf((*generic.Switch)(nil)).Elem(),
-		reflect.TypeOf((*generic.BinarySensor)(nil)).Elem(),
-		reflect.TypeOf((*generic.Float)(nil)).Elem(),
-		reflect.TypeOf((*generic.Integer)(nil)).Elem(),
-		reflect.TypeOf((*generic.Select)(nil)).Elem(),
-		reflect.TypeOf((*generic.Button)(nil)).Elem(),
-		reflect.TypeOf((*generic.Text)(nil)).Elem(),
+		reflect.TypeFor[generic.Switch](),
+		reflect.TypeFor[generic.BinarySensor](),
+		reflect.TypeFor[generic.Float](),
+		reflect.TypeFor[generic.Integer](),
+		reflect.TypeFor[generic.Select](),
+		reflect.TypeFor[generic.Button](),
+		reflect.TypeFor[generic.Text](),
 
-		reflect.TypeOf((*calculated.DewPointSensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.DewPointSpreadSensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.FrostPointSensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.VaporConcentrationSensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.EnthalpySensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.ApparentTemperatureSensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.DerivedBinarySensor)(nil)).Elem(),
-		reflect.TypeOf((*calculated.OperatingVoltageLevelSensor)(nil)).Elem(),
+		reflect.TypeFor[calculated.DewPointSensor](),
+		reflect.TypeFor[calculated.DewPointSpreadSensor](),
+		reflect.TypeFor[calculated.FrostPointSensor](),
+		reflect.TypeFor[calculated.VaporConcentrationSensor](),
+		reflect.TypeFor[calculated.EnthalpySensor](),
+		reflect.TypeFor[calculated.ApparentTemperatureSensor](),
+		reflect.TypeFor[calculated.DerivedBinarySensor](),
+		reflect.TypeFor[calculated.OperatingVoltageLevelSensor](),
 
-		reflect.TypeOf((*climate.Climate)(nil)).Elem(),
-		reflect.TypeOf((*cover.Cover)(nil)).Elem(),
-		reflect.TypeOf((*cover.Blind)(nil)).Elem(),
-		reflect.TypeOf((*cover.Garage)(nil)).Elem(),
-		reflect.TypeOf((*lock.Lock)(nil)).Elem(),
-		reflect.TypeOf((*siren.Siren)(nil)).Elem(),
-		reflect.TypeOf((*siren.SmokeSiren)(nil)).Elem(),
-		reflect.TypeOf((*siren.SoundPlayer)(nil)).Elem(),
-		reflect.TypeOf((*valve.Irrigation)(nil)).Elem(),
-		reflect.TypeOf((*valve.Modulating)(nil)).Elem(),
-		reflect.TypeOf((*textdisplay.TextDisplay)(nil)).Elem(),
-		reflect.TypeOf((*switchdev.Switch)(nil)).Elem(),
-		reflect.TypeOf((*light.Light)(nil)).Elem(),
-		reflect.TypeOf((*light.ColorLight)(nil)).Elem(),
-		reflect.TypeOf((*light.ColorTempLight)(nil)).Elem(),
-		reflect.TypeOf((*light.FixedColorLight)(nil)).Elem(),
-		reflect.TypeOf((*light.EffectLight)(nil)).Elem(),
-		reflect.TypeOf((*light.DRGDaliLight)(nil)).Elem(),
+		reflect.TypeFor[climate.Climate](),
+		reflect.TypeFor[cover.Cover](),
+		reflect.TypeFor[cover.Blind](),
+		reflect.TypeFor[cover.Garage](),
+		reflect.TypeFor[lock.Lock](),
+		reflect.TypeFor[siren.Siren](),
+		reflect.TypeFor[siren.SmokeSiren](),
+		reflect.TypeFor[siren.SoundPlayer](),
+		reflect.TypeFor[valve.Irrigation](),
+		reflect.TypeFor[valve.Modulating](),
+		reflect.TypeFor[textdisplay.TextDisplay](),
+		reflect.TypeFor[switchdev.Switch](),
+		reflect.TypeFor[light.Light](),
+		reflect.TypeFor[light.ColorLight](),
+		reflect.TypeFor[light.ColorTempLight](),
+		reflect.TypeFor[light.FixedColorLight](),
+		reflect.TypeFor[light.EffectLight](),
+		reflect.TypeFor[light.DRGDaliLight](),
 
-		reflect.TypeOf((*hub.Program)(nil)).Elem(),
-		reflect.TypeOf((*hub.Sysvar)(nil)).Elem(),
-		reflect.TypeOf((*hub.Update)(nil)).Elem(),
-		reflect.TypeOf((*hub.AlarmMessages)(nil)).Elem(),
-		reflect.TypeOf((*hub.ServiceMessages)(nil)).Elem(),
-		reflect.TypeOf((*hub.InstallMode)(nil)).Elem(),
-		reflect.TypeOf((*hub.Connectivity)(nil)).Elem(),
-		reflect.TypeOf((*hub.Inbox)(nil)).Elem(),
-		reflect.TypeOf((*hub.Metrics)(nil)).Elem(),
-		reflect.TypeOf((*hub.Hub)(nil)).Elem(),
+		reflect.TypeFor[hub.Program](),
+		reflect.TypeFor[hub.Sysvar](),
+		reflect.TypeFor[hub.Update](),
+		reflect.TypeFor[hub.AlarmMessages](),
+		reflect.TypeFor[hub.ServiceMessages](),
+		reflect.TypeFor[hub.InstallMode](),
+		reflect.TypeFor[hub.Connectivity](),
+		reflect.TypeFor[hub.Inbox](),
+		reflect.TypeFor[hub.Metrics](),
+		reflect.TypeFor[hub.Hub](),
 
-		reflect.TypeOf((*central.Unit)(nil)).Elem(),
-		reflect.TypeOf((*client.InterfaceClient)(nil)).Elem(),
+		reflect.TypeFor[central.Unit](),
+		reflect.TypeFor[client.InterfaceClient](),
 	}
 
 	checks := []struct {
@@ -103,7 +103,7 @@ func TestSourceNoDualStatePayload(t *testing.T) {
 	}
 
 	for _, typ := range types {
-		typ := typ
+
 		ptr := reflect.PointerTo(typ)
 		for _, c := range checks {
 			if !methodDefinedExplicitly(ptr, c.method) {
@@ -149,15 +149,14 @@ func taggedFields(typ reflect.Type, kind string) []string {
 		return nil
 	}
 	var out []string
-	for i := 0; i < typ.NumField(); i++ {
-		sf := typ.Field(i)
+	for sf := range typ.Fields() {
 		tag, ok := sf.Tag.Lookup("payload")
 		if !ok || tag == "" {
 			continue
 		}
 		first := tag
-		if i := strings.IndexByte(tag, ','); i >= 0 {
-			first = tag[:i]
+		if before, _, ok := strings.Cut(tag, ","); ok {
+			first = before
 		}
 		if first == kind {
 			out = append(out, sf.Name)

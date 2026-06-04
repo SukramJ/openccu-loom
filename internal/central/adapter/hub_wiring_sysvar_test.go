@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,7 +47,7 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 			Params map[string]any `json:"params"`
 		}
 		if err := json.Unmarshal(body, &env); err != nil {
-			http.Error(w, err.Error(), 400)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -77,7 +78,7 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 			m.lastRega.Store(&script)
 			_, _ = w.Write([]byte(`{"result":""}`))
 		default:
-			http.Error(w, "unknown method "+env.Method, 404)
+			http.Error(w, "unknown method "+env.Method, http.StatusNotFound)
 		}
 	}))
 	t.Cleanup(m.srv.Close)
@@ -86,9 +87,7 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 
 func copyMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 

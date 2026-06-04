@@ -113,7 +113,7 @@ func TestAsyncSinkDropsWhenSaturated(t *testing.T) {
 	// 1 fits in the queue, the worker grabs it and blocks on hold; the
 	// next enqueue now occupies the queue slot. Subsequent calls are
 	// dropped without error.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
 			t.Fatalf("enqueue err=%v", err)
 		}

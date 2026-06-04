@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -809,7 +810,7 @@ func isNumericString(s string) bool {
 	if s == "" {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] < '0' || s[i] > '9' {
 			return false
 		}
@@ -901,7 +902,7 @@ func (c *Channel) NotifyLinkPeerChanged() {
 // indexOfColon is a tiny inlined `strings.Index(s, ":")` so we don't
 // pull strings into this file.
 func indexOfColon(s string) int {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == ':' {
 			return i
 		}
@@ -1292,12 +1293,7 @@ func (c *Channel) HasLinkSourceCategory(category hmenum.DataPointCategory) bool 
 	c.mu.RLock()
 	cats := c.linkPeerSourceCategories
 	c.mu.RUnlock()
-	for _, cat := range cats {
-		if cat == string(category) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cats, string(category))
 }
 
 // ─── LinkPeerTargetCategories ────────────────────────────────────────
@@ -1335,12 +1331,7 @@ func (c *Channel) HasLinkTargetCategory(category hmenum.DataPointCategory) bool 
 	c.mu.RLock()
 	cats := c.linkPeerTargetCategories
 	c.mu.RUnlock()
-	for _, cat := range cats {
-		if cat == string(category) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(cats, string(category))
 }
 
 // ─── LinkPeers cache ──────────────────────────────────────────────────

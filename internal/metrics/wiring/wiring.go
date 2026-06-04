@@ -78,12 +78,12 @@ func (c clientAdapter) CircuitState() int { return c.ic.MetricsCircuitState() }
 // metrics protocol intentionally types the return as *interface{} to
 // avoid importing time; the aggregator type-asserts back to
 // time.Time. Returns nil when no failure has been recorded.
-func (c clientAdapter) LastFailureTime() *interface{} { //nolint:gocritic // *interface{} is the protocol contract; see metrics.InterfaceClientMetrics
+func (c clientAdapter) LastFailureTime() *any { //nolint:gocritic // *interface{} is the protocol contract; see metrics.InterfaceClientMetrics
 	t, ok := c.ic.MetricsLastFailureTime()
 	if !ok {
 		return nil
 	}
-	var v interface{} = t
+	var v any = t
 	return &v
 }
 
@@ -171,7 +171,6 @@ func (p *RecoveryProvider) RecoveryStates() map[string]metrics.RecoveryStateMetr
 	src := p.src.MetricsRecoveryStates()
 	out := make(map[string]metrics.RecoveryStateMetrics, len(src))
 	for k, v := range src {
-		v := v
 		out[k] = v
 	}
 	return out
@@ -223,10 +222,7 @@ func (p *EventBusProvider) HandlerStats() map[string]metrics.HandlerStatSnapshot
 		snap := out[key]
 		// hs.Matches is uint64; cap at math.MaxInt32 to avoid overflow on
 		// 32-bit targets. In practice match counts never approach this limit.
-		matches := hs.Matches
-		if matches > 1<<31-1 {
-			matches = 1<<31 - 1
-		}
+		matches := min(hs.Matches, 1<<31-1)
 		snap.Executed += int(matches) //nolint:gosec // overflow guarded above
 		out[key] = snap
 	}

@@ -78,8 +78,8 @@ type CircuitBreaker struct {
 	consecutiveErr   int
 	halfOpenOK       int
 	openedAt         time.Time
-	totalRequests    int64 // counts non-bypass calls (blocked + executed)
-	halfOpenInFlight int32 // atomic: number of probes currently executing in HALF_OPEN
+	totalRequests    int64        // counts non-bypass calls (blocked + executed)
+	halfOpenInFlight atomic.Int32 // atomic: number of probes currently executing in HALF_OPEN
 
 	// listeners is the slice of state-change callbacks. Setters are
 	// additive (siehe AddOnStateChange). [OnStateChange] retains its
@@ -204,13 +204,13 @@ func (c *CircuitBreaker) Do(ctx context.Context, operationID string, fn func(ctx
 	// HALF_OPEN: allow exactly one concurrent probe. Additional callers
 	// see ErrCircuitBreakerOpen until the probe settles.
 	if state == hmenum.CircuitStateHalfOpen {
-		if !atomic.CompareAndSwapInt32(&c.halfOpenInFlight, 0, 1) {
+		if !c.halfOpenInFlight.CompareAndSwap(0, 1) {
 			c.totalRequests++
 			c.mu.Unlock()
 			return hmerr.ErrCircuitBreakerOpen
 		}
 		// We are the probe. Decrement the in-flight counter after fn returns.
-		defer atomic.StoreInt32(&c.halfOpenInFlight, 0)
+		defer c.halfOpenInFlight.Store(0)
 	}
 	c.totalRequests++
 	c.mu.Unlock()
@@ -327,7 +327,7 @@ func (c *CircuitBreaker) Reset() {
 	c.openedAt = time.Time{}
 	listeners := c.snapshotListenersLocked()
 	c.mu.Unlock()
-	atomic.StoreInt32(&c.halfOpenInFlight, 0)
+	c.halfOpenInFlight.Store(0)
 
 	if from != hmenum.CircuitStateClosed {
 		for _, cb := range listeners {

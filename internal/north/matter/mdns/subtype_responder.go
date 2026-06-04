@@ -395,7 +395,7 @@ func joinMcast4() (*ipv4.PacketConn, error) {
 	}
 	if joined == 0 {
 		_ = pc.Close()
-		return nil, fmt.Errorf("no multicast interface accepted IPv4 join")
+		return nil, errors.New("no multicast interface accepted IPv4 join")
 	}
 	if primaryIface != nil {
 		_ = pc.SetMulticastInterface(primaryIface)
@@ -428,7 +428,7 @@ func joinMcast6() (*ipv6.PacketConn, error) {
 	}
 	if joined == 0 {
 		_ = pc.Close()
-		return nil, fmt.Errorf("no multicast interface accepted IPv6 join")
+		return nil, errors.New("no multicast interface accepted IPv6 join")
 	}
 	if primaryIface != nil {
 		_ = pc.SetMulticastInterface(primaryIface)
@@ -513,8 +513,7 @@ func isTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
-	var ne net.Error
-	if errors.As(err, &ne) {
+	if ne, ok := errors.AsType[net.Error](err); ok {
 		return ne.Timeout()
 	}
 	return false

@@ -302,7 +302,7 @@ func readRemainingLength(r io.Reader) (int, error) {
 	var mult uint32 = 1
 	var length uint32
 	buf := make([]byte, 1)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		if _, err := io.ReadFull(r, buf); err != nil {
 			return 0, err
 		}

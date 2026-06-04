@@ -326,7 +326,6 @@ func TestFactorySelectsCcuForAllRFInterfaces(t *testing.T) {
 		hmenum.InterfaceVirtualDevices,
 	}
 	for _, iface := range rfInterfaces {
-		iface := iface
 		t.Run(string(iface), func(t *testing.T) {
 			t.Parallel()
 			b, err := Factory(iface, FactoryInput{XMLRPC: &fakeCaller{}})
@@ -413,7 +412,6 @@ func TestKindForAllMVPInterfaces(t *testing.T) {
 		{hmenum.InterfaceCUxD, KindCUxD},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.iface), func(t *testing.T) {
 			t.Parallel()
 			got := KindFor(tc.iface)

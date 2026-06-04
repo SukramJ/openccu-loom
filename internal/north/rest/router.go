@@ -290,7 +290,7 @@ type Deps struct {
 }
 
 // NewRouter builds the `/api/v1` router from d.
-func NewRouter(d Deps) *chi.Mux {
+func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
 	if d.Logger == nil {
 		d.Logger = slog.Default()
 	}

@@ -17,8 +17,6 @@ import (
 
 // TestConfigAdapterNilSourceReturnsZero verifies that a nil config
 // source produces a zero-value ConfigSnapshot without panic.
-func cfgBoolPtr(b bool) *bool { return &b }
-
 func TestConfigAdapterNilSourceReturnsZero(t *testing.T) {
 	t.Parallel()
 	a := NewConfigAdapter(nil, nil)
@@ -42,8 +40,8 @@ func TestConfigAdapterSanitizedConfig(t *testing.T) {
 			BinPort: 8129,
 		},
 		North: config.NorthConfig{
-			REST: config.NorthREST{Enabled: cfgBoolPtr(true)},
-			UI:   config.NorthUI{Enabled: cfgBoolPtr(false)},
+			REST: config.NorthREST{Enabled: new(true)},
+			UI:   config.NorthUI{Enabled: new(false)},
 			MQTT: config.NorthMQTT{
 				Enabled:          true,
 				RawEnabled:       true,

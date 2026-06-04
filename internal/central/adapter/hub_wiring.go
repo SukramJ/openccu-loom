@@ -60,7 +60,7 @@ type HubData struct {
 // Failures during program / sysvar / name / room / function load are
 // logged but do not abort wiring — an empty hub view is preferable
 // to a dead daemon when only the hub endpoint misbehaves.
-func WireHub(
+func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
 	unit *central.Unit,
@@ -89,6 +89,7 @@ func WireHub(
 
 	runner, err := rega.NewRunner(rega.Config{Client: jc, Logger: logger})
 	if err != nil {
+		//nolint:contextcheck // error path cleanup: ctx may have been consumed; use a detached logout to ensure the session is closed
 		_ = jc.Logout(context.Background())
 		return nil, HubData{}, nil, fmt.Errorf("rega.NewRunner: %w", err)
 	}
@@ -142,7 +143,7 @@ func WireHub(
 	// InitHub must run before the first refresh cycle so stale state from a
 	// previous run (sysvars, programs) is cleared before new data arrives.
 	if unit.Hub != nil {
-		unit.Hub.InitHub()
+		unit.Hub.InitHub() //nolint:contextcheck // InitHub has no ctx parameter by design; it clears stale in-memory state synchronously
 	}
 
 	if err := loadPrograms(ctx, jc, unit.HubModel, writer); err != nil {
@@ -265,7 +266,7 @@ func WireHub(
 		})
 	}
 
-	closer := func() {
+	closer := func() { //nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		_ = jc.Logout(shutdownCtx)

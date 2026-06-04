@@ -25,7 +25,7 @@ func newUIWithI18n(t *testing.T) http.Handler {
 
 func TestUITranslatesNavToGerman(t *testing.T) {
 	h := newUIWithI18n(t)
-	req := httptest.NewRequest("GET", "/about", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/about", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -41,7 +41,7 @@ func TestUITranslatesNavToGerman(t *testing.T) {
 
 func TestUISetupPage(t *testing.T) {
 	h := newUIWithI18n(t)
-	req := httptest.NewRequest("GET", "/setup", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/setup", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "openccu-loom") {
@@ -51,7 +51,7 @@ func TestUISetupPage(t *testing.T) {
 
 func TestUILoginPage(t *testing.T) {
 	h := newUIWithI18n(t)
-	req := httptest.NewRequest("GET", "/login?error=1", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/login?error=1", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), "Anmeldedaten") {
@@ -61,7 +61,7 @@ func TestUILoginPage(t *testing.T) {
 
 func TestUILayoutIncludesCSRFMeta(t *testing.T) {
 	h := newUIWithI18n(t)
-	req := httptest.NewRequest("GET", "/about", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/about", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if !strings.Contains(rr.Body.String(), `name="csrf-token"`) {
@@ -71,7 +71,7 @@ func TestUILayoutIncludesCSRFMeta(t *testing.T) {
 
 func TestUILayoutLinksToSPA(t *testing.T) {
 	h := newUIWithI18n(t)
-	req := httptest.NewRequest("GET", "/about", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/about", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if !strings.Contains(rr.Body.String(), `href="/app/"`) {
@@ -88,7 +88,7 @@ func TestRenderUnknownTemplateName500(t *testing.T) {
 	cats, _ := i18n.NewCatalogs()
 	tpl := mustParseTemplates(cats, "en")
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	// "no-such-template.html" does not exist in the templateSet.
 	render(tpl, rr, req, "no-such-template.html", pageData{})
 	if rr.Code != http.StatusInternalServerError {
@@ -105,7 +105,7 @@ func TestRenderWithIdentityInContext(t *testing.T) {
 
 	// Inject an identity into the context.
 	ctx := auth.ContextWithIdentity(context.Background(), auth.Identity{Subject: "carol", Role: auth.RoleAdmin})
-	req := httptest.NewRequest("GET", "/about", http.NoBody).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodGet, "/about", http.NoBody).WithContext(ctx)
 	rr := httptest.NewRecorder()
 	render(tpl, rr, req, "about.html", pageData{Title: "About", Lang: "en"})
 	if rr.Code != http.StatusOK {

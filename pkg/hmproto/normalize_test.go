@@ -5,6 +5,7 @@ package hmproto
 
 import (
 	"encoding/json"
+	"maps"
 	"reflect"
 	"testing"
 
@@ -109,9 +110,7 @@ func TestHashParamsetIgnoresMapOrder(t *testing.T) {
 		"SET_TEMPERATURE": ParameterData{Type: hmenum.ParameterTypeFloat, Min: json.RawMessage("4.5")},
 	}
 	ps2 := Paramset{}
-	for k, v := range ps1 {
-		ps2[k] = v
-	}
+	maps.Copy(ps2, ps1)
 	h1, err := HashParamset(ps1)
 	if err != nil {
 		t.Fatal(err)

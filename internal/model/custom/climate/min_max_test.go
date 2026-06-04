@@ -136,7 +136,7 @@ func TestMinTemp(t *testing.T) {
 		{
 			name:         "operator_12_5_wins_over_descriptor_8",
 			descMin:      8.0,
-			tempMinValue: ptr(12.5),
+			tempMinValue: new(12.5),
 			want:         12.5, // step 1: operator override
 		},
 		{
@@ -155,7 +155,7 @@ func TestMinTemp(t *testing.T) {
 			// expose the off-state as a normal setpoint. Mirror it 1:1.
 			name:         "off_temperature_in_operator_steps_up",
 			descMin:      0,
-			tempMinValue: ptr(4.5),
+			tempMinValue: new(4.5),
 			want:         5.0,
 		},
 		{
@@ -167,7 +167,6 @@ func TestMinTemp(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			r := newMinMaxRig(t, tc.descMin, 30.5, 4.5, 30.5)
@@ -206,7 +205,7 @@ func TestMaxTemp(t *testing.T) {
 		{
 			name:         "operator_35_wins_over_descriptor_28",
 			descMax:      28.0,
-			tempMaxValue: ptr(35.0),
+			tempMaxValue: new(35.0),
 			want:         35.0, // step 1: operator override
 		},
 		{
@@ -218,7 +217,6 @@ func TestMaxTemp(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			r := newMinMaxRig(t, 4.5, tc.descMax, 4.5, 30.5)
@@ -258,6 +256,3 @@ func TestClimateMinMaxTempReadChainHmIPBWTH(t *testing.T) {
 		t.Errorf("MaxTemp()=%.2f, want 30.00 (TEMPERATURE_MAXIMUM observed value wins over setpoint descriptor 30.5)", got)
 	}
 }
-
-// ptr is a helper to take the address of a float64 literal.
-func ptr(v float64) *float64 { return &v }

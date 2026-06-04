@@ -60,7 +60,6 @@ func TestMetricsHealthSummaryRaceSafe(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			for j := range samples {
@@ -68,13 +67,11 @@ func TestMetricsHealthSummaryRaceSafe(t *testing.T) {
 			}
 		}()
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range samples * goroutines {
 			_ = tr.MetricsHealthSummary()
 		}
-	}()
+	})
 	wg.Wait()
 
 	// Expect no panic / data race; at least one component healthy.

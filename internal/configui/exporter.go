@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -144,9 +145,7 @@ func ExportConfiguration(ctx context.Context, in ExportInput) (*ExportedConfigur
 	// Shallow-copy values so the returned struct is independent of the
 	// caller's map.
 	snapshot := make(map[string]any, len(values))
-	for k, v := range values {
-		snapshot[k] = v
-	}
+	maps.Copy(snapshot, values)
 
 	cfg := &ExportedConfiguration{
 		Version:        ExportVersion,

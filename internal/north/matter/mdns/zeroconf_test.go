@@ -249,8 +249,7 @@ func TestZeroconf_TriggerReannounce_ImmediateRePublish(t *testing.T) {
 		t.Fatalf("Publish: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// Long interval so only TriggerReannounce drives republish.
 	_, trigger := z.StartReannounceLoop(ctx, 24*time.Hour)
 

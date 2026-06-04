@@ -166,8 +166,7 @@ func TestConcurrentCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(n)
 	errs := make(chan error, n)
-	for i := 0; i < n; i++ {
-		i := i
+	for i := range n {
 		go func() {
 			defer wg.Done()
 			v, err := c.Call(context.Background(), "echo", []xmlrpc.Value{xmlrpc.IntValue(int32(i))}) //nolint:gosec // test

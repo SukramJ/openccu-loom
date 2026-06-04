@@ -278,13 +278,11 @@ openccu-loom/
 │   ├── hmevent/             — domain event types
 │   ├── hmlog/               — contextual slog helpers + request filters
 │   ├── hmapi/               — REST/WS DTOs shared with external clients
-│   ├── hmproperty/          — typed property helpers (cached, delegated, kind)
 │   ├── interfaces/          — DI contracts (Protocol interfaces)
 │   └── hmproto/             — Homematic wire shapes + normalization
 ├── internal/                — daemon-internal, non-reusable
 │   ├── audit/               — change-log append, persistence
 │   ├── auth/                — Basic / Session / OIDC / API Token
-│   ├── boundary/            — `boundary.Execute` (port of @inspector)
 │   ├── build/               — version metadata
 │   ├── ccudata/             — embedded openccu-data extracts
 │   │                          (translations, easymodes, profiles)
@@ -310,8 +308,8 @@ openccu-loom/
 │   ├── scheduler/           — periodic jobs
 │   └── store/               — SQLite persistence (migrations, sessions,
 │                              paramsets, devices, incidents, audit)
-│                              + in-memory caches (dynamic, visibility,
-│                              patches, master/link profile, devicedetails)
+│                              + in-memory caches (visibility, patches,
+│                              master/link profile, devicedetails)
 ├── assets/
 │   ├── ui/                  — Svelte 5 SPA source (Tailwind 4, Vite)
 │   ├── openapi.yaml         — REST spec

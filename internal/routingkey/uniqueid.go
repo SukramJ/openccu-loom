@@ -54,8 +54,8 @@ func foldAddress(address string) string {
 // addressRoot returns the segment before the first ":" (the channel
 // separator), or the whole address when it carries no channel suffix.
 func addressRoot(address string) string {
-	if i := strings.IndexByte(address, ':'); i >= 0 {
-		return address[:i]
+	if before, _, ok := strings.Cut(address, ":"); ok {
+		return before
 	}
 	return address
 }

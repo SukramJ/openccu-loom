@@ -74,7 +74,7 @@ func TestPurgeVariadicMultipleAddresses(t *testing.T) {
 	results := make([]chan error, 2)
 	for i, addr := range []string{"addr-a", "addr-b"} {
 		results[i] = make(chan error, 1)
-		addr := addr
+
 		ch := results[i]
 		go func() {
 			ch <- tt.AcquireFor(ctx, hmenum.CommandPriorityHigh, addr)

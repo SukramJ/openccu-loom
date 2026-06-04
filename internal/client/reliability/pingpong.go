@@ -546,7 +546,7 @@ func (t *PingPongTracker) Journal() []JournalEntry {
 	}
 	out := make([]JournalEntry, 0, t.journalLen)
 	start := (t.journalHead - t.journalLen + len(t.journal)) % len(t.journal)
-	for i := 0; i < t.journalLen; i++ {
+	for i := range t.journalLen {
 		out = append(out, t.journal[(start+i)%len(t.journal)])
 	}
 	return out
@@ -584,7 +584,7 @@ func (t *PingPongTracker) enforceCap(m map[string]time.Time, kind JournalEventKi
 	}
 	// Partial sort: we only need the oldest toDrop. A linear scan for
 	// each of them is cheap (toDrop is small).
-	for i := 0; i < toDrop; i++ {
+	for i := range toDrop {
 		oldestIdx := i
 		for j := i + 1; j < len(entries); j++ {
 			if entries[j].at.Before(entries[oldestIdx].at) {

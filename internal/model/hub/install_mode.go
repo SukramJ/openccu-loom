@@ -63,10 +63,7 @@ func (m *InstallMode) InstallState() (enabled bool, remaining time.Duration, obs
 	if !m.enabled {
 		return false, 0, m.observed
 	}
-	remain := time.Until(m.expiresAt)
-	if remain < 0 {
-		remain = 0
-	}
+	remain := max(time.Until(m.expiresAt), 0)
 	return true, remain, m.observed
 }
 

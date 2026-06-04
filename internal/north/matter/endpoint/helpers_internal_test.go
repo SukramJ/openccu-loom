@@ -90,7 +90,6 @@ func TestMeasurementDeviceType(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			got := measurementDeviceType(tc.class)

@@ -122,13 +122,13 @@ type Config struct {
 // failure mode.
 func (c Config) validate() error {
 	if c.VendorID == 0 {
-		return fmt.Errorf("bridge: Config.VendorID must be non-zero")
+		return errors.New("bridge: Config.VendorID must be non-zero")
 	}
 	if c.ProductID == 0 {
-		return fmt.Errorf("bridge: Config.ProductID must be non-zero")
+		return errors.New("bridge: Config.ProductID must be non-zero")
 	}
 	if c.NodeLabel == "" {
-		return fmt.Errorf("bridge: Config.NodeLabel must be non-empty")
+		return errors.New("bridge: Config.NodeLabel must be non-empty")
 	}
 	return nil
 }
@@ -379,10 +379,10 @@ type Bridge struct {
 // New does NOT touch the network — call [Start] for that.
 func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Config, logger *slog.Logger) (*Bridge, error) {
 	if s == nil {
-		return nil, fmt.Errorf("bridge: store is required")
+		return nil, errors.New("bridge: store is required")
 	}
 	if snap == nil {
-		return nil, fmt.Errorf("bridge: snapshotter is required")
+		return nil, errors.New("bridge: snapshotter is required")
 	}
 	if err := cfg.validate(); err != nil {
 		return nil, err
@@ -437,6 +437,8 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 //
 // Calling Start a second time on the same instance returns
 // [ErrAlreadyStarted].
+//
+//nolint:contextcheck // serve/ack-pump goroutines run in a fresh context torn down explicitly via the stored serveCancel (Stop); rooting them in the caller ctx would race listener teardown
 func (b *Bridge) Start(ctx context.Context) error {
 	// Claim the started flag atomically so two concurrent Starts
 	// can't both pass the check + race ahead to bind the same UDP
@@ -548,7 +550,7 @@ func (b *Bridge) Reassemble(ctx context.Context) error {
 // lock. Concurrent Reassembles serialise harmlessly: each finishes
 // independently, and the last writer wins (subsequent reads see one
 // of the two assembled topologies, never a torn intermediate).
-func (b *Bridge) reassembleLocked(ctx context.Context) error {
+func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit,funlen // single-purpose bridge topology reassembly with many endpoint/cluster branches
 	snapshots := b.snapshotter(ctx)
 	topology, err := b.assembler.Assemble(ctx, snapshots)
 	if err != nil {
@@ -1019,6 +1021,7 @@ func (b *Bridge) Stop(ctx context.Context) error {
 		for i := range active {
 			svc := &active[i]
 			withdrawCtx, withdrawCancel := context.WithTimeout(context.Background(), b.cfg.AdvertiseTimeout)
+			//nolint:contextcheck // shutdown path: mDNS withdraw must run on a fresh timeout ctx, not the cancelled serve ctx
 			if err := b.advertiser.Withdraw(withdrawCtx, svc.InstanceName, svc.ServiceType); err != nil {
 				b.logger.Debug("matter.mdns.withdraw",
 					slog.String("instance", svc.InstanceName),

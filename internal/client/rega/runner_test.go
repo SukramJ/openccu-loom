@@ -628,7 +628,7 @@ func TestSanitizeJSONControlsAllControlCharsInsideString(t *testing.T) {
 
 	// Build a string value containing every byte in [0x00, 0x1f].
 	var inner strings.Builder
-	for i := 0; i < 0x20; i++ {
+	for i := range 0x20 {
 		inner.WriteByte(byte(i))
 	}
 	// Embed it as the value of key "k".
@@ -637,7 +637,7 @@ func TestSanitizeJSONControlsAllControlCharsInsideString(t *testing.T) {
 	got := SanitizeJSONControls(raw)
 
 	// The output must not contain any raw control character inside the string.
-	for i := 0; i < 0x20; i++ {
+	for i := range 0x20 {
 		if strings.ContainsRune(got, rune(i)) {
 			t.Errorf("raw control char 0x%02x survived sanitisation in %q", i, got)
 		}
@@ -816,7 +816,6 @@ func TestSubstituteHandlesTabAndNewlineInValue(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := EscapeString(tc.input)
@@ -886,7 +885,7 @@ func TestRunConcurrentCallsAreSafe(t *testing.T) {
 	const goroutines = 10
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			_, _ = runner.GetSystemUpdateInfo(context.Background())

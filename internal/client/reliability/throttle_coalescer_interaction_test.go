@@ -38,7 +38,7 @@ func TestBurstAndCoalesceSameKey(t *testing.T) {
 	wg.Add(callers)
 	start := make(chan struct{})
 
-	for i := 0; i < callers; i++ {
+	for range callers {
 		go func() {
 			defer wg.Done()
 			<-start
@@ -89,7 +89,7 @@ func TestBurstAndCoalesceDifferentKeysCriticalBypassesBurst(t *testing.T) {
 	ctx := context.Background()
 
 	// Fill the burst window with HIGH-priority requests.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		if err := tr.Acquire(ctx, hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("priming Acquire: %v", err)
 		}

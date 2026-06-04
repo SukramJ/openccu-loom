@@ -9,6 +9,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -477,7 +478,7 @@ func (l *Light) OnLevel(level float64) {
 // 0 or 1 and report an error otherwise.
 func (l *Light) SetLevel(ctx context.Context, level float64, priority hmenum.CommandPriority) error {
 	if !l.Capabilities.Dimmable && level != 0 && level != 1 {
-		return fmt.Errorf("light: device is not dimmable, level must be 0 or 1")
+		return errors.New("light: device is not dimmable, level must be 0 or 1")
 	}
 	b := custom.NewBrightness(level).Byte()
 	turnOn := level > 0
@@ -486,7 +487,7 @@ func (l *Light) SetLevel(ctx context.Context, level float64, priority hmenum.Com
 		return nil
 	}
 	if l.Float == nil {
-		return fmt.Errorf("light: SET level: channel has no LEVEL data point")
+		return errors.New("light: SET level: channel has no LEVEL data point")
 	}
 	target := custom.NewBrightness(level).Level()
 	l.recordLastSent(target)
@@ -632,7 +633,7 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 		level = *cfg.Brightness
 	}
 	if !l.Capabilities.Dimmable && level != 0 && level != 1 {
-		return fmt.Errorf("light: device is not dimmable, level must be 0 or 1")
+		return errors.New("light: device is not dimmable, level must be 0 or 1")
 	}
 
 	params := map[hmenum.Parameter]any{

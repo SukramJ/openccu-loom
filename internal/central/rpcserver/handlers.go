@@ -56,8 +56,7 @@ var ErrNoHandlers = errors.New("rpcserver: no handlers registered")
 
 // asFault collapses an arbitrary error into an XML-RPC fault.
 func asFault(err error) *hmerr.XMLRPCFault {
-	var fault *hmerr.XMLRPCFault
-	if errors.As(err, &fault) {
+	if fault, ok := errors.AsType[*hmerr.XMLRPCFault](err); ok {
 		return fault
 	}
 	return &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}

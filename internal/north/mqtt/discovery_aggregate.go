@@ -6,6 +6,8 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -29,12 +31,7 @@ var pressParameters = []string{
 // use the same check without duplicating the set.
 func IsPressParameter(p string) bool {
 	up := strings.ToUpper(p)
-	for _, pp := range pressParameters {
-		if up == pp {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(pressParameters, up)
 }
 
 // isPressParameter is the package-internal alias used by Build.
@@ -112,9 +109,7 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 		"event_types":  toAnySlice(types),
 		"device_class": "button",
 	}
-	for k, v := range base {
-		body[k] = v
-	}
+	maps.Copy(body, base)
 	out, err := json.Marshal(body)
 	if err != nil {
 		return "", "", "", nil, false
@@ -159,9 +154,7 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	uniqueID := d.channelUniqueID(ev, comp)
 	nodeID = discoveryNodeID(d.Central, ev.DeviceAddress)
 	base := d.channelBaseBody(ev, displayChannelName(ev), uniqueID)
-	for k, v := range base {
-		body[k] = v
-	}
+	maps.Copy(body, base)
 	// Strict variant: when neither a rule nor a category-default matches, every
 	// HA-attribute field is stripped from the body so an unknown model gets no
 	// `device_class` etc. (mirrors HA-native behaviour). Without this the legacy
@@ -399,7 +392,7 @@ func displayChannelName(ev Event) string {
 		}
 	}
 	if ev.ChannelNo > 0 {
-		return fmt.Sprintf("%d", ev.ChannelNo)
+		return strconv.Itoa(ev.ChannelNo)
 	}
 	return ""
 }

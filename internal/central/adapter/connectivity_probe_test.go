@@ -26,7 +26,7 @@ func newProbeServer(t *testing.T, body string) *httptest.Server {
 		}
 		_ = json.Unmarshal(raw, &env)
 		if env.Method != "Interface.listInterfaces" {
-			http.Error(w, "unexpected method "+env.Method, 404)
+			http.Error(w, "unexpected method "+env.Method, http.StatusNotFound)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

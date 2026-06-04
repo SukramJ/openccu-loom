@@ -17,6 +17,7 @@
 package devicedetails
 
 import (
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -218,9 +219,7 @@ func (c *Cache) DeviceChannelISEIDs() map[string]int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	out := make(map[string]int, len(c.iseIDs))
-	for k, v := range c.iseIDs {
-		out[k] = v
-	}
+	maps.Copy(out, c.iseIDs)
 	return out
 }
 

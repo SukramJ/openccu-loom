@@ -5,7 +5,6 @@ package main
 
 import (
 	"bytes"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -42,7 +41,7 @@ func TestBuildOIDC_EnabledUnreachableIssuer_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.REST.Auth.OIDC.Enabled = true
 	cfg.North.REST.Auth.OIDC.Issuer = "https://192.0.2.1:9999/oidc"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := buildOIDC(cfg, logger)
 	if got != nil {
 		t.Errorf("expected nil when OIDC discovery fails")
@@ -56,7 +55,7 @@ func TestBuildOIDCRest_EnabledUnreachableIssuer_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.REST.Auth.OIDC.Enabled = true
 	cfg.North.REST.Auth.OIDC.Issuer = "https://192.0.2.1:9999/oidc"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := buildOIDCRest(cfg, logger, nil)
 	if got != nil {
 		t.Errorf("expected nil when OIDC discovery fails")

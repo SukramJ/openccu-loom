@@ -4,7 +4,6 @@
 package rpcserver
 
 import (
-	"context"
 	"net"
 	"sync"
 	"testing"
@@ -25,8 +24,7 @@ func TestBINRPCServerActiveTasksCount(t *testing.T) {
 	}
 
 	// Serve in background.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ctx) }()
 

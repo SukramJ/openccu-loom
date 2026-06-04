@@ -4,7 +4,9 @@
 package bridge
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
@@ -18,7 +20,7 @@ import (
 // (e.g. the cluster ID inside attribute_reports[0].path).
 func tlvTopLevelContextTags(body []byte) (map[uint8]bool, error) {
 	if len(body) == 0 {
-		return nil, fmt.Errorf("empty IM body")
+		return nil, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()
@@ -56,7 +58,7 @@ func sortedTagKeys(m map[uint8]bool) []uint8 {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -78,7 +80,7 @@ func sortedStringKeys[V any](m map[string]V) []string {
 // to the configured ceiling.
 func tlvSubscribeResponseMaxInterval(body []byte) (uint16, error) {
 	if len(body) == 0 {
-		return 0, fmt.Errorf("empty IM body")
+		return 0, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()
@@ -105,7 +107,7 @@ func tlvSubscribeResponseMaxInterval(body []byte) (uint16, error) {
 			depth++
 		}
 	}
-	return 0, fmt.Errorf("SubscribeResponse missing MaxInterval (tag 2)")
+	return 0, errors.New("SubscribeResponse missing MaxInterval (tag 2)")
 }
 
 // tlvFirstAttributeUintValue walks the IM body's outer anonymous
@@ -117,7 +119,7 @@ func tlvSubscribeResponseMaxInterval(body []byte) (uint16, error) {
 // per-session FabricIndex it provided.
 func tlvFirstAttributeUintValue(body []byte) (uint64, error) {
 	if len(body) == 0 {
-		return 0, fmt.Errorf("empty IM body")
+		return 0, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()
@@ -168,19 +170,19 @@ func tlvFirstAttributeUintValue(body []byte) (uint64, error) {
 							dDepth++
 						}
 					}
-					return 0, fmt.Errorf("AttributeDataIB missing Data (tag 2)")
+					return 0, errors.New("AttributeDataIB missing Data (tag 2)")
 				}
 				if rEl.IsContainer {
 					rDepth++
 				}
 			}
-			return 0, fmt.Errorf("AttributeReportIB missing AttributeDataIB")
+			return 0, errors.New("AttributeReportIB missing AttributeDataIB")
 		}
 		if el.IsContainer {
 			depth++
 		}
 	}
-	return 0, fmt.Errorf("ReportData has no attributeReports array")
+	return 0, errors.New("ReportData has no attributeReports array")
 }
 
 // tlvFirstAttributeDataVersion walks into the IM body's outer
@@ -191,7 +193,7 @@ func tlvFirstAttributeUintValue(body []byte) (uint64, error) {
 // DataVersion advancement across consecutive fires.
 func tlvFirstAttributeDataVersion(body []byte) (uint32, error) {
 	if len(body) == 0 {
-		return 0, fmt.Errorf("empty IM body")
+		return 0, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()
@@ -220,7 +222,7 @@ func tlvFirstAttributeDataVersion(body []byte) (uint32, error) {
 				return 0, fmt.Errorf("read first attr report: %w", err)
 			}
 			if !el2.IsContainer {
-				return 0, fmt.Errorf("attributeReports[0] not a container")
+				return 0, errors.New("attributeReports[0] not a container")
 			}
 			// Find AttributeDataIB at tag 1 inside this report.
 			rDepth := 1
@@ -252,19 +254,19 @@ func tlvFirstAttributeDataVersion(body []byte) (uint32, error) {
 							dDepth++
 						}
 					}
-					return 0, fmt.Errorf("AttributeDataIB missing DataVersion (tag 0)")
+					return 0, errors.New("AttributeDataIB missing DataVersion (tag 0)")
 				}
 				if rEl.IsContainer {
 					rDepth++
 				}
 			}
-			return 0, fmt.Errorf("AttributeReportIB missing AttributeDataIB (tag 1)")
+			return 0, errors.New("AttributeReportIB missing AttributeDataIB (tag 1)")
 		}
 		if el.IsContainer {
 			depth++
 		}
 	}
-	return 0, fmt.Errorf("ReportData has no attributeReports array")
+	return 0, errors.New("ReportData has no attributeReports array")
 }
 
 // encodeScenarioInvokeMoveToLevel builds an IM:InvokeRequestMessage
@@ -315,7 +317,7 @@ func encodeScenarioInvokeMoveToLevel(endpoint uint16, level uint8) ([]byte, erro
 //	 [0xFF] IMRevision
 func tlvInvokeResponseFirstStatus(body []byte) (uint8, error) {
 	if len(body) == 0 {
-		return 0, fmt.Errorf("empty IM body")
+		return 0, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()
@@ -399,7 +401,7 @@ func tlvInvokeResponseFirstStatus(body []byte) (uint8, error) {
 			depth++
 		}
 	}
-	return 0, fmt.Errorf("InvokeResponse missing invokeResponses array")
+	return 0, errors.New("InvokeResponse missing invokeResponses array")
 }
 
 // encodeScenarioWriteRequest builds a minimal WriteRequestMessage
@@ -428,7 +430,7 @@ func encodeScenarioWriteRequest(path im.ConcreteAttributePath, value bool) ([]by
 // entries at depth 2 — each is one AttributeReport.
 func tlvAttributeReportsCount(body []byte) (int, error) {
 	if len(body) == 0 {
-		return 0, fmt.Errorf("empty IM body")
+		return 0, errors.New("empty IM body")
 	}
 	dec := tlv.NewDecoder(body)
 	first, err := dec.Next()

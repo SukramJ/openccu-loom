@@ -37,7 +37,7 @@ func TestThrottleWaitedForBurstSlotIncrements(t *testing.T) {
 
 	// Fill the burst window with two HIGH-priority Acquires (recorded as
 	// non-critical samples by recordBurstLocked).
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("fill Acquire %d: %v", i, err)
 		}
@@ -56,11 +56,9 @@ func TestThrottleWaitedForBurstSlotIncrements(t *testing.T) {
 	// the fake clock past the window.
 	var wg sync.WaitGroup
 	acquireErr := make(chan error, 1)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		acquireErr <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
-	}()
+	})
 
 	// Give the goroutine time to enter waitForBurstSlot and start the timer.
 	time.Sleep(10 * time.Millisecond)
@@ -89,7 +87,7 @@ func TestThrottleWaitedForBurstSlotNotIncrementedWhenNoWait(t *testing.T) {
 		BurstWindow:    500 * time.Millisecond,
 	})
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityLow); err != nil {
 			t.Fatalf("Acquire %d: %v", i, err)
 		}
@@ -121,11 +119,9 @@ func TestThrottleWaitedForBurstSlotCountedOncePerAcquire(t *testing.T) {
 
 	acquireErr := make(chan error, 1)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		acquireErr <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
-	}()
+	})
 
 	time.Sleep(10 * time.Millisecond)
 	fc.Advance(300 * time.Millisecond)
@@ -158,13 +154,11 @@ func TestThrottleSuspendedIncrementedOnClose(t *testing.T) {
 
 	const waiters = 3
 	var wg sync.WaitGroup
-	for i := 0; i < waiters; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range waiters {
+		wg.Go(func() {
 			// These will queue; Close() will wake them all.
 			tt.Acquire(context.Background(), hmenum.CommandPriorityLow) //nolint:errcheck // we expect ErrThrottleClosed or nil
-		}()
+		})
 	}
 
 	// Give the goroutines time to reach the waiter heap.
@@ -200,11 +194,9 @@ func TestThrottleSuspendedIncrementedByWaitForBurstSlotOnClose(t *testing.T) {
 
 	acquireErr := make(chan error, 1)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		acquireErr <- tt.Acquire(context.Background(), hmenum.CommandPriorityLow)
-	}()
+	})
 
 	// Give the goroutine time to enter waitForBurstSlot and start the timer.
 	time.Sleep(10 * time.Millisecond)
@@ -232,7 +224,7 @@ func TestThrottleSuspendedIncrementedByWaitForBurstSlotOnClose(t *testing.T) {
 func TestThrottleSuspendedZeroWithNoClose(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 5})
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityLow); err != nil {
 			t.Fatalf("Acquire %d: %v", i, err)
 		}

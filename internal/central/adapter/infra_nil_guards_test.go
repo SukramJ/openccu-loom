@@ -9,6 +9,7 @@ package adapter
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -550,13 +551,7 @@ func TestDecodeEncodeTargetChannels(t *testing.T) {
 		t.Fatal("encodeTargetChannels(1_1) = 0, want non-zero")
 	}
 	decoded := decodeTargetChannels(encoded)
-	found := false
-	for _, ch := range decoded {
-		if ch == "1_1" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(decoded, "1_1")
 	if !found {
 		t.Errorf("decodeTargetChannels → %v, expected to contain 1_1", decoded)
 	}

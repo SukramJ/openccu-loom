@@ -271,7 +271,6 @@ func TestSentinelRoundTrips(t *testing.T) {
 	}
 
 	for _, s := range sentinels {
-		s := s
 		t.Run(s.Error(), func(t *testing.T) {
 			t.Parallel()
 			// Direct match.
@@ -308,7 +307,6 @@ func TestXMLRPCFaultCodeIsRetryableTrue(t *testing.T) {
 	}
 
 	for _, c := range retryable {
-		c := c
 		t.Run(fmt.Sprintf("code_%d", int(c)), func(t *testing.T) {
 			t.Parallel()
 			if !c.IsRetryable() {
@@ -329,7 +327,6 @@ func TestXMLRPCFaultCodeIsRetryableFalse(t *testing.T) {
 	}
 
 	for _, c := range nonRetryable {
-		c := c
 		t.Run(fmt.Sprintf("code_%d", int(c)), func(t *testing.T) {
 			t.Parallel()
 			if c.IsRetryable() {
@@ -401,7 +398,6 @@ func TestXMLRPCFaultAllRetryableCodes(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(fmt.Sprintf("code_%d", tc.code), func(t *testing.T) {
 			t.Parallel()
 			f := &XMLRPCFault{Code: tc.code, Message: tc.message}
@@ -489,7 +485,6 @@ func TestContextualErrorFormatVariants(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			wrapped := WithContext(tc.err, tc.ctx)
@@ -611,7 +606,6 @@ func TestRPCFaultCodeMapping(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(fmt.Sprintf("code_%d_%s", tc.code, tc.label), func(t *testing.T) {
 			t.Parallel()
 			f := &XMLRPCFault{Code: tc.code, Message: "test"}

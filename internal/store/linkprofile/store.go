@@ -44,6 +44,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"slices"
 	"sync"
 )
 
@@ -320,7 +321,7 @@ func (s *Store) ReceiverTypes() ([]string, error) {
 // Receiver-type aliases are applied before the lookup.
 func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	if receiverChannelType == "" {
-		return nil, fmt.Errorf("linkprofile: empty receiver channel type")
+		return nil, errors.New("linkprofile: empty receiver channel type")
 	}
 	effective := s.effectiveReceiver(receiverChannelType)
 
@@ -380,13 +381,7 @@ func profileMatches(params map[string]ParamConstraint, current map[string]any) b
 			if len(c.Values) == 0 {
 				continue
 			}
-			found := false
-			for _, v := range c.Values {
-				if v == num {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(c.Values, num)
 			if !found {
 				return false
 			}

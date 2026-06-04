@@ -367,7 +367,6 @@ func TestDefaultRegistryCoversKnownProfileCategories(t *testing.T) {
 	}
 
 	for _, cat := range wantCategories {
-		cat := cat
 		t.Run(string(cat), func(t *testing.T) {
 			t.Parallel()
 			// ForDevice iterates all device types; check that at least one

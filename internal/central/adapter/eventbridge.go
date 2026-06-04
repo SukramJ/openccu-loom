@@ -702,7 +702,7 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 //
 // Channel may be nil when the registry has not yet hydrated the
 // channel — the caller falls back to a minimal Event in that case.
-func (b *EventBridge) buildPublishEvent(
+func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	centralName, iface, deviceAddr, channelAddress string,
 	channelNo int,
 	model, deviceName string,
@@ -1570,14 +1570,14 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 		// below, and any later Save (from the UI) will likewise be
 		// triggered from a request context that may already be
 		// closed by the time the callback runs.
-		scheduleUnsub := cp.OnChange(func(_, _ *schedule.Climate) {
+		scheduleUnsub := cp.OnChange(func(_, _ *schedule.Climate) { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
 			b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
 		})
 		b.unsubs = append(b.unsubs, scheduleUnsub)
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch.
-		go func() { //nolint:gosec // intentionally background-scoped
+		go func() { //nolint:gosec,contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_, _ = cp.Load(loadCtx)
@@ -1714,7 +1714,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	// the channel's refresher; on success it publishes through the
 	// Profile's OnChange, which we subscribe to below for re-publishing.
 	if sp := wp.Simple(); sp != nil {
-		go func(p *weekprofile.DefaultProfile) { //nolint:gosec // background load intentionally uses its own timeout context
+		go func(p *weekprofile.DefaultProfile) { //nolint:gosec,contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_, _ = p.Load(loadCtx)
@@ -1727,7 +1727,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 		capAddr := d.Address
 		capCh := channelNo
 		capWP := wp
-		unsubSimple := sp.OnChange(func(_, _ *schedule.Simple) {
+		unsubSimple := sp.OnChange(func(_, _ *schedule.Simple) { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
 			b.publishScheduleEntityPayload(
 				context.Background(),
 				capCentral, capIface, capAddr, capCh, capWP,
@@ -1769,7 +1769,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	capturedAddr := d.Address
 	capturedCh := channelNo
 	capturedWP := wp
-	unsub := capturedWP.OnChange(func() {
+	unsub := capturedWP.OnChange(func() { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
 		b.publishScheduleEntityPayload(
 			context.Background(),
 			capturedCentral, capturedIface, capturedAddr, capturedCh, capturedWP,
@@ -1928,7 +1928,7 @@ func (b *EventBridge) publishScheduleSwitchSnapshot(
 	capturedAddr := d.Address
 	capturedCh := scheduleChannelNo
 	capturedWP := wp
-	unsub := capturedWP.OnChange(func() {
+	unsub := capturedWP.OnChange(func() { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
 		state := capturedWP.ScheduleEnabled()
 		for k, v := range state {
 			_ = bridge.PublishScheduleSwitchState(
@@ -2116,7 +2116,7 @@ func (b *EventBridge) publishCombinedDPSnapshot(
 		capturedIface := iface
 		capturedAddr := d.Address
 		capturedChannel := channelNo
-		unsub := timer.OnUpdate(func(_, next float64) {
+		unsub := timer.OnUpdate(func(_, next float64) { //nolint:contextcheck // OnUpdate callback fires asynchronously; the snapshot ctx may already be done
 			_ = bridge.PublishCombinedTimerState(
 				context.Background(),
 				capturedCentral, capturedIface, capturedAddr, capturedChannel,

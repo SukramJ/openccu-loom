@@ -116,8 +116,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // asFault collapses any error into an XMLRPCFault. Errors that are
 // already faults pass through untouched; anything else maps to code -1.
 func asFault(err error) *hmerr.XMLRPCFault {
-	var fault *hmerr.XMLRPCFault
-	if errors.As(err, &fault) {
+	if fault, ok := errors.AsType[*hmerr.XMLRPCFault](err); ok {
 		return fault
 	}
 	return &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}

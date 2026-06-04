@@ -251,7 +251,7 @@ profile catalogue are kept in lockstep.
 | Config | programmatic (Pydantic) | YAML (with defaults) |
 | Persistence | JSON files | SQLite WAL + filesystem under `data_dir/` |
 | UI | none (HA provides one) | built-in Svelte 5 SPA (HTMX fallback for no-JS) |
-| Decorators (`@state_property`, `@inspector`) | Python runtime | Go struct tags + `internal/boundary.Execute` |
+| Decorators (`@state_property`, `@inspector`) | Python runtime | Go struct tags; `@inspector` wrapping handled inline at call sites |
 | Device profiles | hand-written Python | generated from the `aiohomematic` registry, plus hand-written Go wrappers |
 
 ## Quality Assurance — Strukturelle Säulen

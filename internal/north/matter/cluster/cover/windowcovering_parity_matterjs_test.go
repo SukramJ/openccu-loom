@@ -6,6 +6,7 @@ package cover_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/cover"
@@ -404,13 +405,7 @@ func TestWindowCoveringServer_MatterReportable(t *testing.T) {
 	reportable := srv.MatterReportable()
 
 	has := func(id uint32) bool {
-		for _, v := range reportable {
-			if v == id {
-				return true
-			}
-		}
-
-		return false
+		return slices.Contains(reportable, id)
 	}
 
 	if !has(clusterwire.WindowCoveringAttrCurrentPositionLiftPercent100ths) {

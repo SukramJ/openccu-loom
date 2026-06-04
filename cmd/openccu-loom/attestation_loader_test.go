@@ -10,7 +10,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
-	"io"
 	"log/slog"
 	"math/big"
 	"os"
@@ -66,7 +65,7 @@ func TestLoadVendorAttestation_PEMRoundTrip(t *testing.T) {
 		PAIPath:    paiPath,
 		CDPath:     cdPath,
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gotKey, gotDAC, gotPAI, gotCD, ok := loadVendorAttestation(cfg, logger)
 	if !ok {
 		t.Fatal("vendor load returned ok=false on a valid PEM bundle")
@@ -85,7 +84,7 @@ func TestLoadVendorAttestation_PEMRoundTrip(t *testing.T) {
 // (nil-everything, false).
 func TestLoadVendorAttestation_MissingPathFalls(t *testing.T) {
 	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	cfg := config.NorthMatterAttestation{} // all paths empty
 	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
 	if ok {
@@ -123,7 +122,7 @@ func TestLoadVendorAttestation_KeyMismatchFails(t *testing.T) {
 	mustWrite(t, cdPath, []byte("cd"))
 
 	cfg := config.NorthMatterAttestation{DACPath: dacPath, DACKeyPath: keyPath, PAIPath: paiPath, CDPath: cdPath}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if _, _, _, _, ok := loadVendorAttestation(cfg, logger); ok {
 		t.Error("DAC/key mismatch should trigger fallback; want ok=false")
 	}

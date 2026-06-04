@@ -20,7 +20,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -107,9 +106,9 @@ func TestRunDaemon_InvalidConfigPath_ReturnsError(t *testing.T) {
 // enabled on dynamic ports, then stops.
 func TestDaemonServe_WithRESTAndUI(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(true)
+	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = "127.0.0.1:0"
-	cfg.North.UI.Enabled = boolPtr(true)
+	cfg.North.UI.Enabled = new(true)
 	cfg.North.UI.Listen = "127.0.0.1:0"
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -141,8 +140,8 @@ func TestDaemonServe_WithRESTAndUI(t *testing.T) {
 // wireAuditPersistence) exercise their "valid DB" branches.
 func TestDaemonServe_WithDataDir(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.DataDir = t.TempDir()
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -170,8 +169,8 @@ func TestDaemonServe_WithDataDir(t *testing.T) {
 // with a real DataDir.
 func TestDaemonServe_WithMatterAndDataDir(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
@@ -205,8 +204,8 @@ func TestDaemonServe_WithMatterAndDataDir(t *testing.T) {
 // the persistent-identity loading paths are exercised.
 func TestDaemonServe_WithCASEConfigured(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.CASE.NodeID = 42
@@ -244,7 +243,7 @@ func TestStartCallbackServer_PublicHostConfigured(t *testing.T) {
 	cfg.Callback.Host = "127.0.0.1"
 	cfg.Callback.Port = 0
 	cfg.Callback.PublicHost = "192.0.2.1"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
 	srv, baseURL, err := startCallbackServer(ctx, cfg, logger)
@@ -268,7 +267,7 @@ func TestStartCallbackServer_NoCentralsNoPublicHost(t *testing.T) {
 	cfg.Callback.Port = 0
 	cfg.Callback.PublicHost = ""
 	cfg.Centrals = nil
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
 	srv, _, err := startCallbackServer(ctx, cfg, logger)
@@ -288,7 +287,7 @@ func TestStartCallbackServer_WithPortRange(t *testing.T) {
 	cfg.Callback.Port = 0
 	cfg.Callback.PortRange = "19000-19100"
 	cfg.Callback.PublicHost = "127.0.0.1"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
 	srv, baseURL, err := startCallbackServer(ctx, cfg, logger)
@@ -312,7 +311,7 @@ func TestStartCallbackServer_InvalidPortRange(t *testing.T) {
 	cfg.Callback.Port = 0
 	cfg.Callback.PortRange = "not-a-range"
 	cfg.Callback.PublicHost = "127.0.0.1"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
 	_, _, err := startCallbackServer(ctx, cfg, logger)
@@ -386,7 +385,7 @@ func TestBuildPaseAdapterFromCreds_WithNilOpCreds_Builds(t *testing.T) {
 	t.Parallel()
 	mgr := buildTestOperationalManager(t)
 	adapter, err := buildPaseAdapterFromCreds(20202021, []byte("openccu-loom-dev0"), 1000, mgr, nil, nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
+		slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("buildPaseAdapterFromCreds: %v", err)
 	}
@@ -447,7 +446,7 @@ func TestBuildCaseAdapter_WithPersistedFabric(t *testing.T) {
 	}
 
 	cfg := config.NorthMatterCASE{NodeID: 0xBEEF, FabricID: 0xCAFE}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	adapter, err := buildCaseAdapter(ctx, cfg, mgr, store, logger)
 	if err != nil {
 		t.Fatalf("buildCaseAdapter with persisted fabric: %v", err)
@@ -496,7 +495,7 @@ func TestLoadPersistentCaseIdentity_WrongIPKLength(t *testing.T) {
 	}
 
 	cfg := config.NorthMatterCASE{FabricID: 0xABCD, NodeID: 0x1234}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, persisted, err := loadPersistentCaseIdentity(ctx, cfg, store, logger)
 	if err != nil {
 		t.Fatalf("unexpected error from loadPersistentCaseIdentity: %v", err)
@@ -514,7 +513,7 @@ func TestLoadAdditionalFabricsForCase_TwoFabrics_LoadsNonSeed(t *testing.T) {
 	t.Parallel()
 	store := matterStoreFromManager(t, buildTestOperationalManager(t))
 	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	addFabricWithIdentity := func(fabricID, nodeID uint64) uint8 {
 		t.Helper()
@@ -647,7 +646,7 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -658,7 +657,7 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 		bundle.store,
 		bundle.bridge,
 		nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
 	)
@@ -704,7 +703,7 @@ func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := buildTestRegistry(t, "ccu-inc")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -718,7 +717,7 @@ func TestWireSessionRecorderPersistence_WithCentral(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := buildTestRegistry(t, "ccu-sess")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireSessionRecorderPersistence(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -736,7 +735,7 @@ func TestWireAuditPersistence_BadDataDir(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = "/proc/nonexistent_dir_12345"
 	buf := audit.NewBuffer(16)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := wireAuditPersistence(cfg, buf, logger)
 	if got == nil {
 		t.Fatal("expected non-nil fallback recorder when DataDir is unusable")
@@ -760,7 +759,7 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -771,7 +770,7 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 		nil,
 		bundle.bridge,
 		nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
 	)
@@ -812,9 +811,9 @@ func TestDaemonServe_RESTHealthGreen(t *testing.T) {
 	_ = l.Close()
 
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(true)
+	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = restAddr
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.DataDir = t.TempDir()
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -869,7 +868,7 @@ func TestBuildBackupAdapter_WithCentral(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := buildTestRegistry(t, "ccu-bak")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	a := buildBackupAdapter(cfg, reg, logger)
 	if a == nil {
 		t.Fatal("expected non-nil adapter")
@@ -885,7 +884,7 @@ func TestWireAuditPersistence_SharedDB(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	buf := audit.NewBuffer(32)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	got, db, _ := wireAuditPersistenceWithDB(cfg, buf, logger)
 	gooseMigrateMu.Unlock()
@@ -906,7 +905,7 @@ func TestBuildOpenAPIValidator_ValidSpecPath(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.REST.OpenAPISpecPath = "assets/openapi.yaml"
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	// buildOpenAPIValidator is unexported via the daemon package —
 	// call it directly from the test (same package).
 	v := buildOpenAPIValidator(cfg, logger)

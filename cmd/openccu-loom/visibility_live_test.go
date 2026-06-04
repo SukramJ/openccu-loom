@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -107,7 +106,7 @@ func TestWireVisibilityUnIgnoreStore_ValidDataDir_ReturnsStore(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	got := wireVisibilityUnIgnoreStore(cfg, logger)
 	gooseMigrateMu.Unlock()
@@ -121,7 +120,7 @@ func TestWireVisibilityUnIgnoreStore_EmptyDataDir_ReturnsNilOrStore(t *testing.T
 	t.Parallel()
 	cfg := config.Default()
 	cfg.DataDir = ""
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	// ./var likely doesn't exist → returns nil; either way must not panic.
 	got := wireVisibilityUnIgnoreStore(cfg, logger)
 	_ = got
@@ -136,7 +135,7 @@ func TestApplyVisibilityUnIgnore_WithPatterns_ReturnsOne(t *testing.T) {
 	store := buildVisibilityStore(t)
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// Pre-seed patterns for ccu-01.
 	ctx := context.Background()
@@ -163,7 +162,7 @@ func TestApplyVisibilityUnIgnore_Seed_FromConfigOnFirstStart(t *testing.T) {
 	store := buildVisibilityStore(t)
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// applyVisibilityUnIgnore should seed from config since store is empty.
 	ctx := context.Background()

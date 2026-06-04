@@ -649,7 +649,7 @@ func GenerateResumptionID() ([]byte, error) {
 // caller must hold m.mu in write mode.
 func (m *Manager) allocateIDLocked() (uint16, error) {
 	const maxID = uint16(0xFFFE)
-	for i := 0; i < int(maxID); i++ {
+	for range maxID {
 		id := m.nextID
 		m.nextID++
 		if m.nextID == 0 || m.nextID > maxID {

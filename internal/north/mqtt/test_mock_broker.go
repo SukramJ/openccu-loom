@@ -23,6 +23,7 @@ package mqtt
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -57,7 +58,8 @@ type lifecycleMockBroker struct {
 // finishes.
 func newLifecycleMockBroker(t *testing.T) *lifecycleMockBroker {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("lifecycleMockBroker: listen: %v", err)
 	}

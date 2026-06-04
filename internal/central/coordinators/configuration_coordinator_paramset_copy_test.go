@@ -14,6 +14,7 @@ package coordinators
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
@@ -35,9 +36,7 @@ func (s *stubParamsetReader) GetParamset(_ context.Context, _ string, _ hmenum.P
 		return nil, s.err
 	}
 	out := make(map[string]any, len(s.values))
-	for k, v := range s.values {
-		out[k] = v
-	}
+	maps.Copy(out, s.values)
 	return out, nil
 }
 

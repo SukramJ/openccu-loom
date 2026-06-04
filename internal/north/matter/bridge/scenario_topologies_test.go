@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -215,7 +216,7 @@ func buildManyTempSensorsTopology() *scenarioTopology {
 	const n = 30
 	dev := device.New(device.Config{Address: "MANYTMP", Name: "Many-Temp"})
 	sources := make(map[string]*scenarioFakeNotifier, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		chAddr := fmt.Sprintf("MANYTMP:%d", i+1)
 		src := &scenarioFakeNotifier{
 			key:   hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: "ACTUAL_TEMPERATURE"},
@@ -311,7 +312,7 @@ func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uin
 		// Distinct sentinel so the harness can attribute the bug:
 		// the dispatch path lost the command-fields struct before
 		// reaching us.
-		return nil, fmt.Errorf("LevelControl MoveToLevel: command fields are nil (commandFieldsReader dropped the TLV payload)")
+		return nil, errors.New("LevelControl MoveToLevel: command fields are nil (commandFieldsReader dropped the TLV payload)")
 	}
 	return nil, nil
 }

@@ -6,8 +6,8 @@ package bridge
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net"
 
@@ -362,7 +362,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		b.logger.Debug("matter.rx.sc.status_report",
 			slog.String("src", srcString(src)),
 			slog.Int("payload_bytes", len(payload)),
-			slog.String("hex", fmt.Sprintf("%x", payload)))
+			slog.String("hex", hex.EncodeToString(payload)))
 		return nil
 
 	default:
@@ -436,7 +436,7 @@ func (b *Bridge) handlePase(
 		return nil
 	}
 	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
-		debugReplyError(b.logger, fmt.Sprintf("send_%s", stage), src, err)
+		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
 	b.dischargeOwedAck(proto.ExchangeID)
@@ -510,7 +510,7 @@ func (b *Bridge) handleCase(
 		return nil
 	}
 	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
-		debugReplyError(b.logger, fmt.Sprintf("send_%s", stage), src, err)
+		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
 	b.dischargeOwedAck(proto.ExchangeID)

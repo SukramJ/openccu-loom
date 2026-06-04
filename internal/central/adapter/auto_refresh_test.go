@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -56,9 +57,7 @@ func (f *fakeMasterGetter) GetParamset(_ context.Context, _ string, _ hmenum.Par
 		return nil, f.err
 	}
 	out := make(map[string]any, len(f.result))
-	for k, v := range f.result {
-		out[k] = v
-	}
+	maps.Copy(out, f.result)
 	return out, nil
 }
 

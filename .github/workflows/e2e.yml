@@ -15,25 +15,25 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26"
-  NODE_VERSION: "20"
+  GO_VERSION: "1.26.4"
+  NODE_VERSION: "24"
 
 jobs:
   e2e:
     name: black-box e2e
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: setup Node (for Vite SPA build)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: assets/ui/package-lock.json
 
       - name: setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

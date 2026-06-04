@@ -207,6 +207,7 @@ func TestBuildDataPointName_MultiChannel(t *testing.T) {
 	ch2.Put(newValuesDP("000ABC:2", "STATE"))
 
 	t.Run("channel 0 gets no postfix even when multi-channel", func(t *testing.T) {
+		t.Parallel()
 		nd := BuildDataPointName(ch0, "STATE", "")
 		if nd.ParameterName != "State" {
 			t.Errorf("ch0 ParameterName = %q, want %q", nd.ParameterName, "State")
@@ -214,6 +215,7 @@ func TestBuildDataPointName_MultiChannel(t *testing.T) {
 	})
 
 	t.Run("channel 1 gets ch1 postfix", func(t *testing.T) {
+		t.Parallel()
 		nd := BuildDataPointName(ch1, "STATE", "")
 		if nd.ParameterName != "State ch1" {
 			t.Errorf("ch1 ParameterName = %q, want %q", nd.ParameterName, "State ch1")
@@ -221,6 +223,7 @@ func TestBuildDataPointName_MultiChannel(t *testing.T) {
 	})
 
 	t.Run("channel 2 gets ch2 postfix", func(t *testing.T) {
+		t.Parallel()
 		nd := BuildDataPointName(ch2, "STATE", "")
 		if nd.ParameterName != "State ch2" {
 			t.Errorf("ch2 ParameterName = %q, want %q", nd.ParameterName, "State ch2")

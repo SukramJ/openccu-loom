@@ -45,15 +45,13 @@ func TestListenerEcho(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = a.Serve(ctx, func(buf []byte, _ *net.UDPAddr) {
 			cp := make([]byte, len(buf))
 			copy(cp, buf)
 			got <- cp
 		})
-	}()
+	})
 
 	payload := []byte("hello matter")
 	if err := b.Send(a.LocalAddr(), payload); err != nil {
@@ -82,13 +80,11 @@ func TestListenerSourceAddressTagged(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = a.Serve(ctx, func(_ []byte, src *net.UDPAddr) {
 			gotSrc <- src
 		})
-	}()
+	})
 
 	if err := b.Send(a.LocalAddr(), []byte{1, 2, 3}); err != nil {
 		t.Fatal(err)

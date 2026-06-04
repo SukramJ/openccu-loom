@@ -133,7 +133,6 @@ func TestParityMatterJS_CommissioningWindow_DurationInvalidReturnsInvalidCommand
 func TestCommissioningWindow_DurationBoundaries_Valid(t *testing.T) {
 	t.Parallel()
 	for _, dur := range []uint16{180, 900} {
-		dur := dur
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			w := bridge.NewCommissioningWindow()
@@ -532,7 +531,7 @@ func TestCommissioningWindow_AdminFabric_ClearedOnRevoke(t *testing.T) {
 // TestRandomDiscriminator_InRange verifies the result is a valid 12-bit value.
 func TestRandomDiscriminator_InRange(t *testing.T) {
 	t.Parallel()
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		v, err := bridge.RandomDiscriminator()
 		if err != nil {
 			t.Fatalf("RandomDiscriminator: %v", err)
@@ -552,7 +551,7 @@ func TestRandomPasscode_NotInvalidSet(t *testing.T) {
 		44444444: true, 55555555: true, 66666666: true, 77777777: true,
 		88888888: true, 99999999: true, 12345678: true, 87654321: true,
 	}
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		v, err := bridge.RandomPasscode()
 		if err != nil {
 			t.Fatalf("RandomPasscode: %v", err)

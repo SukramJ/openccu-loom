@@ -72,7 +72,7 @@ func (c *ReconnectConfig) applyDefaults() {
 // cfg controls the backoff parameters (nil applies defaults).
 // reconnectAttempts is an in/out pointer — the caller owns the counter
 // so multiple sequential Reconnect calls accumulate correctly.
-func (c *InterfaceClient) Reconnect(
+func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	b backends.Operations,
 	interfaceID, callbackURL string,

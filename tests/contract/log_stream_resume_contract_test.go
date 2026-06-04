@@ -62,7 +62,6 @@ func TestLogStreamResume_SinceReturnsOnlyNewerRecords(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run("since="+strconv.FormatUint(tc.cursor, 10), func(t *testing.T) {
 			t.Parallel()
 			records := live.Since(tc.cursor, slog.LevelDebug)
@@ -117,7 +116,6 @@ func TestLogStreamResume_SSEHandler_BackfillNoDuplicates(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

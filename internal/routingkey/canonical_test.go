@@ -15,15 +15,13 @@ import (
 func TestHubSlugConcurrent(t *testing.T) {
 	const want = "loom_11a0001234_sysvar_aussen-temperatur"
 	var wg sync.WaitGroup
-	for i := 0; i < 64; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 64 {
+		wg.Go(func() {
 			got := CanonicalUniqueID("11a0001234", "sysvar", HubSlug("Außen Temperatur"), "")
 			if got != want {
 				t.Errorf("concurrent HubSlug = %q, want %q", got, want)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

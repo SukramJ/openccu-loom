@@ -5,6 +5,7 @@ package visibility
 
 import (
 	"io"
+	"maps"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -157,9 +158,7 @@ func (r *Registry) ShouldSkipParameter(model, channelType string, channelNo int,
 // HiddenParameters returns a read-only copy of the HIDDEN_PARAMETERS set.
 func HiddenParameters() map[hmenum.Parameter]struct{} {
 	out := make(map[hmenum.Parameter]struct{}, len(hiddenParameters))
-	for k, v := range hiddenParameters {
-		out[k] = v
-	}
+	maps.Copy(out, hiddenParameters)
 	return out
 }
 
@@ -175,9 +174,7 @@ func ParameterIsHiddenConst(p hmenum.Parameter) bool {
 // device-level MASTER paramset whitelist.
 func RelevantMasterParamsetsByDevice() map[string]ModelMasterEntry {
 	out := make(map[string]ModelMasterEntry, len(relevantMasterParamsetsByDevice))
-	for k, v := range relevantMasterParamsetsByDevice {
-		out[k] = v
-	}
+	maps.Copy(out, relevantMasterParamsetsByDevice)
 	return out
 }
 
@@ -202,9 +199,7 @@ func IgnoreDevicesForDataPointEventsLower() map[string]map[hmenum.Parameter]stru
 	out := make(map[string]map[hmenum.Parameter]struct{}, len(ignoreDevicesForDataPointEvents))
 	for model, params := range ignoreDevicesForDataPointEvents {
 		cp := make(map[hmenum.Parameter]struct{}, len(params))
-		for p, v := range params {
-			cp[p] = v
-		}
+		maps.Copy(cp, params)
 		out[model] = cp
 	}
 	return out
@@ -215,9 +210,7 @@ func IgnoreDevicesForDataPointEventsLower() map[string]map[hmenum.Parameter]stru
 // value is the single channel number on which the parameter is accepted.
 func AcceptParameterOnlyOnChannelMap() map[string]int {
 	out := make(map[string]int, len(acceptParameterOnlyOnChannel))
-	for k, v := range acceptParameterOnlyOnChannel {
-		out[k] = v
-	}
+	maps.Copy(out, acceptParameterOnlyOnChannel)
 	return out
 }
 

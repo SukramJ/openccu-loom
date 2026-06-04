@@ -6,6 +6,7 @@ package reliability
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -82,11 +83,12 @@ func MakeCoalesceKey(method string, args []any) string {
 		return method
 	}
 	// Pre-size: method + colon + rough estimate per arg.
-	key := method
+	var key strings.Builder
+	key.WriteString(method)
 	for _, a := range args {
-		key += ":" + fmt.Sprint(a)
+		key.WriteString(":" + fmt.Sprint(a))
 	}
-	return key
+	return key.String()
 }
 
 // SetHook installs a [CoalesceHook] called once per coalesced

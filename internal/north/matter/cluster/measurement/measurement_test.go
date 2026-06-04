@@ -5,6 +5,7 @@ package measurement_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
@@ -142,10 +143,8 @@ func TestTemperatureServerReportable(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewTemperatureServer(fakeFloat{val: 21.5, obs: true})
 	attrs := s.MatterReportable()
-	for _, a := range attrs {
-		if a == 0x0000 {
-			return
-		}
+	if slices.Contains(attrs, 0x0000) {
+		return
 	}
 	t.Errorf("MatterReportable = %v, want to contain 0x0000", attrs)
 }
@@ -171,7 +170,7 @@ func TestTemperatureServerDataVersion_NonZeroInitial(t *testing.T) {
 func TestTemperatureServerDataVersion_DistinctAcrossInstances(t *testing.T) {
 	t.Parallel()
 	seen := make(map[uint32]struct{}, 50)
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		s := measurement.NewTemperatureServer(fakeFloat{val: float64(i), obs: true})
 		seen[s.MatterDataVersion()] = struct{}{}
 	}
@@ -753,10 +752,8 @@ func TestCO2ConcentrationServerReportable(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewCO2ConcentrationServer(fakeFloat{val: 425.0, obs: true})
 	attrs := s.MatterReportable()
-	for _, a := range attrs {
-		if a == 0x0000 {
-			return
-		}
+	if slices.Contains(attrs, 0x0000) {
+		return
 	}
 	t.Errorf("MatterReportable = %v, want to contain 0x0000", attrs)
 }
@@ -1041,7 +1038,7 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 	type row struct {
 		name    string
 		class   interfaces.MatterMeasurementClass
-		src     interface{}
+		src     any
 		wantID  uint32
 		wantNil bool
 	}
@@ -1086,7 +1083,6 @@ func TestFromMeasurementClassP2Coverage(t *testing.T) {
 	}
 
 	for _, r := range rows {
-		r := r
 		t.Run(r.name, func(t *testing.T) {
 			t.Parallel()
 			servers := measurement.FromMeasurementClass(r.class, r.src)
@@ -1346,7 +1342,7 @@ func TestFromMeasurementClass_PowerEnergy(t *testing.T) {
 	type row struct {
 		name    string
 		class   interfaces.MatterMeasurementClass
-		src     interface{}
+		src     any
 		wantID  uint32
 		wantNil bool
 	}
@@ -1379,7 +1375,6 @@ func TestFromMeasurementClass_PowerEnergy(t *testing.T) {
 	}
 
 	for _, r := range rows {
-		r := r
 		t.Run(r.name, func(t *testing.T) {
 			t.Parallel()
 			servers := measurement.FromMeasurementClass(r.class, r.src)
@@ -1528,10 +1523,8 @@ func TestHumidityServer_MatterInvoke_Rejected(t *testing.T) {
 func TestHumidityServer_MatterReportable_ContainsMeasuredValue(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewHumidityServer(fakeFloat{val: 50, obs: true})
-	for _, id := range s.MatterReportable() {
-		if id == 0x0000 {
-			return
-		}
+	if slices.Contains(s.MatterReportable(), 0x0000) {
+		return
 	}
 	t.Error("MatterReportable: missing 0x0000")
 }
@@ -1584,10 +1577,8 @@ func TestIlluminanceServer_MatterInvoke_Rejected(t *testing.T) {
 func TestIlluminanceServer_MatterReportable_ContainsMeasuredValue(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewIlluminanceServer(fakeFloat{val: 500, obs: true})
-	for _, id := range s.MatterReportable() {
-		if id == 0x0000 {
-			return
-		}
+	if slices.Contains(s.MatterReportable(), 0x0000) {
+		return
 	}
 	t.Error("MatterReportable: missing 0x0000")
 }
@@ -1640,10 +1631,8 @@ func TestPressureServer_MatterInvoke_Rejected(t *testing.T) {
 func TestPressureServer_MatterReportable_ContainsMeasuredValue(t *testing.T) {
 	t.Parallel()
 	s := measurement.NewPressureServer(fakeFloat{val: 1013.25, obs: true})
-	for _, id := range s.MatterReportable() {
-		if id == 0x0000 {
-			return
-		}
+	if slices.Contains(s.MatterReportable(), 0x0000) {
+		return
 	}
 	t.Error("MatterReportable: missing 0x0000")
 }

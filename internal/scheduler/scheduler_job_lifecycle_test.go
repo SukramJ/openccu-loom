@@ -117,8 +117,7 @@ func TestSchedulerStartActivates(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -147,8 +146,7 @@ func TestSchedulerStartWhenAlreadyRunning(t *testing.T) {
 		Run:      func(context.Context) error { return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -176,8 +174,7 @@ func TestSchedulerStopDeactivates(t *testing.T) {
 		Run:      func(context.Context) error { calls.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -231,8 +228,7 @@ func TestJobExecutesAndContinues(t *testing.T) {
 		Run:      func(context.Context) error { count.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -270,8 +266,7 @@ func TestJobErrorDoesNotStopScheduling(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -316,8 +311,7 @@ func TestMultipleJobsIndependentSchedules(t *testing.T) {
 		Run:      func(context.Context) error { count2.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -359,8 +353,7 @@ func TestMultipleJobsRunOnStart(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -428,8 +421,7 @@ func TestHooksTableDriven(t *testing.T) {
 				Run: func(context.Context) error { return c.jobErr },
 			})
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 
 			if err := s.Start(ctx); err != nil {
 				t.Fatal(err)
@@ -503,8 +495,7 @@ func TestAddAfterStartLaunchesImmediately(t *testing.T) {
 		Run:      func(context.Context) error { return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)

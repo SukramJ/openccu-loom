@@ -5,6 +5,7 @@ package central
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -26,7 +27,7 @@ type Bootstrap struct {
 // defer.
 func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, func(), error) {
 	if cfg == nil {
-		return nil, func() {}, fmt.Errorf("central.Bootstrap: nil config")
+		return nil, func() {}, errors.New("central.Bootstrap: nil config")
 	}
 	logger := b.Logger
 	if logger == nil {
@@ -53,6 +54,6 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 			return nil, func() {}, err
 		}
 	}
-	teardown := func() { reg.StopAll() }
+	teardown := func() { reg.StopAll() } //nolint:contextcheck // shutdown: StopAll/Stop have no ctx parameter; background cleanup is intentional
 	return reg, teardown, nil
 }

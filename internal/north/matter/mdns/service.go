@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -138,7 +139,7 @@ func (s Service) HostFQDN() string {
 // OperationalServiceConfig drives [BuildOperationalService].
 type OperationalServiceConfig struct {
 	// CompressedFabricID is the 8-byte derived fabric identifier
-	// (see fabric.Fabric.CompressedID).
+	// (HKDF over the root public key + fabric ID, Matter §4.13.2.4).
 	CompressedFabricID [8]byte
 	// NodeID is the 64-bit operational node identifier.
 	NodeID uint64
@@ -213,16 +214,16 @@ func BuildOperationalService(cfg OperationalServiceConfig) Service {
 		sai = defaultOperationalSAI
 	}
 	txt := []TXTRecord{
-		{Key: "SII", Value: fmt.Sprintf("%d", sii)},
-		{Key: "SAI", Value: fmt.Sprintf("%d", sai)},
-		{Key: "SAT", Value: fmt.Sprintf("%d", sat)},
-		{Key: "T", Value: fmt.Sprintf("%d", tcpFlag)},
+		{Key: "SII", Value: strconv.FormatUint(uint64(sii), 10)},
+		{Key: "SAI", Value: strconv.FormatUint(uint64(sai), 10)},
+		{Key: "SAT", Value: strconv.FormatUint(uint64(sat), 10)},
+		{Key: "T", Value: strconv.FormatUint(uint64(tcpFlag), 10)},
 	}
 	// ICD operating-mode hint per Matter §4.3.1.6, matter.js
 	// MdnsAdvertisement.ts:191-193. Non-ICD bridges omit this key
 	// (nil); ICD-proxy support can supply it in future.
 	if cfg.ICD != nil {
-		txt = append(txt, TXTRecord{Key: "ICD", Value: fmt.Sprintf("%d", *cfg.ICD)})
+		txt = append(txt, TXTRecord{Key: "ICD", Value: strconv.FormatUint(uint64(*cfg.ICD), 10)})
 	}
 	host := cfg.HostName
 	if host == "" {
@@ -243,7 +244,7 @@ func BuildOperationalService(cfg OperationalServiceConfig) Service {
 		// Publishing `_I<NodeID>` makes the freshly-paired bridge
 		// invisible to the controller's post-CommissioningComplete
 		// reachability probe and triggers RemoveFabric.
-		Subtypes: []string{fmt.Sprintf("_I%s", strings.ToUpper(hex.EncodeToString(cfg.CompressedFabricID[:])))},
+		Subtypes: []string{"_I" + strings.ToUpper(hex.EncodeToString(cfg.CompressedFabricID[:]))},
 	}
 }
 
@@ -377,22 +378,22 @@ func BuildCommissionableService(cfg CommissionableServiceConfig) Service {
 	}
 
 	txt := []TXTRecord{
-		{Key: "D", Value: fmt.Sprintf("%d", long)},
-		{Key: "CM", Value: fmt.Sprintf("%d", cfg.CommissioningMode)},
-		{Key: "DT", Value: fmt.Sprintf("%d", cfg.DeviceTypeID)},
+		{Key: "D", Value: strconv.FormatUint(uint64(long), 10)},
+		{Key: "CM", Value: strconv.FormatUint(uint64(cfg.CommissioningMode), 10)},
+		{Key: "DT", Value: strconv.FormatUint(uint64(cfg.DeviceTypeID), 10)},
 		// SII / SAI / SAT on the commissionable record so commissioners
 		// can tune MRP timers before the operational session is up.
 		// Mirrors matter.js packages/protocol/src/session/SessionIntervals.ts defaults.
-		{Key: "SII", Value: fmt.Sprintf("%d", sii)},
-		{Key: "SAI", Value: fmt.Sprintf("%d", sai)},
-		{Key: "SAT", Value: fmt.Sprintf("%d", sat)},
+		{Key: "SII", Value: strconv.FormatUint(uint64(sii), 10)},
+		{Key: "SAI", Value: strconv.FormatUint(uint64(sai), 10)},
+		{Key: "SAT", Value: strconv.FormatUint(uint64(sat), 10)},
 	}
 	// VP (Vendor+Product) only when a vendor id is set: VendorID 0 is
 	// reserved/invalid, so "VP=0+0" is non-conformant. chip emits the
 	// vendor-only form when ProductID is absent and omits VP entirely when
 	// no vendor (Advertiser_ImplMinimalMdns.cpp AddCommonTxtEntries).
 	if cfg.VendorID != 0 {
-		vp := fmt.Sprintf("%d", cfg.VendorID)
+		vp := strconv.FormatUint(uint64(cfg.VendorID), 10)
 		if cfg.ProductID != 0 {
 			vp = fmt.Sprintf("%d+%d", cfg.VendorID, cfg.ProductID)
 		}
@@ -409,7 +410,7 @@ func BuildCommissionableService(cfg CommissionableServiceConfig) Service {
 	if ph == 0 {
 		ph = PairingHintDefault
 	}
-	txt = append(txt, TXTRecord{Key: "PH", Value: fmt.Sprintf("%d", ph)})
+	txt = append(txt, TXTRecord{Key: "PH", Value: strconv.FormatUint(uint64(ph), 10)})
 	if cfg.PairingInstruction != "" {
 		txt = append(txt, TXTRecord{Key: "PI", Value: cfg.PairingInstruction})
 	}
@@ -422,7 +423,7 @@ func BuildCommissionableService(cfg CommissionableServiceConfig) Service {
 	}
 	// ICD operating-mode hint per Matter §4.3.1.6.
 	if cfg.ICD != nil {
-		txt = append(txt, TXTRecord{Key: "ICD", Value: fmt.Sprintf("%d", *cfg.ICD)})
+		txt = append(txt, TXTRecord{Key: "ICD", Value: strconv.FormatUint(uint64(*cfg.ICD), 10)})
 	}
 	subtypes := []string{
 		fmt.Sprintf("_L%d", long),

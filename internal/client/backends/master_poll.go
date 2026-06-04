@@ -124,7 +124,7 @@ func (p *MasterPoller) run(ctx context.Context, pk pollKey, interval time.Durati
 	case <-timer.C:
 	}
 
-	values, err := p.getter.GetParamset(context.Background(), pk.address, pk.key)
+	values, err := p.getter.GetParamset(ctx, pk.address, pk.key)
 	if err != nil {
 		if !errors.Is(err, context.Canceled) && p.OnError != nil {
 			p.OnError(pk.address, pk.key, err)

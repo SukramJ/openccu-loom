@@ -4,7 +4,7 @@
 package custom
 
 import (
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -38,7 +38,7 @@ func TestExtendedRequiredParametersFromFixedFields(t *testing.T) {
 		hmenum.ParameterAutoMode,
 		hmenum.ParameterBoostMode,
 	}
-	sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+	slices.Sort(want)
 
 	if len(got) != len(want) {
 		t.Fatalf("RequiredParameters() len=%d, want %d; got %v", len(got), len(want), got)
@@ -69,7 +69,7 @@ func TestExtendedRequiredParametersFromAdditional(t *testing.T) {
 		hmenum.ParameterActualTemperature,
 		hmenum.ParameterActivityState,
 	}
-	sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+	slices.Sort(want)
 
 	if len(got) != len(want) {
 		t.Fatalf("RequiredParameters() len=%d, want %d; got %v", len(got), len(want), got)
@@ -184,7 +184,7 @@ func TestExtendedRequiredParametersStableOrder(t *testing.T) {
 	first := e.RequiredParameters()
 
 	const iterations = 20
-	for i := 0; i < iterations; i++ {
+	for i := range iterations {
 		got := e.RequiredParameters()
 		if len(got) != len(first) {
 			t.Fatalf("iteration %d: len=%d, want %d", i, len(got), len(first))

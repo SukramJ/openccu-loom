@@ -173,7 +173,7 @@ func TestOnEventFired_TwoSubscriptions_BothReceive(t *testing.T) {
 
 	// Drain up to 2 calls.
 	var calls []eventReporterCall
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		select {
 		case c := <-ch:
 			calls = append(calls, c)

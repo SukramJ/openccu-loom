@@ -18,14 +18,14 @@ type stubClient struct {
 	pending   int
 	executed  int
 	cbState   int
-	failureTS *interface{}
+	failureTS *any
 }
 
-func (s *stubClient) TotalRequests() int            { return s.total }
-func (s *stubClient) PendingRequests() int          { return s.pending }
-func (s *stubClient) ExecutedRequests() int         { return s.executed }
-func (s *stubClient) CircuitState() int             { return s.cbState }
-func (s *stubClient) LastFailureTime() *interface{} { return s.failureTS } //nolint:gocritic // protocol contract; see InterfaceClientMetrics
+func (s *stubClient) TotalRequests() int    { return s.total }
+func (s *stubClient) PendingRequests() int  { return s.pending }
+func (s *stubClient) ExecutedRequests() int { return s.executed }
+func (s *stubClient) CircuitState() int     { return s.cbState }
+func (s *stubClient) LastFailureTime() *any { return s.failureTS } //nolint:gocritic // protocol contract; see InterfaceClientMetrics
 
 type stubClientProvider struct{ clients []InterfaceClientMetrics }
 

@@ -4,6 +4,7 @@
 package event
 
 import (
+	"slices"
 	"sort"
 	"sync"
 
@@ -158,7 +159,7 @@ func (g *Group) Parameters() []hmenum.Parameter {
 	for p := range g.sources {
 		out = append(out, p)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -176,7 +177,7 @@ func (g *Group) EventTypes() []string {
 	for p := range g.sources {
 		s := string(p)
 		lower := make([]byte, len(s))
-		for i := 0; i < len(s); i++ {
+		for i := range len(s) {
 			if s[i] >= 'A' && s[i] <= 'Z' {
 				lower[i] = s[i] + 32
 			} else {

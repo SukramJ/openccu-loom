@@ -79,7 +79,7 @@ func (b *SystemStatusBuffer) SystemStatusEntries() []SystemStatusEntry {
 	}
 	out := make([]SystemStatusEntry, b.size)
 	start := (b.head - b.size + len(b.ring)) % len(b.ring)
-	for i := 0; i < b.size; i++ {
+	for i := range b.size {
 		out[i] = b.ring[(start+i)%len(b.ring)]
 	}
 	return out

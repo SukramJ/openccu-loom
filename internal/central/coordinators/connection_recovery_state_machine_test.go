@@ -9,6 +9,7 @@ package coordinators
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -44,12 +45,7 @@ func (s *spyTransitioner) recorded() []hmenum.CentralState {
 }
 
 func (s *spyTransitioner) contains(state hmenum.CentralState) bool {
-	for _, t := range s.recorded() {
-		if t == state {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.recorded(), state)
 }
 
 // newSmCoord builds a coordinator with the spy state machine wired in.

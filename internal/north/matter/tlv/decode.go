@@ -123,7 +123,7 @@ func (d *Decoder) readTag(kind TagKind) (Tag, error) {
 
 // readValue dispatches on element type and fills the value field of
 // el.
-func (d *Decoder) readValue(el *Element) error {
+func (d *Decoder) readValue(el *Element) error { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	switch el.Type {
 	case TypeBoolFalse:
 		el.Bool = false

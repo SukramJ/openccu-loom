@@ -5,6 +5,7 @@ package siren
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -198,7 +199,7 @@ const RepetitionsIndexNotSet = -2
 // and a non-nil error when the list is empty or index is out of range.
 func ConvertPlayRepetitionsIndex(index int, availableRep []string) (string, error) {
 	if len(availableRep) == 0 {
-		return "", fmt.Errorf("siren: ConvertPlayRepetitionsIndex: REPETITIONS list is empty")
+		return "", errors.New("siren: ConvertPlayRepetitionsIndex: REPETITIONS list is empty")
 	}
 	var slot int
 	switch {
@@ -250,7 +251,7 @@ type PlayConfig struct {
 // forward-compatible batching.
 func (sp *SoundPlayer) PlaySound(ctx context.Context, cfg PlayConfig, priority hmenum.CommandPriority) error {
 	if sp.writer == nil {
-		return fmt.Errorf("soundplayer: writer required")
+		return errors.New("soundplayer: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(sp.writer), generic.WithPriority(priority))
@@ -302,7 +303,7 @@ func (sp *SoundPlayer) PlaySound(ctx context.Context, cfg PlayConfig, priority h
 // consistent pair.
 func (sp *SoundPlayer) StopSound(ctx context.Context, priority hmenum.CommandPriority) error {
 	if sp.writer == nil {
-		return fmt.Errorf("soundplayer: writer required")
+		return errors.New("soundplayer: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(sp.writer), generic.WithPriority(priority))

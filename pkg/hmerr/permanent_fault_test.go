@@ -19,7 +19,6 @@ func TestXMLRPCFault_NotFoundMessageBlocksRetry(t *testing.T) {
 		{"permanent-not-found-on-permanent-code", -999, "not found", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			f := &XMLRPCFault{Code: tc.code, Message: tc.message}

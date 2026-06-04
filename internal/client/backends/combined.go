@@ -77,12 +77,12 @@ func parseCombined(value string) (map[string]any, bool) {
 		return nil, false
 	}
 	out := make(map[string]any, 2)
-	for _, pair := range strings.Split(value, ",") {
-		idx := strings.IndexByte(pair, '=')
-		if idx < 0 {
+	for pair := range strings.SplitSeq(value, ",") {
+		before, after, ok0 := strings.Cut(pair, "=")
+		if !ok0 {
 			return nil, false
 		}
-		short, raw := pair[:idx], pair[idx+1:]
+		short, raw := before, after
 		canonical := combinedShortToParameter(short)
 		if canonical == "" {
 			// Unknown shorthand — ignore (matches python's silent

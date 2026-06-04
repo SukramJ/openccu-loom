@@ -84,7 +84,6 @@ func TestDataPointUniqueIDFormat(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := baseCfg(hmenum.Parameter(tc.key), hmenum.ParameterTypeBool, hmenum.OperationsRead)
@@ -196,7 +195,6 @@ func TestDataPointVisibleViaPromotion(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool, hmenum.OperationsRead)
@@ -280,13 +278,10 @@ func TestDataPointConcurrentAfterMigration(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Writers churn forced-usage / publisher / wire events.
-	for w := 0; w < writers; w++ {
-		w := w
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for w := range writers {
+		wg.Go(func() {
 			ctx := context.Background()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				dp.SetForcedUsage(usages[(w+i)%len(usages)])
 				if i%17 == 0 {
 					dp.SetPublisher(pub)
@@ -294,15 +289,13 @@ func TestDataPointConcurrentAfterMigration(t *testing.T) {
 				dp.PublishUpdate(ctx, i)
 				dp.OnEvent(int32(i))
 			}
-		}()
+		})
 	}
 
 	// Readers spin every observation surface promoted + DP-native.
-	for r := 0; r < readers; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range readers {
+		wg.Go(func() {
+			for range iterations {
 				_ = dp.UniqueID()
 				_ = dp.Visible()
 				_ = dp.EnabledByDefault()
@@ -312,7 +305,7 @@ func TestDataPointConcurrentAfterMigration(t *testing.T) {
 				_ = dp.ModifiedAt()
 				_ = dp.RefreshedAt()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

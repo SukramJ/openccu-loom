@@ -28,7 +28,7 @@ import (
 func runBackup(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printBackupUsage(stderr)
-		return fmt.Errorf("backup: missing subcommand")
+		return errors.New("backup: missing subcommand")
 	}
 	switch args[0] {
 	case "create":
@@ -64,7 +64,7 @@ type backupCreateResult struct {
 	SHA256 string `json:"sha256"`
 }
 
-func backupCreate(args []string, stdout, stderr io.Writer) error {
+func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup create", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml")
@@ -325,7 +325,7 @@ func addBytesToTar(tw *tar.Writer, archivePath string, buf []byte) (string, erro
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func backupRestore(args []string, stdout, stderr io.Writer) error {
+func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:gocognit,gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup restore", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml (receives extracted config.yaml when present)")
@@ -335,7 +335,7 @@ func backupRestore(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("backup restore: missing <file> argument")
+		return errors.New("backup restore: missing <file> argument")
 	}
 	archivePath := fs.Arg(0)
 
@@ -408,7 +408,7 @@ func backupRestore(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if manifest.CreatedAt == "" {
-		return fmt.Errorf("backup restore: manifest.json not found in archive")
+		return errors.New("backup restore: manifest.json not found in archive")
 	}
 
 	// Validate sha256 sums.

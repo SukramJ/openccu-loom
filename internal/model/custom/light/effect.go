@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -124,7 +125,7 @@ func (l *EffectLight) TurnOn(ctx context.Context, priority hmenum.CommandPriorit
 // given effect — matches the turn_on guard pattern.
 func (l *EffectLight) SetEffect(ctx context.Context, idx int32, priority hmenum.CommandPriority) error {
 	if l.program == nil {
-		return fmt.Errorf("effectlight: channel missing PROGRAM")
+		return errors.New("effectlight: channel missing PROGRAM")
 	}
 	if idx < 0 || (len(l.effects) > 0 && int(idx) >= len(l.effects)) {
 		return fmt.Errorf("effectlight: effect index %d out of range [0,%d)", idx, len(l.effects))

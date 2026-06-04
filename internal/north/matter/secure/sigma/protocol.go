@@ -652,7 +652,7 @@ func (r *Responder) ProcessSigma1(sigma1Bytes []byte) (Sigma2, error) {
 // ProcessSigma1 (which acquires the mutex) and ProcessSigma1WithResume
 // (which holds it across the resume probe + Full-Sigma fallback so the
 // state transition stays atomic against parallel Sigma1 datagrams).
-func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) {
+func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //nolint:funlen // single-purpose SIGMA-1 processing with many crypto/validation branches
 	switch {
 	case r.state == responderStateInit:
 		// fresh responder — fall through to the standard processing.

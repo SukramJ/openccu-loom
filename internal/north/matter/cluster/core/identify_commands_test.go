@@ -5,6 +5,7 @@ package core_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -283,10 +284,8 @@ func TestIdentify_MatterReportableContainsIdentifyTime(t *testing.T) {
 	t.Parallel()
 	id := core.NewIdentify()
 	list := id.MatterReportable()
-	for _, attrID := range list {
-		if attrID == 0x0000 {
-			return
-		}
+	if slices.Contains(list, 0x0000) {
+		return
 	}
 	t.Fatalf("MatterReportable() = %v — missing IdentifyTime (0x0000)", list)
 }

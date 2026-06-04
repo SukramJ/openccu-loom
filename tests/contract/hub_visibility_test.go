@@ -59,35 +59,34 @@ func TestContractHubDataPointVisibilityMatrix(t *testing.T) {
 		{
 			name:            "forced_NoCreate_overrides_field",
 			enabledDefault:  true,
-			forced:          ptrUsage(hmenum.DataPointUsageNoCreate),
+			forced:          new(hmenum.DataPointUsageNoCreate),
 			wantVisible:     false,
 			wantEnabledDflt: false,
 		},
 		{
 			name:            "forced_CDPSecondary_overrides_field",
 			enabledDefault:  true,
-			forced:          ptrUsage(hmenum.DataPointUsageCDPSecondary),
+			forced:          new(hmenum.DataPointUsageCDPSecondary),
 			wantVisible:     false,
 			wantEnabledDflt: false,
 		},
 		{
 			name:            "forced_DataPoint_keeps_visible",
 			enabledDefault:  false,
-			forced:          ptrUsage(hmenum.DataPointUsageDataPoint),
+			forced:          new(hmenum.DataPointUsageDataPoint),
 			wantVisible:     true,
 			wantEnabledDflt: true, // forced takes precedence over field
 		},
 		{
 			name:            "forced_CDPVisible_keeps_visible",
 			enabledDefault:  false,
-			forced:          ptrUsage(hmenum.DataPointUsageCDPVisible),
+			forced:          new(hmenum.DataPointUsageCDPVisible),
 			wantVisible:     true,
 			wantEnabledDflt: true,
 		},
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dp := hub.NewHubDataPoint("ccu", "Var", "", tc.enabledDefault)
@@ -125,5 +124,3 @@ func TestContractHubDataPointUniqueIDIsCentralScoped(t *testing.T) {
 		t.Fatalf("hub UniqueID must not be empty (left=%q right=%q)", left.UniqueID(), right.UniqueID())
 	}
 }
-
-func ptrUsage(u hmenum.DataPointUsage) *hmenum.DataPointUsage { return &u }

@@ -169,10 +169,7 @@ func (r *Retransmitter) Tick(now time.Time) []TickResult {
 // already, which is ~1.6× too aggressive and shows up in Apple's
 // "Dropping message" rate under CASE handshake load.
 func (r *Retransmitter) backoff(retries int) time.Duration {
-	exp := retries - 1
-	if exp < 0 {
-		exp = 0
-	}
+	exp := max(retries-1, 0)
 	factor := math.Pow(MRPBackoffThreshold, float64(exp))
 	jitter := 1 + r.rng.Float64()*MRPBackoffJitterFactor
 	d := float64(MRPBackoffBase) * MRPBackoffMargin * factor * jitter

@@ -71,8 +71,8 @@ func (s *CaptureSink) Append(line []byte) {
 	// Drop oldest complete lines until the new event fits.
 	for s.buf.Len()+len(line)+1 > s.maxLen && s.buf.Len() > 0 {
 		raw := s.buf.Bytes()
-		nl := bytes.IndexByte(raw, '\n')
-		if nl < 0 {
+		_, after, ok := bytes.Cut(raw, []byte{'\n'})
+		if !ok {
 			s.buf.Reset()
 			break
 		}
@@ -80,7 +80,7 @@ func (s *CaptureSink) Append(line []byte) {
 		// acceptable because drops only happen at the buffer's high-
 		// water and the alternative (a linked list of chunks) would
 		// add per-event allocation overhead.
-		s.buf = *bytes.NewBuffer(raw[nl+1:])
+		s.buf = *bytes.NewBuffer(after)
 	}
 	s.buf.Write(line)
 	s.buf.WriteByte('\n')
@@ -307,7 +307,7 @@ func AnonymiseToken(value string) string {
 	sum := sha256Sum([]byte(value))
 	dst := make([]byte, prefixLen)
 	const hexDigits = "0123456789abcdef"
-	for i := 0; i < prefixLen/2; i++ {
+	for i := range prefixLen / 2 {
 		dst[i*2] = hexDigits[sum[i]>>4]
 		dst[i*2+1] = hexDigits[sum[i]&0x0f]
 	}

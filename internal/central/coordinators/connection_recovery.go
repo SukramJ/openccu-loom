@@ -81,15 +81,6 @@ const historySize = 20
 // non-nil error.
 type FailureReasonStep func(err error) *hmenum.FailureReason
 
-// failureReasonPtr is a convenience helper for [FailureReasonStep]
-// implementations that want to override the default reason with a
-// constant value.
-//
-//	Classify: func(_ error) *hmenum.FailureReason {
-//	 return failureReasonPtr(hmenum.FailureReasonAuth)
-//	}
-func failureReasonPtr(r hmenum.FailureReason) *hmenum.FailureReason { return &r }
-
 // HistoryEntry is one entry in a [ConnectionRecoveryCoordinator]'s
 // per-interface history ring. The slice is newest-last so callers
 // rendering a timeline can iterate forward without reversing.
@@ -808,7 +799,7 @@ func (c *ConnectionRecoveryCoordinator) Run(ctx context.Context, interfaceID str
 	return result
 }
 
-func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfaceID string, pipeline []Pipeline) hmenum.RecoveryResult {
+func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfaceID string, pipeline []Pipeline) hmenum.RecoveryResult { //nolint:funlen // single-purpose connection recovery state machine with many pipeline branches
 	c.mu.Lock()
 	// Serialise per interface.
 	if existing, ok := c.active[interfaceID]; ok {

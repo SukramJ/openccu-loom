@@ -23,7 +23,7 @@ func TestSessionMissBurst_FiresAtThreshold(t *testing.T) {
 	// First seven misses must not emit — that's a normal MRP retransmit
 	// clutch (capped at four retries per Matter §4.11.2.1) plus a
 	// little headroom for cross-stack overlap.
-	for i := uint32(0); i < sessionMissBurstThreshold-1; i++ {
+	for i := range sessionMissBurstThreshold - 1 {
 		if b.record(42, now.Add(time.Duration(i)*time.Millisecond)) {
 			t.Fatalf("miss %d emitted prematurely; threshold is %d", i+1, sessionMissBurstThreshold)
 		}
@@ -46,14 +46,14 @@ func TestSessionMissBurst_CooldownSuppressesRepeats(t *testing.T) {
 	now := time.Now()
 
 	// Drive the first burst to emission.
-	for i := uint32(0); i < sessionMissBurstThreshold; i++ {
+	for i := range sessionMissBurstThreshold {
 		b.record(7, now.Add(time.Duration(i)*time.Millisecond))
 	}
 
 	// Further misses within the cooldown stay silent even if they
 	// would otherwise cross the threshold again (the count carries
 	// forward inside the same rolling window).
-	for i := uint32(0); i < sessionMissBurstThreshold*3; i++ {
+	for i := range sessionMissBurstThreshold * 3 {
 		if b.record(7, now.Add(200*time.Millisecond+time.Duration(i)*time.Millisecond)) {
 			t.Fatalf("repeat miss %d emitted inside cooldown window", i)
 		}
@@ -70,7 +70,7 @@ func TestSessionMissBurst_CooldownSuppressesRepeats(t *testing.T) {
 	// one that crosses the threshold (sessionMissBurstThreshold-2
 	// additional misses leave the counter at threshold-1; the final
 	// record bumps it to threshold).
-	for i := uint32(0); i < sessionMissBurstThreshold-2; i++ {
+	for i := range sessionMissBurstThreshold - 2 {
 		if b.record(7, pastCooldown.Add(time.Duration(i+1)*time.Millisecond)) {
 			t.Fatalf("pre-threshold miss %d emitted prematurely", i+1)
 		}
@@ -91,7 +91,7 @@ func TestSessionMissBurst_WindowResetsAfterQuiet(t *testing.T) {
 	now := time.Now()
 
 	// Accumulate up to one-below-threshold inside the window.
-	for i := uint32(0); i < sessionMissBurstThreshold-1; i++ {
+	for i := range sessionMissBurstThreshold - 1 {
 		b.record(99, now.Add(time.Duration(i)*time.Millisecond))
 	}
 
@@ -114,7 +114,7 @@ func TestSessionMissBurst_PerSessionIDIsolation(t *testing.T) {
 
 	// Drive session 1 to one-below-threshold; session 2 should still
 	// be at zero misses.
-	for i := uint32(0); i < sessionMissBurstThreshold-1; i++ {
+	for i := range sessionMissBurstThreshold - 1 {
 		b.record(1, now.Add(time.Duration(i)*time.Millisecond))
 	}
 	if b.record(2, now) {

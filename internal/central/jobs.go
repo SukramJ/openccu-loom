@@ -5,6 +5,7 @@ package central
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -289,12 +290,12 @@ func gatedRunWithDevicesCreatedGate(unit *Unit, skipOnConnectionIssue bool, fn f
 // scheduler. Returns the names of registered jobs for diagnostics. The
 // scheduler must not have been started yet — same lifecycle constraint
 // as [scheduler.Scheduler.Add].
-func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) {
+func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
 	if unit == nil {
-		return nil, fmt.Errorf("central: nil unit")
+		return nil, errors.New("central: nil unit")
 	}
 	if unit.Scheduler == nil {
-		return nil, fmt.Errorf("central: nil scheduler")
+		return nil, errors.New("central: nil scheduler")
 	}
 
 	registered := make([]string, 0, 4)

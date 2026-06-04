@@ -26,10 +26,10 @@ type fakeLoader struct {
 	mu sync.Mutex
 
 	// getValueCalls counts calls to GetValue.
-	getValueCalls int32 // atomic
+	getValueCalls atomic.Int32 // atomic
 
 	// getParamsetCalls counts calls to GetParamset.
-	getParamsetCalls int32 // atomic
+	getParamsetCalls atomic.Int32 // atomic
 
 	// getValueFn is called when set; otherwise getValueResult / getValueErr are used.
 	getValueFn func(address string, parameter hmenum.Parameter) (any, error)
@@ -77,7 +77,7 @@ func (f *fakeLoader) setGetParamset(address string, key hmenum.ParamsetKey, resu
 }
 
 func (f *fakeLoader) GetValue(_ context.Context, address string, parameter hmenum.Parameter) (any, error) {
-	atomic.AddInt32(&f.getValueCalls, 1)
+	f.getValueCalls.Add(1)
 
 	// Block if requested (for singleflight tests).
 	if f.blockCh != nil {
@@ -102,7 +102,7 @@ func (f *fakeLoader) GetValue(_ context.Context, address string, parameter hmenu
 }
 
 func (f *fakeLoader) GetParamset(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error) {
-	atomic.AddInt32(&f.getParamsetCalls, 1)
+	f.getParamsetCalls.Add(1)
 
 	if f.getParamsetFn != nil {
 		return f.getParamsetFn(address, key)
@@ -347,7 +347,7 @@ func TestLoadValueCacheHitSkipsLoader(t *testing.T) {
 	if v != "x" {
 		t.Fatalf("expected value %q, got %v", "x", v)
 	}
-	if atomic.LoadInt32(&fake.getValueCalls) != 0 {
+	if fake.getValueCalls.Load() != 0 {
 		t.Fatal("loader must NOT be called on cache hit")
 	}
 }
@@ -375,8 +375,8 @@ func TestLoadValueCacheMissTriggersLoader(t *testing.T) {
 	if v != 0.8 {
 		t.Fatalf("expected 0.8, got %v", v)
 	}
-	if atomic.LoadInt32(&fake.getValueCalls) != 1 {
-		t.Fatalf("GetValue must be called exactly once, got %d", atomic.LoadInt32(&fake.getValueCalls))
+	if fake.getValueCalls.Load() != 1 {
+		t.Fatalf("GetValue must be called exactly once, got %d", fake.getValueCalls.Load())
 	}
 
 	// Second call must hit cache — loader not called again.
@@ -384,8 +384,8 @@ func TestLoadValueCacheMissTriggersLoader(t *testing.T) {
 	if err2 != nil {
 		t.Fatalf("second call: %v", err2)
 	}
-	if atomic.LoadInt32(&fake.getValueCalls) != 1 {
-		t.Fatalf("second call must use cache; GetValue calls = %d", atomic.LoadInt32(&fake.getValueCalls))
+	if fake.getValueCalls.Load() != 1 {
+		t.Fatalf("second call must use cache; GetValue calls = %d", fake.getValueCalls.Load())
 	}
 }
 
@@ -416,7 +416,7 @@ func TestLoadValueDirectBypassesCache(t *testing.T) {
 	if v != "fresh" {
 		t.Fatalf("expected %q, got %v", "fresh", v)
 	}
-	if atomic.LoadInt32(&fake.getValueCalls) != 1 {
+	if fake.getValueCalls.Load() != 1 {
 		t.Fatal("loader must be called for direct=true")
 	}
 }
@@ -451,8 +451,8 @@ func TestLoadValueMasterBatchFillsAllParameters(t *testing.T) {
 	}
 
 	// GetParamset should have been called exactly once.
-	if atomic.LoadInt32(&fake.getParamsetCalls) != 1 {
-		t.Fatalf("GetParamset must be called once, got %d", atomic.LoadInt32(&fake.getParamsetCalls))
+	if fake.getParamsetCalls.Load() != 1 {
+		t.Fatalf("GetParamset must be called once, got %d", fake.getParamsetCalls.Load())
 	}
 
 	// B and C should now be in the cache without any additional loader call.
@@ -522,7 +522,7 @@ func TestLoadValueGetValueErrorCachesSentinel(t *testing.T) {
 		t.Fatal("expected error from loader")
 	}
 
-	firstCalls := atomic.LoadInt32(&fake.getValueCalls)
+	firstCalls := fake.getValueCalls.Load()
 	if firstCalls != 1 {
 		t.Fatalf("expected 1 loader call, got %d", firstCalls)
 	}
@@ -541,7 +541,7 @@ func TestLoadValueGetValueErrorCachesSentinel(t *testing.T) {
 	if v2 != nil {
 		t.Fatalf("sentinel hit must return nil value, got %v", v2)
 	}
-	if atomic.LoadInt32(&fake.getValueCalls) != firstCalls {
+	if fake.getValueCalls.Load() != firstCalls {
 		t.Fatal("second call within sentinel TTL must NOT invoke loader again")
 	}
 }
@@ -569,11 +569,11 @@ func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 	wg.Add(n)
 
 	// Ensure all goroutines are blocked inside singleflight before releasing.
-	var started int32
+	var started atomic.Int32
 	for i := range n {
 		go func(idx int) {
 			defer wg.Done()
-			atomic.AddInt32(&started, 1)
+			started.Add(1)
 			v, _, _ := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
 			results[idx] = v
 		}(i)
@@ -581,7 +581,7 @@ func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 
 	// Wait until all goroutines have incremented the started counter, then
 	// give them a moment to enter singleflight.Do before unblocking.
-	for atomic.LoadInt32(&started) < n {
+	for started.Load() < n {
 		time.Sleep(time.Millisecond)
 	}
 	time.Sleep(5 * time.Millisecond)
@@ -590,7 +590,7 @@ func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 	wg.Wait()
 
 	// GetValue must have been called exactly once.
-	if calls := atomic.LoadInt32(&fake.getValueCalls); calls != 1 {
+	if calls := fake.getValueCalls.Load(); calls != 1 {
 		t.Fatalf("GetValue must be called exactly once under singleflight, got %d", calls)
 	}
 
@@ -631,7 +631,7 @@ func TestLoadValueSingleflightSeparatesByChannel(t *testing.T) {
 	wg.Wait()
 
 	// Each channel address is a separate singleflight key → 2 calls.
-	if calls := atomic.LoadInt32(&fake.getValueCalls); calls != 2 {
+	if calls := fake.getValueCalls.Load(); calls != 2 {
 		t.Fatalf("expected 2 GetValue calls (one per channel), got %d", calls)
 	}
 }
@@ -680,7 +680,7 @@ func TestLoadValueMasterBatchSingleflightCoalescesAcrossParameters(t *testing.T)
 	}
 
 	// GetParamset called exactly once — singleflight coalesced both.
-	if calls := atomic.LoadInt32(&fake.getParamsetCalls); calls != 1 {
+	if calls := fake.getParamsetCalls.Load(); calls != 1 {
 		t.Fatalf("GetParamset must be called exactly once, got %d", calls)
 	}
 

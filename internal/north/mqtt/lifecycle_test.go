@@ -106,8 +106,7 @@ func TestMQTTConnackFailureBackoff(t *testing.T) {
 	}
 	lc := NewLifecycle(cfg, client)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Reject ALL connects by pre-setting before Start and re-arming
 	// inside a goroutine so the loop always sees a rejection.
@@ -343,7 +342,7 @@ func TestLifecycleJitterBounded(t *testing.T) {
 	cfg := DefaultLifecycle()
 	cfg.Jitter = 10 * time.Millisecond
 	l := NewLifecycle(cfg, &stubConnector{})
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		got := l.jittered(100 * time.Millisecond)
 		if got < 90*time.Millisecond || got > 110*time.Millisecond {
 			t.Fatalf("jittered=%v", got)
@@ -459,8 +458,7 @@ func TestConnackFailureBackoffMaxBackoff(t *testing.T) {
 	}
 	lc := NewLifecycle(cfg, client)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	// Start fails on the first (synchronous) attempt.
 	if err := lc.Start(ctx); err == nil {

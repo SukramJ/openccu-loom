@@ -5,6 +5,7 @@ package endpoint
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -35,13 +36,13 @@ type Config struct {
 // Validate returns nil when the config is internally consistent.
 func (c Config) Validate() error {
 	if c.VendorID == 0 {
-		return fmt.Errorf("endpoint: Config.VendorID must be non-zero")
+		return errors.New("endpoint: Config.VendorID must be non-zero")
 	}
 	if c.ProductID == 0 {
-		return fmt.Errorf("endpoint: Config.ProductID must be non-zero")
+		return errors.New("endpoint: Config.ProductID must be non-zero")
 	}
 	if strings.TrimSpace(c.NodeLabel) == "" {
-		return fmt.Errorf("endpoint: Config.NodeLabel must be non-empty")
+		return errors.New("endpoint: Config.NodeLabel must be non-empty")
 	}
 	return nil
 }
@@ -91,7 +92,7 @@ type Assembler struct {
 // `matter/store.Store`-backed checker so the allowlist is enforced.
 func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 	if s == nil {
-		return nil, fmt.Errorf("endpoint: store is required")
+		return nil, errors.New("endpoint: store is required")
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -193,7 +194,7 @@ const deviceTypeAggregator = 0x000E
 
 func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) {
 	if snap.CentralName == "" {
-		return nil, fmt.Errorf("endpoint: snapshot CentralName is required")
+		return nil, errors.New("endpoint: snapshot CentralName is required")
 	}
 	out := make([]*Endpoint, 0, 8)
 
@@ -215,7 +216,7 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 	return out, nil
 }
 
-func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) {
+func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]*Endpoint, 0, 4)
 
 	allow := func(kind store.DPKind, key string) (bool, error) {

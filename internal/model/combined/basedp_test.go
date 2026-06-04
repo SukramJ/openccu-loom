@@ -87,7 +87,6 @@ func TestHSColorUniqueID(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			c := NewHSColorWithCentral(
@@ -313,13 +312,10 @@ func TestCombinedConcurrentAfterMigration(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for w := 0; w < writers; w++ {
-		w := w
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for w := range writers {
+		wg.Go(func() {
 			ctx := context.Background()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				c.SetForcedUsage(usages[(w+i)%len(usages)])
 				wp.SetForcedUsage(usages[(w+i)%len(usages)])
 				c.PublishUpdate(ctx, i)
@@ -328,14 +324,12 @@ func TestCombinedConcurrentAfterMigration(t *testing.T) {
 				c.OnSaturation(float64(i%100) / 100.0)
 				_ = wp.Set(ctx, schedule.NewClimate(), hmenum.CommandPriorityHigh)
 			}
-		}()
+		})
 	}
 
-	for r := 0; r < readers; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range readers {
+		wg.Go(func() {
+			for range iterations {
 				_ = c.UniqueID()
 				_ = c.Visible()
 				_ = c.EnabledByDefault()
@@ -345,7 +339,7 @@ func TestCombinedConcurrentAfterMigration(t *testing.T) {
 				_ = wp.Visible()
 				_, _ = wp.Value()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

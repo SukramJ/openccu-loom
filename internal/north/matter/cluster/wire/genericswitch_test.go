@@ -5,6 +5,7 @@ package wire_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -187,13 +188,7 @@ func TestGenericSwitch_Reportable_ContainsCurrentPosition(t *testing.T) {
 	if len(reportable) == 0 {
 		t.Fatal("MatterReportable() returned empty slice")
 	}
-	found := false
-	for _, id := range reportable {
-		if id == switchAttrCurrentPos {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(reportable, switchAttrCurrentPos)
 	if !found {
 		t.Errorf("MatterReportable() = %v, want it to contain 0x%04X (CurrentPosition)", reportable, switchAttrCurrentPos)
 	}

@@ -118,9 +118,7 @@ func TestInterfaceClientMetricsRaceSafe(t *testing.T) {
 		}()
 	}
 	// Concurrent readers.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range goroutines * calls {
 			_ = ic.MetricsTotalRequests()
 			_ = ic.MetricsExecutedRequests()
@@ -128,7 +126,7 @@ func TestInterfaceClientMetricsRaceSafe(t *testing.T) {
 			_ = ic.MetricsCircuitState()
 			_, _ = ic.MetricsLastFailureTime()
 		}
-	}()
+	})
 	wg.Wait()
 
 	if got := ic.MetricsTotalRequests(); got != goroutines*calls {

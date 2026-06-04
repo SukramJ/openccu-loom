@@ -15,6 +15,7 @@ func TestParseFormat_TextColorAliases(t *testing.T) {
 	cases := []string{"text-color", "color", "tint"}
 	for _, raw := range cases {
 		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
 			if got := ParseFormat(raw); got != FormatTextColor {
 				t.Fatalf("ParseFormat(%q) = %v, want FormatTextColor", raw, got)
 			}

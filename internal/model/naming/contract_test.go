@@ -20,6 +20,7 @@ package naming_test
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -56,7 +57,7 @@ func displayChannelName(ch *device.Channel, channelNo int) string {
 		return fmt.Sprintf("ch%d", channelNo)
 	}
 	if channelNo > 0 {
-		return fmt.Sprintf("%d", channelNo)
+		return strconv.Itoa(channelNo)
 	}
 	return ""
 }
@@ -462,7 +463,6 @@ func TestNamingContract(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ch, no := tc.setupDevice()

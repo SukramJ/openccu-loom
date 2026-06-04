@@ -92,7 +92,6 @@ func TestBaseDataPointUniqueIDFormat(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			b := datapoint.NewBaseDataPointFields(tc.centralName, tc.address, tc.key)
@@ -159,7 +158,6 @@ func TestBaseDataPointEnabledByDefaultUsageMatrix(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.usage), func(t *testing.T) {
 			t.Parallel()
 			b := datapoint.NewBaseDataPointFields("ccu", "VCU1:1", "P")
@@ -195,7 +193,6 @@ func TestBaseDataPointVisibleUsageMatrix(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.usage), func(t *testing.T) {
 			t.Parallel()
 			b := datapoint.NewBaseDataPointFields("ccu", "VCU1:1", "P")
@@ -301,34 +298,29 @@ func TestBaseDataPointConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Writers: spin SetForcedUsage / SetPublisher / PublishUpdate.
-	for w := 0; w < writers; w++ {
-		w := w
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for w := range writers {
+		wg.Go(func() {
 			ctx := context.Background()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				b.SetForcedUsage(usages[(w+i)%len(usages)])
 				if i%17 == 0 {
 					b.SetPublisher(pub)
 				}
 				b.PublishUpdate(ctx, i)
 			}
-		}()
+		})
 	}
 
 	// Readers: spin UniqueID / Visible / EnabledByDefault / ForcedUsage.
-	for r := 0; r < readers; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range readers {
+		wg.Go(func() {
+			for range iterations {
 				_ = b.UniqueID()
 				_ = b.Visible()
 				_ = b.EnabledByDefault()
 				_, _ = b.ForcedUsage()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -586,11 +578,9 @@ func TestConcurrentMarkAndRead(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Writers: alternate between MarkModified and MarkRefreshed.
-	for w := 0; w < goroutines/2; w++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines / 2 {
+		wg.Go(func() {
+			for i := range iterations {
 				now := time.Now()
 				if i%2 == 0 {
 					b.MarkModified(now)
@@ -598,21 +588,19 @@ func TestConcurrentMarkAndRead(t *testing.T) {
 					b.MarkRefreshed(now)
 				}
 			}
-		}()
+		})
 	}
 
 	// Readers: exercise all four read methods.
-	for r := 0; r < goroutines/2; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range goroutines / 2 {
+		wg.Go(func() {
+			for range iterations {
 				_ = b.ModifiedAt()
 				_ = b.RefreshedAt()
 				_ = b.ModifiedRecently()
 				_ = b.RefreshedRecently()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -1049,12 +1037,12 @@ func TestInFlightCommandsCountConcurrent(t *testing.T) {
 	const goroutines = 50
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	var incCount int64
+	var incCount atomic.Int64
 	for range goroutines {
 		go func() {
 			defer wg.Done()
 			b.IncInFlightCommands()
-			atomic.AddInt64(&incCount, 1)
+			incCount.Add(1)
 		}()
 	}
 	wg.Wait()
@@ -1136,8 +1124,7 @@ func TestUnconfirmedValueForKeyConcurrentWriteRead(t *testing.T) {
 	const goroutines = 20
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		i := i
+	for i := range goroutines {
 		go func() {
 			defer wg.Done()
 			b.WriteUnconfirmedValueForKey(key, i)

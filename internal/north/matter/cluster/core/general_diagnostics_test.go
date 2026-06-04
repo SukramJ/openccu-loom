@@ -5,6 +5,7 @@ package core_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -191,10 +192,8 @@ func TestGenDiag_MatterEventsContainsBootReason(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
 	events := g.MatterEvents()
-	for _, ev := range events {
-		if ev == 0x0003 {
-			return
-		}
+	if slices.Contains(events, 0x0003) {
+		return
 	}
 	t.Fatalf("MatterEvents() = %v — missing BootReason (0x0003)", events)
 }
@@ -329,10 +328,8 @@ func TestGenDiag_MatterAcceptedCommands(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
 	list := g.MatterAcceptedCommands()
-	for _, id := range list {
-		if id == 0x01 {
-			return
-		}
+	if slices.Contains(list, 0x01) {
+		return
 	}
 	t.Fatalf("MatterAcceptedCommands() = %v — missing TimeSnapshot (0x01)", list)
 }
@@ -341,10 +338,8 @@ func TestGenDiag_MatterGeneratedCommands(t *testing.T) {
 	t.Parallel()
 	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
 	list := g.MatterGeneratedCommands()
-	for _, id := range list {
-		if id == 0x02 {
-			return
-		}
+	if slices.Contains(list, 0x02) {
+		return
 	}
 	t.Fatalf("MatterGeneratedCommands() = %v — missing TimeSnapshotResponse (0x02)", list)
 }

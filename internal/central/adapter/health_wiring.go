@@ -32,7 +32,7 @@ import (
 //
 // Returns a closer that drops every subscription. Safe to call multiple times
 // — the registered closures are idempotent.
-func WireHealth(unit *central.Unit) func() {
+func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiring: long sequential setup
 	if unit == nil || unit.EventBus == nil || unit.Health == nil {
 		return func() {}
 	}

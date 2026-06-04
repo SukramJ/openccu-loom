@@ -6,7 +6,6 @@ package handlers_test
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -264,8 +263,7 @@ func TestStreamLogs_HappyPath_SSEHeadersAndBackfill(t *testing.T) {
 		subscribeCh: closed,
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/diagnostics/logs/stream", http.NoBody).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handlers.StreamLogs(svc).ServeHTTP(w, req)

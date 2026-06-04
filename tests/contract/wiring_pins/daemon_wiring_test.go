@@ -16,7 +16,7 @@ import (
 func TestPin_AddOnStopHook_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/central", "AddOnStopHook",
 	)
 }
@@ -28,7 +28,7 @@ func TestPin_AddOnStopHook_CalledInDaemon(t *testing.T) {
 func TestPin_BINRPCCallbackServer_Started(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/central/rpcserver", "NewBINRPCServer",
 	)
 }
@@ -39,7 +39,7 @@ func TestPin_BINRPCCallbackServer_Started(t *testing.T) {
 func TestPin_BINRPCCallbackServer_WiredToDeps(t *testing.T) {
 	contract.MustFindStructLiteralField(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"WireDeps", "BINRPCCallbackServer",
 	)
 }
@@ -51,7 +51,7 @@ func TestPin_BINRPCCallbackServer_WiredToDeps(t *testing.T) {
 func TestPin_NewMqttCollector_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/metrics", "NewMqttCollector",
 	)
 }
@@ -63,7 +63,7 @@ func TestPin_NewMqttCollector_CalledInDaemon(t *testing.T) {
 func TestPin_SetCollector_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/mqtt", "SetCollector",
 	)
 }

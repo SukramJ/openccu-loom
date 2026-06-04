@@ -246,17 +246,17 @@ func applyFilter(filter string, val any) any {
 // parseFilter parses `filtername(arg1, arg2, ...)` into name and args.
 func parseFilter(filter string) (name string, args []string) {
 	filter = strings.TrimSpace(filter)
-	idx := strings.Index(filter, "(")
-	if idx < 0 {
+	before, after, ok := strings.Cut(filter, "(")
+	if !ok {
 		return filter, nil
 	}
-	name = filter[:idx]
-	rest := filter[idx+1:]
+	name = before
+	rest := after
 	rest = strings.TrimSuffix(rest, ")")
 	if rest == "" {
 		return name, nil
 	}
-	for _, a := range strings.Split(rest, ",") {
+	for a := range strings.SplitSeq(rest, ",") {
 		args = append(args, strings.TrimSpace(a))
 	}
 	return name, args
@@ -269,12 +269,12 @@ func evalArith(expr string, valueJSON map[string]any) string {
 	expr = strings.TrimSpace(expr)
 	// Try `<pipeline> * <num>` or `<pipeline> / <num>`.
 	for _, op := range []string{" * ", " / "} {
-		idx := strings.Index(expr, op)
-		if idx < 0 {
+		before, after, ok := strings.Cut(expr, op)
+		if !ok {
 			continue
 		}
-		lhs := strings.TrimSpace(expr[:idx])
-		rhs := strings.TrimSpace(expr[idx+len(op):])
+		lhs := strings.TrimSpace(before)
+		rhs := strings.TrimSpace(after)
 
 		// Evaluate the left-hand pipeline.
 		parts := splitPipeline(lhs)

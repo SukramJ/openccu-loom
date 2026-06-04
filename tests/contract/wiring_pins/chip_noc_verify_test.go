@@ -17,7 +17,7 @@ import (
 func TestPin_NewVerifier_CalledInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(
 		t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/matter/cert", "NewVerifier",
 	)
 }

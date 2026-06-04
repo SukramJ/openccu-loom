@@ -6,6 +6,8 @@ package configui
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -161,9 +163,7 @@ func (s *Session) Discard() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.currentValues = make(map[string]any, len(s.initialValues))
-	for k, v := range s.initialValues {
-		s.currentValues[k] = v
-	}
+	maps.Copy(s.currentValues, s.initialValues)
 	s.undoStack = nil
 	s.redoStack = nil
 }
@@ -174,9 +174,7 @@ func (s *Session) InitialValues() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make(map[string]any, len(s.initialValues))
-	for k, v := range s.initialValues {
-		out[k] = v
-	}
+	maps.Copy(out, s.initialValues)
 	return out
 }
 
@@ -280,9 +278,7 @@ type ValidationIssue struct {
 func (s *Session) Validate(constraints []CrossValidationConstraint) []ValidationIssue {
 	s.mu.Lock()
 	values := make(map[string]any, len(s.currentValues))
-	for k, v := range s.currentValues {
-		values[k] = v
-	}
+	maps.Copy(values, s.currentValues)
 	descs := s.descriptions
 	s.mu.Unlock()
 	return validateAll(descs, values, values, constraints)
@@ -305,9 +301,7 @@ func (s *Session) ValidateCrossConstraints(constraints []CrossValidationConstrai
 	}
 	s.mu.Lock()
 	current := make(map[string]any, len(s.currentValues))
-	for k, v := range s.currentValues {
-		current[k] = v
-	}
+	maps.Copy(current, s.currentValues)
 	s.mu.Unlock()
 	seen := make(map[string]bool)
 	var issues []ValidationIssue
@@ -336,9 +330,7 @@ func (s *Session) ValidateChanges(constraints []CrossValidationConstraint) []Val
 		}
 	}
 	current := make(map[string]any, len(s.currentValues))
-	for k, v := range s.currentValues {
-		current[k] = v
-	}
+	maps.Copy(current, s.currentValues)
 	descs := s.descriptions
 	s.mu.Unlock()
 	if len(changes) == 0 {
@@ -453,13 +445,7 @@ func validateValue(pd hmproto.ParameterData, value any) string {
 			}
 		case string:
 			if len(pd.ValueList) > 0 {
-				found := false
-				for _, v := range pd.ValueList {
-					if v == x {
-						found = true
-						break
-					}
-				}
+				found := slices.Contains(pd.ValueList, x)
 				if !found {
 					return fmt.Sprintf("value %q not in VALUE_LIST", x)
 				}

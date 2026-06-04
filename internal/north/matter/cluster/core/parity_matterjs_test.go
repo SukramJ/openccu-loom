@@ -5,7 +5,7 @@ package core
 
 import (
 	"encoding/json"
-	"sort"
+	"slices"
 	"testing"
 
 	matterparity "github.com/SukramJ/openccu-loom/internal/north/matter/parity"
@@ -96,7 +96,7 @@ func mandatoryAttrIDs(c matterCluster) []uint32 {
 			out = append(out, a.ID)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -324,6 +324,7 @@ func TestParityMatterJS_ClusterIDsAndRevisions(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			if p.codeClusterID != p.jsID {
 				t.Errorf("code cluster ID 0x%04X != matter.js 0x%04X", p.codeClusterID, p.jsID)
 			}
@@ -358,6 +359,7 @@ func TestParityMatterJS_MandatoryAttributeCoverage(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			impl := make(map[uint32]bool, len(p.codeAttrIDs))
 			for _, id := range p.codeAttrIDs {
 				impl[id] = true
@@ -404,6 +406,7 @@ func TestParityMatterJS_NoSpuriousAttributes(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			known := make(map[uint32]bool, len(js.Attributes))
 			for _, a := range js.Attributes {
 				known[a.ID] = true
@@ -474,6 +477,7 @@ func TestParityMatterJS_DeviceTypeRevisions(t *testing.T) {
 			continue
 		}
 		t.Run(js.Name, func(t *testing.T) {
+			t.Parallel()
 			if c.revision != js.Revision {
 				t.Errorf("code revision %d != matter.js %d for %s (0x%04X)", c.revision, js.Revision, js.Name, js.ID)
 			}

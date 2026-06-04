@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"testing"
 	"time"
@@ -75,9 +76,7 @@ func (w *dispatchWriter) PutParamset(
 		return w.putErr
 	}
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	w.puts = append(w.puts, putCall{addr, cp})
 	return nil
 }

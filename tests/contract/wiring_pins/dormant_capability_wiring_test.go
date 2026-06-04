@@ -34,7 +34,7 @@ import (
 // AccessControl entry the controller writes is silently unenforced.
 func TestPin_ACLLister_AttachedInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"bridge", "AttachACLLister")
 }
 
@@ -99,7 +99,7 @@ func TestPin_KeepaliveEnablesPingPong(t *testing.T) {
 // shows online in Apple/Google Home.
 func TestPin_NotifyDeviceReachable_WiredInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"mb", "NotifyDeviceReachable")
 }
 
@@ -110,7 +110,7 @@ func TestPin_NotifyDeviceReachable_WiredInDaemon(t *testing.T) {
 // Without it a NOC rotation leaves stale sessions keyed to the old credential.
 func TestPin_SetOnFabricUpdated_WiredInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"opCreds", "SetOnFabricUpdated")
 }
 
@@ -121,7 +121,7 @@ func TestPin_SetOnFabricUpdated_WiredInDaemon(t *testing.T) {
 // Sigma1-only handshake leaks one map entry for the daemon's lifetime.
 func TestPin_SetOnEvict_WiredInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"caseProvider", "SetOnEvict")
 }
 
@@ -133,7 +133,7 @@ func TestPin_SetOnEvict_WiredInDaemon(t *testing.T) {
 // 900-second cap.
 func TestPin_SetFabricCounter_WiredInDaemon(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"admComm", "SetFabricCounter")
 }
 
@@ -144,7 +144,7 @@ func TestPin_SetFabricCounter_WiredInDaemon(t *testing.T) {
 // origin sw_version as its zero default.
 func TestPin_SetOriginVersion_WiredInDaemon(t *testing.T) {
 	contract.MustFindCallerInFile(t,
-		"cmd/openccu-loom/daemon.go",
+		"cmd/openccu-loom",
 		"internal/north/mqtt", "SetOriginVersion")
 }
 

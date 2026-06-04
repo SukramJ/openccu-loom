@@ -56,7 +56,7 @@ func bumpNextFabricIndex(ctx context.Context, tx *sql.Tx, occupied []uint8) erro
 	// Advance past the just-used slot + find the next free one,
 	// wrapping at 255→1. Stop after a full cycle to detect full table.
 	next := current
-	for i := 0; i < 254; i++ {
+	for range 254 {
 		// Advance.
 		if next == 254 {
 			next = 1

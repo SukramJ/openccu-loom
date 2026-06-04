@@ -4,6 +4,7 @@
 package switchdev
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -201,13 +202,7 @@ func TestStatePayloadNilSwitchReturnsNil(t *testing.T) {
 func TestRegisterSwitchServicesRegisteredTurnOnFor(t *testing.T) {
 	s := newPayloadSwitch(t)
 	names := s.ServiceMethodNames()
-	found := false
-	for _, n := range names {
-		if n == "turn_on_for" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(names, "turn_on_for")
 	if !found {
 		t.Fatalf("turn_on_for not in service methods: %v", names)
 	}

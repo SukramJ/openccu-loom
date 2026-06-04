@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"sort"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -327,7 +327,7 @@ func sortedSessionIDs(m map[uint16]*channel.Session) []uint16 {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 

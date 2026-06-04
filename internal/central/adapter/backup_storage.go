@@ -61,7 +61,7 @@ type FilesystemBackupStorage struct {
 // directory exists.
 func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
 	if dir == "" {
-		return nil, fmt.Errorf("backup: empty directory")
+		return nil, errors.New("backup: empty directory")
 	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return nil, fmt.Errorf("backup: mkdir %s: %w", dir, err)

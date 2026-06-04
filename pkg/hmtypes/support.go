@@ -7,12 +7,15 @@
 package hmtypes
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -21,7 +24,7 @@ import (
 
 // ErrPortRangeInvalid is returned by [FindFreePort] when rangeLo > rangeHi
 // or either bound is outside the valid port range.
-var ErrPortRangeInvalid = fmt.Errorf("hmtypes: invalid port range")
+var ErrPortRangeInvalid = errors.New("hmtypes: invalid port range")
 
 // MaxCacheAge is the default maximum age for cached values, mirroring
 // Py:308).
@@ -58,8 +61,8 @@ func isValidHostname(host string) bool {
 	if host == "" || len(host) > 253 {
 		return false
 	}
-	labels := strings.Split(host, ".")
-	for _, lbl := range labels {
+	labels := strings.SplitSeq(host, ".")
+	for lbl := range labels {
 		if lbl == "" || len(lbl) > 63 {
 			return false
 		}
@@ -102,11 +105,11 @@ func ChangedWithinSeconds(lastChange time.Time, maxAge time.Duration) bool {
 
 // ErrHostEmpty is returned by [ValidateHost] when the host string is
 // empty or blank.
-var ErrHostEmpty = fmt.Errorf("hmtypes: host must not be empty")
+var ErrHostEmpty = errors.New("hmtypes: host must not be empty")
 
 // ErrHostInvalid is returned by [ValidateHost] when the host string
 // does not match a valid hostname or IP address.
-var ErrHostInvalid = fmt.Errorf("hmtypes: host has invalid format")
+var ErrHostInvalid = errors.New("hmtypes: host has invalid format")
 
 // ValidateHost validates that host is a well-formed hostname or IP
 // address. Returns [ErrHostEmpty] for blank input, [ErrHostInvalid] for
@@ -158,17 +161,13 @@ func CleanupTextFromHTMLTags(text string) string {
 // meaningful; all others always return false.
 func SupportsRxMode(commandRxMode hmenum.CommandRxMode, rxModes []hmenum.RxMode) bool {
 	if commandRxMode == hmenum.CommandRxModeBurst {
-		for _, m := range rxModes {
-			if m == hmenum.RxModeBurst {
-				return true
-			}
+		if slices.Contains(rxModes, hmenum.RxModeBurst) {
+			return true
 		}
 	}
 	if commandRxMode == hmenum.CommandRxModeWakeup {
-		for _, m := range rxModes {
-			if m == hmenum.RxModeWakeup {
-				return true
-			}
+		if slices.Contains(rxModes, hmenum.RxModeWakeup) {
+			return true
 		}
 	}
 	return false
@@ -181,7 +180,7 @@ func HashSHA256(value any) string {
 	var data []byte
 	b, err := json.Marshal(value)
 	if err != nil {
-		data = []byte(fmt.Sprintf("%v", makeValueHashable(value)))
+		data = fmt.Appendf(nil, "%v", makeValueHashable(value))
 	} else {
 		data = b
 	}
@@ -326,7 +325,8 @@ func ElementMatchesKey(searchElements []string, compareWith string, ignoreCase, 
 func FindFreePort(rangeLo, rangeHi int) (int, error) {
 	if rangeLo == 0 && rangeHi == 0 {
 		// OS-assigned ephemeral port.
-		l, err := net.Listen("tcp", "127.0.0.1:0")
+		lc := net.ListenConfig{}
+		l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return 0, fmt.Errorf("hmtypes: FindFreePort: %w", err)
 		}
@@ -342,7 +342,8 @@ func FindFreePort(rangeLo, rangeHi int) (int, error) {
 	}
 	for port := rangeLo; port <= rangeHi; port++ {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
-		l, err := net.Listen("tcp", addr)
+		lc2 := net.ListenConfig{}
+		l, err := lc2.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			continue
 		}

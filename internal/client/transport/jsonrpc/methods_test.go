@@ -720,7 +720,6 @@ func TestSetSystemVariableBool(t *testing.T) {
 		{false, 0},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(fmt.Sprintf("value=%v", tc.value), func(t *testing.T) {
 			t.Parallel()
 			var gotParams map[string]any

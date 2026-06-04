@@ -170,10 +170,10 @@ type BridgedConfig struct {
 // observed Apple HAP-mapper requirement.
 func NewBridgedDeviceBasicInformation(cfg BridgedConfig) (*BridgedDeviceBasicInformation, error) {
 	if cfg.UniqueID == "" {
-		return nil, fmt.Errorf("matter: BridgedDeviceBasicInformation Config.UniqueID must be non-empty")
+		return nil, errors.New("matter: BridgedDeviceBasicInformation Config.UniqueID must be non-empty")
 	}
 	if cfg.NodeLabel == "" {
-		return nil, fmt.Errorf("matter: BridgedDeviceBasicInformation Config.NodeLabel must be non-empty")
+		return nil, errors.New("matter: BridgedDeviceBasicInformation Config.NodeLabel must be non-empty")
 	}
 	serialNumber := cfg.SerialNumber
 	if serialNumber == "" {
@@ -250,7 +250,7 @@ func (b *BridgedDeviceBasicInformation) MatterDataVersion() uint32 {
 }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (b *BridgedDeviceBasicInformation) MatterRead(attrID uint32) (any, bool) {
+func (b *BridgedDeviceBasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	switch attrID {
@@ -377,7 +377,7 @@ func (b *BridgedDeviceBasicInformation) MatterWrite(_ context.Context, attrID ui
 		return fmt.Errorf("matter: NodeLabel write expected string, got %T", value)
 	}
 	if len(s) > 32 {
-		return fmt.Errorf("matter: NodeLabel exceeds 32 utf-8 bytes")
+		return errors.New("matter: NodeLabel exceeds 32 utf-8 bytes")
 	}
 	b.mu.Lock()
 	b.nodeLabel = s

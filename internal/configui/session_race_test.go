@@ -34,10 +34,10 @@ func TestSessionConcurrentAccess(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		go func(gid int) {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for j := range iterations {
 				switch (gid + j) % 8 {
 				case 0:
 					s.Set("P1", j%100)
@@ -86,18 +86,18 @@ func TestSessionDiscardConcurrentWrites(t *testing.T) {
 	const discards = 4
 
 	wg.Add(writers + discards)
-	for i := 0; i < writers; i++ {
+	for i := range writers {
 		go func(gid int) {
 			defer wg.Done()
-			for j := 0; j < 100; j++ {
+			for j := range 100 {
 				s.Set("P", gid*100+j)
 			}
 		}(i)
 	}
-	for i := 0; i < discards; i++ {
+	for range discards {
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 50; j++ {
+			for range 50 {
 				s.Discard()
 			}
 		}()

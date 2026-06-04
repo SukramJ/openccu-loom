@@ -46,8 +46,7 @@ func TestSchedulerFakeClockAdvancesTicksDeterministically(t *testing.T) {
 		Run:      func(context.Context) error { calls.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -91,8 +90,7 @@ func TestSchedulerFakeClockStopBeforeFirstTick(t *testing.T) {
 		Run:      func(context.Context) error { calls.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -140,8 +138,7 @@ func TestSchedulerOverrunWithFakeClock(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -194,8 +191,7 @@ func TestSchedulerMultipleJobsAdvanceTogether(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)

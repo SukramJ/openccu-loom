@@ -5,6 +5,7 @@ package mdns
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -157,7 +158,7 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 	z.mu.Lock()
 	defer z.mu.Unlock()
 	if z.closed {
-		return fmt.Errorf("mdns: zeroconf advertiser is closed")
+		return errors.New("mdns: zeroconf advertiser is closed")
 	}
 	key := noopKey(svc.InstanceName, svc.ServiceType)
 	z.shutdownByKeyLocked(key)

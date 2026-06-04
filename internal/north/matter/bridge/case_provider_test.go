@@ -8,7 +8,6 @@ package bridge
 // unexported types.
 
 import (
-	"context"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -191,8 +190,7 @@ func TestCaseProvider_Reaper_EvictsStaleEntries(t *testing.T) {
 	p.entries[42].lastTouched = time.Now().Add(-10 * time.Minute)
 	p.mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.StartReaper(ctx, 10*time.Millisecond, 1*time.Millisecond)
 	defer p.StopReaper()
 
@@ -217,8 +215,7 @@ func TestCaseProvider_Reaper_CallsOnEvict(t *testing.T) {
 	p.entries[77].lastTouched = time.Now().Add(-10 * time.Minute)
 	p.mu.Unlock()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.StartReaper(ctx, 10*time.Millisecond, 1*time.Millisecond)
 	defer p.StopReaper()
 
@@ -235,8 +232,7 @@ func TestCaseProvider_Reaper_CallsOnEvict(t *testing.T) {
 func TestCaseProvider_StartReaper_DoubleIsNoop(t *testing.T) {
 	t.Parallel()
 	p := NewPerExchangeCaseProvider(nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	p.StartReaper(ctx, 100*time.Millisecond, time.Minute)
 	p.StartReaper(ctx, 100*time.Millisecond, time.Minute) // must not panic
 	p.StopReaper()
@@ -253,8 +249,7 @@ func TestCaseProvider_Reaper_DoesNotEvictRecentEntries(t *testing.T) {
 	p := NewPerExchangeCaseProvider(func() *CaseAdapter { return &CaseAdapter{} })
 	p.Resolve(33)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// TTL is 10 minutes — entry should not be reaped in this test window.
 	p.StartReaper(ctx, 10*time.Millisecond, 10*time.Minute)
 	defer p.StopReaper()

@@ -192,7 +192,6 @@ func TestParityMatterJS_DoorLockCommandDispatch(t *testing.T) {
 	}
 
 	for _, cmdID := range cmds {
-		cmdID := cmdID
 		t.Run(t.Name(), func(t *testing.T) {
 			t.Parallel()
 			src := &stubSource{observed: true}

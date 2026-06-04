@@ -34,7 +34,6 @@ func TestIsRequestOpcode_Table(t *testing.T) {
 		{"Unknown_0xFF", 0xFF, false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := im.IsRequestOpcode(tc.opcode)

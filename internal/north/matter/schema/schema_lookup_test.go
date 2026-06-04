@@ -53,7 +53,6 @@ func TestClusterRevision_KnownClusters(t *testing.T) {
 		{0x003E, ClusterRevisions[0x003E]}, // OperationalCredentials
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			rev, ok := ClusterRevision(tc.id)
@@ -108,7 +107,6 @@ func TestDeviceTypeRevision_KnownDeviceTypes(t *testing.T) {
 		0x0013, // BridgedNode
 	}
 	for _, id := range cases {
-		id := id
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			rev, ok := DeviceTypeRevision(id)

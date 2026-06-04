@@ -22,6 +22,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -641,13 +642,7 @@ func TestCentralRegistryLookupRequiresName(t *testing.T) {
 					continue
 				}
 				// Only assert the "must have name" methods.
-				mustCheck := false
-				for _, m := range mustHaveNameParam {
-					if fn.Name.Name == m {
-						mustCheck = true
-						break
-					}
-				}
+				mustCheck := slices.Contains(mustHaveNameParam, fn.Name.Name)
 				if !mustCheck {
 					continue
 				}

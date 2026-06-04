@@ -5,7 +5,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -83,9 +83,9 @@ func newMatterEphemeralProvider(
 }
 
 // GenerateAndInstall implements [matterbridge.EphemeralProvider].
-func (p *matterEphemeralProvider) GenerateAndInstall(_ context.Context) (matterbridge.EphemeralCredentials, error) {
+func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matterbridge.EphemeralCredentials, error) {
 	if p == nil || p.bridge == nil || p.opMgr == nil {
-		return matterbridge.EphemeralCredentials{}, fmt.Errorf("ephemeral provider: not wired")
+		return matterbridge.EphemeralCredentials{}, errors.New("ephemeral provider: not wired")
 	}
 
 	disc, err := matterbridge.RandomDiscriminator()
@@ -117,7 +117,7 @@ func (p *matterEphemeralProvider) GenerateAndInstall(_ context.Context) (matterb
 		// PerExchangePaseProvider whose factory minted a fresh
 		// PaseAdapter from the same ephemeral creds for every Pake1
 		// arrival. Reaper auto-cleans stale entries.
-		ephem := matterbridge.NewPerExchangePaseProvider(func() *matterbridge.PaseAdapter {
+		ephem := matterbridge.NewPerExchangePaseProvider(func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed; buildPaseAdapterFromCreds has no ctx parameter
 			a, err := buildPaseAdapterFromCreds(pass, salt, iterations, p.opMgr, p.opCreds, nil, p.logger)
 			if err != nil {
 				p.logger.Warn("matter.bridge.pase.ephemeral_factory", slog.String("err", err.Error()))
@@ -125,12 +125,12 @@ func (p *matterEphemeralProvider) GenerateAndInstall(_ context.Context) (matterb
 			}
 			return a
 		})
-		ephem.StartReaper(context.Background(), 30*time.Second, 60*time.Second)
+		ephem.StartReaper(ctx, 30*time.Second, 60*time.Second)
 		p.bridge.AttachPaseHandlerProvider(ephem.Resolve)
 	} else {
 		// Singleton ephemeral: build one PaseAdapter and swap it onto
 		// the bridge.
-		adapter, err := buildPaseAdapterFromCreds(pass, salt, iterations, p.opMgr, p.opCreds, nil, p.logger)
+		adapter, err := buildPaseAdapterFromCreds(pass, salt, iterations, p.opMgr, p.opCreds, nil, p.logger) //nolint:contextcheck // buildPaseAdapterFromCreds has no ctx parameter
 		if err != nil {
 			p.mu.Unlock()
 			return matterbridge.EphemeralCredentials{}, err
@@ -151,7 +151,7 @@ func (p *matterEphemeralProvider) GenerateAndInstall(_ context.Context) (matterb
 	bridge := p.bridge
 	mu := &p.mu
 
-	restore := func() {
+	restore := func() { //nolint:contextcheck // restore callback has no ctx parameter; StartReaper needs a daemon-lifetime context independent of the commissioning window's ctx
 		mu.Lock()
 		defer mu.Unlock()
 		if concurrent {

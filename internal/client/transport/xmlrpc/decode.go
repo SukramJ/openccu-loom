@@ -61,7 +61,7 @@ func DecodeValue(d *xml.Decoder, start xml.StartElement) (Value, error) {
 // decodeTypedValue dispatches on the inner element's local name and
 // reads its contents, assuming the caller has already consumed the
 // StartElement.
-func decodeTypedValue(d *xml.Decoder, start xml.StartElement) (Value, error) {
+func decodeTypedValue(d *xml.Decoder, start xml.StartElement) (Value, error) { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	switch start.Name.Local {
 	case "nil":
 		if err := consumeCloseOrSelfClose(d, start); err != nil {

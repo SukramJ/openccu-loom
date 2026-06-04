@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strconv"
 	"strings"
 	"sync"
@@ -463,9 +464,7 @@ func (b *Bridge) SetHubInfoFor(centralName string, info HubInfo) {
 func (b *Bridge) RepublishDiscovery(ctx context.Context) error {
 	b.mu.Lock()
 	snapshot := make(map[string][]byte, len(b.declared))
-	for k, v := range b.declared {
-		snapshot[k] = v
-	}
+	maps.Copy(snapshot, b.declared)
 	b.mu.Unlock()
 	for topic, payload := range snapshot {
 		if err := b.client.Publish(ctx, topic, payload, b.cfg.QoS.Discovery, true); err != nil {
@@ -490,9 +489,7 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 	health := map[string]any{"status": "online"}
 	if b.cfg.HealthSupplier != nil {
 		if extra := b.cfg.HealthSupplier(); extra != nil {
-			for k, v := range extra {
-				health[k] = v
-			}
+			maps.Copy(health, extra)
 			// "status" must stay authoritative — suppliers cannot
 			// shadow the LWT signal.
 			health["status"] = "online"
@@ -866,7 +863,7 @@ func (b *Bridge) PublishInstallMode(ctx context.Context, centralName string, mod
 	if topics.State == "" {
 		return nil
 	}
-	body := []byte(fmt.Sprintf("%d", seconds))
+	body := fmt.Appendf(nil, "%d", seconds)
 	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
 }
 
@@ -1242,11 +1239,11 @@ func renderValue(v any) ([]byte, error) {
 	case string:
 		return []byte(x), nil
 	case int:
-		return []byte(fmt.Sprintf("%d", x)), nil
+		return fmt.Appendf(nil, "%d", x), nil
 	case int32:
-		return []byte(fmt.Sprintf("%d", x)), nil
+		return fmt.Appendf(nil, "%d", x), nil
 	case int64:
-		return []byte(fmt.Sprintf("%d", x)), nil
+		return fmt.Appendf(nil, "%d", x), nil
 	case float32:
 		return []byte(strings.TrimRight(strings.TrimRight(fmt.Sprintf("%f", x), "0"), ".")), nil
 	case float64:

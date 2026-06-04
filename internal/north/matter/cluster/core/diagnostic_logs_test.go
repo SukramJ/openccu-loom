@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"testing"
 	"time"
 
@@ -257,10 +258,8 @@ func TestDiagLogs_MatterAcceptedCommands(t *testing.T) {
 		t.Fatal("MatterAcceptedCommands() is empty")
 	}
 	// RetrieveLogsRequest = 0x00 must be listed.
-	for _, id := range list {
-		if id == 0x00 {
-			return
-		}
+	if slices.Contains(list, 0x00) {
+		return
 	}
 	t.Fatalf("MatterAcceptedCommands() = %v — missing RetrieveLogsRequest (0x00)", list)
 }
@@ -273,10 +272,8 @@ func TestDiagLogs_MatterGeneratedCommands(t *testing.T) {
 		t.Fatal("MatterGeneratedCommands() is empty")
 	}
 	// RetrieveLogsResponse = 0x01 must be listed.
-	for _, id := range list {
-		if id == 0x01 {
-			return
-		}
+	if slices.Contains(list, 0x01) {
+		return
 	}
 	t.Fatalf("MatterGeneratedCommands() = %v — missing RetrieveLogsResponse (0x01)", list)
 }

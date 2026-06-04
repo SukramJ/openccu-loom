@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
@@ -242,10 +243,8 @@ func (s *Siren) ValidateTone(tone string) error {
 	if len(s.availableTones) == 0 {
 		return nil
 	}
-	for _, t := range s.availableTones {
-		if t == tone {
-			return nil
-		}
+	if slices.Contains(s.availableTones, tone) {
+		return nil
 	}
 	return fmt.Errorf("%w: %q", ErrInvalidTone, tone)
 }

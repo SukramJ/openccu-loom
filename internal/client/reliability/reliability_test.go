@@ -23,7 +23,7 @@ func TestCircuitOpensAfterThreshold(t *testing.T) {
 	c := NewCircuit(CircuitConfig{FailureThreshold: 2, ResetTimeout: time.Second, Clock: func() time.Time { return now }})
 
 	err := errors.New("boom")
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = c.Do(context.Background(), "setValue", func(context.Context) error { return err })
 	}
 	if c.State() != hmenum.CircuitStateOpen {
@@ -130,10 +130,8 @@ func TestThrottleSerialisesConcurrent(t *testing.T) {
 	var peak atomic.Int32
 	var inflight atomic.Int32
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			if err := tr.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 				t.Error(err)
 				return
@@ -148,7 +146,7 @@ func TestThrottleSerialisesConcurrent(t *testing.T) {
 			}
 			time.Sleep(2 * time.Millisecond)
 			inflight.Add(-1)
-		}()
+		})
 	}
 	wg.Wait()
 	if peak.Load() > 1 {
@@ -223,15 +221,13 @@ func TestCoalescerSharesResult(t *testing.T) {
 		return "ok", nil
 	}
 	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			v, err := c.Do(context.Background(), "k", fn)
 			if err != nil || v.(string) != "ok" {
 				t.Errorf("got %v %v", v, err)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	if calls.Load() != 1 {

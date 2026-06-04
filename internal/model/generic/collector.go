@@ -259,7 +259,7 @@ func (c *CallParameterCollector) Cancel() {
 // Returning the wire error to the caller mirrors
 // behaviour: the higher-level command-throttle/retry layer decides
 // whether to re-issue the collector.
-func (c *CallParameterCollector) Send(ctx context.Context) error {
+func (c *CallParameterCollector) Send(ctx context.Context) error { //nolint:funlen // single-purpose collector dispatch with many type/error branches
 	c.mu.Lock()
 	if c.consumed {
 		c.mu.Unlock()
@@ -359,11 +359,8 @@ func (c *CallParameterCollector) Send(ctx context.Context) error {
 	// [WaitableDataPoint] are skipped silently so the option degrades
 	// gracefully when callers pass fake DPs in tests.
 	if waitN > 0 {
-		limit := waitN
-		if limit > len(items) {
-			limit = len(items)
-		}
-		for i := 0; i < limit; i++ {
+		limit := min(waitN, len(items))
+		for i := range limit {
 			w, ok := items[i].dp.(WaitableDataPoint)
 			if !ok {
 				continue

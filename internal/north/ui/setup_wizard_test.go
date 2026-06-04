@@ -66,8 +66,8 @@ func newWizardRouter(t *testing.T, wd SetupWizardDeps) http.Handler {
 // wizardCookie extracts the setup session cookie from a response (if any).
 func wizardCookie(rr *httptest.ResponseRecorder) string {
 	for _, line := range rr.Header().Values("Set-Cookie") {
-		if strings.HasPrefix(line, setupCookieName+"=") {
-			val := strings.TrimPrefix(line, setupCookieName+"=")
+		if after, ok := strings.CutPrefix(line, setupCookieName+"="); ok {
+			val := after
 			val = strings.SplitN(val, ";", 2)[0]
 			return val
 		}

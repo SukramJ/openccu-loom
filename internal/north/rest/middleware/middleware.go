@@ -130,6 +130,7 @@ func (sw *statusWriter) Flush() {
 func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			//nolint:contextcheck // deferred panic-recovery closure logs with r.Context(); no new detached context is created
 			defer func() {
 				if rec := recover(); rec != nil {
 					logger.LogAttrs(

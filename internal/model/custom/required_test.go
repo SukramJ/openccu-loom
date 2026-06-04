@@ -4,6 +4,7 @@
 package custom
 
 import (
+	"slices"
 	"sort"
 	"testing"
 
@@ -19,12 +20,7 @@ func testDefaultRegistry() *Registry {
 
 // containsParam reports whether params contains p.
 func containsParam(params []hmenum.Parameter, p hmenum.Parameter) bool {
-	for _, v := range params {
-		if v == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(params, p)
 }
 
 // TestRegistryRequiredParametersIncludesDefaults verifies that DefaultDataPoints

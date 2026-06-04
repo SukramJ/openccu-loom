@@ -5,6 +5,7 @@ package textdisplay
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -128,13 +129,7 @@ func TestTextDisplayWriteAcceptsColor(t *testing.T) {
 	}
 
 	// DISPLAY_DATA_TEXT_COLOR must appear in the emitted parameters.
-	found := false
-	for _, p := range w.params() {
-		if p == hmenum.ParameterDisplayDataTextColor {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(w.params(), hmenum.ParameterDisplayDataTextColor)
 	if !found {
 		t.Errorf("write with color: DISPLAY_DATA_TEXT_COLOR not emitted; params=%v", w.params())
 	}

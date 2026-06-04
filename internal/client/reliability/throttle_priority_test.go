@@ -92,8 +92,8 @@ func TestFIFOWithinSamePriority(t *testing.T) {
 	const n = 3
 	var wg sync.WaitGroup
 	wg.Add(n)
-	for i := 0; i < n; i++ {
-		i := i
+	for i := range n {
+
 		go func() {
 			defer wg.Done()
 			if err := th.Acquire(ctx, hmenum.CommandPriorityLow); err != nil {
@@ -205,9 +205,7 @@ func TestCriticalBeatsLowWaiter(t *testing.T) {
 	var order []string
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := th.Acquire(ctx, hmenum.CommandPriorityLow); err != nil {
 			return
 		}
@@ -215,13 +213,11 @@ func TestCriticalBeatsLowWaiter(t *testing.T) {
 		order = append(order, "low")
 		mu.Unlock()
 		th.Release()
-	}()
+	})
 	time.Sleep(5 * time.Millisecond)
 
 	// Queue a CRITICAL waiter after LOW is already in queue.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		if err := th.Acquire(ctx, hmenum.CommandPriorityCritical); err != nil {
 			return
 		}
@@ -229,7 +225,7 @@ func TestCriticalBeatsLowWaiter(t *testing.T) {
 		order = append(order, "critical")
 		mu.Unlock()
 		th.Release()
-	}()
+	})
 	time.Sleep(5 * time.Millisecond)
 
 	th.Release()

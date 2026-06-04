@@ -15,7 +15,7 @@ import (
 func TestThrottleBurstAllowsThresholdInsideWindow(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 5, BurstWindow: 200 * time.Millisecond})
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("acquire %d: %v", i, err)
 		}
@@ -32,7 +32,7 @@ func TestThrottleBurstAllowsThresholdInsideWindow(t *testing.T) {
 func TestThrottleBurstThrottlesAfterThresholdInsideWindow(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 5, BurstWindow: 100 * time.Millisecond})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -53,7 +53,7 @@ func TestThrottleBurstAllowsCriticalToBypass(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 3, BurstWindow: 200 * time.Millisecond})
 
 	// Saturate the burst window with HIGH priority calls.
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -73,7 +73,7 @@ func TestThrottleBurstAllowsCriticalToBypass(t *testing.T) {
 func TestThrottleBurstNotConfigured(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10})
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -88,7 +88,7 @@ func TestThrottleBurstNotConfigured(t *testing.T) {
 func TestThrottleBurstWindowDrainsOverTime(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 3, BurstWindow: 50 * time.Millisecond})
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -112,7 +112,7 @@ func TestThrottleBurstWindowDrainsOverTime(t *testing.T) {
 func TestThrottleBurstCancelsOnContext(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 2, BurstWindow: 5 * time.Second})
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -135,7 +135,7 @@ func TestThrottleBurstDowngradedCounter(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 10, BurstThreshold: 2, BurstWindow: 200 * time.Millisecond})
 
 	// Fill the burst window with HIGH-priority calls.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 		tt.Release()
 	}
@@ -167,13 +167,11 @@ func TestThrottleBurstLoadStress(t *testing.T) {
 	tt := NewThrottle(ThrottleConfig{MaxInFlight: 5, BurstThreshold: 5, BurstWindow: 100 * time.Millisecond})
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			_ = tt.Acquire(context.Background(), hmenum.CommandPriorityHigh)
 			tt.Release()
-		}()
+		})
 	}
 	wg.Wait()
 	// Assert the burst guard actually throttled the load via the throttle's

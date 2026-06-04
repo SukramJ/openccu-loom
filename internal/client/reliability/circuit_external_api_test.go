@@ -178,7 +178,7 @@ func TestAddOnStateChange_MultipleListeners(t *testing.T) {
 	})
 
 	var count atomic.Int32
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		c.AddOnStateChange(func(_, _ hmenum.CircuitState) {
 			count.Add(1)
 		})
@@ -235,7 +235,7 @@ func TestCommandTracker_LazyCleanupAfterManyAdds(t *testing.T) {
 		MaxSize: 2000,
 	})
 
-	for i := 0; i < 105; i++ {
+	for i := range 105 {
 		addr := "device-" + string(rune('a'+i%26)) + "-ch" + string(rune('0'+i%10))
 		ct.AddSetValue(addr, hmenum.Parameter("PARAM"), hmenum.ParamsetKeyValues, float64(i))
 	}

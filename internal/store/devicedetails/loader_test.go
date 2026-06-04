@@ -6,7 +6,6 @@ package devicedetails
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"testing"
 	"time"
@@ -51,7 +50,7 @@ func (f *fakeClient) GetAllFunctionsRaw(_ context.Context) ([]rawEntry, error) {
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 func discardLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func newTestLoader(client jsonClientLike) (*Cache, *Loader) {

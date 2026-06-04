@@ -458,7 +458,6 @@ func TestCoverHADiscoveryPayload_VariantDeviceClass(t *testing.T) {
 		{VariantWindow, "window"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
 			t.Parallel()
 			c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})

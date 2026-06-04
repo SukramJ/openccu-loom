@@ -4,6 +4,7 @@
 package rpcserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -37,7 +38,8 @@ func bindAddr(addr string, pr *PortRange) (net.Listener, error) {
 		ln, _, err := listenInRange(host, pr.Lo, pr.Hi)
 		return ln, err
 	}
-	return net.Listen("tcp", addr)
+	lc := net.ListenConfig{}
+	return lc.Listen(context.Background(), "tcp", addr)
 }
 
 // listenInRange tries net.Listen("tcp", "host:p") for p = lo..hi and
@@ -48,7 +50,8 @@ func bindAddr(addr string, pr *PortRange) (net.Listener, error) {
 func listenInRange(host string, lo, hi int) (net.Listener, int, error) {
 	for p := lo; p <= hi; p++ {
 		addr := fmt.Sprintf("%s:%d", host, p)
-		ln, err := net.Listen("tcp", addr)
+		lc := net.ListenConfig{}
+		ln, err := lc.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			continue
 		}

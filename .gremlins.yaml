@@ -1,0 +1,11 @@
+# Mutation testing — github.com/go-gremlins/gremlins
+# Run via `make mutation`. Mutation score is an informational quality
+# signal (does the suite actually catch regressions?), NOT a hard gate:
+# the efficacy/coverage thresholds are 0 so a run never fails the build.
+unleash:
+  # Allow each mutant up to 4× the package's baseline test time before
+  # declaring TIMED OUT — reduces inconclusive timeouts on slower packages
+  # without letting a genuinely-hung mutant run forever.
+  timeout-coefficient: 4
+  threshold-efficacy: 0
+  threshold-mcover: 0

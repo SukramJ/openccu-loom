@@ -210,7 +210,7 @@ func TestConnectionStateConcurrentAddRemove(t *testing.T) {
 	t.Parallel()
 	cs := NewConnectionState()
 	var wg sync.WaitGroup
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()

@@ -4,6 +4,7 @@
 package cover
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -29,20 +30,11 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 		return lister.MatterAttributes()
 	}
 
-	hasAttr := func(attrs []uint32, id uint32) bool {
-		for _, a := range attrs {
-			if a == id {
-				return true
-			}
-		}
-		return false
-	}
-
 	t.Run("Cover", func(t *testing.T) {
 		t.Parallel()
 		c, _, _ := newRig(t, "HmIP-BROLL:3", &stubWriter{}, custom.CoverCapabilities{})
 		attrs := matterAttrs(t, c.MatterClusterServers()[0])
-		if !hasAttr(attrs, matterAttrTargetPositionLiftPercent100ths) {
+		if !slices.Contains(attrs, matterAttrTargetPositionLiftPercent100ths) {
 			t.Errorf("Cover MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
 				matterAttrTargetPositionLiftPercent100ths, attrs)
 		}
@@ -52,7 +44,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		attrs := matterAttrs(t, b.MatterClusterServers()[0])
-		if !hasAttr(attrs, matterAttrTargetPositionLiftPercent100ths) {
+		if !slices.Contains(attrs, matterAttrTargetPositionLiftPercent100ths) {
 			t.Errorf("Blind MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
 				matterAttrTargetPositionLiftPercent100ths, attrs)
 		}
@@ -62,7 +54,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 		t.Parallel()
 		b := newBlindRig(t, "VCU3560967:1", &putWriter{}, custom.CoverCapabilities{SupportsTilt: true}, BlindKindHM)
 		attrs := matterAttrs(t, b.MatterClusterServers()[0])
-		if !hasAttr(attrs, matterAttrTargetPositionTiltPercent100ths) {
+		if !slices.Contains(attrs, matterAttrTargetPositionTiltPercent100ths) {
 			t.Errorf("Blind MatterAttributes missing 0x%04X (TargetPositionTiltPercent100ths); got %v",
 				matterAttrTargetPositionTiltPercent100ths, attrs)
 		}
@@ -72,7 +64,7 @@ func TestParityCover_TargetPositionLiftPresent(t *testing.T) {
 		t.Parallel()
 		g, _, _ := newGarageRig(t, "HmIP-MOD-HO:1", &stubWriter{})
 		attrs := matterAttrs(t, g.MatterClusterServers()[0])
-		if !hasAttr(attrs, matterAttrTargetPositionLiftPercent100ths) {
+		if !slices.Contains(attrs, matterAttrTargetPositionLiftPercent100ths) {
 			t.Errorf("Garage MatterAttributes missing 0x%04X (TargetPositionLiftPercent100ths); got %v",
 				matterAttrTargetPositionLiftPercent100ths, attrs)
 		}
