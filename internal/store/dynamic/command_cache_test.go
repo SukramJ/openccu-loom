@@ -213,7 +213,6 @@ func TestCommandCacheConcurrentRecordIsEcho(t *testing.T) {
 	wg.Add(workers)
 
 	for i := range workers {
-		i := i
 		go func() {
 			defer wg.Done()
 			k := makeKey("P" + string(rune('A'+i%10)))
@@ -548,7 +547,6 @@ func TestLooseEqualTypeArms(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := looseEqual(tc.a, tc.b); got != tc.want {

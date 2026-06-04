@@ -24,7 +24,7 @@ func TestRateLimit_AllowsWithinBurst(t *testing.T) {
 	t.Parallel()
 	mw := RateLimit(RateLimitConfig{RequestsPerSecond: 1, Burst: 3})
 	h := mw(http.HandlerFunc(passthrough))
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
 		req = req.WithContext(auth.ContextWithIdentity(req.Context(), auth.Identity{Subject: "alice"}))
 		w := httptest.NewRecorder()
@@ -84,7 +84,7 @@ func TestRateLimit_SkipPaths_BypassLimiter(t *testing.T) {
 	mw := RateLimit(RateLimitConfig{RequestsPerSecond: 0.001, Burst: 1})
 	h := mw(http.HandlerFunc(passthrough))
 	// /info bypasses the limiter — any number of requests succeed.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
@@ -142,7 +142,7 @@ func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	// existing entry past rateLimitIdleTTL so they all qualify for
 	// eviction.
 	store := newLimiterStore(rate.Limit(10), 30)
-	for i := 0; i < 257; i++ {
+	for i := range 257 {
 		key := "id-" + strconv.Itoa(i)
 		store.get(key)
 	}

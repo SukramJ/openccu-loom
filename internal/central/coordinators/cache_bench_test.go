@@ -23,7 +23,7 @@ func BenchmarkCacheGetParallel(b *testing.B) {
 	c := NewCacheCoordinator()
 	const n = 10_000
 	keys := make([]hmtypes.DataPointKey, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		k := hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
 			ChannelAddress: "DEV" + strconv.Itoa(i) + ":1",
@@ -52,7 +52,7 @@ func BenchmarkCacheGetWriteContention(b *testing.B) {
 	c := NewCacheCoordinator()
 	const n = 1_000
 	keys := make([]hmtypes.DataPointKey, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		keys[i] = hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
 			ChannelAddress: "DEV" + strconv.Itoa(i) + ":1",
@@ -67,13 +67,13 @@ func BenchmarkCacheGetWriteContention(b *testing.B) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < b.N; i++ {
+		for i := range b.N {
 			c.Set(keys[i%n], hmtypes.BoolValue(i%2 == 0), "bench")
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < b.N*4; i++ {
+		for i := range b.N * 4 {
 			c.Get(keys[i%n])
 		}
 	}()

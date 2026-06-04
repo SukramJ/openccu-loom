@@ -104,7 +104,6 @@ func TestMetadataByParam(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.param, func(t *testing.T) {
 			t.Parallel()
 			md := MetadataByParam(tc.param)
@@ -170,7 +169,7 @@ func TestMetadataByDeviceAndParam(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		name := tc.deviceModel + "/" + tc.parameter
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -215,7 +214,6 @@ func TestMetadataByUnit(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.unit, func(t *testing.T) {
 			t.Parallel()
 			md := MetadataByUnit(tc.unit)
@@ -325,7 +323,6 @@ func TestBinarySensorQuantityByParam(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.param, func(t *testing.T) {
 			t.Parallel()
 			got := BinarySensorQuantityByParam(tc.param)
@@ -374,7 +371,7 @@ func TestBinarySensorQuantityByDeviceAndParam(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
+
 		name := tc.deviceModel + "/" + tc.parameter
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

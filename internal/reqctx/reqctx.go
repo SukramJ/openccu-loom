@@ -17,6 +17,7 @@ package reqctx
 
 import (
 	"context"
+	"maps"
 	"time"
 )
 
@@ -114,12 +115,8 @@ func (r RequestContext) WithTrace(traceID, spanID, parentSpanID string) RequestC
 // [Extra].
 func (r RequestContext) WithExtra(extra map[string]any) RequestContext {
 	merged := make(map[string]any, len(r.Extra)+len(extra))
-	for k, v := range r.Extra {
-		merged[k] = v
-	}
-	for k, v := range extra {
-		merged[k] = v
-	}
+	maps.Copy(merged, r.Extra)
+	maps.Copy(merged, extra)
 	r.Extra = merged
 	return r
 }

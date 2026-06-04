@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +60,7 @@ func TestNewLoaderForJSONRPC(t *testing.T) {
 	}
 
 	cache := New()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	loader := NewLoaderForJSONRPC(cache, jc, "test-central", logger)
 	if loader == nil {
 		t.Fatal("NewLoaderForJSONRPC returned nil")

@@ -148,7 +148,7 @@ func newHubRouter(t *testing.T) *hubHarness {
 func TestListPrograms(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
-	req := httptest.NewRequest("GET", "/api/v1/programs", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -165,7 +165,7 @@ func TestExecuteProgram(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
 	pw := h.programs
-	req := httptest.NewRequest("POST", "/api/v1/programs/P1/execute", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/programs/P1/execute", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusAccepted {
@@ -179,7 +179,7 @@ func TestExecuteProgram(t *testing.T) {
 func TestExecuteProgramNotFound(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
-	req := httptest.NewRequest("POST", "/api/v1/programs/missing/execute", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/programs/missing/execute", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 404 {
@@ -191,7 +191,7 @@ func TestPutSysvar(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
 	sw := h.sysvars
-	req := httptest.NewRequest("PUT", "/api/v1/sysvars/PartyMode",
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/sysvars/PartyMode",
 		strings.NewReader(`{"value": true}`))
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -213,7 +213,7 @@ func TestGetSysvarReturnsObservedValue(t *testing.T) {
 	sv, _ := h.Sysvar("PartyMode")
 	sv.OnValue(hmtypes.BoolValue(true))
 
-	req := httptest.NewRequest("GET", "/api/v1/sysvars/PartyMode", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars/PartyMode", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -233,7 +233,7 @@ func TestGetInstallMode(t *testing.T) {
 	im.active.Store(true)
 	im.remaining.Store(int64(42 * time.Second))
 
-	req := httptest.NewRequest("GET", "/api/v1/install-mode", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/install-mode", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -250,7 +250,7 @@ func TestPostInstallMode(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
 	im := h.install
-	req := httptest.NewRequest("POST", "/api/v1/install-mode",
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/install-mode",
 		strings.NewReader(`{"active":true,"seconds":60}`))
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -265,7 +265,7 @@ func TestPostInstallMode(t *testing.T) {
 func TestPostInstallModeErrorMaps502(t *testing.T) {
 	im := &fakeInstallMode{writeErr: errors.New("boom")}
 	r := NewRouter(Deps{InstallMode: im})
-	req := httptest.NewRequest("POST", "/api/v1/install-mode", strings.NewReader(`{"active":true}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/install-mode", strings.NewReader(`{"active":true}`))
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusBadGateway {
@@ -278,7 +278,7 @@ func TestListInterfaces(t *testing.T) {
 	r := h.handler
 	iface := h.ifaces
 	_ = iface
-	req := httptest.NewRequest("GET", "/api/v1/interfaces", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/interfaces", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -290,7 +290,7 @@ func TestReconnectInterface(t *testing.T) {
 	h := newHubRouter(t)
 	r := h.handler
 	iface := h.ifaces
-	req := httptest.NewRequest("POST", "/api/v1/interfaces/HmIP-RF/reconnect", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/interfaces/HmIP-RF/reconnect", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != http.StatusAccepted {

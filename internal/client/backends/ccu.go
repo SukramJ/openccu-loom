@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -618,16 +619,16 @@ func (b *CcuBackend) CreateSystemVariableEnum(ctx context.Context, name string, 
 		return nil, ErrUnsupported
 	}
 	// Join as semicolon-separated CCU wire format.
-	joined := ""
+	var joined strings.Builder
 	for i, v := range valueList {
 		if i > 0 {
-			joined += ";"
+			joined.WriteString(";")
 		}
-		joined += v
+		joined.WriteString(v)
 	}
 	raw, err := b.json.Call(ctx, "SysVar.createEnum", map[string]any{
 		"name":      name,
-		"valueList": joined,
+		"valueList": joined.String(),
 		"internal":  0,
 		"chnID":     -1,
 	})

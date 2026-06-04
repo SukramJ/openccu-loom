@@ -116,11 +116,9 @@ func (s *Server) Serve(ctx context.Context) error {
 			s.wg.Wait()
 			return fmt.Errorf("binrpc: accept: %w", err)
 		}
-		s.wg.Add(1)
-		go func() {
-			defer s.wg.Done()
+		s.wg.Go(func() {
 			s.handleConn(ctx, conn)
-		}()
+		})
 	}
 }
 
@@ -194,8 +192,7 @@ func (s *Server) handleConn(ctx context.Context, conn net.Conn) {
 // xmlrpc package's helper — duplicated here to avoid cross-package
 // dependency creep for a four-line function.
 func asFault(err error) *hmerr.XMLRPCFault {
-	var fault *hmerr.XMLRPCFault
-	if errors.As(err, &fault) {
+	if fault, ok := errors.AsType[*hmerr.XMLRPCFault](err); ok {
 		return fault
 	}
 	return &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}

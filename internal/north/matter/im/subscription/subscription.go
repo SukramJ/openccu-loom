@@ -146,11 +146,7 @@ func (s *Subscription) sendIntervalLocked() time.Duration {
 		// publisher cycle.
 		eighty := time.Duration(float64(maxInt) * 0.8)
 		floor := time.Duration(s.MinIntervalFloor) * time.Second
-		if floor > eighty {
-			send = floor
-		} else {
-			send = eighty
-		}
+		send = max(floor, eighty)
 	}
 	// Final clamp: never below the requested MinIntervalFloor
 	// (commissioner-side rate limit) and never below 1 s.

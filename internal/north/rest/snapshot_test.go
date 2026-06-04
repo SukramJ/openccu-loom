@@ -18,7 +18,7 @@ import (
 func TestSnapshotEnvelopeAggregatesAllSources(t *testing.T) {
 	h := newHubRouter(t)
 
-	req := httptest.NewRequest("GET", "/api/v1/snapshot", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.handler.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -51,7 +51,7 @@ func TestSnapshotEnvelopeAggregatesAllSources(t *testing.T) {
 // wired daemon.
 func TestSnapshotEmptyDepsStillReturns200(t *testing.T) {
 	r := NewRouter(Deps{})
-	req := httptest.NewRequest("GET", "/api/v1/snapshot", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -75,7 +75,7 @@ func TestSnapshotEmptyDepsStillReturns200(t *testing.T) {
 func TestSnapshotAnonymizeRedactsLabels(t *testing.T) {
 	h := newHubRouter(t)
 
-	plain := httptest.NewRequest("GET", "/api/v1/snapshot", http.NoBody)
+	plain := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.handler.ServeHTTP(rr, plain)
 	var ref handlers.SnapshotEnvelope
@@ -83,7 +83,7 @@ func TestSnapshotAnonymizeRedactsLabels(t *testing.T) {
 		t.Fatalf("unmarshal plain: %v", err)
 	}
 
-	anon := httptest.NewRequest("GET", "/api/v1/snapshot?anonymize=1", http.NoBody)
+	anon := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?anonymize=1", http.NoBody)
 	rr2 := httptest.NewRecorder()
 	h.handler.ServeHTTP(rr2, anon)
 	if rr2.Code != 200 {
@@ -120,13 +120,13 @@ func TestSnapshotAnonymizeRedactsLabels(t *testing.T) {
 func TestSnapshotAnonymizeStableTokens(t *testing.T) {
 	h := newHubRouter(t)
 
-	first := httptest.NewRequest("GET", "/api/v1/snapshot?anonymize=true", http.NoBody)
+	first := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?anonymize=true", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.handler.ServeHTTP(rr, first)
 	var a handlers.SnapshotEnvelope
 	_ = json.Unmarshal(rr.Body.Bytes(), &a)
 
-	second := httptest.NewRequest("GET", "/api/v1/snapshot?anonymize=yes", http.NoBody)
+	second := httptest.NewRequest(http.MethodGet, "/api/v1/snapshot?anonymize=yes", http.NoBody)
 	rr2 := httptest.NewRecorder()
 	h.handler.ServeHTTP(rr2, second)
 	var b handlers.SnapshotEnvelope

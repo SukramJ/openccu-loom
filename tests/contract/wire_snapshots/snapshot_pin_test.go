@@ -90,11 +90,6 @@ func marshalCompact(v any) string {
 	return string(b)
 }
 
-// helpers (duplicated from generator_test.go — both files coexist under
-// the same build tag; the generator_test.go is excluded in the pin build).
-
-func ptr[T any](v T) *T { return &v }
-
 func newSwitchFixture(t *testing.T, w *fakeWriter) *switchdev.Switch {
 	t.Helper()
 	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VCU0001"})
@@ -689,6 +684,7 @@ type pinCase struct {
 // re-running the same setter with the same inputs produces identical
 // wire calls.
 func TestWireSnapshots(t *testing.T) {
+	t.Parallel()
 	dir := snapshotsDir(t)
 
 	ctx := context.Background()
@@ -928,8 +924,8 @@ func TestWireSnapshots(t *testing.T) {
 			run: func(t *testing.T, w *fakeWriter) []WireCapture {
 				t.Helper()
 				s := newSirenFixture(t, w)
-				acoustic := ptr("FREQUENCY_RISING")
-				optical := ptr("BLINKING_RED")
+				acoustic := new("FREQUENCY_RISING")
+				optical := new("BLINKING_RED")
 				cfg := siren.OnConfig{AcousticSelection: acoustic, OpticalSelection: optical}
 				_ = s.TurnOn(ctx, cfg, pri)
 				return []WireCapture{NormaliseCalls(w.Capture())}
@@ -1325,7 +1321,6 @@ func TestWireSnapshots(t *testing.T) {
 	}
 
 	for _, pc := range cases {
-		pc := pc
 		t.Run(pc.dpType+"/"+pc.setter, func(t *testing.T) {
 			t.Parallel()
 

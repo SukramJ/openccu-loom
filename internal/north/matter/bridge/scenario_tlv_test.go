@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
@@ -56,7 +57,7 @@ func sortedTagKeys(m map[uint8]bool) []uint8 {
 	for k := range m {
 		out = append(out, k)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 

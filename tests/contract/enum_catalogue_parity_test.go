@@ -214,7 +214,6 @@ func TestEnumCatalogueMatchesGoConstants(t *testing.T) {
 		{"DataPointCategory", "DataPointCategory"},
 		{"DataPointType", "DataPointType"},
 	} {
-		tc := tc
 		t.Run(tc.enumName, func(t *testing.T) {
 			t.Parallel()
 			fromSource := extractEnumConstantsFromSource(t, srcPath, tc.sourceType)

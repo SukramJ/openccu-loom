@@ -289,7 +289,7 @@ func TestBackoffVeryLargeConsecutiveFailuresCapped(t *testing.T) {
 	}}
 
 	// Drive 100 consecutive failures.
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		c.Run(context.Background(), "iface-cap", failing)
 	}
 
@@ -316,7 +316,7 @@ func TestBackoffDoesNotOverflowDuration(t *testing.T) {
 	}}
 
 	// 63 failures would overflow a signed int64 if the loop does not cap.
-	for i := 0; i < 63; i++ {
+	for range 63 {
 		c.Run(context.Background(), "overflow-iface", failing)
 	}
 

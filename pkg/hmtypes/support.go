@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -58,8 +59,8 @@ func isValidHostname(host string) bool {
 	if host == "" || len(host) > 253 {
 		return false
 	}
-	labels := strings.Split(host, ".")
-	for _, lbl := range labels {
+	labels := strings.SplitSeq(host, ".")
+	for lbl := range labels {
 		if lbl == "" || len(lbl) > 63 {
 			return false
 		}
@@ -158,17 +159,13 @@ func CleanupTextFromHTMLTags(text string) string {
 // meaningful; all others always return false.
 func SupportsRxMode(commandRxMode hmenum.CommandRxMode, rxModes []hmenum.RxMode) bool {
 	if commandRxMode == hmenum.CommandRxModeBurst {
-		for _, m := range rxModes {
-			if m == hmenum.RxModeBurst {
-				return true
-			}
+		if slices.Contains(rxModes, hmenum.RxModeBurst) {
+			return true
 		}
 	}
 	if commandRxMode == hmenum.CommandRxModeWakeup {
-		for _, m := range rxModes {
-			if m == hmenum.RxModeWakeup {
-				return true
-			}
+		if slices.Contains(rxModes, hmenum.RxModeWakeup) {
+			return true
 		}
 	}
 	return false
@@ -181,7 +178,7 @@ func HashSHA256(value any) string {
 	var data []byte
 	b, err := json.Marshal(value)
 	if err != nil {
-		data = []byte(fmt.Sprintf("%v", makeValueHashable(value)))
+		data = fmt.Appendf(nil, "%v", makeValueHashable(value))
 	} else {
 		data = b
 	}

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -299,13 +300,7 @@ func TestSupportedOperationsFor_Light(t *testing.T) {
 	if len(ops) == 0 {
 		t.Fatal("expected non-empty operations for light")
 	}
-	found := false
-	for _, op := range ops {
-		if op == "turn_on" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(ops, "turn_on")
 	if !found {
 		t.Fatal("expected turn_on in light operations")
 	}

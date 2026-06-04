@@ -14,6 +14,7 @@ package statemachine
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -204,9 +205,7 @@ func (c *Central) TransitionTo(target hmenum.CentralState, reason hmenum.Failure
 			// carried forward. The caller always supplies the complete
 			// current set of degraded interfaces, never a diff.
 			c.degraded = make(map[string]hmenum.FailureReason, len(cfg.degradedInterfaces))
-			for k, v := range cfg.degradedInterfaces {
-				c.degraded[k] = v
-			}
+			maps.Copy(c.degraded, cfg.degradedInterfaces)
 		}
 	}
 	c.history[c.historyHead] = CentralTransition{
@@ -298,7 +297,7 @@ func (c *Central) History() []CentralTransition {
 	if start < 0 {
 		start += c.historyCap
 	}
-	for i := 0; i < c.historyLen; i++ {
+	for i := range c.historyLen {
 		out[i] = c.history[(start+i)%c.historyCap]
 	}
 	return out
@@ -334,9 +333,7 @@ func (c *Central) DegradedInterfaces() map[string]hmenum.FailureReason {
 		return nil
 	}
 	out := make(map[string]hmenum.FailureReason, len(c.degraded))
-	for k, v := range c.degraded {
-		out[k] = v
-	}
+	maps.Copy(out, c.degraded)
 	return out
 }
 

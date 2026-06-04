@@ -113,7 +113,7 @@ func QRCode(p Payload) (string, error) {
 	// 88 bits → 11 bytes little-endian.
 	raw := make([]byte, 11)
 	tmp := new(big.Int).Set(bits)
-	for i := 0; i < 11; i++ {
+	for i := range 11 {
 		raw[i] = byte(new(big.Int).And(tmp, big.NewInt(0xFF)).Uint64()) //nolint:gosec // G115: AND with 0xFF guarantees value fits uint8
 		tmp.Rsh(tmp, 8)
 	}
@@ -130,7 +130,7 @@ func base38Encode(b []byte) string {
 	i := 0
 	for ; i+3 <= len(b); i += 3 {
 		v := uint32(b[i]) | uint32(b[i+1])<<8 | uint32(b[i+2])<<16
-		for j := 0; j < 5; j++ {
+		for range 5 {
 			sb.WriteByte(base38Alphabet[v%38])
 			v /= 38
 		}
@@ -138,13 +138,13 @@ func base38Encode(b []byte) string {
 	switch len(b) - i {
 	case 2:
 		v := uint32(b[i]) | uint32(b[i+1])<<8
-		for j := 0; j < 4; j++ {
+		for range 4 {
 			sb.WriteByte(base38Alphabet[v%38])
 			v /= 38
 		}
 	case 1:
 		v := uint32(b[i])
-		for j := 0; j < 2; j++ {
+		for range 2 {
 			sb.WriteByte(base38Alphabet[v%38])
 			v /= 38
 		}
@@ -229,7 +229,7 @@ var (
 func verhoeffCheck(digits string) (int, error) {
 	c := 0
 	// Iterate from least-significant digit; position is 1-based for the P table.
-	for i := 0; i < len(digits); i++ {
+	for i := range len(digits) {
 		ch := digits[len(digits)-1-i]
 		if ch < '0' || ch > '9' {
 			return 0, errors.New("setup: ManualCode digits contain non-decimal byte")

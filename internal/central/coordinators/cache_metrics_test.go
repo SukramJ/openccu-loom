@@ -77,7 +77,6 @@ func TestCacheCoordinatorMetricsRaceSafe(t *testing.T) {
 
 	wg.Add(goroutines)
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			for j := range ops {
@@ -89,16 +88,14 @@ func TestCacheCoordinatorMetricsRaceSafe(t *testing.T) {
 			}
 		}()
 	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range goroutines * ops {
 			_ = c.MetricsDataCacheHits()
 			_ = c.MetricsDataCacheMisses()
 			_ = c.MetricsDataCacheSize()
 			_ = c.MetricsDataCacheEvictions()
 		}
-	}()
+	})
 	wg.Wait()
 
 	total := c.MetricsDataCacheHits() + c.MetricsDataCacheMisses()

@@ -6,6 +6,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -249,7 +250,7 @@ type recordedEvent struct {
 	cluster  uint32
 	event    uint32
 	data     any
-	priority interface{}
+	priority any
 }
 
 // fakeEmitter implements [interfaces.MatterEventEmitter] by appending
@@ -440,7 +441,6 @@ func TestBridgedBasicInfo_MatterRead_EmptyOptionals(t *testing.T) {
 		{0x0014, "ProductAppearance"},
 	}
 	for _, a := range optionalAttrs {
-		a := a
 		t.Run(a.name, func(t *testing.T) {
 			t.Parallel()
 			v, ok := b.MatterRead(a.id)
@@ -476,13 +476,7 @@ func TestBridgedBasicInfo_MatterAttributes_WithProductAppearance(t *testing.T) {
 		t.Fatalf("NewBridgedDeviceBasicInformation: %v", err)
 	}
 	attrs := b.MatterAttributes()
-	found := false
-	for _, a := range attrs {
-		if a == 0x0014 { // bridgedBasicInfoAttrProductAppearance
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(attrs, 0x0014)
 	if !found {
 		t.Error("MatterAttributes: ProductAppearance (0x0014) missing when ProductAppearance is non-zero")
 	}

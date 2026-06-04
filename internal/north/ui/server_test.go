@@ -31,7 +31,7 @@ func newUIRouter(t *testing.T) http.Handler {
 
 func get(t *testing.T, h http.Handler, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	req := httptest.NewRequest("GET", path, http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, path, http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	return rr
@@ -99,7 +99,7 @@ func TestNewRouterEmptyLangDefaultsToEn(t *testing.T) {
 		// Lang deliberately empty — should default to "en"
 		Catalogs: cats,
 	})
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -116,7 +116,7 @@ func TestNewRouterNoMiddlewaresIsNilSafe(t *testing.T) {
 		AuthResolve: nil,
 		AuthRequire: nil,
 	})
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -139,7 +139,7 @@ func TestNewRouterWithAuthResolveMiddleware(t *testing.T) {
 		Catalogs:    cats,
 		AuthResolve: middleware,
 	})
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if !called {
@@ -162,7 +162,7 @@ func TestNewRouterWithAuthRequireMiddleware(t *testing.T) {
 		Catalogs:    cats,
 		AuthRequire: middleware,
 	})
-	req := httptest.NewRequest("GET", "/health", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Header().Get("X-Test-MW") != "yes" {
@@ -226,7 +226,7 @@ func TestServeIndexFallbackWhenNoIndexHTML(t *testing.T) {
 	// Use an empty in-memory FS that has no index.html.
 	emptyFS := emptyTestFS{}
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	serveIndex(emptyFS, rr, req)
 	if rr.Code != http.StatusServiceUnavailable {
 		t.Fatalf("expected 503, got %d", rr.Code)
@@ -242,7 +242,7 @@ func TestServeIndexFallbackWhenNoIndexHTML(t *testing.T) {
 
 func TestSPAHandlerDoesNotPanic(t *testing.T) {
 	h := http.StripPrefix("/app", SPAHandler())
-	req := httptest.NewRequest("GET", "/app/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/app/", http.NoBody)
 	rr := httptest.NewRecorder()
 	// Must not panic regardless of whether the SPA was built.
 	h.ServeHTTP(rr, req)
@@ -254,7 +254,7 @@ func TestSPAHandlerDoesNotPanic(t *testing.T) {
 
 func TestSPAHandlerUnknownPathFallsBackToIndex(t *testing.T) {
 	h := http.StripPrefix("/app", SPAHandler())
-	req := httptest.NewRequest("GET", "/app/some/deep/client-route", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/app/some/deep/client-route", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	// Either 200 (found index.html) or 503 (SPA not built).
@@ -274,7 +274,7 @@ func TestSPAHandlerStaticAssetSetsCacheControl(t *testing.T) {
 	if asset == "" {
 		t.Skip("no built SPA assets present — handler exercised by other tests")
 	}
-	req := httptest.NewRequest("GET", "/app/assets/"+asset, http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/app/assets/"+asset, http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
@@ -291,7 +291,7 @@ func TestSPAHandlerFileNotFoundFallsBackToIndex(t *testing.T) {
 	h := http.StripPrefix("/app", SPAHandler())
 
 	// Request a path that definitely won't exist in spa_dist.
-	req := httptest.NewRequest("GET", "/app/definitely-not-here.js", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/app/definitely-not-here.js", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	switch rr.Code {
@@ -305,7 +305,7 @@ func TestSPAHandlerFileNotFoundFallsBackToIndex(t *testing.T) {
 func TestSPAHandlerEmptyPath(t *testing.T) {
 	t.Parallel()
 	h := http.StripPrefix("/app", SPAHandler())
-	req := httptest.NewRequest("GET", "/app/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/app/", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	// Either 200 (SPA built) or 503 (SPA not built).

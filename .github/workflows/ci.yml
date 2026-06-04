@@ -15,7 +15,7 @@ concurrency:
 
 env:
   CGO_ENABLED: "0"
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.26.4"
   NODE_VERSION: "20"
 
 jobs:
@@ -49,6 +49,29 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
           golangci-lint config verify
           golangci-lint run --timeout=5m ./...
+
+  security:
+    name: security (vuln + licenses)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      # govulncheck does reachability analysis: it fails only when a known
+      # vulnerability is on a code path this module actually calls.
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          make vuln
+      # go-licenses fails on copyleft dependency licenses
+      # (GPL/AGPL/LGPL = restricted, MPL = reciprocal). The source is MIT;
+      # see CLAUDE.md "Dependency licensing".
+      - name: go-licenses
+        run: |
+          go install github.com/google/go-licenses@latest
+          make licenses
 
   test:
     name: test (${{ matrix.os }})

@@ -58,7 +58,6 @@ func TestRetryJitterLowerBoundNeverNegative(t *testing.T) {
 
 	for _, d := range backoffs {
 		for _, fr := range fracs {
-			d, fr := d, fr
 			t.Run(d.String()+"_frac_"+fr.label, func(t *testing.T) {
 				t.Parallel()
 				rng := deterministicRng(uint64(d) ^ uint64(fr.val*1e9)) //nolint:gosec // G115: duration values in test are non-negative and bounded to test ranges
@@ -90,7 +89,6 @@ func TestRetryJitterUpperBoundDoesNotExceedConfigured(t *testing.T) {
 	const iterations = 1000
 
 	for _, d := range backoffs {
-		d := d
 		t.Run(d.String(), func(t *testing.T) {
 			t.Parallel()
 			rng := deterministicRng(uint64(d) + 0x1234) //nolint:gosec // G115: duration values in test are non-negative and bounded to test ranges
@@ -135,10 +133,7 @@ func TestRetryJitterDistributionIsRoughlyUniform(t *testing.T) {
 
 	for range iterations {
 		got := applyJitter(d, frac, rng)
-		idx := int((got - lo) / width)
-		if idx < 0 {
-			idx = 0
-		}
+		idx := max(int((got-lo)/width), 0)
 		if idx >= numBuckets {
 			idx = numBuckets - 1
 		}

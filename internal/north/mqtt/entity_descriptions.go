@@ -294,12 +294,6 @@ type MqttEntityDescription struct {
 	SuggestedDisplayPrecision *int
 }
 
-// boolPtr returns a pointer to b.
-func boolPtr(b bool) *bool { return &b }
-
-// intPtr returns a pointer to i.
-func intPtr(i int) *int { return &i }
-
 // descToMqtt converts an internal [EntityDescription] to
 // [MqttEntityDescription], populating pointer fields only where the
 // internal value deviates from the "no override" sentinel:
@@ -314,10 +308,10 @@ func descToMqtt(d EntityDescription) MqttEntityDescription {
 		Icon:              d.Icon,
 	}
 	if !d.EnabledByDefault {
-		m.EnabledDefault = boolPtr(false)
+		m.EnabledDefault = new(false)
 	}
 	if d.SuggestedDisplayPrecision >= 0 {
-		m.SuggestedDisplayPrecision = intPtr(d.SuggestedDisplayPrecision)
+		m.SuggestedDisplayPrecision = new(d.SuggestedDisplayPrecision)
 	}
 	return m
 }

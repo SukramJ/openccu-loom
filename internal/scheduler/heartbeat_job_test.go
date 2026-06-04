@@ -41,8 +41,7 @@ func TestHeartbeatJobRunsOnTick(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -85,8 +84,7 @@ func TestHeartbeatJobRunOnStartInvokesBeforeFirstTick(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -128,8 +126,7 @@ func TestHeartbeatJobErrorDoesNotStopScheduler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -173,8 +170,7 @@ func TestHeartbeatJobMultipleIntervalsFire(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)

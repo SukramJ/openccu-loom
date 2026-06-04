@@ -61,10 +61,7 @@ func TestPortRangePicksFirstAvailableInRange(t *testing.T) {
 // of the legal port range. The 50-port window is wide enough that at
 // least one port in (lo, hi] is free during normal CI load.
 func loWindowHi(lo, window int) int {
-	hi := lo + window
-	if hi > 65535 {
-		hi = 65535
-	}
+	hi := min(lo+window, 65535)
 	return hi
 }
 

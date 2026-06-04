@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -90,15 +91,11 @@ func (b *stubBackend) Open(_ context.Context, _ configui.SessionKey) (map[string
 		return nil, nil, b.openErr
 	}
 	out := make(map[string]any, len(b.openInitial))
-	for k, v := range b.openInitial {
-		out[k] = v
-	}
+	maps.Copy(out, b.openInitial)
 	var descs map[string]any
 	if b.openDescriptions != nil {
 		descs = make(map[string]any, len(b.openDescriptions))
-		for k, v := range b.openDescriptions {
-			descs[k] = v
-		}
+		maps.Copy(descs, b.openDescriptions)
 	}
 	return descs, out, nil
 }

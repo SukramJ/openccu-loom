@@ -310,9 +310,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      parameter,
 	}
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
+	h.wg.Go(func() {
 		ctx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
 		defer cancel()
 		if _, _, err := d.LoadValue(ctx, dpk, hmenum.CallSourceManualOrScheduled, true); err != nil {
@@ -321,7 +319,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 				slog.String("parameter", parameter),
 				slog.String("err", err.Error()))
 		}
-	}()
+	})
 }
 
 // NewDevices acknowledges a hot-plug announcement. It stores the incoming
@@ -394,9 +392,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		return nil
 	}
 	fetcher := &callbackDescFetcher{ops: b}
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
+	h.wg.Go(func() {
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
@@ -405,7 +401,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 				slog.String("address", address),
 				slog.String("err", err.Error()))
 		}
-	}()
+	})
 	return nil
 }
 
@@ -429,9 +425,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmenum.Interface(interfaceID)
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
+	h.wg.Go(func() {
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
@@ -441,7 +435,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 				slog.String("new", newAddress),
 				slog.String("err", err.Error()))
 		}
-	}()
+	})
 	return nil
 }
 
@@ -464,9 +458,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmenum.Interface(interfaceID)
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
+	h.wg.Go(func() {
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		for _, addr := range addresses {
@@ -478,7 +470,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 					slog.String("err", err.Error()))
 			}
 		}
-	}()
+	})
 	return nil
 }
 

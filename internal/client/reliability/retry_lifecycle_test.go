@@ -228,7 +228,7 @@ func TestRetrierCancelDeviceCancelsMatchingKey(t *testing.T) {
 	}()
 
 	<-started
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if r.ActiveRetryCount() == 1 {
 			break
 		}
@@ -393,7 +393,7 @@ func TestRetrierCancelDeviceDoesNotMatchPrefix(t *testing.T) {
 	}()
 
 	<-started
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		if r.ActiveRetryCount() == 1 {
 			break
 		}
@@ -446,10 +446,7 @@ func TestRetrierCancelInterfaceSetsAllEvents(t *testing.T) {
 	started := make(chan struct{}, len(keys))
 
 	for i, k := range keys {
-		i, k := i, k
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			errs[i] <- r.DoForKey(context.Background(), k, func(_ context.Context, attempt int) error {
 				started <- struct{}{}
 				if attempt == 1 {
@@ -458,10 +455,10 @@ func TestRetrierCancelInterfaceSetsAllEvents(t *testing.T) {
 				time.Sleep(10 * time.Second)
 				return nil
 			})
-		}()
+		})
 	}
 
-	for i := 0; i < len(keys); i++ {
+	for range keys {
 		<-started
 	}
 	deadline := time.Now().Add(2 * time.Second)

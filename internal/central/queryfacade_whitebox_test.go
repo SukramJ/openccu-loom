@@ -5,6 +5,7 @@ package central
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -83,9 +84,6 @@ func (d *minimalDP) ForcedUsage() (hmenum.DataPointUsage, bool) {
 	return *d.forcedUsage, true
 }
 
-// usagePtr is a small helper to take the address of a usage literal.
-func usagePtr(u hmenum.DataPointUsage) *hmenum.DataPointUsage { return &u }
-
 // pathDP is like minimalDP but also implements statePather so that
 // GetStatePaths / GetStatePathEntries pick it up.
 type pathDP struct {
@@ -142,8 +140,7 @@ func buildQFWithDevice(d *device.Device) *QueryFacade {
 func TestWireSessionRecorderPersistence_WiredPath(t *testing.T) {
 	c := newTestCentral(t)
 	store := newStubPersistStore()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	unsub := c.WireSessionRecorderPersistence(ctx, store, "slug", 50*time.Millisecond)
 	if unsub == nil {
@@ -162,8 +159,7 @@ func TestWireSessionRecorderPersistence_WiredPath(t *testing.T) {
 func TestWireSessionRecorderPersistence_DefaultInterval(t *testing.T) {
 	c := newTestCentral(t)
 	store := newStubPersistStore()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	unsub := c.WireSessionRecorderPersistence(ctx, store, "slug", 0)
 	if unsub == nil {
 		t.Fatal("expected non-nil unsub")
@@ -466,7 +462,7 @@ func TestGetUnIgnoreCandidates_WithIgnoredDP(t *testing.T) {
 	addr := "UI0001"
 	dp := &minimalDP{
 		key:         hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "HIDDEN"},
-		forcedUsage: usagePtr(hmenum.DataPointUsageIgnored),
+		forcedUsage: new(hmenum.DataPointUsageIgnored),
 		operations:  hmenum.OperationsRead | hmenum.OperationsEvent,
 	}
 	d := newModelWithDP(addr, dp)
@@ -486,12 +482,7 @@ func TestGetUnIgnoreCandidates_WithIgnoredDP(t *testing.T) {
 
 // sliceContains is a small test helper for checking presence in a slice.
 func sliceContains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 func TestGetUnIgnoreCandidates_ExcludesVisibleDP(t *testing.T) {
@@ -516,7 +507,7 @@ func TestGetUnIgnoreCandidates_ExcludesCDPSecondary(t *testing.T) {
 	addr := "UI0004"
 	dp := &minimalDP{
 		key:         hmtypes.DataPointKey{ChannelAddress: addr + ":1", Parameter: "OWNED_BY_PARENT"},
-		forcedUsage: usagePtr(hmenum.DataPointUsageCDPSecondary),
+		forcedUsage: new(hmenum.DataPointUsageCDPSecondary),
 	}
 	d := newModelWithDP(addr, dp)
 	qf := buildQFWithDevice(d)
@@ -548,13 +539,13 @@ func TestGetUnIgnoreCandidates_SkipsTransportScopeParameters(t *testing.T) {
 	} {
 		ch.Put(&minimalDP{
 			key:         hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: string(p)},
-			forcedUsage: usagePtr(hmenum.DataPointUsageIgnored),
+			forcedUsage: new(hmenum.DataPointUsageIgnored),
 			operations:  hmenum.OperationsRead | hmenum.OperationsEvent,
 		})
 	}
 	ch.Put(&minimalDP{
 		key:         hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: "REAL_HIDDEN"},
-		forcedUsage: usagePtr(hmenum.DataPointUsageIgnored),
+		forcedUsage: new(hmenum.DataPointUsageIgnored),
 		operations:  hmenum.OperationsRead | hmenum.OperationsEvent,
 	})
 	qf := buildQFWithDevice(d)

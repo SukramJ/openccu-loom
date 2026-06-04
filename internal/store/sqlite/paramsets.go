@@ -108,12 +108,12 @@ func (s *ParamsetStore) cacheAdd(deviceAddress, parameter string, channelNo int)
 // splitChannelAddress splits "VCU001:3" into ("VCU001", 3, true).
 // Returns ("", 0, false) when addr contains no ":" separator.
 func splitChannelAddress(addr string) (device string, channelNo int, ok bool) {
-	idx := strings.IndexByte(addr, ':')
-	if idx < 0 {
+	before, after, ok := strings.Cut(addr, ":")
+	if !ok {
 		return "", 0, false
 	}
-	dev := addr[:idx]
-	rest := addr[idx+1:]
+	dev := before
+	rest := after
 	ch := 0
 	for _, r := range rest {
 		if r < '0' || r > '9' {

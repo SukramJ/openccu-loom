@@ -13,7 +13,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -40,7 +39,7 @@ func TestBuildOpenAPIValidator_ValidSpec_ReturnsValidator(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.REST.OpenAPISpecPath = specPath
 
-	v := buildOpenAPIValidator(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	v := buildOpenAPIValidator(cfg, slog.New(slog.DiscardHandler))
 	if v == nil {
 		t.Fatal("expected non-nil OpenAPIValidator for valid spec")
 	}
@@ -61,7 +60,7 @@ func TestBuildOpenAPIValidator_InvalidSpecContent_ReturnsNil(t *testing.T) {
 	cfg := config.Default()
 	cfg.North.REST.OpenAPISpecPath = badSpec
 
-	v := buildOpenAPIValidator(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	v := buildOpenAPIValidator(cfg, slog.New(slog.DiscardHandler))
 	// May return nil (parse error) or non-nil (if the validator accepts minimal YAML).
 	// Either way the code path through err!=nil is exercised when it errors.
 	_ = v
@@ -93,7 +92,7 @@ func TestWireIncidentRecorder_EmptyDataDir_DoesNotPanic(t *testing.T) {
 	cfg.DataDir = "" // triggers the `dataDir = "./var"` branch
 
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -120,7 +119,7 @@ func TestWireIncidentRecorder_NilCache_ContinueBranch(t *testing.T) {
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -136,7 +135,7 @@ func TestWireSessionRecorderPersistence_EmptyDataDir_DoesNotPanic(t *testing.T) 
 	cfg.DataDir = "" // triggers the fallback branch
 
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireSessionRecorderPersistence(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -165,7 +164,7 @@ func TestWireSessionRecorderPersistence_NilRecorder_ContinueBranch(t *testing.T)
 		t.Fatalf("reg.Register: %v", err)
 	}
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireSessionRecorderPersistence(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -222,7 +221,7 @@ func TestWireIncidentRecorder_DBOpenError_DoesNotPanic(t *testing.T) {
 	cfg.DataDir = blockFile // triggers DB-open error
 
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
@@ -238,7 +237,7 @@ func TestWireIncidentRecorder_DBOpenError_DoesNotPanic(t *testing.T) {
 func TestBuildCaseAdapter_NilStore_EphemeralPath(t *testing.T) {
 	t.Parallel()
 	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	adapter, err := buildCaseAdapter(
 		context.Background(),

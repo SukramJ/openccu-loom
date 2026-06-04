@@ -80,6 +80,7 @@ func TestChannelEventAggregateDiscovery(t *testing.T) {
 
 		// All four events share the SAME objectID (same entity, dedup by cache).
 		t.Run("objectID_stable_for_"+pressParam, func(t *testing.T) {
+			t.Parallel()
 			if objectID != "1_event" {
 				t.Errorf("objectID=%q want \"1_event\"", objectID)
 			}

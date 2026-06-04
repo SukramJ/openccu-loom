@@ -227,7 +227,6 @@ func TestGenerateTranslationKeyStripsPrefix(t *testing.T) {
 		{Kind("other"), "other"},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run(string(c.kind), func(t *testing.T) {
 			t.Parallel()
 			if got := GenerateTranslationKey(c.kind); got != c.want {
@@ -260,7 +259,6 @@ func TestClassifyDeviceErrorPrefixMatch(t *testing.T) {
 		{"NOTERROR", "", false},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run(string(c.param), func(t *testing.T) {
 			t.Parallel()
 			k, ok := Classify(c.param)
@@ -665,7 +663,6 @@ func TestGroupTranslationKeyMatchesSource(t *testing.T) {
 		{KindImpulse, hmenum.ParameterSequenceOK},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.kind), func(t *testing.T) {
 			t.Parallel()
 			g := NewGroup("A:1", tc.kind)
@@ -684,7 +681,6 @@ func TestGroupUsageReturnsEvent(t *testing.T) {
 	t.Parallel()
 
 	for _, k := range []Kind{KindKeypress, KindImpulse, KindDeviceError} {
-		k := k
 		t.Run(string(k), func(t *testing.T) {
 			t.Parallel()
 			g := NewGroup("A:1", k)

@@ -23,7 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -1086,7 +1086,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 				}
 				ids = append(ids, ep.ID)
 			}
-			sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+			slices.Sort(ids)
 			return ids
 		})
 		// Aggregator endpoint (EP 1) PartsList: every bridged endpoint
@@ -1649,7 +1649,6 @@ func (g *serverGroup) startAll() error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	for name, s := range g.servers {
-		name, s := name, s
 		go func() {
 			if err := s.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				g.logger.Error("server.exit", slog.String("name", name), slog.String("err", err.Error()))
@@ -3360,8 +3359,8 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 	// `basic-information-validators.ts:26` invariant
 	// (`uniqueId !== serialNumber`) holds for the Root cluster too.
 	rootSerial := func() string {
-		h := sha256.Sum256([]byte(fmt.Sprintf("%04X|%04X|%s|serial",
-			mc.VendorID, mc.ProductID, mc.NodeLabel)))
+		h := sha256.Sum256(fmt.Appendf(nil, "%04X|%04X|%s|serial",
+			mc.VendorID, mc.ProductID, mc.NodeLabel))
 		return hex.EncodeToString(h[:8])
 	}()
 	bi, err := mattercore.NewBasicInformation(mattercore.Config{
@@ -4132,7 +4131,7 @@ func buildDevAttestation(vendorID, productID uint16) (dacKey *ecdsa.PrivateKey, 
 // key consistent across daemon restarts without an extra
 // persistence slot.
 func rotatingSerialPart(vendorID, productID uint16, nodeLabel string) string {
-	h := sha256.Sum256([]byte(fmt.Sprintf("%04X|%04X|%s|serial", vendorID, productID, nodeLabel)))
+	h := sha256.Sum256(fmt.Appendf(nil, "%04X|%04X|%s|serial", vendorID, productID, nodeLabel))
 	return hex.EncodeToString(h[:8])
 }
 
@@ -4415,11 +4414,6 @@ func splitListenPort(addr string) (int, bool) {
 	}
 	return p, true
 }
-
-// boolPtr returns a pointer to b. Used by the daemon-test
-// fixtures that flip *bool config fields (NorthREST.Enabled,
-// NorthUI.Enabled, …) into explicit true / false states.
-func boolPtr(b bool) *bool { return &b }
 
 // wsAllowedOrigins returns the list of origins the WebSocket handler
 // should accept when CSRF protection is active. When CSRF is disabled

@@ -76,8 +76,7 @@ func TestJobFailures_SuccessfulJobDoesNotIncrement(t *testing.T) {
 		Run:        func(context.Context) error { return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +113,7 @@ func TestJobFailures_ErrorJobIncrementsPerTick(t *testing.T) {
 		Run:        func(context.Context) error { return errors.New("injected error") },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -156,8 +154,7 @@ func TestJobFailures_PanicIncrementsAndGoroutineSurvives(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -203,8 +200,7 @@ func TestJobFailures_MultipleJobsSeparateCounters(t *testing.T) {
 		Run:        func(context.Context) error { return errors.New("always fails") },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

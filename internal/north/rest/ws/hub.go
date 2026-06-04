@@ -259,8 +259,8 @@ func matchTopic(pattern, topic string) bool {
 	if pattern == "*" || pattern == topic {
 		return true
 	}
-	if strings.HasSuffix(pattern, ".*") {
-		prefix := strings.TrimSuffix(pattern, ".*")
+	if before, ok := strings.CutSuffix(pattern, ".*"); ok {
+		prefix := before
 		return topic == prefix || strings.HasPrefix(topic, prefix+".")
 	}
 	return false

@@ -503,7 +503,7 @@ func isWeekProfileSlotParameter(name string) bool {
 	// Schema A: P<N>_TEMPERATURE_<DAY>_<SLOT> / P<N>_ENDTIME_<DAY>_<SLOT>.
 	if len(name) >= 4 && name[0] == 'P' && name[1] >= '1' && name[1] <= '6' && name[2] == '_' {
 		rest := name[3:]
-		for i := 0; i < len(rest); i++ {
+		for i := range len(rest) {
 			c := rest[i]
 			switch {
 			case c >= 'A' && c <= 'Z':
@@ -543,7 +543,7 @@ func matchesBareScheduleSlot(name string) bool {
 	if slot == "" {
 		return false
 	}
-	for i := 0; i < len(slot); i++ {
+	for i := range len(slot) {
 		if slot[i] < '0' || slot[i] > '9' {
 			return false
 		}

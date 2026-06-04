@@ -4,7 +4,6 @@
 package bridge
 
 import (
-	"context"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -157,8 +156,7 @@ func TestPerExchangePaseProvider_ReapBefore_EvictsStale(t *testing.T) {
 func TestPerExchangePaseProvider_StartReaper_Cancels(t *testing.T) {
 	t.Parallel()
 	p := NewPerExchangePaseProvider(func() *PaseAdapter { return NewPaseAdapter(nil) })
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	p.StartReaper(ctx, 5*time.Millisecond, time.Millisecond)
 	p.StartReaper(ctx, 5*time.Millisecond, time.Millisecond) // idempotent

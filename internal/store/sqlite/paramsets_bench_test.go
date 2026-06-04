@@ -58,7 +58,7 @@ func benchChannelAddr(d, ch int) string {
 // buildBenchParamset builds a Paramset with benchParamCount parameters.
 func buildBenchParamset() hmproto.Paramset {
 	ps := make(hmproto.Paramset, benchParamCount)
-	for i := 0; i < benchParamCount; i++ {
+	for i := range benchParamCount {
 		ps[benchParamName(i)] = hmproto.ParameterData{Type: hmenum.ParameterTypeFloat}
 	}
 	return ps
@@ -74,8 +74,8 @@ func seedBenchStore(b *testing.B, s *ParamsetStore) []benchProbe {
 	ctx := context.Background()
 	ps := buildBenchParamset()
 
-	for d := 0; d < benchDeviceCount; d++ {
-		for ch := 0; ch < benchChannelsPerDev; ch++ {
+	for d := range benchDeviceCount {
+		for ch := range benchChannelsPerDev {
 			if err := s.Upsert(ctx, ParamsetRecord{
 				CentralName:    "bench",
 				InterfaceID:    "HmIP-RF",
@@ -92,7 +92,7 @@ func seedBenchStore(b *testing.B, s *ParamsetStore) []benchProbe {
 	// Build a mixed probe set: pick the middle parameter for each device's
 	// first channel — these all appear in multiple channels (ch 0, 1, 2).
 	probes := make([]benchProbe, benchDeviceCount)
-	for d := 0; d < benchDeviceCount; d++ {
+	for d := range benchDeviceCount {
 		probes[d] = benchProbe{
 			channelAddr: benchChannelAddr(d, 0),
 			param:       benchParamName(benchParamCount / 2),
@@ -135,7 +135,7 @@ func BenchmarkIsInMultipleChannels_WithCache(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		p := probes[i%len(probes)]
 		if _, err := s.IsInMultipleChannels(ctx, "bench", "HmIP-RF", p.channelAddr, p.param); err != nil {
 			b.Fatalf("IsInMultipleChannels: %v", err)
@@ -164,7 +164,7 @@ func BenchmarkIsInMultipleChannels_NoCache(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		p := probes[i%len(probes)]
 		// Evict this device from the cache to force the SQL fallback.
 		dev, _, _ := splitChannelAddress(p.channelAddr)
@@ -194,7 +194,7 @@ func BenchmarkUpsert_WithCache(b *testing.B) {
 	ps := buildBenchParamset()
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		d := i % benchDeviceCount
 		ch := i % benchChannelsPerDev
 		if err := s.Upsert(ctx, ParamsetRecord{
@@ -224,7 +224,7 @@ func BenchmarkUpsert_Bare(b *testing.B) {
 
 	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		d := i % benchDeviceCount
 		ch := i % benchChannelsPerDev
 		if err := s.Upsert(ctx, ParamsetRecord{

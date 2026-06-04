@@ -6,6 +6,7 @@ package linkprofile_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
@@ -163,13 +164,7 @@ func TestEmbeddedData_ReceiverTypes(t *testing.T) {
 		t.Fatalf("expected at least 60 receiver types, got %d", len(types))
 	}
 	// DIMMER must be present.
-	found := false
-	for _, rt := range types {
-		if rt == "DIMMER" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(types, "DIMMER")
 	if !found {
 		t.Fatal("DIMMER not found in ReceiverTypes()")
 	}
@@ -490,6 +485,7 @@ func TestMatchActiveProfile_toFloat64Types(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			id := s.MatchActiveProfile("TYPE_RCV", "TYPE_SND", map[string]any{"V": tc.value})
 			if id != tc.want {
 				t.Errorf("value=%v: expected id=%d, got %d", tc.value, tc.want, id)

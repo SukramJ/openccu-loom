@@ -670,7 +670,7 @@ func (r *Retrier) CancelInterface() int {
 // indexByte is a tiny helper to avoid importing strings just for this
 // one call. Returns the first index of c in s, or -1 if absent.
 func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == c {
 			return i
 		}

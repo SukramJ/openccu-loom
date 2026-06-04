@@ -78,7 +78,6 @@ func TestServiceMethodScalarArgPinned(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		c := c
 		t.Run(c.method+"/"+c.paramKey, func(t *testing.T) {
 			t.Parallel()
 			params := map[string]any{c.paramKey: c.paramVal}

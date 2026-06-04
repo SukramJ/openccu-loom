@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -111,8 +112,8 @@ type Config struct {
 	Callback    CallbackConfig    `yaml:"callback" json:"callback" cfg:"expert"`
 	North       NorthConfig       `yaml:"north" json:"north" cfg:"basic"`
 	Centrals    []CentralConfig   `yaml:"centrals" json:"centrals" cfg:"basic"`
-	Reliability ReliabilityConfig `yaml:"reliability,omitempty" json:"reliability,omitempty" cfg:"expert"`
-	Persistence PersistenceConfig `yaml:"persistence,omitempty" json:"persistence,omitempty" cfg:"expert"`
+	Reliability ReliabilityConfig `yaml:"reliability,omitempty" json:"reliability,omitzero" cfg:"expert"`
+	Persistence PersistenceConfig `yaml:"persistence,omitempty" json:"persistence,omitzero" cfg:"expert"`
 }
 
 // PersistenceConfig groups the cross-cutting persistence-tuning knobs
@@ -123,7 +124,7 @@ type Config struct {
 // Today only [PersistenceConfig.ValuesCache] is wired through. Future
 // caches (e.g. linkprofile snapshots) get their own sub-block here.
 type PersistenceConfig struct {
-	ValuesCache ValuesCacheConfig `yaml:"values_cache,omitempty" json:"values_cache,omitempty" cfg:"expert"`
+	ValuesCache ValuesCacheConfig `yaml:"values_cache,omitempty" json:"values_cache,omitzero" cfg:"expert"`
 }
 
 // ValuesCacheConfig overrides the defaults baked into the wire-DP
@@ -160,12 +161,7 @@ func (c ValuesCacheConfig) ValuesCacheEnabled(centralName string) bool {
 	if c.Enabled != nil && !*c.Enabled {
 		return false
 	}
-	for _, name := range c.DisabledCentrals {
-		if name == centralName {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(c.DisabledCentrals, centralName)
 }
 
 // ReliabilityConfig overrides reliability-stack defaults. All fields

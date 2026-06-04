@@ -130,7 +130,7 @@ func TestPerClassThrottleFallsBackToLegacyThrottle(t *testing.T) {
 	defer legacyThrottle.Release()
 
 	for _, method := range []string{"getValue", "setValue", "ping"} {
-		method := method
+
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		_, err := c.Call(ctx, method, nil, hmenum.CommandPriorityCritical, "")
 		cancel()

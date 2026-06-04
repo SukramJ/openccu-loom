@@ -484,8 +484,8 @@ func (b *BasicInformation) uniqueID() string {
 	// Mix in the per-boot salt so Apple's HAP cache sees a fresh
 	// fingerprint after every daemon restart; see package bootid.
 	salt := bootid.Salt()
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%04X|%04X|%s|%s",
-		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber)))
+	h := sha256.Sum256(fmt.Appendf(nil, "%s|%04X|%04X|%s|%s",
+		hex.EncodeToString(salt[:]), b.vendorID, b.productID, b.nodeLabel, b.serialNumber))
 	return hex.EncodeToString(h[:16])
 }
 

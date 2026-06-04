@@ -59,7 +59,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs_DoesNotPanic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -82,7 +82,7 @@ func TestStartMatterBridge_ConcurrentPairings_Armed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -104,7 +104,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		bundle.stop()
 		t.Error("expected nil bundle when DB open fails")
@@ -115,7 +115,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 
 func TestStartMatterBridge_NilCfg_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	bundle := startMatterBridge(context.Background(), nil, nil, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(context.Background(), nil, nil, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil for nil cfg")
 	}
@@ -125,7 +125,7 @@ func TestStartMatterBridge_Disabled_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = false
-	bundle := startMatterBridge(context.Background(), cfg, nil, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(context.Background(), cfg, nil, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil when matter disabled")
 	}
@@ -148,7 +148,7 @@ func TestStartMatterBridge_EphemeralWindow_ConcurrentPairings(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -172,7 +172,7 @@ func TestStartMatterBridge_EphemeralWindow_Singleton(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -195,7 +195,7 @@ func TestStartMatterBridge_DefaultDataDir_NotEmpty(t *testing.T) {
 
 	// May succeed or fail (depends on ./var writeability in test sandbox).
 	// Either way must not panic.
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Cleanup(bundle.stop)
 	}
@@ -218,7 +218,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -229,7 +229,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 		bundle.store,
 		bundle.bridge,
 		nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
 	)
@@ -269,7 +269,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -282,7 +282,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 		bundle.store,
 		bundle.bridge,
 		nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 		func(_ context.Context, _ uint8, _, _ uint64, _ []byte) {
 			mu.Lock()
 			called = true
@@ -307,7 +307,7 @@ func TestLoadPersistentCaseIdentity_ValidFabric_ReturnsPersisted(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -374,7 +374,7 @@ func TestLoadPersistentCaseIdentity_InvalidPrivKey_ReturnsError(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -417,7 +417,7 @@ func TestLoadPersistentCaseIdentity_FabricIDMatch_PicksCorrectFabric(t *testing.
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -475,7 +475,7 @@ func TestLoadAdditionalFabricsForCase_TwoValidFabrics_LoadsBoth(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	addFabricWithIdentity := func(t *testing.T, fabricID, nodeID uint64) uint8 {
 		t.Helper()
@@ -535,7 +535,7 @@ func TestLoadAdditionalFabricsForCase_MissingIdentity_SkipsEntry(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	rootPub := elliptic.Marshal(elliptic.P256(), rootPriv.X, rootPriv.Y) //nolint:staticcheck // elliptic.Marshal is deprecated in Go 1.26 but still the correct wire encoding for P-256 uncompressed public keys in the Matter spec
@@ -572,7 +572,7 @@ func TestLoadAdditionalFabricsForCase_InvalidPrivKey_SkipsEntry(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	rootPub := elliptic.Marshal(elliptic.P256(), rootPriv.X, rootPriv.Y) //nolint:staticcheck // elliptic.Marshal is deprecated in Go 1.26 but still the correct wire encoding for P-256 uncompressed public keys in the Matter spec
@@ -623,7 +623,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 	innerCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(innerCtx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(innerCtx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -637,7 +637,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 		bundle.store,
 		bundle.bridge,
 		nil,
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
 	)
@@ -646,7 +646,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 	}
 
 	salt := []byte("test-salt-16byte")
-	pase, err := buildPaseAdapterFromCreds(20202021, salt, 1000, mgr, opCreds, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	pase, err := buildPaseAdapterFromCreds(20202021, salt, 1000, mgr, opCreds, nil, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("buildPaseAdapterFromCreds: %v", err)
 	}
@@ -661,7 +661,7 @@ func TestBuildPaseAdapterFromCreds_NilOpCreds_Builds(t *testing.T) {
 	t.Parallel()
 	mgr := buildTestOperationalManager(t)
 	salt := []byte("test-salt-16byte")
-	pase, err := buildPaseAdapterFromCreds(20202021, salt, 1000, mgr, nil, nil, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	pase, err := buildPaseAdapterFromCreds(20202021, salt, 1000, mgr, nil, nil, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("buildPaseAdapterFromCreds: %v", err)
 	}
@@ -695,7 +695,7 @@ func TestLoadVendorAttestation_MissingDACKeyPath_ReturnsFalse(t *testing.T) {
 		CDPath:     cdPath,
 		DACKeyPath: "",
 	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
 	if ok {
 		t.Error("expected ok=false when DACKeyPath is empty")
 	}
@@ -735,7 +735,7 @@ func TestLoadVendorAttestation_KeyMismatch2_ReturnsFalse(t *testing.T) {
 		CDPath:     cdPath,
 		DACKeyPath: keyPath,
 	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
 	if ok {
 		t.Error("expected ok=false for key mismatch")
 	}
@@ -774,7 +774,7 @@ func TestLoadVendorAttestation_MatchingKey_ReturnsTrue(t *testing.T) {
 		CDPath:     cdPath,
 		DACKeyPath: keyPath,
 	}
-	key, dac, pai, cd, ok := loadVendorAttestation(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	key, dac, pai, cd, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
 	if !ok {
 		t.Fatal("expected ok=true for matching key")
 	}
@@ -793,7 +793,7 @@ func TestLoadVendorAttestation_MissingDACFile_ReturnsFalse(t *testing.T) {
 		CDPath:     "/nonexistent/cd.bin",
 		DACKeyPath: "/nonexistent/key.pem",
 	}
-	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	_, _, _, _, ok := loadVendorAttestation(cfg, slog.New(slog.DiscardHandler))
 	if ok {
 		t.Error("expected ok=false for missing files")
 	}
@@ -805,7 +805,7 @@ func TestLoadTranslations_NonExistentFilePath_FallsBack(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.CCUData.TranslationsPath = "/nonexistent/translations.tar.gz"
-	tr := loadTranslations(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	tr := loadTranslations(cfg, slog.New(slog.DiscardHandler))
 	if tr == nil {
 		t.Error("expected non-nil translations (fallback to embedded)")
 	}
@@ -817,7 +817,7 @@ func TestLoadTranslations_EmptyPath_UsesEmbedded(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.CCUData.TranslationsPath = ""
-	tr := loadTranslations(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	tr := loadTranslations(cfg, slog.New(slog.DiscardHandler))
 	if tr == nil {
 		t.Error("expected non-nil translations")
 	}
@@ -827,7 +827,7 @@ func TestLoadTranslations_EmptyPath_UsesEmbedded(t *testing.T) {
 
 func TestLoadEasymode_EmbeddedLoads(t *testing.T) {
 	t.Parallel()
-	em := loadEasymode(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	em := loadEasymode(slog.New(slog.DiscardHandler))
 	if em == nil {
 		t.Error("expected non-nil easymode")
 	}
@@ -837,7 +837,7 @@ func TestLoadEasymode_EmbeddedLoads(t *testing.T) {
 
 func TestLoadProfiles_EmbeddedLoads(t *testing.T) {
 	t.Parallel()
-	ps := loadProfiles(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	ps := loadProfiles(slog.New(slog.DiscardHandler))
 	// ps may be nil if the embedded archive is absent — no assertion on value.
 	_ = ps
 }
@@ -923,12 +923,12 @@ func TestDaemonServe_WithAuthUsers_StartsOK(t *testing.T) {
 	_ = l.Close()
 
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(true)
+	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = restAddr
 	cfg.North.REST.Auth.Users = map[string]string{
 		"admin": "secret",
 	}
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.DataDir = t.TempDir()
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -976,10 +976,10 @@ func TestDaemonServe_OIDCDisabled_StartsOK(t *testing.T) {
 	_ = l.Close()
 
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(true)
+	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = restAddr
 	cfg.North.REST.Auth.OIDC.Enabled = false
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.DataDir = t.TempDir()
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -1020,7 +1020,7 @@ func TestBuildCaseAdapter_EphemeralPath_BuildsAdapter(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr) // empty store → no fabric → ephemeral
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	caseCfg := config.NorthMatterCASE{NodeID: 0xDEAD, FabricID: 0xBEEF}
 	adapter, err := buildCaseAdapter(ctx, caseCfg, mgr, store, logger)
@@ -1064,7 +1064,7 @@ func TestWireIncidentRecorder_CentralWithCache_SetsRecorder(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := buildTestRegistry(t, "ccu-incident")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)

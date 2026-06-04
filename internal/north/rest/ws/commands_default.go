@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/configui"
@@ -1167,14 +1168,14 @@ func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp
 // joinStrings joins strings with a separator — avoids importing strings
 // just for this one call site.
 func joinStrings(ss []string, sep string) string {
-	out := ""
+	var out strings.Builder
 	for i, s := range ss {
 		if i > 0 {
-			out += sep
+			out.WriteString(sep)
 		}
-		out += s
+		out.WriteString(s)
 	}
-	return out
+	return out.String()
 }
 
 func sessionStateMap(s *configui.Session) map[string]any {

@@ -271,27 +271,23 @@ func TestConcurrentSubscribeUnsubscribePublish(t *testing.T) {
 	// Goroutines that repeatedly subscribe, publish once, then unsubscribe.
 	for i := range half {
 		_ = i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range iterations {
 				unsub := Subscribe(b, func(hmevent.RecoveryStartedEvent) {})
 				Publish(b, hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 				unsub()
 			}
-		}()
+		})
 	}
 
 	// Goroutines that only publish.
 	for i := range half {
 		_ = i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range iterations {
 				Publish(b, hmevent.RecoveryStartedEvent{Base: hmevent.NewBase(), CentralName: "c"})
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

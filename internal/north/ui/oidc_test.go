@@ -211,7 +211,7 @@ func TestOIDCCallbackWithoutConfigReturns503(t *testing.T) {
 	t.Parallel()
 	cats, _ := i18n.NewCatalogs()
 	h := NewRouter(Deps{Lang: "en", Catalogs: cats})
-	req := httptest.NewRequest("GET", "/login/oidc/callback?code=abc&state=xyz", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/login/oidc/callback?code=abc&state=xyz", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusServiceUnavailable {

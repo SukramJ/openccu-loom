@@ -4,6 +4,7 @@
 package adapter
 
 import (
+	"maps"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -265,9 +266,7 @@ func (a *HealthAdapter) CentralScoreInt(name string) int {
 func (a *HealthAdapter) Gauges() map[string]float64 {
 	out := map[string]float64{}
 	for _, t := range a.trackers() {
-		for k, v := range t.Gauges() {
-			out[k] = v
-		}
+		maps.Copy(out, t.Gauges())
 	}
 	return out
 }

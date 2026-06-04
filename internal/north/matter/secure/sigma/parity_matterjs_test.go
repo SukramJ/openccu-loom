@@ -73,7 +73,6 @@ func TestParityMatterJS_Sigma_Vectors(t *testing.T) {
 	vecs := loadMatterJSSigmaVectors(t)
 
 	for _, v := range vecs {
-		v := v
 		t.Run(v.Label, func(t *testing.T) {
 			t.Parallel()
 			switch v.Label {

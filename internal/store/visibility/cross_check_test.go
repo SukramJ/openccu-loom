@@ -151,7 +151,6 @@ func TestDeciderUnIgnoreModelPrefixMatch(t *testing.T) {
 		{"HmIP", "HmIP-RGBW", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.model+"/"+tc.pattern, func(t *testing.T) {
 			t.Parallel()
 			if got := modelPrefixMatch(tc.model, tc.pattern); got != tc.want {
@@ -275,7 +274,6 @@ func TestPersistedParameterMustBeVisibleByDefault(t *testing.T) {
 		hmenum.ParameterOnTime,
 	}
 	for _, p := range writableValueParams {
-		p := p
 		t.Run(string(p), func(t *testing.T) {
 			t.Parallel()
 			if !reg.IsAllowed("HmIP-eTRV", "TRANSCEIVER", hmenum.ParamsetKeyValues, p) {
@@ -301,7 +299,6 @@ func TestVisibleButNotPersistentIsAllowed(t *testing.T) {
 		hmenum.ParameterState,
 	}
 	for _, p := range readOnlyParams {
-		p := p
 		t.Run(string(p), func(t *testing.T) {
 			t.Parallel()
 			if !reg.IsAllowed("HmIP-STH", "CLIMATE_TRANSCEIVER", hmenum.ParamsetKeyValues, p) {

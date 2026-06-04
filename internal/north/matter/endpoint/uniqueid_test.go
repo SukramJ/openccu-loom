@@ -57,7 +57,7 @@ func TestUniqueIDFor_StableAcrossInvocations(t *testing.T) {
 		DPKey:         "",
 	}
 	first := uniqueIDFor(key)
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		got := uniqueIDFor(key)
 		if got != first {
 			t.Fatalf("uniqueIDFor returned different values for the same key: first=%q got=%q (iteration %d)", first, got, i)

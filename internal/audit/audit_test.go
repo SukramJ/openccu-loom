@@ -73,7 +73,7 @@ func TestBufferPreservesExplicitTimestamp(t *testing.T) {
 func TestBufferListLimitClamps(t *testing.T) {
 	t.Parallel()
 	b := NewBuffer(10)
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		b.Record(Entry{Action: ActionParamsetWrite, Note: string(rune('0' + i))})
 	}
 	if got := b.List(2); len(got) != 2 {
@@ -99,7 +99,7 @@ func TestBufferListReturnsSnapshot(t *testing.T) {
 func TestBufferZeroCapacityFallsBackToDefault(t *testing.T) {
 	t.Parallel()
 	b := NewBuffer(0)
-	for i := 0; i < 600; i++ {
+	for range 600 {
 		b.Record(Entry{Action: ActionParamsetWrite})
 	}
 	if got := b.Len(); got != 500 {

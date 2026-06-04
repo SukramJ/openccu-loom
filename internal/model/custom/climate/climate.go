@@ -1904,13 +1904,7 @@ func (c *Climate) numWeekPrograms() int {
 	if !loOK || !hiOK {
 		return 0
 	}
-	count := int(hi-lo) + 1
-	if count < 0 {
-		count = 0
-	}
-	if count > 6 {
-		count = 6
-	}
+	count := min(max(int(hi-lo)+1, 0), 6)
 	return count
 }
 

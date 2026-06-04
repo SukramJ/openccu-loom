@@ -44,7 +44,6 @@ func TestClassifyMethod(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := reliability.ClassifyMethod(tc.method)
@@ -69,7 +68,6 @@ func TestRPCClassString(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.class.String(); got != tc.want {

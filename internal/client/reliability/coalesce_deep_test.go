@@ -61,17 +61,14 @@ func TestCoalescerLeaderRunsOnceForBurst(t *testing.T) {
 	results := make([]int64, N)
 	errs := make([]error, N)
 
-	for i := 0; i < N; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range N {
+		wg.Go(func() {
 			v, err := c.Do(context.Background(), "burst-key", fn)
 			errs[i] = err
 			if err == nil {
 				results[i] = v.(int64) //nolint:forcetypeassert // known concrete type in this test
 			}
-		}()
+		})
 	}
 
 	// Wait until at least one goroutine has entered the fn (the leader).
@@ -156,14 +153,11 @@ func TestCoalescerErrorPropagatesToWaiters(t *testing.T) {
 
 	errs := make([]error, N)
 	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range N {
+		wg.Go(func() {
 			_, err := c.Do(context.Background(), "err-key", fn)
 			errs[i] = err
-		}()
+		})
 	}
 
 	<-leaderReady
@@ -201,12 +195,10 @@ func TestCoalescerStatsAccountsLeaderAndFollowers(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range N {
+		wg.Go(func() {
 			c.Do(context.Background(), "stats-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		}()
+		})
 	}
 
 	<-leaderReady
@@ -281,12 +273,10 @@ func TestCoalescerHookFiresPerFollowerNotLeader(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	for i := 0; i < goroutines; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range goroutines {
+		wg.Go(func() {
 			c.Do(context.Background(), "hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		}()
+		})
 	}
 
 	<-leaderReady
@@ -339,12 +329,10 @@ func TestCoalescerHookSafeToCallBackIntoCoalescer(t *testing.T) {
 	})
 
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 2 {
+		wg.Go(func() {
 			c.Do(context.Background(), "reentrant-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		}()
+		})
 	}
 
 	<-leaderReady
@@ -394,11 +382,9 @@ func TestCoalescerSetHookReplacesExisting(t *testing.T) {
 
 	// Launch the leader goroutine.
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c.Do(context.Background(), "replace-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	}()
+	})
 
 	// Wait for the leader to be inside fn.
 	<-leaderIn
@@ -412,13 +398,11 @@ func TestCoalescerSetHookReplacesExisting(t *testing.T) {
 	close(followersGo)
 
 	const followers = 3
-	for i := 0; i < followers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range followers {
+		wg.Go(func() {
 			<-followersGo                                 // ensure hook swap is visible before calling Do
 			c.Do(context.Background(), "replace-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		}()
+		})
 	}
 
 	// Wait until all goroutines (1 leader + followers) have entered Do.
@@ -460,12 +444,10 @@ func TestCoalescerSetHookNilDetaches(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 3 {
+		wg.Go(func() {
 			c.Do(context.Background(), "nil-hook-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-		}()
+		})
 	}
 
 	<-leaderReady
@@ -601,11 +583,9 @@ func TestCoalescerInFlightDuringLeaderRun(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		c.Do(context.Background(), "inflight-key", fn) //nolint:errcheck // error is asserted via channel or atomic in the goroutine above
-	}()
+	})
 
 	<-leaderReady
 

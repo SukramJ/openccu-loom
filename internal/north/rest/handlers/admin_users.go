@@ -49,7 +49,7 @@ type updateUserRequest struct {
 type userSummaryResponse struct {
 	Subject   string    `json:"subject"`
 	Role      auth.Role `json:"role"`
-	CreatedAt time.Time `json:"created_at,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // userListEntry is one element of the GET /admin/users response.

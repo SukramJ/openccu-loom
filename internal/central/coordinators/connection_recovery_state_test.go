@@ -65,7 +65,7 @@ func TestFailedRunBumpsConsecutiveFailures(t *testing.T) {
 	pipeline := []Pipeline{
 		{Stage: hmenum.RecoveryStageDetecting, Run: func(_ context.Context) error { return errors.New("offline") }},
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		c.Run(context.Background(), "iface", pipeline)
 	}
 	state := c.State("iface")
@@ -144,7 +144,7 @@ func TestExponentialBackoffSaturates(t *testing.T) {
 	failing := []Pipeline{
 		{Stage: hmenum.RecoveryStageDetecting, Run: func(_ context.Context) error { return errors.New("x") }},
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		c.Run(context.Background(), "iface", failing)
 	}
 	if got := c.NextRetryDelay("iface"); got != 4*time.Second {
@@ -158,7 +158,7 @@ func TestPipelineClassifyOverridesFailureReason(t *testing.T) {
 	pipeline := []Pipeline{{
 		Stage:    hmenum.RecoveryStageDetecting,
 		Run:      func(_ context.Context) error { return errors.New("auth blew up") },
-		Classify: func(_ error) *hmenum.FailureReason { return failureReasonPtr(hmenum.FailureReasonAuth) },
+		Classify: func(_ error) *hmenum.FailureReason { return new(hmenum.FailureReasonAuth) },
 	}}
 	c.Run(context.Background(), "iface", pipeline)
 
@@ -177,7 +177,7 @@ func TestHistoryRingCaps(t *testing.T) {
 	failing := []Pipeline{
 		{Stage: hmenum.RecoveryStageDetecting, Run: func(_ context.Context) error { return errors.New("x") }},
 	}
-	for i := 0; i < historySize+5; i++ {
+	for range historySize + 5 {
 		c.Run(context.Background(), "iface", failing)
 	}
 	if got := len(c.History("iface")); got != historySize {

@@ -301,15 +301,13 @@ func TestBatchConcurrentAddFlush(t *testing.T) {
 
 	// Flush goroutine: periodically drains without racing.
 	var wgFlush sync.WaitGroup
-	wgFlush.Add(1)
-	go func() {
-		defer wgFlush.Done()
+	wgFlush.Go(func() {
 		for range flushLoops {
 			batch.Flush()
 			// Yield so adders can make progress.
 			runtime.Gosched()
 		}
-	}()
+	})
 
 	wgAdd.Wait()
 	wgFlush.Wait()

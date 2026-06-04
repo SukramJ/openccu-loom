@@ -174,7 +174,7 @@ func readValue(r *bytesReader, depth int) (xmlrpc.Value, error) {
 			return nil, fmt.Errorf("binrpc: struct member count %d exceeds remaining %d bytes", count, r.remaining())
 		}
 		members := make([]xmlrpc.Member, count)
-		for i := uint32(0); i < count; i++ {
+		for i := range count {
 			name, err := readRawString(r)
 			if err != nil {
 				return nil, fmt.Errorf("binrpc: struct member %d name: %w", i, err)
@@ -199,7 +199,7 @@ func readNValues(r *bytesReader, n, depth int) ([]xmlrpc.Value, error) {
 		return nil, fmt.Errorf("binrpc: value count %d exceeds remaining %d bytes", n, r.remaining())
 	}
 	out := make([]xmlrpc.Value, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		v, err := readValue(r, depth)
 		if err != nil {
 			return nil, err

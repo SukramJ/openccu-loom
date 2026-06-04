@@ -241,6 +241,7 @@ func TestEncodeTimerDurationThreshold(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.label, func(t *testing.T) {
+			t.Parallel()
 			v, u := EncodeTimerDuration(c.d)
 			if v != c.wantV || u != c.wantUnit {
 				t.Errorf("EncodeTimerDuration(%v) = (%d, %d), want (%d, %d)",

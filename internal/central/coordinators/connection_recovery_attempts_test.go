@@ -16,7 +16,7 @@ func TestRecoveryAttemptCounterIncrementsOnFailure(t *testing.T) {
 	bus := events.NewBus()
 	c := NewConnectionRecoveryCoordinatorWithLimit("ccu-01", bus, 3)
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		res := c.Run(context.Background(), "HmIP-RF", []Pipeline{
 			{Stage: hmenum.RecoveryStage("ping"), Run: func(_ context.Context) error { return errors.New("boom") }},
 		})
@@ -34,7 +34,7 @@ func TestRecoveryAttemptCounterResetsOnSuccess(t *testing.T) {
 	c := NewConnectionRecoveryCoordinatorWithLimit("ccu-01", bus, 5)
 
 	// Two failures …
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = c.Run(context.Background(), "HmIP-RF", []Pipeline{
 			{Stage: hmenum.RecoveryStage("ping"), Run: func(_ context.Context) error { return errors.New("boom") }},
 		})
@@ -60,7 +60,7 @@ func TestRecoveryAttemptCapBlocksFurtherRuns(t *testing.T) {
 	c := NewConnectionRecoveryCoordinatorWithLimit("ccu-01", bus, 2)
 
 	// Burn through the cap.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = c.Run(context.Background(), "HmIP-RF", []Pipeline{
 			{Stage: hmenum.RecoveryStage("ping"), Run: func(_ context.Context) error { return errors.New("boom") }},
 		})
@@ -86,7 +86,7 @@ func TestRecoveryResetAttemptsReleasesCap(t *testing.T) {
 	bus := events.NewBus()
 	c := NewConnectionRecoveryCoordinatorWithLimit("ccu-01", bus, 2)
 
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_ = c.Run(context.Background(), "HmIP-RF", []Pipeline{
 			{Stage: hmenum.RecoveryStage("ping"), Run: func(_ context.Context) error { return errors.New("boom") }},
 		})
@@ -112,7 +112,7 @@ func TestRecoveryUnlimitedAttemptsWhenCapZero(t *testing.T) {
 	bus := events.NewBus()
 	c := NewConnectionRecoveryCoordinatorWithLimit("ccu-01", bus, 0)
 
-	for i := 0; i < 50; i++ {
+	for range 50 {
 		_ = c.Run(context.Background(), "HmIP-RF", []Pipeline{
 			{Stage: hmenum.RecoveryStage("ping"), Run: func(_ context.Context) error { return errors.New("boom") }},
 		})

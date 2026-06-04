@@ -94,7 +94,7 @@ func TestWindowAcceptsFreshAndRejectsDuplicate(t *testing.T) {
 // TestWindowAcceptsAdvancing emulates an in-order counter stream.
 func TestWindowAcceptsAdvancing(t *testing.T) {
 	w := NewWindow()
-	for i := uint32(0); i < 10; i++ {
+	for i := range uint32(10) {
 		if !w.Accept(i) {
 			t.Fatalf("counter %d rejected", i)
 		}

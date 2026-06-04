@@ -64,7 +64,6 @@ func TestCanRetryTable(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			c := NewConnectionRecoveryCoordinatorWithLimit("ccu-canretry", events.NewBus(), tc.maxCap)
@@ -144,7 +143,6 @@ func TestDefaultBackoffConstants(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			c := NewConnectionRecoveryCoordinatorWithLimit("ccu-backoff", events.NewBus(), 0)

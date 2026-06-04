@@ -40,7 +40,6 @@ func TestClassifyInterface_AllBranches(t *testing.T) {
 		{"vpn0", InterfaceTypeUnspecified},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := classifyInterface(tc.name)

@@ -98,7 +98,7 @@ func TestCaptureSink_RingEviction(t *testing.T) {
 
 	// Build a line that is exactly 50 chars.
 	base := `{"n":"` + strings.Repeat("x", 40) + `"}`
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		s.Append([]byte(base))
 	}
 
@@ -148,7 +148,7 @@ func TestCaptureSink_EventsCountsEvicted(t *testing.T) {
 	t.Parallel()
 	// Tiny buffer: hold at most ~60 bytes.
 	s := hmlog.NewCaptureSink(60, false)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		s.Append([]byte(`{"msg":"line"}`))
 	}
 	if got := s.Events(); got != 5 {

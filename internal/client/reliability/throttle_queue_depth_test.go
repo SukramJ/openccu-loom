@@ -35,10 +35,8 @@ func TestThrottleMaxQueueDepthRejectsNonCritical(t *testing.T) {
 
 	// Two queued waiters — these block but do NOT return immediately.
 	var wg sync.WaitGroup
-	for i := 0; i < 2; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 2 {
+		wg.Go(func() {
 			waitCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			// We don't care whether they succeed; we only need them
@@ -48,7 +46,7 @@ func TestThrottleMaxQueueDepthRejectsNonCritical(t *testing.T) {
 				cancel()
 			}()
 			_ = tt.Acquire(waitCtx, hmenum.CommandPriorityLow)
-		}()
+		})
 	}
 
 	// Give the queued goroutines time to enqueue.
@@ -151,17 +149,15 @@ func TestThrottleMaxQueueDepthDisabledWhenZero(t *testing.T) {
 	// Pile waiters up — none of them must be rejected.
 	const n = 50
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range n {
+		wg.Go(func() {
 			waitCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
 			defer cancel()
 			err := tt.Acquire(waitCtx, hmenum.CommandPriorityLow)
 			if errors.Is(err, ErrThrottleQueueFull) {
 				t.Errorf("unexpected ErrThrottleQueueFull with depth=0")
 			}
-		}()
+		})
 	}
 	// Let queue build.
 	time.Sleep(50 * time.Millisecond)

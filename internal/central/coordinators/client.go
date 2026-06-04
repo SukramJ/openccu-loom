@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -153,7 +154,7 @@ func (c *ClientCoordinator) Interfaces() []hmenum.Interface {
 	for iface := range seen {
 		out = append(out, iface)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 

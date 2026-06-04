@@ -119,16 +119,16 @@ func ExtractSupportedScheduleFields(masterParamset map[string]struct{}) []hmenum
 	seen := make(map[hmenum.ScheduleField]struct{})
 	for key := range masterParamset {
 		// Fast path: key must contain "_WP_".
-		idx := strings.Index(key, scheduleKeyPrefix)
-		if idx < 0 {
+		before, after, ok := strings.Cut(key, scheduleKeyPrefix)
+		if !ok {
 			continue
 		}
 		// Everything before "_WP_" must be all digits.
-		prefix := key[:idx]
+		prefix := before
 		if !allDigits(prefix) || prefix == "" {
 			continue
 		}
-		fieldName := key[idx+len(scheduleKeyPrefix):]
+		fieldName := after
 		if fieldName == "" {
 			continue
 		}
@@ -209,15 +209,15 @@ func FilterRawScheduleByFields(raw map[string]any, supported []hmenum.ScheduleFi
 	}
 	out := make(map[string]any, len(raw))
 	for k, v := range raw {
-		idx := strings.Index(k, scheduleKeyPrefix)
-		if idx < 0 {
+		_, after, ok0 := strings.Cut(k, scheduleKeyPrefix)
+		if !ok0 {
 			// Non-WP key — keep as-is.
 			out[k] = v
 			continue
 		}
 		// Always keep the WEEKDAY and TARGET_CHANNELS deactivation
 		// sentinel values so deleted slots are cleared on the CCU.
-		fieldName := k[idx+len(scheduleKeyPrefix):]
+		fieldName := after
 		sf := hmenum.ScheduleField(fieldName)
 		if _, supported := ok[sf]; supported ||
 			sf == hmenum.ScheduleFieldWeekday ||

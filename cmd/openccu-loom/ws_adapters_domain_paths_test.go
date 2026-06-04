@@ -14,7 +14,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"path/filepath"
 	"runtime"
@@ -311,14 +310,14 @@ func TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping concurrent mode test")
 	}
 	t.Cleanup(bundle.stop)
 
 	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// configuredFactory != nil → concurrent mode.
 	configuredFactory := func() *matterbridge.PaseAdapter {
@@ -371,7 +370,7 @@ func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping RevokeFabric live test")
 	}
@@ -548,7 +547,7 @@ func TestWireIncidentRecorder_WithRegistryContainingCache_DoesNotPanic(t *testin
 	// Use a central that was registered via buildTestRegistry — it includes
 	// a CacheCoordinator which has a SetIncidentRecorder method.
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -571,7 +570,7 @@ func TestLoadTranslations_ValidEmbeddedFilePath_Succeeds(t *testing.T) {
 	cfg := config.Default()
 	cfg.CCUData.TranslationsPath = archivePath
 
-	tr := loadTranslations(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	tr := loadTranslations(cfg, slog.New(slog.DiscardHandler))
 	if tr == nil {
 		t.Fatal("expected non-nil translations from valid file path")
 	}
@@ -586,7 +585,7 @@ func TestApplyVisibilityUnIgnore_OverlappingPatterns(t *testing.T) {
 	store := buildVisibilityStore(t)
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01", "ccu-02")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	cfg := config.Default()
 	cfg.Centrals = []config.CentralConfig{
 		{Name: "ccu-01"},
@@ -619,7 +618,7 @@ func TestWireSessionRecorderPersistence_WithCentralHavingRecorder(t *testing.T) 
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireSessionRecorderPersistence(cfg, reg, logger)
 	gooseMigrateMu.Unlock()

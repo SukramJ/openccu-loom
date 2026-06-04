@@ -52,12 +52,10 @@ func TestPreloadLocale_ConcurrentSafe(t *testing.T) {
 	c.ResetForTesting()
 
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			c.PreloadLocale("en")
-		}()
+		})
 	}
 	wg.Wait()
 	// After concurrent preloads the locale must be accessible.

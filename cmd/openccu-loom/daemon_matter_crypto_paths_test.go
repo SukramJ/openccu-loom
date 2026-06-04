@@ -18,7 +18,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -57,7 +56,7 @@ func TestLoadVendorAttestation_PAIError_ReturnsFalse(t *testing.T) {
 		PAIPath:    filepath.Join(tmp, "nosuchpai.der"), // does not exist → PAI error
 		CDPath:     filepath.Join(tmp, "cd.bin"),
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
 	if ok {
 		t.Error("expected ok=false when PAI file missing")
@@ -87,7 +86,7 @@ func TestLoadVendorAttestation_CDError_ReturnsFalse(t *testing.T) {
 		PAIPath:    paiPath,
 		CDPath:     filepath.Join(tmp, "nosuchcd.bin"), // does not exist → CD error
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
 	if ok {
 		t.Error("expected ok=false when CD file missing")
@@ -121,7 +120,7 @@ func TestLoadVendorAttestation_DACKeyError_ReturnsFalse(t *testing.T) {
 		PAIPath:    paiPath,
 		CDPath:     cdPath,
 	}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, _, ok := loadVendorAttestation(cfg, logger)
 	if ok {
 		t.Error("expected ok=false when DAC key file missing")
@@ -153,7 +152,7 @@ func TestLoadAdditionalFabricsForCase_ClosedDB_ListFabricsError(t *testing.T) {
 
 	caseFabrics := make(map[uint8]*caseFabricEntry)
 	var mu sync.RWMutex
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	n := loadAdditionalFabricsForCase(ctx, store, 0, caseFabrics, &mu, logger)
 	if n != 0 {
 		t.Errorf("expected 0 loaded with closed DB, got %d", n)
@@ -170,7 +169,7 @@ func TestLoadAdditionalFabricsForCase_InvalidRootPubKey_SkipsVerifierError(t *te
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// Use a 5-byte root public key → NewVerifier fails (needs 65 bytes, 0x04 prefix).
 	idx, err := store.AddFabric(ctx, matterstore.FabricRecord{
@@ -220,7 +219,7 @@ func TestLoadAdditionalFabricsForCase_BadIPKLength_SkipsIPKError(t *testing.T) {
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// Generate a valid 65-byte root public key (needed for mattercert.NewVerifier).
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -276,7 +275,7 @@ func TestLoadPersistentCaseIdentity_InvalidRootPubKey_ReturnsError(t *testing.T)
 	ctx := context.Background()
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	// Short root public key → NewVerifier will fail.
 	idx, err := store.AddFabric(ctx, matterstore.FabricRecord{
@@ -322,7 +321,7 @@ func TestApplyVisibilityUnIgnore_WithDevices_TouchesDevices(t *testing.T) {
 	store := buildVisibilityStore(t)
 	visReg := visibility.NewRegistry()
 	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	cfg := config.Default()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}
 
@@ -441,7 +440,7 @@ func TestMatterEphemeralProvider_Singleton_BuildAndInstall_DoesNotPanic(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -454,7 +453,7 @@ func TestMatterEphemeralProvider_Singleton_BuildAndInstall_DoesNotPanic(t *testi
 		bundle.opCreds,
 		bundle.configuredPase, // may be nil
 		nil,                   // no concurrent factory → singleton mode
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 	)
 
 	creds, err := p.GenerateAndInstall(context.Background())

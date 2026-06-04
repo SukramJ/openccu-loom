@@ -4,6 +4,7 @@
 package dynamic
 
 import (
+	"slices"
 	"sync"
 	"time"
 )
@@ -50,7 +51,7 @@ func (j *PingPongJournal) RecordSent(interfaceID string, at time.Time) {
 func (j *PingPongJournal) RecordAck(interfaceID string, at time.Time) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-	for i := len(j.items) - 1; i >= 0; i-- {
+	for i := range slices.Backward(j.items) {
 		if j.items[i].InterfaceID != interfaceID || !j.items[i].AckedAt.IsZero() {
 			continue
 		}
@@ -66,9 +67,9 @@ func (j *PingPongJournal) RecordAck(interfaceID string, at time.Time) bool {
 func (j *PingPongJournal) Latest(interfaceID string) (PingPongEntry, bool) {
 	j.mu.RLock()
 	defer j.mu.RUnlock()
-	for i := len(j.items) - 1; i >= 0; i-- {
-		if j.items[i].InterfaceID == interfaceID && !j.items[i].AckedAt.IsZero() {
-			return j.items[i], true
+	for _, v := range slices.Backward(j.items) {
+		if v.InterfaceID == interfaceID && !v.AckedAt.IsZero() {
+			return v, true
 		}
 	}
 	return PingPongEntry{}, false

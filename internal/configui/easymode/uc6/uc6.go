@@ -9,6 +9,7 @@ package uc6
 
 import (
 	"fmt"
+	"maps"
 
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/configui/easymode"
@@ -140,9 +141,7 @@ func (u *UseCase) Apply(_ easymode.ResolveContext, _ *configui.Schema, values ma
 		if !ok {
 			return nil, fmt.Errorf("uc6: option %d unknown for group %s", id, g.ID)
 		}
-		for k, v := range opt.Values {
-			out[k] = v
-		}
+		maps.Copy(out, opt.Values)
 	}
 	return out, nil
 }
@@ -195,9 +194,7 @@ func indexParams(schema *configui.Schema) map[string]*configui.FormParameter {
 
 func copyMap(in map[string]any) map[string]any {
 	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 

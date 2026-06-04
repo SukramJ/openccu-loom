@@ -62,7 +62,7 @@ func hasPrefixFold(s, prefix string) bool {
 	if len(s) < len(prefix) {
 		return false
 	}
-	for i := 0; i < len(prefix); i++ {
+	for i := range len(prefix) {
 		ca := s[i]
 		cb := prefix[i]
 		if ca >= 'A' && ca <= 'Z' {

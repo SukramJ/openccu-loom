@@ -63,7 +63,7 @@ func TestCentralRegistryConcurrent(t *testing.T) {
 	r := NewCentralRegistry()
 	const n = 20
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

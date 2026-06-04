@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -258,13 +259,7 @@ func TestBINRPCServerSystemListMethodsReturnsExpectedMethods(t *testing.T) {
 
 	required := []string{"event", "newDevices", "deleteDevices", "listDevices", "system.listMethods"}
 	for _, want := range required {
-		found := false
-		for _, n := range names {
-			if n == want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(names, want)
 		if !found {
 			t.Errorf("system.listMethods missing %q, got %v", want, names)
 		}

@@ -20,6 +20,7 @@ package weekprofile
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"time"
 
@@ -560,9 +561,7 @@ func (dp *ProfileDataPoint) ScheduleEnabled() map[string]bool {
 		return nil
 	}
 	out := make(map[string]bool, len(dp.scheduleEnabled))
-	for k, v := range dp.scheduleEnabled {
-		out[k] = v
-	}
+	maps.Copy(out, dp.scheduleEnabled)
 	return out
 }
 
@@ -753,9 +752,7 @@ func (dp *ProfileDataPoint) SetAvailableTargetChannels(channels map[string]Targe
 		dp.availableTargetChannels = nil
 	} else {
 		dp.availableTargetChannels = make(map[string]TargetChannelInfo, len(channels))
-		for k, v := range channels {
-			dp.availableTargetChannels[k] = v
-		}
+		maps.Copy(dp.availableTargetChannels, channels)
 		// Pre-populate scheduleEnabled with the registered keys so
 		// SyncScheduleEnabled has something to merge into and the
 		// Zeitplan sensor's schedule_enabled attribute lists every key
@@ -781,9 +778,7 @@ func (dp *ProfileDataPoint) AvailableTargetChannels() map[string]TargetChannelIn
 		return nil
 	}
 	out := make(map[string]TargetChannelInfo, len(dp.availableTargetChannels))
-	for k, v := range dp.availableTargetChannels {
-		out[k] = v
-	}
+	maps.Copy(out, dp.availableTargetChannels)
 	return out
 }
 

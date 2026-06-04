@@ -287,10 +287,7 @@ func (a *Aggregator) RPC() RpcMetrics {
 		}
 	}
 
-	successfulRequests := totalRequests - int(failedRequests) - int(rejectedRequests)
-	if successfulRequests < 0 {
-		successfulRequests = 0
-	}
+	successfulRequests := max(totalRequests-int(failedRequests)-int(rejectedRequests), 0)
 
 	return RpcMetrics{
 		TotalRequests:           totalRequests,

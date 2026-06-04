@@ -24,7 +24,7 @@ func TestThrottlePurgeCancelsAllWaitersForAddress(t *testing.T) {
 
 	// Queue 3 waiters for "A:1", 1 for "B:1".
 	results := make(chan error, 4)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		go func() {
 			results <- tt.AcquireFor(context.Background(), hmenum.CommandPriorityHigh, "A:1")
 		}()
@@ -50,7 +50,7 @@ func TestThrottlePurgeCancelsAllWaitersForAddress(t *testing.T) {
 	// Three "A:1" goroutines should return ErrSuperseded.
 	supersededCount := 0
 	timeout := time.After(200 * time.Millisecond)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case err := <-results:
 			if !errors.Is(err, ErrSuperseded) {

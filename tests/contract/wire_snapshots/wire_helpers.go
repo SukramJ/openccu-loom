@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
 
@@ -84,9 +85,7 @@ func (f *fakeWriter) PutParamset(
 	_ hmenum.CommandPriority,
 ) error {
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	f.mu.Lock()
 	f.calls = append(f.calls, CapturedCall{
 		Method:      "PutParamset",

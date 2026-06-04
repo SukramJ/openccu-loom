@@ -204,14 +204,8 @@ func (m *Manager) Subscribe(req SubscribeArgs) (*Subscription, error) {
 	// minimum exceeds the capped ceiling — equivalent to matter.js's lower-bound
 	// guarantee. The negotiated MaxIntervalCeiling stored on the Subscription is
 	// what the bridge advertises in SubscribeResponse, satisfying §10.6.3.2.
-	maxCeil := req.MaxIntervalCeiling
-	if maxCeil > m.cfg.MaxIntervalCeilingSeconds {
-		maxCeil = m.cfg.MaxIntervalCeilingSeconds
-	}
-	minFloor := req.MinIntervalFloor
-	if minFloor < m.cfg.MinIntervalFloorSeconds {
-		minFloor = m.cfg.MinIntervalFloorSeconds
-	}
+	maxCeil := min(req.MaxIntervalCeiling, m.cfg.MaxIntervalCeilingSeconds)
+	minFloor := max(req.MinIntervalFloor, m.cfg.MinIntervalFloorSeconds)
 	// Re-validate AFTER clamp: the configured ceiling may be below the
 	// floored minimum, producing a silent inversion that permanently
 	// blocks drainDirtyIfElapsed. Reject early so callers can surface

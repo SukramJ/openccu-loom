@@ -65,7 +65,7 @@ func TestPingPongSweepFailureSetsLiveSeverity(t *testing.T) {
 	})
 
 	// Send threshold pings — live pending table is exactly at threshold.
-	for i := 0; i < threshold; i++ {
+	for i := range threshold {
 		tr.RecordPing(fmt.Sprintf("ping-%d", i))
 	}
 
@@ -127,7 +127,7 @@ func TestPingPongRecordPongDrainsDegradedState(t *testing.T) {
 
 	// Build up to the threshold so severity becomes "degraded".
 	ids := make([]string, threshold)
-	for i := 0; i < threshold; i++ {
+	for i := range threshold {
 		ids[i] = fmt.Sprintf("hb-%d", i)
 		tr.RecordPing(ids[i])
 	}
@@ -177,8 +177,8 @@ func TestPingPongMultipleFailuresNoDoubleIncrement(t *testing.T) {
 	})
 
 	var sweepTotal int
-	for r := 0; r < rounds; r++ {
-		for p := 0; p < pingsPerRound; p++ {
+	for r := range rounds {
+		for p := range pingsPerRound {
 			tr.RecordPing(fmt.Sprintf("r%d-p%d", r, p))
 		}
 		// Advance past TTL so this round's pings expire.
@@ -221,7 +221,7 @@ func TestPingPongMismatchHookCalledExactlyOncePerExpiry(t *testing.T) {
 		hookCalls.Add(1)
 	})
 
-	for i := 0; i < totalPings; i++ {
+	for i := range totalPings {
 		tr.RecordPing(fmt.Sprintf("ping-%d", i))
 	}
 	fake.Advance(ttl + time.Millisecond)
@@ -256,11 +256,10 @@ func TestPingPongConcurrentRecordAndSweep(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
-	for g := 0; g < goroutines; g++ {
-		g := g
+	for g := range goroutines {
 		go func() {
 			defer wg.Done()
-			for i := 0; i < opsPerGoroutine; i++ {
+			for i := range opsPerGoroutine {
 				id := fmt.Sprintf("g%d-i%d", g, i)
 				tr.RecordPing(id)
 				// Some goroutines immediately match their pong; others don't.
@@ -319,7 +318,7 @@ func TestPingPongSweepAndClearRace(t *testing.T) {
 	// Writer goroutine: continuously add pings.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < N*10; i++ {
+		for i := range N * 10 {
 			tr.RecordPing(fmt.Sprintf("concurrent-%d", i))
 		}
 	}()
@@ -327,7 +326,7 @@ func TestPingPongSweepAndClearRace(t *testing.T) {
 	// Sweeper goroutine: advance clock and sweep.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < N; i++ {
+		for range N {
 			fake.Advance(ttl + time.Millisecond)
 			tr.Sweep()
 		}
@@ -336,7 +335,7 @@ func TestPingPongSweepAndClearRace(t *testing.T) {
 	// Clear goroutine: periodically clear.
 	go func() {
 		defer wg.Done()
-		for i := 0; i < N; i++ {
+		for range N {
 			tr.Clear()
 		}
 	}()

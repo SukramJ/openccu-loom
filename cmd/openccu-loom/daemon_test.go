@@ -9,7 +9,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"io"
 	"log/slog"
 	"sync"
 	"testing"
@@ -51,9 +50,9 @@ func (b *syncBuffer) String() string {
 // the ctx to verify shutdown drains.
 func TestDaemonServeBootsAndShutsDownGracefully(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(true)
+	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = "127.0.0.1:0"
-	cfg.North.UI.Enabled = boolPtr(true)
+	cfg.North.UI.Enabled = new(true)
 	cfg.North.UI.Listen = "127.0.0.1:0"
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
@@ -87,8 +86,8 @@ func TestDaemonServeBootsAndShutsDownGracefully(t *testing.T) {
 
 func TestDaemonServeAcceptsDefaultsWithoutCentrals(t *testing.T) {
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -115,8 +114,7 @@ func TestStartMatterBridge_DisabledReturnsNil(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger); bundle != nil {
 		t.Error("expected nil bundle when Matter is disabled")
@@ -426,7 +424,7 @@ func TestTrustAnyPeerVerifier_EmptyNocErrors(t *testing.T) {
 func TestLoadPersistentCaseIdentity_NoStoreNoFabric(t *testing.T) {
 	t.Parallel()
 	cfg := config.NorthMatterCASE{NodeID: 1, FabricID: 0}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, persisted, err := loadPersistentCaseIdentity(t.Context(), cfg, nil, logger)
 	if err != nil {
 		t.Fatalf("loadPersistentCaseIdentity: %v", err)
@@ -444,7 +442,7 @@ func TestLoadPersistentCaseIdentity_EmptyStore(t *testing.T) {
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
 	cfg := config.NorthMatterCASE{NodeID: 1, FabricID: 0}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	_, _, _, persisted, err := loadPersistentCaseIdentity(t.Context(), cfg, store, logger)
 	if err != nil {
 		t.Fatalf("loadPersistentCaseIdentity: %v", err)
@@ -498,7 +496,7 @@ func TestLoadPersistentCaseIdentity_PicksFabric(t *testing.T) {
 	}
 
 	cfg := config.NorthMatterCASE{NodeID: 0xDEADBEEF, FabricID: 0xCAFEBABE}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	identity, verifier, idx, persisted, err := loadPersistentCaseIdentity(ctx, cfg, store, logger)
 	if err != nil {
 		t.Fatalf("loadPersistentCaseIdentity: %v", err)

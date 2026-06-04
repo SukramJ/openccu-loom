@@ -173,7 +173,7 @@ func containsIdentifierInDir(t *testing.T, dir, ident string, keywords []string)
 		if err != nil {
 			return nil //nolint:nilerr // best-effort filesystem walk; unreadable file is skipped
 		}
-		for _, line := range strings.Split(string(body), "\n") {
+		for line := range strings.SplitSeq(string(body), "\n") {
 			if !strings.Contains(line, ident) {
 				continue
 			}
@@ -205,7 +205,7 @@ func countReaderRefs(t *testing.T, dir, ident string) int {
 		if err != nil {
 			return nil //nolint:nilerr // best-effort filesystem walk; unreadable file is skipped
 		}
-		for _, line := range strings.Split(string(body), "\n") {
+		for line := range strings.SplitSeq(string(body), "\n") {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" || strings.HasPrefix(trimmed, "//") {
 				continue

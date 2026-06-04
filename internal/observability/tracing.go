@@ -6,6 +6,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -108,9 +109,7 @@ func (s *Span) Attributes() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make(map[string]any, len(s.attributes))
-	for k, v := range s.attributes {
-		out[k] = v
-	}
+	maps.Copy(out, s.attributes)
 	return out
 }
 

@@ -84,14 +84,8 @@ func bytesDiff(got, want []byte) string {
 		if got[i] == want[i] {
 			continue
 		}
-		lo := i - 8
-		if lo < 0 {
-			lo = 0
-		}
-		hi := i + 8
-		if hi > len(got) {
-			hi = len(got)
-		}
+		lo := max(i-8, 0)
+		hi := min(i+8, len(got))
 		return fmt.Sprintf(
 			"diverge at offset %d: got 0x%02X want 0x%02X\n"+
 				"  context got  [%d..%d]: %s\n"+
@@ -301,7 +295,7 @@ func TestIMWireFixtures_MarshalParity(t *testing.T) {
 	records := loadFixtures(t)
 
 	for _, rec := range records {
-		rec := rec // capture
+		// capture
 		t.Run(rec.Label, func(t *testing.T) {
 			t.Parallel()
 

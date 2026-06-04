@@ -209,7 +209,6 @@ func TestKindStringCoversAllKnownKinds(t *testing.T) {
 		{Kind(99), "unknown"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
 			t.Parallel()
 			got := tc.kind.String()
@@ -515,7 +514,6 @@ func TestEveryMVPBackendKindStringIsNonEmpty(t *testing.T) {
 		{"Homegear", NewHomegearBackend(&fakeCaller{}, nil)},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s := tc.b.Kind().String()

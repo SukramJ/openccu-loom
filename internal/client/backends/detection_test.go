@@ -266,7 +266,6 @@ func TestParseMajorMinorEdgeCases(t *testing.T) {
 		{"3.0", 3, 0},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.version, func(t *testing.T) {
 			t.Parallel()
 			gotMaj, gotMin := parseMajorMinor(tc.version)

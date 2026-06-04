@@ -93,7 +93,7 @@ func TestOutboundReliable_TickGivesUp(t *testing.T) {
 	// Drive past every retry: keep advancing time and ticking.
 	now := time.Unix(0, 0)
 	send := func(*net.UDPAddr, []byte) error { return nil }
-	for i := 0; i < mrp.MaxRetransmissions; i++ {
+	for i := range mrp.MaxRetransmissions {
 		now = now.Add(10 * time.Second) // way past any backoff window
 		results := tr.Tick(now, send)
 		if len(results) != 1 || results[0].Err != nil {

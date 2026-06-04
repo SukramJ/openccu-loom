@@ -266,12 +266,12 @@ func TestClientConcurrencyCap(t *testing.T) {
 
 	c, _ := New(Config{Endpoint: srv.URL, MaxConcurrent: 2})
 	done := make(chan error, 8)
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		go func() {
 			done <- c.Call(context.Background(), "Ping", nil, nil)
 		}()
 	}
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		if err := <-done; err != nil {
 			t.Fatalf("Call: %v", err)
 		}

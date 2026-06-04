@@ -159,10 +159,7 @@ func (c *CCM) cbcMAC(nonce, plaintext, aad []byte) []byte {
 func cbcMacBlocks(b cipher.Block, state, data []byte) []byte {
 	block := make([]byte, blockSize)
 	for i := 0; i < len(data); i += blockSize {
-		end := i + blockSize
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(i+blockSize, len(data))
 		// Reset the padding buffer.
 		for j := range block {
 			block[j] = 0
@@ -189,10 +186,7 @@ func (c *CCM) ctrCrypt(nonce, data []byte) {
 	for i := 0; i < len(data); i += blockSize {
 		binary.BigEndian.PutUint16(a[1+NonceSize:], counter)
 		c.block.Encrypt(keystream, a)
-		end := i + blockSize
-		if end > len(data) {
-			end = len(data)
-		}
+		end := min(i+blockSize, len(data))
 		for j := i; j < end; j++ {
 			data[j] ^= keystream[j-i]
 		}

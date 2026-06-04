@@ -43,10 +43,10 @@ type CentralRow struct {
 	PrimaryInterface      string                  `json:"primary_interface,omitempty"`
 	Interfaces            []config.InterfaceSpec  `json:"interfaces"`
 	Ports                 map[string]int          `json:"ports,omitempty"`
-	Visibility            config.VisibilityConfig `json:"visibility,omitempty"`
+	Visibility            config.VisibilityConfig `json:"visibility,omitzero"`
 	Enabled               bool                    `json:"enabled"`
-	CreatedAt             time.Time               `json:"created_at,omitempty"`
-	UpdatedAt             time.Time               `json:"updated_at,omitempty"`
+	CreatedAt             time.Time               `json:"created_at,omitzero"`
+	UpdatedAt             time.Time               `json:"updated_at,omitzero"`
 }
 
 // ErrCentralNotFound is returned for missing rows.

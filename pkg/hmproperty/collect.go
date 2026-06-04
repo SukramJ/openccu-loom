@@ -5,6 +5,7 @@ package hmproperty
 
 import (
 	"fmt"
+	"maps"
 	"reflect"
 	"strings"
 	"sync"
@@ -65,8 +66,7 @@ func descriptorsFor(t reflect.Type) []Descriptor {
 	// Compute descriptors from struct tags.
 	var ds []Descriptor
 	if t.Kind() == reflect.Struct {
-		for i := range t.NumField() {
-			f := t.Field(i)
+		for f := range t.Fields() {
 			if !f.IsExported() {
 				continue
 			}
@@ -75,7 +75,7 @@ func descriptorsFor(t reflect.Type) []Descriptor {
 				continue
 			}
 			d := Descriptor{FieldName: f.Name}
-			for _, part := range strings.Split(tag, ",") {
+			for part := range strings.SplitSeq(tag, ",") {
 				part = strings.TrimSpace(part)
 				switch part {
 				case "config":
@@ -89,8 +89,8 @@ func descriptorsFor(t reflect.Type) []Descriptor {
 				case "log_context":
 					d.LogContext = true
 				default:
-					if strings.HasPrefix(part, "alt=") {
-						d.AltName = strings.TrimPrefix(part, "alt=")
+					if after, ok := strings.CutPrefix(part, "alt="); ok {
+						d.AltName = after
 					} else if d.Kind == "" {
 						// First unrecognised non-empty token is treated
 						// as the kind string for forward-compat.
@@ -164,9 +164,7 @@ func GetPropertyByKind(dataObject any, kind Kind, logContextOnly bool) map[strin
 func GetPropertyByLogContext(dataObject any) map[string]any {
 	out := make(map[string]any)
 	for _, k := range AllKinds {
-		for key, val := range GetPropertyByKind(dataObject, k, true) {
-			out[key] = val
-		}
+		maps.Copy(out, GetPropertyByKind(dataObject, k, true))
 	}
 	return out
 }

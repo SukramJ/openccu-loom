@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -41,9 +42,7 @@ func (s *stubConfigExportService) ReadParamset(_ context.Context, centralName, c
 	}
 	// Return a copy to prevent aliasing.
 	out := make(map[string]any, len(s.readResult))
-	for k, v := range s.readResult {
-		out[k] = v
-	}
+	maps.Copy(out, s.readResult)
 	return out, nil
 }
 

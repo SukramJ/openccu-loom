@@ -5,13 +5,12 @@ package mqtt
 
 import (
 	"context"
-	"io"
 	"log/slog"
 	"testing"
 )
 
 func testLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func newWiringWithBridge(t *testing.T) (*Wiring, *Bridge) {

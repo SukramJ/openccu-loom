@@ -6,6 +6,7 @@ package generic
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -55,9 +56,7 @@ func (b *recordingBackend) PutParamset(_ context.Context, ch string, key hmenum.
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	clone := make(map[string]any, len(vals))
-	for k, v := range vals {
-		clone[k] = v
-	}
+	maps.Copy(clone, vals)
 	b.putCalls = append(b.putCalls, putCall{ch, key, clone, prio})
 	return b.failOnPut
 }

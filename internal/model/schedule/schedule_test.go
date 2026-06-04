@@ -140,7 +140,7 @@ func TestClimateWeekdaySlotLimit(t *testing.T) {
 	periods := make([]ClimatePeriod, 0, 14)
 	// 14 trivial periods of 1h each (00:00-01:00, 01:00-02:00, ...).
 	// All sequenced and non-overlapping — only the count violates.
-	for i := 0; i < 14; i++ {
+	for i := range 14 {
 		periods = append(periods, ClimatePeriod{
 			StartTime:   formatHour(i),
 			EndTime:     formatHour(i + 1),

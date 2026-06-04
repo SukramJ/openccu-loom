@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"testing"
 	"time"
 )
@@ -28,9 +29,7 @@ func (f *fakeParamsetReader) ReadParamset(_ context.Context, _, _, _ string) (ma
 	}
 	// Return a copy to avoid aliasing surprises.
 	out := make(map[string]any, len(f.values))
-	for k, v := range f.values {
-		out[k] = v
-	}
+	maps.Copy(out, f.values)
 	return out, nil
 }
 
@@ -191,7 +190,7 @@ func TestVersionMismatchIsRejected(t *testing.T) {
 func TestEmptyValuesIsValid(t *testing.T) {
 	t.Parallel()
 
-	payload := []byte(fmt.Sprintf(`{
+	payload := fmt.Appendf(nil, `{
 		"version":        %q,
 		"exported_at":    "2026-04-28T12:00:00Z",
 		"device_address": "0001ABCD",
@@ -200,7 +199,7 @@ func TestEmptyValuesIsValid(t *testing.T) {
 		"channel_type":   "CLIMATE_TRANSCEIVER",
 		"paramset_key":   "MASTER",
 		"values":         {}
-	}`, ExportVersion))
+	}`, ExportVersion)
 
 	cfg, err := ImportConfiguration(payload)
 	if err != nil {

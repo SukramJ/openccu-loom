@@ -128,7 +128,6 @@ func TestStatusCode_String(t *testing.T) {
 		{StatusCode(0xEE), "Status(0xEE)"}, // default branch
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
 			t.Parallel()
 			got := tc.code.String()
@@ -153,7 +152,6 @@ func TestMinEventNumberFromFilters(t *testing.T) {
 		{"all_equal", []EventMinimumNumber{{EventMin: 5}, {EventMin: 5}}, 5},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := minEventNumberFromFilters(tc.filters)

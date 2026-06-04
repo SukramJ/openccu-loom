@@ -216,6 +216,7 @@ func TestDeviceDescriptionLinkRolesStringDecoding(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			var d hmproto.DeviceDescription
 			if err := json.Unmarshal([]byte(tc.in), &d); err != nil {
 				t.Fatalf("Unmarshal: %v", err)
@@ -265,7 +266,6 @@ func TestDeviceDescriptionChannelNo(t *testing.T) {
 		{"", -1},           // empty
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.addr, func(t *testing.T) {
 			t.Parallel()
 			d := hmproto.DeviceDescription{Address: tc.addr}

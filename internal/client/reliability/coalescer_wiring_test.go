@@ -129,13 +129,10 @@ func TestBackendCallerCoalescesSetValueByChannelAndParameter(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 
-	for i := 0; i < 2; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range 2 {
+		wg.Go(func() {
 			_, errs[i] = bc.Call(context.Background(), "setValue", iface, channel, param, float64(21+i))
-		}()
+		})
 	}
 
 	// Wait for the leader to enter the transport, then wait until the

@@ -4,6 +4,7 @@
 package visibility
 
 import (
+	"maps"
 	"regexp"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -417,8 +418,6 @@ func modelNameSet(names ...string) map[string]struct{} {
 // copyParamSet converts a map[hmenum.Parameter]struct{} to a new copy.
 func copyParamSet(src map[hmenum.Parameter]struct{}) map[hmenum.Parameter]struct{} {
 	m := make(map[hmenum.Parameter]struct{}, len(src))
-	for k, v := range src {
-		m[k] = v
-	}
+	maps.Copy(m, src)
 	return m
 }

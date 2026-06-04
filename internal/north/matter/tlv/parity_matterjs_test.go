@@ -250,7 +250,7 @@ func TestParityMatterJS_EncoderWireBytes(t *testing.T) {
 	t.Parallel()
 	fixtures := loadFixtures(t)
 	for _, f := range fixtures {
-		f := f // capture
+		// capture
 		t.Run(f.Label, func(t *testing.T) {
 			t.Parallel()
 			want := mustHex(t, f.BytesHex)
@@ -271,8 +271,8 @@ func TestParityMatterJS_EncoderFixturesCovered(t *testing.T) {
 	t.Parallel()
 	fixtures := loadFixtures(t)
 	for _, f := range fixtures {
-		f := f
 		t.Run(f.Label, func(t *testing.T) {
+			t.Parallel()
 			defer func() {
 				if r := recover(); r != nil {
 					t.Errorf("encode panic for %s — switch arm missing: %v", f.Label, r)

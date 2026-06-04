@@ -460,7 +460,7 @@ func TestOptimisticConcurrentSends(t *testing.T) {
 
 	const N = 20
 	var wg sync.WaitGroup
-	for i := 0; i < N; i++ {
+	for i := range N {
 		wg.Add(1)
 		go func(v float64) {
 			defer wg.Done()
@@ -485,18 +485,16 @@ func TestOptimisticConcurrentConfirms(t *testing.T) {
 	dp := newFloatDP(t, w, withOptTimeout(5*time.Second))
 	dp.OnEvent(0.0)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_ = sendFloat(t, dp, float64(i+1)/100)
 	}
 
 	// Concurrently fire matching confirms — last value is 0.05.
 	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			dp.OnEvent(0.05)
-		}()
+		})
 	}
 	wg.Wait()
 

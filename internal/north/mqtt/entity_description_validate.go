@@ -3,7 +3,10 @@
 
 package mqtt
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ValidateEntityDescriptionRules inspects the static per-domain devParam
 // maps for ambiguous entries: two entries with the same composite key
@@ -98,7 +101,7 @@ func ValidateEntityDescriptionRules() error {
 
 	for _, ns := range allExtSlices {
 		rules := ns.rules
-		for i := 0; i < len(rules); i++ {
+		for i := range rules {
 			for j := i + 1; j < len(rules); j++ {
 				a, b := rules[i], rules[j]
 				if a.Priority != b.Priority {
@@ -124,9 +127,10 @@ func ValidateEntityDescriptionRules() error {
 	if len(conflicts) == 0 {
 		return nil
 	}
-	result := "entity description rules validation failed:\n"
+	var result strings.Builder
+	result.WriteString("entity description rules validation failed:\n")
 	for _, c := range conflicts {
-		result += "  - " + c + "\n"
+		result.WriteString("  - " + c + "\n")
 	}
-	return fmt.Errorf("%s", result) //nolint:goerr113 // dynamic conflict list; not a sentinel
+	return fmt.Errorf("%s", result.String()) //nolint:goerr113 // dynamic conflict list; not a sentinel
 }

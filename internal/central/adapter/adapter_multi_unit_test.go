@@ -11417,8 +11417,7 @@ func TestSweepDevice_ObservedLoadableDP(t *testing.T) {
 // covering the empty function body {}.
 func TestStartUnobservedSweepLoop_NilSweepNoopBodyCovered(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	// sweep == nil → returns noop at line 53.
 	stop := StartUnobservedSweepLoop(ctx, nil, time.Second, nil)
 	if stop == nil {
@@ -14215,7 +14214,7 @@ func TestBackupAdapter_TriggerBackup_AsyncSaveSucceeds(t *testing.T) {
 
 	// Poll the fake storage until the async goroutine saves the entry.
 	var got []byte
-	for i := 0; i < 200; i++ {
+	for range 200 {
 		if b, ok := fake.lookup(id); ok {
 			got = b
 			break

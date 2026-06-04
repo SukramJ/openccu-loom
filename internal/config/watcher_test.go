@@ -4,7 +4,6 @@
 package config
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -59,8 +58,7 @@ func TestWatcherDetectsChange(t *testing.T) {
 		t.Fatalf("initial Locale=%q want en", cfg.Locale)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() { _ = w.Run(ctx) }()
 
 	// Mutate the file. We must change mtime explicitly because
@@ -115,8 +113,7 @@ func TestWatcherKeepsPreviousOnError(t *testing.T) {
 	if cfg.Locale != "en" {
 		t.Fatalf("seed Locale=%q want en", cfg.Locale)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go func() { _ = w.Run(ctx) }()
 
 	// Corrupt the file.

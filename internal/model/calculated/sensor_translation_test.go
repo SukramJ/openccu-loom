@@ -40,7 +40,6 @@ func TestCalcSensorTranslationPromoted(t *testing.T) {
 	}
 
 	for _, tc := range sensors {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := tc.trans()

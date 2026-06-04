@@ -36,8 +36,7 @@ func TestSchedulerStartStopLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal("Start:", err)
@@ -83,8 +82,7 @@ func TestSchedulerJobErrorDoesNotCrashScheduler(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -135,8 +133,7 @@ func TestSchedulerMultipleJobsRunConcurrently(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -192,8 +189,7 @@ func TestSchedulerOverrunDoesNotPileUp(t *testing.T) {
 		},
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -229,8 +225,7 @@ func TestSchedulerStopReturnsPromptly(t *testing.T) {
 		Run:      func(context.Context) error { return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -297,8 +292,7 @@ func TestSchedulerRunOnStartFiresBeforeFirstTick(t *testing.T) {
 		Run:        func(context.Context) error { calls.Add(1); return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -329,8 +323,7 @@ func TestSchedulerAddAfterStartLaunchesJob(t *testing.T) {
 		Run:      func(context.Context) error { return nil },
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
@@ -418,23 +411,19 @@ func TestSchedulerConcurrentOperationsRaceFree(t *testing.T) {
 
 		var wg sync.WaitGroup
 		for range 10 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				// These should all return error (started), no race.
 				_ = s.Add(Job{
 					Name:     "late",
 					Interval: time.Minute,
 					Run:      func(context.Context) error { return nil },
 				})
-			}()
+			})
 		}
 		for range 3 {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				s.Stop()
-			}()
+			})
 		}
 		cancel()
 		wg.Wait()

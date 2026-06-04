@@ -152,7 +152,6 @@ func TestDataCacheConcurrentPutGetForget(t *testing.T) {
 	var puts, forgets atomic.Int64
 
 	for g := range goroutines {
-		g := g
 		go func() {
 			defer wg.Done()
 			k := baseKeys[g%keySpace]

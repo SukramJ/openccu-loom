@@ -6,6 +6,7 @@ package core_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -195,13 +196,7 @@ func TestDescriptor_MatterReportableContainsPartsList(t *testing.T) {
 	t.Parallel()
 	d := defaultDescriptor(t)
 	reportable := d.MatterReportable()
-	found := false
-	for _, id := range reportable {
-		if id == 0x0003 {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(reportable, 0x0003)
 	if !found {
 		t.Fatalf("MatterReportable = %v, expected PartsList (0x0003)", reportable)
 	}

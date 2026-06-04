@@ -82,12 +82,11 @@ func ClassifyFields(v any) []FieldDescriptor {
 // per field. Anonymous (embedded) fields are inlined; named
 // sub-struct fields prefix their yaml tag onto the path.
 func walkStruct(rt reflect.Type, pathPrefix, source string, out *[]FieldDescriptor) {
-	for i := 0; i < rt.NumField(); i++ {
-		f := rt.Field(i)
+	for f := range rt.Fields() {
 		if !f.IsExported() {
 			continue
 		}
-		yamlTag := strings.Split(f.Tag.Get("yaml"), ",")[0]
+		yamlTag, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
 		if yamlTag == "-" {
 			continue
 		}

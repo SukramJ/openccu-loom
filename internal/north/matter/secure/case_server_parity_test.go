@@ -284,7 +284,7 @@ func TestParityMatterJS_CasePairing_MulticastIdempotency(t *testing.T) {
 	const fanout = 4
 	ch := make(chan res, fanout)
 	goStart := make(chan struct{})
-	for i := 0; i < fanout; i++ {
+	for range fanout {
 		go func() {
 			<-goStart
 			s2, err := responder.ProcessSigma1(s1)

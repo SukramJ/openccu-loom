@@ -153,19 +153,15 @@ func TestFakeConcurrentAdvanceAndScheduleSafe(t *testing.T) {
 	t.Parallel()
 	c := NewFake(time.Now())
 	var wg sync.WaitGroup
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 32 {
+		wg.Go(func() {
 			_ = c.NewTimer(time.Millisecond)
-		}()
+		})
 	}
-	for i := 0; i < 32; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 32 {
+		wg.Go(func() {
 			c.Advance(time.Microsecond)
-		}()
+		})
 	}
 	wg.Wait()
 	// Smoke: no panic / data race when running with -race.

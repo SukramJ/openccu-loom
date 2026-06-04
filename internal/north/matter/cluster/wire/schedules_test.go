@@ -149,7 +149,6 @@ func TestSchedulesEmptySourceReturnsZeros(t *testing.T) {
 		{"NumberOfScheduleTransitions", wire.SchedulesAttrNumberOfScheduleTransitions},
 		{"NumberOfScheduleTransitionsPerDay", wire.SchedulesAttrNumberOfScheduleTransitionsPerDay},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			v, ok := srv.MatterRead(tc.attrID)

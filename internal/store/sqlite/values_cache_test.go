@@ -415,7 +415,7 @@ func TestValuesCache_Stats_RowsAndBytes(t *testing.T) {
 	now := nowMS()
 
 	const n = 5
-	for i := 0; i < n; i++ {
+	for i := range n {
 		param := string(rune('A' + i))
 		if err := s.SaveValue(ctx, "ccu1", "HmIP-RF", "STAT:1", param, float64(i), now, now); err != nil {
 			t.Fatalf("SaveValue param %s: %v", param, err)

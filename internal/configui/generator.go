@@ -6,6 +6,7 @@ package configui
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -450,9 +451,7 @@ func copyAnyMap(in map[string]any) map[string]any {
 		return nil
 	}
 	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }
 

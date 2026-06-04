@@ -114,7 +114,6 @@ func TestEmptyChannelsIsAnyChannelWildcardPositive(t *testing.T) {
 	d := NewParameterDecider(nil)
 	// HM-CC-RT-DN has Channels:{} (empty = wildcard) and climateMasterParameters.
 	for _, ch := range []int{0, 1, 2, 5, 10} {
-		ch := ch
 		t.Run("ch"+string(rune('0'+ch)), func(t *testing.T) { //nolint:gosec // G115: ch is a small channel number in test list; '0'+ch stays within ASCII digit range
 			t.Parallel()
 			if d.IsParameterIgnored("HM-CC-RT-DN", "X", ch, hmenum.ParamsetKeyMaster, hmenum.ParameterTemperatureOffset) {
@@ -153,12 +152,10 @@ func TestEmptyChannelsAllThreeWildcardModels(t *testing.T) {
 	wildcardModels := []string{"HM-CC-RT-DN", "HM-CC-VG-1", "HM-TC-IT-WM-W-EU"}
 	d := NewParameterDecider(nil)
 	for _, model := range wildcardModels {
-		model := model
 		t.Run(model, func(t *testing.T) {
 			t.Parallel()
 			// Temperature offset is in climateMasterParameters — must be allowed on any ch.
 			for _, ch := range []int{0, 1, 4} {
-				ch := ch
 				if d.IsParameterIgnored(model, "X", ch, hmenum.ParamsetKeyMaster, hmenum.ParameterTemperatureOffset) {
 					t.Errorf("%s ch=%d: TEMPERATURE_OFFSET must NOT be ignored (empty-channels wildcard)", model, ch)
 				}
@@ -278,7 +275,6 @@ func TestRegistryIsAllowedForChannelMasterWhitelist(t *testing.T) {
 		{"HmIP-Unknown", 0, hmenum.ParameterLevel, false, "unknown model ch=0 default-skip MASTER"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 			got := reg.IsAllowedForChannel(tc.model, "X", tc.ch, hmenum.ParamsetKeyMaster, tc.param)

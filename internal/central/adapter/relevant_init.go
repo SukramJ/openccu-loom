@@ -156,7 +156,7 @@ func seedReadableEvents(ctx context.Context, unit *central.Unit, iface hmenum.In
 // that should be eagerly loaded during bootstrap. Type-erases via the
 // minimal Category + IsReadable interface so the helper does not have
 // to import the concrete generic.DataPoint family.
-func isReadableEventDP(dp interface{}) bool {
+func isReadableEventDP(dp any) bool {
 	cat, ok := dp.(interface {
 		Category() hmenum.DataPointCategory
 	})

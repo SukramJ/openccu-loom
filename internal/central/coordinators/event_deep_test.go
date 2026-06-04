@@ -288,7 +288,6 @@ func TestHandleRawEventConcurrentNoRace(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	for g := range goroutines {
-		g := g
 		go func() {
 			defer wg.Done()
 			iface := "iface"
@@ -318,7 +317,7 @@ func TestMarkEventConcurrentNoRace(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines * 2)
 	for i := range goroutines {
-		i := i
+
 		go func() {
 			defer wg.Done()
 			ec.MarkEvent("iface", time.Now().Add(time.Duration(i)*time.Millisecond))
@@ -349,7 +348,6 @@ func TestSplitDeviceAddress(t *testing.T) {
 		{":0", ""},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.in, func(t *testing.T) {
 			t.Parallel()
 			if got := splitDeviceAddress(tc.in); got != tc.want {

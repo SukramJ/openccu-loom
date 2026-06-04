@@ -340,14 +340,12 @@ func TestProgramNotifyRemovedClearsHandlers(t *testing.T) {
 func TestProgramConcurrentExecution(t *testing.T) {
 	p := &Program{ID: "race"}
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 20 {
+		wg.Go(func() {
 			p.OnExecution(true, hmenum.ProgramTriggerAPI)
 			_, _ = p.LastExecution()
 			_, _ = p.LastResult()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -407,13 +405,10 @@ func TestSysvarSet_writerError(t *testing.T) {
 func TestSysvarConcurrentOnValue(t *testing.T) {
 	s := &Sysvar{HubDataPoint: HubDataPoint{Name: "sv"}, Writer: &stubSysvar{}}
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
-		i := i
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for i := range 20 {
+		wg.Go(func() {
 			s.OnValue(hmtypes.IntValue(i))
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -455,14 +450,12 @@ func TestSameInbox_differentValues(t *testing.T) {
 func TestInboxConcurrentReplace(t *testing.T) {
 	in := NewInbox()
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 10 {
+		wg.Go(func() {
 			in.Replace([]InboxDevice{{Address: "0001"}})
 			_ = in.Count()
 			_ = in.List()
-		}()
+		})
 	}
 	wg.Wait()
 }
@@ -777,7 +770,7 @@ func TestConnectivityAllReachable_allUp(t *testing.T) {
 func TestConnectivityConcurrentOnState(t *testing.T) {
 	c := NewConnectivity()
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -823,7 +816,7 @@ func TestUpdateOnUpdateUnsubscribe(t *testing.T) {
 func TestUpdateConcurrentOnInfo(t *testing.T) {
 	u := NewUpdate()
 	var wg sync.WaitGroup
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()

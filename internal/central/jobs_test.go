@@ -6,6 +6,7 @@ package central
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -111,13 +112,7 @@ func TestRegisterStandardJobsRegistersInstallModeSlot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterStandardJobs: %v", err)
 	}
-	found := false
-	for _, n := range names {
-		if n == "hub.install_mode_refresh" {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(names, "hub.install_mode_refresh")
 	if !found {
 		t.Fatalf("install_mode_refresh slot missing in %v", names)
 	}

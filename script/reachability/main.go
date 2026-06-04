@@ -405,10 +405,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 
 	if len(byPackage) > 0 {
 		fmt.Println("\nTop-10 Pakete nach Dead-Code-Count:")
-		limit := 10
-		if len(byPackage) < limit {
-			limit = len(byPackage)
-		}
+		limit := min(len(byPackage), 10)
 		for _, ps := range byPackage[:limit] {
 			fmt.Printf("  %-60s funcs=%d types=%d\n", ps.Package, ps.UnreachableFuncs, ps.UnreachableTypes)
 		}
@@ -752,8 +749,8 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 			return false
 		}
 		// Value-Receiver-Methoden: direkt über named.Method(i) zugänglich
-		for i := range named.NumMethods() {
-			fn := pkg.Prog.FuncValue(named.Method(i))
+		for method := range named.Methods() {
+			fn := pkg.Prog.FuncValue(method)
 			if fn != nil && reachable[fn] {
 				return true
 			}
@@ -761,8 +758,7 @@ func isReachable(member ssa.Member, reachable map[*ssa.Function]bool, pkg *ssa.P
 		// Pointer-Receiver-Methoden: über MethodSet des Pointer-Typs
 		ptrType := types.NewPointer(named)
 		mset := types.NewMethodSet(ptrType)
-		for j := range mset.Len() {
-			sel := mset.At(j)
+		for sel := range mset.Methods() {
 			if sel == nil {
 				continue
 			}
@@ -899,8 +895,8 @@ func findWhitelistComment(f *ast.File, fset *token.FileSet, decl ast.Decl) (stri
 			if commentLine >= declLine-1 && commentLine < declLine {
 				text := strings.TrimPrefix(c.Text, "//")
 				text = strings.TrimSpace(text)
-				if strings.HasPrefix(text, "loom:reachable:reason=") {
-					reason := strings.TrimPrefix(text, "loom:reachable:reason=")
+				if after, ok := strings.CutPrefix(text, "loom:reachable:reason="); ok {
+					reason := after
 					reason = strings.Trim(reason, `"`)
 					return reason, true
 				}

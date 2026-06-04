@@ -19,7 +19,7 @@ import (
 func forceOpen(t *testing.T, cb *CircuitBreaker) {
 	t.Helper()
 	boom := errors.New("boom")
-	for i := 0; i < cb.cfg.FailureThreshold; i++ {
+	for range cb.cfg.FailureThreshold {
 		_ = cb.Do(context.Background(), "setValue", func(_ context.Context) error { return boom })
 	}
 	if cb.State() != hmenum.CircuitStateOpen {
@@ -85,7 +85,6 @@ func TestCircuitBypassesPing(t *testing.T) {
 func TestCircuitBypassGetVersionAndSystemListMethods(t *testing.T) {
 	t.Parallel()
 	for _, method := range []string{"getVersion", "system.listMethods", "system.methodHelp"} {
-		method := method
 		t.Run(method, func(t *testing.T) {
 			t.Parallel()
 			cb := newOpenCircuit(t)

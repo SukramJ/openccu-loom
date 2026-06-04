@@ -99,7 +99,6 @@ func TestMQTTTopicSchemaDoc_StateTopics(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if tc.got != tc.docTopic {
@@ -149,7 +148,6 @@ func TestMQTTTopicSchemaDoc_CommandTopics(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if tc.got != tc.docTopic {
@@ -228,7 +226,6 @@ func TestMQTTTopicSchemaDoc_BridgeHubTopics(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if tc.got != tc.docTopic {

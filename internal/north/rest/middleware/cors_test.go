@@ -6,6 +6,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync/atomic"
 	"testing"
 )
@@ -93,7 +94,6 @@ func TestCORS_WildcardOriginAllowsAny(t *testing.T) {
 	handler := CORS(cfg)(newCountingHandler(t, &calls, http.StatusOK, "ok"))
 
 	for _, origin := range []string{"https://foo.example", "https://bar.io", "http://localhost:3000"} {
-		origin := origin
 		t.Run(origin, func(t *testing.T) {
 			t.Parallel()
 			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
@@ -304,12 +304,7 @@ func TestCORS_CaseInsensitiveOriginMatching(t *testing.T) {
 // containsToken reports whether token appears as a word in the comma-separated
 // header value s.
 func containsToken(s, token string) bool {
-	for _, part := range splitComma(s) {
-		if part == token {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(splitComma(s), token)
 }
 
 func splitComma(s string) []string {
@@ -326,7 +321,7 @@ func splitComma(s string) []string {
 func splitStr(s string, sep byte) []string {
 	var out []string
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == sep {
 			out = append(out, s[start:i])
 			start = i + 1

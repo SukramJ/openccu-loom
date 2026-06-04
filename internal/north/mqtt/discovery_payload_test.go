@@ -381,7 +381,6 @@ func TestClimateMinTempFromConfigPayload(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			src := &stubBuilder{
@@ -715,7 +714,6 @@ func TestClimateModesInPayload(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			src := &stubBuilder{
@@ -1605,7 +1603,6 @@ func TestBinarySensorMissingEntriesH019(t *testing.T) {
 		{"LOWBAT_SENSOR", "LOW_BAT", true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.param, func(t *testing.T) {
 			t.Parallel()
 			desc, ok := LookupBinarySensorRule("", tc.param)

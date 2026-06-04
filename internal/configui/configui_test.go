@@ -5,6 +5,7 @@ package configui
 
 import (
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -439,10 +440,8 @@ func TestGrouperPutsParametersIntoCuratedSections(t *testing.T) {
 		t.Fatalf("last group=%s want other", got[len(got)-1].ID)
 	}
 	// RANDOM_PARAM must be in "other".
-	for _, p := range got[len(got)-1].Parameters {
-		if p == "RANDOM_PARAM" {
-			return
-		}
+	if slices.Contains(got[len(got)-1].Parameters, "RANDOM_PARAM") {
+		return
 	}
 	t.Fatalf("RANDOM_PARAM not in other group: %+v", got[len(got)-1])
 }

@@ -1,6 +1,6 @@
 module github.com/SukramJ/openccu-loom
 
-go 1.26
+go 1.26.4
 
 require (
 	github.com/SukramJ/godevccu v0.1.2

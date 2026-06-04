@@ -50,7 +50,7 @@ func TestPongTrackerAddContainsRemove(t *testing.T) {
 func TestPongTrackerLen(t *testing.T) {
 	t.Parallel()
 	pt := NewPongTracker()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		pt.Add(string(rune('A'+i)), time.Now())
 	}
 	if pt.Len() != 5 {
@@ -188,7 +188,7 @@ func TestPingPongDiagJournalSizeEviction(t *testing.T) {
 	t.Parallel()
 	const maxEntries = 5
 	j := NewPingPongDiagJournal(PingPongDiagJournalConfig{MaxEntries: maxEntries, MaxAge: time.Hour})
-	for i := 0; i < maxEntries+3; i++ {
+	for range maxEntries + 3 {
 		j.RecordPingSent("tok")
 	}
 	events := j.GetRecentEvents(100)
@@ -321,7 +321,7 @@ func TestPingPongDiagJournalTokenTruncation(t *testing.T) {
 func TestPingPongDiagJournalRTTSamplesCappedAt50(t *testing.T) {
 	t.Parallel()
 	j := NewPingPongDiagJournal(PingPongDiagJournalConfig{MaxEntries: 200, MaxAge: time.Hour})
-	for i := 0; i < 60; i++ {
+	for i := range 60 {
 		j.RecordPongReceived("t", float64(i))
 	}
 	stats := j.GetRTTStatistics()

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -311,10 +312,7 @@ func (c *Client) Login(ctx context.Context) error {
 		if c.currentBackoff == 0 {
 			c.currentBackoff = loginBaseBackoff
 		} else {
-			next := time.Duration(float64(c.currentBackoff) * loginBackoffMultiplier)
-			if next > loginMaxBackoff {
-				next = loginMaxBackoff
-			}
+			next := min(time.Duration(float64(c.currentBackoff)*loginBackoffMultiplier), loginMaxBackoff)
 			c.currentBackoff = next
 		}
 		c.mu.Unlock()
@@ -411,9 +409,7 @@ func (c *Client) paramsWithSession(params map[string]any) map[string]any {
 		return params
 	}
 	out := make(map[string]any, len(params)+1)
-	for k, v := range params {
-		out[k] = v
-	}
+	maps.Copy(out, params)
 	out[sessionParamKey] = session
 	return out
 }

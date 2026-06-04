@@ -865,24 +865,20 @@ func TestConcurrent_OnAttributeChanged_Tick_Subscribe_Close(t *testing.T) {
 
 	// Concurrent OnAttributeChanged.
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 20 {
 				m.OnAttributeChanged(subscribedPath)
 			}
-		}()
+		})
 	}
 
 	// Concurrent Tick.
 	for range 4 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for range 20 {
 				m.Tick(ctx, time.Now().Add(5*time.Second))
 			}
-		}()
+		})
 	}
 
 	// Concurrent Subscribe (new fabric to avoid quota).
@@ -1201,8 +1197,7 @@ func TestSubscribe_PostClampNoInversion_Succeeds(t *testing.T) {
 func TestStartStop_Idempotent(t *testing.T) {
 	t.Parallel()
 	m := newManager(subscription.Config{}, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	m.Start(ctx)
 	// Double Stop must not panic (sync.Once).

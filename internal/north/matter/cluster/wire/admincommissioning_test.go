@@ -6,6 +6,7 @@ package wire_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -211,7 +212,6 @@ func TestAdmComm_Write_ReturnsErrorForEveryAttr(t *testing.T) {
 		admCommAttrWindow, admCommAttrFabric, admCommAttrVendor,
 		admCommAttrFeatMap, admCommAttrRev,
 	} {
-		attrID := attrID
 		t.Run("", func(t *testing.T) {
 			t.Parallel()
 			err := ac.MatterWrite(context.Background(), attrID, uint8(0), hmenum.CommandPriorityHigh)
@@ -509,13 +509,7 @@ func TestAdmComm_Reportable_ContainsRequiredAttributes(t *testing.T) {
 
 	want := []uint32{admCommAttrWindow, admCommAttrFabric, admCommAttrVendor}
 	for _, id := range want {
-		found := false
-		for _, r := range reportable {
-			if r == id {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(reportable, id)
 		if !found {
 			t.Errorf("MatterReportable() = %v; missing attr 0x%04X", reportable, id)
 		}

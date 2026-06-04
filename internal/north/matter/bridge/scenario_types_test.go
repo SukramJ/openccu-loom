@@ -62,7 +62,7 @@ type scenario struct {
 type scenarioGiven struct {
 	SessionID               uint16            `json:"session_id,omitempty"`
 	PeerSubscribeExchangeID uint16            `json:"peer_subscribe_exchange_id,omitempty"`
-	Subscription            scenarioAttrPath  `json:"subscription,omitempty"`
+	Subscription            scenarioAttrPath  `json:"subscription,omitzero"`
 	Subscriptions           []scenarioSubSpec `json:"subscriptions,omitempty"`
 
 	// Topology names a predefined recipe under
@@ -89,7 +89,7 @@ type scenarioGiven struct {
 type scenarioSubSpec struct {
 	SessionID               uint16             `json:"session_id"`
 	PeerSubscribeExchangeID uint16             `json:"peer_subscribe_exchange_id"`
-	Subscription            scenarioAttrPath   `json:"subscription,omitempty"`
+	Subscription            scenarioAttrPath   `json:"subscription,omitzero"`
 	Paths                   []scenarioAttrPath `json:"paths,omitempty"`
 
 	// SkipAutoSubscribe defaults to false so existing scenarios get

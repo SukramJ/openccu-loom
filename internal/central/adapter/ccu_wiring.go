@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	neturl "net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -143,8 +144,8 @@ func WireCentrals(
 		joined  []string
 	)
 	teardown := func() {
-		for i := len(closers) - 1; i >= 0; i-- {
-			closers[i]()
+		for _, closer := range slices.Backward(closers) {
+			closer()
 		}
 	}
 	for i := range cfg.Centrals {

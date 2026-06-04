@@ -197,6 +197,7 @@ func TestHotReloadHandler_AlwaysReturnsNilError(t *testing.T) {
 // that an MQTT structural diff with no supervisor installed logs
 // mqtt_deferred and returns nil — the watcher must not roll back.
 func TestHotReloadHandler_MQTT_NoSupervisorBound_LogsDeferred(t *testing.T) {
+	t.Parallel()
 	// nil deps path: reloadDeps.MQTTSupervisor() handles nil receiver.
 	t.Run("nil_deps", func(t *testing.T) {
 		t.Parallel()

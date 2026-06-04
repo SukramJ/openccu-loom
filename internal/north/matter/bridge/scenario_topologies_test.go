@@ -215,7 +215,7 @@ func buildManyTempSensorsTopology() *scenarioTopology {
 	const n = 30
 	dev := device.New(device.Config{Address: "MANYTMP", Name: "Many-Temp"})
 	sources := make(map[string]*scenarioFakeNotifier, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		chAddr := fmt.Sprintf("MANYTMP:%d", i+1)
 		src := &scenarioFakeNotifier{
 			key:   hmtypes.DataPointKey{ChannelAddress: chAddr, Parameter: "ACTUAL_TEMPERATURE"},

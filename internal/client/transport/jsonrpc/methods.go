@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strings"
@@ -246,9 +247,7 @@ func (c *Client) ReadProgram(ctx context.Context, iseID string) (map[string]any,
 // Wire: Program.updateProgram, params: body ∪ {id: iseID}.
 func (c *Client) UpdateProgram(ctx context.Context, iseID string, body map[string]any) error {
 	params := make(map[string]any, len(body)+1)
-	for k, v := range body {
-		params[k] = v
-	}
+	maps.Copy(params, body)
 	params["id"] = iseID
 	return c.Call(ctx, "Program.updateProgram", params, nil)
 }
@@ -936,8 +935,8 @@ func (c *Client) ListInterfaces(ctx context.Context) ([]InterfaceEntry, error) {
 func (c *Client) backupBaseURL() string {
 	const jsonRPCPath = "/api/homematic.cgi"
 	ep := strings.TrimRight(c.cfg.Endpoint, "/")
-	if strings.HasSuffix(ep, jsonRPCPath) {
-		return strings.TrimSuffix(ep, jsonRPCPath)
+	if before, ok := strings.CutSuffix(ep, jsonRPCPath); ok {
+		return before
 	}
 	// Fallback: try to use the URL up to the path root.
 	u, err := url.Parse(ep)
@@ -950,12 +949,12 @@ func (c *Client) backupBaseURL() string {
 // joinSemicolon joins a string slice with semicolons. Used to format the
 // valueList parameter for SysVar.createEnum (CCU wire format).
 func joinSemicolon(s []string) string {
-	result := ""
+	var result strings.Builder
 	for i, v := range s {
 		if i > 0 {
-			result += ";"
+			result.WriteString(";")
 		}
-		result += v
+		result.WriteString(v)
 	}
-	return result
+	return result.String()
 }

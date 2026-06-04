@@ -4,7 +4,6 @@
 package main
 
 import (
-	"io"
 	"log/slog"
 	"testing"
 
@@ -29,7 +28,7 @@ func TestBuildBackupAdapter_ValidDataDir_ReturnsAdapter(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := central.NewRegistry()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	a := buildBackupAdapter(cfg, reg, logger)
 	if a == nil {
 		t.Fatal("expected non-nil adapter for valid data dir")
@@ -44,7 +43,7 @@ func TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = ""
 	reg := central.NewRegistry()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	a := buildBackupAdapter(cfg, reg, logger)
 	if a == nil {
 		t.Fatal("expected non-nil adapter even when backup dir creation fails")
@@ -79,7 +78,7 @@ func TestWireSessionRecorderPersistence_ValidDir_ReturnsCloser(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := central.NewRegistry()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireSessionRecorderPersistence(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -111,7 +110,7 @@ func TestWireIncidentRecorder_ValidConfig_DoesNotPanic(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	reg := central.NewRegistry()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
@@ -144,7 +143,7 @@ func TestWireAuditPersistence_ValidConfig_ReturnsPersistedRecorder(t *testing.T)
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
 	buf := audit.NewBuffer(16)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	got, db, _ := wireAuditPersistenceWithDB(cfg, buf, logger)
 	gooseMigrateMu.Unlock()
@@ -163,7 +162,7 @@ func TestWireAuditPersistence_EmptyDataDir_FallsBack(t *testing.T) {
 	cfg := config.Default()
 	cfg.DataDir = ""
 	buf := audit.NewBuffer(16)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := wireAuditPersistence(cfg, buf, logger)
 	// ./var likely does not exist in test; degrades to buf.
 	if got == nil {

@@ -46,7 +46,7 @@ func TestPongTrackerCleanupTrackerSizeLimit(t *testing.T) {
 	base := time.Now()
 
 	// Add 5 tokens with distinct, ascending timestamps.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		pt.Add(string(rune('a'+i)), base.Add(time.Duration(i)*time.Second))
 	}
 
@@ -196,20 +196,20 @@ func TestPingPongCombinedTrackerConnectionIssueSkipsTracking(t *testing.T) {
 
 func TestPingPongCombinedTrackerThresholdPublish(t *testing.T) {
 	t.Parallel()
-	var publishCount int32
+	var publishCount atomic.Int32
 	tr := NewPingPongCombinedTracker(PingPongCombinedConfig{
 		InterfaceID:  "BidCos-RF",
 		AllowedDelta: 2,
 		OnPublish: func(kind hmenum.PingPongMismatchType, count int) {
-			atomic.AddInt32(&publishCount, 1)
+			publishCount.Add(1)
 		},
 	})
 	// Send 3 pings (> threshold of 2). Each HandleSendPing may call OnPublish.
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		tr.HandleSendPing("BidCos-RF", time.Now().Add(time.Duration(i)*time.Millisecond))
 	}
 
-	if atomic.LoadInt32(&publishCount) == 0 {
+	if publishCount.Load() == 0 {
 		t.Error("OnPublish must have been called at least once when pending > AllowedDelta")
 	}
 }

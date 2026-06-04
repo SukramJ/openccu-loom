@@ -8,7 +8,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -36,7 +35,7 @@ func TestStartMatterBridge_EphemeralWindow(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with ephemeral window enabled")
@@ -66,7 +65,7 @@ func TestStartMatterBridge_EphemeralWindowConcurrent(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with concurrent ephemeral window enabled")
@@ -89,7 +88,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with DevRotateUniqueIDs")
@@ -102,7 +101,7 @@ func TestStartMatterBridge_NilConfig_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if got := startMatterBridge(ctx, nil, reg, health.NewTracker(), logger); got != nil {
 		t.Error("expected nil for nil config")
 		got.stop()
@@ -114,7 +113,7 @@ func TestStartMatterBridge_NilConfig_ReturnsNil(t *testing.T) {
 func TestBuildMatterAdvertiser_ZeroconfBranch_ReturnsNonNil(t *testing.T) {
 	t.Parallel()
 	mc := config.NorthMatter{MDNSAdvertise: "zeroconf"}
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := buildMatterAdvertiser(mc, logger)
 	if got == nil {
 		t.Fatal("expected non-nil advertiser for zeroconf")
@@ -135,7 +134,7 @@ func TestAnnouncePersistedFabric_WithFabric_CallsAnnounceFabric(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -159,7 +158,7 @@ func TestAnnouncePersistedFabric_WithFabric_CallsAnnounceFabric(t *testing.T) {
 	}
 
 	// Must not panic; exercises the loop body + AnnounceFabric call.
-	announcePersistedFabric(ctx, bundle.store, bundle.bridge, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	announcePersistedFabric(ctx, bundle.store, bundle.bridge, slog.New(slog.DiscardHandler))
 }
 
 func TestAnnouncePersistedFabric_InvalidRootKey_LogsAndContinues(t *testing.T) {
@@ -174,7 +173,7 @@ func TestAnnouncePersistedFabric_InvalidRootKey_LogsAndContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -193,7 +192,7 @@ func TestAnnouncePersistedFabric_InvalidRootKey_LogsAndContinues(t *testing.T) {
 	}
 
 	// Must not panic; exercises the error branch.
-	announcePersistedFabric(ctx, bundle.store, bundle.bridge, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	announcePersistedFabric(ctx, bundle.store, bundle.bridge, slog.New(slog.DiscardHandler))
 }
 
 // ── loadAdditionalFabricsForCase: non-nil store with fabrics ─────────────────
@@ -208,7 +207,7 @@ func TestLoadAdditionalFabricsForCase_EmptyFabrics_ReturnsZero(t *testing.T) {
 		0,   // seedIdx
 		nil, // caseFabrics map
 		nil, // mu
-		slog.New(slog.NewTextHandler(io.Discard, nil)),
+		slog.New(slog.DiscardHandler),
 	)
 	if count != 0 {
 		t.Errorf("expected 0 for empty store, got %d", count)
@@ -220,7 +219,7 @@ func TestLoadAdditionalFabricsForCase_SeedSkipped_ReturnsZero(t *testing.T) {
 	mgr := buildTestOperationalManager(t)
 	store := matterStoreFromManager(t, mgr)
 	ctx := context.Background()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 
 	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

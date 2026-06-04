@@ -26,7 +26,7 @@ func newJSONLogger(buf *bytes.Buffer) *slog.Logger {
 func parseLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	t.Helper()
 	var records []map[string]any
-	for _, line := range bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n")) {
+	for line := range bytes.SplitSeq(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n")) {
 		if len(line) == 0 {
 			continue
 		}

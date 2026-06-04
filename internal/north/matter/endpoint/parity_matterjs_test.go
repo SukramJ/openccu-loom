@@ -23,7 +23,7 @@ package endpoint_test
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -352,8 +352,8 @@ func TestParityMatterJS_BridgedEndpoint_ServerListDerivedFromMountedClusters(t *
 	serverList2 := raw2.([]uint32)
 	sl1 := append([]uint32(nil), serverList...)
 	sl2 := append([]uint32(nil), serverList2...)
-	sort.Slice(sl1, func(i, j int) bool { return sl1[i] < sl1[j] })
-	sort.Slice(sl2, func(i, j int) bool { return sl2[i] < sl2[j] })
+	slices.Sort(sl1)
+	slices.Sort(sl2)
 	if len(sl1) != len(sl2) {
 		t.Fatalf("consecutive ServerList reads: len %d vs %d", len(sl1), len(sl2))
 	}

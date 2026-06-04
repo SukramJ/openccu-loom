@@ -142,7 +142,7 @@ func (b *Bridge) PublishScheduleEntityState(
 		centralName = b.cfg.CentralName
 	}
 	topic := b.topics.ScheduleEntityState(centralName, iface, address, channel)
-	return b.client.Publish(ctx, topic, []byte(fmt.Sprintf("%d", count)), b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, topic, fmt.Appendf(nil, "%d", count), b.cfg.QoS.State, true)
 }
 
 // PublishScheduleEntityAttrs publishes the rich schedule structure to

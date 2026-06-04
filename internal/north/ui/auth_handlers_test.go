@@ -29,7 +29,7 @@ func newAuthUI(t *testing.T) (http.Handler, *auth.MemoryUserStore, *auth.Session
 func TestLoginPostSuccessIssuesCookie(t *testing.T) {
 	h, _, _ := newAuthUI(t)
 	body := strings.NewReader("username=alice&password=s3cret")
-	req := httptest.NewRequest("POST", "/login", body)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -43,7 +43,7 @@ func TestLoginPostSuccessIssuesCookie(t *testing.T) {
 
 func TestLoginPostFailureRedirects(t *testing.T) {
 	h, _, _ := newAuthUI(t)
-	req := httptest.NewRequest("POST", "/login", strings.NewReader("username=alice&password=wrong"))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("username=alice&password=wrong"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -55,7 +55,7 @@ func TestLoginPostFailureRedirects(t *testing.T) {
 func TestLogoutPostClearsCookie(t *testing.T) {
 	h, _, sessions := newAuthUI(t)
 	sess, _ := sessions.Issue(auth.Identity{Subject: "alice", Role: auth.RoleAdmin})
-	req := httptest.NewRequest("POST", "/logout", http.NoBody)
+	req := httptest.NewRequest(http.MethodPost, "/logout", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sess.ID})
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -74,7 +74,7 @@ func TestSetupPostCreatesAdmin(t *testing.T) {
 		Lang: "en", Catalogs: cats,
 		Auth: &AuthDeps{Users: users, Sessions: auth.NewSessionStore()},
 	})
-	req := httptest.NewRequest("POST", "/setup",
+	req := httptest.NewRequest(http.MethodPost, "/setup",
 		strings.NewReader("username=root&password=supersecret&confirm=supersecret"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -94,7 +94,7 @@ func TestSetupPostPasswordMismatchFails(t *testing.T) {
 		Lang: "en", Catalogs: cats,
 		Auth: &AuthDeps{Users: users, Sessions: auth.NewSessionStore()},
 	})
-	req := httptest.NewRequest("POST", "/setup",
+	req := httptest.NewRequest(http.MethodPost, "/setup",
 		strings.NewReader("username=root&password=abc&confirm=xyz"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
@@ -119,7 +119,7 @@ func TestHandleLoginPostOversizedBodyReturns400(t *testing.T) {
 	})
 	// Body larger than 64 KiB — triggers MaxBytesReader + ParseForm error.
 	bigBody := strings.Repeat("x", 65*1024+1)
-	req := httptest.NewRequest("POST", "/login", strings.NewReader(bigBody))
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(bigBody))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -140,7 +140,7 @@ func TestHandleSetupPostOversizedBodyReturns400(t *testing.T) {
 		Auth: &AuthDeps{Users: users, Sessions: sessions},
 	})
 	bigBody := strings.Repeat("x", 65*1024+1)
-	req := httptest.NewRequest("POST", "/setup", strings.NewReader(bigBody))
+	req := httptest.NewRequest(http.MethodPost, "/setup", strings.NewReader(bigBody))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -164,7 +164,7 @@ func TestHandleLoginPostSuccessRedirectsToRoot(t *testing.T) {
 		Auth: &AuthDeps{Users: users, Sessions: sessions},
 	})
 	body := strings.NewReader("username=testuser&password=testpass")
-	req := httptest.NewRequest("POST", "/login", body)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -188,7 +188,7 @@ func TestHandleLoginPostNilAuthReturns503(t *testing.T) {
 	// Auth: nil → handleLoginPost should return 503
 	h := NewRouter(Deps{Lang: "en", Catalogs: cats, Auth: nil})
 	body := strings.NewReader("username=alice&password=s3cret")
-	req := httptest.NewRequest("POST", "/login", body)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -211,7 +211,7 @@ func TestHandleSetupPostCreatesUserAndRedirects(t *testing.T) {
 		Auth:     &AuthDeps{Users: users, Sessions: sessions},
 	})
 	body := strings.NewReader("username=admin&password=secret1&confirm=secret1")
-	req := httptest.NewRequest("POST", "/setup", body)
+	req := httptest.NewRequest(http.MethodPost, "/setup", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -233,7 +233,7 @@ func TestHandleSetupPostPasswordMismatchRedirectsWithError(t *testing.T) {
 		Auth:     &AuthDeps{Users: users, Sessions: sessions},
 	})
 	body := strings.NewReader("username=admin&password=secret1&confirm=different")
-	req := httptest.NewRequest("POST", "/setup", body)
+	req := httptest.NewRequest(http.MethodPost, "/setup", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -249,7 +249,7 @@ func TestHandleSetupPostNilAuthReturns503(t *testing.T) {
 	cats, _ := i18n.NewCatalogs()
 	h := NewRouter(Deps{Lang: "en", Catalogs: cats, Auth: nil})
 	body := strings.NewReader("username=admin&password=secret1&confirm=secret1")
-	req := httptest.NewRequest("POST", "/setup", body)
+	req := httptest.NewRequest(http.MethodPost, "/setup", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -270,7 +270,7 @@ func TestHandleLoginPostParsesFormValues(t *testing.T) {
 	})
 	// Wrong password → redirect with error
 	body := strings.NewReader("username=bob&password=wrongpass")
-	req := httptest.NewRequest("POST", "/login", body)
+	req := httptest.NewRequest(http.MethodPost, "/login", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)

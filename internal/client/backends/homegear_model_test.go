@@ -82,8 +82,8 @@ func TestHomegearOperationsSurfaceParity(t *testing.T) {
 		"SetSystemVariable", "SetValue",
 		"Model", "Version", "SetVersion",
 	}
-	b := NewHomegearBackend(nil, nil)
-	rt := reflect.TypeOf(b)
+	_ = NewHomegearBackend(nil, nil)
+	rt := reflect.TypeFor[*HomegearBackend]()
 	missing := []string{}
 	for _, m := range required {
 		if _, ok := rt.MethodByName(m); !ok {

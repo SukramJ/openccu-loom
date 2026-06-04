@@ -48,7 +48,7 @@ func TestSimpleScheduleRoundTripContract(t *testing.T) {
 		// SWITCH must reject level_2 + ramp_time
 		{
 			name: "switch with level_2 rejects", category: hmenum.DataPointCategorySwitch,
-			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 1.0, Level2: floatPtr(0.5)},
+			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 1.0, Level2: new(0.5)},
 			wantError: true,
 		},
 		{
@@ -75,7 +75,7 @@ func TestSimpleScheduleRoundTripContract(t *testing.T) {
 		// VALVE must reject level_2 + ramp_time
 		{
 			name: "valve with level_2 rejects", category: hmenum.DataPointCategoryValve,
-			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 1.0, Level2: floatPtr(0.5)},
+			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 1.0, Level2: new(0.5)},
 			wantError: true,
 		},
 		{
@@ -86,7 +86,7 @@ func TestSimpleScheduleRoundTripContract(t *testing.T) {
 		// LIGHT must reject level_2
 		{
 			name: "light with level_2 rejects", category: hmenum.DataPointCategoryLight,
-			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 0.8, Level2: floatPtr(0.5)},
+			entry:     schedule.SimpleEntry{Weekdays: allDays, Time: "08:00", Level: 0.8, Level2: new(0.5)},
 			wantError: true,
 		},
 		{
@@ -118,5 +118,3 @@ var allDays = []schedule.Weekday{
 	schedule.WeekdaySaturday,
 	schedule.WeekdaySunday,
 }
-
-func floatPtr(v float64) *float64 { return &v }

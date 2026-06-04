@@ -3,7 +3,11 @@
 
 package easymode
 
-import "github.com/SukramJ/openccu-loom/internal/configui"
+import (
+	"maps"
+
+	"github.com/SukramJ/openccu-loom/internal/configui"
+)
 
 // ResolveContext bundles the inputs every UseCase consumes when it
 // resolves its rules into a form-schema. Concrete UCs only read the
@@ -100,9 +104,7 @@ func (p *Pipeline) Apply(ctx ResolveContext, schema *configui.Schema, values map
 		if err != nil {
 			return nil, err
 		}
-		for k, v := range patches {
-			merged[k] = v
-		}
+		maps.Copy(merged, patches)
 	}
 	return merged, nil
 }

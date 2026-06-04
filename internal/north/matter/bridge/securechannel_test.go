@@ -241,7 +241,7 @@ func TestDispatchSC_Sigma1MulticastReplayDropped(t *testing.T) {
 
 	// Five identical Sigma1 arrivals on the same exchange — Apple's
 	// multicast burst.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		if err := b.dispatchSecureChannel(loopbackSrc(), scHdr(), proto, payload); err != nil {
 			t.Fatalf("dispatch[%d]: %v", i, err)
 		}

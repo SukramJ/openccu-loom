@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -235,7 +236,6 @@ func TestOpcreds_AddNOC_InvalidAdminVendorID(t *testing.T) {
 		0xFFFE,
 	}
 	for _, vid := range rejectedVIDs {
-		vid := vid
 		t.Run(fmt.Sprintf("vid=0x%04X_rejected", vid), func(t *testing.T) {
 			t.Parallel()
 			oc := newOpcreds(t)
@@ -810,6 +810,7 @@ func TestOpcreds_GlobalAttributes_Served(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			v, ok := oc.MatterRead(tc.attrID)
 			if !ok {
 				t.Fatalf("MatterRead(0x%04X) = (_, false); want true ", tc.attrID)
@@ -1101,13 +1102,7 @@ func TestOpcreds_VidVerificationCommandsInAcceptedList(t *testing.T) {
 		0x0D: "SignVidVerificationRequest",
 	}
 	for id, name := range wantAccepted {
-		found := false
-		for _, cmd := range accepted {
-			if cmd == id {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(accepted, id)
 		if !found {
 			t.Errorf("AcceptedCommandList missing %s (0x%02X)", name, id)
 		}
@@ -1122,37 +1117,19 @@ func TestOpcreds_VidVerificationCommandsInAcceptedList(t *testing.T) {
 	if !ok {
 		t.Fatalf("GeneratedCommandList type = %T, want []uint32", genVal)
 	}
-	found := false
-	for _, cmd := range generated {
-		if cmd == 0x0E {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(generated, 0x0E)
 	if !found {
 		t.Error("GeneratedCommandList missing SignVidVerificationResponse (0x0E)")
 	}
 
 	// MatterAcceptedCommands and MatterGeneratedCommands must match.
 	for id, name := range wantAccepted {
-		found := false
-		for _, cmd := range oc.MatterAcceptedCommands() {
-			if cmd == id {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(oc.MatterAcceptedCommands(), id)
 		if !found {
 			t.Errorf("MatterAcceptedCommands missing %s (0x%02X)", name, id)
 		}
 	}
-	foundGen := false
-	for _, cmd := range oc.MatterGeneratedCommands() {
-		if cmd == 0x0E {
-			foundGen = true
-			break
-		}
-	}
+	foundGen := slices.Contains(oc.MatterGeneratedCommands(), 0x0E)
 	if !foundGen {
 		t.Error("MatterGeneratedCommands missing SignVidVerificationResponse (0x0E)")
 	}

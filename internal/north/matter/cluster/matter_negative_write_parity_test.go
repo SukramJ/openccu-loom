@@ -165,7 +165,6 @@ func TestNegativeWriteParity(t *testing.T) {
 
 	ctx := context.Background()
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			// Skip rows that delegate to TestNegativeInvokeParity.
@@ -239,7 +238,6 @@ func TestNegativeInvokeParity(t *testing.T) {
 
 	ctx := context.Background()
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 

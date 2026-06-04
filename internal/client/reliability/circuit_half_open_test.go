@@ -168,7 +168,7 @@ func TestHalfOpenParallelContention(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
 			err := c.Do(context.Background(), "setValue", func(_ context.Context) error {

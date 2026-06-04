@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -331,13 +332,7 @@ func TestSupportedOperationsForWS(t *testing.T) {
 			t.Errorf("category %v: expected operations, got none", tc.cat)
 			continue
 		}
-		found := false
-		for _, op := range ops {
-			if op == tc.want {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(ops, tc.want)
 		if !found {
 			t.Errorf("category %v: expected %q in %v", tc.cat, tc.want, ops)
 		}

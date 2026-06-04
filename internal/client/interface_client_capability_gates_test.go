@@ -188,7 +188,7 @@ func TestAllCircuitBreakersClosedAfterTrip(t *testing.T) {
 	defer ic.Close()
 
 	// Force the circuit open by calling until it trips.
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		_, _ = ic.Call(context.Background(), "m", nil, hmenum.CommandPriorityLow, "")
 	}
 	// May or may not be open depending on threshold; ensure method does not panic.
@@ -243,7 +243,6 @@ func TestRPCServerTypeForInterface(t *testing.T) {
 		{hmenum.InterfaceVirtualDevices, hmenum.RPCServerTypeXMLRPC},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(string(tc.iface), func(t *testing.T) {
 			t.Parallel()
 			got := client.RPCServerTypeForInterface(tc.iface)

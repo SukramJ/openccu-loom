@@ -428,9 +428,7 @@ func TestProfileDataPointConcurrentSafe(t *testing.T) {
 	const goroutines = 20
 
 	for range goroutines {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			for i := range 10 {
 				profile := []string{"P1", "P2", "P3"}[i%3]
 				_ = dp.SetCurrentProfile(profile)
@@ -438,7 +436,7 @@ func TestProfileDataPointConcurrentSafe(t *testing.T) {
 				_ = dp.ScheduleEnabled()
 				_ = dp.SetScheduleEnabled(context.Background(), "1_1", i%2 == 0, hmenum.CommandPriorityHigh)
 			}
-		}()
+		})
 	}
 	wg.Wait()
 }

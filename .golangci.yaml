@@ -7,19 +7,29 @@ linters:
   default: none
   enable:
     - bodyclose
+    - contextcheck
+    - copyloopvar
     - errcheck
     - errorlint
     - exhaustive
     - gocritic
     - gosec
     - govet
+    - intrange
+    - makezero
     - nilerr
+    - noctx
     - prealloc
+    - reassign
     - revive
+    - sloglint
     - staticcheck
+    - thelper
+    - tparallel
     - unconvert
     - unparam
     - unused
+    - usestdlibvars
     - wastedassign
   settings:
     errcheck:
@@ -38,6 +48,9 @@ linters:
     gosec:
       excludes:
         - G104
+    sloglint:
+      no-mixed-args: true
+      static-msg: false
     revive:
       severity: warning
       rules:
@@ -66,8 +79,10 @@ linters:
     generated: lax
     rules:
       - linters:
+          - contextcheck
           - errcheck
           - gosec
+          - noctx
           - unparam
         path: _test\.go
       - linters:

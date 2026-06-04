@@ -165,7 +165,7 @@ func FuzzReadResponse(f *testing.F) {
 // recursion-depth guard in readValue.
 func nestedArrayResponse(levels int) []byte {
 	var payload bytes.Buffer
-	for i := 0; i < levels; i++ {
+	for range levels {
 		_ = binary.Write(&payload, binary.BigEndian, typeArray)
 		_ = binary.Write(&payload, binary.BigEndian, uint32(1)) // count = 1
 	}

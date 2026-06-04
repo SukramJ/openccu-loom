@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"maps"
 	"sync/atomic"
 	"testing"
 
@@ -86,9 +87,7 @@ func (b *countingBackend) GetParamset(_ context.Context, _ string, _ hmenum.Para
 		return nil, b.err
 	}
 	out := make(map[string]any, len(b.result))
-	for k, v := range b.result {
-		out[k] = v
-	}
+	maps.Copy(out, b.result)
 	return out, nil
 }
 

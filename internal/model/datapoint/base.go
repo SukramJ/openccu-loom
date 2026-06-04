@@ -111,7 +111,7 @@ type BaseDataPointFields struct {
 	// [DecInFlightCommands] on rollback or confirmation. The counter
 	// is accessed atomically so callers on separate goroutines do not
 	// need to hold the data point lock.
-	inFlightCommandsCount int64
+	inFlightCommandsCount atomic.Int64
 
 	// unconfirmedLastValueSend holds the last value written for each
 	// sub-parameter of a composite/custom data point before the CCU has
@@ -731,13 +731,13 @@ func (b *BaseDataPointFields) IsInMultipleChannels() bool {
 // InFlightCommandsCount returns the current number of write commands in flight
 // to the CCU for this data point. Zero means no write is pending.
 func (b *BaseDataPointFields) InFlightCommandsCount() int {
-	return int(atomic.LoadInt64(&b.inFlightCommandsCount))
+	return int(b.inFlightCommandsCount.Load())
 }
 
 // IncInFlightCommands increments the in-flight command counter by one.
 // Called by the write path immediately before dispatching a value to the CCU.
 func (b *BaseDataPointFields) IncInFlightCommands() {
-	atomic.AddInt64(&b.inFlightCommandsCount, 1)
+	b.inFlightCommandsCount.Add(1)
 }
 
 // DecInFlightCommands decrements the in-flight command counter by one, floored
@@ -746,11 +746,11 @@ func (b *BaseDataPointFields) IncInFlightCommands() {
 // without a prior Inc.
 func (b *BaseDataPointFields) DecInFlightCommands() {
 	for {
-		cur := atomic.LoadInt64(&b.inFlightCommandsCount)
+		cur := b.inFlightCommandsCount.Load()
 		if cur <= 0 {
 			return
 		}
-		if atomic.CompareAndSwapInt64(&b.inFlightCommandsCount, cur, cur-1) {
+		if b.inFlightCommandsCount.CompareAndSwap(cur, cur-1) {
 			return
 		}
 	}

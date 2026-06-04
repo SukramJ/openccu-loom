@@ -45,9 +45,9 @@ func TestSessionMiddlewareAttachesIdentity(t *testing.T) {
 		if !ok || id.Subject != "alice" || id.Scheme != SchemeSession {
 			t.Fatalf("id=%+v ok=%v", id, ok)
 		}
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: sess.ID})
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
@@ -58,9 +58,9 @@ func TestSessionMiddlewareAttachesIdentity(t *testing.T) {
 
 func TestCSRFMiddlewarePassesSafeMethods(t *testing.T) {
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	mw.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -75,7 +75,7 @@ func TestCSRFMiddlewareRejectsPostWithoutToken(t *testing.T) {
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		t.Fatal("next should not run")
 	}))
-	req := httptest.NewRequest("POST", "/", strings.NewReader("x=1"))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("x=1"))
 	req.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: "expected"})
 	rr := httptest.NewRecorder()
 	mw.ServeHTTP(rr, req)
@@ -88,9 +88,9 @@ func TestCSRFMiddlewareAcceptsMatchingHeader(t *testing.T) {
 	hit := 0
 	mw := CSRFMiddleware(false)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		hit++
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest("POST", "/", strings.NewReader("x=1"))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("x=1"))
 	req.AddCookie(&http.Cookie{Name: CSRFCookieName, Value: "match-me"})
 	req.Header.Set(CSRFHeaderName, "match-me")
 	rr := httptest.NewRecorder()

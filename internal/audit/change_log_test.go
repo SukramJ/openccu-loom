@@ -221,15 +221,13 @@ func TestConcurrentAddAndRead(t *testing.T) {
 	const entries = 50
 
 	var wg sync.WaitGroup
-	for g := 0; g < goroutines; g++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < entries; i++ {
+	for range goroutines {
+		wg.Go(func() {
+			for range entries {
 				cl.Add("shared", ChangeEntry{ChannelAddress: "X"})
 				cl.GetEntries("shared", "", 10) //nolint:errcheck // return values intentionally discarded
 			}
-		}()
+		})
 	}
 	wg.Wait()
 	_, total, ok := cl.GetEntries("shared", "", 0)

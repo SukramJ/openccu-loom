@@ -42,14 +42,14 @@ func TestOnSysvarRegistered_NotRetroactive(t *testing.T) {
 	h := NewHub("c")
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "early"}})
 
-	var fired int32
-	h.OnSysvarRegistered(func(*Sysvar) { atomic.AddInt32(&fired, 1) })
-	if v := atomic.LoadInt32(&fired); v != 0 {
+	var fired atomic.Int32
+	h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
+	if v := fired.Load(); v != 0 {
 		t.Fatalf("retroactive fire: count=%d", v)
 	}
 
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "late"}})
-	if v := atomic.LoadInt32(&fired); v != 1 {
+	if v := fired.Load(); v != 1 {
 		t.Fatalf("post-register count=%d, want 1", v)
 	}
 }
@@ -57,15 +57,15 @@ func TestOnSysvarRegistered_NotRetroactive(t *testing.T) {
 func TestOnSysvarRegistered_UnsubscribeStopsFiring(t *testing.T) {
 	t.Parallel()
 	h := NewHub("c")
-	var fired int32
-	unsub := h.OnSysvarRegistered(func(*Sysvar) { atomic.AddInt32(&fired, 1) })
+	var fired atomic.Int32
+	unsub := h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "a"}})
 	unsub()
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "b"}})
 	// Double-unsub is a no-op.
 	unsub()
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: "c"}})
-	if v := atomic.LoadInt32(&fired); v != 1 {
+	if v := fired.Load(); v != 1 {
 		t.Fatalf("count=%d after unsubscribe, want 1", v)
 	}
 }
@@ -113,12 +113,12 @@ func TestOnProgramRegistered_FiresOnPutProgram(t *testing.T) {
 func TestOnProgramRegistered_UnsubscribeStopsFiring(t *testing.T) {
 	t.Parallel()
 	h := NewHub("c")
-	var fired int32
-	unsub := h.OnProgramRegistered(func(*Program) { atomic.AddInt32(&fired, 1) })
+	var fired atomic.Int32
+	unsub := h.OnProgramRegistered(func(*Program) { fired.Add(1) })
 	h.PutProgram(&Program{ID: "P1"})
 	unsub()
 	h.PutProgram(&Program{ID: "P2"})
-	if v := atomic.LoadInt32(&fired); v != 1 {
+	if v := fired.Load(); v != 1 {
 		t.Fatalf("count=%d after unsubscribe, want 1", v)
 	}
 }
@@ -126,11 +126,11 @@ func TestOnProgramRegistered_UnsubscribeStopsFiring(t *testing.T) {
 func TestPutSysvar_IgnoresNilAndEmptyName(t *testing.T) {
 	t.Parallel()
 	h := NewHub("c")
-	var fired int32
-	h.OnSysvarRegistered(func(*Sysvar) { atomic.AddInt32(&fired, 1) })
+	var fired atomic.Int32
+	h.OnSysvarRegistered(func(*Sysvar) { fired.Add(1) })
 	h.PutSysvar(nil)
 	h.PutSysvar(&Sysvar{HubDataPoint: HubDataPoint{Name: ""}})
-	if v := atomic.LoadInt32(&fired); v != 0 {
+	if v := fired.Load(); v != 0 {
 		t.Fatalf("observer fired for invalid input: count=%d", v)
 	}
 }
@@ -138,11 +138,11 @@ func TestPutSysvar_IgnoresNilAndEmptyName(t *testing.T) {
 func TestPutProgram_IgnoresNilAndEmptyID(t *testing.T) {
 	t.Parallel()
 	h := NewHub("c")
-	var fired int32
-	h.OnProgramRegistered(func(*Program) { atomic.AddInt32(&fired, 1) })
+	var fired atomic.Int32
+	h.OnProgramRegistered(func(*Program) { fired.Add(1) })
 	h.PutProgram(nil)
 	h.PutProgram(&Program{ID: ""})
-	if v := atomic.LoadInt32(&fired); v != 0 {
+	if v := fired.Load(); v != 0 {
 		t.Fatalf("observer fired for invalid input: count=%d", v)
 	}
 }

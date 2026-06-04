@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"testing"
 
@@ -35,7 +34,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_LiveOpener(t *
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -64,7 +63,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_LiveOpener(t *
 
 	// Install PASE handler so the window has a verifier.
 	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	pase, err := buildPaseAdapterFromCreds(20202021, []byte("openccu-loom-dev0"), 1000, mgr, nil, nil, logger)
 	if err != nil {
 		t.Skipf("buildPaseAdapterFromCreds: %v", err)
@@ -103,7 +102,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_TopologyNotRea
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -145,7 +144,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_AlreadyOpen(t 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.NewTextHandler(io.Discard, nil)))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -173,7 +172,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_AlreadyOpen(t 
 	}
 
 	mgr := buildTestOperationalManager(t)
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	pase, err := buildPaseAdapterFromCreds(20202021, []byte("openccu-loom-dev0"), 1000, mgr, nil, nil, logger)
 	if err != nil {
 		t.Skipf("buildPaseAdapterFromCreds: %v", err)

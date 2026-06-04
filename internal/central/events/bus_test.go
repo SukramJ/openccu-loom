@@ -114,7 +114,7 @@ func TestBusDeferredHighWaterTracksRecursion(t *testing.T) {
 			innerCalls.Add(1)
 			return
 		}
-		for i := 0; i < recursionBurst; i++ {
+		for range recursionBurst {
 			Publish(b, hmevent.CentralStateChangedEvent{CentralName: "inner"})
 		}
 	})
@@ -153,10 +153,8 @@ func TestBusConcurrentSubscribersAreSafe(t *testing.T) {
 	// Register a single handler; a race condition during subscription
 	// with Publish should never observe an invalid slice.
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 50 {
+		wg.Go(func() {
 			unsub := Subscribe(b, func(e hmevent.CentralStateChangedEvent) {
 				mu.Lock()
 				count++
@@ -164,7 +162,7 @@ func TestBusConcurrentSubscribersAreSafe(t *testing.T) {
 			})
 			Publish(b, hmevent.CentralStateChangedEvent{})
 			unsub()
-		}()
+		})
 	}
 	wg.Wait()
 	// No assertion on count (depends on scheduler); just ensure we

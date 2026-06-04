@@ -618,6 +618,7 @@ func TestPBKDFParameters_ValidateBounds(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			err := tc.p.Validate()
 			if tc.ok && err != nil {
 				t.Errorf("Validate: unexpected error: %v", err)

@@ -30,8 +30,6 @@ func (f fakeACLLister) ListACL(_ context.Context, fabricIndex uint8) ([]store.AC
 	return out, nil
 }
 
-func u32(v uint32) *uint32 { return &v }
-
 // caseEntry is a CASE ACL entry on fabric f granting priv over the given
 // targets (nil targets = all) without restricting subjects (wildcard).
 func caseEntry(f uint8, priv store.Privilege, targets []store.ACLTarget) store.ACLEntry {
@@ -106,12 +104,12 @@ func TestTopologyDispatcher_CheckACL(t *testing.T) {
 		},
 		{
 			"cluster-scoped operate matches target cluster",
-			fakeACLLister{entries: []store.ACLEntry{caseEntry(1, store.PrivilegeOperate, []store.ACLTarget{{Cluster: u32(onOff)}})}},
+			fakeACLLister{entries: []store.ACLEntry{caseEntry(1, store.PrivilegeOperate, []store.ACLTarget{{Cluster: new(onOff)}})}},
 			1, peerA, nil, onOff, privOperate, im.StatusSuccess,
 		},
 		{
 			"cluster-scoped operate denies other cluster",
-			fakeACLLister{entries: []store.ACLEntry{caseEntry(1, store.PrivilegeOperate, []store.ACLTarget{{Cluster: u32(onOff)}})}},
+			fakeACLLister{entries: []store.ACLEntry{caseEntry(1, store.PrivilegeOperate, []store.ACLTarget{{Cluster: new(onOff)}})}},
 			1, peerA, nil, otherCluster, privOperate, im.StatusUnsupportedAccess,
 		},
 		{

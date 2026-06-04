@@ -296,7 +296,7 @@ func TestIncidentStoreRecentLimitHonored(t *testing.T) {
 	s := freshIncidentStore(t)
 	ctx := context.Background()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		inc := Incident{
 			CentralName: "ccu1",
 			InterfaceID: "HmIP-RF",
@@ -369,7 +369,7 @@ func TestIncidentStoreRecentBumpedIncidentCountPersists(t *testing.T) {
 	if _, err := s.Record(ctx, inc); err != nil {
 		t.Fatalf("record: %v", err)
 	}
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		if _, err := s.BumpIfRecent(ctx, inc, time.Hour); err != nil {
 			t.Fatalf("bump %d: %v", i, err)
 		}
@@ -544,7 +544,7 @@ func TestIncidentStoreGetDiagnostics(t *testing.T) {
 	s := freshIncidentStore(t)
 	ctx := context.Background()
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, err := s.Record(ctx, Incident{
 			CentralName: "ccu1",
 			Type:        hmenum.IncidentTypeAuthFailure,
@@ -616,7 +616,7 @@ func TestIncidentStorePurgeOld(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert two rows.
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		_, err := s.Record(ctx, Incident{
 			CentralName: "ccu1",
 			Type:        hmenum.IncidentTypeAuthFailure,
@@ -648,7 +648,7 @@ func TestIncidentStoreEnforcePerTypeCap(t *testing.T) {
 	ctx := context.Background()
 
 	// Insert 5 auth-failure rows.
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		_, err := s.Record(ctx, Incident{
 			CentralName: "ccu1",
 			Type:        hmenum.IncidentTypeAuthFailure,
@@ -694,7 +694,7 @@ func TestIncidentStoreIncidentCountGaps(t *testing.T) {
 		t.Fatalf("IncidentCount on empty store=%d, want 0", n)
 	}
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		_, _ = s.Record(ctx, Incident{
 			CentralName: "ccu1",
 			Type:        hmenum.IncidentTypeAuthFailure,

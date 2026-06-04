@@ -149,7 +149,7 @@ func TestParityBackoffSaturatesAtMax(t *testing.T) {
 	c.SetBackoff(100*time.Millisecond, 400*time.Millisecond)
 
 	failing := simpleFailPipeline(hmenum.RecoveryStageDetecting)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		c.Run(context.Background(), "sat-iface", failing)
 	}
 	got := c.NextRetryDelay("sat-iface")
@@ -475,12 +475,9 @@ func TestParityMultiInterfaceRecoveryRun(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for _, id := range []string{"iface-A", "iface-B"} {
-		id := id
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			c.Run(context.Background(), id, simpleFailPipeline(hmenum.RecoveryStageRPCChecking))
-		}()
+		})
 	}
 	wg.Wait()
 

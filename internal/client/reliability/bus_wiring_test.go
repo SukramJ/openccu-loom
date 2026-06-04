@@ -50,14 +50,12 @@ func TestCoalescerHookFiresOnlyForFollowers(t *testing.T) {
 	// Spin up followers.
 	const followers = 3
 	var wg sync.WaitGroup
-	for i := 0; i < followers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range followers {
+		wg.Go(func() {
 			_, _ = c.Do(context.Background(), "k", func(_ context.Context) (any, error) {
 				return nil, errors.New("should not fire")
 			})
-		}()
+		})
 	}
 
 	// Wait deterministically until the coalescer recorded all followers.

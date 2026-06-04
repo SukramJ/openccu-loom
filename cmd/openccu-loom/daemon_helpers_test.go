@@ -359,7 +359,7 @@ func TestSystemCCUAdapter_List_CentralInRegistry_FieldsPopulated(t *testing.T) {
 
 func TestWireValuesCacheStore_NilConfig_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := wireValuesCacheStore(nil, logger)
 	if got != nil {
 		t.Error("expected nil for nil config")
@@ -371,7 +371,7 @@ func TestWireValuesCacheStore_DisabledByConfig_ReturnsNil(t *testing.T) {
 	disabled := false
 	cfg := config.Default()
 	cfg.Persistence.ValuesCache.Enabled = &disabled
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	got := wireValuesCacheStore(cfg, logger)
 	if got != nil {
 		t.Error("expected nil when values cache explicitly disabled")
@@ -390,7 +390,7 @@ func TestWireValuesCacheStore_BadDataDir_ReturnsNil(t *testing.T) {
 	// DataDir points at the blocking file, not a directory — sqlite cannot
 	// create openccu-loom.db inside a file.
 	cfg.DataDir = blockingFile
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	got := wireValuesCacheStore(cfg, logger)
 	gooseMigrateMu.Unlock()
@@ -533,7 +533,7 @@ func openTestValuesCacheStore(t *testing.T) *sqlitestore.ValuesCacheStore {
 	t.Helper()
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
 	store := wireValuesCacheStore(cfg, logger)
 	gooseMigrateMu.Unlock()

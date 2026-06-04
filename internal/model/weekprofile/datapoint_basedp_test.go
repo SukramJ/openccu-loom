@@ -77,7 +77,6 @@ func TestProfileDataPointUniqueID(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			dp := NewProfileDataPoint(ProfileDataPointConfig{
@@ -206,26 +205,21 @@ func TestProfileDataPointConcurrentBaseDataPoint(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for w := 0; w < writers; w++ {
-		w := w
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for w := range writers {
+		wg.Go(func() {
 			ctx := context.Background()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				dp.SetForcedUsage(usages[(w+i)%len(usages)])
 				dp.PublishUpdate(ctx, i)
 				_ = dp.SetCurrentProfile([]string{"P1", "P2", "P3"}[i%3])
 				_ = dp.SetScheduleEnabled(ctx, "1_1", i%2 == 0, hmenum.CommandPriorityHigh)
 			}
-		}()
+		})
 	}
 
-	for r := 0; r < readers; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range readers {
+		wg.Go(func() {
+			for range iterations {
 				_ = dp.UniqueID()
 				_ = dp.Visible()
 				_ = dp.EnabledByDefault()
@@ -233,7 +227,7 @@ func TestProfileDataPointConcurrentBaseDataPoint(t *testing.T) {
 				_ = dp.CurrentProfile()
 				_ = dp.ScheduleEnabled()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

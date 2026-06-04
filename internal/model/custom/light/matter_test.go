@@ -388,7 +388,6 @@ func TestLevelInvokeMoveToLevelWithOnOffMap(t *testing.T) {
 // continuous-rate dimming, so these are accepted no-ops.
 func TestLevelInvokeMoveReturnsSuccess(t *testing.T) {
 	for _, cmdID := range []uint32{0x01, 0x05} {
-		cmdID := cmdID
 		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
 			l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
 			srv := levelServer(t, l)
@@ -440,7 +439,6 @@ func TestLevelInvokeStepDownFloor(t *testing.T) {
 // there is no in-flight ramp on HM to stop.
 func TestLevelInvokeStopReturnsSuccess(t *testing.T) {
 	for _, cmdID := range []uint32{0x03, 0x07} {
-		cmdID := cmdID
 		t.Run(fmt.Sprintf("cmd=0x%02X", cmdID), func(t *testing.T) {
 			w := &stubWriter{}
 			l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})

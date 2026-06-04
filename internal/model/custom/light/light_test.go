@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"maps"
 	"testing"
 	"time"
 
@@ -34,9 +35,7 @@ type putWriter struct {
 
 func (p *putWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	p.puts = append(p.puts, cp)
 	return nil
 }

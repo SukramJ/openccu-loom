@@ -5,6 +5,7 @@ package coordinators
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -330,9 +331,7 @@ func (c *CacheCoordinator) LoadAll(ctx context.Context) error {
 		return nil
 	}
 	c.mu.Lock()
-	for k, v := range loaded {
-		c.entries[k] = v
-	}
+	maps.Copy(c.entries, loaded)
 	c.dirty = false
 	c.mu.Unlock()
 	return nil
@@ -375,9 +374,7 @@ func (c *CacheCoordinator) SaveAll(ctx context.Context) error {
 	p := c.persister
 	// Take a snapshot while under the read lock.
 	snapshot := make(map[hmtypes.DataPointKey]DataCacheEntry, len(c.entries))
-	for k, v := range c.entries {
-		snapshot[k] = v
-	}
+	maps.Copy(snapshot, c.entries)
 	c.mu.RUnlock()
 	if p == nil {
 		return nil

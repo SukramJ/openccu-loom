@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,12 +36,7 @@ var Weekdays = []Weekday{
 }
 
 func isValidWeekday(w Weekday) bool {
-	for _, v := range Weekdays {
-		if v == w {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(Weekdays, w)
 }
 
 // Condition is the trigger condition of a schedule entry.

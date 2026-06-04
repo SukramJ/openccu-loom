@@ -76,7 +76,7 @@ func TestCoalescerEvictionStress1000GoroutinesMultiKey(t *testing.T) {
 
 	var callCount atomic.Int64
 
-	for i := 0; i < totalGoroutines; i++ {
+	for i := range totalGoroutines {
 		key := fmt.Sprintf("key-%d", i%uniqueKeys)
 		go func(k string) {
 			defer wg.Done()
@@ -147,7 +147,7 @@ func TestCoalescerEvictionStressSingleKey(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(totalGoroutines)
-	for i := 0; i < totalGoroutines; i++ {
+	for range totalGoroutines {
 		go func() {
 			defer wg.Done()
 			_, _ = c.Do(context.Background(), "single-key", fn)
@@ -243,7 +243,7 @@ func TestCoalescerEvictionStressWithConcurrentClear(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(totalGoroutines)
-	for i := 0; i < totalGoroutines; i++ {
+	for i := range totalGoroutines {
 		key := fmt.Sprintf("stress-key-%d", i%uniqueKeys)
 		go func(k string) {
 			defer wg.Done()

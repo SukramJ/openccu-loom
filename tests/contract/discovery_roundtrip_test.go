@@ -555,7 +555,6 @@ func TestDiscoveryRoundTrip_BoolCapitalisation(t *testing.T) {
 func TestDiscoveryRoundTrip_Event_MultiPress(t *testing.T) {
 	t.Parallel()
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG", "PRESS_LONG_RELEASE", "PRESS_LONG_START"} {
-		param := param
 		t.Run(param, func(t *testing.T) {
 			t.Parallel()
 			p := buildDiscovery(t, mqtt.Event{

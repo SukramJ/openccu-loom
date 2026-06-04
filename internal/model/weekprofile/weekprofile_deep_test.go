@@ -105,7 +105,7 @@ func (s *simpleSaver) Save(_ context.Context, v *schedule.Simple) error {
 func fullDayWeekday(n int, baseTemp float64) schedule.ClimateWeekday {
 	minPerSlot := 24 * 60 / n
 	periods := make([]schedule.ClimatePeriod, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		startM := i * minPerSlot
 		endM := startM + minPerSlot
 		periods[i] = schedule.ClimatePeriod{
@@ -431,23 +431,19 @@ func TestProfileConcurrentReadIsSafe(t *testing.T) {
 	const readers = 50
 
 	// Writer goroutine.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 20; i++ {
+	wg.Go(func() {
+		for range 20 {
 			_ = p.Save(context.Background(), schedule.NewClimate())
 		}
-	}()
+	})
 
 	// Reader goroutines.
 	for range readers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < 20; i++ {
+		wg.Go(func() {
+			for range 20 {
 				_, _ = p.Current()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -461,22 +457,18 @@ func TestProfileConcurrentOnChangeSafe(t *testing.T) {
 	p := weekprofile.NewClimate(nil, &climateSaver{})
 	var wg sync.WaitGroup
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 10; i++ {
+	wg.Go(func() {
+		for range 10 {
 			_ = p.Save(context.Background(), schedule.NewClimate())
 		}
-	}()
+	})
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for i := 0; i < 10; i++ {
+	wg.Go(func() {
+		for range 10 {
 			unsub := p.OnChange(func(_, _ *schedule.Climate) {})
 			unsub()
 		}
-	}()
+	})
 
 	wg.Wait()
 }
@@ -548,7 +540,7 @@ func TestClimateWeekdayMaxPeriodsAccepted(t *testing.T) {
 	// plus a final twelve-hour slot — so that the test exercises the exact
 	// MaxClimatePeriods = 13 cap with valid 24-hour coverage.
 	periods := make([]schedule.ClimatePeriod, 13)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		periods[i] = schedule.ClimatePeriod{
 			StartTime:   minutesToHHMM(i * 60),
 			EndTime:     minutesToHHMM((i + 1) * 60),
@@ -574,7 +566,7 @@ func TestClimateWeekdayExceedsMaxPeriodsRejected(t *testing.T) {
 	// 14 one-hour periods (not contiguous, but that's OK — count check runs
 	// before the coverage check in production).
 	periods := make([]schedule.ClimatePeriod, 14)
-	for i := 0; i < 14; i++ {
+	for i := range 14 {
 		periods[i] = schedule.ClimatePeriod{
 			StartTime:   minutesToHHMM(i * 60),
 			EndTime:     minutesToHHMM((i + 1) * 60),

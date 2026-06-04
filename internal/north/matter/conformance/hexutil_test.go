@@ -46,7 +46,7 @@ func TestHexDump_AllNibbles(t *testing.T) {
 
 func TestHexNibble_Digits(t *testing.T) {
 	t.Parallel()
-	for n := byte(0); n < 10; n++ {
+	for n := range byte(10) {
 		got := hexNibble(n)
 		want := '0' + n
 		if got != want {

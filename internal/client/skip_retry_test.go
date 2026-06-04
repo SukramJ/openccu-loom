@@ -24,16 +24,16 @@ import (
 // countingBackend records the number of SetValue invocations.
 // All other methods are no-ops that satisfy backends.Operations.
 type countingBackend struct {
-	setCallCount int64
+	setCallCount atomic.Int64
 	setErr       error
 }
 
 func (b *countingBackend) incSet() error {
-	atomic.AddInt64(&b.setCallCount, 1)
+	b.setCallCount.Add(1)
 	return b.setErr
 }
 
-func (b *countingBackend) SetCallCount() int { return int(atomic.LoadInt64(&b.setCallCount)) }
+func (b *countingBackend) SetCallCount() int { return int(b.setCallCount.Load()) }
 
 // --- backends.Operations stub ---
 func (b *countingBackend) Kind() backends.Kind { return backends.KindCCU }

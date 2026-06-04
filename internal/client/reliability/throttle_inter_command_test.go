@@ -89,7 +89,7 @@ func TestInterCommandDelayZeroDisables(t *testing.T) {
 	})
 
 	start := time.Now()
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		if err := tt.Acquire(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 			t.Fatalf("acquire %d: %v", i, err)
 		}

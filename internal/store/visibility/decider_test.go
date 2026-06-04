@@ -75,7 +75,6 @@ func TestDeciderLenRaceSafe(t *testing.T) {
 
 	wg.Add(goroutines)
 	for i := range goroutines {
-		i := i
 		go func() {
 			defer wg.Done()
 			for j := range ops {
@@ -88,13 +87,11 @@ func TestDeciderLenRaceSafe(t *testing.T) {
 	}
 
 	// Concurrent Len() reads.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range goroutines * ops {
 			_ = d.Len()
 		}
-	}()
+	})
 
 	wg.Wait()
 

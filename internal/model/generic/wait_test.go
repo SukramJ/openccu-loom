@@ -98,7 +98,7 @@ func TestWaitForConfirmationMultipleSubscribersAllSettle(t *testing.T) {
 
 	const N = 5
 	results := make(chan error, N)
-	for i := 0; i < N; i++ {
+	for range N {
 		go func() {
 			results <- dp.WaitForConfirmation(context.Background())
 		}()
@@ -107,7 +107,7 @@ func TestWaitForConfirmationMultipleSubscribersAllSettle(t *testing.T) {
 	time.Sleep(20 * time.Millisecond) // let subscribers attach
 	dp.OnEvent(0.5)                   // confirm
 
-	for i := 0; i < N; i++ {
+	for i := range N {
 		select {
 		case err := <-results:
 			if err != nil {

@@ -6,7 +6,6 @@ package main
 import (
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"sync/atomic"
 	"testing"
@@ -17,7 +16,7 @@ import (
 )
 
 func supervisorLogger() *slog.Logger {
-	return slog.New(slog.NewTextHandler(io.Discard, nil))
+	return slog.New(slog.DiscardHandler)
 }
 
 func mqttCfg(enabled bool) *config.Config {

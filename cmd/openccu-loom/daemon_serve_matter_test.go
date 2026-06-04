@@ -17,8 +17,8 @@ import (
 func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
@@ -53,8 +53,8 @@ func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 func TestDaemonServe_WithMQTTEnabled(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Enabled = boolPtr(false)
-	cfg.North.UI.Enabled = boolPtr(false)
+	cfg.North.REST.Enabled = new(false)
+	cfg.North.UI.Enabled = new(false)
 	cfg.North.MQTT.Enabled = true
 	cfg.North.MQTT.BrokerURL = "" // no broker → noop client
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}

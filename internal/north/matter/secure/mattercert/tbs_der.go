@@ -445,7 +445,7 @@ func encodeKeyUsageBits(flags uint16) asn1.BitString {
 	}
 	// Find the highest set bit to size the BIT STRING tightly.
 	highest := -1
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		if flags&(1<<i) != 0 {
 			highest = i
 		}

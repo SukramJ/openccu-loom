@@ -44,6 +44,7 @@ import (
 	"fmt"
 	"io/fs"
 	"math"
+	"slices"
 	"sync"
 )
 
@@ -380,13 +381,7 @@ func profileMatches(params map[string]ParamConstraint, current map[string]any) b
 			if len(c.Values) == 0 {
 				continue
 			}
-			found := false
-			for _, v := range c.Values {
-				if v == num {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(c.Values, num)
 			if !found {
 				return false
 			}

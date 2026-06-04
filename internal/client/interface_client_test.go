@@ -32,13 +32,13 @@ func TestInterfaceClientCoalescesByKey(t *testing.T) {
 	}
 	ctx := context.Background()
 	done := make(chan struct{}, 5)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		go func() {
 			_, _ = c.Call(ctx, "getValue", nil, hmenum.CommandPriorityHigh, "k")
 			done <- struct{}{}
 		}()
 	}
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		<-done
 	}
 	// Coalescing is best-effort: at least one but at most a handful of
@@ -232,7 +232,7 @@ func TestInterfaceClientCloseCanelsActiveRetries(t *testing.T) {
 
 	// Wait until the chain has registered itself.
 	<-started
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if retrier.ActiveRetryCount() == 1 {
 			break
 		}

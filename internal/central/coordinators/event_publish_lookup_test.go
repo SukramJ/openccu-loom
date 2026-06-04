@@ -428,7 +428,6 @@ func TestAddDataPointSubscriptionForKeyZeroIsWildcard(t *testing.T) {
 		{InterfaceID: "BidCos-RF", ChannelAddress: "VCU0002:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: "LEVEL"},
 	}
 	for _, k := range keys {
-		k := k
 		events.Publish(bus, hmevent.DataPointValueChangedEvent{
 			Base:     hmevent.NewBase(),
 			Key:      k,

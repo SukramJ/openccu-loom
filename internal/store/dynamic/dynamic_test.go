@@ -73,7 +73,7 @@ func TestPingPongJournalLatest(t *testing.T) {
 
 func TestPingPongJournalCapacity(t *testing.T) {
 	j := NewPingPongJournal(2)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		j.RecordSent("x", time.Now())
 	}
 	if len(j.Snapshot()) != 2 {

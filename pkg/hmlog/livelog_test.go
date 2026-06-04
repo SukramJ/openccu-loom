@@ -22,7 +22,7 @@ func buildRec(level slog.Level, msg string) slog.Record {
 func TestLiveLog_RingEviction_KeepsLastN(t *testing.T) {
 	t.Parallel()
 	l := NewLiveLog(3)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		r := buildRec(slog.LevelInfo, "msg")
 		l.record(r, nil)
 	}
@@ -48,7 +48,7 @@ func TestLiveLog_Snapshot_LimitAndMinLevel(t *testing.T) {
 	l := NewLiveLog(20)
 	levels := []slog.Level{slog.LevelDebug, slog.LevelInfo, slog.LevelWarn, slog.LevelError}
 	for _, lvl := range levels {
-		for i := 0; i < 3; i++ {
+		for range 3 {
 			l.record(buildRec(lvl, "msg"), nil)
 		}
 	}
@@ -80,7 +80,7 @@ func TestLiveLog_Snapshot_LimitAndMinLevel(t *testing.T) {
 func TestLiveLog_Since_ReturnsRecordsAfterSeq(t *testing.T) {
 	t.Parallel()
 	l := NewLiveLog(10)
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		l.record(buildRec(slog.LevelInfo, "msg"), nil)
 	}
 	got := l.Since(3, slog.LevelDebug)
@@ -97,7 +97,7 @@ func TestLiveLog_Since_ReturnsRecordsAfterSeq(t *testing.T) {
 func TestLiveLog_Since_ZeroReturnsAll(t *testing.T) {
 	t.Parallel()
 	l := NewLiveLog(10)
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		l.record(buildRec(slog.LevelInfo, "msg"), nil)
 	}
 	got := l.Since(0, slog.LevelDebug)
@@ -251,7 +251,7 @@ func TestLiveLog_SlowSubscriber_DoesNotBlockRecord(t *testing.T) {
 	go func() {
 		defer close(done)
 		// Feed more than the buffer depth (256) without draining.
-		for i := 0; i < defaultLiveSubscriberBuffer+10; i++ {
+		for range defaultLiveSubscriberBuffer + 10 {
 			l.record(buildRec(slog.LevelInfo, "flood"), nil)
 		}
 	}()
@@ -274,7 +274,10 @@ func TestLiveLog_SlowSubscriber_DoesNotBlockRecord(t *testing.T) {
 func TestLiveLog_TeeHandler_BoundAttrsPopulateRecord(t *testing.T) {
 	t.Parallel()
 	live := NewLiveLog(10)
-	tee := NewTeeHandler(slog.NewTextHandler(io.Discard, nil))
+	// DiscardHandler reports Enabled()==false, which would short-circuit the
+	// TeeHandler before it forwards the record; the test needs an inner handler
+	// that is actually enabled at Info level.
+	tee := NewTeeHandler(slog.NewTextHandler(io.Discard, nil)) //nolint:sloglint // TeeHandler needs an enabled inner handler; DiscardHandler is always disabled
 	tee.AttachLive(live)
 
 	lg := slog.New(tee).

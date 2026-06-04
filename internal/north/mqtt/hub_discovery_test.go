@@ -179,7 +179,6 @@ func TestSysvarComponentSelection(t *testing.T) {
 
 	db := newHubBuilder()
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			item := db.BuildSysvarDiscovery("ccu-01", tc.sv)
@@ -780,7 +779,6 @@ func TestSafeLower(t *testing.T) {
 		{"Straße", "strasse"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.in, func(t *testing.T) {
 			t.Parallel()
 			got := safeLower(tc.in)

@@ -82,10 +82,10 @@ func TestMiddlewareResolvesBasic(t *testing.T) {
 		if !ok || id.Subject != "alice" {
 			t.Fatalf("id=%+v ok=%v", id, ok)
 		}
-		w.WriteHeader(204)
+		w.WriteHeader(http.StatusNoContent)
 	})
 	h := mw.Resolve(next)
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.SetBasicAuth("alice", "s")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -105,7 +105,7 @@ func TestMiddlewareResolvesBearer(t *testing.T) {
 		hit++
 	})
 	h := mw.Resolve(next)
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.Header.Set("Authorization", "Bearer xyz")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
@@ -119,7 +119,7 @@ func TestMiddlewareRequireRejects(t *testing.T) {
 	h := mw.Require(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("next should not run")
 	}))
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != 401 {
@@ -134,10 +134,10 @@ func TestMiddlewareRequireRole(t *testing.T) {
 	us := NewMemoryUserStore()
 	us.Put("viewer", "s", RoleViewer)
 	mw := NewMiddleware(us, nil)
-	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
 	h := mw.Resolve(mw.RequireRole(RoleOperator, next))
 
-	req := httptest.NewRequest("GET", "/", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req.SetBasicAuth("viewer", "s")
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)

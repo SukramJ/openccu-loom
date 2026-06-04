@@ -75,7 +75,6 @@ func TestParityMatterJS_Spake2_Vectors(t *testing.T) {
 	vecs := loadMatterJSVectors(t)
 
 	for _, v := range vecs {
-		v := v
 		t.Run(v.Label, func(t *testing.T) {
 			t.Parallel()
 			switch v.Label {

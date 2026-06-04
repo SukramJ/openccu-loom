@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -783,10 +784,8 @@ func humanizeRaw(v string) string {
 
 func groupForParam(meta *ccudata.SenderTypeMetadata, parameter string) string {
 	for _, g := range meta.ParameterGroups {
-		for _, p := range g.Parameters {
-			if p == parameter {
-				return g.ID
-			}
+		if slices.Contains(g.Parameters, parameter) {
+			return g.ID
 		}
 	}
 	return ""

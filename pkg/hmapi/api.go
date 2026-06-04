@@ -26,6 +26,7 @@ package hmapi
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 )
 
@@ -173,7 +174,6 @@ func (a *HomematicAPI) Connect(ctx context.Context) error {
 	}
 	ch := make(chan result, len(snapshot))
 	for _, c := range snapshot {
-		c := c
 		go func() {
 			err := c.Connect(ctx)
 			ch <- result{name: c.Name(), err: err}
@@ -212,7 +212,6 @@ func (a *HomematicAPI) Disconnect(ctx context.Context) error {
 	}
 	ch := make(chan result, len(snapshot))
 	for _, c := range snapshot {
-		c := c
 		go func() {
 			ch <- result{err: c.Disconnect(ctx)}
 		}()
@@ -324,14 +323,14 @@ func (a *HomematicAPI) requireCentral(name string) (CentralHandle, error) {
 type multiError struct{ errs []error }
 
 func (m *multiError) Error() string {
-	s := ""
+	var s strings.Builder
 	for i, e := range m.errs {
 		if i > 0 {
-			s += "; "
+			s.WriteString("; ")
 		}
-		s += e.Error()
+		s.WriteString(e.Error())
 	}
-	return s
+	return s.String()
 }
 
 func (m *multiError) Unwrap() []error { return m.errs }

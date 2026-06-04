@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"sort"
 	"sync"
 	"time"
@@ -105,7 +106,7 @@ type Summary struct {
 	Status      Status    `json:"status"`
 	StartedAt   time.Time `json:"started_at"`
 	EndsAt      time.Time `json:"ends_at"`
-	StoppedAt   time.Time `json:"stopped_at,omitempty"`
+	StoppedAt   time.Time `json:"stopped_at,omitzero"`
 	Anonymised  bool      `json:"anonymised"`
 	Events      int       `json:"events"`
 	BufferBytes int       `json:"buffer_bytes"`
@@ -450,8 +451,6 @@ func cloneStringMap(in map[string]string) map[string]string {
 		return nil
 	}
 	out := make(map[string]string, len(in))
-	for k, v := range in {
-		out[k] = v
-	}
+	maps.Copy(out, in)
 	return out
 }

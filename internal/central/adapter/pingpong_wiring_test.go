@@ -75,7 +75,7 @@ func TestWirePingPongBusPublishesEventOnThresholdCrossing(t *testing.T) {
 	// Drive the pending count above the threshold. RecordPing adds to
 	// pending; no matching RecordPong is called, so the count rises.
 	// The hook fires on count == threshold+1 (first crossing).
-	for i := 0; i < threshold+2; i++ {
+	for i := range threshold + 2 {
 		ic.RecordPing("ping-" + string(rune('a'+i)))
 	}
 

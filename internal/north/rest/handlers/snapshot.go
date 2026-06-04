@@ -132,7 +132,7 @@ func snapshotIncludes(r *http.Request) snapshotInclude {
 	if r == nil {
 		return inc
 	}
-	for _, tok := range strings.Split(r.URL.Query().Get("include"), ",") {
+	for tok := range strings.SplitSeq(r.URL.Query().Get("include"), ",") {
 		switch strings.TrimSpace(tok) {
 		case "channels":
 			inc.channels = true
@@ -225,7 +225,7 @@ func wantsNDJSON(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	for _, part := range strings.Split(r.Header.Get("Accept"), ",") {
+	for part := range strings.SplitSeq(r.Header.Get("Accept"), ",") {
 		mt := strings.TrimSpace(part)
 		// Strip parameters (e.g. "application/x-ndjson; q=0.9").
 		if i := strings.Index(mt, ";"); i >= 0 {

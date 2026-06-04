@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"sync"
 	"testing"
@@ -50,9 +51,7 @@ func (b *scheduleIOFakeBackend) recordPut(addr string, values map[string]any) {
 		b.putValues = make(map[string]map[string]any)
 	}
 	cp := make(map[string]any, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	b.putValues[addr] = cp
 	b.putCalls++
 }
@@ -125,9 +124,7 @@ func buildScheduleIOFixture(t *testing.T, raw map[string]any) (
 		// Hand back a copy so callers can mutate without affecting
 		// subsequent reads.
 		out := make(map[string]any, len(raw))
-		for k, v := range raw {
-			out[k] = v
-		}
+		maps.Copy(out, raw)
 		return out, nil
 	}
 	backend.putParamsetFn = func(_ context.Context, address string, _ hmenum.ParamsetKey, values map[string]any) error {
@@ -410,9 +407,7 @@ func buildTwoDeviceFixture(t *testing.T, srcRaw map[string]any) (
 			return map[string]any{"GLOBAL_BUTTON_LOCK": false}, nil
 		}
 		out := make(map[string]any, len(srcRaw))
-		for k, v := range srcRaw {
-			out[k] = v
-		}
+		maps.Copy(out, srcRaw)
 		return out, nil
 	}
 	backend.putParamsetFn = func(_ context.Context, address string, _ hmenum.ParamsetKey, values map[string]any) error {
@@ -563,7 +558,6 @@ func TestCopyProfileToInvalidProfileIDs(t *testing.T) {
 		{"both-valid", "P1", "P2", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			err := domain.CopyProfileTo(
@@ -860,18 +854,18 @@ func TestScheduleCacheConcurrentReadsAndWrites(t *testing.T) {
 	const channels = 8
 	const iterations = 200
 	var wg sync.WaitGroup
-	for i := 0; i < channels; i++ {
-		i := i
+	for i := range channels {
+
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				cache.put(fmt.Sprintf("addr%d:1", i), schedule.NewClimate())
 			}
 		}()
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for range iterations {
 				_, _ = cache.get(fmt.Sprintf("addr%d:1", i))
 			}
 		}()
@@ -1162,9 +1156,7 @@ func TestCopyProfileToCapAcceptsWithinCap(t *testing.T) {
 	}
 	backend.getParamsetFn = func(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
 		out := make(map[string]any, len(rawSrc))
-		for k, v := range rawSrc {
-			out[k] = v
-		}
+		maps.Copy(out, rawSrc)
 		return out, nil
 	}
 

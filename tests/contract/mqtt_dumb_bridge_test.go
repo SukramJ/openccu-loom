@@ -174,7 +174,7 @@ func removeInlineComment(line string) string {
 	// Simple heuristic: find the first `//` that is not inside a string.
 	inString := false
 	escaped := false
-	for i := 0; i < len(line)-1; i++ {
+	for i := range len(line) - 1 {
 		ch := line[i]
 		if escaped {
 			escaped = false

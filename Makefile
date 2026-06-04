@@ -12,6 +12,8 @@ GOFUMPT         ?= gofumpt
 GOIMPORTS       ?= goimports
 GOLANGCI_LINT   ?= golangci-lint
 GORELEASER      ?= goreleaser
+GOVULNCHECK     ?= govulncheck
+GOLICENSES      ?= go-licenses
 
 export CGO_ENABLED := 0
 
@@ -42,6 +44,8 @@ setup: ## install developer tooling and the pre-commit hook
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
 	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 	$(GO) install github.com/pressly/goose/v3/cmd/goose@latest
+	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
+	$(GO) install github.com/google/go-licenses@latest
 	@if [ -d .git ]; then \
 		install -m 0755 script/git/pre-commit .git/hooks/pre-commit 2>/dev/null || \
 			echo "note: script/git/pre-commit not present yet (Phase 0)"; \
@@ -334,6 +338,14 @@ coverage-check-per-package: ## fail when any package drops below its tier thresh
 .PHONY: lint
 lint: ## run golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+.PHONY: vuln
+vuln: ## scan dependencies + reachable code for known vulnerabilities (govulncheck)
+	$(GOVULNCHECK) ./...
+
+.PHONY: licenses
+licenses: ## fail on copyleft dependency licenses (GPL/AGPL/LGPL forbidden; MPL = reciprocal)
+	$(GOLICENSES) check ./... --disallowed_types=forbidden,restricted,reciprocal
 
 .PHONY: fmt
 fmt: ## run gofumpt + goimports

@@ -4,6 +4,8 @@
 package custom
 
 import (
+	"slices"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -123,10 +125,8 @@ func (a AggregateView) HasAnyKey(keys []hmtypes.DataPointKey) bool {
 			continue
 		}
 		dpk := s.DataPointKey()
-		for _, k := range keys {
-			if dpk == k {
-				return true
-			}
+		if slices.Contains(keys, dpk) {
+			return true
 		}
 	}
 	return false

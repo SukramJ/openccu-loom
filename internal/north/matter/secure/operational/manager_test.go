@@ -213,7 +213,7 @@ func TestManager_AdoptFabricIndex_Idempotent(t *testing.T) {
 	t.Parallel()
 	m, _ := newTestManager()
 	e, _ := m.OpenFromSigma(2, 1, 100, testKeys())
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if err := m.AdoptFabricIndex(e.SessionID, 2); err != nil {
 			t.Fatalf("AdoptFabricIndex iteration %d: %v", i, err)
 		}

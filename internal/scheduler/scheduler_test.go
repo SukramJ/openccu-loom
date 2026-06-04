@@ -24,8 +24,7 @@ func TestSchedulerRunsJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -40,8 +39,7 @@ func TestSchedulerRunsJob(t *testing.T) {
 func TestSchedulerRejectsDoubleStart(t *testing.T) {
 	s := New(nil, nil)
 	_ = s.Add(Job{Name: "x", Interval: time.Minute, Run: func(context.Context) error { return nil }})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -66,8 +64,7 @@ func TestSchedulerValidatesJob(t *testing.T) {
 
 func TestSchedulerAddAfterStart(t *testing.T) {
 	s := New(nil, nil)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -125,8 +122,7 @@ func TestSchedulerJobErrorIsLoggedNotPropagated(t *testing.T) {
 			return fail
 		},
 	})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	if err := s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

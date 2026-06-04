@@ -22,6 +22,7 @@ package weekprofile
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -234,12 +235,7 @@ func isValidProfileKey(k string) bool {
 
 // isValidWeekday checks whether a string is a known CCU weekday.
 func isValidWeekday(w schedule.Weekday) bool {
-	for _, v := range schedule.Weekdays {
-		if v == w {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(schedule.Weekdays, w)
 }
 
 // ---------------------------------------------------------------------------

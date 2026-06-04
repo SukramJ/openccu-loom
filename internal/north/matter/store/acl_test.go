@@ -10,12 +10,6 @@ import (
 	store "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 )
 
-// ptr32 is a helper to get a *uint32 from a literal value.
-func ptr32(v uint32) *uint32 { return &v }
-
-// ptr16 is a helper to get a *uint16 from a literal value.
-func ptr16(v uint16) *uint16 { return &v }
-
 // TestACL_ListEmpty verifies that ListACL on a fresh fabric returns an empty
 // slice (not nil, not an error).
 func TestACL_ListEmpty(t *testing.T) {
@@ -149,8 +143,8 @@ func TestACL_SubjectsWithMultipleTargets(t *testing.T) {
 			AuthMode:  store.AuthModeGroup,
 			Subjects:  []uint64{50, 51},
 			Targets: []store.ACLTarget{
-				{Cluster: ptr32(0x0006), Endpoint: ptr16(1)},
-				{Cluster: ptr32(0x0008), DeviceType: ptr32(0x0100)},
+				{Cluster: new(uint32(0x0006)), Endpoint: new(uint16(1))},
+				{Cluster: new(uint32(0x0008)), DeviceType: new(uint32(0x0100))},
 			},
 		},
 	}
@@ -194,13 +188,13 @@ func TestACL_TargetPointerFieldsRoundTrip(t *testing.T) {
 			Subjects:  []uint64{1},
 			Targets: []store.ACLTarget{
 				// All fields set.
-				{Cluster: ptr32(1), Endpoint: ptr16(2), DeviceType: ptr32(3)},
+				{Cluster: new(uint32(1)), Endpoint: new(uint16(2)), DeviceType: new(uint32(3))},
 				// Only Cluster.
-				{Cluster: ptr32(4), Endpoint: nil, DeviceType: nil},
+				{Cluster: new(uint32(4)), Endpoint: nil, DeviceType: nil},
 				// Only Endpoint.
-				{Cluster: nil, Endpoint: ptr16(5), DeviceType: nil},
+				{Cluster: nil, Endpoint: new(uint16(5)), DeviceType: nil},
 				// Only DeviceType.
-				{Cluster: nil, Endpoint: nil, DeviceType: ptr32(6)},
+				{Cluster: nil, Endpoint: nil, DeviceType: new(uint32(6))},
 				// All nil.
 				{Cluster: nil, Endpoint: nil, DeviceType: nil},
 			},
@@ -353,7 +347,7 @@ func TestACL_ReplaceWithNilTargets(t *testing.T) {
 	entries := []store.ACLEntry{
 		{Privilege: store.PrivilegeView, AuthMode: store.AuthModeCASE, Subjects: []uint64{0x11}},
 		{Privilege: store.PrivilegeManage, AuthMode: store.AuthModeGroup, Subjects: nil, Targets: []store.ACLTarget{
-			{Endpoint: ptr16(5)},
+			{Endpoint: new(uint16(5))},
 		}},
 	}
 	if err := s.ReplaceACL(ctx, 1, entries); err != nil {

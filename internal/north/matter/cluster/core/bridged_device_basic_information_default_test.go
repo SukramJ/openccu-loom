@@ -62,7 +62,6 @@ func TestBridgedBasicInfo_HonorsConfigReachable(t *testing.T) {
 		{"unreachable", false},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			cfg := core.BridgedConfig{

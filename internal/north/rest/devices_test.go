@@ -112,7 +112,7 @@ func newDeviceRouter(t *testing.T, writer handlers.DataPointWriter, chWriter dev
 
 func TestListDevices(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -152,7 +152,7 @@ func TestListDevicesFilters(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/api/v1/devices"+c.query, http.NoBody)
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/devices"+c.query, http.NoBody)
 			rr := httptest.NewRecorder()
 			r.ServeHTTP(rr, req)
 			if rr.Code != 200 {
@@ -175,7 +175,7 @@ func TestListDevicesFilters(t *testing.T) {
 
 func TestGetDeviceDetail(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices/0001ABCD", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -190,7 +190,7 @@ func TestGetDeviceDetail(t *testing.T) {
 
 func TestGetDeviceNotFound(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices/MISSING", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/MISSING", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 404 {
@@ -200,7 +200,7 @@ func TestGetDeviceNotFound(t *testing.T) {
 
 func TestListDataPoints(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices/0001ABCD/channels/1/data-points", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD/channels/1/data-points", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -215,7 +215,7 @@ func TestListDataPoints(t *testing.T) {
 
 func TestGetDataPoint(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices/0001ABCD/channels/1/data-points/STATE", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD/channels/1/data-points/STATE", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 200 {
@@ -338,7 +338,7 @@ func TestPutDataPointValueMissingWriter(t *testing.T) {
 
 func TestGetChannelNotFound(t *testing.T) {
 	r := newDeviceRouter(t, nil, nil)
-	req := httptest.NewRequest("GET", "/api/v1/devices/0001ABCD/channels/99", http.NoBody)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001ABCD/channels/99", http.NoBody)
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 	if rr.Code != 404 {

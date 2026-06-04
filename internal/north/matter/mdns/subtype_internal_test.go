@@ -7,7 +7,6 @@
 package mdns
 
 import (
-	"context"
 	"log/slog"
 	"net"
 	"testing"
@@ -298,8 +297,7 @@ func TestSubtypeResponder_Start_NoPCSockets_NoGoroutines(t *testing.T) {
 	// Build a responder without actual network sockets (pc4=nil, pc6=nil).
 	r := newTestResponder()
 	// Start should not launch any goroutines when both pc4 and pc6 are nil.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	r.Start(ctx)
 	// Calling Start again (cancel != nil now) must be a no-op.
 	r.Start(ctx)
@@ -321,8 +319,7 @@ func TestSubtypeResponder_Close_WithoutStart(t *testing.T) {
 func TestSubtypeResponder_Close_Idempotent(t *testing.T) {
 	t.Parallel()
 	r := newTestResponder()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	r.Start(ctx)
 	if err := r.Close(); err != nil {
 		t.Fatalf("first Close: %v", err)

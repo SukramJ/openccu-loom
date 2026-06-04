@@ -58,7 +58,6 @@ func TestCalculatedDewPointUniqueID(t *testing.T) {
 		},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			s := NewDewPointSensorWithIdentity(tc.centralName, tc.address)
@@ -117,7 +116,6 @@ func TestCalculatedSatisfiesBaseDataPoint(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		c := c
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			if got := c.dp.UniqueID(); got != c.want {
@@ -153,7 +151,6 @@ func TestCalculatedLegacyConstructorsKeepFamilySuffix(t *testing.T) {
 		{name: "OperatingVoltageLevel", dp: NewOperatingVoltageLevelSensor(), want: ":CALCULATED/OPERATING_VOLTAGE_LEVEL"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			if got := tc.dp.UniqueID(); !strings.HasSuffix(got, tc.want) {
@@ -219,31 +216,26 @@ func TestCalculatedConcurrent(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	for w := 0; w < writers; w++ {
-		w := w
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for w := range writers {
+		wg.Go(func() {
 			ctx := context.Background()
-			for i := 0; i < iterations; i++ {
+			for i := range iterations {
 				s.SetForcedUsage(usages[(w+i)%len(usages)])
 				s.PublishUpdate(ctx, i)
 			}
-		}()
+		})
 	}
 
-	for r := 0; r < readers; r++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for i := 0; i < iterations; i++ {
+	for range readers {
+		wg.Go(func() {
+			for range iterations {
 				_ = s.UniqueID()
 				_ = s.Visible()
 				_ = s.EnabledByDefault()
 				_, _ = s.ForcedUsage()
 				_, _ = s.Value()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

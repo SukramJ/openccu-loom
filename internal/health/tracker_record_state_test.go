@@ -314,7 +314,7 @@ func TestParityWindowedScoreOnlyCountsRecentSamples(t *testing.T) {
 
 	// Three old failures (5 min ago) — will be outside the 2 min window.
 	old := parityT0.Add(-5 * time.Minute)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		tr.Record("w", Sample{Healthy: false, Timestamp: old})
 	}
 	// Two recent successes.

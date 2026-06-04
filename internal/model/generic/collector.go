@@ -359,11 +359,8 @@ func (c *CallParameterCollector) Send(ctx context.Context) error {
 	// [WaitableDataPoint] are skipped silently so the option degrades
 	// gracefully when callers pass fake DPs in tests.
 	if waitN > 0 {
-		limit := waitN
-		if limit > len(items) {
-			limit = len(items)
-		}
-		for i := 0; i < limit; i++ {
+		limit := min(waitN, len(items))
+		for i := range limit {
 			w, ok := items[i].dp.(WaitableDataPoint)
 			if !ok {
 				continue

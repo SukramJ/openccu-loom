@@ -41,6 +41,7 @@ func TestRoundTripBoolFalse(t *testing.T) {
 	roundTrip(t, "bool-false",
 		func(e *Encoder) { e.PutBool(AnonymousTag(), false) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeBoolFalse || el.Bool {
 				t.Fatalf("got type=0x%02X bool=%v", el.Type, el.Bool)
 			}
@@ -53,6 +54,7 @@ func TestRoundTripBoolTrue(t *testing.T) {
 	roundTrip(t, "bool-true",
 		func(e *Encoder) { e.PutBool(AnonymousTag(), true) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeBoolTrue || !el.Bool {
 				t.Fatalf("got type=0x%02X bool=%v", el.Type, el.Bool)
 			}
@@ -64,6 +66,7 @@ func TestRoundTripNull(t *testing.T) {
 	roundTrip(t, "null",
 		func(e *Encoder) { e.PutNull(AnonymousTag()) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeNull || !el.IsNull {
 				t.Fatalf("got type=0x%02X isNull=%v", el.Type, el.IsNull)
 			}
@@ -150,6 +153,7 @@ func TestFloat32RoundTrip(t *testing.T) {
 	roundTrip(t, "f32",
 		func(e *Encoder) { e.PutFloat32(AnonymousTag(), 3.5) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeFloat4 || float32(el.Float) != 3.5 {
 				t.Fatalf("got type=0x%02X float=%v", el.Type, el.Float)
 			}
@@ -162,6 +166,7 @@ func TestFloat64RoundTrip(t *testing.T) {
 	roundTrip(t, "f64",
 		func(e *Encoder) { e.PutFloat64(AnonymousTag(), 1.234567890123) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeFloat8 || el.Float != 1.234567890123 {
 				t.Fatalf("got type=0x%02X float=%v", el.Type, el.Float)
 			}
@@ -174,6 +179,7 @@ func TestUTF8RoundTripShort(t *testing.T) {
 	roundTrip(t, "utf8-1",
 		func(e *Encoder) { e.PutUTF8(AnonymousTag(), "hello matter") },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeUTF8Str1 || el.String != "hello matter" {
 				t.Fatalf("got type=0x%02X str=%q", el.Type, el.String)
 			}
@@ -186,6 +192,7 @@ func TestUTF8WidthEscalates256B(t *testing.T) {
 	roundTrip(t, "utf8-2",
 		func(e *Encoder) { e.PutUTF8(AnonymousTag(), string(body)) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeUTF8Str2 || el.String != string(body) {
 				t.Fatalf("got type=0x%02X len=%d", el.Type, len(el.String))
 			}
@@ -199,6 +206,7 @@ func TestOctetsRoundTrip(t *testing.T) {
 	roundTrip(t, "octets",
 		func(e *Encoder) { e.PutOctets(AnonymousTag(), body) },
 		func(t *testing.T, el Element) {
+			t.Helper()
 			if el.Type != TypeOctetStr1 || !bytes.Equal(el.Octets, body) {
 				t.Fatalf("got type=0x%02X octets=% X", el.Type, el.Octets)
 			}
@@ -800,7 +808,7 @@ func TestPutUint64Bounded_ValidValues(t *testing.T) {
 func TestDecodeAppleSigma1Bytes(t *testing.T) {
 	b, _ := hex.DecodeString("15300120051c20660838df2ffc4996e8c28918a4f93a82e2a9e66fac50edf22a")
 	dec := NewDecoder(b)
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		el, err := dec.Next()
 		if err != nil {
 			t.Logf("el%d err: %v", i, err)

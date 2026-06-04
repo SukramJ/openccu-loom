@@ -61,8 +61,8 @@ func TestLoadSubscriptionFanout(t *testing.T) {
 	defer mgr.Stop()
 
 	// Subscribe every (endpoint, channel) wildcard.
-	for ep := 0; ep < endpoints; ep++ {
-		for ch := 0; ch < channels; ch++ {
+	for ep := range endpoints {
+		for ch := range channels {
 			path := im.ConcreteAttributePath{
 				HasEndpoint:  true,
 				HasCluster:   true,
@@ -93,8 +93,8 @@ func TestLoadSubscriptionFanout(t *testing.T) {
 	mgr.Tick(ctx, t0)
 
 	// Touch every subscribed path; verify O(n) fan-out.
-	for ep := 0; ep < endpoints; ep++ {
-		for ch := 0; ch < channels; ch++ {
+	for ep := range endpoints {
+		for ch := range channels {
 			path := im.ConcreteAttributePath{
 				HasEndpoint:  true,
 				HasCluster:   true,
