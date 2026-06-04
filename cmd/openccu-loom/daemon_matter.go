@@ -20,10 +20,12 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
@@ -31,6 +33,7 @@ import (
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	matterwire "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/eligibility"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
@@ -45,7 +48,10 @@ import (
 	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -2293,6 +2299,334 @@ func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, logger *slog.L
 		slog.String("service_type", discoverymdns.ServiceType),
 		slog.Int("port", port))
 	return adv, nil
+}
+
+// matterWiring carries the Matter REST/WS-facing adapters produced by
+// wireMatterRuntime. All fields are nil when the bridge is disabled.
+type matterWiring struct {
+	fabricStore   handlers.MatterFabricStore
+	opener        handlers.MatterCommissioningOpener
+	statusReader  handlers.MatterStatusReader
+	fabricRevoker handlers.MatterFabricRevoker
+	closer        handlers.MatterCommissioningCloser
+	exposureStore handlers.MatterExposureStore
+	candidates    handlers.MatterCandidateProvider
+	pub           *matterEventPublisher
+	reassembler   handlers.MatterTopologyReassembler
+	bi            *mattercore.BasicInformation
+}
+
+// wireMatterRuntime stands up the Matter bridge runtime when enabled and
+// returns the REST/WS adapters, any device-availability unsubscribe
+// closures to register, and a teardown to defer. Returns a zero
+// matterWiring + nil closers + a no-op teardown when the bridge is off.
+//
+//nolint:gocognit,funlen // composition/wiring: long sequential Matter bridge setup
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
+	teardown = func() {}
+	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, logger); bundle != nil {
+		mb := bundle.bridge
+		mfs := bundle.store
+		teardown = bundle.stop
+		wiring.fabricStore = mfs
+		wiring.exposureStore = mfs
+		wiring.reassembler = mb
+		// Wire the allowlist checker so the assembler only bridges
+		// sources that the operator has explicitly enabled. Default
+		// = empty allowlist = empty topology. The exposure-management
+		// REST endpoints (`/api/v1/matter/exposable`) drive the
+		// matter_exposures table the checker reads through.
+		//
+		// Bridge.Start has already assembled the initial topology with
+		// the allow-all default, so we trigger a reassemble here to
+		// discard the over-broad endpoint set and rebuild scoped to
+		// the persisted exposures. Without this Apple Home sees every
+		// CCU device as a Matter endpoint (1000+), the initial
+		// Subscribe expands to 60+ KB, the post-CASE phase exceeds
+		// Apple's pairing-UI timeout and the user sees a generic
+		// add-failed error even though the cryptographic handshake completed.
+		mb.AttachExposureChecker(mfs)
+		if err := mb.Reassemble(ctx); err != nil {
+			logger.Warn("matter.bridge.reassemble.after_exposure_checker",
+				slog.String("err", err.Error()))
+		}
+
+		// Wire CCU device-availability → BridgedDeviceBasicInformation
+		// Reachable. WireDeviceAvailability (above) publishes a
+		// DeviceLifecycleEvent{AvailabilityChanged} on each central's bus
+		// whenever a device's effective availability flips (interface
+		// disconnect, STICKY_UNREACH, reconnect). Forward that to the
+		// bridge so the matching bridged endpoint fires the §9.13.6
+		// ReachableChanged event — without this Apple/Google always see
+		// every bridged device as reachable even when the CCU device is
+		// dead. The Reachable attribute itself reads dev.Available() live
+		// per dispatch (endpoint/materialize.go); this supplies the push
+		// half so active subscriptions are notified, not just polled reads.
+		for _, u := range reg.List() {
+			if u == nil || u.EventBus == nil {
+				continue
+			}
+			cName := u.Name()
+			unsub := events.Subscribe(u.EventBus, func(e hmevent.DeviceLifecycleEvent) {
+				if e.Subtype != hmenum.DeviceLifecycleSubtypeAvailabilityChanged {
+					return
+				}
+				mb.NotifyDeviceReachable(cName, e.Address, e.Available)
+			})
+			closers = append(closers, unsub)
+		}
+		// Wire the Root Descriptor's dynamic PartsList provider to
+		// the bridge's live topology so `0:0x001D:0x0003` reflects the
+		// freshly-assembled bridged endpoints. Apple Home reads
+		// PartsList after CommissioningComplete; an empty list makes
+		// the bridge look like an empty RootNode and Apple's UI ends
+		// the commissioning with a generic add-failed error.
+		// Root.Descriptor.PartsList — flat tree of all descendant
+		// endpoints (Aggregator + bridged), matching matter.js HEAD's
+		// `DescriptorServer.#updatePartsList` (packages/node/src/
+		// behaviors/descriptor/DescriptorServer.ts:185-209) when
+		// IndexBehavior is mounted on Root. matter.js's
+		// `examples/device-bridge-onoff` Sample emits
+		// `Root.PartsList=[1,2,3]` (Aggregator + 2 bridged children)
+		// and pairs with Apple Home successfully — verified empirically
+		// (matter.js byte-dump via InteractionMessenger.ts:681 hook).
+		// Earlier `[1]`-only experiments produced the same Apple-Cache
+		// `count: 3` symptom, so flat-tree is the matter.js-parity
+		// answer, not the workaround.
+		mb.AttachRootPartsListProvider(func() []uint16 {
+			topo := mb.Topology()
+			if topo == nil {
+				return nil
+			}
+			ids := make([]uint16, 0, len(topo.Endpoints))
+			for _, ep := range topo.Endpoints {
+				if ep.IsRoot() {
+					continue
+				}
+				ids = append(ids, ep.ID)
+			}
+			slices.Sort(ids)
+			return ids
+		})
+		// Aggregator endpoint (EP 1) PartsList: every bridged endpoint
+		// (ID ≥ 2). Mirrors matter.js's `Aggregator.parts = [bridged
+		// children]` (AggregatorEndpoint requirements list Parts as
+		// mandatory in `packages/node/src/endpoints/aggregator.ts`).
+		mb.AttachAggregatorPartsListProvider(func() []uint16 {
+			topo := mb.Topology()
+			if topo == nil {
+				return nil
+			}
+			ids := make([]uint16, 0, len(topo.Endpoints))
+			for _, ep := range topo.Endpoints {
+				if ep.IsRoot() || ep.IsAggregator() {
+					continue
+				}
+				ids = append(ids, ep.ID)
+			}
+			return ids
+		})
+		// Build the commissioning-window opener using the configured
+		// PASE parameters. The opener reuses the bridge's already-open
+		// PASE acceptor; it tracks the window state and emits
+		// QR + manual codes for the caller (REST handler).
+		window := matterbridge.NewCommissioningWindow()
+		mb.AttachCommissioningWindow(window)
+		// Wire FailSafeArmer and PaseSessionCloser hooks so CommissioningWindow
+		// can arm the Matter fail-safe after opening a window (Matter §11.19.6)
+		// and evict open PASE sessions when the window is revoked
+		// (Matter §11.19.7.3 step 1). Both adapters delegate to their
+		// respective production paths — see [failSafeArmerAdapter] and
+		// [paseSessionCloserAdapter].
+		window.SetFailSafeChecker(bundle.rootRefs.GeneralCommissioning)
+		window.SetFailSafeArmer(&failSafeArmerAdapter{
+			gc:     bundle.rootRefs.GeneralCommissioning,
+			logger: logger,
+		})
+		window.SetPaseSessionCloser(&paseSessionCloserAdapter{
+			opMgr:  bundle.opMgr,
+			logger: logger,
+		})
+		opener := matterbridge.NewCommissioningWindowOpener(
+			window,
+			cfg.North.Matter.Discriminator,
+			cfg.North.Matter.Commissioning.Passcode,
+			cfg.North.Matter.VendorID,
+			cfg.North.Matter.ProductID,
+		)
+		// Matter §4.3.1.5 requires a random 64-bit hex Instance Name on
+		// every commissionable record. A fixed/zero value lets Apple
+		// Home cache the lookup result across reboots and reject the
+		// pairing as "already known"; rolling a fresh ID per process
+		// boot avoids the stale-cache trap.
+		var instanceID [8]byte
+		if _, err := rand.Read(instanceID[:]); err != nil {
+			logger.Warn("matter.bridge.instance_id.rand_failed", slog.String("err", err.Error()))
+		}
+		// Rotating Device Identifier per Matter §5.4.2.4. UniqueID is
+		// derived stably from the bridge identity (VendorID, ProductID,
+		// SerialNumber, NodeLabel) so the value survives daemon restarts
+		// without an extra persistence slot. LifetimeCounter stays at 0
+		// in 0.1.0; future iterations bump it on fabric-change events.
+		rotatingUniqueID := mdns.DeriveUniqueIDFromIdentity(
+			cfg.North.Matter.VendorID,
+			cfg.North.Matter.ProductID,
+			rotatingSerialPart(cfg.North.Matter.VendorID, cfg.North.Matter.ProductID, cfg.North.Matter.NodeLabel),
+			cfg.North.Matter.NodeLabel,
+		)
+		rotatingID := mdns.GenerateRotatingID(rotatingUniqueID, 0)
+
+		wiring.opener = &matterCommissioningOpenerAdapter{
+			inner:  opener,
+			bridge: mb,
+			advert: matterbridge.CommissioningAdvertisement{
+				InstanceID:        instanceID,
+				Discriminator:     cfg.North.Matter.Discriminator,
+				VendorID:          cfg.North.Matter.VendorID,
+				ProductID:         cfg.North.Matter.ProductID,
+				NodeLabel:         cfg.North.Matter.NodeLabel,
+				RotatingID:        rotatingID,
+				CommissioningMode: 1, // §4.3.1.4 CM=1: open commissioning window
+				// DT TXT-Record advertises the *primary* device-type
+				// of the Node. matter.js's bridge sample sets it to
+				// AggregatorEndpoint.deviceType (0x000E); we tested
+				// 0x000E empirically against an iPhone with all four
+				// fix-stack items in place (ACL, NetworkCommissioning,
+				// 500ms chunk wait, ArmFailSafe→OpCreds reset) and
+				// Apple's HMMTRBridgeDeviceTypeDeterminer still
+				// produced endpointDeviceTypes={0=(22)} — the value
+				// is not driven by DT. Side-effect of DT=0x000E was
+				// that Apple skipped the SystemCommissioner pair
+				// (no AddingSystemCommissioner state, no second AddNOC
+				// for vendor 0x1384) which removed the second HAP
+				// rebuild attempt and made the pair worse rather
+				// than better. Kept at RootNode pending a wire-level
+				// diff against a matter.js sample bridge.
+				DeviceTypeID: 0x0016, // §10.3 RootNode — DT=0x000E empirically worse for Apple Multi-Admin flow
+			},
+		}
+		// Withdraw the commissionable record on every transition into
+		// "closed" so commissioners stop discovering the bridge once
+		// the window has expired or been revoked.
+		window.SetTransitionHook(func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
+			if mb == nil {
+				return
+			}
+			if window.CurrentWindow().Status != matterwire.WindowStatusEnhanced {
+				mb.WithdrawCommissioning(context.Background())
+			}
+		})
+
+		// Ephemeral-window mode: each OpenCommissioningWindow call
+		// generates a fresh discriminator + passcode + Spake2+ verifier
+		// and swaps it onto the bridge's PASE adapter for the window
+		// duration. Works with both `concurrent_pairings=false`
+		// (singleton swap) and `concurrent_pairings=true` (per-exchange
+		// PaseAdapter factory installed for the window).
+		if cfg.North.Matter.Commissioning.EphemeralWindow {
+			var configuredFactory func() *matterbridge.PaseAdapter
+			if cfg.North.Matter.Commissioning.ConcurrentPairings {
+				// Capture the operator's configured per-exchange factory
+				// so the Restore closure can re-install it after the
+				// ephemeral window closes.
+				cmCopy := cfg.North.Matter.Commissioning
+				opMgrLocal := bundle.opMgr
+				opCredsLocal := bundle.opCreds
+				gcLocal := bundle.rootRefs.GeneralCommissioning
+				loggerLocal := logger
+				configuredFactory = func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed by interface; buildPaseAdapter has no ctx
+					a, err := buildPaseAdapter(cmCopy, opMgrLocal, opCredsLocal, gcLocal, loggerLocal)
+					if err != nil {
+						loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
+						return nil
+					}
+					return a
+				}
+			}
+			ephem := newMatterEphemeralProvider(mb, cfg.North.Matter.Commissioning, bundle.opMgr, bundle.opCreds, bundle.configuredPase, configuredFactory, logger)
+			opener.SetEphemeralProvider(ephem)
+			logger.Info("matter.bridge.pase.ephemeral_armed",
+				slog.Bool("configured_fallback", bundle.configuredPase != nil),
+				slog.Bool("concurrent_pairings", cfg.North.Matter.Commissioning.ConcurrentPairings))
+		}
+		// Wire the Reassemble → WS event emit pipeline so the SPA's
+		// allowlist save flow gets a `matter.endpoint_assembled`
+		// notification after the topology refresh completes.
+		wiring.pub = &matterEventPublisher{hub: wsHub}
+		// Composite onReassembled: WS event publish + Matter-spec
+		// lifecycle events (BootReason + StartUp) on the FIRST
+		// reassemble, when the cluster servers are wired to the
+		// emitter pipeline. matter.js fires these on the equivalent
+		// "behavior pipeline ready" hook (NodeServer.run).
+		var reassembleOnce sync.Once
+		biRef := bundle.rootRefs.BasicInformation
+		gdRef := bundle.rootRefs.GeneralDiagnostics
+		wiring.bi = biRef
+		mb.SetOnReassembled(func(count int) { //nolint:contextcheck // callback signature is fixed; publishEndpointAssembled has no ctx
+			wiring.pub.publishEndpointAssembled(count)
+			reassembleOnce.Do(func() {
+				if gdRef != nil {
+					gdRef.EmitBootReason()
+				}
+				if biRef != nil {
+					biRef.EmitStartUp()
+				}
+			})
+		})
+		// IMPORTANT: SetOnReassembled is wired AFTER mb.Reassemble(ctx)
+		// (called earlier in this function) — the bridge's first
+		// topology-assembly pass therefore fires the hook with the
+		// then-nil closure and the StartUp / BootReason events never
+		// land in EventLog. Apple Home's MTRDevice waits for those
+		// Critical events as part of its Subscribe-Initial state-
+		// machine (verified via byte-diff
+		// against matter.js Sample): without them the controller
+		// transitions state `Subscribing` → `Unsubscribed` instead of
+		// `Subscribing` → `InitialSubscriptionEstablished`, persists
+		// only 3 cluster_information records instead of ~21, and
+		// surfaces the bridge as "added but not supported".
+		// Trigger the same once-only emit path the SetOnReassembled
+		// callback would have triggered, now that the hook is wired
+		// and the cluster-server emitters are bound via the topology
+		// assembler.
+		reassembleOnce.Do(func() {
+			if gdRef != nil {
+				gdRef.EmitBootReason()
+			}
+			if biRef != nil {
+				biRef.EmitStartUp()
+			}
+		})
+		mb.SetOnFabricAdded(wiring.pub.publishFabricAdded)
+		mb.SetOnFabricRemoved(wiring.pub.publishFabricRemoved)
+		wiring.statusReader = &matterStatusReaderAdapter{
+			enabled: cfg.North.Matter.Enabled,
+			bridge:  mb,
+			store:   mfs,
+			window:  window,
+			cfg: &matterStatusConfig{
+				advertising: cfg.North.Matter.MDNSAdvertise == "zeroconf",
+			},
+		}
+		if healthTracker != nil {
+			_ = startMatterHealthProbe(ctx, wiring.statusReader, healthTracker, matterHealthProbeInterval)
+		}
+		wiring.fabricRevoker = &matterFabricRevokerAdapter{store: mfs}
+		wiring.closer = &matterCommissioningCloserAdapter{window: window}
+		wiring.candidates = &matterCandidateProviderAdapter{
+			walk: func() []eligibility.Candidate {
+				var out []eligibility.Candidate
+				for _, u := range reg.List() {
+					if u == nil || u.ModelRegistry == nil {
+						continue
+					}
+					out = append(out, eligibility.CollectCandidates(u.Name(), u.ModelRegistry.List())...)
+				}
+				return out
+			},
+		}
+	}
+	return wiring, closers, teardown
 }
 
 // splitListenPort returns the TCP port from a Go net.Listen-style
