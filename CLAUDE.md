@@ -283,7 +283,6 @@ openccu-loom/
 ├── internal/                — daemon-internal, non-reusable
 │   ├── audit/               — change-log append, persistence
 │   ├── auth/                — Basic / Session / OIDC / API Token
-│   ├── boundary/            — `boundary.Execute` (port of @inspector)
 │   ├── build/               — version metadata
 │   ├── ccudata/             — embedded openccu-data extracts
 │   │                          (translations, easymodes, profiles)

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 14bdd5e
-HEAD: 14bdd5e
+Generated: ddabb47
+HEAD: ddabb47
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 22201 |
+| Total Exported | 22185 |
 | Reachable | 3690 |
-| Whitelisted | 15821 |
-| **Unreachable** | **2690** |
+| Whitelisted | 15813 |
+| **Unreachable** | **2682** |
 
 ## Top-20 Packages by Dead Code
 
@@ -65,8 +65,6 @@ HEAD: 14bdd5e
 | internal/auth/oidc | NewPKCEPair | internal/auth/oidc/pkce.go | 23 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
-| internal/boundary | Execute | internal/boundary/execute.go | 47 |
-| internal/boundary | Execute | internal/boundary/execute.go | 47 |
 | internal/ccudata | Empty | internal/ccudata/translations.go | 79 |
 | internal/ccudata | EmptyEasymode | internal/ccudata/easymode.go | 237 |
 | internal/ccudata | LoadEasymodeEmbedded | internal/ccudata/embed.go | 65 |
@@ -91,6 +89,8 @@ HEAD: 14bdd5e
 | internal/central/adapter | NewCustomDPDispatcher | internal/central/adapter/custom_dp_dispatcher.go | 57 |
 | internal/central/adapter | NewDataPointWriterAdapter | internal/central/adapter/devices.go | 130 |
 | internal/central/adapter | NewDeviceAdminDomain | internal/central/adapter/device_admin.go | 27 |
+| internal/central/adapter | NewDevicePipeline | internal/central/adapter/device_pipeline.go | 122 |
+| internal/central/adapter | NewDeviceReloaderAdapter | internal/central/adapter/device_reloader.go | 41 |
 
 ## Full By-Package Breakdown
 
@@ -131,7 +131,6 @@ HEAD: 14bdd5e
 | internal/north/discovery/mdns | 3 | 6 | 2 |
 | internal/north/matter/secure/setup | 3 | 3 | 0 |
 | internal/store/devicedetails | 3 | 2 | 0 |
-| internal/boundary | 2 | 4 | 2 |
 | internal/central | 2 | 18 | 2 |
 | internal/central/rpcserver | 2 | 10 | 4 |
 | internal/clock | 2 | 5 | 0 |

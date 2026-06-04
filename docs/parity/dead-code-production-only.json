@@ -1,6 +1,6 @@
 {
-  "generated": "14bdd5e",
-  "head": "14bdd5e",
+  "generated": "ddabb47",
+  "head": "ddabb47",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 22201,
+    "total_exported": 22185,
     "reachable": 3458,
-    "whitelisted": 15821,
-    "unreachable": 2922
+    "whitelisted": 15813,
+    "unreachable": 2914
   },
   "by_package": [
     {
@@ -301,12 +301,6 @@
       "unreachable_funcs": 3,
       "unreachable_types": 46,
       "unreachable_other": 0
-    },
-    {
-      "package": "internal/boundary",
-      "unreachable_funcs": 2,
-      "unreachable_types": 4,
-      "unreachable_other": 2
     },
     {
       "package": "internal/central/rpcserver",
@@ -1253,62 +1247,6 @@
       "file": "internal/auth/oidc/jwks.go",
       "line": 129,
       "kind": "func"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Config",
-      "file": "internal/boundary/execute.go",
-      "line": 26,
-      "kind": "type"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Config",
-      "file": "internal/boundary/execute.go",
-      "line": 26,
-      "kind": "type"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "ErrPanic",
-      "file": "internal/boundary/execute.go",
-      "line": 43,
-      "kind": "var"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "ErrPanic",
-      "file": "internal/boundary/execute.go",
-      "line": 43,
-      "kind": "var"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Execute",
-      "file": "internal/boundary/execute.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Execute",
-      "file": "internal/boundary/execute.go",
-      "line": 47,
-      "kind": "func"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Metrics",
-      "file": "internal/boundary/execute.go",
-      "line": 18,
-      "kind": "type"
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "Metrics",
-      "file": "internal/boundary/execute.go",
-      "line": 18,
-      "kind": "type"
     },
     {
       "package": "internal/build",
@@ -26021,62 +25959,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/jwks_test.go",
       "line": 85
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "ExecuteResult",
-      "reason": "generic helper used by any boundary caller that needs to extract a typed result",
-      "file": "internal/boundary/execute.go",
-      "line": 107
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "ExecuteResult",
-      "reason": "generic helper used by any boundary caller that needs to extract a typed result",
-      "file": "internal/boundary/execute.go",
-      "line": 107
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteErrorIncrementsErrorCount",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 27
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteReRaisePanicFalseSwallows",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 73
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteRecoversPanic",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 40
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteResultPropagatesError",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 63
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteResultReturnsValueOnSuccess",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 54
-    },
-    {
-      "package": "internal/boundary",
-      "identifier": "TestExecuteSuccessIncrementsCount",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/boundary/execute_test.go",
-      "line": 14
     },
     {
       "package": "internal/ccudata",

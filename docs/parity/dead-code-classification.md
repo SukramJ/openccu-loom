@@ -259,7 +259,6 @@ Device-Profile-Konstruktoren rufen die Mixin-Factories intern auf. RTA verfolgt 
 | `NewHubPathData` (naming) | Via Hub-DP-Naming-Pipeline |
 | `NewGroup` (model/event) | Via Event-Grouping-Logic |
 | `ForKinds` (payload) | Via Payload-Builder-Dispatch |
-| `ExecuteResult` (boundary) | Via Boundary-Execute-Helper mit Result-Tracking |
 | `WithExternal` (events) | Event-Bus-Option für externe Bus-Kopplung |
 | `PublishSync` (events) | Synchrone Bus-Publish-Variante, via Test und Edge-Cases |
 | `NewBatch` (events) | Batch-Publisher, via Event-Aggregation |
