@@ -4,6 +4,89 @@ This file tracks deliverables that are scoped but deferred. Items land
 here when we explicitly choose not to do them now but commit to
 revisiting them later. Completed items are moved to `CHANGELOG.md`.
 
+## Depth-parity execution plan (aiohomematic)
+
+**Status**: prioritised, not started.
+
+The structural port (phases 0–10) is complete; remaining work is
+*depth* parity against the aiohomematic reference family. This section
+fixes the order in which the open items are worked. **Matter parity is
+a separate track against matter.js — out of scope here** (see
+[`docs/matter-parity-contract.md`](./matter-parity-contract.md)).
+
+Sequencing principle: protective guards first (they cover all later
+model changes), then cheap high-certainty wins (model already done,
+wiring only), then hardening, then the large Homegear track last — the
+CCU is the primary fleet, Homegear is the secondary backend.
+
+**Recommended order: Phase 0 → 1 (parallel) → 2 → 3a → 3b → 3c →
+4 (on trigger).**
+
+### Phase 0 — Parity-guard hardening (foundation, do first)
+
+- **Code-enforce the model-snapshot drift baseline.** The cross-stack
+  snapshot pipeline exists, but the "~270 architecturally-accepted
+  drifts" baseline lives only in `CLAUDE.md` prose; regression
+  detection is manual at the release gate. Promote it to a threshold
+  constant + a CI step that fails when the drift count grows past the
+  baseline without a matching `docs/parity/by_design.md` entry.
+  *Effort: S. Risk: low.* Highest leverage per effort — it protects
+  every model change in the phases below.
+  **Gate:** `script/model_snapshot_diff.py` runs in CI and breaks on
+  drift > baseline.
+
+### Phase 1 — Cheap parity closes (model done, wire only)
+
+Independent and parallelisable; both close real aiohomematic↔Loom gaps
+where the model layer is complete and only the north-bound publisher
+hook is missing. Follow the established publisher pattern
+([ADR 0010](./adr/0010-discovery-payload-from-model.md),
+[ADR 0011](./adr/0011-mqtt-topic-and-payload-architecture.md)).
+
+- **MetricHubSensor → MQTT publishing.** Model present
+  (`internal/model/hub/metrics.go`); REST exposes it, MQTT does not.
+  *Effort: S. Risk: low.*
+- **Inbox → MQTT publisher hook (`HUB_REFRESHED`).** Model + REST
+  present (`internal/model/hub/payload.go`); the MQTT publisher hook is
+  missing. *Effort: S. Risk: low.*
+  **Gate:** MQTT topic-contract test + golden-replay of the hub event.
+
+### Phase 2 — Resolver / correctness hardening
+
+- **Discovery-snapshot SUBTYPE / `model_id` resolver.** A
+  test-infrastructure gap (not a production defect) that masks the
+  parity signal: SUBTYPE propagation for HmIP-PS/PSM variants and
+  eTRV / SMO subtypes needs hardening in the translation resolver under
+  `internal/ccudata/`. *Effort: M. Risk: medium.*
+  **Gate:** `tests/integration/discovery_snapshot_field_diff_test.go`
+  reports 0 `model_id` invariant failures.
+
+### Phase 3 — Homegear depth-parity (largest block, own track)
+
+The full detail lives in the **HomegearBackend depth-parity** section
+below; sequenced here smallest / most-unblocking first. Today
+`/api/v1/{programs,rooms,functions,sysvars}/...` return empty on a
+Homegear backend.
+
+- **3a — Sysvar adapter** (type coercion / persistence). First: removes
+  SPA mis-renders, least model rework. *Effort: M. Risk: medium.*
+- **3b — Rooms / Functions remodel** (break the CCU-shape assumption).
+  *Effort: M–L. Risk: medium.*
+- **3c — Programs (Homegear-flavoured ReGa adapter, JSON-RPC).** Largest
+  single item. *Effort: L. Risk: high.*
+  **Gate (per sub):** REST integration test against a Homegear backend
+  returns non-empty, correct results.
+
+### Phase 4 — Trigger-driven / opportunistic (low, non-blocking)
+
+- **`valve.Modulating` profile-registry wiring.** The type and
+  constructor exist (`internal/model/custom/valve/`); only the profile
+  registry does not map a device onto it. *Effort: S. **Blocked** until
+  a device profile needs it.*
+- **`GetProgramDataPointByStatePath` O(1) index.** Current O(n) scan is
+  fine at ≤300 programs. *Effort: S. Deferred to a performance
+  milestone.*
+
 ## HomegearBackend depth-parity
 
 **Status**: backend abstraction + basic backend in place; depth-parity
