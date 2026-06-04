@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package main
+
+import (
+	"log/slog"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/metrics"
+	metricswiring "github.com/SukramJ/openccu-loom/internal/metrics/wiring"
+	"github.com/SukramJ/openccu-loom/internal/observability"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// seedCentralHealthAndMetrics primes every registered central's health tracker
+// and wires its metrics aggregator. It seeds a synthetic "started" sample so
+// `/health` reports green from t=0, pins the operator-configured primary
+// interface, registers the event-bus / audit-durability / scheduler gauges,
+// and stands up a per-central metrics Observer + Aggregator.
+func seedCentralHealthAndMetrics(reg *central.Registry, cfg *config.Config, auditDurableStats *audit.DurableSinkStats, logger *slog.Logger) {
+	obsRecorder := observability.LogRecorder{Logger: logger.With(slog.String("component", "observability"))}
+	for _, u := range reg.List() {
+		u.Health.Record("central", health.Sample{Healthy: true, Note: "started"})
+		u.SetObservabilityRecorder(obsRecorder)
+
+		// Pin the primary interface explicitly when the operator
+		// configured `primary_interface` for this central. Empty
+		// (default) keeps the built-in HmIP-RF substring heuristic.
+		// Multi-CCU setups with HmIP-Wired-only or BidCos-only
+		// installations rely on this to score the right interface
+		// as the central's primary.
+		for i := range cfg.Centrals {
+			if cfg.Centrals[i].Name == u.Name() && cfg.Centrals[i].PrimaryInterface != "" {
+				u.Health.SetPrimaryInterface(cfg.Centrals[i].PrimaryInterface)
+				logger.Info("health.primary_interface.pinned",
+					slog.String("central", u.Name()),
+					slog.String("interface", cfg.Centrals[i].PrimaryInterface))
+				break
+			}
+		}
+
+		// Surface the event-bus deferred high-water gauge through the
+		// health tracker so admin endpoints can alert on pathological
+		// handler recursion without owning the events package directly.
+		bus := u.EventBus
+		u.Health.RegisterGauge("event_bus.deferred_depth",
+			func() float64 { return float64(bus.DeferredDepth()) })
+		u.Health.RegisterGauge("event_bus.deferred_high_water",
+			func() float64 { return float64(bus.DeferredHighWater()) })
+		// Audit durability telemetry. Surfaces the durable-sink overflow
+		// counter so admin endpoints can alert on audit-row loss before the
+		// database falls behind. Skipped when the durable sink was not wired
+		// (in-memory-only audit).
+		if auditDurableStats != nil {
+			s := auditDurableStats
+			u.Health.RegisterGauge("audit.dropped",
+				func() float64 { return float64(s.Dropped()) })
+			u.Health.RegisterGauge("audit.sink_errors",
+				func() float64 { return float64(s.SinkErrors()) })
+		}
+		// Scheduler coverage: job-count + cumulative failure counter
+		// (errors + recovered panics). Per-job breakdown is reachable
+		// via the diagnostics-dump component map; the gauge gives the
+		// SPA a single number for the at-a-glance tile.
+		if u.Scheduler != nil {
+			scheduler := u.Scheduler
+			u.Health.RegisterGauge("scheduler.jobs",
+				func() float64 { return float64(len(scheduler.Jobs())) })
+			u.Health.RegisterGauge("scheduler.failures",
+				func() float64 { return float64(scheduler.TotalFailures()) })
+		}
+
+		// Wire a per-central metrics aggregator. The Observer subscribes to
+		// the central's EventBus so metric events published by clients and
+		// coordinators are automatically funnelled into the snapshot.
+		// All providers are wired with the components owned by this central;
+		// nil providers are safe — Aggregator degrades to zero-value sections.
+		obs := metrics.NewObserver()
+		unsubMetrics := metricswiring.SubscribeObserver(u.EventBus, obs)
+		_ = unsubMetrics // lifetime matches the central; detach on shutdown is best-effort
+
+		agg := metrics.NewAggregator(
+			u.Name(), obs,
+			metrics.WithClientProvider(metricswiring.NewClientProvider(u.MetricsClients)),
+			metrics.WithCacheProvider(metricswiring.NewCacheProvider(u.Cache)),
+			metrics.WithRecoveryProvider(metricswiring.NewRecoveryProvider(u.Recovery)),
+			metrics.WithEventBus(metricswiring.NewEventBusProvider(u.EventBus)),
+			metrics.WithHealthTracker(metricswiring.NewHealthProvider(u.Health, u.Recovery)),
+		)
+		u.SetAggregator(agg)
+	}
+}
+
+// wireValueWriterHooks attaches the per-central LinkCoordinator and the two
+// ValueWriter resolver hooks (bus resolver + optimistic CommandTracker) onto
+// every registered central. Grouping these wirings keeps the composition
+// root's branch-count down without changing behaviour.
+//
+// LinkCoordinator wiring is UNCONDITIONAL — it must run even when REST is off,
+// otherwise `central.Link.resolver==nil` and link operations from MQTT/WS
+// adapters that bypass REST break.
+//
+// The bus resolver lets WriteOptions.WaitForCallback subscribe to the right
+// central's EventBus per call (multi-CCU deployments hit different busses).
+//
+// The CommandTracker hook fires after each successful SetValue: it calls
+// WriteUnconfirmedValue on the matching InterfaceClient so north-bound adapters
+// can return the new value immediately before the CCU echoes back a callback.
+func wireValueWriterHooks(reg *central.Registry, valueWriter *clientpkg.ValueWriter, linksDomain *adapter.LinksDomain, logger *slog.Logger) {
+	for _, u := range reg.List() {
+		if err := adapter.WireLinkCoordinator(u, linksDomain); err != nil {
+			logger.Warn("wire link coordinator", slog.String("central", u.Name()), slog.String("err", err.Error()))
+		}
+	}
+
+	valueWriter.SetBusResolver(func(centralName string) (any, bool) {
+		c, ok := reg.Get(centralName)
+		if !ok || c == nil {
+			return nil, false
+		}
+		return c.EventBus, true
+	})
+
+	valueWriter.SetCommandTrackerFn(func(interfaceID, channelAddress string, parameter hmenum.Parameter, paramsetKey hmenum.ParamsetKey, value any) {
+		for _, u := range reg.List() {
+			if entry, ok := u.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
+				entry.Client.WriteUnconfirmedValue(channelAddress, parameter, paramsetKey, value)
+				return
+			}
+		}
+	})
+}

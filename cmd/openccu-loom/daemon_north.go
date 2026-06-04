@@ -18,12 +18,15 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth/oidc"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -68,6 +71,122 @@ func (g *serverGroup) stopAll(ctx context.Context) {
 			g.logger.Warn("server.shutdown", slog.String("name", name), slog.String("err", err.Error()))
 		}
 	}
+}
+
+// authStores bundles the in-memory auth state the composition root builds
+// before the REST phase. The SQLite-backed stores are layered on top inside
+// wireREST; these remain as the secondary fallback so YAML-pinned legacy users
+// keep working.
+type authStores struct {
+	users          *auth.MemoryUserStore
+	tokens         *auth.MemoryTokenStore
+	sessions       *auth.SessionStore
+	authMw         *auth.Middleware
+	sessionResolve func(http.Handler) http.Handler
+	restResolve    func(http.Handler) http.Handler
+}
+
+// buildAuthStores constructs the in-memory user/token/session stores from
+// cfg.Users, registers the token store on the WS hub, and chains the token +
+// session resolvers. The SPA authenticates via the session cookie the HTMX
+// login page sets; since the browser sends cookies across ports to the same
+// hostname, both tokens (Bearer, Basic) AND sessions must resolve on the REST
+// listener, so the two resolvers are chained.
+func buildAuthStores(cfg *config.Config, wsHub *ws.Hub) authStores {
+	users := auth.NewMemoryUserStore()
+	for name, pass := range cfg.North.REST.Auth.Users {
+		users.Put(name, pass, auth.RoleAdmin)
+	}
+	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
+	wsHub.SetTokenStore(tokens)
+	sessions := auth.NewSessionStore()
+	authMw := auth.NewMiddleware(users, tokens)
+
+	sessionResolve := auth.SessionMiddleware(sessions)
+	restResolve := func(next http.Handler) http.Handler {
+		return authMw.Resolve(sessionResolve(next))
+	}
+	return authStores{
+		users:          users,
+		tokens:         tokens,
+		sessions:       sessions,
+		authMw:         authMw,
+		sessionResolve: sessionResolve,
+		restResolve:    restResolve,
+	}
+}
+
+// uiMountDeps bundles the live subsystems the browser-facing UI router needs.
+type uiMountDeps struct {
+	healthAdapter *adapter.HealthAdapter
+	catalogs      *i18n.Catalogs
+	users         *auth.MemoryUserStore
+	sessions      *auth.SessionStore
+	sqUsers       *sqlitestore.UserStore
+	sqCentrals    *sqlitestore.CentralsStore
+	sqSections    *sqlitestore.ConfigSectionStore
+}
+
+// mountUIServer stands up the browser-facing UI router + server when the UI is
+// enabled (no-op otherwise). The first-run setup wizard is wired only when the
+// SQLite stores are available; otherwise the wizard stays disabled and the UI
+// serves the login/SPA surface alone.
+func mountUIServer(cfg *config.Config, logger *slog.Logger, servers *serverGroup, d uiMountDeps) {
+	if !cfg.North.UI.IsEnabled() {
+		return
+	}
+	var setupDeps *ui.SetupWizardDeps
+	if d.sqUsers != nil {
+		setupDeps = &ui.SetupWizardDeps{
+			Users:    d.sqUsers,
+			Centrals: d.sqCentrals,
+			Sections: d.sqSections,
+			Sessions: ui.NewSetupSessionStore(),
+		}
+	}
+	uiRouter := ui.NewRouter(ui.Deps{
+		Logger:      logger,
+		Lang:        cfg.Locale,
+		Health:      d.healthAdapter,
+		Catalogs:    d.catalogs,
+		Auth:        &ui.AuthDeps{Users: d.users, Sessions: d.sessions, Secure: false},
+		Setup:       setupDeps,
+		OIDC:        buildOIDC(cfg, logger),
+		AuthResolve: auth.SessionMiddleware(d.sessions),
+		AuthRequire: nil, // UI is browser-facing, wizard runs unauthenticated
+	})
+	servers.add("ui", rest.NewServer(cfg.North.UI.Listen, uiRouter, logger))
+}
+
+// awaitShutdown blocks until ctx is cancelled, then runs the graceful
+// shutdown sequence: emit the Matter ShutDown event (best-effort) and stop
+// every north-bound server with a bounded timeout. Production wires ctx to
+// SIGINT/SIGTERM via signal.NotifyContext in main.go; tests pass a
+// context.WithCancel ctx so they can drive shutdown without signals.
+func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, servers *serverGroup) {
+	logger.Info("daemon.ready")
+	<-ctx.Done()
+	// context.Cause is non-nil once ctx is cancelled (guaranteed here by the
+	// receive above), but guard anyway so a future caller can't trip a nil
+	// dereference.
+	cause := "canceled"
+	if c := context.Cause(ctx); c != nil {
+		cause = c.Error()
+	}
+	logger.Info("daemon.shutdown", slog.String("cause", cause))
+
+	// Matter ShutDown event: spec §11.1.6.2 mandates the cluster fires this
+	// event when the bridge is about to terminate so commissioners can detach
+	// gracefully. Best-effort — failure to emit is not fatal. matter.bi is nil
+	// when matter is disabled.
+	if matter.bi != nil {
+		matter.bi.EmitShutDown()
+	}
+
+	//nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	servers.stopAll(shutdownCtx) //nolint:contextcheck // shutdown path: shutdownCtx intentionally not derived from daemon ctx
 }
 
 func buildTokenMap(cfg *config.Config) map[string]auth.Identity {
