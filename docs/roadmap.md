@@ -22,18 +22,23 @@ CCU is the primary fleet, Homegear is the secondary backend.
 **Recommended order: Phase 0 → 1 (parallel) → 2 → 3a → 3b → 3c →
 4 (on trigger).**
 
-### Phase 0 — Parity-guard hardening (foundation, do first)
+### Phase 0 — Parity-guard hardening (foundation) — DONE
 
-- **Code-enforce the model-snapshot drift baseline.** The cross-stack
-  snapshot pipeline exists, but the "~270 architecturally-accepted
-  drifts" baseline lives only in `CLAUDE.md` prose; regression
-  detection is manual at the release gate. Promote it to a threshold
-  constant + a CI step that fails when the drift count grows past the
-  baseline without a matching `docs/parity/by_design.md` entry.
-  *Effort: S. Risk: low.* Highest leverage per effort — it protects
-  every model change in the phases below.
-  **Gate:** `script/model_snapshot_diff.py` runs in CI and breaks on
-  drift > baseline.
+- **Code-enforce the model-snapshot drift baseline.** The threshold
+  gate already existed (`script/model_snapshot_drift_check.py`,
+  per-bucket baselines summing to ~280, run via `make snapshot-diff`);
+  this phase hardened it rather than building it anew: removed the
+  dangling `parity_audit.md` reference (the file no longer exists)
+  and re-pointed it at `docs/parity/by_design.md`; fixed the broken
+  env-override key derivation so the documented
+  `OPENCCU_LOOM_DRIFT_GENERIC` / `_CHANNEL` / `_CUSTOM_ONLY_PY` /
+  `_CALC` overrides actually resolve; added a TOTAL line and an
+  unguarded-bucket guard that fails when the diff emits a drift bucket
+  with no baseline (previously silently ignored).
+  **Gate:** `make snapshot-diff` (release-time; the cross-stack diff
+  is intentionally not in CI — the aiohomematic venv is absent there,
+  by design per `.github/workflows/integration.yml`). CI dumps the Go
+  side via `make snapshot-go`.
 
 ### Phase 1 — Cheap parity closes (model done, wire only)
 

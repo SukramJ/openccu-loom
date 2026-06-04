@@ -20,6 +20,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   backward-compatible. See
   `docs/external-clients/ha-unique-id-migration.md`.
 
+### Fixed
+
+- **Model-snapshot drift gate honours its documented overrides.**
+  `script/model_snapshot_drift_check.py` derived its env-override keys
+  via a fragile string transform that did not match the documented
+  `OPENCCU_LOOM_DRIFT_GENERIC` / `_CHANNEL` / `_CALC` names, so three
+  of the four baseline overrides silently had no effect. The keys are
+  now an explicit table. The script also prints a TOTAL line and now
+  fails on any drift bucket it has no baseline for (previously such
+  buckets slipped through unguarded), and its stale `parity_audit.md`
+  references were re-pointed at `docs/parity/by_design.md`.
+
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that
