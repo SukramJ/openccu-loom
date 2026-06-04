@@ -1,0 +1,29 @@
+# vacuum OpenAPI ruleset — https://quobix.com/vacuum
+#
+# Advisory lint for assets/openapi.yaml (target: `make openapi-lint`). The
+# gate is report-only; it surfaces structural problems without failing the
+# build. We start from vacuum's "recommended" set and disable the rules that
+# fight this API's deliberate conventions:
+#
+#   - camel-case-properties: the wire payloads are snake_case on purpose —
+#     they mirror the Homematic / aiohomematic parameter naming the daemon
+#     bridges (e.g. `peer_device_name`, `modified_at`). camelCase would
+#     diverge from the south-bound source of truth.
+#   - oas3-missing-example / description rules: example/description coverage
+#     is a docs-completeness nicety, not a contract correctness issue; left
+#     off so the real findings (missing operationId, missing type, unused
+#     components) are not drowned out.
+#
+# What stays on catches genuine spec defects: operations without an
+# operationId, schemas missing a `type`, unused components, undefined tags.
+extends: [[spectral:oas, recommended]]
+
+rules:
+  camel-case-properties: false
+  oas3-missing-example: false
+  oas3-valid-schema-example: false
+  oas3-parameter-description: false
+  operation-description: false
+  component-description: false
+  description-duplication: false
+  tag-description: false

@@ -367,6 +367,36 @@ vuln: ## scan dependencies + reachable code for known vulnerabilities (govulnche
 licenses: ## fail on copyleft dependency licenses (GPL/AGPL/LGPL forbidden; MPL = reciprocal)
 	$(GOLICENSES) check ./... --disallowed_types=forbidden,restricted,reciprocal
 
+.PHONY: tidy-check
+tidy-check: ## verify go.mod/go.sum are tidy + module checksums (CI gate)
+	$(GO) mod verify
+	$(GO) mod tidy
+	@git diff --exit-code go.mod go.sum || { echo "go.mod/go.sum not tidy — run 'make tidy'"; exit 1; }
+
+.PHONY: secrets
+secrets: ## scan the repo for committed secrets (gitleaks; allowlist in .gitleaks.toml)
+	$(GO) run github.com/zricethezav/gitleaks/v8@latest detect --no-banner --redact -c .gitleaks.toml
+
+.PHONY: sbom
+sbom: ## generate a CycloneDX SBOM for the daemon -> sbom.json
+	$(GO) run github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest app -json -output sbom.json -main ./cmd/openccu-loom .
+
+.PHONY: fieldalign
+fieldalign: ## report sub-optimal struct field alignment (advisory, ~900 hits — not a gate)
+	@$(GO) run golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@latest ./... || true
+
+.PHONY: nilcheck
+nilcheck: ## run Uber nilaway nil-flow analysis (advisory, noisy — not a gate)
+	@$(GO) run go.uber.org/nilaway/cmd/nilaway@latest ./... || true
+
+.PHONY: deadcode-xtools
+deadcode-xtools: ## cross-check dead code via golang.org/x/tools/cmd/deadcode (advisory)
+	@$(GO) run golang.org/x/tools/cmd/deadcode@latest ./... || true
+
+.PHONY: openapi-lint
+openapi-lint: ## lint assets/openapi.yaml with vacuum (advisory; ruleset in .vacuum.yaml)
+	@$(GO) run github.com/daveshanley/vacuum@latest lint -r .vacuum.yaml assets/openapi.yaml || true
+
 .PHONY: fmt
 fmt: ## run gofumpt + goimports
 	$(GOFUMPT) -l -w .
