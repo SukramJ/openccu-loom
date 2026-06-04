@@ -4,7 +4,7 @@ Generated: 2026-05-29T06:43:46Z
 
 Total annotated items: 57 — PRODUCTIVE: 4 — MASKED: 53
 
-## MASKED — Annotation hides genuine dead code (53 items)
+## MASKED — Annotation hides genuine dead code (52 items)
 
 These items have zero production callers outside their definition file.
 **Action required:** either wire them into a real production call site, or
@@ -65,7 +65,6 @@ A `loom:reachable` annotation alone is not sufficient justification.
 | `BuildStack` | `pkg/hmlog/factory.go` | 87 | legacy two-return-value variant used by tests and tooling that do not need TeeHandler |
 | `DefaultSensitiveKeys` | `pkg/hmlog/redact.go` | 98 | used by config-UI and REST handlers that need to extend the redaction list |
 | `NewRequestContextFilter` | `pkg/hmlog/request_filter.go` | 36 | used by BuildFullStack to enrich log records with per-request fields |
-| `Delegated` | `pkg/hmproperty/delegated.go` | 38 | used by device-profile paramset-config and MQTT entity descriptions to resolve delegated property paths |
 
 ## PRODUCTIVE — Has production callers (4 items)
 

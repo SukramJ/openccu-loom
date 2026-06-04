@@ -278,7 +278,6 @@ openccu-loom/
 │   ├── hmevent/             — domain event types
 │   ├── hmlog/               — contextual slog helpers + request filters
 │   ├── hmapi/               — REST/WS DTOs shared with external clients
-│   ├── hmproperty/          — typed property helpers (cached, delegated, kind)
 │   ├── interfaces/          — DI contracts (Protocol interfaces)
 │   └── hmproto/             — Homematic wire shapes + normalization
 ├── internal/                — daemon-internal, non-reusable

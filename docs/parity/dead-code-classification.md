@@ -271,7 +271,6 @@ Device-Profile-Konstruktoren rufen die Mixin-Factories intern auf. RTA verfolgt 
 | `NewGroup` (model/event) | Via Event-Group-Builder |
 | `AliveKey` (store/sqlite) | Via Values-Cache-Alive-Key-Lookup |
 | `TypeOfValue` (store/sqlite) | Via Values-Cache-Type-Dispatch |
-| `Delegated` (hmproperty) | Via Property-Delegation-Pattern |
 | `NewConnectionRegistry` (health) | Via Health-Tracker-Registry-Setup |
 | `NewConnection` (health) | Via Health-Connection-Setup |
 | `WithHistorySize` (health) | Test-Seam / Option für Tracker |
