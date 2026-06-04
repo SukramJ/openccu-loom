@@ -17,10 +17,9 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "sourceMap": true,
-    "baseUrl": ".",
     "paths": {
-      "$lib": ["src/lib"],
-      "$lib/*": ["src/lib/*"]
+      "$lib": ["./src/lib"],
+      "$lib/*": ["./src/lib/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "src/**/*.d.ts"],
