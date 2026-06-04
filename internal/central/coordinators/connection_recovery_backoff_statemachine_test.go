@@ -299,7 +299,7 @@ func TestParityCBStateChangedOpenTriggers(t *testing.T) {
 		From:        hmenum.CircuitStateClosed,
 		To:          hmenum.CircuitStateOpen,
 	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery not triggered by CB→Open within 2s (count=%d)", count.Load())
 	}
 }
@@ -325,7 +325,7 @@ func TestParityConnectionLostSubscriptionWiring(t *testing.T) {
 		CentralName: "parity-lost",
 		InterfaceID: "BidCos-RF",
 	})
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery not triggered after ConnectionLost (count=%d)", count.Load())
 	}
 

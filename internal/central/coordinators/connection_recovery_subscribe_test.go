@@ -70,7 +70,7 @@ func TestSubscribeReactsToConnectionLostEvent(t *testing.T) {
 		InterfaceID: "HmIP-RF",
 	})
 
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery did not start after ConnectionLostEvent (count=%d)", count.Load())
 	}
 }
@@ -94,7 +94,7 @@ func TestSubscribeReactsToCircuitBreakerTripped(t *testing.T) {
 		InterfaceID: "BidCos-RF",
 	})
 
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery did not start after CircuitBreakerTrippedEvent (count=%d)", count.Load())
 	}
 }
@@ -120,7 +120,7 @@ func TestSubscribeReactsToCBStateChangedOpen(t *testing.T) {
 		To:          hmenum.CircuitStateOpen,
 	})
 
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery did not start after CB→Open (count=%d)", count.Load())
 	}
 }
@@ -150,7 +150,7 @@ func TestSubscribeReactsToCBStateChangedHalfOpenToClosed(t *testing.T) {
 		To:          hmenum.CircuitStateClosed,
 	})
 
-	if !waitFor(t, func() bool { return count.Load() >= 1 }, 2*time.Second) {
+	if !waitFor(t, func() bool { return count.Load() >= 1 }, eventWaitTimeout) {
 		t.Fatalf("recovery did not start after CB half_open→closed (count=%d) — bridge will not receive callback events until next outage", count.Load())
 	}
 }
@@ -265,7 +265,7 @@ func TestSubscribeSkipsDuplicateRecovery(t *testing.T) {
 	// Wait for the coordinator's active map to drain.
 	if !waitFor(t, func() bool {
 		return !c.MetricsInRecovery()
-	}, 2*time.Second) {
+	}, eventWaitTimeout) {
 		t.Fatal("recovery did not finish after release")
 	}
 
@@ -313,7 +313,7 @@ func TestSubscribeHeartbeatFiresRecoveryPerInterface(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		return len(triggered) >= 2
-	}, 2*time.Second) {
+	}, eventWaitTimeout) {
 		mu.Lock()
 		defer mu.Unlock()
 		t.Fatalf("heartbeat did not trigger recovery for both interfaces; got %v", triggered)
