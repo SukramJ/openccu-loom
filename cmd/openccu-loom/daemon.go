@@ -15,20 +15,16 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
-	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
-	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	metricswiring "github.com/SukramJ/openccu-loom/internal/metrics/wiring"
-	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 
@@ -37,18 +33,14 @@ import (
 	// constructor catalogue is populated before the device pipeline
 	// runs. See [internal/model/custom/builtins].
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
-	"github.com/SukramJ/openccu-loom/internal/north/filter"
-	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
-	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 )
 
 func daemonServe(ctx context.Context, cfg *config.Config, stdout, stderr io.Writer) error {
@@ -282,80 +274,23 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- shared infrastructure ---------------------------------
-	metricsReg := metrics.NewRegistry()
-	healthTracker := health.NewTracker()
-	catalogs, _ := i18n.NewCatalogs()
-
-	// Outbound visibility filter (ADR 0007): wrap the default registry
-	// as a filter.VisibilitySet so adapters never import the full
-	// visibility loading machinery. The registry uses built-in rules by
-	// default; operators can extend them via un-ignore files once that
-	// config knob is wired. A nil adapter is never produced here
-	// (NewRegistry always returns non-nil) but the Adapter is nil-safe.
-	visReg := visibility.NewRegistry()
-	// E.13: seed the required-parameter whitelist with every
-	// parameter referenced by the generated profile catalogue plus
-	// every Extended config. This is what protects required custom-DP
-	// parameters (e.g. SET_POINT_TEMPERATURE) from being filtered out
-	// by IGNORED_PARAMETERS during paramset hydration.
-	visReg.SetRequiredParameters(custom.DefaultRegistry().RequiredParameters())
-	visFilter := filter.NewAdapter(visReg)
-
-	// Visibility / un_ignore — SQLite-backed store, bootstrap-seed from
-	// config.yaml on first start, then wired into the REST surface via
-	// the visibilityAdapter (see cmd/openccu-loom/visibility_adapter.go +
-	// visibility_wiring.go + docs/ui/unignore-concept.md). The patterns
-	// are applied to visReg after WireCentrals so the suppression marks
-	// land on materialised devices.
-	visibilityUnIgnoreStore := wireVisibilityUnIgnoreStore(cfg, logger) //nolint:contextcheck // wireVisibilityUnIgnoreStore has no ctx parameter
-	defer func() { _ = visibilityUnIgnoreStore.Close() }()
-	visibilityAdapter := newVisibilityAdapter(visReg, visibilityUnIgnoreStore, reg)
-	masterValuesStore := wireMasterValuesStore(cfg, logger) //nolint:contextcheck // wireMasterValuesStore has no ctx parameter
-	defer func() { _ = masterValuesStore.Close() }()
-	valuesCacheStore := wireValuesCacheStore(cfg, logger) //nolint:contextcheck // wireValuesCacheStore has no ctx parameter
-	defer func() { _ = valuesCacheStore.Close() }()
-
-	wsHub := ws.NewHub()
-	if n := cfg.North.REST.WS.ReplayCapacity; n > 0 {
-		wsHub.SetReplayCapacity(n)
-	}
-	wsHandler := ws.Handler(wsHub, logger, wsAllowedOrigins(cfg))
-	// WS subscriber-count gauge so the diagnostics dump shows how
-	// many SPA clients are currently subscribed for live updates.
-	// Registered against every central's tracker because the WS hub
-	// is daemon-global; per-central scoping would double-count.
-	if healthTracker != nil {
-		hub := wsHub
-		healthTracker.RegisterGauge("ws.subscribers",
-			func() float64 { return float64(hub.ClientCount()) })
-	}
-
-	valueWriter := clientpkg.NewValueWriter()
-	// Stamp the build version into MQTT Discovery payloads so the
-	// `origin.sw_version` field reflects the running binary instead of
-	// the "dev" default. Set before the supervisor starts emitting
-	// Discovery so the very first payload already carries it.
-	mqtt.SetOriginVersion(build.Version)
-	mqttCollector := metrics.NewMqttCollector(metricsReg, pickFirstCentral(cfg))
-	mqttSup := newMQTTSupervisor(logger, healthTracker)
-	mqttSup.SetCollector(mqttCollector)
-	if err := mqttSup.Start(ctx, cfg); err != nil {
-		logger.Warn("mqtt.supervisor.start", slog.String("err", err.Error()))
-	}
-	defer func() { //nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		mqttSup.Shutdown(shutCtx)
-	}()
-	// Late-bind the supervisor + the live config snapshot into the
-	// reload deps bag so the config-watcher's hot-reload handler can
-	// issue an MQTT Swap when north.mqtt.* changes and the REST
-	// trigger handler can replay the current config on demand. Nil
-	// deps (direct daemonServe callers / tests) is fine — Swap simply
-	// never fires.
-	deps.SetMQTTSupervisor(mqttSup)
-	deps.SetCurrentConfig(cfg)
-	mqttWiring := mqttSup.Wiring()
+	si, sharedInfraTeardown := wireSharedInfrastructure(ctx, cfg, logger, reg, deps)
+	defer sharedInfraTeardown()
+	metricsReg := si.metricsReg
+	healthTracker := si.healthTracker
+	catalogs := si.catalogs
+	visReg := si.visReg
+	visFilter := si.visFilter
+	visibilityUnIgnoreStore := si.visibilityStore
+	visibilityAdapter := si.visibilityAdapter
+	masterValuesStore := si.masterValuesStore
+	valuesCacheStore := si.valuesCacheStore
+	wsHub := si.wsHub
+	wsHandler := si.wsHandler
+	valueWriter := si.valueWriter
+	mqttCollector := si.mqttCollector
+	mqttSup := si.mqttSup
+	mqttWiring := si.mqttWiring
 	// --- CCU translation archive ------------------------------
 	// Optional: operators can drop the
 	// into cfg.CCUData.TranslationsPath so the UI shows localised
