@@ -162,7 +162,7 @@ func bytesEqual(a, b []byte) bool {
 
 // NewVerifier returns a verifier rooted at rootPubKey. The key must be
 // a P-256 public key in uncompressed (0x04 prefix, 65 bytes) form —
-// the canonical [fabric.Fabric.RootPubKey] shape.
+// the canonical Matter root-CA public-key shape.
 func NewVerifier(rootPubKey []byte, clock TimeSource) (*Verifier, error) {
 	if len(rootPubKey) != 65 || rootPubKey[0] != 0x04 {
 		return nil, fmt.Errorf("%w: root pub key length=%d prefix=%#x", ErrMalformed, len(rootPubKey), rootPubKey[0])

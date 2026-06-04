@@ -139,7 +139,7 @@ func (s Service) HostFQDN() string {
 // OperationalServiceConfig drives [BuildOperationalService].
 type OperationalServiceConfig struct {
 	// CompressedFabricID is the 8-byte derived fabric identifier
-	// (see fabric.Fabric.CompressedID).
+	// (HKDF over the root public key + fabric ID, Matter §4.13.2.4).
 	CompressedFabricID [8]byte
 	// NodeID is the 64-bit operational node identifier.
 	NodeID uint64
