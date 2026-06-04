@@ -524,6 +524,25 @@ is the complete specification — every Custom / Generic / Calculated
 DP currently in the model is accounted for, and no model-layer
 *structural* refactor is required.
 
+### 6.4 MCP (planned north-bound bridge)
+
+Matter is one of several north-bound adapters over the same domain
+core (alongside REST, WebSocket, and MQTT). A further bridge — an
+**MCP server** that exposes the domain to LLM agents as
+tools / resources / prompts — is decided but not yet implemented. It
+follows the same "rich model, dumb adapter" principle as the Matter
+bridge and the MQTT plane, is default-off and read-only by default,
+and is sequenced after the depth-parity work against aiohomematic.
+
+- **[ADR 0025](docs/adr/0025-mcp-northbound-adapter.md)** — the
+  production MCP adapter: tool / resource shapes, multi-CCU scoping,
+  the two-switch (`Enabled` / `AllowWrites`) read-only-default
+  posture, capability handshake, and auth reuse.
+- **[ADR 0026](docs/adr/0026-mcp-dev-mode.md)** — a separate,
+  build-tag-gated (`dev_mcp`) dev-mode introspection surface
+  (EventBus tap, reliability state, cache dumps, godevccu control)
+  that never compiles into release artefacts.
+
 ---
 
 ## 7. Resolved Decisions & Risk Register

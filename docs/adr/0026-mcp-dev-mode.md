@@ -1,6 +1,6 @@
 # ADR 0026 — MCP dev-mode: build-tag-gated introspection surface
 
-- **Status**: proposed
+- **Status**: accepted
 - **Date**: 2026-06-04
 - **Related**:
   [ADR 0025 — MCP north-bound adapter](./0025-mcp-northbound-adapter.md),

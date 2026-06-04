@@ -1,6 +1,6 @@
 # ADR 0025 — MCP server as a north-bound adapter
 
-- **Status**: proposed
+- **Status**: accepted
 - **Date**: 2026-06-04
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
@@ -261,10 +261,44 @@ Option B structurally cannot provide.
 
 ## Follow-ups
 
-- Vet the Go MCP SDK landscape (maturity, license, pure-Go) before
-  the implementation PR; record the choice (SDK vs. hand-rolled) in
-  the PR description, and open a thin ADR-0025a only if a hand-rolled
-  framing layer becomes a non-trivial standing component.
-- Decide whether MCP resources should expose the audit log
-  read-only by default or behind `AllowWrites`-style gating, since
-  the audit trail can carry operationally sensitive history.
+- **SDK gate — resolved (2026-06-04): use the official
+  [`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk),
+  not a hand-rolled framing layer.** Vetting outcome: the official SDK
+  reached **v1.0.0 GA on 2025-09-30** (now v1.6.x) with an explicit
+  no-breaking-changes compatibility guarantee, is Apache-2.0/MIT
+  (no copyleft), pulls no CGo (`CGO_ENABLED=0` clean, light pure-Go
+  dependency tree), and exposes Streamable HTTP via
+  `NewStreamableHTTPHandler`, which returns a plain `http.Handler`
+  the daemon mounts alongside REST/WS on its existing listener — no
+  second server, no second runtime. It is maintained by Anthropic +
+  the Go team, giving the best longevity / spec-tracking guarantee
+  for a long-lived single-binary daemon. Hand-rolling was rejected:
+  JSON-RPC-2.0 framing is the easy part, but session management,
+  Streamable-HTTP GET/POST + SSE resumability, capability
+  negotiation, and spec-revision tracking are not, and the SDK owns
+  them under a stability guarantee. Runner-up `mark3labs/mcp-go`
+  (MIT, pure-Go, `http.Handler`) is the fallback if the official
+  SDK's ergonomics disappoint, at the cost of pre-1.0 churn;
+  `metoro-io/mcp-golang` is unsuitable (pre-1.0, no first-class
+  Streamable HTTP). Because the SDK path was chosen, **no ADR-0025a
+  is needed** — that placeholder was contingent on a hand-rolled
+  framing layer becoming a standing component.
+- **Audit-log exposure — resolved (2026-06-04): mirror REST.** The
+  MCP adapter exposes the audit log as a read-only tool / resource,
+  available whenever the adapter is enabled (including read-only
+  mode), inheriting the exact authorization the REST `GET /audit`
+  route already uses — authenticated, *not* admin-scoped
+  (`internal/north/rest/router.go` mounts it as `pr.Get`, not
+  `pr.With(admin)`). This follows the ADR's central principle: an MCP
+  client can do exactly what the same token can do over REST, no
+  more. Gating a *read* behind the `AllowWrites` *write* switch was
+  rejected as semantically inconsistent. A separate opt-out
+  (`ExposeAudit`) was considered — the `AuditEntry` does carry the
+  `user` identity field plus before/after change history, and an LLM
+  agent is a qualitatively different consumer than a REST client —
+  but rejected for 0.1.x: being more restrictive than REST is
+  permitted by the principle ("no *more*"), yet the audit read is
+  already available to every authenticated REST token, so MCP
+  withholding it would surprise rather than protect. Revisit a
+  per-resource opt-out only if operator feedback asks to withhold
+  identity-bearing resources from agent surfaces specifically.
