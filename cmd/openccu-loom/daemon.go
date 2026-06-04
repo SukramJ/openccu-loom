@@ -8,18 +8,14 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
-	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/config"
-	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -40,7 +36,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
-	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 func daemonServe(ctx context.Context, cfg *config.Config, stdout, stderr io.Writer) error {
@@ -116,49 +111,20 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	logger.Info("daemon.start", startAttrs...)
 
 	// --- audit DB + config overlay (early) --------------------
-	// Open the SQLite-backed audit / config store BEFORE the
-	// central registry is built. The DB carries SPA-side live
-	// edits (centrals, MQTT section, …) that have to land in cfg
-	// before bootstrap.Build snapshots cfg.Centrals — otherwise
-	// a CCU the operator added via the SPA only takes effect on
-	// the NEXT next restart.
-	//
-	// The seed-from-YAML logic + auth-chain rewire stay further
-	// down where the in-memory user/token stores are constructed;
-	// only the DB open + the section/central overlay run here.
-	auditBuf := audit.NewBuffer(500)
-	auditRec, auditDB, auditDurableStats := wireAuditPersistenceWithDB(cfg, auditBuf, logger) //nolint:contextcheck // wireAuditPersistenceWithDB has no ctx parameter; it creates its own internal context
-	// Release the audit/config DB handle on shutdown. Registered early so
-	// it runs late (LIFO) — after the health probe and the stores that
-	// read it. A leaked handle blocks temp-dir cleanup on Windows.
-	if auditDB != nil {
-		defer func() { _ = auditDB.Close() }()
-	}
-	var (
-		sqUsers     *sqlitestore.UserStore
-		sqTokens    *sqlitestore.TokenStore
-		sqCentrals  *sqlitestore.CentralsStore
-		sqSections  *sqlitestore.ConfigSectionStore
-		configStore *configstore.Store
-	)
-	if auditDB != nil {
-		sqUsers = sqlitestore.NewUserStore(auditDB)
-		sqTokens = sqlitestore.NewTokenStore(auditDB)
-		sqCentrals = sqlitestore.NewCentralsStore(auditDB)
-		sqSections = sqlitestore.NewConfigSectionStore(auditDB)
-		bootstrapCfg := &config.BootstrapConfig{
-			DataDir: cfg.DataDir,
-			Logging: cfg.Logging,
-			Listen:  config.BootstrapListen{REST: cfg.North.REST.Listen, UI: cfg.North.UI.Listen},
-		}
-		configStore = configstore.New(bootstrapCfg, sqSections, sqCentrals,
-			configstore.WithEnvLookup(os.Getenv))
-		if _, err := configStore.OverlayInto(ctx, cfg); err != nil {
-			logger.Warn("configstore.overlay", slog.String("err", err.Error()))
-		} else if err := cfg.Validate(); err != nil {
-			logger.Warn("configstore.overlay.validate", slog.String("err", err.Error()))
-		}
-	}
+	// Extracted into wireAuditOverlay (daemon_boot.go). The returned
+	// teardown is deferred early so it runs late (LIFO) — after the
+	// health probe and the stores that read the DB handle.
+	ov, auditOverlayTeardown := wireAuditOverlay(ctx, cfg, logger)
+	defer auditOverlayTeardown()
+	auditBuf := ov.buf
+	auditRec := ov.rec
+	auditDB := ov.db
+	auditDurableStats := ov.durableStats
+	sqUsers := ov.sqUsers
+	sqTokens := ov.sqTokens
+	sqCentrals := ov.sqCentrals
+	sqSections := ov.sqSections
+	configStore := ov.configStore
 
 	// --- central registry --------------------------------------
 	bootstrap := &central.Bootstrap{Logger: logger}
@@ -292,16 +258,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	mqttSup := si.mqttSup
 	mqttWiring := si.mqttWiring
 	// --- CCU translation archive ------------------------------
-	// Optional: operators can drop the
-	// into cfg.CCUData.TranslationsPath so the UI shows localised
-	// device/parameter labels. Missing/empty path falls back to the
-	// raw CCU strings. Parse errors are logged and degraded to empty.
-	// Loaded BEFORE the EventBridge so the bridge can hand the labeler
-	// down into the MQTT discovery `name` field — without it HA shows
-	// raw uppercase parameter ids.
-	translations := loadTranslations(cfg, logger)
-	easymode := loadEasymode(logger)
-	profiles := loadProfiles(logger)
+	// Extracted into loadCCUArchive (daemon_boot.go).
+	arch := loadCCUArchive(cfg, logger)
+	translations := arch.translations
+	easymode := arch.easymode
+	profiles := arch.profiles
 
 	bridge := adapter.NewEventBridge(reg, wsHub, mqttWiring).
 		WithVisibility(visFilter).
@@ -327,62 +288,21 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- XML-RPC callback server -------------------------------
-	// Shared across every central; routes by `/RPC2/<central_name>`.
-	// A binding failure is a hard error — the daemon would otherwise
-	// silently lose every CCU value-change event.
-	callbackCtx, cancelCallback := context.WithCancel(ctx)
+	// Extracted into wireXMLRPCCallback (daemon_boot.go). The returned
+	// teardown cancels the callback context (folds the original
+	// `defer cancelCallback()`).
+	cb, cancelCallback := wireXMLRPCCallback(ctx, cfg, logger)
 	defer cancelCallback()
-	callbackSrv, callbackBaseURL, err := startCallbackServer(callbackCtx, cfg, logger)
-	if err != nil {
-		logger.Warn("callback.start.failed", slog.String("err", err.Error()))
-	}
-	if callbackSrv != nil {
-		logger.Info("callback.listen",
-			slog.String("addr", callbackSrv.Addr().String()),
-			slog.String("base_url", callbackBaseURL))
-	}
+	callbackCtx := cb.ctx
+	callbackSrv := cb.srv
+	callbackBaseURL := cb.baseURL
 
 	// --- BIN-RPC callback server --------------------------------
-	// Shared listener for CUxD interfaces. Routing uses the interface_id
-	// carried inside every BIN-RPC envelope. A nil server is a valid
-	// degraded state — WireCentrals skips CUxD registration when
-	// BINRPCCallbackServer is nil.
-	var (
-		binRPCSrv  *rpcserver.BINRPCServer
-		binRPCAddr string
-	)
-	{
-		binHost := cfg.Callback.Host
-		if binHost == "" {
-			binHost = "0.0.0.0"
-		}
-		binAddr := fmt.Sprintf("%s:%d", binHost, cfg.Callback.BinPort)
-		binCfg := rpcserver.BINRPCConfig{
-			Addr:   binAddr,
-			Logger: logger.With(slog.String("component", "callback.binrpc")),
-		}
-		srv, binErr := rpcserver.NewBINRPCServer(binCfg) //nolint:contextcheck // NewBINRPCServer/bindAddr has no ctx parameter; bind is instantaneous
-		if binErr != nil {
-			logger.Warn("callback.binrpc.start.failed", slog.String("err", binErr.Error()))
-		} else {
-			binRPCSrv = srv
-			go func() {
-				if serveErr := srv.Serve(callbackCtx); serveErr != nil {
-					logger.Warn("callback.binrpc.serve", slog.String("err", serveErr.Error()))
-				}
-			}()
-			publicHost := cfg.Callback.PublicHost
-			if publicHost == "" {
-				publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
-			}
-			if tcpAddr, ok := srv.Addr().(*net.TCPAddr); ok && publicHost != "" {
-				binRPCAddr = fmt.Sprintf("%s:%d", publicHost, tcpAddr.Port)
-			}
-			logger.Info("callback.binrpc.listen",
-				slog.String("addr", srv.Addr().String()),
-				slog.String("public_addr", binRPCAddr))
-		}
-	}
+	// Extracted into wireBINRPCCallback (daemon_boot.go). Serves on
+	// callbackCtx so it shuts down with the XML-RPC callback server.
+	binCB := wireBINRPCCallback(callbackCtx, cfg, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
+	binRPCSrv := binCB.srv
+	binRPCAddr := binCB.addr
 
 	// --- southbound wiring -------------------------------------
 	// Per-central XML-RPC/BIN-RPC client wiring, device pipeline and
