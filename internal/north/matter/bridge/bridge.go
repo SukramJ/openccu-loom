@@ -122,13 +122,13 @@ type Config struct {
 // failure mode.
 func (c Config) validate() error {
 	if c.VendorID == 0 {
-		return fmt.Errorf("bridge: Config.VendorID must be non-zero")
+		return errors.New("bridge: Config.VendorID must be non-zero")
 	}
 	if c.ProductID == 0 {
-		return fmt.Errorf("bridge: Config.ProductID must be non-zero")
+		return errors.New("bridge: Config.ProductID must be non-zero")
 	}
 	if c.NodeLabel == "" {
-		return fmt.Errorf("bridge: Config.NodeLabel must be non-empty")
+		return errors.New("bridge: Config.NodeLabel must be non-empty")
 	}
 	return nil
 }
@@ -379,10 +379,10 @@ type Bridge struct {
 // New does NOT touch the network — call [Start] for that.
 func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Config, logger *slog.Logger) (*Bridge, error) {
 	if s == nil {
-		return nil, fmt.Errorf("bridge: store is required")
+		return nil, errors.New("bridge: store is required")
 	}
 	if snap == nil {
-		return nil, fmt.Errorf("bridge: snapshotter is required")
+		return nil, errors.New("bridge: snapshotter is required")
 	}
 	if err := cfg.validate(); err != nil {
 		return nil, err

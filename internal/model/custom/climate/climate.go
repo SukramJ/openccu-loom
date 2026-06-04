@@ -832,7 +832,7 @@ func (c *Climate) SetTemperature(ctx context.Context, v float64, priority hmenum
 		return nil
 	}
 	if c.writer == nil {
-		return fmt.Errorf("climate: set temperature: no setpoint data point and no writer")
+		return errors.New("climate: set temperature: no setpoint data point and no writer")
 	}
 	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature: %w", err)
@@ -854,7 +854,7 @@ func (c *Climate) SetTemperatureRaw(ctx context.Context, v float64, priority hme
 		return nil
 	}
 	if c.writer == nil {
-		return fmt.Errorf("climate: set temperature raw: no setpoint data point and no writer")
+		return errors.New("climate: set temperature raw: no setpoint data point and no writer")
 	}
 	if err := c.writer.SetValue(custom.EnsureContext(ctx), c.Address, paramForSetpoint(c.Kind), v, priority); err != nil {
 		return fmt.Errorf("climate: set temperature raw: %w", err)

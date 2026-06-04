@@ -5,7 +5,7 @@ package combined
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
@@ -177,13 +177,13 @@ func (w *WeekProfile) Set(
 	priority hmenum.CommandPriority,
 ) error {
 	if w == nil {
-		return fmt.Errorf("week_profile: nil receiver")
+		return errors.New("week_profile: nil receiver")
 	}
 	if w.Writer == nil {
-		return fmt.Errorf("week_profile: no writer wired")
+		return errors.New("week_profile: no writer wired")
 	}
 	if s == nil {
-		return fmt.Errorf("week_profile: nil schedule")
+		return errors.New("week_profile: nil schedule")
 	}
 	if w.profile != nil {
 		return w.profile.Save(ctx, s)

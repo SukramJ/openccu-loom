@@ -5,8 +5,8 @@ package spake2
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
-	"fmt"
 	"testing"
 )
 
@@ -373,8 +373,8 @@ func TestUnmarshalUncompressed_NotAPoint(t *testing.T) {
 	// 66 zero bytes — 0x04 prefix is missing, so elliptic.Unmarshal
 	// returns nil, nil which maps to ErrInvalidPoint.
 	zeros := make([]byte, 66)
-	hex := fmt.Sprintf("%x", zeros)
-	_, err := unmarshalUncompressed(hex)
+	hexStr := hex.EncodeToString(zeros)
+	_, err := unmarshalUncompressed(hexStr)
 	if !errors.Is(err, ErrInvalidPoint) {
 		t.Fatalf("err = %v, want ErrInvalidPoint", err)
 	}

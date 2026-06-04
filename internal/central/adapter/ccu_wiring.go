@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -152,7 +153,7 @@ func WireCentrals(
 		cc := &cfg.Centrals[i]
 		unit, ok := reg.Get(cc.Name)
 		if !ok {
-			joined = append(joined, fmt.Sprintf("%s: not registered", cc.Name))
+			joined = append(joined, cc.Name+": not registered")
 			continue
 		}
 		// Register callback handlers first so events that arrive during
@@ -618,7 +619,7 @@ func wireInterface(
 					return err
 				}
 				if !ok {
-					return fmt.Errorf("reconnect: CanReconnect returned false")
+					return errors.New("reconnect: CanReconnect returned false")
 				}
 				return nil
 			},
@@ -987,7 +988,7 @@ func ensureConnectedClientState(ic *client.InterfaceClient, logger *slog.Logger)
 // BIN-RPC caller separately.
 func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, error) {
 	if iface == hmenum.InterfaceCUxD {
-		return "", fmt.Errorf("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
+		return "", errors.New("CUxD requires a BIN-RPC caller; XML-RPC wiring is not applicable")
 	}
 	ports, ok := hmenum.DetectionPorts[iface]
 	if !ok {

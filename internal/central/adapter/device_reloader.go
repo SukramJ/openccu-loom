@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -47,7 +48,7 @@ func NewDeviceReloaderAdapter(r *central.Registry, w *clientpkg.ValueWriter) *De
 // no backend can be resolved.
 func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAddress string) error {
 	if a.registry == nil || a.writer == nil {
-		return fmt.Errorf("device_reloader: adapter not fully wired")
+		return errors.New("device_reloader: adapter not fully wired")
 	}
 	for _, unit := range a.registry.List() {
 		dev, ok := unit.ModelRegistry.Get(deviceAddress)

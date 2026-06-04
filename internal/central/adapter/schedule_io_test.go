@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"maps"
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 
@@ -959,7 +960,7 @@ func buildFixtureWithProfileCap(t *testing.T, deviceAddress string, capMax int) 
 				Type:       hmenum.ParameterTypeInteger,
 				Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 				Min:        json.RawMessage("1"),
-				Max:        json.RawMessage(fmt.Sprintf("%d", capMax)),
+				Max:        json.RawMessage(strconv.Itoa(capMax)),
 			},
 		})
 		apDP.OnEvent(1)
@@ -1019,7 +1020,7 @@ func buildFixtureWithRFProfileCap(t *testing.T, deviceAddress string, rfMax int)
 			Type:       hmenum.ParameterTypeInteger,
 			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
 			Min:        json.RawMessage("0"),
-			Max:        json.RawMessage(fmt.Sprintf("%d", rfMax)),
+			Max:        json.RawMessage(strconv.Itoa(rfMax)),
 		},
 	})
 	wpDP.OnEvent(0)

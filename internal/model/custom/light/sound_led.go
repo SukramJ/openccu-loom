@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 
@@ -161,7 +162,7 @@ func (l *SoundPlayerLED) AvailableRepetitions() []string {
 // atomically with the colour change.
 func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
 	if w == nil {
-		return fmt.Errorf("soundplayer-led: writer required")
+		return errors.New("soundplayer-led: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 	coll := generic.NewCollector(generic.WriterAsBackend(w), generic.WithPriority(priority))
@@ -189,7 +190,7 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 // [Light.SetTimerOnTime]).
 func (l *SoundPlayerLED) TurnOn(ctx context.Context, cfg LedOnConfig, w custom.Writer, addr string, priority hmenum.CommandPriority) error {
 	if w == nil {
-		return fmt.Errorf("soundplayer-led: writer required")
+		return errors.New("soundplayer-led: writer required")
 	}
 	ctx = custom.EnsureContext(ctx)
 
@@ -274,7 +275,7 @@ func (l *SoundPlayerLED) Flash(ctx context.Context, c FixedColor, onTimeIdx, rep
 		return fmt.Errorf("soundplayer-led: repetitions index %d out of range", repIdx)
 	}
 	if w == nil {
-		return fmt.Errorf("soundplayer-led: writer required")
+		return errors.New("soundplayer-led: writer required")
 	}
 	if err := w.SetValue(ctx, addr, hmenum.ParameterOnTimeList1, l.availableOnTimes[onTimeIdx], priority); err != nil {
 		return fmt.Errorf("soundplayer-led: ON_TIME_LIST_1: %w", err)

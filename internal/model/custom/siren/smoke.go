@@ -5,6 +5,7 @@ package siren
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -187,7 +188,7 @@ func (s *SmokeSiren) AvailableTones() []string { return nil }
 // secondary alarm pattern across all peer devices.
 func (s *SmokeSiren) TurnOn(ctx context.Context, priority hmenum.CommandPriority) error {
 	if s.writer == nil {
-		return fmt.Errorf("smokesiren: writer required")
+		return errors.New("smokesiren: writer required")
 	}
 	if err := s.writer.SetValue(custom.EnsureContext(ctx), s.Address, hmenum.ParameterSmokeDetectorCommand, "INTRUSION_ALARM", priority); err != nil {
 		return fmt.Errorf("smokesiren: COMMAND=INTRUSION: %w", err)
@@ -199,7 +200,7 @@ func (s *SmokeSiren) TurnOn(ctx context.Context, priority hmenum.CommandPriority
 // secondary alarm pattern.
 func (s *SmokeSiren) TurnOff(ctx context.Context, priority hmenum.CommandPriority) error {
 	if s.writer == nil {
-		return fmt.Errorf("smokesiren: writer required")
+		return errors.New("smokesiren: writer required")
 	}
 	if err := s.writer.SetValue(custom.EnsureContext(ctx), s.Address, hmenum.ParameterSmokeDetectorCommand, "INTRUSION_ALARM_OFF", priority); err != nil {
 		return fmt.Errorf("smokesiren: COMMAND=OFF: %w", err)

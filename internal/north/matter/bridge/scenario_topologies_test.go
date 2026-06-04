@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -311,7 +312,7 @@ func (*scenarioFakeLevelControlServer) MatterInvoke(_ context.Context, cmdID uin
 		// Distinct sentinel so the harness can attribute the bug:
 		// the dispatch path lost the command-fields struct before
 		// reaching us.
-		return nil, fmt.Errorf("LevelControl MoveToLevel: command fields are nil (commandFieldsReader dropped the TLV payload)")
+		return nil, errors.New("LevelControl MoveToLevel: command fields are nil (commandFieldsReader dropped the TLV payload)")
 	}
 	return nil, nil
 }

@@ -5,7 +5,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -85,7 +85,7 @@ func newMatterEphemeralProvider(
 // GenerateAndInstall implements [matterbridge.EphemeralProvider].
 func (p *matterEphemeralProvider) GenerateAndInstall(ctx context.Context) (matterbridge.EphemeralCredentials, error) {
 	if p == nil || p.bridge == nil || p.opMgr == nil {
-		return matterbridge.EphemeralCredentials{}, fmt.Errorf("ephemeral provider: not wired")
+		return matterbridge.EphemeralCredentials{}, errors.New("ephemeral provider: not wired")
 	}
 
 	disc, err := matterbridge.RandomDiscriminator()

@@ -96,7 +96,7 @@ func (s *MQTTCommandSink) InvokeCustomDP(
 	priority hmenum.CommandPriority,
 ) error {
 	if s.cdpDispatch == nil {
-		return fmt.Errorf("mqtt_sink: CDP dispatcher not wired")
+		return errors.New("mqtt_sink: CDP dispatcher not wired")
 	}
 	return s.cdpDispatch.InvokeCustomDP(ctx, deviceAddress, name, operation, params, priority, "mqtt:custom-dp:invoke")
 }

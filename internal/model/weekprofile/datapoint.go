@@ -19,6 +19,7 @@ package weekprofile
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -464,7 +465,7 @@ func (dp *ProfileDataPoint) SetCurrentProfile(key string) error {
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
 	if dp.scheduleType != ScheduleTypeClimate {
-		return fmt.Errorf("weekprofile: SetCurrentProfile not applicable to non-climate data points")
+		return errors.New("weekprofile: SetCurrentProfile not applicable to non-climate data points")
 	}
 	if err := dp.validateProfileKey(key); err != nil {
 		return err

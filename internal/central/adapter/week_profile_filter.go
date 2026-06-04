@@ -26,6 +26,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -294,7 +295,7 @@ func (a *scheduleWriteForwarder) SetValue(
 	priority hmenum.CommandPriority,
 ) error {
 	if a == nil || a.ch == nil {
-		return fmt.Errorf("weekprofile: channel writer not attached")
+		return errors.New("weekprofile: channel writer not attached")
 	}
 	w := a.ch.Writer()
 	if w == nil {

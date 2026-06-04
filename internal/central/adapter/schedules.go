@@ -1094,7 +1094,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		return err
 	}
 	if sched == nil {
-		return fmt.Errorf("schedules: nil payload")
+		return errors.New("schedules: nil payload")
 	}
 	var raw map[string]any
 	switch sched.Kind {
@@ -1138,7 +1138,7 @@ func (s *SchedulesDomain) PutClimateSchedule(
 		return err
 	}
 	if len(raw) == 0 {
-		return fmt.Errorf("schedules: empty payload")
+		return errors.New("schedules: empty payload")
 	}
 	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, raw, hmenum.CommandRxModeUnset); err != nil {
 		if !isCCUScheduleFalsePositive(err) {

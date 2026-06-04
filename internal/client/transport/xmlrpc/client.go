@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -146,7 +147,7 @@ func (c *Client) doCall(ctx context.Context, method string, params []Value) (Val
 	}
 	req.Header.Set("Content-Type", "text/xml; charset=ISO-8859-1")
 	req.Header.Set("Accept", "text/xml")
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", body.Len()))
+	req.Header.Set("Content-Length", strconv.Itoa(body.Len()))
 	if c.cfg.Username != "" {
 		req.SetBasicAuth(c.cfg.Username, c.cfg.Password)
 	}

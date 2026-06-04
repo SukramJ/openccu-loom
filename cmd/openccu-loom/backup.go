@@ -28,7 +28,7 @@ import (
 func runBackup(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		printBackupUsage(stderr)
-		return fmt.Errorf("backup: missing subcommand")
+		return errors.New("backup: missing subcommand")
 	}
 	switch args[0] {
 	case "create":
@@ -335,7 +335,7 @@ func backupRestore(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("backup restore: missing <file> argument")
+		return errors.New("backup restore: missing <file> argument")
 	}
 	archivePath := fs.Arg(0)
 
@@ -408,7 +408,7 @@ func backupRestore(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	if manifest.CreatedAt == "" {
-		return fmt.Errorf("backup restore: manifest.json not found in archive")
+		return errors.New("backup restore: manifest.json not found in archive")
 	}
 
 	// Validate sha256 sums.

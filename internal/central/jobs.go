@@ -5,6 +5,7 @@ package central
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -291,10 +292,10 @@ func gatedRunWithDevicesCreatedGate(unit *Unit, skipOnConnectionIssue bool, fn f
 // as [scheduler.Scheduler.Add].
 func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) {
 	if unit == nil {
-		return nil, fmt.Errorf("central: nil unit")
+		return nil, errors.New("central: nil unit")
 	}
 	if unit.Scheduler == nil {
-		return nil, fmt.Errorf("central: nil scheduler")
+		return nil, errors.New("central: nil scheduler")
 	}
 
 	registered := make([]string, 0, 4)

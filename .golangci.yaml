@@ -19,6 +19,7 @@ linters:
     - makezero
     - nilerr
     - noctx
+    - perfsprint
     - prealloc
     - reassign
     - revive

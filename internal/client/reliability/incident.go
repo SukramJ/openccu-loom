@@ -176,7 +176,7 @@ func WireRetryIncidents(rec IncidentRecorder, centralName, iface string) Inciden
 	return IncidentSinkFunc(func(err error) {
 		msg := "retry: all attempts exhausted"
 		if err != nil {
-			msg = fmt.Sprintf("retry: all attempts exhausted: %s", err.Error())
+			msg = "retry: all attempts exhausted: " + err.Error()
 		}
 		_ = rec.RecordIncident(context.Background(), IncidentRecord{
 			CentralName: centralName,

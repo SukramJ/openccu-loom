@@ -11,6 +11,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -23,7 +24,7 @@ import (
 
 // ErrPortRangeInvalid is returned by [FindFreePort] when rangeLo > rangeHi
 // or either bound is outside the valid port range.
-var ErrPortRangeInvalid = fmt.Errorf("hmtypes: invalid port range")
+var ErrPortRangeInvalid = errors.New("hmtypes: invalid port range")
 
 // MaxCacheAge is the default maximum age for cached values, mirroring
 // Py:308).
@@ -104,11 +105,11 @@ func ChangedWithinSeconds(lastChange time.Time, maxAge time.Duration) bool {
 
 // ErrHostEmpty is returned by [ValidateHost] when the host string is
 // empty or blank.
-var ErrHostEmpty = fmt.Errorf("hmtypes: host must not be empty")
+var ErrHostEmpty = errors.New("hmtypes: host must not be empty")
 
 // ErrHostInvalid is returned by [ValidateHost] when the host string
 // does not match a valid hostname or IP address.
-var ErrHostInvalid = fmt.Errorf("hmtypes: host has invalid format")
+var ErrHostInvalid = errors.New("hmtypes: host has invalid format")
 
 // ValidateHost validates that host is a well-formed hostname or IP
 // address. Returns [ErrHostEmpty] for blank input, [ErrHostInvalid] for

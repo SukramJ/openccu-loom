@@ -163,7 +163,7 @@ func wireCUxDInterface(
 			handlers.SetWriter(writer)
 		}
 		binrpcCallbackServer.Register(initID, handlers)
-		callbackURL = fmt.Sprintf("binary://%s", binrpcCallbackAddr)
+		callbackURL = "binary://" + binrpcCallbackAddr
 		closerSrv := binrpcCallbackServer
 		capturedInitID := initID
 		_ = closerSrv // avoid unused-var lint for deregister call in closer

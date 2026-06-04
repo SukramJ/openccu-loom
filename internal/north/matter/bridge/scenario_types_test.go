@@ -6,6 +6,7 @@ package bridge
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 )
@@ -297,7 +298,7 @@ func normalizeGiven(g *scenarioGiven) {
 // time, which keeps failure attribution honest.
 func validateScenario(s *scenario) error {
 	if s.Name == "" {
-		return fmt.Errorf("scenario.name is empty")
+		return errors.New("scenario.name is empty")
 	}
 	if len(s.Steps) == 0 {
 		return fmt.Errorf("scenario %q has no steps", s.Name)

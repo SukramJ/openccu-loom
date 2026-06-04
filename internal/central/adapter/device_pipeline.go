@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -219,7 +220,7 @@ func (p *DevicePipeline) WithVisibility(v *visibility.Registry) *DevicePipeline 
 // logical id (e.g. "HmIP-RF").
 func (p *DevicePipeline) Ingest(ctx context.Context, interfaceID string, iface hmenum.Interface, descs []hmproto.DeviceDescription) error {
 	if p.unit == nil {
-		return fmt.Errorf("pipeline: no central")
+		return errors.New("pipeline: no central")
 	}
 	// First pass: build devices (only entries without PARENT — these
 	// are the device roots; children are channels).

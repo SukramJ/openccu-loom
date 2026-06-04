@@ -17,7 +17,7 @@ package adapter
 
 import (
 	"context"
-	"fmt"
+	"errors"
 )
 
 // ScheduleFacade bundles climate-schedule and device-schedule operations
@@ -43,10 +43,10 @@ type ScheduleFacade struct {
 // loom:reachable:reason="entry point for WS/REST schedule command handlers; wired in daemon.go north-side setup"
 func NewScheduleFacade(domain *SchedulesDomain, adapter *ScheduleQueryAdapter) (*ScheduleFacade, error) {
 	if domain == nil {
-		return nil, fmt.Errorf("schedule_facade: nil SchedulesDomain")
+		return nil, errors.New("schedule_facade: nil SchedulesDomain")
 	}
 	if adapter == nil {
-		return nil, fmt.Errorf("schedule_facade: nil ScheduleQueryAdapter")
+		return nil, errors.New("schedule_facade: nil ScheduleQueryAdapter")
 	}
 	return &ScheduleFacade{domain: domain, adapter: adapter}, nil
 }

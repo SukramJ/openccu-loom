@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
@@ -51,14 +52,14 @@ func (b *Bridge) maybeUnmaskPrivacy(buf []byte) error {
 	}
 	sessionID := binary.LittleEndian.Uint16(buf[1:3])
 	if sessionID == 0 {
-		return fmt.Errorf("privacy: P bit set on SessionID=0 (PASE) — spec violation")
+		return errors.New("privacy: P bit set on SessionID=0 (PASE) — spec violation")
 	}
 
 	b.mu.RLock()
 	lookup := b.sessions
 	b.mu.RUnlock()
 	if lookup == nil {
-		return fmt.Errorf("privacy: no session lookup wired")
+		return errors.New("privacy: no session lookup wired")
 	}
 	sess, ok := lookup.Lookup(sessionID)
 	if !ok {

@@ -262,7 +262,7 @@ func (s *SchedulesDomain) SetSchedule(
 		return err
 	}
 	if sched == nil {
-		return fmt.Errorf("schedules: nil schedule")
+		return errors.New("schedules: nil schedule")
 	}
 	if err := sched.Validate(); err != nil {
 		return fmt.Errorf("schedules: invalid schedule: %w", err)
@@ -291,7 +291,7 @@ func (s *SchedulesDomain) SetSchedule(
 		return fmt.Errorf("schedules: build paramset: %w", err)
 	}
 	if len(values) == 0 {
-		return fmt.Errorf("schedules: empty schedule payload")
+		return errors.New("schedules: empty schedule payload")
 	}
 	if err := backend.PutParamset(ctx, channelAddr, hmenum.ParamsetKeyMaster, values, hmenum.CommandRxModeUnset); err != nil {
 		return err
@@ -382,7 +382,7 @@ func (s *SchedulesDomain) CopyScheduleTo(
 		return fmt.Errorf("schedules: read source: %w", err)
 	}
 	if src == nil || len(src.Profiles) == 0 {
-		return fmt.Errorf("schedules: source schedule is empty")
+		return errors.New("schedules: source schedule is empty")
 	}
 	return s.SetSchedule(ctx, dstDeviceAddress, dstChannelNo, src)
 }
@@ -411,7 +411,7 @@ func (s *SchedulesDomain) SetProfile(
 		return err
 	}
 	if prof == nil {
-		return fmt.Errorf("schedules.SetProfile: nil profile")
+		return errors.New("schedules.SetProfile: nil profile")
 	}
 	if !isValidProfileID(profileKey) {
 		return fmt.Errorf("%w: %q is not a valid profile key (P1..P6)", ErrInvalidProfileID, profileKey)
@@ -447,7 +447,7 @@ func (s *SchedulesDomain) SetProfile(
 		return fmt.Errorf("schedules.SetProfile: build paramset: %w", err)
 	}
 	if len(values) == 0 {
-		return fmt.Errorf("schedules.SetProfile: empty profile payload")
+		return errors.New("schedules.SetProfile: empty profile payload")
 	}
 	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
 	if err != nil {
@@ -553,7 +553,7 @@ func (s *SchedulesDomain) CopyProfileTo(
 		return fmt.Errorf("schedules: build paramset: %w", err)
 	}
 	if len(values) == 0 {
-		return fmt.Errorf("schedules: empty profile payload")
+		return errors.New("schedules: empty profile payload")
 	}
 	backend, channelAddr, err := s.resolve(dstDeviceAddress, dstChannelNo)
 	if err != nil {

@@ -719,7 +719,7 @@ func TestHandleCase_SigmaRejectSendsStatusReport(t *testing.T) {
 	t.Run("genuine_error_returns_original_error", func(t *testing.T) {
 		t.Parallel()
 		b := newStartedBridge(t)
-		wantErr := fmt.Errorf("sigma: bogus decode failure")
+		wantErr := errors.New("sigma: bogus decode failure")
 		h := &errorCaseHandler{err: wantErr}
 		b.AttachCaseHandler(h)
 		proto := scProto(mrp.SCOpcodeSigma1, 42, false, 0)

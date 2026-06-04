@@ -8,7 +8,7 @@
 package hmtypes
 
 import (
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -30,16 +30,16 @@ type DataPointKey struct {
 // NewDataPointKey constructs a key and validates its components.
 func NewDataPointKey(interfaceID, channelAddress string, paramsetKey hmenum.ParamsetKey, parameter string) (DataPointKey, error) {
 	if interfaceID == "" {
-		return DataPointKey{}, fmt.Errorf("hmtypes: DataPointKey.InterfaceID is required")
+		return DataPointKey{}, errors.New("hmtypes: DataPointKey.InterfaceID is required")
 	}
 	if channelAddress == "" {
-		return DataPointKey{}, fmt.Errorf("hmtypes: DataPointKey.ChannelAddress is required")
+		return DataPointKey{}, errors.New("hmtypes: DataPointKey.ChannelAddress is required")
 	}
 	if paramsetKey == "" {
-		return DataPointKey{}, fmt.Errorf("hmtypes: DataPointKey.ParamsetKey is required")
+		return DataPointKey{}, errors.New("hmtypes: DataPointKey.ParamsetKey is required")
 	}
 	if parameter == "" {
-		return DataPointKey{}, fmt.Errorf("hmtypes: DataPointKey.Parameter is required")
+		return DataPointKey{}, errors.New("hmtypes: DataPointKey.Parameter is required")
 	}
 	return DataPointKey{
 		InterfaceID:    interfaceID,

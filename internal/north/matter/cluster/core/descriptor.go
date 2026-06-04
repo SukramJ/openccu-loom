@@ -57,7 +57,7 @@ var errDescriptorReadOnly = errors.New("matter: Descriptor is read-only")
 // deviceTypes must contain at least one entry per Matter §9.5.5.1.
 func NewDescriptor(deviceTypes []DeviceTypeStruct, serverList, clientList []uint32, partsList []uint16) (*Descriptor, error) {
 	if len(deviceTypes) == 0 {
-		return nil, fmt.Errorf("matter: Descriptor requires at least one DeviceType entry")
+		return nil, errors.New("matter: Descriptor requires at least one DeviceType entry")
 	}
 	return &Descriptor{
 		deviceTypes: append([]DeviceTypeStruct(nil), deviceTypes...),

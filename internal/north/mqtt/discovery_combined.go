@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -175,7 +176,7 @@ func (b *Bridge) PublishCombinedTimerState(
 // trailing ".0" when the value is integral.
 func formatSeconds(s float64) string {
 	if s == float64(int64(s)) {
-		return fmt.Sprintf("%d", int64(s))
+		return strconv.FormatInt(int64(s), 10)
 	}
 	return fmt.Sprintf("%g", s)
 }

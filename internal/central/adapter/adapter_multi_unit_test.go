@@ -8645,7 +8645,7 @@ func TestReadActiveProfile_GetParamsetError(t *testing.T) {
 		getParamsetFn: func(_ context.Context, _ string, key hmenum.ParamsetKey) (map[string]any, error) {
 			if key == hmenum.ParamsetKeyValues {
 				// readActiveProfile call → return error → (false,"") path.
-				return nil, fmt.Errorf("values unavailable")
+				return nil, errors.New("values unavailable")
 			}
 			// MASTER call: return valid climate schedule.
 			return climateScheduleValues(), nil
@@ -8788,7 +8788,7 @@ func TestWireSchedulerEvents_OnCompleteWithError(t *testing.T) {
 		t.Fatalf("expected 1 wired job, got %d", len(wired))
 	}
 	// Call OnComplete with a non-nil error — exercises line 44-46.
-	wired[0].OnComplete("test-job", 42, false, fmt.Errorf("job failed"))
+	wired[0].OnComplete("test-job", 42, false, errors.New("job failed"))
 }
 
 // TestWireSchedulerEvents_OnCompleteNoError exercises the nil err path
@@ -8859,7 +8859,7 @@ func TestRecoveryReconnector_FailedResult(t *testing.T) {
 	}
 	// A step that always fails → Recovery.Run returns "failed" → result != "success".
 	step := coordinators.RecoveryStep(func(_ context.Context) error {
-		return fmt.Errorf("reinit failed")
+		return errors.New("reinit failed")
 	})
 	rc := NewRecoveryReconnector(reg, step)
 	err = rc.Reconnect(context.Background(), "ccu-b32-rr-fail", "HmIP-RF")

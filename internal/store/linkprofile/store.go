@@ -321,7 +321,7 @@ func (s *Store) ReceiverTypes() ([]string, error) {
 // Receiver-type aliases are applied before the lookup.
 func (s *Store) load(receiverChannelType string) (map[string][]Profile, error) {
 	if receiverChannelType == "" {
-		return nil, fmt.Errorf("linkprofile: empty receiver channel type")
+		return nil, errors.New("linkprofile: empty receiver channel type")
 	}
 	effective := s.effectiveReceiver(receiverChannelType)
 

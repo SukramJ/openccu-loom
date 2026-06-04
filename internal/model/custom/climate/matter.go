@@ -464,7 +464,7 @@ func (s climateThermostatServer) MatterInvoke(ctx context.Context, cmdID uint32,
 		// No baseline — the command can't be applied as a delta. The
 		// spec allows refusing here; the bridge will translate this
 		// into a FAILURE status.
-		return nil, fmt.Errorf("matter: SetpointRaiseLower needs an observed setpoint")
+		return nil, errors.New("matter: SetpointRaiseLower needs an observed setpoint")
 	}
 	// `amount` is in 0.1°C units; positive raises, negative lowers.
 	delta := float64(amount) / 10

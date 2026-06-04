@@ -6,6 +6,7 @@ package coordinators
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -347,7 +348,7 @@ func (c *ConfigurationCoordinator) GetParamset(
 	reader LiveParamsetReader,
 ) (map[string]any, error) {
 	if reader == nil {
-		return nil, fmt.Errorf("configuration_coordinator: get_paramset: nil reader")
+		return nil, errors.New("configuration_coordinator: get_paramset: nil reader")
 	}
 	values, err := reader.GetParamset(ctx, channelAddress, paramsetKey)
 	if err != nil {
@@ -376,7 +377,7 @@ func (c *ConfigurationCoordinator) PutParamset(
 	writer LiveParamsetWriter,
 ) (PutParamsetResult, error) {
 	if writer == nil {
-		return PutParamsetResult{}, fmt.Errorf("configuration_coordinator: put_paramset: nil writer")
+		return PutParamsetResult{}, errors.New("configuration_coordinator: put_paramset: nil writer")
 	}
 
 	if validate {
@@ -423,7 +424,7 @@ func (c *ConfigurationCoordinator) GetLinkParamsetDescription(
 	fetcher LinkParamsetDescriptionFetcher,
 ) (LinkParamsetDescription, error) {
 	if fetcher == nil {
-		return LinkParamsetDescription{}, fmt.Errorf("configuration_coordinator: get_link_paramset_description: nil fetcher")
+		return LinkParamsetDescription{}, errors.New("configuration_coordinator: get_link_paramset_description: nil fetcher")
 	}
 	params, err := fetcher.GetLinkParamsetDescription(ctx, channelAddress)
 	if err != nil {
@@ -510,10 +511,10 @@ func (c *ConfigurationCoordinator) CopyParamset(
 	writer LiveParamsetWriter,
 ) (result CopyParamsetResult, srcValues, dstValues map[string]any, err error) {
 	if reader == nil {
-		return CopyParamsetResult{}, nil, nil, fmt.Errorf("configuration_coordinator: copy_paramset: nil reader")
+		return CopyParamsetResult{}, nil, nil, errors.New("configuration_coordinator: copy_paramset: nil reader")
 	}
 	if writer == nil {
-		return CopyParamsetResult{}, nil, nil, fmt.Errorf("configuration_coordinator: copy_paramset: nil writer")
+		return CopyParamsetResult{}, nil, nil, errors.New("configuration_coordinator: copy_paramset: nil writer")
 	}
 
 	// 1. Read live source values.

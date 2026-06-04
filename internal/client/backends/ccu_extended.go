@@ -10,10 +10,12 @@ package backends
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,7 +113,7 @@ func (b *CcuBackend) GetServiceMessages(ctx context.Context, messageType string)
 		out := make([]map[string]any, 0, len(msgs))
 		for i := range msgs {
 			m := &msgs[i]
-			if messageType != "" && fmt.Sprintf("%d", m.Type) != messageType {
+			if messageType != "" && strconv.Itoa(m.Type) != messageType {
 				continue
 			}
 			out = append(out, map[string]any{
@@ -268,7 +270,7 @@ func (b *CcuBackend) RenameDevice(ctx context.Context, iseID int, newName string
 		return false, ErrUnsupported
 	}
 	_, err := b.json.Call(ctx, "Device.setName", map[string]any{
-		"id":   fmt.Sprintf("%d", iseID),
+		"id":   strconv.Itoa(iseID),
 		"name": newName,
 	})
 	return err == nil, err
@@ -281,7 +283,7 @@ func (b *CcuBackend) RenameChannel(ctx context.Context, iseID int, newName strin
 		return false, ErrUnsupported
 	}
 	_, err := b.json.Call(ctx, "Channel.setName", map[string]any{
-		"id":   fmt.Sprintf("%d", iseID),
+		"id":   strconv.Itoa(iseID),
 		"name": newName,
 	})
 	return err == nil, err
@@ -530,9 +532,9 @@ func (b *CcuBackend) CreateBackupAndDownload(ctx context.Context, maxWaitTime, p
 		case backupStatusCompleted:
 			return b.downloadBackup(ctx)
 		case backupStatusFailed:
-			return nil, fmt.Errorf("ccu.CreateBackupAndDownload: backup failed on CCU")
+			return nil, errors.New("ccu.CreateBackupAndDownload: backup failed on CCU")
 		case backupStatusIdle:
-			return nil, fmt.Errorf("ccu.CreateBackupAndDownload: unexpected idle status (backup not running)")
+			return nil, errors.New("ccu.CreateBackupAndDownload: unexpected idle status (backup not running)")
 		case backupStatusRunning:
 			// keep polling
 		}
@@ -595,10 +597,10 @@ func (b *CcuBackend) downloadBackup(ctx context.Context) ([]byte, error) {
 	// returns the login page under HTTP 200 instead of a 401). Treat both as
 	// a failure rather than persisting a worthless 0-byte / HTML "backup".
 	if len(content) == 0 {
-		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: empty archive (session rejected by cp_security.cgi)")
+		return nil, errors.New("ccu.CreateBackupAndDownload: empty archive (session rejected by cp_security.cgi)")
 	}
 	if looksLikeHTML(content) {
-		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: CCU returned an HTML page, not an archive (session rejected)")
+		return nil, errors.New("ccu.CreateBackupAndDownload: CCU returned an HTML page, not an archive (session rejected)")
 	}
 	return content, nil
 }

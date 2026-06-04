@@ -899,7 +899,7 @@ func validateMQTT(m *NorthMQTT) error {
 		return nil
 	}
 	if m.BrokerURL == "" {
-		return fmt.Errorf("config: mqtt.broker_url: required when mqtt.enabled is true")
+		return errors.New("config: mqtt.broker_url: required when mqtt.enabled is true")
 	}
 	u, err := url.Parse(m.BrokerURL)
 	if err != nil {
@@ -912,7 +912,7 @@ func validateMQTT(m *NorthMQTT) error {
 		return fmt.Errorf("config: mqtt.broker_url: unsupported scheme %q (use tcp, mqtt, tls, ssl or mqtts)", u.Scheme)
 	}
 	if u.Hostname() == "" {
-		return fmt.Errorf("config: mqtt.broker_url: host must not be empty")
+		return errors.New("config: mqtt.broker_url: host must not be empty")
 	}
 	switch m.PayloadFormat {
 	case "", "bare", "json":
@@ -921,7 +921,7 @@ func validateMQTT(m *NorthMQTT) error {
 		return fmt.Errorf("config: mqtt.payload_format: invalid value %q (use bare or json)", m.PayloadFormat)
 	}
 	if m.TopicBase == "" {
-		return fmt.Errorf("config: mqtt.topic_base: required")
+		return errors.New("config: mqtt.topic_base: required")
 	}
 	return nil
 }

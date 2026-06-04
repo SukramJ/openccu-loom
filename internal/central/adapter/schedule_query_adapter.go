@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -31,7 +32,7 @@ func NewScheduleQueryAdapter(domain *SchedulesDomain) *ScheduleQueryAdapter {
 // channelAddress and returns the schedule as a JSON-able map.
 func (a *ScheduleQueryAdapter) GetClimateSchedule(ctx context.Context, channelAddress string) (map[string]any, error) {
 	if a.domain == nil {
-		return nil, fmt.Errorf("schedule_query_adapter: nil domain")
+		return nil, errors.New("schedule_query_adapter: nil domain")
 	}
 	deviceAddress, channelNo := splitChannelAddress(channelAddress)
 	dto, err := a.domain.GetClimateSchedule(ctx, deviceAddress, channelNo)
@@ -45,7 +46,7 @@ func (a *ScheduleQueryAdapter) GetClimateSchedule(ctx context.Context, channelAd
 // and writes it back via the domain.
 func (a *ScheduleQueryAdapter) SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) error {
 	if a.domain == nil {
-		return fmt.Errorf("schedule_query_adapter: nil domain")
+		return errors.New("schedule_query_adapter: nil domain")
 	}
 	deviceAddress, channelNo := splitChannelAddress(channelAddress)
 	dto, err := mapToSchedule(profile)
@@ -59,7 +60,7 @@ func (a *ScheduleQueryAdapter) SetClimateSchedule(ctx context.Context, channelAd
 // string the domain expects.
 func (a *ScheduleQueryAdapter) SetActiveProfile(ctx context.Context, channelAddress string, profileIndex int) error {
 	if a.domain == nil {
-		return fmt.Errorf("schedule_query_adapter: nil domain")
+		return errors.New("schedule_query_adapter: nil domain")
 	}
 	deviceAddress, channelNo := splitChannelAddress(channelAddress)
 	return a.domain.SetActiveProfile(ctx, deviceAddress, channelNo, fmt.Sprintf("P%d", profileIndex))
@@ -69,7 +70,7 @@ func (a *ScheduleQueryAdapter) SetActiveProfile(ctx context.Context, channelAddr
 // schedule.
 func (a *ScheduleQueryAdapter) GetDeviceSchedule(ctx context.Context, deviceAddress string) (map[string]any, error) {
 	if a.domain == nil {
-		return nil, fmt.Errorf("schedule_query_adapter: nil domain")
+		return nil, errors.New("schedule_query_adapter: nil domain")
 	}
 	dto, err := a.domain.GetClimateScheduleAuto(ctx, deviceAddress)
 	if err != nil {
@@ -82,7 +83,7 @@ func (a *ScheduleQueryAdapter) GetDeviceSchedule(ctx context.Context, deviceAddr
 // schedule.
 func (a *ScheduleQueryAdapter) SetDeviceSchedule(ctx context.Context, deviceAddress string, profile map[string]any) error {
 	if a.domain == nil {
-		return fmt.Errorf("schedule_query_adapter: nil domain")
+		return errors.New("schedule_query_adapter: nil domain")
 	}
 	dto, err := mapToSchedule(profile)
 	if err != nil {
@@ -95,7 +96,7 @@ func (a *ScheduleQueryAdapter) SetDeviceSchedule(ctx context.Context, deviceAddr
 // the active profile.
 func (a *ScheduleQueryAdapter) SetDeviceActiveProfile(ctx context.Context, deviceAddress, profile string) error {
 	if a.domain == nil {
-		return fmt.Errorf("schedule_query_adapter: nil domain")
+		return errors.New("schedule_query_adapter: nil domain")
 	}
 	return a.domain.SetActiveProfileAuto(ctx, deviceAddress, profile)
 }

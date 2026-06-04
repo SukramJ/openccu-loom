@@ -9,6 +9,7 @@ package adapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -114,7 +115,7 @@ func (d *CustomDPDispatcher) InvokeCustomDP(
 // data point on the device at deviceAddress.
 func (d *CustomDPDispatcher) resolveCustomDP(deviceAddress, name string) (device.AttachableDataPoint, int, error) {
 	if d.registry == nil {
-		return nil, 0, fmt.Errorf("custom_dp: registry not configured")
+		return nil, 0, errors.New("custom_dp: registry not configured")
 	}
 	for _, u := range d.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)

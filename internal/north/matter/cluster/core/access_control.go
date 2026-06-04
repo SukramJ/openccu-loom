@@ -5,6 +5,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -165,7 +166,7 @@ type ACLTargetStruct struct {
 // NewAccessControl constructs the cluster.
 func NewAccessControl(s ACLStoreFacade) (*AccessControl, error) {
 	if s == nil {
-		return nil, fmt.Errorf("matter: AccessControl store is required")
+		return nil, errors.New("matter: AccessControl store is required")
 	}
 	return &AccessControl{store: s}, nil
 }

@@ -9,6 +9,7 @@ package cover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -218,7 +219,7 @@ func extractPercent100ths(fields any) (uint16, error) {
 	case map[string]any:
 		raw, ok := v["percent"]
 		if !ok {
-			return 0, fmt.Errorf("windowcovering: GoToLiftPercentage missing percent field")
+			return 0, errors.New("windowcovering: GoToLiftPercentage missing percent field")
 		}
 		var castOK bool
 		pct, castOK = raw.(uint16)

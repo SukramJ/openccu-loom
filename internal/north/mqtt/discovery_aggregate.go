@@ -392,7 +392,7 @@ func displayChannelName(ev Event) string {
 		}
 	}
 	if ev.ChannelNo > 0 {
-		return fmt.Sprintf("%d", ev.ChannelNo)
+		return strconv.Itoa(ev.ChannelNo)
 	}
 	return ""
 }

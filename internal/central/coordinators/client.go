@@ -10,6 +10,7 @@ import (
 	"net"
 	"slices"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
@@ -366,7 +367,7 @@ func (c *ClientCoordinator) WaitForTCPReady(ctx context.Context, host string, po
 	if port <= 0 {
 		return nil
 	}
-	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	probeCtx, cancel := context.WithTimeout(ctx, tcpProbeTimeout)
 	conn, err := (&net.Dialer{}).DialContext(probeCtx, "tcp", addr)
 	cancel()
@@ -438,7 +439,7 @@ func (c *ClientCoordinator) LastFailureInterfaceID() string {
 func (c *ClientCoordinator) CreateClient(ctx context.Context, cfg CreateClientConfig) (*ClientEntry, error) {
 	// Stage 1: TCP pre-flight on the first attempt only.
 	if cfg.Port > 0 {
-		addr := net.JoinHostPort(cfg.Host, fmt.Sprintf("%d", cfg.Port))
+		addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
 		probeCtx, cancel := context.WithTimeout(ctx, tcpProbeTimeout)
 		conn, err := (&net.Dialer{}).DialContext(probeCtx, "tcp", addr)
 		cancel()

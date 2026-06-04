@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -85,7 +86,7 @@ func (v *visibilityAdapter) UnIgnoreCandidates(centralName string, paramset hmen
 // merge `patterns` ad-hoc.
 func (v *visibilityAdapter) LoadUnIgnore(centralName string, _ []string) (affectedDevices int, parseErrors []string, err error) {
 	if v == nil || v.registry == nil || v.registryStore == nil || v.centralRegistry == nil {
-		return 0, nil, fmt.Errorf("visibility adapter not wired")
+		return 0, nil, errors.New("visibility adapter not wired")
 	}
 	// Build the union of every central's persisted patterns. SQLite
 	// is the source of truth — REST PUT writes there first, then this

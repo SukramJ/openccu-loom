@@ -10,6 +10,7 @@ package hood
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -153,7 +154,7 @@ func (h *Hood) FanSpeed() (FanSpeed, bool) {
 // corresponding wire code to the LEVEL parameter.
 func (h *Hood) SetFanSpeed(ctx context.Context, speed FanSpeed, priority hmenum.CommandPriority) error {
 	if h.writer == nil {
-		return fmt.Errorf("hood: writer required")
+		return errors.New("hood: writer required")
 	}
 	code := int32(speed) //nolint:gosec // FanSpeed values are small constants (0-3); safe to narrow
 	if err := h.writer.SetValue(custom.EnsureContext(ctx), h.Address, hmenum.ParameterLevel, code, priority); err != nil {

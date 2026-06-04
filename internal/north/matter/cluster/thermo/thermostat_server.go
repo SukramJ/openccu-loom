@@ -9,6 +9,7 @@ package thermo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -295,7 +296,7 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 	switch attrID {
 	case thermoAttrOccupiedHeatingSetpoint:
 		if s.features&ThermostatFeatureHEAT == 0 {
-			return fmt.Errorf("thermostat: OccupiedHeatingSetpoint not supported (no HEAT feature)")
+			return errors.New("thermostat: OccupiedHeatingSetpoint not supported (no HEAT feature)")
 		}
 		v, ok := cluster.AsInt16(value)
 		if !ok {
@@ -313,7 +314,7 @@ func (s *ThermostatServer) MatterWrite(_ context.Context, attrID uint32, value a
 		return nil
 	case thermoAttrOccupiedCoolingSetpoint:
 		if s.features&ThermostatFeatureCOOL == 0 {
-			return fmt.Errorf("thermostat: OccupiedCoolingSetpoint not supported (no COOL feature)")
+			return errors.New("thermostat: OccupiedCoolingSetpoint not supported (no COOL feature)")
 		}
 		v, ok := cluster.AsInt16(value)
 		if !ok {

@@ -5,6 +5,7 @@ package coordinators
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -110,7 +111,7 @@ func (c *DeviceCoordinator) InitialPull(ctx context.Context, lister DeviceLister
 		func(ctx context.Context) (PullReport, error) {
 			rep := PullReport{Interface: iface}
 			if lister == nil {
-				return rep, fmt.Errorf("device_coordinator: lister is nil")
+				return rep, errors.New("device_coordinator: lister is nil")
 			}
 			snapshot, err := lister.ListDevices(ctx, iface)
 			if err != nil {
@@ -531,7 +532,7 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 	iface hmenum.Interface,
 ) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: refresh_device_descriptions: fetcher is nil")
+		return errors.New("device_coordinator: refresh_device_descriptions: fetcher is nil")
 	}
 	descs, err := fetcher.ListDevices(ctx, iface)
 	if err != nil {
@@ -707,7 +708,7 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 	checker ParamsetConsistencyChecker,
 ) ([]ParamsetInconsistency, error) {
 	if checker == nil {
-		return nil, fmt.Errorf("device_coordinator: check_paramset_consistency: nil checker")
+		return nil, errors.New("device_coordinator: check_paramset_consistency: nil checker")
 	}
 
 	var result []ParamsetInconsistency
@@ -799,7 +800,7 @@ func (c *DeviceCoordinator) ReaddDevice(
 	deviceAddresses []string,
 ) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: readd_device: fetcher is nil")
+		return errors.New("device_coordinator: readd_device: fetcher is nil")
 	}
 	for _, addr := range deviceAddresses {
 		// Evict caches for this device.
@@ -927,7 +928,7 @@ func (c *DeviceCoordinator) RefreshFirmwareDataByState(
 	states []hmenum.DeviceFirmwareState,
 ) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: refresh_firmware_data_by_state: nil fetcher")
+		return errors.New("device_coordinator: refresh_firmware_data_by_state: nil fetcher")
 	}
 	if stateReader == nil || len(states) == 0 {
 		return nil
@@ -966,7 +967,7 @@ func (c *DeviceCoordinator) RefreshFirmwareDataByState(
 // unreachable interface does not abort the sweep.
 func (c *DeviceCoordinator) RefreshFirmwareData(ctx context.Context, fetcher DeviceDescriptionFetcher) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: refresh_firmware_data: nil fetcher")
+		return errors.New("device_coordinator: refresh_firmware_data: nil fetcher")
 	}
 	for _, iface := range c.descs.GetInterfaceIDs() {
 		if err := c.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, iface); err != nil {
@@ -992,7 +993,7 @@ func (c *DeviceCoordinator) ReplaceDevice(
 	oldAddr, newAddr string,
 ) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: replace_device: nil fetcher")
+		return errors.New("device_coordinator: replace_device: nil fetcher")
 	}
 
 	// Validate old device exists.
@@ -1064,7 +1065,7 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptions(
 	refreshOnlyExisting bool,
 ) error {
 	if fetcher == nil {
-		return fmt.Errorf("device_coordinator: refresh_device_descriptions: nil fetcher")
+		return errors.New("device_coordinator: refresh_device_descriptions: nil fetcher")
 	}
 	descs, err := fetcher.ListDevices(ctx, iface)
 	if err != nil {

@@ -229,7 +229,7 @@ func (a *UISchemaAdapter) buildSubsetGroups(
 			out = append(out, bucket{
 				key: k,
 				group: handlers.UISchemaSubsetGroup{
-					ID:           fmt.Sprintf("subset_%s", ss.MemberParams[0]),
+					ID:           "subset_" + ss.MemberParams[0],
 					Label:        a.errorLabel(locale, ss.NameKey),
 					MemberParams: append([]string(nil), ss.MemberParams...),
 					Options:      opts,

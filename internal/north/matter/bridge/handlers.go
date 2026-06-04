@@ -6,6 +6,7 @@ package bridge
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -255,7 +256,7 @@ func (a *PaseAdapter) ProcessPake1(payload []byte) (opcode uint8, respPayload []
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.verifierFactory == nil {
-		return 0, nil, fmt.Errorf("bridge: PaseAdapter without verifier factory")
+		return 0, nil, errors.New("bridge: PaseAdapter without verifier factory")
 	}
 	context, err := a.computePaseContextLocked()
 	if err != nil {
@@ -263,7 +264,7 @@ func (a *PaseAdapter) ProcessPake1(payload []byte) (opcode uint8, respPayload []
 	}
 	v := a.verifierFactory(context)
 	if v == nil {
-		return 0, nil, fmt.Errorf("bridge: PaseAdapter factory returned nil verifier")
+		return 0, nil, errors.New("bridge: PaseAdapter factory returned nil verifier")
 	}
 	a.verifier = v
 	pA, err := spake2.DecodePake1(payload)
@@ -301,7 +302,7 @@ func (a *PaseAdapter) ProcessPake1(payload []byte) (opcode uint8, respPayload []
 // as a wrapped error.
 func (a *PaseAdapter) computePaseContextLocked() ([]byte, error) {
 	if len(a.pbkdfReqBytes) == 0 || len(a.pbkdfRespBytes) == 0 {
-		return nil, fmt.Errorf("bridge: Pake1 before PBKDFParamRequest/Response — context cannot be derived")
+		return nil, errors.New("bridge: Pake1 before PBKDFParamRequest/Response — context cannot be derived")
 	}
 	h := sha256.New()
 	h.Write([]byte(spake2.MatterContext))
@@ -328,7 +329,7 @@ func (a *PaseAdapter) ProcessPake3(payload []byte) (opcode uint8, respPayload []
 	defer a.mu.Unlock()
 	v := a.verifier
 	if v == nil {
-		return 0, nil, fmt.Errorf("bridge: PaseAdapter Pake3 without preceding Pake1")
+		return 0, nil, errors.New("bridge: PaseAdapter Pake3 without preceding Pake1")
 	}
 	cA, err := spake2.DecodePake3(payload)
 	if err != nil {
@@ -458,7 +459,7 @@ func (a *CaseAdapter) SetOnSessionEstablished(cb CaseSessionEstablished) {
 func (a *CaseAdapter) ProcessSigma1(payload []byte) (opcode uint8, respPayload []byte, err error) {
 	r := a.snapshotResponder()
 	if r == nil {
-		return 0, nil, fmt.Errorf("bridge: CaseAdapter without responder")
+		return 0, nil, errors.New("bridge: CaseAdapter without responder")
 	}
 	result, err := r.ProcessSigma1WithResume(payload)
 	if err != nil {
@@ -484,7 +485,7 @@ func (a *CaseAdapter) ProcessSigma1(payload []byte) (opcode uint8, respPayload [
 		out := sigma.MarshalSigma2Resume(*result.Sigma2Resume)
 		slog.Default().Debug("matter.tx.sigma2resume.wire",
 			slog.Int("len", len(out)),
-			slog.String("hex_first128", fmt.Sprintf("%x", peekBytes(out, 128))))
+			slog.String("hex_first128", hex.EncodeToString(peekBytes(out, 128))))
 
 		a.mu.Lock()
 		firstEstablish := !a.established
@@ -508,7 +509,7 @@ func (a *CaseAdapter) ProcessSigma1(payload []byte) (opcode uint8, respPayload [
 	out := result.Sigma2.Marshal()
 	slog.Default().Debug("matter.tx.sigma2.wire",
 		slog.Int("len", len(out)),
-		slog.String("hex_first128", fmt.Sprintf("%x", peekBytes(out, 128))))
+		slog.String("hex_first128", hex.EncodeToString(peekBytes(out, 128))))
 	return mrp.SCOpcodeSigma2, out, nil
 }
 
@@ -531,7 +532,7 @@ func peekBytes(b []byte, n int) []byte {
 func (a *CaseAdapter) ProcessSigma3(payload []byte) (opcode uint8, respPayload []byte, err error) {
 	r := a.snapshotResponder()
 	if r == nil {
-		return 0, nil, fmt.Errorf("bridge: CaseAdapter without responder")
+		return 0, nil, errors.New("bridge: CaseAdapter without responder")
 	}
 	if err := r.ProcessSigma3(payload); err != nil {
 		// Emit StatusReport(FAILURE, InvalidParameter) so the commissioner
@@ -558,7 +559,7 @@ func (a *CaseAdapter) ProcessSigma3(payload []byte) (opcode uint8, respPayload [
 	if firstEstablish && a.onEstablished != nil {
 		keys, ok := r.SessionKeys()
 		if !ok {
-			return 0, nil, fmt.Errorf("bridge: CASE keys missing after Sigma3 success")
+			return 0, nil, errors.New("bridge: CASE keys missing after Sigma3 success")
 		}
 		if err := a.onEstablished(keys, r.PeerSessionID()); err != nil {
 			return 0, nil, fmt.Errorf("bridge: CASE session pickup: %w", err)
@@ -587,7 +588,7 @@ func (a *CaseAdapter) ProcessSigma3(payload []byte) (opcode uint8, respPayload [
 // Implemented as a stub that rejects with an error; the commissioner
 // (if it ever sends 0x33 in error) falls back to a fresh Sigma1.
 func (a *CaseAdapter) ProcessSigma2Resume(_ []byte) (opcode uint8, respPayload []byte, err error) {
-	return 0, nil, fmt.Errorf("bridge: inbound Sigma2_Resume not supported (bridge is CASE responder)")
+	return 0, nil, errors.New("bridge: inbound Sigma2_Resume not supported (bridge is CASE responder)")
 }
 
 // MRPAckAdapter wraps an [mrp.AckTracker] in the [AckHandler] port.

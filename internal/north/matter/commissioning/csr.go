@@ -71,7 +71,7 @@ func BuildCSR(in CSRInput) (*CSRResult, error) {
 		return nil, fmt.Errorf("%w: got %d", ErrAttestationChallenge, len(in.AttestationChallenge))
 	}
 	if in.DACPrivateKey == nil {
-		return nil, fmt.Errorf("commissioning: DAC private key required")
+		return nil, errors.New("commissioning: DAC private key required")
 	}
 
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

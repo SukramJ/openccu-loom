@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -396,11 +397,11 @@ func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHd
 			b.logger.Debug("matter.rx.im.read_path",
 				slog.String("src", srcString(src)),
 				slog.Any("endpoint", p.Endpoint),
-				slog.String("endpoint_set", fmt.Sprintf("%v", p.HasEndpoint)),
+				slog.String("endpoint_set", strconv.FormatBool(p.HasEndpoint)),
 				slog.Any("cluster", p.Cluster),
-				slog.String("cluster_set", fmt.Sprintf("%v", p.HasCluster)),
+				slog.String("cluster_set", strconv.FormatBool(p.HasCluster)),
 				slog.Any("attribute", p.Attribute),
-				slog.String("attribute_set", fmt.Sprintf("%v", p.HasAttribute)))
+				slog.String("attribute_set", strconv.FormatBool(p.HasAttribute)))
 		}
 		// Stamp the FabricFiltered flag + the requesting FabricIndex
 		// into the context so fabric-scoped cluster servers

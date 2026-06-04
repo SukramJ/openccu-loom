@@ -5,6 +5,7 @@ package light
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -51,7 +52,7 @@ func (l *DRGDaliLight) SetEffect(ctx context.Context, label string, priority hme
 		return nil
 	}
 	if label == "" {
-		return fmt.Errorf("dali: effect label must not be empty")
+		return errors.New("dali: effect label must not be empty")
 	}
 	if err := l.effect.TriggerLabel(custom.EnsureContext(ctx), label, priority); err != nil {
 		return fmt.Errorf("dali: SET EFFECT: %w", err)

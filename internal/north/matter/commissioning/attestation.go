@@ -73,7 +73,7 @@ func BuildAttestation(in AttestationInput) (*AttestationResult, error) {
 		return nil, fmt.Errorf("%w: got %d", ErrAttestationChallenge, len(in.AttestationChallenge))
 	}
 	if in.DACPrivateKey == nil {
-		return nil, fmt.Errorf("commissioning: DAC private key required")
+		return nil, errors.New("commissioning: DAC private key required")
 	}
 
 	now := in.Now

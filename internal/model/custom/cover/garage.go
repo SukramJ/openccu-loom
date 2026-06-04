@@ -5,6 +5,7 @@ package cover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -222,7 +223,7 @@ func (g *Garage) SetPosition(ctx context.Context, target float64, priority hmenu
 // command writes the DOOR_COMMAND parameter.
 func (g *Garage) command(ctx context.Context, c DoorCommand, priority hmenum.CommandPriority) error {
 	if g.writer == nil {
-		return fmt.Errorf("garage: writer required")
+		return errors.New("garage: writer required")
 	}
 	if err := g.writer.SetValue(custom.EnsureContext(ctx), g.Address, hmenum.ParameterDoorCommand, string(c), priority); err != nil {
 		return fmt.Errorf("garage: DOOR_COMMAND=%s: %w", c, err)

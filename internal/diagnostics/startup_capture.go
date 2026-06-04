@@ -63,7 +63,7 @@ func LoadStartupCapture(dataDir string) (StartupCaptureConfig, error) {
 // shared host should not be able to flip it without admin access.
 func SaveStartupCapture(dataDir string, cfg StartupCaptureConfig) error {
 	if dataDir == "" {
-		return fmt.Errorf("diagnostics: data dir required to persist startup capture")
+		return errors.New("diagnostics: data dir required to persist startup capture")
 	}
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
 		return fmt.Errorf("diagnostics: mkdir data dir: %w", err)

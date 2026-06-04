@@ -14,6 +14,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -1048,7 +1049,7 @@ type caseFabricEntry struct {
 // post-pair multi-fabric routing.
 func loadFabricRootPublicKey(ctx context.Context, store *matterstore.Store, fabricIndex uint8) ([]byte, error) {
 	if store == nil {
-		return nil, fmt.Errorf("matter store: nil")
+		return nil, errors.New("matter store: nil")
 	}
 	fabric, err := store.GetFabric(ctx, fabricIndex)
 	if err != nil {
@@ -1253,7 +1254,7 @@ func privKeyFromScalar(scalar []byte) (*ecdsa.PrivateKey, error) {
 type trustAnyPeerVerifier struct{}
 
 func (trustAnyPeerVerifier) VerifyAndExtractPubKey(_, _ []byte) (*ecdsa.PublicKey, error) {
-	return nil, fmt.Errorf("trustAnyPeerVerifier: production verifier missing — wire mattercert.Verifier with persistent fabric identity")
+	return nil, errors.New("trustAnyPeerVerifier: production verifier missing — wire mattercert.Verifier with persistent fabric identity")
 }
 
 // caseResumptionStoreAdapter bridges [sigma.ResumptionStore] to the

@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -80,7 +81,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 		publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
 	}
 	if publicHost == "" {
-		return srv, "", fmt.Errorf("callback: public host could not be determined — set callback.public_host")
+		return srv, "", errors.New("callback: public host could not be determined — set callback.public_host")
 	}
 	tcpAddr, ok := srv.Addr().(*net.TCPAddr)
 	port := cfg.Callback.Port
