@@ -1024,38 +1024,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	_ = dpWriterAdapter
 
 	// --- SystemStatusChangedEvent north-bound subscribers --------
-	// All three subscribers are started unconditionally so the ring
-	// buffer accumulates events regardless of whether a particular
-	// north-bound plane is active.
-	sysStatusBuf := handlers.NewSystemStatusBuffer(100)
-	stopSysStatusBuf := sysStatusBuf.Subscribe(reg)
-	defer stopSysStatusBuf()
-
-	wsSysStatus := ws.NewSystemStatusSubscriber(reg, wsHub)
-	wsSysStatus.Start()
-	defer wsSysStatus.Stop()
-
-	wsHubEvents := ws.NewHubEventsSubscriber(reg, wsHub)
-	wsHubEvents.Start()
-	defer wsHubEvents.Stop()
-
-	wsDeviceLifecycle := ws.NewDeviceLifecycleSubscriber(reg, wsHub)
-	wsDeviceLifecycle.Start()
-	defer wsDeviceLifecycle.Stop()
-
-	wsDeviceTrigger := ws.NewDeviceTriggerSubscriber(reg, wsHub)
-	wsDeviceTrigger.Start()
-	defer wsDeviceTrigger.Stop()
-
-	wsOptimisticRollback := ws.NewOptimisticRollbackSubscriber(reg, wsHub)
-	wsOptimisticRollback.Start()
-	defer wsOptimisticRollback.Stop()
-
-	if mqttWiring != nil {
-		mqttSysStatus := mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
-		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
-		defer mqttSysStatus.Stop()
-	}
+	sysStatusBuf, sysStatusTeardown := wireSystemStatusSubscribers(reg, wsHub, mqttWiring, logger) //nolint:contextcheck // subscribers' Start has no ctx parameter; they subscribe to the event bus internally
+	defer sysStatusTeardown()
 
 	if cfg.North.REST.IsEnabled() {
 		var openapiValidator *middleware.OpenAPIValidator
