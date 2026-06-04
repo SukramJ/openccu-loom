@@ -123,7 +123,7 @@ func (s *SchedulesDomain) SetScheduleEnabled(
 	// the SPA sees the change immediately without waiting for a CCU
 	// callback. Best-effort: if the channel or data point is not yet
 	// wired we skip silently.
-	s.applyScheduleEnabledToModel(deviceAddress, channelKey, enabled)
+	s.applyScheduleEnabledToModel(ctx, deviceAddress, channelKey, enabled)
 
 	return nil
 }
@@ -185,7 +185,7 @@ func (s *SchedulesDomain) channelKeyBitmask(ctx context.Context, deviceAddress, 
 // applyScheduleEnabledToModel updates the in-model ProfileDataPoint for
 // the device so the SPA sees the change without waiting for a CCU event.
 // Best-effort: silently returns when the device or channel cannot be found.
-func (s *SchedulesDomain) applyScheduleEnabledToModel(deviceAddress, channelKey string, enabled bool) {
+func (s *SchedulesDomain) applyScheduleEnabledToModel(ctx context.Context, deviceAddress, channelKey string, enabled bool) {
 	if s.registry == nil {
 		return
 	}
@@ -199,7 +199,7 @@ func (s *SchedulesDomain) applyScheduleEnabledToModel(deviceAddress, channelKey 
 			if wp == nil {
 				continue
 			}
-			_ = wp.SetScheduleEnabled(context.Background(), channelKey, enabled, hmenum.CommandPriorityHigh)
+			_ = wp.SetScheduleEnabled(ctx, channelKey, enabled, hmenum.CommandPriorityHigh)
 			return
 		}
 		return

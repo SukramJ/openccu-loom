@@ -7124,7 +7124,7 @@ func TestApplyScheduleEnabledToModel_WithWeekProfile(t *testing.T) {
 	// applyScheduleEnabledToModel is called internally by SetScheduleEnabled,
 	// but we can call it directly since it's a method on SchedulesDomain
 	// (unexported but accessible within the same package).
-	s.applyScheduleEnabledToModel("ASE1DEV01B28", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "ASE1DEV01B28", "1_1", true)
 	// Must not panic.
 }
 
@@ -9741,7 +9741,7 @@ func TestApplyScheduleEnabledToModel_DeviceNotInFirstCentral(t *testing.T) {
 	s := NewSchedulesDomain(reg, w)
 
 	// applyScheduleEnabledToModel → c1 doesn't have device → continue → c2 has it.
-	s.applyScheduleEnabledToModel("ASEDEV36", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "ASEDEV36", "1_1", true)
 }
 
 // ---------------------------------------------------------------------------

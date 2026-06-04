@@ -56,7 +56,8 @@ func NewServer(cfg ServerConfig) (*Server, error) {
 	if cfg.Addr == "" {
 		return nil, errors.New("binrpc: ServerConfig.Addr is required")
 	}
-	ln, err := net.Listen("tcp", cfg.Addr)
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(context.Background(), "tcp", cfg.Addr)
 	if err != nil {
 		return nil, fmt.Errorf("binrpc: listen %s: %w", cfg.Addr, err)
 	}

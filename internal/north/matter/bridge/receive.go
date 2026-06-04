@@ -197,6 +197,7 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	case im.InteractionModelProtocolID:
 		return b.handleIMOpcode(ctx, src, &hdr, proto, payload)
 	case mrp.SecureChannelProtocolID:
+		//nolint:contextcheck // secure-channel handshake (PASE/CASE) runs on the bridge handler context internally; the per-datagram dispatch + test harness keep a ctx-free signature
 		return b.dispatchSecureChannel(src, &hdr, proto, payload)
 	default:
 		err := fmt.Errorf("%w: 0x%04X", ErrUnknownProtocol, proto.ProtocolID)

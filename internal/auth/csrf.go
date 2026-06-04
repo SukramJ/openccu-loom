@@ -83,6 +83,7 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			//nolint:contextcheck // r carries a context derived from r.Context() via WithValue above; reading it back is not a new detached context
 			if id, ok := IdentityFrom(r.Context()); ok && csrfSchemeExempt(id.Scheme) {
 				next.ServeHTTP(w, r)
 				return

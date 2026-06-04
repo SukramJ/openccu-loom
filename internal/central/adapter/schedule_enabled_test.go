@@ -528,7 +528,7 @@ func TestApplyScheduleEnabledToModelDeviceFound(t *testing.T) {
 
 	s := NewSchedulesDomain(reg, nil)
 	// Call applyScheduleEnabledToModel — must not panic.
-	s.applyScheduleEnabledToModel("DEV-EN", "1_1", false)
+	s.applyScheduleEnabledToModel(context.Background(), "DEV-EN", "1_1", false)
 }
 
 func TestApplyScheduleEnabledToModelDeviceNotFound(t *testing.T) {
@@ -536,14 +536,14 @@ func TestApplyScheduleEnabledToModelDeviceNotFound(t *testing.T) {
 	reg := central.NewRegistry()
 	s := NewSchedulesDomain(reg, nil)
 	// No central in registry → no device → must not panic.
-	s.applyScheduleEnabledToModel("NOSUCHDEV", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "NOSUCHDEV", "1_1", true)
 }
 
 func TestApplyScheduleEnabledToModelNilRegistry(t *testing.T) {
 	t.Parallel()
 	s := NewSchedulesDomain(nil, nil)
 	// nil registry → early return, no panic.
-	s.applyScheduleEnabledToModel("DEV001", "1_1", true)
+	s.applyScheduleEnabledToModel(context.Background(), "DEV001", "1_1", true)
 }
 
 // ============================================================

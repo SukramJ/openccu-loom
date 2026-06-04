@@ -203,7 +203,7 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 					return nil
 				}
 			}
-			h.scheduleSelfReload(dev, channelAddress, parameter)
+			h.scheduleSelfReload(dev, channelAddress, parameter) //nolint:contextcheck // scheduleSelfReload has no ctx param; its goroutine uses h.ctx (handler lifetime) not the short-lived callback ctx
 		}
 	}
 	// Clear the last_value_send tracker entry on a successful CCU echo.
@@ -310,7 +310,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      parameter,
 	}
-	h.wg.Go(func() {
+	h.wg.Go(func() { //nolint:contextcheck // background reload uses h.ctx, not the caller's ctx which may be short-lived
 		ctx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
 		defer cancel()
 		if _, _, err := d.LoadValue(ctx, dpk, hmenum.CallSourceManualOrScheduled, true); err != nil {
@@ -392,7 +392,7 @@ func (h *CallbackHandlers) UpdateDevice(ctx context.Context, interfaceID, addres
 		return nil
 	}
 	fetcher := &callbackDescFetcher{ops: b}
-	h.wg.Go(func() {
+	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(bgCtx, fetcher, iface); err != nil {
@@ -425,7 +425,7 @@ func (h *CallbackHandlers) ReplaceDevice(ctx context.Context, interfaceID, oldAd
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmenum.Interface(interfaceID)
-	h.wg.Go(func() {
+	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		if err := h.unit.Devices.ReplaceDevice(bgCtx, fetcher, iface, oldAddress, newAddress); err != nil {
@@ -458,7 +458,7 @@ func (h *CallbackHandlers) ReaddedDevice(_ context.Context, interfaceID string, 
 	}
 	fetcher := &callbackDescFetcher{ops: b}
 	iface := hmenum.Interface(interfaceID)
-	h.wg.Go(func() {
+	h.wg.Go(func() { //nolint:contextcheck // background refresh uses h.ctx, not the caller's ctx which may be short-lived
 		bgCtx, cancel := context.WithTimeout(h.ctx, 30*time.Second)
 		defer cancel()
 		for _, addr := range addresses {
@@ -506,7 +506,7 @@ func (h *CallbackHandlers) ListDevices(_ context.Context, interfaceID string) (x
 //
 // Always returns nil — the CCU does not interpret a non-nil response and a
 // failed local handler must not break the callback channel.
-func (h *CallbackHandlers) Error(_ context.Context, interfaceID string, errorCode int, msg string) error {
+func (h *CallbackHandlers) Error(ctx context.Context, interfaceID string, errorCode int, msg string) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
 	h.logger.Warn("callback.error",
 		slog.String("interface", interfaceID),
@@ -529,7 +529,7 @@ func (h *CallbackHandlers) Error(_ context.Context, interfaceID string, errorCod
 		})
 	}
 	if rec := h.incidentRecorder(); rec != nil {
-		_ = rec.RecordIncident(context.Background(), reliability.IncidentRecord{
+		_ = rec.RecordIncident(ctx, reliability.IncidentRecord{
 			CentralName: centralName,
 			InterfaceID: interfaceID,
 			Type:        hmenum.IncidentTypeCallbackTimeout,

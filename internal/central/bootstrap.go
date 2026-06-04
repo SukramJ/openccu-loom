@@ -53,6 +53,6 @@ func (b *Bootstrap) Build(_ context.Context, cfg *config.Config) (*Registry, fun
 			return nil, func() {}, err
 		}
 	}
-	teardown := func() { reg.StopAll() }
+	teardown := func() { reg.StopAll() } //nolint:contextcheck // shutdown: StopAll/Stop have no ctx parameter; background cleanup is intentional
 	return reg, teardown, nil
 }

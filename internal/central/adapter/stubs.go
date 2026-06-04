@@ -118,7 +118,7 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 		// The backup deliberately outlives the request context: the handler
 		// returns 202 immediately, which cancels the request ctx, so runBackup
 		// must use its own background context with [backupRunTimeout].
-		go a.runBackup(u, id) //nolint:gosec // G118: detached on purpose; see comment above
+		go a.runBackup(u, id) //nolint:gosec,contextcheck // G118: detached on purpose; runBackup uses its own backupRunTimeout context so the 202 response cannot cancel the backup
 		return id, nil
 	}
 	return "", ErrUnimplemented

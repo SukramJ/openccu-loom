@@ -57,7 +57,7 @@ func daemonServeWithReload(ctx context.Context, cfg *config.Config, configPath s
 	w, _, err := config.NewWatcher(
 		configPath,
 		config.WithLogger(logger),
-		config.WithHandler(hotReloadHandler(logger, deps)),
+		config.WithHandler(hotReloadHandler(logger, deps)), //nolint:contextcheck // hotReloadHandler returns a callback with no ctx param; it creates its own timeout internally
 	)
 	if err != nil {
 		return err

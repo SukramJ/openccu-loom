@@ -118,7 +118,7 @@ func applyPragmas(ctx context.Context, db *sql.DB) error {
 		"PRAGMA temp_store = MEMORY",
 	}
 	// Journal mode: WAL for file-backed, MEMORY for in-memory.
-	if isMemoryDSN(db) {
+	if isMemoryDSN(ctx, db) {
 		pragmas = append(pragmas, "PRAGMA journal_mode = MEMORY")
 	} else {
 		pragmas = append(pragmas, "PRAGMA journal_mode = WAL")
@@ -134,9 +134,9 @@ func applyPragmas(ctx context.Context, db *sql.DB) error {
 // isMemoryDSN returns true when the underlying connection looks like an
 // in-memory database. SQLite doesn't expose the DSN directly; we test
 // by asking whether journal_mode=WAL is even a valid target.
-func isMemoryDSN(db *sql.DB) bool {
+func isMemoryDSN(ctx context.Context, db *sql.DB) bool {
 	var mode string
-	if err := db.QueryRow("PRAGMA journal_mode").Scan(&mode); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode").Scan(&mode); err != nil {
 		return false
 	}
 	// A brand-new in-memory database reports "memory" here; file

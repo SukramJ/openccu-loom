@@ -112,6 +112,7 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			c.writePump()
 			close(done)
 		}()
+		//nolint:contextcheck // the WebSocket connection outlives the HTTP upgrade request; readPump/reauth use the connection-scoped context, not r.Context()
 		c.readPump()
 		c.close()
 		<-done

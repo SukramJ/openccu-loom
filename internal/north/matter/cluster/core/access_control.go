@@ -300,7 +300,7 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 	if attrID == accessControlAttrExtension {
 		_, fabricIndex := im.FabricFilterFromContext(ctx)
 		if fabricIndex == 0 {
-			return a.MatterRead(attrID)
+			return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 		}
 		a.mu.RLock()
 		exts := a.extensions[fabricIndex]
@@ -313,13 +313,13 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 		return out, true
 	}
 	if attrID != accessControlAttrACL {
-		return a.MatterRead(attrID)
+		return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 	_, fabricIndex := im.FabricFilterFromContext(ctx)
 	if fabricIndex == 0 {
 		// PASE (pre-AddNOC) or no FabricFilter set: fall through to
 		// MatterRead which uses a.currentFabric (the last write target).
-		return a.MatterRead(attrID)
+		return a.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 	entries, err := a.store.ListACL(ctx, fabricIndex)
 	if err != nil {

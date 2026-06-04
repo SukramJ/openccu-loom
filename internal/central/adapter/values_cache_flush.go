@@ -175,6 +175,7 @@ func WireValuesCacheFlusher(
 				// Shutdown flush ignores the dirty flag — the daemon
 				// is going down, every central gets one final write
 				// so the next boot sees the very latest snapshot.
+				//nolint:contextcheck // shutdown path must not inherit the cancelled flusher ctx
 				flushOnce(context.Background(), reg, store, nil, logger, "shutdown")
 				return
 			case <-ticker.C:

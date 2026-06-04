@@ -142,8 +142,10 @@ func (s *XMLRPCServer) Serve(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
+		//nolint:contextcheck // shutdown path must not inherit the cancelled serve ctx
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), s.shutdown)
 		defer cancel()
+		//nolint:contextcheck // shutdown path: Shutdown runs on the fresh timeout ctx, not the cancelled serve ctx
 		_ = s.srv.Shutdown(shutdownCtx)
 		return <-errCh
 	case err := <-errCh:

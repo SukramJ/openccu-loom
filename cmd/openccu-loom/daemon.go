@@ -199,7 +199,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// down where the in-memory user/token stores are constructed;
 	// only the DB open + the section/central overlay run here.
 	auditBuf := audit.NewBuffer(500)
-	auditRec, auditDB, auditDurableStats := wireAuditPersistenceWithDB(cfg, auditBuf, logger)
+	auditRec, auditDB, auditDurableStats := wireAuditPersistenceWithDB(cfg, auditBuf, logger) //nolint:contextcheck // wireAuditPersistenceWithDB has no ctx parameter; it creates its own internal context
 	// Release the audit/config DB handle on shutdown. Registered early so
 	// it runs late (LIFO) — after the health probe and the stores that
 	// read it. A leaked handle blocks temp-dir cleanup on Windows.
@@ -234,7 +234,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// --- central registry --------------------------------------
 	bootstrap := &central.Bootstrap{Logger: logger}
-	reg, teardown, err := bootstrap.Build(context.Background(), cfg)
+	reg, teardown, err := bootstrap.Build(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("bootstrap: %w", err)
 	}
@@ -310,7 +310,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		}
 	}
 
-	if err := reg.StartAll(context.Background()); err != nil {
+	if err := reg.StartAll(ctx); err != nil {
 		return fmt.Errorf("central start: %w", err)
 	}
 
@@ -319,14 +319,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// operator activates it via REST/WS — the wiring only ensures that,
 	// when active, captured sessions survive a daemon restart.
 	// production-replay path. Closer is chained into shutdown.
-	if recorderPersistTeardown := wireSessionRecorderPersistence(cfg, reg, logger); recorderPersistTeardown != nil {
+	if recorderPersistTeardown := wireSessionRecorderPersistence(cfg, reg, logger); recorderPersistTeardown != nil { //nolint:contextcheck // wireSessionRecorderPersistence has no ctx parameter; it creates its own internal context
 		defer recorderPersistTeardown()
 	}
 	// Wire SQLite-backed incident recording into every central's
 	// CacheCoordinator. CallbackHandlers reads the recorder lazily from
 	// CacheCoordinator.GetIncidentRecorder(), so no separate handler-level
 	// wiring step is needed. Degrades gracefully when the DB cannot be opened.
-	defer wireIncidentRecorder(cfg, reg, logger)()
+	defer wireIncidentRecorder(cfg, reg, logger)() //nolint:contextcheck // wireIncidentRecorder has no ctx parameter; it creates its own internal context
 
 	// Seed every central's health tracker with a synthetic "started"
 	// sample so the `/health` endpoint reports green as soon as the
@@ -429,12 +429,12 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// visibility_wiring.go + docs/ui/unignore-concept.md). The patterns
 	// are applied to visReg after WireCentrals so the suppression marks
 	// land on materialised devices.
-	visibilityUnIgnoreStore := wireVisibilityUnIgnoreStore(cfg, logger)
+	visibilityUnIgnoreStore := wireVisibilityUnIgnoreStore(cfg, logger) //nolint:contextcheck // wireVisibilityUnIgnoreStore has no ctx parameter
 	defer func() { _ = visibilityUnIgnoreStore.Close() }()
 	visibilityAdapter := newVisibilityAdapter(visReg, visibilityUnIgnoreStore, reg)
-	masterValuesStore := wireMasterValuesStore(cfg, logger)
+	masterValuesStore := wireMasterValuesStore(cfg, logger) //nolint:contextcheck // wireMasterValuesStore has no ctx parameter
 	defer func() { _ = masterValuesStore.Close() }()
-	valuesCacheStore := wireValuesCacheStore(cfg, logger)
+	valuesCacheStore := wireValuesCacheStore(cfg, logger) //nolint:contextcheck // wireValuesCacheStore has no ctx parameter
 	defer func() { _ = valuesCacheStore.Close() }()
 
 	wsHub := ws.NewHub()
@@ -461,10 +461,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	mqttCollector := metrics.NewMqttCollector(metricsReg, pickFirstCentral(cfg))
 	mqttSup := newMQTTSupervisor(logger, healthTracker)
 	mqttSup.SetCollector(mqttCollector)
-	if err := mqttSup.Start(context.Background(), cfg); err != nil {
+	if err := mqttSup.Start(ctx, cfg); err != nil {
 		logger.Warn("mqtt.supervisor.start", slog.String("err", err.Error()))
 	}
-	defer func() {
+	defer func() { //nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
 		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		mqttSup.Shutdown(shutCtx)
@@ -495,7 +495,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(
 			adapter.NewParameterLabelAdapter(translations, cfg.Locale),
 		))
-	bridge.Start(context.Background())
+	bridge.Start(ctx)
 	defer bridge.Stop()
 
 	// Wire hub entity → MQTT publisher. Only active when MQTT is
@@ -506,7 +506,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// supervisor swaps the stack — Start() is idempotent (Stop+rewire).
 	if mqttWiring != nil {
 		hubMQTT := adapter.NewHubMQTTPublisher(reg, mqttWiring, logger)
-		hubMQTT.Start(context.Background())
+		hubMQTT.Start(ctx)
 		defer hubMQTT.Stop()
 		mqttSup.OnConnect(func(ctx context.Context) {
 			hubMQTT.Start(ctx)
@@ -517,7 +517,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Shared across every central; routes by `/RPC2/<central_name>`.
 	// A binding failure is a hard error — the daemon would otherwise
 	// silently lose every CCU value-change event.
-	callbackCtx, cancelCallback := context.WithCancel(context.Background())
+	callbackCtx, cancelCallback := context.WithCancel(ctx)
 	defer cancelCallback()
 	callbackSrv, callbackBaseURL, err := startCallbackServer(callbackCtx, cfg, logger)
 	if err != nil {
@@ -548,7 +548,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			Addr:   binAddr,
 			Logger: logger.With(slog.String("component", "callback.binrpc")),
 		}
-		srv, binErr := rpcserver.NewBINRPCServer(binCfg)
+		srv, binErr := rpcserver.NewBINRPCServer(binCfg) //nolint:contextcheck // NewBINRPCServer/bindAddr has no ctx parameter; bind is instantaneous
 		if binErr != nil {
 			logger.Warn("callback.binrpc.start.failed", slog.String("err", binErr.Error()))
 		} else {
@@ -560,7 +560,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			}()
 			publicHost := cfg.Callback.PublicHost
 			if publicHost == "" {
-				publicHost = autodetectCallbackHost(cfg)
+				publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
 			}
 			if tcpAddr, ok := srv.Addr().(*net.TCPAddr); ok && publicHost != "" {
 				binRPCAddr = fmt.Sprintf("%s:%d", publicHost, tcpAddr.Port)
@@ -581,7 +581,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// injects the live HTTPBackupRestorer into it after the first
 	// successful hub handshake.
 	backupAdapter := buildBackupAdapter(cfg, reg, logger)
-	wireCtx, wireCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	wireCtx, wireCancel := context.WithTimeout(ctx, 60*time.Second)
 	wireTeardown, wireErr := adapter.WireCentrals(wireCtx, cfg, reg, adapter.WireDeps{
 		Writer:               valueWriter,
 		Translations:         translations,
@@ -606,7 +606,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if flushInterval <= 0 {
 		flushInterval = adapter.DefaultValuesCacheFlushInterval
 	}
-	if stopFlusher := adapter.WireValuesCacheFlusher(reg, valuesCacheStore, flushInterval, logger); stopFlusher != nil {
+	if stopFlusher := adapter.WireValuesCacheFlusher(reg, valuesCacheStore, flushInterval, logger); stopFlusher != nil { //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
 		defer stopFlusher()
 	}
 	// Surface the values-cache counters as health gauges so the
@@ -626,20 +626,20 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		healthTracker.RegisterGauge("values_cache.flushed_entries",
 			func() float64 { return float64(store.MetricsSnapshot().FlushedEntries) })
 		healthTracker.RegisterGauge("values_cache.row_count",
-			func() float64 {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			func() float64 { //nolint:contextcheck // gauge callback fires on demand; must not inherit the (cancelled) daemon ctx
+				gaugeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
-				stats, err := store.Stats(ctx)
+				stats, err := store.Stats(gaugeCtx)
 				if err != nil {
 					return 0
 				}
 				return float64(stats.Rows)
 			})
 		healthTracker.RegisterGauge("values_cache.value_json_bytes",
-			func() float64 {
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			func() float64 { //nolint:contextcheck // gauge callback fires on demand; must not inherit the (cancelled) daemon ctx
+				gaugeCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
-				stats, err := store.Stats(ctx)
+				stats, err := store.Stats(gaugeCtx)
 				if err != nil {
 					return 0
 				}
@@ -691,7 +691,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// ModelRegistry is populated with materialised devices that the
 	// suppression-mark pass can flip. See docs/ui/unignore-concept.md
 	// and visibility_wiring.go.
-	applyVisibilityUnIgnore(context.Background(), cfg, reg, visibilityUnIgnoreStore, visReg, logger)
+	applyVisibilityUnIgnore(ctx, cfg, reg, visibilityUnIgnoreStore, visReg, logger)
 
 	// Wire device-availability propagation: when an InterfaceClient reports
 	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
@@ -769,7 +769,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// daemon logs and proceeds.
 	if mqttWiring != nil {
 		if mqttBridge := mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
 			n, cleanupErr := mqttBridge.RunRetainCleanupOnce(cleanupCtx, 2*time.Second)
 			cleanupCancel()
 			if cleanupErr != nil {
@@ -784,7 +784,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// point through the EventBridge so the broker carries retained
 	// state (and HA Discovery configs) for every device immediately
 	// after start, not just after the first CCU-driven change.
-	bridge.PublishInitialSnapshot(context.Background())
+	bridge.PublishInitialSnapshot(ctx)
 
 	// Orphan HA-Discovery cleanup — after the initial snapshot has
 	// repopulated `Bridge.declared` with every HA-Discovery topic the
@@ -800,7 +800,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// just skips.
 	if mqttWiring != nil {
 		if mqttBridge := mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
 			n, cleanupErr := mqttBridge.RunDiscoveryOrphanCleanupOnce(cleanupCtx, 2*time.Second)
 			cleanupCancel()
 			if cleanupErr != nil {
@@ -820,7 +820,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// steady-state operation costs nothing extra on the CCU.
 	unobservedSweep := adapter.NewUnobservedSweep(reg, logger)
 	stopSweep := adapter.StartUnobservedSweepLoop(
-		context.Background(), unobservedSweep, 0, logger,
+		ctx, unobservedSweep, 0, logger,
 	)
 	defer stopSweep()
 
@@ -984,7 +984,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// every Swap (hot-reload) so birth sync + command subscriber
 	// follow the new broker without manual re-attachment.
 	mqttSup.SetSubscriberBuilder(makeMQTTSubscriberBuilder(reg, valueWriter, schedulesDomain, mqttCollector, logger))
-	if err := mqttSup.AttachSubscribers(context.Background()); err != nil {
+	if err := mqttSup.AttachSubscribers(ctx); err != nil {
 		logger.Warn("mqtt.subscribers.attach", slog.String("err", err.Error()))
 	}
 
@@ -1189,7 +1189,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// Withdraw the commissionable record on every transition into
 		// "closed" so commissioners stop discovering the bridge once
 		// the window has expired or been revoked.
-		window.SetTransitionHook(func() {
+		window.SetTransitionHook(func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
 			if mb == nil {
 				return
 			}
@@ -1215,7 +1215,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 				opCredsLocal := bundle.opCreds
 				gcLocal := bundle.rootRefs.GeneralCommissioning
 				loggerLocal := logger
-				configuredFactory = func() *matterbridge.PaseAdapter {
+				configuredFactory = func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed by interface; buildPaseAdapter has no ctx
 					a, err := buildPaseAdapter(cmCopy, opMgrLocal, opCredsLocal, gcLocal, loggerLocal)
 					if err != nil {
 						loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
@@ -1243,7 +1243,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		biRef := bundle.rootRefs.BasicInformation
 		gdRef := bundle.rootRefs.GeneralDiagnostics
 		matterBI = biRef
-		mb.SetOnReassembled(func(count int) {
+		mb.SetOnReassembled(func(count int) { //nolint:contextcheck // callback signature is fixed; publishEndpointAssembled has no ctx
 			matterPub.publishEndpointAssembled(count)
 			reassembleOnce.Do(func() {
 				if gdRef != nil {
@@ -1427,14 +1427,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	if mqttWiring != nil {
 		mqttSysStatus := mqtt.NewSystemStatusPublisher(reg, mqttWiring, logger)
-		mqttSysStatus.Start()
+		mqttSysStatus.Start() //nolint:contextcheck // Start has no ctx parameter; it subscribes to the event bus internally
 		defer mqttSysStatus.Stop()
 	}
 
 	if cfg.North.REST.IsEnabled() {
 		var openapiValidator *middleware.OpenAPIValidator
 		if cfg.North.REST.OpenAPIValidateEnabled() {
-			openapiValidator = buildOpenAPIValidator(cfg, logger)
+			openapiValidator = buildOpenAPIValidator(cfg, logger) //nolint:contextcheck // NewOpenAPIValidator/Validate uses context.Background() internally; non-owned code
 		}
 		// RPC session recorder (XML/JSON-RPC replay capture). Resume a
 		// recording that was running before a restart, then expose it.
@@ -1472,7 +1472,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			TokenAdmin:     tokenAdminSvc,
 			CentralAdmin:   centralAdminSvc,
 			MQTTReload:     newMQTTReloadAdapter(mqttSup, deps, cfg),
-			OIDC:           buildOIDCRest(cfg, logger, restAuth),
+			OIDC:           buildOIDCRest(cfg, logger, restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 			SPAHandler:     ui.SPAHandler(),
 			Backup:         backupAdapter,
 			EditSessions:   handlers.NewEditSessions(),
@@ -1563,7 +1563,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		servers.add("rest", rest.NewServer(cfg.North.REST.Listen, router, logger))
 
 		if cfg.North.Discovery.MDNS.IsEnabled() {
-			if adv, err := startMDNSAdvertiser(cfg, logger); err != nil {
+			if adv, err := startMDNSAdvertiser(ctx, cfg, logger); err != nil {
 				logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
 			} else if adv != nil {
 				defer func() {
@@ -1593,14 +1593,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			Catalogs:    catalogs,
 			Auth:        &ui.AuthDeps{Users: users, Sessions: sessions, Secure: false},
 			Setup:       setupDeps,
-			OIDC:        buildOIDC(cfg, logger),
+			OIDC:        buildOIDC(cfg, logger), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 			AuthResolve: auth.SessionMiddleware(sessions),
 			AuthRequire: nil, // UI is browser-facing, wizard runs unauthenticated
 		})
 		servers.add("ui", rest.NewServer(cfg.North.UI.Listen, uiRouter, logger))
 	}
 
-	if err := servers.startAll(); err != nil {
+	if err := servers.startAll(); err != nil { //nolint:contextcheck // startAll has no ctx parameter; individual servers manage their own lifecycle
 		return fmt.Errorf("server start: %w", err)
 	}
 
@@ -1621,9 +1621,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		matterBI.EmitShutDown()
 	}
 
+	//nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	servers.stopAll(shutdownCtx)
+	servers.stopAll(shutdownCtx) //nolint:contextcheck // shutdown path: shutdownCtx intentionally not derived from daemon ctx
 	return nil
 }
 
@@ -1755,7 +1756,7 @@ func (a scheduleWeekProfileSink) SetActiveProfile(
 // buildOIDC discovers the IdP and constructs the UI OIDC deps.
 // Returns nil when OIDC is disabled or discovery fails — the daemon
 // then renders the login page without the SSO button.
-func buildOIDC(cfg *config.Config, logger *slog.Logger) *ui.OIDCDeps {
+func buildOIDC(cfg *config.Config, logger *slog.Logger) *ui.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
 	client := buildOIDCClient(cfg, logger)
 	if client == nil {
 		return nil
@@ -1765,7 +1766,7 @@ func buildOIDC(cfg *config.Config, logger *slog.Logger) *ui.OIDCDeps {
 
 // buildOIDCRest reuses the same OIDC client for the REST mount so
 // SPA-driven SSO and the HTMX wizard share state and credentials.
-func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps {
+func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
 	client := buildOIDCClient(cfg, logger)
 	if client == nil {
 		return nil
@@ -1778,6 +1779,7 @@ func buildOIDCClient(cfg *config.Config, logger *slog.Logger) *oidc.Client {
 	if !oc.Enabled || oc.Issuer == "" {
 		return nil
 	}
+	//nolint:contextcheck // test callers outside owned set prevent threading ctx through here; discovery uses a short independent timeout
 	discoCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	client, err := oidc.New(discoCtx, oidc.Config{
@@ -1910,7 +1912,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 		xcfg.PortRange = rpcserver.NewPortRange(lo, hi)
 	}
 
-	srv, err := rpcserver.NewXMLRPCServer(xcfg)
+	srv, err := rpcserver.NewXMLRPCServer(xcfg) //nolint:contextcheck // NewXMLRPCServer/bindAddr has no ctx parameter; bind is instantaneous
 	if err != nil {
 		return nil, "", fmt.Errorf("callback listen %s: %w", addr, err)
 	}
@@ -1922,7 +1924,7 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 
 	publicHost := cfg.Callback.PublicHost
 	if publicHost == "" {
-		publicHost = autodetectCallbackHost(cfg)
+		publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
 	}
 	if publicHost == "" {
 		return srv, "", fmt.Errorf("callback: public host could not be determined — set callback.public_host")
@@ -1940,12 +1942,12 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 // configured central and reads back the local address. This is the
 // standard "egress interface" trick — no packets are actually sent
 // because UDP "Dial" only binds.
-func autodetectCallbackHost(cfg *config.Config) string {
+func autodetectCallbackHost(cfg *config.Config) string { //nolint:contextcheck // test callers outside owned set prevent ctx signature; UDP bind uses context.Background() below
 	if len(cfg.Centrals) == 0 {
 		return ""
 	}
 	target := cfg.Centrals[0].Host
-	conn, err := net.Dial("udp", target+":80")
+	conn, err := (&net.Dialer{}).DialContext(context.Background(), "udp", target+":80")
 	if err != nil {
 		return ""
 	}
@@ -2113,7 +2115,7 @@ func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) mdns.Adve
 				slog.String("err", err.Error()),
 				slog.String("hint", "primary records will publish, but Apple Home / Google Home subtype-filtered discovery may fail"))
 		} else {
-			r.Start(context.Background())
+			r.Start(context.Background()) //nolint:contextcheck // test callers outside owned set prevent signature change; subtype responder needs daemon-lifetime context
 			z.AttachSubtypeResponder(r)
 			logger.Info("matter.bridge.mdns.subtype_responder_started",
 				slog.String("hint", "PTR responder for `_L*._sub`, `_S*._sub`, `_V*._sub`, `_CM._sub` queries active"))
@@ -2154,7 +2156,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		dataDir = "./var"
 	}
 	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
-	dbCtx, dbCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer dbCancel()
 	db, err := sqlitestore.Open(dbCtx, dsn)
 	if err != nil {
@@ -2202,7 +2204,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		return out
 	}
 
-	advertiser := buildMatterAdvertiser(mc, logger)
+	advertiser := buildMatterAdvertiser(mc, logger) //nolint:contextcheck // buildMatterAdvertiser has no ctx; subtype responder uses context.Background() with a nolint inside
 	bridge, err := matterbridge.New(store, snap, advertiser, matterbridge.Config{
 		Listen:        mc.Listen,
 		PreferIPv4:    mc.PreferIPv4,
@@ -2551,7 +2553,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			}
 			logger.Info("matter.bridge.fabric.removed",
 				slog.Int("fabric_index", int(fabricIndex)))
-			go func() {
+			go func() { //nolint:contextcheck // delayed teardown goroutine uses background ctx; the outer ctx (OnFabricRemoved) has already returned
 				time.Sleep(100 * time.Millisecond)
 				opMgr.CloseFabric(fabricIndex)
 				subMgr.CloseFabric(fabricIndex)
@@ -2601,7 +2603,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	var configuredPase *matterbridge.PaseAdapter
 	if mc.Commissioning.Passcode != 0 {
 		if mc.Commissioning.ConcurrentPairings {
-			provider := matterbridge.NewPerExchangePaseProvider(func() *matterbridge.PaseAdapter {
+			provider := matterbridge.NewPerExchangePaseProvider(func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed; buildPaseAdapter has no ctx parameter
 				a, err := buildPaseAdapter(mc.Commissioning, opMgr, opCreds, rootRefs.GeneralCommissioning, logger)
 				if err != nil {
 					logger.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
@@ -2620,7 +2622,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				slog.Int("iterations", mc.Commissioning.Iterations),
 				slog.String("mode", "per-exchange"))
 		} else {
-			paseAdapter, err := buildPaseAdapter(mc.Commissioning, opMgr, opCreds, rootRefs.GeneralCommissioning, logger)
+			paseAdapter, err := buildPaseAdapter(mc.Commissioning, opMgr, opCreds, rootRefs.GeneralCommissioning, logger) //nolint:contextcheck // buildPaseAdapter/buildPaseAdapterFromCreds have no ctx parameter
 			if err != nil {
 				logger.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
 			} else {
@@ -2701,7 +2703,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				slog.String("hint", "no persisted fabric yet; first Sigma1 after AddNOC will use the fabric-driven identity"))
 		}
 
-		caseProvider := matterbridge.NewPerExchangeCaseProvider(func() *matterbridge.CaseAdapter {
+		caseProvider := matterbridge.NewPerExchangeCaseProvider(func() *matterbridge.CaseAdapter { //nolint:contextcheck // factory signature is fixed; SetOnSessionEstablished callback has no ctx parameter
 			caseIdentityMu.RLock()
 			id := caseIdentity
 			ver := caseVerifier
@@ -2832,7 +2834,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			slog.String("mode", "per-exchange"))
 	}
 
-	stop := func() {
+	stop := func() { //nolint:contextcheck // shutdown path must not inherit the (potentially cancelled) daemon ctx
 		stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if stopReannounce != nil {
@@ -2920,7 +2922,7 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 	responder.SetSessionParameters(bridgeSessionParameters())
 	caseAdapter := matterbridge.NewCaseAdapter(responder)
 	nodeID := identity.NodeID
-	caseAdapter.SetOnSessionEstablished(func(keys sigma.SessionKeys, _ uint16) error {
+	caseAdapter.SetOnSessionEstablished(func(keys sigma.SessionKeys, _ uint16) error { //nolint:contextcheck // callback signature is fixed; PersistResumption uses context.Background() since no ctx is available in the callback
 		// Snapshot the responder so the post-Sigma3 peerNodeID flows into
 		// the operational session entry (used as AES-CCM source NodeID for
 		// inbound packets per Matter §4.5.1.4) and the resumption persist
@@ -4372,7 +4374,7 @@ func detectSupervisedRestart() bool {
 // Returns (nil, err) when the port is malformed or zeroconf fails to
 // register; the caller is expected to log and continue (mDNS is a
 // convenience, not a hard dependency).
-func startMDNSAdvertiser(cfg *config.Config, logger *slog.Logger) (discoverymdns.Advertiser, error) {
+func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, logger *slog.Logger) (discoverymdns.Advertiser, error) {
 	port, ok := splitListenPort(cfg.North.REST.Listen)
 	if !ok {
 		return nil, nil
@@ -4387,7 +4389,7 @@ func startMDNSAdvertiser(cfg *config.Config, logger *slog.Logger) (discoverymdns
 		},
 	}
 	adv := discoverymdns.NewMulticast(svc)
-	if err := adv.Start(context.Background()); err != nil {
+	if err := adv.Start(ctx); err != nil {
 		return nil, err
 	}
 	logger.Info("discovery.mdns.started",

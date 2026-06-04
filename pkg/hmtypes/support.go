@@ -7,6 +7,7 @@
 package hmtypes
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -323,7 +324,8 @@ func ElementMatchesKey(searchElements []string, compareWith string, ignoreCase, 
 func FindFreePort(rangeLo, rangeHi int) (int, error) {
 	if rangeLo == 0 && rangeHi == 0 {
 		// OS-assigned ephemeral port.
-		l, err := net.Listen("tcp", "127.0.0.1:0")
+		lc := net.ListenConfig{}
+		l, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			return 0, fmt.Errorf("hmtypes: FindFreePort: %w", err)
 		}
@@ -339,7 +341,8 @@ func FindFreePort(rangeLo, rangeHi int) (int, error) {
 	}
 	for port := rangeLo; port <= rangeHi; port++ {
 		addr := fmt.Sprintf("127.0.0.1:%d", port)
-		l, err := net.Listen("tcp", addr)
+		lc2 := net.ListenConfig{}
+		l, err := lc2.Listen(context.Background(), "tcp", addr)
 		if err != nil {
 			continue
 		}

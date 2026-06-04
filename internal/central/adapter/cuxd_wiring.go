@@ -170,7 +170,7 @@ func wireCUxDInterface(
 		_ = capturedInitID
 	}
 
-	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger)
+	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
 	if poller != nil {
 		pipeline.WithMasterRefreshHook(poller.SchedulePoll)
 	} else {

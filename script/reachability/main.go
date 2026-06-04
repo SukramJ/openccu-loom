@@ -23,6 +23,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -908,7 +909,7 @@ func findWhitelistComment(f *ast.File, fset *token.FileSet, decl ast.Decl) (stri
 
 // gitHead liest die aktuelle Git-Revision.
 func gitHead(dir string) string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+	cmd := exec.CommandContext(context.Background(), "git", "rev-parse", "--short", "HEAD")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {

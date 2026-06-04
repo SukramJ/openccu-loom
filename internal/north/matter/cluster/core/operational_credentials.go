@@ -695,7 +695,7 @@ func (o *OperationalCredentials) MatterReadFiltered(ctx context.Context, attrID 
 	// When no filter is active (PASE / fabricIndex==0 / FabricFiltered=false),
 	// fall through so the unfiltered MatterRead path serves the attribute.
 	if !filtered || fabricIndex == 0 {
-		return o.MatterRead(attrID)
+		return o.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 
 	switch attrID {
@@ -743,7 +743,7 @@ func (o *OperationalCredentials) MatterReadFiltered(ctx context.Context, attrID 
 	default:
 		// All other attributes (scalars, TrustedRootCertificates, …) are
 		// not fabric-scoped per Matter §11.18; forward to MatterRead.
-		return o.MatterRead(attrID)
+		return o.MatterRead(attrID) //nolint:contextcheck // MatterRead is the unfiltered cluster-interface read; it takes no ctx by the Matter cluster-server contract
 	}
 }
 

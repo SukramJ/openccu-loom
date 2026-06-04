@@ -437,6 +437,8 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 //
 // Calling Start a second time on the same instance returns
 // [ErrAlreadyStarted].
+//
+//nolint:contextcheck // serve/ack-pump goroutines run in a fresh context torn down explicitly via the stored serveCancel (Stop); rooting them in the caller ctx would race listener teardown
 func (b *Bridge) Start(ctx context.Context) error {
 	// Claim the started flag atomically so two concurrent Starts
 	// can't both pass the check + race ahead to bind the same UDP
@@ -1019,6 +1021,7 @@ func (b *Bridge) Stop(ctx context.Context) error {
 		for i := range active {
 			svc := &active[i]
 			withdrawCtx, withdrawCancel := context.WithTimeout(context.Background(), b.cfg.AdvertiseTimeout)
+			//nolint:contextcheck // shutdown path: mDNS withdraw must run on a fresh timeout ctx, not the cancelled serve ctx
 			if err := b.advertiser.Withdraw(withdrawCtx, svc.InstanceName, svc.ServiceType); err != nil {
 				b.logger.Debug("matter.mdns.withdraw",
 					slog.String("instance", svc.InstanceName),
