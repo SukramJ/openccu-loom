@@ -1,0 +1,31 @@
+# EditorConfig — https://editorconfig.org
+# Complements gofumpt (Go) and Prettier-less Svelte/TS formatting by
+# enforcing baseline whitespace/encoding across all editors.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go is tab-indented (gofumpt); Makefiles require tabs.
+[*.go]
+indent_style = tab
+
+[Makefile]
+indent_style = tab
+
+# Web/config sources are 2-space indented.
+[*.{js,mjs,cjs,ts,svelte,json,jsonc,css,html,yml,yaml,toml}]
+indent_style = space
+indent_size = 2
+
+# Markdown: keep trailing whitespace (hard line breaks are significant).
+[*.md]
+trim_trailing_whitespace = false
+
+# Generated wire fixtures / golden data are left untouched.
+[tests/integration/testdata/**]
+trim_trailing_whitespace = false
+insert_final_newline = false

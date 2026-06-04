@@ -1,0 +1,40 @@
+version: 2
+updates:
+  # Go modules (root)
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # Bundle minor/patch bumps into one PR; majors stay individual so
+      # they get a focused review (see the SPA TypeScript 6 / bits-ui 2
+      # migration as an example of why).
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # SPA npm dependencies
+  - package-ecosystem: npm
+    directory: "/assets/ui"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions (pinned by commit SHA; Dependabot bumps the SHA and
+  # keeps the `# vX` version comment in sync).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns: ["*"]
