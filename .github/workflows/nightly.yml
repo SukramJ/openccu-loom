@@ -23,7 +23,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - name: extended fuzz
-        run: make fuzz
+        # Deeper than the PR smoke (100000x): a larger iteration budget for
+        # genuine overnight exploration. Still iteration-based, so it never
+        # flakes on a slow runner — it just runs longer.
+        run: make fuzz FUZZTIME=2000000x FUZZ_TIMEOUT=600s
 
   bench:
     name: bench

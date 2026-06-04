@@ -301,12 +301,21 @@ mutation: ## run mutation testing (gremlins) on core packages — slow; report-o
 		$(GREMLINS) unleash "$$p" || true; \
 	done
 
+# Fuzz smoke budget. Iteration-based (`<n>x`) on purpose: a wall-clock
+# budget (`5s`) makes go's fuzzing coordinator cancel mid-execution on a
+# CPU-starved CI runner and report a spurious "context deadline exceeded"
+# failure. A fixed execution count is immune to runner load — it just takes
+# a little longer — while still replaying the full seed corpus and exploring
+# new inputs. Override for a deeper nightly run, e.g. FUZZTIME=2000000x.
+FUZZTIME     ?= 100000x
+FUZZ_TIMEOUT ?= 120s
+
 .PHONY: fuzz
-fuzz: ## run each fuzz target for 5s as a smoke test
+fuzz: ## run each fuzz target for $(FUZZTIME) executions as a smoke test
 	@for pkg in $$($(GO) list ./internal/client/transport/xmlrpc/... ./internal/client/transport/binrpc/... ./internal/client/transport/jsonrpc/... ./internal/north/matter/im/... ./internal/north/matter/tlv/...); do \
 		for fn in $$($(GO) test -list 'Fuzz.*' $$pkg 2>/dev/null | grep '^Fuzz'); do \
-			echo "-> fuzz $$pkg :: $$fn (5s)"; \
-			$(GO) test $$pkg -fuzz=^$${fn}$$ -fuzztime=5s -run=^$$ || exit 1; \
+			echo "-> fuzz $$pkg :: $$fn ($(FUZZTIME))"; \
+			$(GO) test $$pkg -fuzz=^$${fn}$$ -fuzztime=$(FUZZTIME) -timeout=$(FUZZ_TIMEOUT) -run=^$$ || exit 1; \
 		done; \
 	done
 
