@@ -40,21 +40,23 @@ CCU is the primary fleet, Homegear is the secondary backend.
   by design per `.github/workflows/integration.yml`). CI dumps the Go
   side via `make snapshot-go`.
 
-### Phase 1 — Cheap parity closes (model done, wire only)
+### Phase 1 — Cheap parity closes (model done, wire only) — ALREADY DONE
 
-Independent and parallelisable; both close real aiohomematic↔Loom gaps
-where the model layer is complete and only the north-bound publisher
-hook is missing. Follow the established publisher pattern
-([ADR 0010](./adr/0010-discovery-payload-from-model.md),
-[ADR 0011](./adr/0011-mqtt-topic-and-payload-architecture.md)).
+On inspection both items were already implemented and tested; the
+`by_design.md` entries that listed them as deferred (A3-G5, A3-G9)
+were stale and have been corrected to RESOLVED.
 
-- **MetricHubSensor → MQTT publishing.** Model present
-  (`internal/model/hub/metrics.go`); REST exposes it, MQTT does not.
-  *Effort: S. Risk: low.*
-- **Inbox → MQTT publisher hook (`HUB_REFRESHED`).** Model + REST
-  present (`internal/model/hub/payload.go`); the MQTT publisher hook is
-  missing. *Effort: S. Risk: low.*
-  **Gate:** MQTT topic-contract test + golden-replay of the hub event.
+- **MetricHubSensor → MQTT publishing.** Wired in `wireOneCentral`
+  (`internal/central/adapter/hub_mqtt_publisher.go`, `--- Metrics ---`
+  block): System Health discovery + publish + `Metrics.OnUpdate`;
+  Connection Latency via the per-interface
+  `ConnectivityChangedEvent.LatencyMs` path. Tested by
+  `hub_metric_sensors_test.go`. *Remaining: `MetricLastEventAgeSecs`
+  has no production observer — a deferred scheduler job, not an MQTT
+  gap; see `by_design.md`.*
+- **Inbox → MQTT publishing.** Wired in the same file (`--- Inbox ---`
+  block): `BuildInboxDiscovery` + initial publish + `Inbox.OnUpdate` →
+  `PublishInbox`. Tested by `hub_mqtt_publisher_inbox_test.go`.
 
 ### Phase 2 — Resolver / correctness hardening
 
