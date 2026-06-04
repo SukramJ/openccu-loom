@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/observability"
+	"github.com/SukramJ/openccu-loom/internal/syncx"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -144,7 +145,7 @@ type ConnectionRecoveryCoordinator struct {
 	maxDelay          time.Duration
 	heartbeatInterval time.Duration
 
-	mu       sync.Mutex
+	mu       syncx.Mutex
 	active   map[string]chan struct{}
 	attempts map[string]int
 	state    map[string]*InterfaceRecoveryState
@@ -170,9 +171,13 @@ type ConnectionRecoveryCoordinator struct {
 	cbResetter CircuitBreakerResetter
 
 	// subMu guards unsubscribers and stopped.
-	subMu         sync.Mutex
+	subMu         syncx.Mutex
 	unsubscribers []func()
 	stopped       bool
+	// stopCh is closed by Stop to immediately unblock heartbeatLoop,
+	// rather than letting it linger until the next ticker tick. Guarded
+	// by subMu alongside stopped.
+	stopCh chan struct{}
 
 	// incidentLog is the per-coordinator incident ring buffer.
 	// Guarded by mu.
@@ -257,6 +262,7 @@ func NewConnectionRecoveryCoordinatorWithLimit(centralName string, bus *events.B
 		attempts:          make(map[string]int),
 		state:             make(map[string]*InterfaceRecoveryState),
 		history:           make(map[string][]HistoryEntry),
+		stopCh:            make(chan struct{}),
 	}
 }
 
@@ -536,6 +542,9 @@ func (c *ConnectionRecoveryCoordinator) Stop() {
 		return
 	}
 	c.stopped = true
+	if c.stopCh != nil {
+		close(c.stopCh)
+	}
 	for _, unsub := range c.unsubscribers {
 		unsub()
 	}
@@ -554,17 +563,20 @@ func (c *ConnectionRecoveryCoordinator) heartbeatLoop() {
 	interval := c.heartbeatInterval
 	c.mu.Unlock()
 
+	c.subMu.Lock()
+	stopCh := c.stopCh
+	c.subMu.Unlock()
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.subMu.Lock()
-		stopped := c.stopped
-		c.subMu.Unlock()
-		if stopped {
+	for {
+		select {
+		case <-stopCh:
 			return
+		case <-ticker.C:
+			c.fireHeartbeatIfExhausted()
 		}
-		c.fireHeartbeatIfExhausted()
 	}
 }
 

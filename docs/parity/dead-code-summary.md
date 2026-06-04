@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: ddabb47
-HEAD: ddabb47
+Generated: 83e3fb8
+HEAD: 83e3fb8
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 22185 |
+| Total Exported | 22191 |
 | Reachable | 3690 |
-| Whitelisted | 15813 |
-| **Unreachable** | **2682** |
+| Whitelisted | 15817 |
+| **Unreachable** | **2684** |
 
 ## Top-20 Packages by Dead Code
 
@@ -191,3 +191,4 @@ HEAD: ddabb47
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/scheduler | 0 | 4 | 0 |
 | internal/store/linkprofile | 0 | 1 | 1 |
+| internal/syncx | 0 | 2 | 0 |

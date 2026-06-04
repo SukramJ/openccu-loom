@@ -397,6 +397,10 @@ deadcode-xtools: ## cross-check dead code via golang.org/x/tools/cmd/deadcode (a
 openapi-lint: ## lint assets/openapi.yaml with vacuum (advisory; ruleset in .vacuum.yaml)
 	@$(GO) run github.com/daveshanley/vacuum@latest lint -r .vacuum.yaml assets/openapi.yaml || true
 
+.PHONY: deadlock-test
+deadlock-test: ## run tests with go-deadlock lock-order detection (syncx-migrated packages)
+	CGO_ENABLED=1 $(GO) test -tags deadlock -race -count=1 ./internal/central/coordinators/...
+
 .PHONY: fmt
 fmt: ## run gofumpt + goimports
 	$(GOFUMPT) -l -w .

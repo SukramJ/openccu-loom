@@ -1,6 +1,6 @@
 {
-  "generated": "ddabb47",
-  "head": "ddabb47",
+  "generated": "83e3fb8",
+  "head": "83e3fb8",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 22185,
+    "total_exported": 22191,
     "reachable": 3458,
-    "whitelisted": 15813,
-    "unreachable": 2914
+    "whitelisted": 15817,
+    "unreachable": 2916
   },
   "by_package": [
     {
@@ -601,6 +601,12 @@
       "unreachable_funcs": 0,
       "unreachable_types": 1,
       "unreachable_other": 1
+    },
+    {
+      "package": "internal/syncx",
+      "unreachable_funcs": 0,
+      "unreachable_types": 2,
+      "unreachable_other": 0
     }
   ],
   "unreachable": [
@@ -2953,14 +2959,14 @@
       "package": "internal/central/coordinators",
       "identifier": "CircuitBreakerResetter",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 123,
+      "line": 124,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "CircuitBreakerResetter",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 123,
+      "line": 124,
       "kind": "type"
     },
     {
@@ -3044,7 +3050,7 @@
       "package": "internal/central/coordinators",
       "identifier": "ConnectionRecoveryCoordinator",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 138,
+      "line": 139,
       "kind": "type"
     },
     {
@@ -3205,14 +3211,14 @@
       "package": "internal/central/coordinators",
       "identifier": "FailureReasonStep",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 82,
+      "line": 83,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "FailureReasonStep",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 82,
+      "line": 83,
       "kind": "type"
     },
     {
@@ -3247,14 +3253,14 @@
       "package": "internal/central/coordinators",
       "identifier": "HistoryEntry",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 87,
+      "line": 88,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "HistoryEntry",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 87,
+      "line": 88,
       "kind": "type"
     },
     {
@@ -3268,28 +3274,28 @@
       "package": "internal/central/coordinators",
       "identifier": "HubRefresher",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1123,
+      "line": 1135,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "HubRefresher",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1123,
+      "line": 1135,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "IncidentEntry",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1086,
+      "line": 1098,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "IncidentEntry",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1086,
+      "line": 1098,
       "kind": "type"
     },
     {
@@ -3310,28 +3316,28 @@
       "package": "internal/central/coordinators",
       "identifier": "InterfaceRecoveryState",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 99,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "InterfaceRecoveryState",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 99,
+      "line": 100,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "JSONRPCSessionClearer",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1142,
+      "line": 1154,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "JSONRPCSessionClearer",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 1142,
+      "line": 1154,
       "kind": "type"
     },
     {
@@ -3478,7 +3484,7 @@
       "package": "internal/central/coordinators",
       "identifier": "NewConnectionRecoveryCoordinator",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 238,
+      "line": 243,
       "kind": "func"
     },
     {
@@ -3555,14 +3561,14 @@
       "package": "internal/central/coordinators",
       "identifier": "Pipeline",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 25,
+      "line": 26,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "Pipeline",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 25,
+      "line": 26,
       "kind": "type"
     },
     {
@@ -3660,21 +3666,21 @@
       "package": "internal/central/coordinators",
       "identifier": "RecoveryStateView",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 727,
+      "line": 739,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "RecoveryStep",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 21,
+      "line": 22,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "RecoveryStep",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 21,
+      "line": 22,
       "kind": "type"
     },
     {
@@ -3723,14 +3729,14 @@
       "package": "internal/central/coordinators",
       "identifier": "StateTransitioner",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 116,
+      "line": 117,
       "kind": "type"
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "StateTransitioner",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 116,
+      "line": 117,
       "kind": "type"
     },
     {
@@ -18595,6 +18601,20 @@
       "kind": "type"
     },
     {
+      "package": "internal/syncx",
+      "identifier": "Mutex",
+      "file": "internal/syncx/syncx.go",
+      "line": 27,
+      "kind": "type"
+    },
+    {
+      "package": "internal/syncx",
+      "identifier": "RWMutex",
+      "file": "internal/syncx/syncx.go",
+      "line": 30,
+      "kind": "type"
+    },
+    {
       "package": "pkg/hmapi",
       "identifier": "CentralHandle",
       "file": "pkg/hmapi/api.go",
@@ -27156,6 +27176,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/jobs_test.go",
       "line": 402
+    },
+    {
+      "package": "internal/central",
+      "identifier": "TestMain",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/leak_test.go",
+      "line": 17
     },
     {
       "package": "internal/central",
@@ -40588,14 +40615,14 @@
       "identifier": "NewConnectionRecoveryCoordinatorWithLimit",
       "reason": "called by NewConnectionRecoveryCoordinator (the standard production entry point); also used directly in integration tests that need a bounded attempt count",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 247
+      "line": 252
     },
     {
       "package": "internal/central/coordinators",
       "identifier": "NewConnectionRecoveryCoordinatorWithLimit",
       "reason": "called by NewConnectionRecoveryCoordinator (the standard production entry point); also used directly in integration tests that need a bounded attempt count",
       "file": "internal/central/coordinators/connection_recovery.go",
-      "line": 247
+      "line": 252
     },
     {
       "package": "internal/central/coordinators",
@@ -43256,6 +43283,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/coordinators/link_deep_test.go",
       "line": 42
+    },
+    {
+      "package": "internal/central/coordinators",
+      "identifier": "TestMain",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/central/coordinators/leak_test.go",
+      "line": 17
     },
     {
       "package": "internal/central/coordinators",
@@ -47414,6 +47448,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/client/interface_client_whitebox_test.go",
       "line": 72
+    },
+    {
+      "package": "internal/client",
+      "identifier": "TestMain",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/client/leak_test.go",
+      "line": 17
     },
     {
       "package": "internal/client",
@@ -122965,6 +123006,13 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/store/sqlite/store_test.go",
       "line": 161
+    },
+    {
+      "package": "internal/store/sqlite",
+      "identifier": "TestMain",
+      "reason": "auto-whitelist:pattern=test-file",
+      "file": "internal/store/sqlite/leak_test.go",
+      "line": 17
     },
     {
       "package": "internal/store/sqlite",
