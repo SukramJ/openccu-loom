@@ -19,6 +19,13 @@ import (
 )
 
 // waitFor polls pred every 2 ms until it returns true or timeout elapses.
+// eventWaitTimeout is the deadline for event-bus-driven waitFor polls.
+// Delivery is asynchronous (subscriber goroutines), so the wait tolerates
+// scheduler starvation on a loaded CI runner under -race instrumentation;
+// waitFor returns as soon as the predicate holds, so a generous ceiling
+// costs nothing on the happy path.
+const eventWaitTimeout = 5 * time.Second
+
 func waitFor(t *testing.T, pred func() bool, timeout time.Duration) bool {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
