@@ -134,3 +134,6 @@ tests/integration/testdata/discovery_snapshot_aiohomematic2mqtt.json
 # source package — a bare 'reachability' pattern hides that directory.
 /reachability
 
+
+# Generated SBOM (run 'make sbom' / CI release artifact)
+/sbom.json

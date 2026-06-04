@@ -49,12 +49,17 @@ jobs:
           go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
           golangci-lint config verify
           golangci-lint run --timeout=5m ./...
+      # Fail if go.mod/go.sum drift from `go mod tidy` or checksums mismatch.
+      - name: go mod tidy + verify
+        run: make tidy-check
 
   security:
     name: security (vuln + licenses)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0 # full history so the gitleaks git-mode scan is complete
       - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -72,6 +77,10 @@ jobs:
         run: |
           go install github.com/google/go-licenses@latest
           make licenses
+      # gitleaks scans the tracked history for committed secrets; the
+      # allowlist for test fixtures / docs lives in .gitleaks.toml.
+      - name: gitleaks
+        run: make secrets
 
   test:
     name: test (${{ matrix.os }})
@@ -166,6 +175,11 @@ jobs:
         run: make wire-compare
       - name: reachability
         run: make reachability
+      # Advisory OpenAPI lint (vacuum). Report-only: surfaces missing
+      # operationIds / types / unused components without failing the build.
+      - name: openapi-lint (advisory)
+        continue-on-error: true
+        run: make openapi-lint
 
   spa:
     name: spa (typecheck + vitest)

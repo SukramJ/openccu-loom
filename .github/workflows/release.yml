@@ -56,3 +56,25 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # CycloneDX SBOM for the daemon module graph, attached to the run.
+      - name: generate SBOM
+        run: make sbom
+      - name: upload SBOM
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        with:
+          name: sbom
+          path: sbom.json
+          if-no-files-found: warn
+      # Scan the published image for OS/dependency CVEs that a Go-only
+      # govulncheck cannot see. The runtime base is distroless/static, so a
+      # fixable-CRITICAL gate stays quiet in practice. goreleaser strips the
+      # leading "v", so the image tag is the bare version.
+      - name: compute image ref
+        run: echo "IMAGE_REF=ghcr.io/sukramj/openccu-loom:${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

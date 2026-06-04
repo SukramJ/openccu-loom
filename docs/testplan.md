@@ -114,6 +114,37 @@ Realistic with two parallel streams: ~6–8 weeks.
   `tests/golden/` and are regenerated with `go test -update` after
   godevccu fixture changes.
 
+## Concurrency analysis
+
+Three layers guard the goroutine and locking model. The first two run
+in CI; the third is an opt-in build for local investigation.
+
+- **`go test -race`** — the data-race detector, default on `main`
+  (the CI test job sets `CGO_ENABLED=1` for it).
+- **goleak** — goroutine-leak detection. `go.uber.org/goleak`'s
+  `VerifyTestMain` is installed in the leak-prone core packages
+  (`internal/client`, `internal/central`,
+  `internal/central/coordinators`, `internal/store/sqlite`) via a
+  per-package `leak_test.go`. The package test run fails if any
+  goroutine a test spawned is still alive at the end — which is how a
+  missing `Stop()`/`cancel()` path surfaces. Extend coverage by adding
+  a `leak_test.go` with the same `TestMain` to another package; if a
+  legitimate background goroutine must be tolerated, suppress it with
+  the narrowest `goleak.IgnoreTopFunction(...)` and a justifying
+  comment rather than disabling the check.
+- **go-deadlock** — lock-order / stuck-lock detection, opt-in under
+  the `deadlock` build tag (`make deadlock-test`). Packages opt in by
+  declaring mutex fields as `syncx.Mutex` / `syncx.RWMutex`
+  (`internal/syncx`) instead of `sync.Mutex` / `sync.RWMutex`. In the
+  default build `syncx` types are plain aliases for the `sync` types
+  (zero cost); under `-tags deadlock` they become go-deadlock's
+  checking mutexes, and the run aborts with a goroutine dump on a
+  lock-order cycle or a lock held past `DeadlockTimeout` (60s).
+  Migration is incremental — only opted-in locks participate in the
+  cross-package lock graph; `connection_recovery.go` is migrated as
+  the first consumer. Widen coverage by switching more hot-path mutex
+  fields to `syncx` and extending the `make deadlock-test` package set.
+
 ## Tracking
 
 - **Status by cluster + per-file inventory**: regenerate via

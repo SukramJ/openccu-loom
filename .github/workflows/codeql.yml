@@ -1,0 +1,50 @@
+name: codeql
+
+# CodeQL static analysis (SAST). Complements gosec/govulncheck with
+# data-flow and taint analysis (injection, crypto misuse, …). Findings
+# surface in the repository's Security → Code scanning tab; the job does
+# not fail the build on alerts.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "23 3 * * 1" # weekly Monday 03:23 UTC
+
+permissions:
+  contents: read
+  security-events: write # required to upload CodeQL results
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.26.4"
+
+jobs:
+  analyze:
+    name: codeql (go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        with:
+          languages: go
+          # Go's CodeQL extractor requires a real compile (build-mode: none
+          # is rejected for Go). autobuild runs the module's `go build`; the
+          # committed spa_dist/.gitkeep satisfies the `go:embed all:spa_dist`
+          # directive, so a fresh checkout builds without first building the
+          # SPA — the same assumption the `build` CI job already relies on.
+          build-mode: autobuild
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@dd903d2e4f5405488e5ef1422510ee31c8b32357 # v3
+        with:
+          category: "/language:go"
