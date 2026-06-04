@@ -36,3 +36,21 @@ jobs:
           cache: true
       - name: benchmarks
         run: make bench
+
+  mutation:
+    name: mutation (gremlins, core pkgs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    # Report-only quality signal: gremlins is configured with 0 thresholds
+    # so it never fails, and the step is non-blocking regardless.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: mutation testing
+        run: |
+          go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+          make mutation

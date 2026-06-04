@@ -14,6 +14,7 @@ GOLANGCI_LINT   ?= golangci-lint
 GORELEASER      ?= goreleaser
 GOVULNCHECK     ?= govulncheck
 GOLICENSES      ?= go-licenses
+GREMLINS        ?= gremlins
 
 export CGO_ENABLED := 0
 
@@ -46,6 +47,7 @@ setup: ## install developer tooling and the pre-commit hook
 	$(GO) install github.com/pressly/goose/v3/cmd/goose@latest
 	$(GO) install golang.org/x/vuln/cmd/govulncheck@latest
 	$(GO) install github.com/google/go-licenses@latest
+	$(GO) install github.com/go-gremlins/gremlins/cmd/gremlins@latest
 	@if [ -d .git ]; then \
 		install -m 0755 script/git/pre-commit .git/hooks/pre-commit 2>/dev/null || \
 			echo "note: script/git/pre-commit not present yet (Phase 0)"; \
@@ -289,6 +291,15 @@ bench: ## run benchmarks (requires -tags=bench)
 	else \
 		echo "benchmarks not implemented yet (Phase 10)"; \
 	fi
+
+MUTATION_PKGS ?= ./internal/parameter/ ./internal/payload/ ./internal/routingkey/ ./pkg/hmtypes/ ./pkg/hmenum/
+
+.PHONY: mutation
+mutation: ## run mutation testing (gremlins) on core packages — slow; report-only
+	@for p in $(MUTATION_PKGS); do \
+		echo "-> gremlins unleash $$p"; \
+		$(GREMLINS) unleash "$$p" || true; \
+	done
 
 .PHONY: fuzz
 fuzz: ## run each fuzz target for 5s as a smoke test
