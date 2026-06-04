@@ -357,7 +357,7 @@ func (a *AccessControl) MatterReadFiltered(ctx context.Context, attrID uint32) (
 // Apple times out after 10 s and tears the fabric down via
 // RemoveFabric. Extension (0x0001) is not implemented — matter.js does
 // the same and Apple does not write it.
-func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if attrID == accessControlAttrACL {
 		entries, ok := value.([]AccessControlEntryStruct)
 		if !ok {

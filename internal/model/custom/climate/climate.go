@@ -1428,7 +1428,7 @@ func replayCurrentValue(dp interface {
 // replays the wire DP's currently observed value through the same handler so
 // the Climate cache lands in sync with the CCU state at boot, not only on the
 // next push.
-func (c *Climate) Subscribe(ch *device.Channel) func() {
+func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyclo,funlen // single-purpose climate subscription wiring with many data-point branches
 	if ch == nil {
 		return func() {}
 	}

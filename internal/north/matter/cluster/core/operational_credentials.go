@@ -507,7 +507,7 @@ type NOCStruct struct {
 }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) {
+func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	ctx := context.Background()
 	switch attrID {
 	case opcredsAttrNOCs:
@@ -1216,7 +1216,7 @@ func hkdfSHA256(ikm, salt, info []byte, length int) ([]byte, error) {
 	return hkdfPkg.Key(sha256.New, ikm, salt, string(info), length)
 }
 
-func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (any, error) {
+func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (any, error) { //nolint:funlen // single-purpose NOC install handler with many validation/crypto branches
 	req, ok := fields.(AddNOCRequest)
 	if !ok {
 		return nil, fmt.Errorf("%w: AddNOCRequest expected, got %T", errOpcredsInvalidArg, fields)

@@ -99,7 +99,7 @@ func NewLoader(cache *Cache, client jsonClientLike, centralName string, logger *
 // When directCall is false, the call is skipped if the cache was
 // refreshed within the last [loadWindow] (= MAX_CACHE_AGE/3 ≈ 3 s).
 // When directCall is true, the load always runs.
-func (l *Loader) Load(ctx context.Context, directCall bool) error {
+func (l *Loader) Load(ctx context.Context, directCall bool) error { //nolint:funlen // single-purpose device-details loader with many paramset/channel branches
 	if !directCall {
 		age := time.Since(l.cache.RefreshedAt())
 		if age < loadWindow {

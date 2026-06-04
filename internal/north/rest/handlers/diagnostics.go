@@ -110,7 +110,7 @@ type HealthExtras interface {
 // host names, and operator-controlled fields are hashed when
 // anonymisation is on; structural relationships (interface counts,
 // status verdicts, sample counts) stay intact.
-func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc {
+func Diagnostics(deps DiagnosticsDeps) http.HandlerFunc { //nolint:gocognit,funlen // single-purpose diagnostics builder with many subsystem branches
 	return func(w http.ResponseWriter, r *http.Request) {
 		anonymize := parseBool(r.URL.Query().Get("anonymize"), true)
 

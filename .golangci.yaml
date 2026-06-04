@@ -12,7 +12,10 @@ linters:
     - errcheck
     - errorlint
     - exhaustive
+    - funlen
+    - gocognit
     - gocritic
+    - gocyclo
     - gosec
     - govet
     - intrange
@@ -37,6 +40,13 @@ linters:
       check-type-assertions: true
     exhaustive:
       default-signifies-exhaustive: true
+    funlen:
+      lines: 100
+      statements: 60
+    gocognit:
+      min-complexity: 50
+    gocyclo:
+      min-complexity: 30
     gocritic:
       disabled-checks:
         - ifElseChain
@@ -82,6 +92,9 @@ linters:
       - linters:
           - contextcheck
           - errcheck
+          - funlen
+          - gocognit
+          - gocyclo
           - gosec
           - noctx
           - unparam
@@ -89,6 +102,12 @@ linters:
       - linters:
           - gosec
         path: cmd/
+      # Generated profile registry: a large hand-unmaintained table.
+      - linters:
+          - funlen
+          - gocognit
+          - gocyclo
+        path: internal/model/custom/generated_profiles\.go
     paths:
       - third_party$
       - builtin$

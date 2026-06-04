@@ -799,7 +799,7 @@ func (c *ConnectionRecoveryCoordinator) Run(ctx context.Context, interfaceID str
 	return result
 }
 
-func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfaceID string, pipeline []Pipeline) hmenum.RecoveryResult {
+func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfaceID string, pipeline []Pipeline) hmenum.RecoveryResult { //nolint:funlen // single-purpose connection recovery state machine with many pipeline branches
 	c.mu.Lock()
 	// Serialise per interface.
 	if existing, ok := c.active[interfaceID]; ok {

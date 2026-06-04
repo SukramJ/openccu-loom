@@ -518,7 +518,7 @@ func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byt
 // handleSubscribeRequest is the Subscribe-opcode branch of the IM
 // dispatcher. Exposed as a method so the receive-pipeline test can
 // drive it without spinning up a real UDP listener.
-func (b *Bridge) handleSubscribeRequest(
+func (b *Bridge) handleSubscribeRequest( //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	ctx context.Context,
 	src *net.UDPAddr,
 	requestHdr *message.Header,

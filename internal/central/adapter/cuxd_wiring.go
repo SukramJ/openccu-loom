@@ -31,7 +31,7 @@ import (
 // HmIP-RF / BidCos / VirtualDevices is not applicable here. Each
 // CUxD interface gets its own outbound [binrpc.Client] plus a
 // registration on the shared [rpcserver.BINRPCServer] callback listener.
-func wireCUxDInterface(
+func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
 	unit *central.Unit,

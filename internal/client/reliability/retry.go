@@ -486,7 +486,7 @@ func (r *Retrier) isNonRetryableUnderConfig(err error) bool {
 //
 // When [Retrier.Enabled] is false, fn is called exactly once without
 // registering a supersede slot (the retry=False fast-path).
-func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn func(ctx context.Context, attempt int) error) error {
+func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn func(ctx context.Context, attempt int) error) error { //nolint:funlen // single-purpose retry state machine with many error/backoff branches
 	// enabled kill-switch.
 	r.mu.Lock()
 	enabled := r.enabled

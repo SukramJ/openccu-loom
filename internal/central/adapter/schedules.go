@@ -592,7 +592,7 @@ func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationF
 	return dBase, dFactor
 }
 
-func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry {
+func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry { //nolint:gocognit,gocyclo,funlen // single-purpose schedule parsing logic with many branches
 	type slot struct {
 		weekday          int
 		hour             int
@@ -943,7 +943,7 @@ func applyLockEncoding(e handlers.SimpleScheduleEntry) handlers.SimpleScheduleEn
 	return e
 }
 
-func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) {
+func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
 	out := make(map[string]any, len(entries)*8+48)
 	used := make(map[int]bool, len(entries))
 	for i := range entries {

@@ -218,7 +218,7 @@ func (d *DefaultDiscoveryBuilder) WithSubDevices(on bool) *DefaultDiscoveryBuild
 // (model-driven). Drives sensor / binary_sensor / number entities
 // that are not part of an aggregate, plus VALUES paramsets on
 // channels we don't classify as a custom domain.
-func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
+func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if ev.ChannelType != "" {
 		if comp, nid, oid, p, agg := d.aggregateChannel(ev); agg {
 			return comp, nid, oid, p, true

@@ -88,7 +88,7 @@ func (r ReadRequest) MarshalTLV(enc *tlv.Encoder) {
 
 // UnmarshalReadRequestTLV reads a ReadRequestMessage. Skips the
 // optional Event* fields — they're not consumed by v1.1.
-func UnmarshalReadRequestTLV(dec *tlv.Decoder) (ReadRequest, error) {
+func UnmarshalReadRequestTLV(dec *tlv.Decoder) (ReadRequest, error) { //nolint:gocognit // wire/dispatch table over many attribute/opcode cases
 	open, err := dec.Next()
 	if err != nil {
 		return ReadRequest{}, err

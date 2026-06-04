@@ -205,7 +205,7 @@ func safeLower(s string) string {
 // The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
 // independent of the friendly description so renames in the CCU don't
 // orphan HA history.
-func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem {
+func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem { //nolint:funlen // single-purpose sysvar discovery builder with many type branches
 	if sv.Name == "" {
 		return DiscoveryItem{}
 	}

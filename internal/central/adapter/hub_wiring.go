@@ -60,7 +60,7 @@ type HubData struct {
 // Failures during program / sysvar / name / room / function load are
 // logged but do not abort wiring — an empty hub view is preferable
 // to a dead daemon when only the hub endpoint misbehaves.
-func WireHub(
+func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
 	unit *central.Unit,

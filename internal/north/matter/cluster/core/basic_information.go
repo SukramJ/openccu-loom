@@ -341,7 +341,7 @@ var (
 func (b *BasicInformation) MatterClusterID() uint32 { return basicInfoClusterID }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) {
+func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	switch attrID {

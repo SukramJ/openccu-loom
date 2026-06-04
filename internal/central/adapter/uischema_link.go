@@ -23,7 +23,7 @@ import (
 //
 // Port of the LINK branch in
 // (form_schema.py:generate with paramset_key=LINK).
-func (a *UISchemaAdapter) buildLinkSchema(
+func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose link schema assembly with many paramset branches
 	ctx context.Context,
 	dev *device.Device,
 	ch *device.Channel,

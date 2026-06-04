@@ -289,7 +289,7 @@ func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []
 //     deadline is stamped into `Bridge.timedDeadlines` and the
 //     matching follow-up Write/Invoke is gated against it via
 //     `Bridge.checkTimedGate` per Matter §8.7.
-func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, payload []byte) error {
+func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, payload []byte) error { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	// StatusResponse is the spec-mandated ACK for a ReportData /
 	// SubscribeResponse / Invoke / Write reply we sent earlier (Matter
 	// §8.6.2). Apple Home, Google Home, and chip-tool all emit it

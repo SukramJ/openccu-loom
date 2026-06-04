@@ -259,7 +259,7 @@ func (c *CallParameterCollector) Cancel() {
 // Returning the wire error to the caller mirrors
 // behaviour: the higher-level command-throttle/retry layer decides
 // whether to re-issue the collector.
-func (c *CallParameterCollector) Send(ctx context.Context) error {
+func (c *CallParameterCollector) Send(ctx context.Context) error { //nolint:funlen // single-purpose collector dispatch with many type/error branches
 	c.mu.Lock()
 	if c.consumed {
 		c.mu.Unlock()

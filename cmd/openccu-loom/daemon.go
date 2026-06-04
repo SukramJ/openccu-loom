@@ -71,7 +71,7 @@ func daemonServe(ctx context.Context, cfg *config.Config, stdout, stderr io.Writ
 // can reach live subsystems (currently: the MQTT supervisor) after
 // boot completes. Direct callers — tests and the no-watcher path —
 // pass nil and skip the late binding.
-func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.Writer, deps *reloadDeps) error {
+func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.Writer, deps *reloadDeps) error { //nolint:gocognit,gocyclo,funlen // composition root: long sequential daemon wiring
 	stack, err := newFullLoggerStack(cfg.Logging, stdout)
 	if err != nil {
 		return fmt.Errorf("logging.overrides: %w", err)

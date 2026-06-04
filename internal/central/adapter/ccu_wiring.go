@@ -127,7 +127,7 @@ type WireDeps struct {
 // backend + ingest + value seeding), and — when [WireDeps.CallbackServer]
 // is set — registers the callback handler + announces the daemon's
 // callback URL to the CCU so live events start flowing.
-func WireCentrals(
+func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cfg *config.Config,
 	reg *central.Registry,
@@ -357,7 +357,7 @@ func (r *backendRegistry) getter(interfaceID string) backends.MasterGetter {
 	return b
 }
 
-//nolint:contextcheck // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below
+//nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup
 func wireInterface(
 	ctx context.Context,
 	cc config.CentralConfig,

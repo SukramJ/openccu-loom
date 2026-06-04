@@ -55,7 +55,7 @@ func NewUISchemaAdapter(
 }
 
 // UISchema implements [handlers.UISchemaService].
-func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaRequest) (*handlers.UISchema, error) {
+func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaRequest) (*handlers.UISchema, error) { //nolint:funlen // single-purpose UI schema assembly with many paramset branches
 	address, channelNo, paramset, peer, locale := req.Address, req.Channel, req.Paramset, req.Peer, req.Locale
 	dev, ch := a.lookupChannel(address, channelNo)
 	if dev == nil || ch == nil {

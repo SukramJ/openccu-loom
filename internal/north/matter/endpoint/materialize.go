@@ -47,7 +47,7 @@ const matterDeviceTypeBridgedNode uint32 = 0x0013
 //
 // Result is a fresh slice on every call; callers may mutate or
 // append without affecting subsequent invocations.
-func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer {
+func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:funlen // wire/dispatch table over many attribute/opcode cases
 	if ep == nil {
 		return nil
 	}

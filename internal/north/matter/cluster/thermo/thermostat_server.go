@@ -188,7 +188,7 @@ func (s *ThermostatServer) SetLocalTemperature(t *int16) {
 // MatterRead implements [interfaces.MatterClusterServer].
 // Feature-gated attributes return (nil, false) when their required feature
 // is absent — the IM dispatcher handles the UnsupportedAttribute response.
-func (s *ThermostatServer) MatterRead(attrID uint32) (any, bool) {
+func (s *ThermostatServer) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -386,7 +386,7 @@ func abs16(x int16) int16 {
 // matter.js ThermostatServer.ts:setpointRaiseLower (lines 157-242).
 // mode=Heat without HEAT feature → InvalidCommand; mode=Cool without COOL
 // feature → InvalidCommand; otherwise apply amount*10 delta, clamped to limits.
-func (s *ThermostatServer) handleSetpointRaiseLower(fields any) error {
+func (s *ThermostatServer) handleSetpointRaiseLower(fields any) error { //nolint:funlen // single-purpose setpoint command handler with many mode/feature branches
 	// Decode fields: expect map[string]any with "mode" (uint8) and "amount" (int8).
 	m, ok := fields.(map[string]any)
 	if !ok {

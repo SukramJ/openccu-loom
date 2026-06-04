@@ -64,7 +64,7 @@ type backupCreateResult struct {
 	SHA256 string `json:"sha256"`
 }
 
-func backupCreate(args []string, stdout, stderr io.Writer) error {
+func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup create", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml")
@@ -325,7 +325,7 @@ func addBytesToTar(tw *tar.Writer, archivePath string, buf []byte) (string, erro
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func backupRestore(args []string, stdout, stderr io.Writer) error {
+func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:gocognit,gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup restore", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml (receives extracted config.yaml when present)")

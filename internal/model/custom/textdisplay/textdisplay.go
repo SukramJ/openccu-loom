@@ -674,7 +674,7 @@ func (t *TextDisplay) writeRowFieldsToAddr(ctx context.Context, r Row, rowAddr, 
 //
 // A [generic.CallParameterCollector] is attached to ctx for
 // forward-compatible batching.
-func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority) error {
+func (t *TextDisplay) WriteWithSound(ctx context.Context, r Row, opts SoundOptions, priority hmenum.CommandPriority) error { //nolint:gocyclo // single-purpose text-display write with many option/validation branches
 	if r.ID < 1 || r.ID > maxDisplayID {
 		return fmt.Errorf("%w: id=%d (must be 1..%d)", ErrInvalidRow, r.ID, maxDisplayID)
 	}

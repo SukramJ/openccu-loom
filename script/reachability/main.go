@@ -159,7 +159,7 @@ func main() {
 	}
 }
 
-func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionOnly bool) error {
+func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionOnly bool) error { //nolint:gocognit,gocyclo,funlen // build tooling; many CLI branches
 	absRoot, err := filepath.Abs(repoRoot)
 	if err != nil {
 		return fmt.Errorf("resolve repo root: %w", err)
@@ -417,7 +417,7 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 
 // checkAutoWhitelist prüft ob ein Item automatisch whitelisted werden soll.
 // Gibt den Reason-String zurück wenn ja, sonst ("", false).
-func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) {
+func checkAutoWhitelist(relFile, identifier string) (autoWhitelistReason, bool) { //nolint:gocognit,gocyclo,funlen // build tooling; many CLI branches
 	// Verfeinerung 2: _test.go Files
 	if strings.HasSuffix(relFile, "_test.go") {
 		return autoWhitelistTestFile, true
@@ -802,7 +802,7 @@ func memberKind(member ssa.Member) string {
 
 // collectWhitelisted liest alle Go-Dateien und sammelt Identifiers mit
 // `// loom:reachable:reason="..."` Kommentaren direkt über der Deklaration.
-func collectWhitelisted(pkgs []*packages.Package, absRoot string, out map[whitelistKey]WhitelistEntry, logger *slog.Logger) {
+func collectWhitelisted(pkgs []*packages.Package, absRoot string, out map[whitelistKey]WhitelistEntry, logger *slog.Logger) { //nolint:gocognit // build tooling; many CLI branches
 	seen := make(map[string]bool)
 
 	packages.Visit(pkgs, func(p *packages.Package) bool {

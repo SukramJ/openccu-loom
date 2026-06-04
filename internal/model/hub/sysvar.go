@@ -144,7 +144,7 @@ func CleanSysvarNames(names []string) []string {
 
 // sysvarParamValue converts the raw JSON-decoded param value to the
 // [hmtypes.ParamValue] kind expected for the given [hmenum.HubValueType].
-func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, error) {
+func sysvarParamValue(vt hmenum.HubValueType, raw any) (hmtypes.ParamValue, error) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	switch vt {
 	case hmenum.HubValueTypeLogic:
 		switch v := raw.(type) {

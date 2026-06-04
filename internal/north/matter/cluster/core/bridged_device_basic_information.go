@@ -250,7 +250,7 @@ func (b *BridgedDeviceBasicInformation) MatterDataVersion() uint32 {
 }
 
 // MatterRead implements [interfaces.MatterClusterServer].
-func (b *BridgedDeviceBasicInformation) MatterRead(attrID uint32) (any, bool) {
+func (b *BridgedDeviceBasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	switch attrID {

@@ -702,7 +702,7 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 //
 // Channel may be nil when the registry has not yet hydrated the
 // channel — the caller falls back to a minimal Event in that case.
-func (b *EventBridge) buildPublishEvent(
+func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	centralName, iface, deviceAddr, channelAddress string,
 	channelNo int,
 	model, deviceName string,

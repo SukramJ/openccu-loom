@@ -122,7 +122,7 @@ type matterBridgeBundle struct {
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
 }
 
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, logger *slog.Logger) *matterBridgeBundle {
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, logger *slog.Logger) *matterBridgeBundle { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
@@ -1321,7 +1321,7 @@ type rootClusterRefs struct {
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
 // single misconfigured cluster cannot block the rest.
-func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8)) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) {
+func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8)) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen // composition/wiring: long sequential setup
 	out := make([]interfaces.MatterClusterServer, 0, 8)
 	var opCreds *mattercore.OperationalCredentials
 	var refs rootClusterRefs

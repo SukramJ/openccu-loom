@@ -550,7 +550,7 @@ func (b *Bridge) Reassemble(ctx context.Context) error {
 // lock. Concurrent Reassembles serialise harmlessly: each finishes
 // independently, and the last writer wins (subsequent reads see one
 // of the two assembled topologies, never a torn intermediate).
-func (b *Bridge) reassembleLocked(ctx context.Context) error {
+func (b *Bridge) reassembleLocked(ctx context.Context) error { //nolint:gocognit,funlen // single-purpose bridge topology reassembly with many endpoint/cluster branches
 	snapshots := b.snapshotter(ctx)
 	topology, err := b.assembler.Assemble(ctx, snapshots)
 	if err != nil {

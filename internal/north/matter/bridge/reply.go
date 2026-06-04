@@ -415,7 +415,7 @@ func EncodeSubscribeResponse(sr im.SubscribeResponse) ([]byte, error) {
 // internal/north/matter/cluster/{core,measurement,...} returns from
 // MatterRead. Add a case here when a new cluster server starts
 // returning a richer type (struct, list, …).
-func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeValue) {
+func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeValue) { //nolint:gocognit,gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
 	if v.IsNull || v.Value == nil {
 		enc.PutNull(tag)
 		return

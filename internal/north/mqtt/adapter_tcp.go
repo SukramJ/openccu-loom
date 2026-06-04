@@ -116,7 +116,7 @@ func NewTCPClient(cfg TCPConfig) *TCPClient {
 
 // Connect implements [Connector]. It dials, sends CONNECT, waits for
 // CONNACK, and starts the read pump + keep-alive loop.
-func (c *TCPClient) Connect(ctx context.Context) error {
+func (c *TCPClient) Connect(ctx context.Context) error { //nolint:funlen // single-purpose TCP connect with many protocol/error branches
 	c.mu.Lock()
 	if c.conn != nil {
 		c.mu.Unlock()

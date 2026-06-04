@@ -216,7 +216,7 @@ func (a *Assembler) assembleSnapshot(ctx context.Context, snap Snapshot, seen ma
 	return out, nil
 }
 
-func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) {
+func (a *Assembler) assembleChannel(ctx context.Context, centralName string, dev *device.Device, ch *device.Channel, seen map[store.EndpointKey]struct{}) ([]*Endpoint, error) { //nolint:gocognit,gocyclo,funlen // single-purpose channel assembly with many device-type/cluster branches
 	out := make([]*Endpoint, 0, 4)
 
 	allow := func(kind store.DPKind, key string) (bool, error) {

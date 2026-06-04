@@ -160,7 +160,7 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func configImport(args []string, stdout, stderr io.Writer) error {
+func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("config import", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml")

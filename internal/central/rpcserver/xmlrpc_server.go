@@ -275,7 +275,7 @@ func routeFromPath(p string) (string, bool) {
 // bindXMLRPCMethods wires the seven CCU callback methods into mux.
 // Every method extracts its positional arguments from the XML-RPC
 // params array and delegates to the central's [Handlers].
-func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) {
+func bindXMLRPCMethods(mux *xmlrpc.Mux, h Handlers) { //nolint:gocognit,funlen // wire/dispatch table over many attribute/opcode cases
 	mux.Handle("event", func(ctx context.Context, params []xmlrpc.Value) (xmlrpc.Value, error) {
 		if len(params) != 4 {
 			return nil, fmt.Errorf("event: want 4 params, got %d", len(params))
