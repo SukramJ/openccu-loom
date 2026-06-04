@@ -516,117 +516,33 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- REST --------------------------------------------------
-	servers := newServerGroup(logger)
-	if auditDB != nil && healthTracker != nil {
-		stopProbe := sqlitestore.StartHealthProbe(ctx, auditDB, healthTracker, sqlitestore.DefaultProbeInterval)
-		_ = stopProbe // daemon shutdown handled by the parent context cancel
-	}
-
-	if auditDB != nil {
-		// One-shot seed: if SQLite users table is empty AND the
-		// YAML carries legacy auth.users, copy them in so the
-		// admin-edit surface starts pre-populated. Idempotent —
-		// subsequent boots see Count() > 0 and skip the seed.
-		if n, err := sqUsers.Count(ctx); err == nil && n == 0 {
-			for name, pass := range cfg.North.REST.Auth.Users {
-				if perr := sqUsers.Put(ctx, name, pass, auth.RoleAdmin); perr != nil {
-					logger.Warn("auth.seed.user", slog.String("subject", name), slog.String("err", perr.Error()))
-				}
-			}
-		}
-
-		// Same idempotent seed for the centrals table: if SQLite is
-		// empty AND the YAML lists at least one CCU, copy the list
-		// into the centrals table so the SPA's CCUs tab shows the
-		// running config from the first boot. After that, edit
-		// authoritatively via the SPA.
-		if n, err := sqCentrals.Count(ctx); err == nil && n == 0 {
-			for i := range cfg.Centrals {
-				cc := &cfg.Centrals[i]
-				row := sqlitestore.CentralRow{
-					Name:                  cc.Name,
-					Host:                  cc.Host,
-					Port:                  cc.Port,
-					JSONRPCPort:           cc.JSONRPCPort,
-					Username:              cc.Username,
-					PasswordPlain:         cc.Password, // YAML password becomes the SQLite default
-					TLS:                   cc.TLS,
-					TLSInsecureSkipVerify: cc.TLSInsecureSkipVerify,
-					PrimaryInterface:      cc.PrimaryInterface,
-					Interfaces:            cc.Interfaces,
-					Ports:                 cc.Ports,
-					Visibility:            cc.Visibility,
-					Enabled:               true,
-				}
-				if perr := sqCentrals.Put(ctx, row); perr != nil {
-					logger.Warn("centrals.seed", slog.String("name", cc.Name), slog.String("err", perr.Error()))
-				}
-			}
-		}
-
-		// Layer SQLite stores on top of the Memory stores for
-		// authentication so wizard-created users + YAML-pinned
-		// users both resolve. The chain prefers SQLite; falls back
-		// to Memory only on a clean "unauthenticated" miss.
-		authMw = auth.NewMiddleware(
-			auth.ChainedUserStore{Primary: sqUsers, Secondary: users},
-			auth.ChainedTokenStore{Primary: sqTokens, Secondary: tokens},
-		)
-		// Re-bind the resolver after swapping the middleware so the
-		// REST chain picks up the chained stores.
-		restResolve = func(next http.Handler) http.Handler {
-			return authMw.Resolve(sessionResolve(next))
-		}
-	}
-
-	// REST status metrics — 5xx/4xx counters surfaced as health
-	// gauges. Wired into the chi middleware chain via Deps.StatusMetrics
-	// and read back through RegisterGauge so the diagnostics dump and
-	// the SPA's Diagnostics view can render the values.
-	restStatusMetrics := middleware.NewStatusMetrics()
-	if healthTracker != nil {
-		sm := restStatusMetrics
-		healthTracker.RegisterGauge("rest.5xx",
-			func() float64 { return float64(sm.ServerErrors()) })
-		healthTracker.RegisterGauge("rest.4xx",
-			func() float64 { return float64(sm.ClientErrors()) })
-		healthTracker.RegisterGauge("rest.requests_total",
-			func() float64 { return float64(sm.TotalRequests()) })
-	}
-
-	restAuth := &handlers.AuthDeps{
-		Users:         users,
-		Sessions:      sessions,
-		Tokens:        tokens,
-		Secure:        false, // dev/plain HTTP; flip when TLS is wired
-		AuditRecorder: auditBuf,
-	}
-	// When SQLite-backed user persistence is available, route the
-	// /auth/login resolver through the chained store so
-	// wizard-created admins and YAML-pinned users both
-	// authenticate. The legacy /auth/users read path continues to
-	// hit the in-memory snapshot via AuthDeps.Users.
-	if sqUsers != nil {
-		restAuth.LoginUsers = auth.ChainedUserStore{Primary: sqUsers, Secondary: users}
-	}
-
-	// Wave-C admin services backed by the SQLite stores opened
-	// above. Each handler-side interface (ConfigAdminService /
-	// UserAdminService / TokenAdminService / CentralAdminService)
-	// is satisfied directly by the corresponding *sqlite.Store —
-	// no extra adapter required.
-	var (
-		configAdminSvc  handlers.ConfigAdminService
-		userAdminSvc    handlers.UserAdminService
-		tokenAdminSvc   handlers.TokenAdminService
-		centralAdminSvc handlers.CentralAdminService
-	)
-	if configStore != nil {
-		configAdminSvc = configAdminAdapter{store: configStore, sections: sqSections}
-		userAdminSvc = sqUsers
-		tokenAdminSvc = sqTokens
-		centralAdminSvc = sqCentrals
-	}
+	rw := wireREST(ctx, restWiringDeps{
+		cfg:            cfg,
+		logger:         logger,
+		auditBuf:       auditBuf,
+		auditDB:        auditDB,
+		healthTracker:  healthTracker,
+		configStore:    configStore,
+		sqUsers:        sqUsers,
+		sqCentrals:     sqCentrals,
+		sqTokens:       sqTokens,
+		sqSections:     sqSections,
+		users:          users,
+		tokens:         tokens,
+		sessions:       sessions,
+		authMw:         authMw,
+		restResolve:    restResolve,
+		sessionResolve: sessionResolve,
+	})
+	servers := rw.servers
+	restStatusMetrics := rw.statusMetrics
+	restAuth := rw.auth
+	configAdminSvc := rw.configAdmin
+	userAdminSvc := rw.userAdmin
+	tokenAdminSvc := rw.tokenAdmin
+	centralAdminSvc := rw.centralAdmin
+	authMw = rw.authMw
+	restResolve = rw.authResolve
 
 	// --- Adapter-Hoist ---------------------------------------- Adapters used
 	// by BOTH the WS-command router and the REST router are constructed once
