@@ -38,7 +38,6 @@ import (
 	"sort"
 	"strings"
 	"text/template"
-	"time"
 
 	"golang.org/x/tools/go/callgraph/rta"
 	"golang.org/x/tools/go/packages"
@@ -350,8 +349,42 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 	byPackage := buildPackageSummary(unreachableItems)
 
 	// --- 8. Inventory schreiben ---
+	// Deterministic output: sort every slice by a stable key and use the
+	// git HEAD (not a wall-clock timestamp) as the "generated" marker, so
+	// re-running the analysis at the same commit yields a byte-identical
+	// file — no spurious per-run diffs.
+	if head == "" {
+		head = "unknown"
+	}
+	sort.Strings(entryPointNames)
+	sort.Slice(unreachableItems, func(i, j int) bool {
+		a, b := unreachableItems[i], unreachableItems[j]
+		switch {
+		case a.Package != b.Package:
+			return a.Package < b.Package
+		case a.Identifier != b.Identifier:
+			return a.Identifier < b.Identifier
+		case a.File != b.File:
+			return a.File < b.File
+		default:
+			return a.Line < b.Line
+		}
+	})
+	sort.Slice(whitelistedItems, func(i, j int) bool {
+		a, b := whitelistedItems[i], whitelistedItems[j]
+		switch {
+		case a.Package != b.Package:
+			return a.Package < b.Package
+		case a.Identifier != b.Identifier:
+			return a.Identifier < b.Identifier
+		case a.File != b.File:
+			return a.File < b.File
+		default:
+			return a.Line < b.Line
+		}
+	})
 	inv := Inventory{
-		Generated:   time.Now().UTC().Format(time.RFC3339),
+		Generated:   head,
 		Head:        head,
 		EntryPoints: entryPointNames,
 		Summary: Summary{

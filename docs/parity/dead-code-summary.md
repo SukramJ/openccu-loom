@@ -1,7 +1,7 @@
 # Dead-Code Summary
 
-Generated: 2026-06-04T16:30:46Z
-HEAD: 9c44ba0
+Generated: 14bdd5e
+HEAD: 14bdd5e
 
 ## Overview
 
@@ -42,55 +42,55 @@ HEAD: 9c44ba0
 | Package | Identifier | File | Line |
 |---|---|---|---|
 | internal/audit | AsyncSink | internal/audit/persist.go | 291 |
-| pkg/hmerr | ExceptionToFailureReason | pkg/hmerr/errors.go | 395 |
-| pkg/hmerr | LogBoundaryError | pkg/hmerr/boundary.go | 61 |
-| pkg/hmerr | ErrorContext | pkg/hmerr/errors.go | 153 |
+| internal/audit | AsyncSink | internal/audit/persist.go | 291 |
+| internal/audit | BuildChangeDiff | internal/audit/change_log.go | 177 |
+| internal/audit | NewBuffer | internal/audit/audit.go | 114 |
+| internal/audit | NewChangeLog | internal/audit/change_log.go | 53 |
+| internal/audit | NewDurableSink | internal/audit/persist.go | 167 |
+| internal/audit | NewPersistedRecorder | internal/audit/persist.go | 40 |
+| internal/audit | NoopRecorder | internal/audit/audit.go | 171 |
+| internal/auth | CSRFMiddleware | internal/auth/csrf.go | 51 |
+| internal/auth | CSRFToken | internal/auth/csrf.go | 27 |
+| internal/auth | ClearSessionCookie | internal/auth/session.go | 119 |
+| internal/auth | IdentityFrom | internal/auth/middleware.go | 104 |
+| internal/auth | NewMemoryTokenStore | internal/auth/auth.go | 72 |
+| internal/auth | NewMemoryUserStore | internal/auth/auth.go | 181 |
+| internal/auth | NewMiddleware | internal/auth/middleware.go | 29 |
+| internal/auth | NewSessionStore | internal/auth/session.go | 39 |
+| internal/auth | SessionMiddleware | internal/auth/session.go | 83 |
+| internal/auth | WriteSessionCookie | internal/auth/session.go | 104 |
+| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 135 |
+| internal/auth/oidc | Discover | internal/auth/oidc/discovery.go | 27 |
+| internal/auth/oidc | New | internal/auth/oidc/client.go | 40 |
+| internal/auth/oidc | NewPKCEPair | internal/auth/oidc/pkce.go | 23 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
-| pkg/hmevent | NewBaseAt | pkg/hmevent/event.go | 45 |
-| internal/central/events | WithPriority | internal/central/events/bus.go | 57 |
-| internal/central/events | WithKey | internal/central/events/bus.go | 64 |
-| internal/central/events | Add | internal/central/events/batch.go | 41 |
-| internal/central/events | Subscribe | internal/central/events/bus.go | 152 |
-| internal/central/events | Publish | internal/central/events/bus.go | 202 |
-| internal/central/events | PublishSync | internal/central/events/bus.go | 274 |
-| internal/model/event | Sources | internal/model/event/event.go | 76 |
-| internal/model/optimistic | New | internal/model/optimistic/tracker.go | 112 |
-| internal/payload | For | internal/payload/payload.go | 37 |
-| internal/payload | Merge | internal/payload/payload.go | 89 |
-| internal/routingkey | GenerateChannelUniqueID | internal/routingkey/uniqueid.go | 107 |
-| internal/model/device | GenerateTranslationKey | internal/model/device/naming.go | 39 |
-| internal/client/backends | EncodeHMLevel | internal/client/backends/combined.go | 183 |
-| internal/client/backends | DetectBackend | internal/client/backends/detection.go | 67 |
-| internal/client/backends | Factory | internal/client/backends/factory.go | 25 |
-| internal/client/backends | UpdateCapabilitiesForVersion | internal/client/backends/capabilities.go | 229 |
-| internal/client | SanitizeErrorMessage | internal/client/errors.go | 33 |
-| internal/client/transport/xmlrpc | Format | internal/client/transport/xmlrpc/value.go | 370 |
-| internal/model/hub | WrapSysvar | internal/model/hub/sysvar_subtypes.go | 302 |
-| internal/health | WithConnectionClock | internal/health/connection.go | 90 |
-| internal/health | NewConnection | internal/health/connection.go | 70 |
-| internal/health | NewConnectionRegistry | internal/health/connection.go | 311 |
-| internal/client/transport/binrpc | NewServer | internal/client/transport/binrpc/server.go | 55 |
-| pkg/hmlog | WithContext | pkg/hmlog/contextual.go | 73 |
-| pkg/hmlog | New | pkg/hmlog/contextual.go | 45 |
-| pkg/hmlog | Get | pkg/hmlog/contextual.go | 59 |
-| pkg/hmlog | WatchSlow | pkg/hmlog/slowquery.go | 35 |
-| pkg/hmlog | ForSubsystem | pkg/hmlog/factory.go | 120 |
-| internal/north/matter/tlv | FullyQualifiedTag | internal/north/matter/tlv/tlv.go | 95 |
-| internal/north/matter/tlv | ImplicitTag | internal/north/matter/tlv/tlv.go | 85 |
-| internal/configui | ParameterStep | internal/configui/step.go | 21 |
-| internal/configui | ClassifyLinkParameter | internal/configui/link_param_metadata.go | 181 |
-| internal/configui | GetTimePresets | internal/configui/link_param_metadata.go | 272 |
-| internal/configui | Generate | internal/configui/generator.go | 147 |
-| internal/configui | Humanize | internal/configui/labels.go | 118 |
-| internal/configui | DetermineWidget | internal/configui/widget.go | 62 |
-| internal/configui | EncodeTimeValue | internal/configui/link_param_metadata.go | 308 |
-| internal/configui | DecodeTimeValue | internal/configui/link_param_metadata.go | 294 |
-| internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
-| internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
-| internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
-| internal/north/discovery/mdns | NewNoop | internal/north/discovery/mdns/advertiser.go | 101 |
-| internal/north/matter/schema | ClusterRevision | internal/north/matter/schema/lookup.go | 11 |
+| internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/boundary | Execute | internal/boundary/execute.go | 47 |
+| internal/boundary | Execute | internal/boundary/execute.go | 47 |
+| internal/ccudata | Empty | internal/ccudata/translations.go | 79 |
+| internal/ccudata | EmptyEasymode | internal/ccudata/easymode.go | 237 |
+| internal/ccudata | LoadEasymodeEmbedded | internal/ccudata/embed.go | 65 |
+| internal/ccudata | LoadProfilesEmbedded | internal/ccudata/profiles.go | 109 |
+| internal/ccudata | LoadTranslations | internal/ccudata/translations.go | 52 |
+| internal/ccudata | LoadTranslationsEmbedded | internal/ccudata/embed.go | 48 |
+| internal/central | NewRegistry | internal/central/central_registry.go | 26 |
+| internal/central | RegisterStandardJobs | internal/central/jobs.go | 293 |
+| internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
+| internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
+| internal/central/adapter | ClassifyLinkParameter | internal/central/adapter/link_param_metadata.go | 184 |
+| internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
+| internal/central/adapter | DecodeTimeValue | internal/central/adapter/link_param_metadata.go | 294 |
+| internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
+| internal/central/adapter | EncodeTimeValue | internal/central/adapter/link_param_metadata.go | 305 |
+| internal/central/adapter | GetTimePresets | internal/central/adapter/link_param_metadata.go | 276 |
+| internal/central/adapter | InitInterfaceID | internal/central/adapter/interface_id.go | 54 |
+| internal/central/adapter | NewBackupAdapter | internal/central/adapter/stubs.go | 85 |
+| internal/central/adapter | NewCallbackHandlers | internal/central/adapter/callback_handlers.go | 58 |
+| internal/central/adapter | NewCentralLinksDomain | internal/central/adapter/central_links.go | 32 |
+| internal/central/adapter | NewConfigAdapter | internal/central/adapter/config.go | 25 |
+| internal/central/adapter | NewCustomDPDispatcher | internal/central/adapter/custom_dp_dispatcher.go | 57 |
+| internal/central/adapter | NewDataPointWriterAdapter | internal/central/adapter/devices.go | 130 |
+| internal/central/adapter | NewDeviceAdminDomain | internal/central/adapter/device_admin.go | 27 |
 
 ## Full By-Package Breakdown
 
