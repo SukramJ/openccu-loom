@@ -26,10 +26,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (`internal/north/mcp/`) exposes the daemon to LLM agents as tools over
   a Streamable-HTTP transport, mounted on the REST listener behind the
   same auth chain. Disabled by default (`North.MCP.Enabled`) and
-  read-only even when enabled — the write tool (`set_datapoint`) is
-  registered only when `North.MCP.AllowWrites` is also set, and it
-  refuses to write to a device the named central does not own. Read
-  tools: `list_centrals`, `list_devices`, `get_device`, `list_audit`.
+  read-only even when enabled — write tools are registered only when
+  `North.MCP.AllowWrites` is also set, and the write tools that touch a
+  device refuse to act on one the named central does not own. Read
+  tools: `list_centrals`, `list_devices`, `get_device`, `read_paramset`,
+  `get_health`, `list_audit`. Write tools: `set_datapoint`,
+  `write_paramset`, `trigger_program`. Each tool also gates on its own
+  dependency, so a partial wiring never exposes a half-functional tool.
   The `mcp.v1` / `mcp.write.v1` capability tokens surface the posture via
   `GET /info`. Built on the official `modelcontextprotocol/go-sdk`. See
   [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).

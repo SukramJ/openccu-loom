@@ -18,7 +18,9 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -50,6 +52,29 @@ type ValueWriter interface {
 	) error
 }
 
+// ParamsetService reads and writes device paramsets (MASTER / VALUES).
+// Same contract as the REST ParamsetService; the read half backs
+// read_paramset, the write half backs the gated write_paramset.
+type ParamsetService interface {
+	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
+	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
+}
+
+// HealthReader exposes the daemon's component-health view (CCU
+// connectivity and subsystem status). Same contract as the REST
+// HealthReader.
+type HealthReader interface {
+	Overall() health.Status
+	Snapshot() []health.Component
+}
+
+// HubResolver resolves a central's hub model by name — the seam the
+// gated trigger_program tool uses to find and run a CCU program.
+// *central.Registry satisfies it.
+type HubResolver interface {
+	HubFor(centralName string) *hub.Hub
+}
+
 // Deps is the wiring surface. Writer may be nil (no writes available).
 // Audit may be nil (no change-log surface); when present it serves both
 // the read tool (List) and records MCP-origin writes (Record).
@@ -57,19 +82,18 @@ type Deps struct {
 	Centrals    CentralLister
 	Devices     DeviceLister
 	Writer      ValueWriter
+	Paramsets   ParamsetService
+	Health      HealthReader
+	Hubs        HubResolver
 	Audit       audit.Recorder
 	AllowWrites bool
 	Version     string
 }
 
-// writesEnabled reports whether the write tools should be registered:
-// the operator opted in (AllowWrites) and a writer is actually wired.
-func (d Deps) writesEnabled() bool {
-	return d.AllowWrites && d.Writer != nil
-}
-
 // NewServer builds the MCP server and registers the tool set. Read
-// tools are always registered; write tools only when writes are enabled.
+// tools are always registered (each gated on its own dependency being
+// wired); write tools only when AllowWrites is set, and each still gates
+// on its own dependency so a partial wiring never exposes a half-tool.
 func NewServer(d Deps) *mcpsdk.Server {
 	version := d.Version
 	if version == "" {
@@ -80,7 +104,7 @@ func NewServer(d Deps) *mcpsdk.Server {
 		Version: version,
 	}, nil)
 	registerReadTools(s, d)
-	if d.writesEnabled() {
+	if d.AllowWrites {
 		registerWriteTools(s, d)
 	}
 	return s

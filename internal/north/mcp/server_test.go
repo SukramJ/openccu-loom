@@ -6,18 +6,93 @@ package mcp_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ─── fakes ───────────────────────────────────────────────────────────────────
+
+// fakeParamsets is a minimal in-memory implementation of mcp.ParamsetService.
+type fakeParamsets struct {
+	store    map[string]map[string]any // address:key → values
+	putCalls []putParamsetCall
+	err      error
+}
+
+type putParamsetCall struct {
+	address string
+	key     hmenum.ParamsetKey
+	values  map[string]any
+}
+
+func newFakeParamsets() *fakeParamsets {
+	return &fakeParamsets{store: make(map[string]map[string]any)}
+}
+
+func (f *fakeParamsets) seed(address string, key hmenum.ParamsetKey, values map[string]any) {
+	f.store[address+":"+string(key)] = values
+}
+
+func (f *fakeParamsets) GetParamset(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	v := f.store[address+":"+string(key)]
+	return v, nil
+}
+
+func (f *fakeParamsets) PutParamset(_ context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.putCalls = append(f.putCalls, putParamsetCall{address: address, key: key, values: values})
+	return nil
+}
+
+// fakeHealth is a minimal in-memory implementation of mcp.HealthReader.
+type fakeHealth struct {
+	overall    health.Status
+	components []health.Component
+}
+
+func (f *fakeHealth) Overall() health.Status       { return f.overall }
+func (f *fakeHealth) Snapshot() []health.Component { return f.components }
+
+// fakeHubs resolves a central name to a pre-built *hub.Hub.
+type fakeHubs struct {
+	hubs map[string]*hub.Hub
+}
+
+func newFakeHubs() *fakeHubs { return &fakeHubs{hubs: make(map[string]*hub.Hub)} }
+
+func (f *fakeHubs) add(centralName string, h *hub.Hub) { f.hubs[centralName] = h }
+
+func (f *fakeHubs) HubFor(centralName string) *hub.Hub { return f.hubs[centralName] }
+
+// fakeProgramWriter records ExecuteProgram calls and returns a preset error.
+type fakeProgramWriter struct {
+	calls []string
+	err   error
+}
+
+func (f *fakeProgramWriter) ExecuteProgram(_ context.Context, id string) error {
+	f.calls = append(f.calls, id)
+	return f.err
+}
+
+func (f *fakeProgramWriter) SetProgramEnabled(_ context.Context, _ string, _ bool) error {
+	return errors.New("not implemented in fake")
+}
 
 type fakeCentrals struct{ names []string }
 
@@ -534,5 +609,347 @@ func TestSetDatapoint_WrongCentral(t *testing.T) {
 	// No audit entry must have been recorded.
 	if buf.Len() != 0 {
 		t.Errorf("expected 0 audit entries after failed write, got %d", buf.Len())
+	}
+}
+
+// ─── read_paramset ───────────────────────────────────────────────────────────
+
+func TestReadParamset_ReturnsValues(t *testing.T) {
+	ps := newFakeParamsets()
+	ps.seed("ADDR001:1", hmenum.ParamsetKeyMaster, map[string]any{"MIN_SETPOINT": 5.0, "MAX_SETPOINT": 30.5})
+
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals:  &fakeCentrals{names: []string{"ccu1"}},
+		Devices:   devs,
+		Paramsets: ps,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "read_paramset", map[string]any{
+		"address": "ADDR001:1",
+		"key":     "MASTER",
+	})
+	if res.IsError {
+		t.Fatalf("read_paramset returned error: %v", res.Content)
+	}
+
+	var out struct {
+		Values map[string]any `json:"values"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if out.Values["MIN_SETPOINT"] == nil {
+		t.Error("expected MIN_SETPOINT in values")
+	}
+	if out.Values["MAX_SETPOINT"] == nil {
+		t.Error("expected MAX_SETPOINT in values")
+	}
+}
+
+func TestReadParamset_InvalidKeyErrors(t *testing.T) {
+	ps := newFakeParamsets()
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals:  &fakeCentrals{names: []string{"ccu1"}},
+		Devices:   devs,
+		Paramsets: ps,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "read_paramset", map[string]any{
+		"address": "ADDR001:1",
+		"key":     "BOGUS",
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true for invalid paramset key")
+	}
+}
+
+// ─── get_health ──────────────────────────────────────────────────────────────
+
+func TestGetHealth_ReturnsOverallAndComponents(t *testing.T) {
+	fh := &fakeHealth{
+		overall: health.StatusHealthy,
+		components: []health.Component{
+			{Name: "ccu1-HmIP-RF", Status: health.StatusHealthy},
+			{Name: "sqlite", Status: health.StatusDegraded},
+		},
+	}
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1"}},
+		Devices:  devs,
+		Health:   fh,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_health", map[string]any{})
+	if res.IsError {
+		t.Fatalf("get_health returned error: %v", res.Content)
+	}
+
+	var out struct {
+		Overall    string `json:"overall"`
+		Components []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"components"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if out.Overall != string(health.StatusHealthy) {
+		t.Errorf("overall: want %q, got %q", health.StatusHealthy, out.Overall)
+	}
+	if len(out.Components) != 2 {
+		t.Fatalf("expected 2 components, got %d", len(out.Components))
+	}
+	byName := make(map[string]string, len(out.Components))
+	for _, c := range out.Components {
+		byName[c.Name] = c.Status
+	}
+	if byName["ccu1-HmIP-RF"] != string(health.StatusHealthy) {
+		t.Errorf("ccu1-HmIP-RF: want %q, got %q", health.StatusHealthy, byName["ccu1-HmIP-RF"])
+	}
+	if byName["sqlite"] != string(health.StatusDegraded) {
+		t.Errorf("sqlite: want %q, got %q", health.StatusDegraded, byName["sqlite"])
+	}
+}
+
+// ─── write_paramset ──────────────────────────────────────────────────────────
+
+func TestWriteParamset_SuccessfulWrite(t *testing.T) {
+	ps := newFakeParamsets()
+	buf := audit.NewBuffer(100)
+	devs, _, _ := makeDeviceFixture()
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:     devs,
+		Paramsets:   ps,
+		Audit:       buf,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	writeVals := map[string]any{"MIN_SETPOINT": 10.0}
+	res := callTool(t, cs, "write_paramset", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001",
+		"key":          "MASTER",
+		"values":       writeVals,
+	})
+	if res.IsError {
+		t.Fatalf("write_paramset returned error: %v", res.Content)
+	}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	unmarshalStructured(t, res, &out)
+	if !out.OK {
+		t.Fatal("expected OK=true on successful paramset write")
+	}
+
+	// Verify PutParamset was called with the right arguments.
+	if len(ps.putCalls) != 1 {
+		t.Fatalf("expected 1 PutParamset call, got %d", len(ps.putCalls))
+	}
+	call := ps.putCalls[0]
+	if call.address != "ADDR001" {
+		t.Errorf("PutParamset address: want ADDR001, got %q", call.address)
+	}
+	if call.key != hmenum.ParamsetKeyMaster {
+		t.Errorf("PutParamset key: want MASTER, got %q", call.key)
+	}
+
+	// Verify audit entry was recorded with the paramset_write action.
+	entries := buf.List(10)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(entries))
+	}
+	if entries[0].Action != audit.ActionParamsetWrite {
+		t.Errorf("audit action: want %q, got %q", audit.ActionParamsetWrite, entries[0].Action)
+	}
+	if entries[0].DeviceAddress != "ADDR001" {
+		t.Errorf("audit device_address: want ADDR001, got %q", entries[0].DeviceAddress)
+	}
+}
+
+func TestWriteParamset_WrongCentralErrors(t *testing.T) {
+	ps := newFakeParamsets()
+	buf := audit.NewBuffer(100)
+	devs, _, _ := makeDeviceFixture()
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:     devs,
+		Paramsets:   ps,
+		Audit:       buf,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	// ADDR001 belongs to ccu1 — submitting ccu2 as owner must be refused.
+	res := callTool(t, cs, "write_paramset", map[string]any{
+		"central_name": "ccu2",
+		"address":      "ADDR001",
+		"key":          "MASTER",
+		"values":       map[string]any{"MIN_SETPOINT": 10.0},
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true when central_name does not own the device")
+	}
+
+	// PutParamset must NOT have been called.
+	if len(ps.putCalls) != 0 {
+		t.Errorf("PutParamset should not have been called, got %d calls", len(ps.putCalls))
+	}
+
+	// No audit entry must have been recorded.
+	if buf.Len() != 0 {
+		t.Errorf("expected 0 audit entries after failed write, got %d", buf.Len())
+	}
+}
+
+// ─── trigger_program ─────────────────────────────────────────────────────────
+
+// makeHubWithProgram builds a *hub.Hub containing one registered program
+// whose writer records execution calls. Returns the hub and the writer.
+func makeHubWithProgram(centralName, programID string) (*hub.Hub, *fakeProgramWriter) {
+	writer := &fakeProgramWriter{}
+	prog := hub.NewProgram(centralName, programID, "Test Program", "a test program", false, writer)
+	h := hub.NewHub(centralName)
+	h.PutProgram(prog)
+	return h, writer
+}
+
+func TestTriggerProgram_ExecutesProgram(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	h, writer := makeHubWithProgram("ccu1", "prog-42")
+
+	hubs := newFakeHubs()
+	hubs.add("ccu1", h)
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		Hubs:        hubs,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "trigger_program", map[string]any{
+		"central_name": "ccu1",
+		"program_id":   "prog-42",
+	})
+	if res.IsError {
+		t.Fatalf("trigger_program returned error: %v", res.Content)
+	}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	unmarshalStructured(t, res, &out)
+	if !out.OK {
+		t.Fatal("expected OK=true on successful program trigger")
+	}
+
+	// The fake writer must have been called exactly once with the program ID.
+	if len(writer.calls) != 1 {
+		t.Fatalf("expected 1 ExecuteProgram call, got %d", len(writer.calls))
+	}
+	if writer.calls[0] != "prog-42" {
+		t.Errorf("ExecuteProgram id: want %q, got %q", "prog-42", writer.calls[0])
+	}
+}
+
+func TestTriggerProgram_UnknownProgramErrors(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	h := hub.NewHub("ccu1") // no programs registered
+
+	hubs := newFakeHubs()
+	hubs.add("ccu1", h)
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		Hubs:        hubs,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "trigger_program", map[string]any{
+		"central_name": "ccu1",
+		"program_id":   "does-not-exist",
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true for unknown program_id")
+	}
+}
+
+func TestTriggerProgram_UnknownCentralErrors(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+
+	hubs := newFakeHubs() // no centrals registered
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		Hubs:        hubs,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "trigger_program", map[string]any{
+		"central_name": "ccu-unknown",
+		"program_id":   "prog-1",
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true for unknown central")
+	}
+}
+
+// ─── catalogue gate (AllowWrites=false) ──────────────────────────────────────
+
+func TestCatalogue_ReadToolsPresentWriteToolsAbsentWhenWritesDisabled(t *testing.T) {
+	ps := newFakeParamsets()
+	fh := &fakeHealth{overall: health.StatusHealthy}
+	hubs := newFakeHubs()
+	devs, _, _ := makeDeviceFixture()
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		Paramsets:   ps,
+		Health:      fh,
+		Hubs:        hubs,
+		AllowWrites: false,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	names := toolNames(t, cs)
+
+	// Read tools must be present.
+	for _, want := range []string{"read_paramset", "get_health"} {
+		if !names[want] {
+			t.Errorf("expected read tool %q to be in catalogue when AllowWrites=false", want)
+		}
+	}
+
+	// Write tools must be absent.
+	for _, absent := range []string{"write_paramset", "trigger_program"} {
+		if names[absent] {
+			t.Errorf("write tool %q must not be in catalogue when AllowWrites=false", absent)
+		}
 	}
 }

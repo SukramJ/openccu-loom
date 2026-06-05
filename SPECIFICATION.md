@@ -536,11 +536,15 @@ projects the same domain the REST surface serves, scoped per central.
 
 The adapter mounts on the REST listener at `North.MCP.Path` (default
 `/mcp`) behind the same auth chain, gated by `North.MCP.Enabled`. Read
-tools (`list_centrals`, `list_devices`, `get_device`, `list_audit`) are
-always registered; the write tool (`set_datapoint`) only when
-`North.MCP.AllowWrites` is also set, and it refuses to write to a device
-the named central does not own (ADR 0002). The `mcp.v1` / `mcp.write.v1`
-capability tokens surface the posture through `GET /info`.
+tools (`list_centrals`, `list_devices`, `get_device`, `read_paramset`,
+`get_health`, `list_audit`) are always registered; write tools
+(`set_datapoint`, `write_paramset`, `trigger_program`) only when
+`North.MCP.AllowWrites` is also set, and the device-touching writes
+refuse to act on a device the named central does not own (ADR 0002).
+Each tool additionally gates on its own dependency. The `mcp.v1` /
+`mcp.write.v1` capability tokens surface the posture through `GET /info`.
+A `list_incidents` tool is deliberately omitted for now — the daemon's
+incident source is still a stub; it lands when real incidents do.
 
 - **[ADR 0025](docs/adr/0025-mcp-northbound-adapter.md)** — the
   production MCP adapter: tool / resource shapes, multi-CCU scoping,
