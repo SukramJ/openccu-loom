@@ -50,19 +50,28 @@ func DefaultColorControlServerConfig() ColorControlServerConfig {
 	}
 }
 
+// ColorTemperatureWriter is the optional sink a [ColorControlServer]
+// drives on a successful MoveToColorTemperature. Implementations translate
+// the cropped mired value into the device's native unit — HM exposes
+// COLOR_TEMPERATURE in Kelvin (mireds = 1_000_000 / Kelvin) — and push it
+// to the CCU. A write error aborts the command and leaves the in-process
+// CurrentColorTemperatureMireds attribute unchanged, so the reported state
+// never claims a value the device did not accept.
+type ColorTemperatureWriter interface {
+	SetColorTemperatureMireds(ctx context.Context, mireds uint16, priority hmenum.CommandPriority) error
+}
+
 // ColorControlServer is a minimal CT-only ColorControl cluster server
 // (cluster 0x0300) for the ColorTemperatureLight (0x010C) device type.
-// It holds the current CT value in-process; all color-move / step
-// commands are accepted and answered with Success but do not drive HM
-// hardware — callers that need write-through must subtype or wrap.
-//
-// TODO: wire write-through to the HM device's COLOR_TEMPERATURE parameter
-// once a suitable adapter interface is defined. At present, MoveToColorTemperature
-// updates the in-process state only and returns Success, satisfying
-// chip-tool conformance without a live CCU target.
+// It holds the current CT value in-process and, when a
+// [ColorTemperatureWriter] is wired via [ColorControlServer.SetWriter],
+// pushes every MoveToColorTemperature down to the device. Without a writer
+// the server updates in-process state only and answers Success — the
+// chip-tool conformance / test path that needs no live CCU target.
 type ColorControlServer struct {
 	cfg     ColorControlServerConfig
 	current uint16
+	writer  ColorTemperatureWriter
 }
 
 // NewColorControlServer constructs a ColorControlServer with the given
@@ -72,6 +81,12 @@ func NewColorControlServer(cfg ColorControlServerConfig) *ColorControlServer {
 	init := min(max(cfg.InitialMireds, cfg.MinMireds), cfg.MaxMireds)
 	return &ColorControlServer{cfg: cfg, current: init}
 }
+
+// SetWriter wires the optional write-through sink. Pass nil to detach.
+// Intended to be called once at endpoint-assembly time, before the server
+// handles any command; the IM dispatcher serializes command delivery, so
+// no further synchronisation is needed.
+func (s *ColorControlServer) SetWriter(w ColorTemperatureWriter) { s.writer = w }
 
 // MatterClusterID returns the ColorControl cluster ID (0x0300).
 func (s *ColorControlServer) MatterClusterID() uint32 { return wire.ColorControlClusterID }
@@ -126,9 +141,12 @@ func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any
 // (0x0A) crops the target to [MinMireds, MaxMireds] and updates the
 // in-process CT state per matter.js ColorControlServer.ts:moveToColorTemperatureLogic
 // (lines 973-980) which passes the value through #cropColorTemperature (line 221).
-// The CT-move and CT-step commands (0x4B, 0x4C) and StopMoveStep (0x47)
-// are accepted as no-ops — HM devices have no continuous-rate CT sweep.
-func (s *ColorControlServer) MatterInvoke(_ context.Context, cmdID uint32, fields any, _ hmenum.CommandPriority) (any, error) {
+// When a [ColorTemperatureWriter] is wired the cropped value is pushed to
+// the device first; a write error aborts the command and leaves the
+// reported state unchanged. The CT-move and CT-step commands (0x4B, 0x4C)
+// and StopMoveStep (0x47) are accepted as no-ops — HM devices have no
+// continuous-rate CT sweep.
+func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	switch cmdID {
 	case wire.ColorCtrlCmdMoveToColorTemperature:
 		// Decode target mireds from fields. The bridge delivers either a bare
@@ -152,6 +170,14 @@ func (s *ColorControlServer) MatterInvoke(_ context.Context, cmdID uint32, field
 		}
 		if target > s.cfg.MaxMireds {
 			target = s.cfg.MaxMireds
+		}
+		// Push to the device before committing the reported state, so a
+		// rejected write never leaves CurrentColorTemperatureMireds claiming
+		// a value the CCU did not accept.
+		if s.writer != nil {
+			if err := s.writer.SetColorTemperatureMireds(ctx, target, priority); err != nil {
+				return nil, fmt.Errorf("colorcontrol: MoveToColorTemperature write-through: %w", err)
+			}
 		}
 		s.current = target
 		return nil, nil
