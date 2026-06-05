@@ -62,6 +62,8 @@ go.work.sum
 *.db-wal
 *.db-shm
 secrets.key
+# Auto-generated master key for at-rest secret encryption (ADR 0027).
+secret.key
 
 # TLS + backup artifacts (never commit)
 tls/

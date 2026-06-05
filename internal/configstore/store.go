@@ -219,6 +219,88 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 	}
 }
 
+// marshalSection is the inverse of [applySection]: it serialises the
+// section's sub-tree of cfg into the JSON shape stored in
+// config_sections. ok is false for sections that have no config.Config
+// source (currently only [SectionSecurity]), which the seed skips.
+func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err error) {
+	switch sec {
+	case SectionMQTT:
+		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027)
+		raw, err = json.Marshal(cfg.North.MQTT)
+	case SectionMatter:
+		raw, err = json.Marshal(cfg.North.Matter)
+	case SectionDiscovery:
+		raw, err = json.Marshal(cfg.North.Discovery)
+	case SectionREST:
+		raw, err = json.Marshal(cfg.North.REST)
+	case SectionOIDC:
+		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027)
+		raw, err = json.Marshal(cfg.North.REST.Auth.OIDC)
+	case SectionUI:
+		raw, err = json.Marshal(cfg.North.UI)
+	case SectionCallback:
+		raw, err = json.Marshal(cfg.Callback)
+	case SectionCCUData:
+		raw, err = json.Marshal(cfg.CCUData)
+	case SectionReliability:
+		raw, err = json.Marshal(cfg.Reliability)
+	case SectionPersistence:
+		raw, err = json.Marshal(cfg.Persistence)
+	case SectionLocale:
+		raw, err = json.Marshal(LocaleConfig{Locale: cfg.Locale})
+	case SectionSecurity:
+		return nil, false, nil
+	default:
+		return nil, false, fmt.Errorf("configstore: marshal: unknown section %q", sec)
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("configstore: marshal %s: %w", sec, err)
+	}
+	return raw, true, nil
+}
+
+// SeedSectionsFromConfig performs a one-shot copy of the YAML-loaded
+// config sections into the config_sections table on first run. It is a
+// no-op when any section row already exists, so subsequent boots — and
+// any operator SPA edit — keep the DB authoritative. Mirrors the
+// one-shot users/centrals seed, giving operators a "write a full
+// config.yaml, start once, then manage in the SPA" workflow.
+//
+// Secrets are seeded exactly as written in the YAML (matching how the
+// SPA persists a section verbatim). A secret left empty in the YAML
+// stays empty in the DB and is resolved from its env var at load time,
+// so env-only secrets never land in the database.
+//
+// Returns the number of sections written.
+func (s *Store) SeedSectionsFromConfig(ctx context.Context, cfg *config.Config, updatedBy string) (int, error) {
+	if s.sections == nil || cfg == nil {
+		return 0, nil
+	}
+	existing, err := s.sections.List(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("configstore: seed: list sections: %w", err)
+	}
+	if len(existing) > 0 {
+		return 0, nil // already seeded or SPA-edited — DB is authoritative
+	}
+	n := 0
+	for _, sec := range AllSections() {
+		raw, ok, mErr := marshalSection(sec, cfg)
+		if mErr != nil {
+			return n, mErr
+		}
+		if !ok {
+			continue
+		}
+		if _, err := s.sections.Put(ctx, string(sec), raw, updatedBy); err != nil {
+			return n, fmt.Errorf("configstore: seed %s: %w", sec, err)
+		}
+		n++
+	}
+	return n, nil
+}
+
 // layerCentrals materialises the centrals table into
 // [config.Config.Centrals]. Disabled rows are silently skipped so
 // the operator can park a CCU without removing it.

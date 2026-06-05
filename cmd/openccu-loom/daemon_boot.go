@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -72,8 +73,30 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 			Logging: cfg.Logging,
 			Listen:  config.BootstrapListen{REST: cfg.North.REST.Listen, UI: cfg.North.UI.Listen},
 		}
+		// Resolve the at-rest secret cipher (ADR 0027) and wire it into the
+		// section + centrals stores so secret-classed fields are sealed
+		// transparently on write and opened on read.
+		cipher, cerr := secret.Load(cfg.DataDir, os.Getenv, logger)
+		if cerr != nil {
+			logger.Warn("secret.load", slog.String("err", cerr.Error()),
+				slog.String("effect", "config secrets stored in plaintext"))
+			cipher = &secret.Cipher{}
+		}
+		ov.sqCentrals.SetCipher(cipher)
+		ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
+			return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+		})
 		ov.configStore = configstore.New(bootstrapCfg, ov.sqSections, ov.sqCentrals,
 			configstore.WithEnvLookup(os.Getenv))
+		// First-run seed: copy the YAML-loaded config sections into the DB
+		// once (no-op when any section row exists). Secrets are sealed by the
+		// section store's transform hook. Runs before OverlayInto so the DB is
+		// populated for this and every subsequent boot.
+		if n, err := ov.configStore.SeedSectionsFromConfig(ctx, cfg, "yaml-bootstrap"); err != nil {
+			logger.Warn("configstore.seed", slog.String("err", err.Error()))
+		} else if n > 0 {
+			logger.Info("configstore.seed", slog.Int("sections", n))
+		}
 		if _, err := ov.configStore.OverlayInto(ctx, cfg); err != nil {
 			logger.Warn("configstore.overlay", slog.String("err", err.Error()))
 		} else if err := cfg.Validate(); err != nil {
