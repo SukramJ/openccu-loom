@@ -20,6 +20,55 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   backward-compatible. See
   `docs/external-clients/ha-unique-id-migration.md`.
 
+### Added
+
+- **MCP server (Model Context Protocol).** A new north-bound adapter
+  (`internal/north/mcp/`) exposes the daemon to LLM agents as tools over
+  a Streamable-HTTP transport, mounted on the REST listener behind the
+  same auth chain. Disabled by default (`North.MCP.Enabled`) and
+  read-only even when enabled — write tools are registered only when
+  `North.MCP.AllowWrites` is also set, and the write tools that touch a
+  device refuse to act on one the named central does not own. Read
+  tools: `list_centrals`, `list_devices`, `get_device`, `read_paramset`,
+  `get_health`, `list_audit`. Write tools: `set_datapoint`,
+  `write_paramset`, `trigger_program`. Each tool also gates on its own
+  dependency, so a partial wiring never exposes a half-functional tool.
+  The `mcp.v1` / `mcp.write.v1` capability tokens surface the posture via
+  `GET /info`. Built on the official `modelcontextprotocol/go-sdk`. See
+  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).
+
+- **System variables now work on Homegear backends.** Homegear is
+  XML-RPC-only, so the JSON-RPC hub bootstrap could not populate its
+  sysvar list and `/api/v1/sysvars` stayed empty. The daemon now loads
+  and periodically refreshes Homegear system variables over the XML-RPC
+  `getAllSystemVariables` method (inferring each variable's type from
+  its value, since Homegear ships only name + value), and writes values
+  back via `setSystemVariable` — bringing Homegear to parity with the
+  reference stack's Homegear support. Programs, rooms, and functions
+  remain empty on Homegear by design (no ReGa engine / metadata RPC),
+  matching that stack.
+
+- **Device-model labels for HmIP-DLP and HmIP-UDI-SMI55.** These two
+  devices ship icons and parameter help but no device-model label in
+  the upstream translation catalogue, so their MQTT discovery payload
+  omitted `model_id` (HA fell back to the cryptic wire type). The
+  curated translation overlay now supplies the German and English
+  labels — "Türschlossantrieb - pro" / "Door Lock Drive - pro" and
+  "Universal Dimmeraufsatz - Bewegungsmelder" / "Universal Dimming
+  Control Element - motion detector".
+
+### Fixed
+
+- **Model-snapshot drift gate honours its documented overrides.**
+  `script/model_snapshot_drift_check.py` derived its env-override keys
+  via a fragile string transform that did not match the documented
+  `OPENCCU_LOOM_DRIFT_GENERIC` / `_CHANNEL` / `_CALC` names, so three
+  of the four baseline overrides silently had no effect. The keys are
+  now an explicit table. The script also prints a TOTAL line and now
+  fails on any drift bucket it has no baseline for (previously such
+  buckets slipped through unguarded), and its stale `parity_audit.md`
+  references were re-pointed at `docs/parity/by_design.md`.
+
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that

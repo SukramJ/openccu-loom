@@ -76,6 +76,15 @@ north:
         admin: "change-me"
   ui:
     listen: ":8081"
+  # MCP server (Model Context Protocol) — exposes the daemon to LLM
+  # agents as tools over Streamable HTTP, mounted on the REST listener
+  # behind the same auth chain. Disabled by default. Read-only even when
+  # enabled: `allow_writes` must ALSO be set before an agent can change
+  # device state (set_datapoint). See ADR 0025.
+  # mcp:
+  #   enabled: false
+  #   allow_writes: false   # gate the write tools; keep false for read-only
+  #   path: /mcp            # Streamable-HTTP mount path on the REST listener
 
 # First-run setup safety. The /setup wizard always refuses once
 # there is at least one admin user; this toggle lets you keep the

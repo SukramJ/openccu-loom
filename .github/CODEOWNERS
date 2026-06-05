@@ -1,0 +1,30 @@
+# Code owners for OpenCCU-Loom.
+#
+# Owners are auto-requested for review on PRs that touch the matching
+# paths. Branch protection does not *require* code-owner approval (the
+# project runs with a single maintainer who cannot self-approve), so
+# this file's job is review routing and signalling which zones carry
+# extra parity obligations — see CLAUDE.md.
+
+# Default owner for everything in the repo.
+*                               @SukramJ
+
+# Matter side — a semantic 1:1 port of matter.js HEAD. Cluster IDs /
+# revisions / attribute IDs / constraints / wire shape are taken
+# verbatim; every change reads matter.js first, cites it, and updates
+# the parity tests. See CLAUDE.md "matter.js as the Matter Gold Standard".
+/internal/north/matter/         @SukramJ
+
+# CCU-side domain model — mirrors aiohomematic (enums, paramset
+# normalization, profile registration, custom-DP composition).
+/internal/model/custom/         @SukramJ
+/pkg/hmenum/                    @SukramJ
+
+# Architecture decisions are immutable once landed; changes here need a
+# new ADR rather than an edit.
+/docs/adr/                      @SukramJ
+
+# Build, CI and supply-chain surface.
+/.github/                       @SukramJ
+/Makefile                       @SukramJ
+/.goreleaser.yaml               @SukramJ

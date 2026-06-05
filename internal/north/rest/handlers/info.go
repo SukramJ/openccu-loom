@@ -35,6 +35,13 @@ const (
 	// to decide whether the "Restart daemon" button should be
 	// active.
 	CapabilitySupervisedRestart = "system.restart.supervised.v1"
+	// CapabilityMCP is surfaced when the MCP server (ADR 0025) is
+	// enabled. CapabilityMCPWrite is surfaced additionally when its
+	// write-capable tools are permitted (AllowWrites); a client reads
+	// the finer-grained token to decide whether to attempt a write tool.
+	CapabilityMCP = "mcp.v1"
+	//nolint:gosec // G101 false positive: a capability token, not a credential.
+	CapabilityMCPWrite = "mcp.write.v1"
 )
 
 // InfoResponse is the body of `GET /api/v1/info`.
@@ -58,6 +65,10 @@ type CapabilityDetector interface {
 	HasMatterBridge() bool
 	HasOIDC() bool
 	HasSupervisedRestart() bool
+	// HasMCP reports whether the MCP server is enabled; HasMCPWrite
+	// whether its write tools are permitted. HasMCPWrite implies HasMCP.
+	HasMCP() bool
+	HasMCPWrite() bool
 }
 
 // Info serves build metadata plus the daemon's wall-clock uptime.
@@ -101,6 +112,12 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasSupervisedRestart() {
 		out = append(out, CapabilitySupervisedRestart)
+	}
+	if d.HasMCP() {
+		out = append(out, CapabilityMCP)
+	}
+	if d.HasMCPWrite() {
+		out = append(out, CapabilityMCPWrite)
 	}
 	return out
 }

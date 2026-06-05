@@ -34,13 +34,15 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x002B: 4, // Fan
 	0x002C: 1, // AirQualitySensor
 	0x002D: 2, // AirPurifier
+	0x0040: 1, // IrrigationSystem
 	0x0041: 1, // WaterFreezeDetector
 	0x0042: 1, // WaterValve
 	0x0043: 1, // WaterLeakDetector
 	0x0044: 1, // RainSensor
+	0x0045: 1, // SoilSensor
 	0x0070: 2, // Refrigerator
 	0x0071: 5, // TemperatureControlledCabinet
-	0x0072: 4, // RoomAirConditioner
+	0x0072: 3, // RoomAirConditioner
 	0x0073: 2, // LaundryWasher
 	0x0074: 4, // RoboticVacuumCleaner
 	0x0075: 2, // Dishwasher
@@ -52,6 +54,7 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x007B: 2, // Oven
 	0x007C: 2, // LaundryDryer
 	0x0090: 2, // NetworkInfrastructureManager
+	0x0091: 2, // ThreadBorderRouter
 	0x0100: 3, // OnOffLight
 	0x0101: 3, // DimmableLight
 	0x0103: 3, // OnOffLightSwitch
@@ -66,8 +69,20 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x010F: 2, // MountedOnOffControl
 	0x0110: 2, // MountedDimmableLoadControl
 	0x0130: 1, // JointFabricAdministrator
+	0x0140: 2, // Intercom
+	0x0141: 2, // AudioDoorbell
+	0x0142: 1, // Camera
+	0x0143: 1, // VideoDoorbell
+	0x0144: 1, // FloodlightCamera
+	0x0145: 1, // SnapshotCamera
+	0x0146: 1, // Chime
+	0x0147: 1, // CameraController
+	0x0148: 2, // Doorbell
 	0x0202: 6, // WindowCovering
 	0x0203: 4, // WindowCoveringController
+	0x0230: 1, // Closure
+	0x0231: 1, // ClosurePanel
+	0x023E: 1, // ClosureController
 	0x0301: 5, // Thermostat
 	0x0302: 3, // TemperatureSensor
 	0x0303: 3, // Pump
@@ -81,6 +96,10 @@ var DeviceTypeRevisions = map[uint32]uint16{
 	0x050D: 3, // DeviceEnergyManagement
 	0x050F: 1, // WaterHeater
 	0x0510: 1, // ElectricalSensor
+	0x0511: 1, // ElectricalUtilityMeter
+	0x0512: 1, // MeterReferencePoint
+	0x0513: 1, // ElectricalEnergyTariff
+	0x0514: 1, // ElectricalMeter
 	0x0840: 3, // ControlBridge
 	0x0850: 3, // OnOffSensor
 }
@@ -110,10 +129,12 @@ var DeviceTypeNames = map[uint32]string{
 	0x002B: "Fan",
 	0x002C: "AirQualitySensor",
 	0x002D: "AirPurifier",
+	0x0040: "IrrigationSystem",
 	0x0041: "WaterFreezeDetector",
 	0x0042: "WaterValve",
 	0x0043: "WaterLeakDetector",
 	0x0044: "RainSensor",
+	0x0045: "SoilSensor",
 	0x0070: "Refrigerator",
 	0x0071: "TemperatureControlledCabinet",
 	0x0072: "RoomAirConditioner",
@@ -128,6 +149,7 @@ var DeviceTypeNames = map[uint32]string{
 	0x007B: "Oven",
 	0x007C: "LaundryDryer",
 	0x0090: "NetworkInfrastructureManager",
+	0x0091: "ThreadBorderRouter",
 	0x0100: "OnOffLight",
 	0x0101: "DimmableLight",
 	0x0103: "OnOffLightSwitch",
@@ -142,8 +164,20 @@ var DeviceTypeNames = map[uint32]string{
 	0x010F: "MountedOnOffControl",
 	0x0110: "MountedDimmableLoadControl",
 	0x0130: "JointFabricAdministrator",
+	0x0140: "Intercom",
+	0x0141: "AudioDoorbell",
+	0x0142: "Camera",
+	0x0143: "VideoDoorbell",
+	0x0144: "FloodlightCamera",
+	0x0145: "SnapshotCamera",
+	0x0146: "Chime",
+	0x0147: "CameraController",
+	0x0148: "Doorbell",
 	0x0202: "WindowCovering",
 	0x0203: "WindowCoveringController",
+	0x0230: "Closure",
+	0x0231: "ClosurePanel",
+	0x023E: "ClosureController",
 	0x0301: "Thermostat",
 	0x0302: "TemperatureSensor",
 	0x0303: "Pump",
@@ -157,6 +191,10 @@ var DeviceTypeNames = map[uint32]string{
 	0x050D: "DeviceEnergyManagement",
 	0x050F: "WaterHeater",
 	0x0510: "ElectricalSensor",
+	0x0511: "ElectricalUtilityMeter",
+	0x0512: "MeterReferencePoint",
+	0x0513: "ElectricalEnergyTariff",
+	0x0514: "ElectricalMeter",
 	0x0840: "ControlBridge",
 	0x0850: "OnOffSensor",
 }

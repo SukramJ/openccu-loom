@@ -140,6 +140,12 @@
       "revision": 2
     },
     {
+      "id": 64,
+      "name": "IrrigationSystem",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
       "id": 65,
       "name": "WaterFreezeDetector",
       "classification": "simple",
@@ -164,6 +170,12 @@
       "revision": 1
     },
     {
+      "id": 69,
+      "name": "SoilSensor",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
       "id": 112,
       "name": "Refrigerator",
       "classification": "simple",
@@ -179,7 +191,7 @@
       "id": 114,
       "name": "RoomAirConditioner",
       "classification": "simple",
-      "revision": 4
+      "revision": 3
     },
     {
       "id": 115,
@@ -244,6 +256,12 @@
     {
       "id": 144,
       "name": "NetworkInfrastructureManager",
+      "classification": "simple",
+      "revision": 2
+    },
+    {
+      "id": 145,
+      "name": "ThreadBorderRouter",
       "classification": "simple",
       "revision": 2
     },
@@ -332,6 +350,60 @@
       "revision": 1
     },
     {
+      "id": 320,
+      "name": "Intercom",
+      "classification": "simple",
+      "revision": 2
+    },
+    {
+      "id": 321,
+      "name": "AudioDoorbell",
+      "classification": "simple",
+      "revision": 2
+    },
+    {
+      "id": 322,
+      "name": "Camera",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 323,
+      "name": "VideoDoorbell",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 324,
+      "name": "FloodlightCamera",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 325,
+      "name": "SnapshotCamera",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 326,
+      "name": "Chime",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 327,
+      "name": "CameraController",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 328,
+      "name": "Doorbell",
+      "classification": "simple",
+      "revision": 2
+    },
+    {
       "id": 514,
       "name": "WindowCovering",
       "classification": "simple",
@@ -342,6 +414,24 @@
       "name": "WindowCoveringController",
       "classification": "simple",
       "revision": 4
+    },
+    {
+      "id": 560,
+      "name": "Closure",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 561,
+      "name": "ClosurePanel",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 574,
+      "name": "ClosureController",
+      "classification": "simple",
+      "revision": 1
     },
     {
       "id": 769,
@@ -419,6 +509,30 @@
       "id": 1296,
       "name": "ElectricalSensor",
       "classification": "utility",
+      "revision": 1
+    },
+    {
+      "id": 1297,
+      "name": "ElectricalUtilityMeter",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 1298,
+      "name": "MeterReferencePoint",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 1299,
+      "name": "ElectricalEnergyTariff",
+      "classification": "simple",
+      "revision": 1
+    },
+    {
+      "id": 1300,
+      "name": "ElectricalMeter",
+      "classification": "simple",
       "revision": 1
     },
     {
@@ -513,23 +627,9 @@
       "commands": [
         {
           "id": 0,
-          "name": "AddGroup",
-          "direction": "request",
-          "conformance": "M",
-          "response": "AddGroupResponse"
-        },
-        {
-          "id": 0,
           "name": "AddGroupResponse",
           "direction": "response",
           "conformance": "M"
-        },
-        {
-          "id": 1,
-          "name": "ViewGroup",
-          "direction": "request",
-          "conformance": "M",
-          "response": "ViewGroupResponse"
         },
         {
           "id": 1,
@@ -539,23 +639,9 @@
         },
         {
           "id": 2,
-          "name": "GetGroupMembership",
-          "direction": "request",
-          "conformance": "M",
-          "response": "GetGroupMembershipResponse"
-        },
-        {
-          "id": 2,
           "name": "GetGroupMembershipResponse",
           "direction": "response",
           "conformance": "M"
-        },
-        {
-          "id": 3,
-          "name": "RemoveGroup",
-          "direction": "request",
-          "conformance": "M",
-          "response": "RemoveGroupResponse"
         },
         {
           "id": 3,
@@ -697,7 +783,7 @@
         },
         {
           "name": "OFFONLY",
-          "conformance": "[!LT | DF]"
+          "conformance": "[!(LT | DF)]"
         }
       ]
     },
@@ -728,27 +814,20 @@
           "id": 2,
           "name": "MinLevel",
           "type": "uint8",
-          "conformance": "[LT]",
-          "access": "R V",
-          "constraint": "1 to 254",
-          "default": 1
-        },
-        {
-          "id": 2,
-          "name": "MinLevel",
-          "type": "uint8",
-          "conformance": "[!LT]",
+          "conformance": "Rev >= v7, O",
           "access": "R V",
           "constraint": "max 254",
-          "default": 0
+          "quality": "F",
+          "default": 1
         },
         {
           "id": 3,
           "name": "MaxLevel",
           "type": "uint8",
-          "conformance": "O",
+          "conformance": "Rev >= v7, O",
           "access": "R V",
           "constraint": "minLevel to 254",
+          "quality": "F",
           "default": 254
         },
         {
@@ -758,7 +837,7 @@
           "conformance": "FQ",
           "access": "R V",
           "constraint": "minFrequency to maxFrequency",
-          "quality": "S P Q"
+          "quality": "S Q"
         },
         {
           "id": 5,
@@ -845,7 +924,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 6
+          "default": 7
         }
       ],
       "commands": [
@@ -1064,9 +1143,8 @@
           "type": "uint16",
           "conformance": "M",
           "access": "R V",
-          "constraint": "min 4",
-          "quality": "F",
-          "default": 4
+          "constraint": "4 to 65534",
+          "quality": "F"
         },
         {
           "id": 3,
@@ -1074,9 +1152,8 @@
           "type": "uint16",
           "conformance": "M",
           "access": "R V",
-          "constraint": "min 3",
-          "quality": "F",
-          "default": 3
+          "constraint": "3 to 65534",
+          "quality": "F"
         },
         {
           "id": 4,
@@ -1084,9 +1161,8 @@
           "type": "uint16",
           "conformance": "M",
           "access": "R V",
-          "constraint": "min 4",
-          "quality": "F",
-          "default": 4
+          "constraint": "4 to 65534",
+          "quality": "F"
         },
         {
           "id": 5,
@@ -1095,8 +1171,7 @@
           "conformance": "MNGD",
           "access": "R V",
           "constraint": "desc",
-          "quality": "F",
-          "default": []
+          "quality": "F"
         },
         {
           "id": 6,
@@ -1104,8 +1179,7 @@
           "type": "list",
           "conformance": "MNGD",
           "access": "R F V",
-          "constraint": "desc",
-          "default": []
+          "constraint": "desc"
         },
         {
           "id": 65532,
@@ -1477,7 +1551,7 @@
           "id": 18,
           "name": "UniqueId",
           "type": "string",
-          "conformance": "M",
+          "conformance": "Rev >= v4, O",
           "access": "R V",
           "constraint": "max 32",
           "quality": "F"
@@ -1494,7 +1568,7 @@
           "id": 20,
           "name": "ProductAppearance",
           "type": "ProductAppearanceStruct",
-          "conformance": "O",
+          "conformance": "[Rev >= v2]",
           "access": "R V",
           "quality": "F"
         },
@@ -1502,7 +1576,7 @@
           "id": 21,
           "name": "SpecificationVersion",
           "type": "uint32",
-          "conformance": "M",
+          "conformance": "Rev >= v3",
           "access": "R V",
           "constraint": "desc",
           "quality": "F",
@@ -1512,7 +1586,7 @@
           "id": 22,
           "name": "MaxPathsPerInvoke",
           "type": "uint16",
-          "conformance": "M",
+          "conformance": "Rev >= v3",
           "access": "R V",
           "constraint": "min 1",
           "quality": "F",
@@ -1522,7 +1596,7 @@
           "id": 24,
           "name": "ConfigurationVersion",
           "type": "uint32",
-          "conformance": "P, M",
+          "conformance": "P, Rev >= v5",
           "access": "R V",
           "constraint": "min 1",
           "quality": "N",
@@ -2262,6 +2336,36 @@
           "quality": "X N"
         },
         {
+          "id": 10,
+          "name": "RecoveryIdentifier",
+          "type": "octstr",
+          "conformance": "P, NR",
+          "access": "R M",
+          "constraint": "8",
+          "quality": "N",
+          "default": {
+            "type": "bytes",
+            "value": "0"
+          }
+        },
+        {
+          "id": 11,
+          "name": "NetworkRecoveryReason",
+          "type": "NetworkRecoveryReasonEnum",
+          "conformance": "P, NR",
+          "access": "R M",
+          "quality": "X",
+          "default": null
+        },
+        {
+          "id": 12,
+          "name": "IsCommissioningWithoutPower",
+          "type": "bool",
+          "conformance": "P, O",
+          "access": "R V",
+          "default": false
+        },
+        {
           "id": 65532,
           "name": "FeatureMap",
           "type": "FeatureMap"
@@ -2332,6 +2436,10 @@
         {
           "name": "TC",
           "conformance": "O"
+        },
+        {
+          "name": "NR",
+          "conformance": "P, O"
         }
       ]
     },
@@ -4045,7 +4153,7 @@
         {
           "id": 18,
           "name": "UniqueId",
-          "conformance": "M"
+          "conformance": "Rev >= v4, O"
         },
         {
           "id": 19,
@@ -4055,7 +4163,7 @@
         {
           "id": 20,
           "name": "ProductAppearance",
-          "conformance": "O"
+          "conformance": "[Rev >= v2]"
         },
         {
           "id": 21,
@@ -4070,7 +4178,7 @@
         {
           "id": 24,
           "name": "ConfigurationVersion",
-          "conformance": "P, O"
+          "conformance": "P, [Rev >= v5]"
         },
         {
           "id": 65532,
@@ -4128,7 +4236,7 @@
       "features": [
         {
           "name": "BIS",
-          "conformance": "O"
+          "conformance": "[Rev >= v4]"
         }
       ]
     },
@@ -4638,6 +4746,12 @@
           "constraint": "min 0",
           "quality": "N",
           "default": []
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
         }
       ],
       "commands": [],
@@ -4655,14 +4769,13 @@
           "name": "StateValue",
           "type": "bool",
           "conformance": "M",
-          "access": "R V",
-          "quality": "P"
+          "access": "R V"
         },
         {
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 1
+          "default": 2
         }
       ],
       "commands": [],
@@ -4849,6 +4962,57 @@
       "featureMap": 0,
       "attributes": [
         {
+          "id": 0,
+          "name": "PhaseList",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 32[max 64]",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "CurrentPhase",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "CountdownTime",
+          "type": "elapsed-s",
+          "conformance": "O",
+          "access": "R V",
+          "constraint": "max 259200",
+          "quality": "X Q",
+          "default": null
+        },
+        {
+          "id": 3,
+          "name": "OperationalStateList",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc"
+        },
+        {
+          "id": 4,
+          "name": "OperationalState",
+          "type": "OperationalStateEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 5,
+          "name": "OperationalError",
+          "type": "ErrorStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc"
+        },
+        {
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
@@ -4879,7 +5043,20 @@
           "name": "OperationalCommandResponse"
         }
       ],
-      "events": [],
+      "events": [
+        {
+          "id": 0,
+          "name": "OperationalError",
+          "priority": "critical",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "OperationCompletion",
+          "priority": "info",
+          "conformance": "O"
+        }
+      ],
       "features": []
     },
     {
@@ -4918,7 +5095,21 @@
           "default": 2
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -5089,7 +5280,21 @@
           "default": 3
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -5136,7 +5341,21 @@
           "default": 3
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -5242,15 +5461,33 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
           "name": "DEPONOFF",
           "conformance": "X"
+        },
+        {
+          "name": "DIRECTMODECH",
+          "conformance": "O"
         }
       ]
     },
@@ -5287,15 +5524,33 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 4
+          "default": 5
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
           "name": "DEPONOFF",
           "conformance": "X"
+        },
+        {
+          "name": "DIRECTMODECH",
+          "conformance": "O"
         }
       ]
     },
@@ -5400,6 +5655,36 @@
       "featureMap": 0,
       "attributes": [
         {
+          "id": 0,
+          "name": "Mask",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "Latch",
+          "type": "AlarmBitmap",
+          "conformance": "RESET",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "State",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 3,
+          "name": "Supported",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
           "id": 65532,
           "name": "FeatureMap",
           "type": "FeatureMap"
@@ -5413,12 +5698,26 @@
       ],
       "commands": [
         {
+          "id": 0,
+          "name": "Reset",
+          "direction": "request",
+          "conformance": "RESET",
+          "response": "status"
+        },
+        {
           "id": 1,
           "name": "ModifyEnabledAlarms",
           "conformance": "X"
         }
       ],
-      "events": [],
+      "events": [
+        {
+          "id": 0,
+          "name": "Notify",
+          "priority": "info",
+          "conformance": "M"
+        }
+      ],
       "features": [
         {
           "name": "RESET",
@@ -5464,7 +5763,21 @@
           "default": 3
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -5732,15 +6045,76 @@
       "featureMap": 0,
       "attributes": [
         {
+          "id": 0,
+          "name": "Mask",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "Latch",
+          "type": "AlarmBitmap",
+          "conformance": "RESET",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "State",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 3,
+          "name": "Supported",
+          "type": "AlarmBitmap",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
           "default": 1
         }
       ],
-      "commands": [],
-      "events": [],
-      "features": []
+      "commands": [
+        {
+          "id": 0,
+          "name": "Reset",
+          "direction": "request",
+          "conformance": "RESET",
+          "response": "status"
+        },
+        {
+          "id": 1,
+          "name": "ModifyEnabledAlarms",
+          "direction": "request",
+          "conformance": "O",
+          "response": "status"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "Notify",
+          "priority": "info",
+          "conformance": "M"
+        }
+      ],
+      "features": [
+        {
+          "name": "RESET"
+        }
+      ]
     },
     {
       "id": 94,
@@ -6048,6 +6422,57 @@
       "featureMap": 0,
       "attributes": [
         {
+          "id": 0,
+          "name": "PhaseList",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 32[max 64]",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "CurrentPhase",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "CountdownTime",
+          "type": "elapsed-s",
+          "conformance": "O",
+          "access": "R V",
+          "constraint": "max 259200",
+          "quality": "X Q",
+          "default": null
+        },
+        {
+          "id": 3,
+          "name": "OperationalStateList",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc"
+        },
+        {
+          "id": 4,
+          "name": "OperationalState",
+          "type": "OperationalStateEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 5,
+          "name": "OperationalError",
+          "type": "ErrorStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc"
+        },
+        {
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
@@ -6085,7 +6510,20 @@
           "response": "OperationalCommandResponse"
         }
       ],
-      "events": [],
+      "events": [
+        {
+          "id": 0,
+          "name": "OperationalError",
+          "priority": "critical",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "OperationCompletion",
+          "priority": "info",
+          "conformance": "O"
+        }
+      ],
       "features": []
     },
     {
@@ -6132,23 +6570,9 @@
       "commands": [
         {
           "id": 0,
-          "name": "AddScene",
-          "direction": "request",
-          "conformance": "M",
-          "response": "AddSceneResponse"
-        },
-        {
-          "id": 0,
           "name": "AddSceneResponse",
           "direction": "response",
           "conformance": "M"
-        },
-        {
-          "id": 1,
-          "name": "ViewScene",
-          "direction": "request",
-          "conformance": "M",
-          "response": "ViewSceneResponse"
         },
         {
           "id": 1,
@@ -6158,36 +6582,15 @@
         },
         {
           "id": 2,
-          "name": "RemoveScene",
-          "direction": "request",
-          "conformance": "M",
-          "response": "RemoveSceneResponse"
-        },
-        {
-          "id": 2,
           "name": "RemoveSceneResponse",
           "direction": "response",
           "conformance": "M"
         },
         {
           "id": 3,
-          "name": "RemoveAllScenes",
-          "direction": "request",
-          "conformance": "M",
-          "response": "RemoveAllScenesResponse"
-        },
-        {
-          "id": 3,
           "name": "RemoveAllScenesResponse",
           "direction": "response",
           "conformance": "M"
-        },
-        {
-          "id": 4,
-          "name": "StoreScene",
-          "direction": "request",
-          "conformance": "M",
-          "response": "StoreSceneResponse"
         },
         {
           "id": 4,
@@ -6204,23 +6607,9 @@
         },
         {
           "id": 6,
-          "name": "GetSceneMembership",
-          "direction": "request",
-          "conformance": "M",
-          "response": "GetSceneMembershipResponse"
-        },
-        {
-          "id": 6,
           "name": "GetSceneMembershipResponse",
           "direction": "response",
           "conformance": "M"
-        },
-        {
-          "id": 64,
-          "name": "CopyScene",
-          "direction": "request",
-          "conformance": "O",
-          "response": "CopySceneResponse"
         },
         {
           "id": 64,
@@ -6242,30 +6631,273 @@
       "name": "HepaFilterMonitoring",
       "revision": 1,
       "featureMap": 0,
-      "attributes": [],
-      "commands": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "Condition",
+          "type": "percent",
+          "conformance": "CON",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "DegradationDirection",
+          "type": "DegradationDirectionEnum",
+          "conformance": "CON",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "ChangeIndication",
+          "type": "ChangeIndicationEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 3,
+          "name": "InPlaceIndicator",
+          "type": "bool",
+          "conformance": "O",
+          "access": "R V"
+        },
+        {
+          "id": 4,
+          "name": "LastChangedTime",
+          "type": "epoch-s",
+          "conformance": "O",
+          "access": "RW VO",
+          "quality": "X N",
+          "default": null
+        },
+        {
+          "id": 5,
+          "name": "ReplacementProductList",
+          "type": "list",
+          "conformance": "REP",
+          "access": "R V",
+          "constraint": "max 5",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ResetCondition",
+          "direction": "request",
+          "conformance": "O",
+          "response": "status"
+        }
+      ],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "CON",
+          "conformance": "O"
+        },
+        {
+          "name": "WRN",
+          "conformance": "O"
+        },
+        {
+          "name": "REP",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 114,
       "name": "ActivatedCarbonFilterMonitoring",
       "revision": 1,
       "featureMap": 0,
-      "attributes": [],
-      "commands": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "Condition",
+          "type": "percent",
+          "conformance": "CON",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "DegradationDirection",
+          "type": "DegradationDirectionEnum",
+          "conformance": "CON",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "ChangeIndication",
+          "type": "ChangeIndicationEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 3,
+          "name": "InPlaceIndicator",
+          "type": "bool",
+          "conformance": "O",
+          "access": "R V"
+        },
+        {
+          "id": 4,
+          "name": "LastChangedTime",
+          "type": "epoch-s",
+          "conformance": "O",
+          "access": "RW VO",
+          "quality": "X N",
+          "default": null
+        },
+        {
+          "id": 5,
+          "name": "ReplacementProductList",
+          "type": "list",
+          "conformance": "REP",
+          "access": "R V",
+          "constraint": "max 5",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ResetCondition",
+          "direction": "request",
+          "conformance": "O",
+          "response": "status"
+        }
+      ],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "CON",
+          "conformance": "O"
+        },
+        {
+          "name": "WRN",
+          "conformance": "O"
+        },
+        {
+          "name": "REP",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 121,
       "name": "WaterTankLevelMonitoring",
       "revision": 1,
       "featureMap": 0,
-      "attributes": [],
-      "commands": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "Condition",
+          "type": "percent",
+          "conformance": "CON",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "DegradationDirection",
+          "type": "DegradationDirectionEnum",
+          "conformance": "CON",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "ChangeIndication",
+          "type": "ChangeIndicationEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 3,
+          "name": "InPlaceIndicator",
+          "type": "bool",
+          "conformance": "O",
+          "access": "R V"
+        },
+        {
+          "id": 4,
+          "name": "LastChangedTime",
+          "type": "epoch-s",
+          "conformance": "O",
+          "access": "RW VO",
+          "quality": "X N",
+          "default": null
+        },
+        {
+          "id": 5,
+          "name": "ReplacementProductList",
+          "type": "list",
+          "conformance": "REP",
+          "access": "R V",
+          "constraint": "max 5",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ResetCondition",
+          "direction": "request",
+          "conformance": "O",
+          "response": "status"
+        }
+      ],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "CON",
+          "conformance": "O"
+        },
+        {
+          "name": "WRN",
+          "conformance": "O"
+        },
+        {
+          "name": "REP",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 128,
@@ -6848,7 +7480,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 1
+          "default": 2
         }
       ],
       "commands": [],
@@ -6882,6 +7514,14 @@
         {
           "name": "PERE",
           "conformance": "O.b+"
+        },
+        {
+          "name": "APPE",
+          "conformance": "P, O"
+        },
+        {
+          "name": "REAE",
+          "conformance": "P, O"
         }
       ]
     },
@@ -6984,6 +7624,98 @@
         },
         {
           "name": "TP",
+          "conformance": "O"
+        }
+      ]
+    },
+    {
+      "id": 149,
+      "name": "CommodityPrice",
+      "revision": 4,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "TariffUnit",
+          "type": "TariffUnitEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 1,
+          "name": "Currency",
+          "type": "currency",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "CurrentPrice",
+          "type": "CommodityPriceStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PriceForecast",
+          "type": "list",
+          "conformance": "FORE",
+          "access": "R V",
+          "constraint": "max 56"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "GetDetailedPriceRequest",
+          "direction": "request",
+          "conformance": "O",
+          "response": "GetDetailedPriceResponse"
+        },
+        {
+          "id": 1,
+          "name": "GetDetailedPriceResponse",
+          "direction": "response",
+          "conformance": "GetDetailedPriceRequest"
+        },
+        {
+          "id": 2,
+          "name": "GetDetailedForecastRequest",
+          "direction": "request",
+          "conformance": "[FORE]",
+          "response": "GetDetailedForecastResponse"
+        },
+        {
+          "id": 3,
+          "name": "GetDetailedForecastResponse",
+          "direction": "response",
+          "conformance": "GetDetailedForecastRequest"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "PriceChange",
+          "priority": "info",
+          "conformance": "O"
+        }
+      ],
+      "features": [
+        {
+          "name": "FORE",
           "conformance": "O"
         }
       ]
@@ -7485,7 +8217,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
       "commands": [
@@ -7590,11 +8322,11 @@
         },
         {
           "name": "SOC",
-          "conformance": "P, O"
+          "conformance": "O"
         },
         {
           "name": "PNC",
-          "conformance": "P, O"
+          "conformance": "O"
         },
         {
           "name": "RFID",
@@ -7602,7 +8334,7 @@
         },
         {
           "name": "V2X",
-          "conformance": "P, O"
+          "conformance": "O"
         }
       ]
     },
@@ -7773,7 +8505,21 @@
           "default": 2
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -7818,7 +8564,21 @@
           "default": 1
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
@@ -7863,12 +8623,84 @@
           "default": 2
         }
       ],
-      "commands": [],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ChangeToMode",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ChangeToModeResponse"
+        },
+        {
+          "id": 1,
+          "name": "ChangeToModeResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
       "events": [],
       "features": [
         {
           "name": "DEPONOFF",
           "conformance": "X"
+        }
+      ]
+    },
+    {
+      "id": 160,
+      "name": "ElectricalGridConditions",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "LocalGenerationAvailable",
+          "type": "bool",
+          "conformance": "M",
+          "access": "RW VO",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "CurrentConditions",
+          "type": "ElectricalGridConditionsStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "ForecastConditions",
+          "type": "list",
+          "conformance": "FORE",
+          "access": "R V",
+          "constraint": "max 56"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [],
+      "events": [
+        {
+          "id": 0,
+          "name": "CurrentConditionsChanged",
+          "priority": "info",
+          "conformance": "O"
+        }
+      ],
+      "features": [
+        {
+          "name": "FORE",
+          "conformance": "O"
         }
       ]
     },
@@ -7885,7 +8717,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "desc",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -7909,7 +8741,7 @@
           "conformance": "DPS",
           "access": "R V",
           "constraint": "desc",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 4,
@@ -8037,8 +8869,7 @@
           "type": "string",
           "conformance": "O",
           "access": "R[W] VM",
-          "constraint": "max 3",
-          "quality": "P"
+          "constraint": "max 3"
         },
         {
           "id": 34,
@@ -8046,7 +8877,6 @@
           "type": "LEDSettingEnum",
           "conformance": "O",
           "access": "R[W] VM",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8054,8 +8884,7 @@
           "name": "AutoRelockTime",
           "type": "uint32",
           "conformance": "O",
-          "access": "R[W] VM",
-          "quality": "P"
+          "access": "R[W] VM"
         },
         {
           "id": 36,
@@ -8063,7 +8892,6 @@
           "type": "SoundVolumeEnum",
           "conformance": "O",
           "access": "R[W] VM",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8072,8 +8900,7 @@
           "type": "OperatingModeEnum",
           "conformance": "M",
           "access": "R[W] VM",
-          "constraint": "desc",
-          "quality": "P"
+          "constraint": "desc"
         },
         {
           "id": 38,
@@ -8089,7 +8916,6 @@
           "type": "ConfigurationRegisterBitmap",
           "conformance": "O",
           "access": "R V",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8098,7 +8924,6 @@
           "type": "bool",
           "conformance": "O",
           "access": "R[W] VA",
-          "quality": "P",
           "default": true
         },
         {
@@ -8107,7 +8932,6 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "quality": "P",
           "default": true
         },
         {
@@ -8116,7 +8940,6 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "quality": "P",
           "default": true
         },
         {
@@ -8125,7 +8948,6 @@
           "type": "bool",
           "conformance": "O",
           "access": "RW VM",
-          "quality": "P",
           "default": true
         },
         {
@@ -8134,7 +8956,6 @@
           "type": "LocalProgrammingFeaturesBitmap",
           "conformance": "O",
           "access": "R[W] VA",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8143,8 +8964,7 @@
           "type": "uint8",
           "conformance": "PIN | RID",
           "access": "R[W] VA",
-          "constraint": "1 to 255",
-          "quality": "P"
+          "constraint": "1 to 255"
         },
         {
           "id": 49,
@@ -8152,8 +8972,7 @@
           "type": "uint8",
           "conformance": "PIN | RID",
           "access": "R[W] VA",
-          "constraint": "1 to 255",
-          "quality": "P"
+          "constraint": "1 to 255"
         },
         {
           "id": 50,
@@ -8161,7 +8980,6 @@
           "type": "bool",
           "conformance": "[!USR & PIN]",
           "access": "R[W] VA",
-          "quality": "P",
           "default": true
         },
         {
@@ -8169,8 +8987,7 @@
           "name": "RequirePinForRemoteOperation",
           "type": "bool",
           "conformance": "COTA & PIN",
-          "access": "R[W] VA",
-          "quality": "P"
+          "access": "R[W] VA"
         },
         {
           "id": 52,
@@ -8185,8 +9002,7 @@
           "type": "uint16",
           "conformance": "[USR]",
           "access": "R[W] VA",
-          "constraint": "1 to 2880",
-          "quality": "P"
+          "constraint": "1 to 2880"
         },
         {
           "id": 128,
@@ -8275,7 +9091,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 9
+          "default": 10
         }
       ],
       "commands": [
@@ -8308,72 +9124,11 @@
           "response": "status"
         },
         {
-          "id": 5,
-          "name": "SetPinCode",
-          "direction": "request",
-          "conformance": "!USR & PIN",
-          "response": "status"
-        },
-        {
-          "id": 6,
-          "name": "GetPinCode",
-          "direction": "request",
-          "conformance": "!USR & PIN",
-          "response": "GetPinCodeResponse"
-        },
-        {
-          "id": 6,
-          "name": "GetPinCodeResponse",
-          "direction": "response",
-          "conformance": "!USR & PIN"
-        },
-        {
-          "id": 7,
-          "name": "ClearPinCode",
-          "direction": "request",
-          "conformance": "!USR & PIN",
-          "response": "status"
-        },
-        {
-          "id": 8,
-          "name": "ClearAllPinCodes",
-          "direction": "request",
-          "conformance": "!USR & PIN",
-          "response": "status"
-        },
-        {
-          "id": 9,
-          "name": "SetUserStatus",
-          "direction": "request",
-          "conformance": "!USR & (PIN | RID | FGP)",
-          "response": "status"
-        },
-        {
-          "id": 10,
-          "name": "GetUserStatus",
-          "direction": "request",
-          "conformance": "!USR & (PIN | RID | FGP)",
-          "response": "GetUserStatusResponse"
-        },
-        {
-          "id": 10,
-          "name": "GetUserStatusResponse",
-          "direction": "response",
-          "conformance": "!USR"
-        },
-        {
           "id": 11,
           "name": "SetWeekDaySchedule",
           "direction": "request",
           "conformance": "WDSCH",
           "response": "status"
-        },
-        {
-          "id": 12,
-          "name": "GetWeekDaySchedule",
-          "direction": "request",
-          "conformance": "WDSCH",
-          "response": "GetWeekDayScheduleResponse"
         },
         {
           "id": 12,
@@ -8397,13 +9152,6 @@
         },
         {
           "id": 15,
-          "name": "GetYearDaySchedule",
-          "direction": "request",
-          "conformance": "YDSCH",
-          "response": "GetYearDayScheduleResponse"
-        },
-        {
-          "id": 15,
           "name": "GetYearDayScheduleResponse",
           "direction": "response",
           "conformance": "YDSCH"
@@ -8424,13 +9172,6 @@
         },
         {
           "id": 18,
-          "name": "GetHolidaySchedule",
-          "direction": "request",
-          "conformance": "HDSCH",
-          "response": "GetHolidayScheduleResponse"
-        },
-        {
-          "id": 18,
           "name": "GetHolidayScheduleResponse",
           "direction": "response",
           "conformance": "HDSCH"
@@ -8440,60 +9181,6 @@
           "name": "ClearHolidaySchedule",
           "direction": "request",
           "conformance": "HDSCH",
-          "response": "status"
-        },
-        {
-          "id": 20,
-          "name": "SetUserType",
-          "direction": "request",
-          "conformance": "!USR & (PIN | RID | FGP)",
-          "response": "status"
-        },
-        {
-          "id": 21,
-          "name": "GetUserType",
-          "direction": "request",
-          "conformance": "!USR & (PIN | RID | FGP)",
-          "response": "GetUserTypeResponse"
-        },
-        {
-          "id": 21,
-          "name": "GetUserTypeResponse",
-          "direction": "response",
-          "conformance": "!USR"
-        },
-        {
-          "id": 22,
-          "name": "SetRfidCode",
-          "direction": "request",
-          "conformance": "!USR & RID",
-          "response": "status"
-        },
-        {
-          "id": 23,
-          "name": "GetRfidCode",
-          "direction": "request",
-          "conformance": "!USR & RID",
-          "response": "GetRfidCodeResponse"
-        },
-        {
-          "id": 23,
-          "name": "GetRfidCodeResponse",
-          "direction": "response",
-          "conformance": "!USR & RID"
-        },
-        {
-          "id": 24,
-          "name": "ClearRfidCode",
-          "direction": "request",
-          "conformance": "!USR & RID",
-          "response": "status"
-        },
-        {
-          "id": 25,
-          "name": "ClearAllRfidCodes",
-          "direction": "request",
-          "conformance": "!USR & RID",
           "response": "status"
         },
         {
@@ -8617,7 +9304,7 @@
         },
         {
           "name": "RID",
-          "conformance": "O"
+          "conformance": "P, O"
         },
         {
           "name": "FGP",
@@ -8641,7 +9328,7 @@
         },
         {
           "name": "USR",
-          "conformance": "ALIRO, [PIN | RID | FGP | FACE]"
+          "conformance": "PIN | RID | FGP | FACE | ALIRO"
         },
         {
           "name": "YDSCH",
@@ -8682,44 +9369,6 @@
           "default": 0
         },
         {
-          "id": 1,
-          "name": "PhysicalClosedLimitLift",
-          "type": "uint16",
-          "conformance": "P, [LF & PA_LF & ABS]",
-          "access": "R V",
-          "quality": "F",
-          "default": 0
-        },
-        {
-          "id": 2,
-          "name": "PhysicalClosedLimitTilt",
-          "type": "uint16",
-          "conformance": "P, [TL & PA_TL & ABS]",
-          "access": "R V",
-          "quality": "F",
-          "default": 0
-        },
-        {
-          "id": 3,
-          "name": "CurrentPositionLift",
-          "type": "uint16",
-          "conformance": "P, [LF & PA_LF & ABS]",
-          "access": "R V",
-          "constraint": "installedOpenLimitLift to installedClosedLimitLift",
-          "quality": "X N",
-          "default": null
-        },
-        {
-          "id": 4,
-          "name": "CurrentPositionTilt",
-          "type": "uint16",
-          "conformance": "P, [TL & PA_TL & ABS]",
-          "access": "R V",
-          "constraint": "installedOpenLimitTilt to installedClosedLimitTilt",
-          "quality": "X N",
-          "default": null
-        },
-        {
           "id": 5,
           "name": "NumberOfActuationsLift",
           "type": "uint16",
@@ -8752,7 +9401,7 @@
           "type": "percent",
           "conformance": "[LF & PA_LF]",
           "access": "R V",
-          "quality": "X N P",
+          "quality": "X N",
           "default": null
         },
         {
@@ -8761,7 +9410,7 @@
           "type": "percent",
           "conformance": "[TL & PA_TL]",
           "access": "R V",
-          "quality": "X N P",
+          "quality": "X N",
           "default": null
         },
         {
@@ -8771,7 +9420,6 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "max 63",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8780,7 +9428,7 @@
           "type": "percent100ths",
           "conformance": "LF & PA_LF",
           "access": "R V",
-          "quality": "X P",
+          "quality": "X",
           "default": null
         },
         {
@@ -8789,7 +9437,7 @@
           "type": "percent100ths",
           "conformance": "TL & PA_TL",
           "access": "R V",
-          "quality": "X P",
+          "quality": "X",
           "default": null
         },
         {
@@ -8809,7 +9457,7 @@
           "conformance": "LF & PA_LF",
           "access": "R V",
           "constraint": "max 10000",
-          "quality": "X N P",
+          "quality": "X N",
           "default": null
         },
         {
@@ -8819,63 +9467,8 @@
           "conformance": "TL & PA_TL",
           "access": "R V",
           "constraint": "max 10000",
-          "quality": "X N P",
+          "quality": "X N",
           "default": null
-        },
-        {
-          "id": 16,
-          "name": "InstalledOpenLimitLift",
-          "type": "uint16",
-          "conformance": "P, LF & PA_LF & ABS",
-          "access": "R V",
-          "constraint": "max 65534",
-          "quality": "N",
-          "default": 0
-        },
-        {
-          "id": 17,
-          "name": "InstalledClosedLimitLift",
-          "type": "uint16",
-          "conformance": "P, LF & PA_LF & ABS",
-          "access": "R V",
-          "constraint": "max 65534",
-          "quality": "N",
-          "default": 65534
-        },
-        {
-          "id": 18,
-          "name": "InstalledOpenLimitTilt",
-          "type": "uint16",
-          "conformance": "P, TL & PA_TL & ABS",
-          "access": "R V",
-          "constraint": "max 65534",
-          "quality": "N",
-          "default": 0
-        },
-        {
-          "id": 19,
-          "name": "InstalledClosedLimitTilt",
-          "type": "uint16",
-          "conformance": "P, TL & PA_TL & ABS",
-          "access": "R V",
-          "constraint": "max 65534",
-          "quality": "N",
-          "default": 65534
-        },
-        {
-          "id": 20,
-          "name": "VelocityLift",
-          "conformance": "D"
-        },
-        {
-          "id": 21,
-          "name": "AccelerationTimeLift",
-          "conformance": "D"
-        },
-        {
-          "id": 22,
-          "name": "DecelerationTimeLift",
-          "conformance": "D"
         },
         {
           "id": 23,
@@ -8888,23 +9481,12 @@
           "default": 0
         },
         {
-          "id": 24,
-          "name": "IntermediateSetpointsLift",
-          "conformance": "D"
-        },
-        {
-          "id": 25,
-          "name": "IntermediateSetpointsTilt",
-          "conformance": "D"
-        },
-        {
           "id": 26,
           "name": "SafetyStatus",
           "type": "SafetyStatusBitmap",
           "conformance": "O",
           "access": "R V",
           "constraint": "desc",
-          "quality": "P",
           "default": 0
         },
         {
@@ -8916,7 +9498,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 6
+          "default": 8
         }
       ],
       "commands": [
@@ -8942,24 +9524,10 @@
           "response": "status"
         },
         {
-          "id": 4,
-          "name": "GoToLiftValue",
-          "direction": "request",
-          "conformance": "P, [LF & ABS]",
-          "response": "status"
-        },
-        {
           "id": 5,
           "name": "GoToLiftPercentage",
           "direction": "request",
           "conformance": "LF & PA_LF, [LF]",
-          "response": "status"
-        },
-        {
-          "id": 7,
-          "name": "GoToTiltValue",
-          "direction": "request",
-          "conformance": "P, [TL & ABS]",
           "response": "status"
         },
         {
@@ -8985,12 +9553,347 @@
           "conformance": "[LF]"
         },
         {
-          "name": "ABS",
-          "conformance": "P, O"
-        },
-        {
           "name": "PA_TL",
           "conformance": "[TL]"
+        }
+      ]
+    },
+    {
+      "id": 260,
+      "name": "ClosureControl",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "CountdownTime",
+          "type": "elapsed-s",
+          "conformance": "[PS & !IS]",
+          "access": "R V",
+          "constraint": "max 259200",
+          "quality": "X Q",
+          "default": null
+        },
+        {
+          "id": 1,
+          "name": "MainState",
+          "type": "MainStateEnum",
+          "conformance": "M",
+          "access": "R V"
+        },
+        {
+          "id": 2,
+          "name": "CurrentErrorList",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 10[all]"
+        },
+        {
+          "id": 3,
+          "name": "OverallCurrentState",
+          "type": "OverallCurrentStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X",
+          "default": null
+        },
+        {
+          "id": 4,
+          "name": "OverallTargetState",
+          "type": "OverallTargetStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X",
+          "default": null
+        },
+        {
+          "id": 5,
+          "name": "LatchControlModes",
+          "type": "LatchControlModesBitmap",
+          "conformance": "LT",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "Stop",
+          "direction": "request",
+          "conformance": "!IS",
+          "response": "status"
+        },
+        {
+          "id": 1,
+          "name": "MoveTo",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 2,
+          "name": "Calibrate",
+          "direction": "request",
+          "conformance": "CL",
+          "response": "status"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "OperationalError",
+          "priority": "critical",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "MovementCompleted",
+          "priority": "info",
+          "conformance": "!IS"
+        },
+        {
+          "id": 2,
+          "name": "EngageStateChanged",
+          "priority": "info",
+          "conformance": "MO"
+        },
+        {
+          "id": 3,
+          "name": "SecureStateChanged",
+          "priority": "info",
+          "conformance": "M"
+        }
+      ],
+      "features": [
+        {
+          "name": "PS",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LT",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "IS",
+          "conformance": "O"
+        },
+        {
+          "name": "SP",
+          "conformance": "[PS & !IS]"
+        },
+        {
+          "name": "VT",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "PD",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "CL",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "PT",
+          "conformance": "O"
+        },
+        {
+          "name": "MO",
+          "conformance": "O"
+        }
+      ]
+    },
+    {
+      "id": 261,
+      "name": "ClosureDimension",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "CurrentState",
+          "type": "DimensionStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X Q",
+          "default": null
+        },
+        {
+          "id": 1,
+          "name": "TargetState",
+          "type": "DimensionStateStruct",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X",
+          "default": null
+        },
+        {
+          "id": 2,
+          "name": "Resolution",
+          "type": "percent100ths",
+          "conformance": "PS",
+          "access": "R V",
+          "constraint": "min 0.01%",
+          "quality": "F",
+          "default": {
+            "type": "percent",
+            "value": 0
+          }
+        },
+        {
+          "id": 3,
+          "name": "StepValue",
+          "type": "percent100ths",
+          "conformance": "PS",
+          "access": "R V",
+          "constraint": "min 0.01%",
+          "quality": "F",
+          "default": {
+            "type": "percent",
+            "value": 0
+          }
+        },
+        {
+          "id": 4,
+          "name": "Unit",
+          "type": "ClosureUnitEnum",
+          "conformance": "UT",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 5,
+          "name": "UnitRange",
+          "type": "UnitRangeStruct",
+          "conformance": "UT",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X",
+          "default": null
+        },
+        {
+          "id": 6,
+          "name": "LimitRange",
+          "type": "RangePercent100thsStruct",
+          "conformance": "LM",
+          "access": "R V",
+          "constraint": "desc"
+        },
+        {
+          "id": 7,
+          "name": "TranslationDirection",
+          "type": "TranslationDirectionEnum",
+          "conformance": "TR",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 8,
+          "name": "RotationAxis",
+          "type": "RotationAxisEnum",
+          "conformance": "RO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "Overflow",
+          "type": "OverflowEnum",
+          "conformance": "RO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "ModulationType",
+          "type": "ModulationTypeEnum",
+          "conformance": "MD",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 11,
+          "name": "LatchControlModes",
+          "type": "LatchControlModesBitmap",
+          "conformance": "LT",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "SetTarget",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 1,
+          "name": "Step",
+          "direction": "request",
+          "conformance": "PS",
+          "response": "status"
+        }
+      ],
+      "events": [],
+      "features": [
+        {
+          "name": "PS",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LT",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "UT",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "LM",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "SP",
+          "conformance": "[PS]"
+        },
+        {
+          "name": "TR",
+          "conformance": "[PS].b"
+        },
+        {
+          "name": "RO",
+          "conformance": "[PS].b"
+        },
+        {
+          "name": "MD",
+          "conformance": "[PS].b"
         }
       ]
     },
@@ -9238,7 +10141,6 @@
           "conformance": "O",
           "access": "R V",
           "constraint": "desc",
-          "quality": "P",
           "default": 0
         },
         {
@@ -9265,7 +10167,7 @@
           "type": "int16",
           "conformance": "M",
           "access": "R V",
-          "quality": "X P",
+          "quality": "X",
           "default": null
         },
         {
@@ -9339,7 +10241,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 4
+          "default": 5
         }
       ],
       "commands": [],
@@ -9490,7 +10392,7 @@
           "type": "temperature",
           "conformance": "M",
           "access": "R V",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -9506,8 +10408,7 @@
           "name": "Occupancy",
           "type": "OccupancyBitmap",
           "conformance": "OCC",
-          "access": "R V",
-          "default": 1
+          "access": "R V"
         },
         {
           "id": 3,
@@ -9564,30 +10465,17 @@
         {
           "id": 7,
           "name": "PiCoolingDemand",
-          "type": "uint8",
-          "conformance": "[COOL]",
-          "access": "R V",
-          "constraint": "0% to 100%",
-          "quality": "P"
+          "conformance": "D"
         },
         {
           "id": 8,
           "name": "PiHeatingDemand",
-          "type": "uint8",
-          "conformance": "[HEAT]",
-          "access": "R V",
-          "constraint": "0% to 100%",
-          "quality": "P"
+          "conformance": "D"
         },
         {
           "id": 9,
           "name": "HvacSystemTypeConfiguration",
-          "type": "HVACSystemTypeBitmap",
-          "conformance": "D",
-          "access": "R[W] VM",
-          "constraint": "desc",
-          "quality": "N",
-          "default": 0
+          "conformance": "D"
         },
         {
           "id": 16,
@@ -9711,7 +10599,7 @@
           "type": "SignedTemperature",
           "conformance": "AUTO",
           "access": "R[W] VM",
-          "constraint": "0 to 12.7\u00b0C",
+          "constraint": "0 to 12.7°C",
           "quality": "N",
           "default": {
             "type": "celsius",
@@ -9755,33 +10643,6 @@
           "default": 0
         },
         {
-          "id": 32,
-          "name": "StartOfWeek",
-          "type": "StartOfWeekEnum",
-          "conformance": "SCH",
-          "access": "R V",
-          "constraint": "desc",
-          "quality": "F"
-        },
-        {
-          "id": 33,
-          "name": "NumberOfWeeklyTransitions",
-          "type": "uint8",
-          "conformance": "SCH",
-          "access": "R V",
-          "quality": "F",
-          "default": 0
-        },
-        {
-          "id": 34,
-          "name": "NumberOfDailyTransitions",
-          "type": "uint8",
-          "conformance": "SCH",
-          "access": "R V",
-          "quality": "F",
-          "default": 0
-        },
-        {
           "id": 35,
           "name": "TemperatureSetpointHold",
           "type": "TemperatureSetpointHoldEnum",
@@ -9804,12 +10665,7 @@
         {
           "id": 37,
           "name": "ThermostatProgrammingOperationMode",
-          "type": "ProgrammingOperationModeBitmap",
-          "conformance": "O",
-          "access": "RW VM",
-          "constraint": "desc",
-          "quality": "P",
-          "default": 0
+          "conformance": "D"
         },
         {
           "id": 41,
@@ -9842,68 +10698,37 @@
           "name": "SetpointChangeSourceTimestamp",
           "type": "epoch-s",
           "conformance": "O",
-          "access": "R V",
-          "default": 0
+          "access": "R V"
         },
         {
           "id": 52,
           "name": "OccupiedSetback",
-          "type": "UnsignedTemperature",
-          "conformance": "SB",
-          "access": "RW VM",
-          "constraint": "occupiedSetbackMin to occupiedSetbackMax",
-          "quality": "X N",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 53,
           "name": "OccupiedSetbackMin",
-          "type": "UnsignedTemperature",
-          "conformance": "SB",
-          "access": "R V",
-          "constraint": "max occupiedSetbackMax",
-          "quality": "X F",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 54,
           "name": "OccupiedSetbackMax",
-          "type": "UnsignedTemperature",
-          "conformance": "SB",
-          "access": "R V",
-          "constraint": "occupiedSetbackMin to 25.4\u00b0C",
-          "quality": "X F",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 55,
           "name": "UnoccupiedSetback",
-          "type": "UnsignedTemperature",
-          "conformance": "SB & OCC",
-          "access": "RW VM",
-          "constraint": "unoccupiedSetbackMin to unoccupiedSetbackMax",
-          "quality": "X N",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 56,
           "name": "UnoccupiedSetbackMin",
-          "type": "UnsignedTemperature",
-          "conformance": "SB & OCC",
-          "access": "R V",
-          "constraint": "max unoccupiedSetbackMax",
-          "quality": "X F",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 57,
           "name": "UnoccupiedSetbackMax",
-          "type": "UnsignedTemperature",
-          "conformance": "SB & OCC",
-          "access": "R V",
-          "constraint": "unoccupiedSetbackMin to 25.4\u00b0C",
-          "quality": "X F",
-          "default": null
+          "conformance": "D"
         },
         {
           "id": 58,
@@ -9999,7 +10824,7 @@
           "type": "list",
           "conformance": "PRES",
           "access": "R V",
-          "constraint": "desc",
+          "constraint": "1 to 7",
           "quality": "F"
         },
         {
@@ -10008,7 +10833,7 @@
           "type": "list",
           "conformance": "MSCH",
           "access": "R V",
-          "constraint": "desc",
+          "constraint": "1 to 3",
           "quality": "F"
         },
         {
@@ -10017,8 +10842,8 @@
           "type": "uint8",
           "conformance": "PRES",
           "access": "R V",
-          "quality": "F",
-          "default": 0
+          "constraint": "min 1",
+          "quality": "F"
         },
         {
           "id": 75,
@@ -10026,8 +10851,8 @@
           "type": "uint8",
           "conformance": "MSCH",
           "access": "R V",
-          "quality": "F",
-          "default": 0
+          "constraint": "min 1",
+          "quality": "F"
         },
         {
           "id": 76,
@@ -10035,8 +10860,8 @@
           "type": "uint8",
           "conformance": "MSCH",
           "access": "R V",
-          "quality": "F",
-          "default": 0
+          "constraint": "min 1",
+          "quality": "F"
         },
         {
           "id": 77,
@@ -10044,8 +10869,8 @@
           "type": "uint8",
           "conformance": "MSCH",
           "access": "R V",
-          "quality": "X F",
-          "default": null
+          "constraint": "min 1",
+          "quality": "X F"
         },
         {
           "id": 78,
@@ -10054,8 +10879,7 @@
           "conformance": "PRES",
           "access": "R V",
           "constraint": "max 16",
-          "quality": "X N",
-          "default": null
+          "quality": "X N"
         },
         {
           "id": 79,
@@ -10064,8 +10888,7 @@
           "conformance": "MSCH",
           "access": "R V",
           "constraint": "max 16",
-          "quality": "X N",
-          "default": null
+          "quality": "X N"
         },
         {
           "id": 80,
@@ -10074,8 +10897,7 @@
           "conformance": "PRES",
           "access": "RW VM",
           "constraint": "max numberOfPresets",
-          "quality": "N T",
-          "default": []
+          "quality": "N T"
         },
         {
           "id": 81,
@@ -10083,9 +10905,8 @@
           "type": "list",
           "conformance": "MSCH",
           "access": "RW VM",
-          "constraint": "desc",
-          "quality": "N T",
-          "default": []
+          "constraint": "max numberOfSchedules",
+          "quality": "N T"
         },
         {
           "id": 82,
@@ -10105,7 +10926,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 9
+          "default": 10
         }
       ],
       "commands": [
@@ -10114,39 +10935,6 @@
           "name": "SetpointRaiseLower",
           "direction": "request",
           "conformance": "M",
-          "response": "status"
-        },
-        {
-          "id": 0,
-          "name": "GetWeeklyScheduleResponse",
-          "direction": "response",
-          "conformance": "SCH"
-        },
-        {
-          "id": 1,
-          "name": "SetWeeklySchedule",
-          "direction": "request",
-          "conformance": "SCH",
-          "response": "status"
-        },
-        {
-          "id": 1,
-          "name": "GetRelayStatusLogResponse",
-          "direction": "response",
-          "conformance": "GetRelayStatusLog"
-        },
-        {
-          "id": 2,
-          "name": "GetWeeklySchedule",
-          "direction": "request",
-          "conformance": "SCH",
-          "response": "GetWeeklyScheduleResponse"
-        },
-        {
-          "id": 3,
-          "name": "ClearWeeklySchedule",
-          "direction": "request",
-          "conformance": "SCH",
           "response": "status"
         },
         {
@@ -10172,6 +10960,7 @@
           "id": 254,
           "name": "AtomicRequest",
           "direction": "request",
+          "conformance": "PRES | MSCH",
           "response": "AtomicResponse"
         }
       ],
@@ -10190,12 +10979,8 @@
           "conformance": "O"
         },
         {
-          "name": "SCH",
-          "conformance": "O"
-        },
-        {
           "name": "SB",
-          "conformance": "O"
+          "conformance": "D"
         },
         {
           "name": "AUTO",
@@ -10279,8 +11064,7 @@
           "type": "uint8",
           "conformance": "SPD",
           "access": "R V",
-          "constraint": "max speedMax",
-          "quality": "P"
+          "constraint": "max speedMax"
         },
         {
           "id": 7,
@@ -10297,8 +11081,7 @@
           "type": "RockBitmap",
           "conformance": "RCK",
           "access": "RW VO",
-          "constraint": "desc",
-          "quality": "P"
+          "constraint": "desc"
         },
         {
           "id": 9,
@@ -10315,16 +11098,14 @@
           "type": "WindBitmap",
           "conformance": "WND",
           "access": "RW VO",
-          "constraint": "desc",
-          "quality": "P"
+          "constraint": "desc"
         },
         {
           "id": 11,
           "name": "AirflowDirection",
           "type": "AirflowDirectionEnum",
           "conformance": "DIR",
-          "access": "RW VO",
-          "quality": "P"
+          "access": "RW VO"
         },
         {
           "id": 65532,
@@ -10335,7 +11116,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 5
+          "default": 6
         }
       ],
       "commands": [
@@ -10427,7 +11208,7 @@
           "conformance": "HS",
           "access": "R V",
           "constraint": "max 254",
-          "quality": "N P Q"
+          "quality": "N Q"
         },
         {
           "id": 1,
@@ -10436,7 +11217,7 @@
           "conformance": "HS",
           "access": "R V",
           "constraint": "max 254",
-          "quality": "N S P Q"
+          "quality": "N S Q"
         },
         {
           "id": 2,
@@ -10455,7 +11236,7 @@
           "conformance": "XY",
           "access": "R V",
           "constraint": "max 65279",
-          "quality": "N S P Q"
+          "quality": "N S Q"
         },
         {
           "id": 4,
@@ -10464,7 +11245,7 @@
           "conformance": "XY",
           "access": "R V",
           "constraint": "max 65279",
-          "quality": "N S P Q"
+          "quality": "N S Q"
         },
         {
           "id": 5,
@@ -10488,7 +11269,7 @@
           "conformance": "CT",
           "access": "R V",
           "constraint": "colorTempPhysicalMinMireds to colorTempPhysicalMaxMireds",
-          "quality": "N S P Q"
+          "quality": "N S Q"
         },
         {
           "id": 8,
@@ -10676,7 +11457,7 @@
           "name": "WhitePointX",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10684,7 +11465,7 @@
           "name": "WhitePointY",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10692,7 +11473,7 @@
           "name": "ColorPointRx",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10700,7 +11481,7 @@
           "name": "ColorPointRy",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10708,7 +11489,7 @@
           "name": "ColorPointRIntensity",
           "type": "uint8",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "quality": "X"
         },
         {
@@ -10716,7 +11497,7 @@
           "name": "ColorPointGx",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10724,7 +11505,7 @@
           "name": "ColorPointGy",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10732,7 +11513,7 @@
           "name": "ColorPointGIntensity",
           "type": "uint8",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "quality": "X"
         },
         {
@@ -10740,7 +11521,7 @@
           "name": "ColorPointBx",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10748,7 +11529,7 @@
           "name": "ColorPointBy",
           "type": "uint16",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "constraint": "max 65279"
         },
         {
@@ -10756,7 +11537,7 @@
           "name": "ColorPointBIntensity",
           "type": "uint8",
           "conformance": "O",
-          "access": "RW VM",
+          "access": "R V",
           "quality": "X"
         },
         {
@@ -10817,7 +11598,7 @@
         {
           "id": 16394,
           "name": "ColorCapabilities",
-          "type": "map16",
+          "type": "ColorCapabilitiesBitmap",
           "conformance": "M",
           "access": "R V",
           "constraint": "max 31"
@@ -10864,7 +11645,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 7
+          "default": 9
         }
       ],
       "commands": [
@@ -11039,7 +11820,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "0, minMeasuredValue to maxMeasuredValue",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -11080,7 +11861,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
       "commands": [],
@@ -11100,7 +11881,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "minMeasuredValue to maxMeasuredValue",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -11135,7 +11916,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 4
+          "default": 5
         }
       ],
       "commands": [],
@@ -11155,7 +11936,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "minMeasuredValue to maxMeasuredValue",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -11237,7 +12018,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
       "commands": [],
@@ -11262,7 +12043,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "minMeasuredValue to maxMeasuredValue",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -11295,7 +12076,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
       "commands": [],
@@ -11315,7 +12096,7 @@
           "conformance": "M",
           "access": "R V",
           "constraint": "minMeasuredValue to maxMeasuredValue",
-          "quality": "X P"
+          "quality": "X"
         },
         {
           "id": 1,
@@ -11347,7 +12128,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 3
+          "default": 4
         }
       ],
       "commands": [],
@@ -11366,8 +12147,7 @@
           "type": "OccupancyBitmap",
           "conformance": "M",
           "access": "R V",
-          "constraint": "0 to 1",
-          "quality": "P"
+          "constraint": "0 to 1"
         },
         {
           "id": 1,
@@ -11497,7 +12277,7 @@
           "id": 65533,
           "name": "ClusterRevision",
           "type": "ClusterRevision",
-          "default": 5
+          "default": 6
         }
       ],
       "commands": [],
@@ -11549,97 +12329,1411 @@
       "name": "CarbonMonoxideConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1037,
       "name": "CarbonDioxideConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1043,
       "name": "NitrogenDioxideConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1045,
       "name": "OzoneConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1066,
       "name": "Pm25ConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1067,
       "name": "FormaldehydeConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1068,
       "name": "Pm1ConcentrationMeasurement",
-      "revision": 1,
+      "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1069,
       "name": "Pm10ConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1070,
       "name": "TotalVolatileOrganicCompoundsConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
       "commands": [],
       "events": [],
-      "features": []
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
     },
     {
       "id": 1071,
       "name": "RadonConcentrationMeasurement",
       "revision": 4,
       "featureMap": 0,
-      "attributes": [],
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MinMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MaxMeasuredValue",
+          "type": "single",
+          "conformance": "MEA",
+          "access": "R V",
+          "constraint": "min minMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "PeakMeasuredValue",
+          "type": "single",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PeakMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "PEA",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 5,
+          "name": "AverageMeasuredValue",
+          "type": "single",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "minMeasuredValue to maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "AverageMeasuredValueWindow",
+          "type": "elapsed-s",
+          "conformance": "AVG",
+          "access": "R V",
+          "constraint": "max 604800"
+        },
+        {
+          "id": 7,
+          "name": "Uncertainty",
+          "type": "single",
+          "conformance": "[MEA]",
+          "access": "R V",
+          "constraint": "ms"
+        },
+        {
+          "id": 8,
+          "name": "MeasurementUnit",
+          "type": "MeasurementUnitEnum",
+          "conformance": "MEA",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "MeasurementMedium",
+          "type": "MeasurementMediumEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "LevelValue",
+          "type": "LevelValueEnum",
+          "conformance": "LEV",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 4
+        }
+      ],
+      "commands": [],
+      "events": [],
+      "features": [
+        {
+          "name": "MEA",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "LEV",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MED",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "CRI",
+          "conformance": "[LEV]"
+        },
+        {
+          "name": "PEA",
+          "conformance": "[MEA]"
+        },
+        {
+          "name": "AVG",
+          "conformance": "[MEA]"
+        }
+      ]
+    },
+    {
+      "id": 1072,
+      "name": "SoilMeasurement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "SoilMoistureMeasurementLimits",
+          "type": "MeasurementAccuracyStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "SoilMoistureMeasuredValue",
+          "type": "percent",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "soilMoistureMeasurementLimits.minMeasuredValue to soilMoistureMeasurementLimits.maxMeasuredValue",
+          "quality": "X"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
       "commands": [],
       "events": [],
       "features": []
@@ -12712,7 +14806,7 @@
           "type": "string",
           "conformance": "M",
           "access": "R V",
-          "constraint": "desc",
+          "constraint": "max 256",
           "quality": "F"
         },
         {
@@ -13111,6 +15205,1360 @@
       ],
       "events": [],
       "features": []
+    },
+    {
+      "id": 1360,
+      "name": "ZoneManagement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MaxUserDefinedZones",
+          "type": "uint8",
+          "conformance": "USERDEFINED",
+          "access": "R V",
+          "constraint": "min 5",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "MaxZones",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "min 1",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "Zones",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "0 to maxZones",
+          "quality": "N"
+        },
+        {
+          "id": 3,
+          "name": "Triggers",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "0 to maxZones",
+          "quality": "N"
+        },
+        {
+          "id": 4,
+          "name": "SensitivityMax",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "2 to 10",
+          "quality": "F"
+        },
+        {
+          "id": 5,
+          "name": "Sensitivity",
+          "type": "uint8",
+          "conformance": "!PERZONESENS",
+          "access": "RW VO",
+          "constraint": "1 to sensitivityMax",
+          "quality": "N"
+        },
+        {
+          "id": 6,
+          "name": "TwoDCartesianMax",
+          "type": "TwoDCartesianVertexStruct",
+          "conformance": "TWODCART",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "CreateTwoDCartesianZone",
+          "direction": "request",
+          "conformance": "TWODCART & USERDEFINED",
+          "response": "CreateTwoDCartesianZoneResponse"
+        },
+        {
+          "id": 1,
+          "name": "CreateTwoDCartesianZoneResponse",
+          "direction": "response",
+          "conformance": "TWODCART & USERDEFINED"
+        },
+        {
+          "id": 2,
+          "name": "UpdateTwoDCartesianZone",
+          "direction": "request",
+          "conformance": "TWODCART & USERDEFINED",
+          "response": "status"
+        },
+        {
+          "id": 3,
+          "name": "RemoveZone",
+          "direction": "request",
+          "conformance": "USERDEFINED",
+          "response": "status"
+        },
+        {
+          "id": 4,
+          "name": "CreateOrUpdateTrigger",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 5,
+          "name": "RemoveTrigger",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "ZoneTriggered",
+          "priority": "info",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "ZoneStopped",
+          "priority": "info",
+          "conformance": "M"
+        }
+      ],
+      "features": [
+        {
+          "name": "TWODCART",
+          "conformance": "O"
+        },
+        {
+          "name": "PERZONESENS",
+          "conformance": "[TWODCART]"
+        },
+        {
+          "name": "USERDEFINED",
+          "conformance": "[TWODCART]"
+        },
+        {
+          "name": "FOCUSZONES",
+          "conformance": "[USERDEFINED]"
+        }
+      ]
+    },
+    {
+      "id": 1361,
+      "name": "CameraAvStreamManagement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MaxConcurrentEncoders",
+          "type": "uint8",
+          "conformance": "VDO | SNP",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "MaxEncodedPixelRate",
+          "type": "uint32",
+          "conformance": "VDO | SNP",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "VideoSensorParams",
+          "type": "VideoSensorParamsStruct",
+          "conformance": "VDO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 3,
+          "name": "NightVisionUsesInfrared",
+          "type": "bool",
+          "conformance": "NV",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 4,
+          "name": "MinViewportResolution",
+          "type": "VideoResolutionStruct",
+          "conformance": "VDO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 5,
+          "name": "RateDistortionTradeOffPoints",
+          "type": "list",
+          "conformance": "VDO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 6,
+          "name": "MaxContentBufferSize",
+          "type": "uint32",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 7,
+          "name": "MicrophoneCapabilities",
+          "type": "AudioCapabilitiesStruct",
+          "conformance": "ADO",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 8,
+          "name": "SpeakerCapabilities",
+          "type": "AudioCapabilitiesStruct",
+          "conformance": "SPKR",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 9,
+          "name": "TwoWayTalkSupport",
+          "type": "TwoWayTalkSupportTypeEnum",
+          "conformance": "SPKR",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 10,
+          "name": "SnapshotCapabilities",
+          "type": "list",
+          "conformance": "SNP",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 11,
+          "name": "MaxNetworkBandwidth",
+          "type": "uint32",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 12,
+          "name": "CurrentFrameRate",
+          "type": "uint16",
+          "conformance": "VDO",
+          "access": "R V"
+        },
+        {
+          "id": 13,
+          "name": "HdrModeEnabled",
+          "type": "bool",
+          "conformance": "HDR",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 14,
+          "name": "SupportedStreamUsages",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 15,
+          "name": "AllocatedVideoStreams",
+          "type": "list",
+          "conformance": "VDO",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 16,
+          "name": "AllocatedAudioStreams",
+          "type": "list",
+          "conformance": "ADO",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 17,
+          "name": "AllocatedSnapshotStreams",
+          "type": "list",
+          "conformance": "SNP",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 18,
+          "name": "StreamUsagePriorities",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 19,
+          "name": "SoftRecordingPrivacyModeEnabled",
+          "type": "bool",
+          "conformance": "PRIV",
+          "access": "RW VO",
+          "quality": "N"
+        },
+        {
+          "id": 20,
+          "name": "SoftLivestreamPrivacyModeEnabled",
+          "type": "bool",
+          "conformance": "PRIV",
+          "access": "RW VO",
+          "quality": "N"
+        },
+        {
+          "id": 21,
+          "name": "HardPrivacyModeOn",
+          "type": "bool",
+          "conformance": "O",
+          "access": "R V",
+          "default": true
+        },
+        {
+          "id": 22,
+          "name": "NightVision",
+          "type": "TriStateAutoEnum",
+          "conformance": "NV",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 23,
+          "name": "NightVisionIllum",
+          "type": "TriStateAutoEnum",
+          "conformance": "[NV]",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 24,
+          "name": "Viewport",
+          "type": "ViewportStruct",
+          "conformance": "VDO",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 25,
+          "name": "SpeakerMuted",
+          "type": "bool",
+          "conformance": "SPKR",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 26,
+          "name": "SpeakerVolumeLevel",
+          "type": "uint8",
+          "conformance": "SPKR",
+          "access": "RW M",
+          "constraint": "speakerMinLevel to speakerMaxLevel",
+          "quality": "N"
+        },
+        {
+          "id": 27,
+          "name": "SpeakerMaxLevel",
+          "type": "uint8",
+          "conformance": "SPKR",
+          "access": "R M",
+          "constraint": "speakerMinLevel to 254"
+        },
+        {
+          "id": 28,
+          "name": "SpeakerMinLevel",
+          "type": "uint8",
+          "conformance": "SPKR",
+          "access": "R M",
+          "constraint": "max speakerMaxLevel"
+        },
+        {
+          "id": 29,
+          "name": "MicrophoneMuted",
+          "type": "bool",
+          "conformance": "ADO",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 30,
+          "name": "MicrophoneVolumeLevel",
+          "type": "uint8",
+          "conformance": "ADO",
+          "access": "RW M",
+          "constraint": "microphoneMinLevel to microphoneMaxLevel",
+          "quality": "N"
+        },
+        {
+          "id": 31,
+          "name": "MicrophoneMaxLevel",
+          "type": "uint8",
+          "conformance": "ADO",
+          "access": "R M",
+          "constraint": "microphoneMinLevel to 254"
+        },
+        {
+          "id": 32,
+          "name": "MicrophoneMinLevel",
+          "type": "uint8",
+          "conformance": "ADO",
+          "access": "R M",
+          "constraint": "max microphoneMaxLevel"
+        },
+        {
+          "id": 33,
+          "name": "MicrophoneAgcEnabled",
+          "type": "bool",
+          "conformance": "[ADO]",
+          "access": "RW M",
+          "quality": "N",
+          "default": true
+        },
+        {
+          "id": 34,
+          "name": "ImageRotation",
+          "type": "uint16",
+          "conformance": "[ICTL].b+",
+          "access": "RW M",
+          "constraint": "max 359",
+          "quality": "N"
+        },
+        {
+          "id": 35,
+          "name": "ImageFlipHorizontal",
+          "type": "bool",
+          "conformance": "[ICTL].b+",
+          "access": "RW M",
+          "quality": "N",
+          "default": true
+        },
+        {
+          "id": 36,
+          "name": "ImageFlipVertical",
+          "type": "bool",
+          "conformance": "[ICTL].b+",
+          "access": "RW M",
+          "quality": "N",
+          "default": true
+        },
+        {
+          "id": 37,
+          "name": "LocalVideoRecordingEnabled",
+          "type": "bool",
+          "conformance": "VDO & STOR",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 38,
+          "name": "LocalSnapshotRecordingEnabled",
+          "type": "bool",
+          "conformance": "SNP & STOR",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 39,
+          "name": "StatusLightEnabled",
+          "type": "bool",
+          "conformance": "O",
+          "access": "RW M",
+          "quality": "N",
+          "default": true
+        },
+        {
+          "id": 40,
+          "name": "StatusLightBrightness",
+          "type": "ThreeLevelAutoEnum",
+          "conformance": "O",
+          "access": "RW M",
+          "quality": "N"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "AudioStreamAllocate",
+          "direction": "request",
+          "conformance": "ADO",
+          "response": "AudioStreamAllocateResponse"
+        },
+        {
+          "id": 1,
+          "name": "AudioStreamAllocateResponse",
+          "direction": "response",
+          "conformance": "ADO"
+        },
+        {
+          "id": 2,
+          "name": "AudioStreamDeallocate",
+          "direction": "request",
+          "conformance": "ADO",
+          "response": "status"
+        },
+        {
+          "id": 3,
+          "name": "VideoStreamAllocate",
+          "direction": "request",
+          "conformance": "VDO",
+          "response": "VideoStreamAllocateResponse"
+        },
+        {
+          "id": 4,
+          "name": "VideoStreamAllocateResponse",
+          "direction": "response",
+          "conformance": "VDO"
+        },
+        {
+          "id": 5,
+          "name": "VideoStreamModify",
+          "direction": "request",
+          "conformance": "VDO & (WMARK | OSD)",
+          "response": "status"
+        },
+        {
+          "id": 6,
+          "name": "VideoStreamDeallocate",
+          "direction": "request",
+          "conformance": "VDO",
+          "response": "status"
+        },
+        {
+          "id": 7,
+          "name": "SnapshotStreamAllocate",
+          "direction": "request",
+          "conformance": "SNP",
+          "response": "SnapshotStreamAllocateResponse"
+        },
+        {
+          "id": 8,
+          "name": "SnapshotStreamAllocateResponse",
+          "direction": "response",
+          "conformance": "SNP"
+        },
+        {
+          "id": 9,
+          "name": "SnapshotStreamModify",
+          "direction": "request",
+          "conformance": "SNP & (WMARK | OSD)",
+          "response": "status"
+        },
+        {
+          "id": 10,
+          "name": "SnapshotStreamDeallocate",
+          "direction": "request",
+          "conformance": "SNP",
+          "response": "status"
+        },
+        {
+          "id": 11,
+          "name": "SetStreamPriorities",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 12,
+          "name": "CaptureSnapshot",
+          "direction": "request",
+          "conformance": "SNP",
+          "response": "CaptureSnapshotResponse"
+        },
+        {
+          "id": 13,
+          "name": "CaptureSnapshotResponse",
+          "direction": "response",
+          "conformance": "SNP"
+        }
+      ],
+      "events": [],
+      "features": [
+        {
+          "name": "ADO",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "VDO",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "SNP",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "PRIV",
+          "conformance": "O"
+        },
+        {
+          "name": "SPKR",
+          "conformance": "[ADO]"
+        },
+        {
+          "name": "ICTL",
+          "conformance": "[VDO | SNP]"
+        },
+        {
+          "name": "WMARK",
+          "conformance": "[VDO | SNP]"
+        },
+        {
+          "name": "OSD",
+          "conformance": "[VDO | SNP]"
+        },
+        {
+          "name": "STOR",
+          "conformance": "O"
+        },
+        {
+          "name": "HDR",
+          "conformance": "[VDO | SNP]"
+        },
+        {
+          "name": "NV",
+          "conformance": "[VDO | SNP]"
+        }
+      ]
+    },
+    {
+      "id": 1362,
+      "name": "CameraAvSettingsUserLevelManagement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MptzPosition",
+          "type": "MPTZStruct",
+          "conformance": "MPAN | MTILT | MZOOM",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 1,
+          "name": "MaxPresets",
+          "type": "uint8",
+          "conformance": "MPRESETS",
+          "access": "R V",
+          "quality": "F"
+        },
+        {
+          "id": 2,
+          "name": "MptzPresets",
+          "type": "list",
+          "conformance": "MPRESETS",
+          "access": "R V",
+          "constraint": "max maxPresets",
+          "quality": "N"
+        },
+        {
+          "id": 3,
+          "name": "DptzStreams",
+          "type": "list",
+          "conformance": "DPTZ",
+          "access": "R V",
+          "quality": "N"
+        },
+        {
+          "id": 4,
+          "name": "ZoomMax",
+          "type": "uint8",
+          "conformance": "MZOOM",
+          "access": "R V",
+          "constraint": "2 to 100"
+        },
+        {
+          "id": 5,
+          "name": "TiltMin",
+          "type": "int16",
+          "conformance": "MTILT",
+          "access": "R V",
+          "constraint": "-180 to 0"
+        },
+        {
+          "id": 6,
+          "name": "TiltMax",
+          "type": "int16",
+          "conformance": "MTILT",
+          "access": "R V",
+          "constraint": "1 to 180"
+        },
+        {
+          "id": 7,
+          "name": "PanMin",
+          "type": "int16",
+          "conformance": "MPAN",
+          "access": "R V",
+          "constraint": "-180 to 0"
+        },
+        {
+          "id": 8,
+          "name": "PanMax",
+          "type": "int16",
+          "conformance": "MPAN",
+          "access": "R V",
+          "constraint": "1 to 180"
+        },
+        {
+          "id": 9,
+          "name": "MovementState",
+          "type": "PhysicalMovementEnum",
+          "conformance": "MPAN | MTILT | MZOOM",
+          "access": "R V"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "MptzSetPosition",
+          "direction": "request",
+          "conformance": "MPAN | MTILT | MZOOM",
+          "response": "status"
+        },
+        {
+          "id": 1,
+          "name": "MptzRelativeMove",
+          "direction": "request",
+          "conformance": "MPAN | MTILT | MZOOM",
+          "response": "status"
+        },
+        {
+          "id": 2,
+          "name": "MptzMoveToPreset",
+          "direction": "request",
+          "conformance": "MPRESETS",
+          "response": "status"
+        },
+        {
+          "id": 3,
+          "name": "MptzSavePreset",
+          "direction": "request",
+          "conformance": "MPRESETS",
+          "response": "status"
+        },
+        {
+          "id": 4,
+          "name": "MptzRemovePreset",
+          "direction": "request",
+          "conformance": "MPRESETS",
+          "response": "status"
+        },
+        {
+          "id": 5,
+          "name": "DptzSetViewport",
+          "direction": "request",
+          "conformance": "DPTZ",
+          "response": "status"
+        },
+        {
+          "id": 6,
+          "name": "DptzRelativeMove",
+          "direction": "request",
+          "conformance": "[DPTZ]",
+          "response": "status"
+        }
+      ],
+      "events": [],
+      "features": [
+        {
+          "name": "DPTZ",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MPAN",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MTILT",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MZOOM",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "MPRESETS",
+          "conformance": "[MPAN | MTILT | MZOOM]"
+        }
+      ]
+    },
+    {
+      "id": 1363,
+      "name": "WebRtcTransportProvider",
+      "revision": 2,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "CurrentSessions",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S M"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 2
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "SolicitOffer",
+          "direction": "request",
+          "conformance": "M",
+          "response": "SolicitOfferResponse"
+        },
+        {
+          "id": 1,
+          "name": "SolicitOfferResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 2,
+          "name": "ProvideOffer",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ProvideOfferResponse"
+        },
+        {
+          "id": 3,
+          "name": "ProvideOfferResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "ProvideAnswer",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 5,
+          "name": "ProvideIceCandidates",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 6,
+          "name": "EndSession",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        }
+      ],
+      "events": [],
+      "features": [
+        {
+          "name": "METADATA",
+          "conformance": "P, O"
+        }
+      ]
+    },
+    {
+      "id": 1364,
+      "name": "WebRtcTransportRequestor",
+      "revision": 2,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "CurrentSessions",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S A"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 2
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "Offer",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 1,
+          "name": "Answer",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 2,
+          "name": "IceCandidates",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 3,
+          "name": "End",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        }
+      ],
+      "events": [],
+      "features": []
+    },
+    {
+      "id": 1365,
+      "name": "PushAvStreamTransport",
+      "revision": 2,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "SupportedFormats",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "min 1",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "CurrentConnections",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S V",
+          "constraint": "desc",
+          "quality": "N"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 2
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "AllocatePushTransport",
+          "direction": "request",
+          "conformance": "M",
+          "response": "AllocatePushTransportResponse"
+        },
+        {
+          "id": 1,
+          "name": "AllocatePushTransportResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 2,
+          "name": "DeallocatePushTransport",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 3,
+          "name": "ModifyPushTransport",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 4,
+          "name": "SetTransportStatus",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 5,
+          "name": "ManuallyTriggerTransport",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 6,
+          "name": "FindTransport",
+          "direction": "request",
+          "conformance": "M",
+          "response": "FindTransportResponse"
+        },
+        {
+          "id": 7,
+          "name": "FindTransportResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "PushTransportBegin",
+          "priority": "info",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "PushTransportEnd",
+          "priority": "info",
+          "conformance": "M"
+        }
+      ],
+      "features": [
+        {
+          "name": "PERZONESENS",
+          "conformance": "O"
+        },
+        {
+          "name": "METADATA",
+          "conformance": "P, O"
+        }
+      ]
+    },
+    {
+      "id": 1366,
+      "name": "Chime",
+      "revision": 2,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "InstalledChimeSounds",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "1 to 255"
+        },
+        {
+          "id": 1,
+          "name": "SelectedChime",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "RW VO",
+          "quality": "N"
+        },
+        {
+          "id": 2,
+          "name": "Enabled",
+          "type": "bool",
+          "conformance": "M",
+          "access": "RW VO",
+          "quality": "N"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 2
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "PlayChimeSound",
+          "direction": "request",
+          "conformance": "M"
+        }
+      ],
+      "events": [
+        {
+          "id": 0,
+          "name": "ChimeStartedPlaying",
+          "priority": "info",
+          "conformance": "P, Rev >= v2"
+        }
+      ],
+      "features": []
+    },
+    {
+      "id": 1792,
+      "name": "CommodityTariff",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "TariffInfo",
+          "type": "TariffInformationStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "TariffUnit",
+          "type": "TariffUnitEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "StartDate",
+          "type": "epoch-s",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "DayEntries",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 672",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "DayPatterns",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 28",
+          "quality": "X"
+        },
+        {
+          "id": 5,
+          "name": "CalendarPeriods",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "1 to 4",
+          "quality": "X"
+        },
+        {
+          "id": 6,
+          "name": "IndividualDays",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 50",
+          "quality": "X"
+        },
+        {
+          "id": 7,
+          "name": "CurrentDay",
+          "type": "DayStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 8,
+          "name": "NextDay",
+          "type": "DayStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 9,
+          "name": "CurrentDayEntry",
+          "type": "DayEntryStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 10,
+          "name": "CurrentDayEntryDate",
+          "type": "epoch-s",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 11,
+          "name": "NextDayEntry",
+          "type": "DayEntryStruct",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 12,
+          "name": "NextDayEntryDate",
+          "type": "epoch-s",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 13,
+          "name": "TariffComponents",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "1 to 672",
+          "quality": "X"
+        },
+        {
+          "id": 14,
+          "name": "TariffPeriods",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "1 to 672",
+          "quality": "X"
+        },
+        {
+          "id": 15,
+          "name": "CurrentTariffComponents",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 20",
+          "quality": "X"
+        },
+        {
+          "id": 16,
+          "name": "NextTariffComponents",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 20",
+          "quality": "X"
+        },
+        {
+          "id": 17,
+          "name": "DefaultRandomizationOffset",
+          "type": "int16",
+          "conformance": "RNDM",
+          "access": "R V",
+          "constraint": "desc",
+          "quality": "X"
+        },
+        {
+          "id": 18,
+          "name": "DefaultRandomizationType",
+          "type": "DayEntryRandomizationTypeEnum",
+          "conformance": "RNDM",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "GetTariffComponentResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 1,
+          "name": "GetDayEntryResponse",
+          "direction": "response",
+          "conformance": "M"
+        }
+      ],
+      "events": [],
+      "features": [
+        {
+          "name": "PRICE",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "FCRED",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "AUXLD",
+          "conformance": "O.a+"
+        },
+        {
+          "name": "PEAKP",
+          "conformance": "O"
+        },
+        {
+          "name": "PWRTHLD",
+          "conformance": "O"
+        },
+        {
+          "name": "RNDM",
+          "conformance": "O"
+        }
+      ]
     },
     {
       "id": 1872,
@@ -13539,6 +16987,348 @@
           "response": "status"
         }
       ],
+      "events": [],
+      "features": []
+    },
+    {
+      "id": 2049,
+      "name": "TlsCertificateManagement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MaxRootCertificates",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "5 to 254",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "ProvisionedRootCertificates",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S V",
+          "constraint": "max maxRootCertificates",
+          "quality": "N"
+        },
+        {
+          "id": 2,
+          "name": "MaxClientCertificates",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "2 to 254",
+          "quality": "F"
+        },
+        {
+          "id": 3,
+          "name": "ProvisionedClientCertificates",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S V",
+          "constraint": "max maxClientCertificates",
+          "quality": "N"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ProvisionRootCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ProvisionRootCertificateResponse"
+        },
+        {
+          "id": 1,
+          "name": "ProvisionRootCertificateResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 2,
+          "name": "FindRootCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "FindRootCertificateResponse"
+        },
+        {
+          "id": 3,
+          "name": "FindRootCertificateResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "LookupRootCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "LookupRootCertificateResponse"
+        },
+        {
+          "id": 5,
+          "name": "LookupRootCertificateResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 6,
+          "name": "RemoveRootCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 7,
+          "name": "ClientCsr",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ClientCsrResponse"
+        },
+        {
+          "id": 8,
+          "name": "ClientCsrResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 9,
+          "name": "ProvisionClientCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        },
+        {
+          "id": 10,
+          "name": "FindClientCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "FindClientCertificateResponse"
+        },
+        {
+          "id": 11,
+          "name": "FindClientCertificateResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 12,
+          "name": "LookupClientCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "LookupClientCertificateResponse"
+        },
+        {
+          "id": 13,
+          "name": "LookupClientCertificateResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 14,
+          "name": "RemoveClientCertificate",
+          "direction": "request",
+          "conformance": "M",
+          "response": "status"
+        }
+      ],
+      "events": [],
+      "features": []
+    },
+    {
+      "id": 2050,
+      "name": "TlsClientManagement",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MaxProvisioned",
+          "type": "uint8",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "5 to 254",
+          "quality": "F"
+        },
+        {
+          "id": 1,
+          "name": "ProvisionedEndpoints",
+          "type": "list",
+          "conformance": "M",
+          "access": "R S V",
+          "constraint": "desc",
+          "quality": "N"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [
+        {
+          "id": 0,
+          "name": "ProvisionEndpoint",
+          "direction": "request",
+          "conformance": "M",
+          "response": "ProvisionEndpointResponse"
+        },
+        {
+          "id": 1,
+          "name": "ProvisionEndpointResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 2,
+          "name": "FindEndpoint",
+          "direction": "request",
+          "conformance": "M",
+          "response": "FindEndpointResponse"
+        },
+        {
+          "id": 3,
+          "name": "FindEndpointResponse",
+          "direction": "response",
+          "conformance": "M"
+        },
+        {
+          "id": 4,
+          "name": "RemoveEndpoint",
+          "direction": "request",
+          "conformance": "M"
+        }
+      ],
+      "events": [],
+      "features": []
+    },
+    {
+      "id": 2822,
+      "name": "MeterIdentification",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeterType",
+          "type": "MeterTypeEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "PointOfDelivery",
+          "type": "string",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 64",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "MeterSerialNumber",
+          "type": "string",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max 64",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "ProtocolVersion",
+          "type": "string",
+          "conformance": "O",
+          "access": "R V",
+          "constraint": "max 64",
+          "quality": "X"
+        },
+        {
+          "id": 4,
+          "name": "PowerThreshold",
+          "type": "PowerThresholdStruct",
+          "conformance": "PWRTHLD",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 65532,
+          "name": "FeatureMap",
+          "type": "FeatureMap"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [],
+      "events": [],
+      "features": [
+        {
+          "name": "PWRTHLD",
+          "conformance": "O"
+        }
+      ]
+    },
+    {
+      "id": 2823,
+      "name": "CommodityMetering",
+      "revision": 1,
+      "featureMap": 0,
+      "attributes": [
+        {
+          "id": 0,
+          "name": "MeteredQuantity",
+          "type": "list",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "max maximumMeteredQuantities",
+          "quality": "X"
+        },
+        {
+          "id": 1,
+          "name": "MeteredQuantityTimestamp",
+          "type": "epoch-s",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 2,
+          "name": "TariffUnit",
+          "type": "TariffUnitEnum",
+          "conformance": "M",
+          "access": "R V",
+          "quality": "X"
+        },
+        {
+          "id": 3,
+          "name": "MaximumMeteredQuantities",
+          "type": "uint16",
+          "conformance": "M",
+          "access": "R V",
+          "constraint": "min 1",
+          "quality": "X"
+        },
+        {
+          "id": 65533,
+          "name": "ClusterRevision",
+          "type": "ClusterRevision",
+          "default": 1
+        }
+      ],
+      "commands": [],
       "events": [],
       "features": []
     }

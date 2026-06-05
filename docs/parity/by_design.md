@@ -1719,33 +1719,23 @@ Go path: `internal/model/custom/state_change.go`.
 
 ---
 
-### A3-G5 — MetricHubSensor MQTT publishing deferred
+### A3-G5 — MetricHubSensor MQTT publishing — RESOLVED
 
 Python `hub.py:388,510,554` wires `fetch_metrics_data`, `init_metrics`, and `publish_metrics_refreshed` so that SystemHealth, ConnectionLatency, and LastEventAge sensor values are published to MQTT topics.
 
-OpenCCU-Loom's `MetricHubSensor` family (`internal/model/hub/metrics.go:176-242`) is fully implemented at the model level but the `hub_mqtt_publisher.go` does not yet include a metrics wiring block. The REST API exposes metrics via `GET /api/v1/hub/{central}/metrics`; the MQTT surface is absent.
+OpenCCU-Loom's `MetricHubSensor` family (`internal/model/hub/metrics.go`) is fully implemented at the model level, and the MQTT surface is now wired: `wireOneCentral` (`internal/central/adapter/hub_mqtt_publisher.go`, `--- Metrics ---` block) publishes `BuildSystemHealthDiscovery` + `PublishHubSystemHealthScore` and subscribes `Metrics.OnUpdate(MetricSystemHealth, …)`; Connection Latency rides the per-interface `ConnectivityChangedEvent.LatencyMs` path (`PublishHubConnectionLatency`) in the `--- Connectivity ---` block. Coverage: `internal/central/adapter/hub_metric_sensors_test.go`. The REST surface (`GET /api/v1/hub/{central}/metrics`) remains in place alongside it.
 
-**Re-activation checklist:**
-- [ ] Add `BuildMetricsDiscovery` + `PublishMetrics` to the MQTT topic builder.
-- [ ] Add a `--- Metrics ---` block in `wireOneCentral` (`internal/central/adapter/hub_mqtt_publisher.go`) analogous to the programs block.
-- [ ] Wire `MetricHubSensor` construction into the Hub coordinator init path.
-- [ ] Add unit test covering the metrics publish path.
+**Remaining sub-item (separate deferral):** `MetricLastEventAgeSecs` is not published — not for lack of an MQTT hook, but because no production code observes the value. The observer is a scheduler job measuring `time.Since(lastDataPointEventTimestamp)`, deferred for the reason documented in the `MetricLastEventAgeSecs` dead-code note below. Once that job lands, the existing `Metrics.OnUpdate` plumbing publishes it with no further wiring.
 
 Go paths: `internal/model/hub/metrics.go`, `internal/central/adapter/hub_mqtt_publisher.go`.
 
 ---
 
-### A3-G9 — Inbox MQTT publishing deferred
+### A3-G9 — Inbox MQTT publishing — RESOLVED
 
 Python `hub.py:763` fires `SystemEventType.HUB_REFRESHED` when inbox data changes, which the MQTT adapter picks up to publish pending-device notifications.
 
-OpenCCU-Loom's `hub_mqtt_publisher.wireOneCentral` publishes Programs, Sysvars, AlarmMessages, ServiceMessages, InstallMode, and Connectivity — but has no Inbox block. Pending devices waiting in the CCU inbox are not signalled via MQTT; operators must use the SPA or REST API to view inbox state.
-
-**Re-activation checklist:**
-- [ ] Add `BuildInboxDiscovery` + `PublishInbox` to the MQTT topic builder.
-- [ ] Add an `--- Inbox ---` block in `wireOneCentral` analogous to the AlarmMessages block.
-- [ ] Subscribe `hubModel.Inbox.OnUpdate` in the publisher.
-- [ ] Add unit test covering the inbox publish path.
+OpenCCU-Loom now publishes the inbox: `wireOneCentral` (`internal/central/adapter/hub_mqtt_publisher.go`, `--- Inbox ---` block) emits `BuildInboxDiscovery` (`internal/north/mqtt/hub_discovery.go`), performs the initial-state publish when `hubModel.Inbox.Observed()`, and subscribes `hubModel.Inbox.OnUpdate` → `PublishInbox` (`internal/north/mqtt/bridge.go`). Pending devices in the CCU inbox are now signalled via MQTT, not just the SPA / REST API. Coverage: `internal/central/adapter/hub_mqtt_publisher_inbox_test.go`.
 
 Go paths: `internal/model/hub/inbox.go`, `internal/central/adapter/hub_mqtt_publisher.go`.
 

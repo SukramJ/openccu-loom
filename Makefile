@@ -463,9 +463,22 @@ ccudata-drift: ## Verify embedded openccu-data matches upstream (set OPENCCU_DAT
 refresh-ccudata: update-ccu-data generate ## one-shot: pull openccu-data + regenerate Go profiles
 	@echo "-- ccudata refresh complete; run 'make test' to validate --"
 
+MATTERJS_DIR ?= ../matter.js
+
 .PHONY: generate-matter-schema
-generate-matter-schema: ## regenerate internal/north/matter/schema/ from matter.js HEAD snapshot
-	python3 script/extract_matterjs_head.py
+generate-matter-schema: ## regenerate matter schema snapshot + internal/north/matter/schema/ from matter.js HEAD
+	# Step 1: extract the schema from the matter.js checkout (must be built:
+	# `cd $(MATTERJS_DIR)/packages/model && npm run build`). The extractor
+	# resolves type-inheritance, so type-referencing clusters keep their
+	# inherited revision + members. Node >= 23 runs the .ts directly; it is
+	# copied into the matter.js tree so the bare `@matter/model` import resolves.
+	cp docs/parity/matter/extract-from-matter-js.ts $(MATTERJS_DIR)/.occu-extract.mts
+	cd $(MATTERJS_DIR) && node .occu-extract.mts \
+		> $(CURDIR)/docs/parity/matter/matter-schema-snapshot.json; \
+		rc=$$?; rm -f .occu-extract.mts; exit $$rc
+	# Step 2: keep the parity embed copy in sync (see internal/north/matter/parity/parity.go).
+	cp docs/parity/matter/matter-schema-snapshot.json internal/north/matter/parity/schema.json
+	# Step 3: regenerate the typed Go revision/name maps from the snapshot.
 	$(GO) run ./script/generate_matter_schema.go
 	@if command -v $(GOFUMPT) >/dev/null 2>&1; then \
 		$(GOFUMPT) -w internal/north/matter/schema/; \

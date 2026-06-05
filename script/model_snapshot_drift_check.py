@@ -4,11 +4,20 @@
 #
 # model_snapshot_drift_check.py — read the JSON output of
 # `script/model_snapshot_diff.py` from stdin and assert per-bucket
-# drift counts stay below documented baselines. CI uses this to
-# detect regressions without failing on the architecturally-accepted
-# residue documented in `parity_audit.md` §0.2.
+# drift counts stay at or below documented baselines. The release
+# pipeline (`make snapshot-diff`) uses this to detect regressions
+# without failing on the architecturally-accepted residue catalogued
+# in `docs/parity/by_design.md`.
 #
-# Override baselines via env vars (one digit per bucket):
+# The per-bucket defaults below sum to the cross-stack drift baseline
+# referenced in CLAUDE.md ("Cross-stack model-snapshot verification").
+# Ratchet a baseline DOWN when a fix closes drift; only raise one when
+# a genuinely new architectural divergence has a matching entry in
+# `docs/parity/by_design.md`. Never raise a baseline merely to silence
+# a regression.
+#
+# Override a baseline via its env var (handy for ratcheting in one run
+# before committing the lowered default):
 #
 #   OPENCCU_LOOM_DRIFT_GENERIC=70 OPENCCU_LOOM_DRIFT_CHANNEL=40 \
 #   OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY=160 OPENCCU_LOOM_DRIFT_CALC=10 \
@@ -29,26 +38,32 @@ import json
 import os
 import sys
 
-# Baselines reflect the architecturally-accepted residue documented
-# in parity_audit.md §0.2. Adjust together with the audit when a fix
-# closes more drift, never just to silence a regression.
-_DEFAULT_BASELINES = {
-    "generic_data_points.drifted": 70,
-    "channel_fields": 40,
-    "custom_data_points.only_py": 160,
-    "calculated_data_points.drifted": 10,
+# bucket -> (env override var, default baseline).
+#
+# Defaults are the architecturally-accepted residue catalogued in
+# `docs/parity/by_design.md`. The env var names are spelled out here
+# verbatim — no string munging — so the documented overrides above
+# actually resolve to these keys.
+_BASELINES: dict[str, tuple[str, int]] = {
+    "generic_data_points.drifted": ("OPENCCU_LOOM_DRIFT_GENERIC", 70),
+    "channel_fields": ("OPENCCU_LOOM_DRIFT_CHANNEL", 40),
+    "custom_data_points.only_py": ("OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY", 160),
+    "calculated_data_points.drifted": ("OPENCCU_LOOM_DRIFT_CALC", 10),
 }
 
 
-def _baseline(name: str, default: int) -> int:
-    env_key = "OPENCCU_LOOM_DRIFT_" + name.upper().replace(".", "_").replace("DATA_POINTS", "").replace("__", "_")
+def _baseline(env_key: str, default: int) -> int:
     raw = os.environ.get(env_key)
     if raw is None:
         return default
     try:
         return int(raw)
     except ValueError:
-        print(f"[drift-check] invalid env override {env_key}={raw!r}; using default {default}", file=sys.stderr)
+        print(
+            f"[drift-check] invalid env override {env_key}={raw!r}; "
+            f"using default {default}",
+            file=sys.stderr,
+        )
         return default
 
 
@@ -65,21 +80,42 @@ def main() -> int:
         return 0
 
     failures: list[str] = []
-    for bucket, default_baseline in _DEFAULT_BASELINES.items():
+    total_actual = 0
+    total_baseline = 0
+    for bucket, (env_key, default_baseline) in _BASELINES.items():
         actual = counts.get(bucket, 0)
-        baseline = _baseline(bucket, default_baseline)
+        baseline = _baseline(env_key, default_baseline)
+        total_actual += actual
+        total_baseline += baseline
         marker = "OK" if actual <= baseline else "FAIL"
         print(f"  {marker:4}  {bucket:42}  actual={actual:5}  baseline={baseline}")
         if actual > baseline:
             failures.append(f"{bucket}: actual={actual} > baseline={baseline}")
+
+    # A drift bucket the diff started reporting that we have no baseline
+    # for is an unguarded regression channel — fail loudly rather than
+    # let new drift slip through a bucket nobody is watching.
+    for bucket, actual in counts.items():
+        if bucket not in _BASELINES and actual:
+            failures.append(f"{bucket}: actual={actual} has no baseline (unguarded bucket)")
+            print(f"  FAIL  {bucket:42}  actual={actual:5}  baseline=(none)")
+
+    print(f"  ----  {'TOTAL':42}  actual={total_actual:5}  baseline={total_baseline}")
 
     if failures:
         print(file=sys.stderr)
         print("[drift-check] regression detected:", file=sys.stderr)
         for f in failures:
             print(f"  - {f}", file=sys.stderr)
-        print("Update parity_audit.md §0.2 if the new residue is a", file=sys.stderr)
-        print("legitimate architecture change, then bump the baseline.", file=sys.stderr)
+        print(
+            "If the new residue is a legitimate architecture change, add an",
+            file=sys.stderr,
+        )
+        print(
+            "entry to docs/parity/by_design.md and bump the matching baseline",
+            file=sys.stderr,
+        )
+        print("in this script. Otherwise, fix the drift.", file=sys.stderr)
         return 1
     return 0
 
