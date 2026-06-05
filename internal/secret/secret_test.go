@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -166,8 +167,12 @@ func TestLoad_AutoKeyfile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("secret.key not created: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm&0o777 != 0o600 {
-		t.Errorf("secret.key has permissions %04o, want 0600", perm)
+	// Windows does not honour Unix permission bits (os.WriteFile(0600)
+	// surfaces as 0666), so the 0600 contract only holds on POSIX.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm&0o777 != 0o600 {
+			t.Errorf("secret.key has permissions %04o, want 0600", perm)
+		}
 	}
 
 	// Second Load must read the same key so cross-cipher round-trips work.
