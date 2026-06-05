@@ -1222,6 +1222,11 @@ func NewPM10ConcentrationServer(src interfaces.MatterFloatMeasurementSource) *PM
 type PowerSourceServer struct {
 	cluster.DataVersionTracker
 	src interfaces.MatterBoolMeasurementSource
+	// endpoint is the Matter endpoint this power source feeds, stamped
+	// post-construction by the endpoint assembler via [SetEndpoint] so
+	// EndpointList (0x001F) can name it. Zero means "unspecified", which
+	// Matter §11.7.6.20 permits (an empty list is reported in that case).
+	endpoint uint16
 }
 
 // Compile-time assertion: PowerSourceServer satisfies MatterClusterDataVersion.
@@ -1231,6 +1236,11 @@ var _ interfaces.MatterClusterDataVersion = (*PowerSourceServer)(nil)
 func NewPowerSourceServer(src interfaces.MatterBoolMeasurementSource) *PowerSourceServer {
 	return &PowerSourceServer{src: src}
 }
+
+// SetEndpoint stamps the endpoint id this power source is mounted on so
+// EndpointList (0x001F) reports it. The endpoint assembler calls this after
+// construction, mirroring the BasicInformation / GeneralDiagnostics pattern.
+func (s *PowerSourceServer) SetEndpoint(endpoint uint16) { s.endpoint = endpoint }
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
 func (s *PowerSourceServer) MatterDataVersion() uint32 { return s.Current() }
@@ -1265,11 +1275,15 @@ func (s *PowerSourceServer) MatterRead(attrID uint32) (any, bool) {
 	case attrPwrBatReplaceability:
 		return batReplaceUserReplaceable, true
 	case attrPwrEndpointList:
-		// TODO: pass the host endpoint ID at construction time so this
-		// can return []uint16{hostEndpointID}. Matter spec §11.7.6.20:
-		// "0 (unspecified)" is valid when no specific endpoint binding
-		// is configured. matter.js: power-source.element.ts EndpointList.
-		return []uint16{}, true
+		// EndpointList names the endpoints this power source feeds. We mount
+		// one power source per bridged device endpoint, so the list is the
+		// single stamped endpoint. An unset (zero) endpoint reports the empty
+		// list, which Matter §11.7.6.20 permits as "unspecified".
+		// matter.js: power-source.element.ts EndpointList (0x001F).
+		if s.endpoint == 0 {
+			return []uint16{}, true
+		}
+		return []uint16{s.endpoint}, true
 	case cluster.AttrGlobalFeatureMap:
 		// BAT (bit 1) + REPLC (bit 3): BatReplaceability has M conformance
 		// under the REPLC feature per Matter §11.7.6.10; serving the

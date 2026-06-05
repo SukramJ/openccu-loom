@@ -76,6 +76,14 @@ func ClusterServers(ep *Endpoint) []interfaces.MatterClusterServer { //nolint:fu
 			}
 		} else {
 			inner = measurement.FromMeasurementClass(class, ep.Measurement)
+			// PowerSource.EndpointList (§11.7.6.20) must name the endpoint
+			// the power source feeds; stamp it post-construction, like the
+			// other endpoint-aware servers (BasicInformation, …).
+			for _, s := range inner {
+				if ps, ok := s.(*measurement.PowerSourceServer); ok {
+					ps.SetEndpoint(ep.ID)
+				}
+			}
 		}
 	}
 	if len(inner) == 0 {
