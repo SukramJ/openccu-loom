@@ -356,14 +356,15 @@ type NorthMatter struct {
 	// at noop (commissioners get debug-logged drops).
 	Commissioning NorthMatterCommissioning `yaml:"commissioning" json:"commissioning" cfg:"basic"`
 
-	// CASE configures the operational-session responder. When NodeID
-	// is non-zero the daemon constructs a sigma responder with an
-	// ephemeral identity (development-only) and wires it into the
-	// bridge's CASE port. Persistent fabric identity (NOC + ICAC +
-	// stable private key) is a post-0.1.0 follow-up; until then the CASE
-	// path is structurally wired but cannot complete with a
-	// production controller that validates the bridge's certificate
-	// chain.
+	// CASE configures the operational-session responder. When NodeID is
+	// non-zero the daemon constructs a sigma responder and wires it into
+	// the bridge's CASE port. The operational fabric identity established
+	// during commissioning (NOC + ICAC + operational private key + IPK) is
+	// persisted per fabric and rehydrated at boot, so CASE completes against
+	// a production controller that validates the certificate chain and
+	// survives daemon restarts — commissioned controllers reconnect without
+	// re-pairing. The operational private key is stored unencrypted at rest;
+	// protecting the data directory is the operator's responsibility.
 	CASE NorthMatterCASE `yaml:"case" json:"case" cfg:"expert"`
 
 	// Attestation configures the bridge's Device Attestation surface
