@@ -75,6 +75,14 @@ type Header struct {
 	Privacy      bool
 	Control      bool
 	HasExtension bool
+
+	// MessageExtension carries the Message Extensions block (Core Spec
+	// §4.4.1.8) when HasExtension is set. The block is reserved in Matter
+	// 1.x, but it is part of the message header and therefore part of the
+	// AEAD additional authenticated data ([Header.Marshal] feeds the AAD in
+	// channel.Session.Decrypt), so it MUST round-trip through encode/decode
+	// or authentication of any frame that carries it would fail.
+	MessageExtension []byte
 }
 
 // Errors.
@@ -89,7 +97,45 @@ var (
 	// ErrReservedDestSize is returned when the DSIZ field carries the
 	// reserved 0b11 value.
 	ErrReservedDestSize = errors.New("message: reserved DSIZ value")
+
+	// ErrExtensionLength is returned when an extension block's uint16
+	// length prefix claims more bytes than remain in the buffer. Mirrors
+	// the bounds check in matter.js
+	// packages/protocol/src/codec/MessageCodec.ts decodePacket /
+	// decodePayload, which reject a length exceeding the remaining size.
+	ErrExtensionLength = errors.New("message: extension length exceeds buffer")
 )
+
+// appendExtension encodes a Matter extension block: a little-endian uint16
+// length prefix followed by the bytes. Mirrors the length-delimited shape
+// matter.js packages/protocol/src/codec/MessageCodec.ts reads back.
+func appendExtension(buf, ext []byte) []byte {
+	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(ext))) //nolint:gosec // len bounded by MTU
+	return append(buf, ext...)
+}
+
+// readExtension decodes a length-delimited extension block from the front
+// of buf and returns the extension bytes plus the total bytes consumed
+// (2 + length). It bounds-checks the length against the remaining buffer so
+// a hostile or truncated length field cannot drive an out-of-range read —
+// mirrors the guard added in matter.js MessageCodec.ts decodePacket /
+// decodePayload. A zero-length block returns a nil slice so it round-trips
+// against a header built without an explicit extension.
+func readExtension(buf []byte, what string) (ext []byte, consumed int, err error) {
+	if len(buf) < 2 {
+		return nil, 0, fmt.Errorf("%w: %s length prefix", ErrTruncated, what)
+	}
+	n := int(binary.LittleEndian.Uint16(buf))
+	if n > len(buf)-2 {
+		return nil, 0, fmt.Errorf("%w: %s claims %d of %d remaining", ErrExtensionLength, what, n, len(buf)-2)
+	}
+	if n == 0 {
+		return nil, 2, nil
+	}
+	ext = make([]byte, n)
+	copy(ext, buf[2:2+n])
+	return ext, 2 + n, nil
+}
 
 // Marshal encodes the message header into a fresh byte slice.
 func (h Header) Marshal() []byte {
@@ -125,6 +171,9 @@ func (h Header) Marshal() []byte {
 		buf = binary.LittleEndian.AppendUint64(buf, h.DestNodeID)
 	case DestGroup:
 		buf = binary.LittleEndian.AppendUint16(buf, h.DestGroupID)
+	}
+	if h.HasExtension {
+		buf = appendExtension(buf, h.MessageExtension)
 	}
 	return buf
 }
@@ -180,6 +229,14 @@ func UnmarshalHeader(buf []byte) (Header, int, error) {
 	default:
 		return Header{}, 0, fmt.Errorf("%w: 0b%02b", ErrReservedDestSize, h.DestSize)
 	}
+	if h.HasExtension {
+		ext, n, err := readExtension(buf[pos:], "message extensions")
+		if err != nil {
+			return Header{}, 0, err
+		}
+		h.MessageExtension = ext
+		pos += n
+	}
 	return h, pos, nil
 }
 
@@ -211,6 +268,12 @@ type ProtocolHeader struct {
 	ProtocolID    uint16
 	VendorID      uint16
 	AckCounter    uint32 // valid when HasAck
+
+	// SecuredExtension carries the Secured Extensions block (Core Spec
+	// §4.4.2.1) when HasSecuredExt is set. Reserved in Matter 1.x; it sits
+	// inside the encrypted payload between the protocol header and the
+	// application payload, so it must be consumed to locate the payload.
+	SecuredExtension []byte
 }
 
 // Marshal encodes the protocol header into a fresh byte slice.
@@ -240,6 +303,9 @@ func (h ProtocolHeader) Marshal() []byte {
 	}
 	if h.HasAck {
 		buf = binary.LittleEndian.AppendUint32(buf, h.AckCounter)
+	}
+	if h.HasSecuredExt {
+		buf = appendExtension(buf, h.SecuredExtension)
 	}
 	return buf
 }
@@ -276,6 +342,14 @@ func UnmarshalProtocolHeader(buf []byte) (ProtocolHeader, int, error) {
 		}
 		h.AckCounter = binary.LittleEndian.Uint32(buf[pos:])
 		pos += 4
+	}
+	if h.HasSecuredExt {
+		ext, n, err := readExtension(buf[pos:], "secured extensions")
+		if err != nil {
+			return ProtocolHeader{}, 0, err
+		}
+		h.SecuredExtension = ext
+		pos += n
 	}
 	return h, pos, nil
 }
