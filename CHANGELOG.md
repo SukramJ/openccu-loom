@@ -22,6 +22,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **System variables now work on Homegear backends.** Homegear is
+  XML-RPC-only, so the JSON-RPC hub bootstrap could not populate its
+  sysvar list and `/api/v1/sysvars` stayed empty. The daemon now loads
+  and periodically refreshes Homegear system variables over the XML-RPC
+  `getAllSystemVariables` method (inferring each variable's type from
+  its value, since Homegear ships only name + value), and writes values
+  back via `setSystemVariable` — bringing Homegear to parity with the
+  reference stack's Homegear support. Programs, rooms, and functions
+  remain empty on Homegear by design (no ReGa engine / metadata RPC),
+  matching that stack.
+
 - **Device-model labels for HmIP-DLP and HmIP-UDI-SMI55.** These two
   devices ship icons and parameter help but no device-model label in
   the upstream translation catalogue, so their MQTT discovery payload

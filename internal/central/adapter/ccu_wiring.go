@@ -276,6 +276,13 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 				slog.String("interface", string(iface)))
 		}
 
+		// Homegear has no JSON-RPC layer, so WireHub fails at login and its
+		// loadSysvars (SysVar.getAll over JSON-RPC) never runs — the hub
+		// sysvar surface would stay empty. Now that the interface backend is
+		// up, wire the XML-RPC sysvar load + refresh against it, mirroring
+		// the reference stack's getAllSystemVariables path for Homegear.
+		wireHomegearHubIfPresent(ctx, unit, backendsByInterface, logger)
+
 		// Wire the periodic data-refresh handler now that the pipeline and
 		// Rega runner are established. The central.refresh_client_data
 		// scheduler job (default 5 min) delegates here to re-run the
@@ -339,6 +346,23 @@ func (r *backendRegistry) put(interfaceID string, b backends.Operations) {
 	r.mu.Lock()
 	r.m[interfaceID] = b
 	r.mu.Unlock()
+}
+
+// homegearBackend returns the first registered Homegear backend, or nil
+// when none of the central's interfaces is Homegear. Used to wire the
+// XML-RPC sysvar path that the JSON-RPC hub bootstrap cannot serve.
+func (r *backendRegistry) homegearBackend() backends.Operations {
+	if r == nil {
+		return nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, b := range r.m {
+		if b != nil && b.Kind() == backends.KindHomegear {
+			return b
+		}
+	}
+	return nil
 }
 
 // getter is a closure suitable for [wireConfigPendingHook]. Resolves

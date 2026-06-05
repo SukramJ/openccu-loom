@@ -76,21 +76,34 @@ were stale and have been corrected to RESOLVED.
   **Gate:** regenerate the (gitignored) snapshot via `make snapshot-go`;
   the `model_id` invariant is expected to report 0 failures.
 
-### Phase 3 — Homegear depth-parity (largest block, own track)
+### Phase 3 — Homegear depth-parity — DONE (sysvars) / AT PARITY (rest)
 
-The full detail lives in the **HomegearBackend depth-parity** section
-below; sequenced here smallest / most-unblocking first. Today
-`/api/v1/{programs,rooms,functions,sysvars}/...` return empty on a
-Homegear backend.
+The parity target is aiohomematic's *Homegear* support, not the CCU —
+aiohomematic itself has no full CCU feature parity for Homegear. Against
+that target, three of the four hub surfaces were already at parity and
+only sysvars were a real gap.
 
-- **3a — Sysvar adapter** (type coercion / persistence). First: removes
-  SPA mis-renders, least model rework. *Effort: M. Risk: medium.*
-- **3b — Rooms / Functions remodel** (break the CCU-shape assumption).
-  *Effort: M–L. Risk: medium.*
-- **3c — Programs (Homegear-flavoured ReGa adapter, JSON-RPC).** Largest
-  single item. *Effort: L. Risk: high.*
-  **Gate (per sub):** REST integration test against a Homegear backend
-  returns non-empty, correct results.
+- **Programs / Rooms / Functions — already at parity, no work.**
+  aiohomematic's `HOMEGEAR_CAPABILITIES` sets `programs=False`,
+  `rooms=False`, `functions=False` and its `backends/homegear.py` has no
+  methods for them (Homegear has no ReGa engine and no
+  room/function metadata RPC). openccu-loom returns `ErrUnsupported`
+  for programs and derives rooms/functions from device fields — the same
+  behaviour. Confirmed, not a gap.
+- **3a — Sysvar adapter — DONE.** Homegear is XML-RPC-only, so the
+  JSON-RPC hub bootstrap (`WireHub` → `loadSysvars` via `SysVar.getAll`)
+  fails at login and never populated the hub — `/api/v1/sysvars` was
+  empty. Added an XML-RPC sysvar load + refresh path
+  (`internal/central/adapter/homegear_hub_wiring.go`) that calls the
+  Homegear backend's `getAllSystemVariables`, infers the value type from
+  the Go value (Homegear ships name+value only), reconciles into the hub
+  model, and serves the `hub.sysvar_refresh` job — mirroring
+  aiohomematic's `get_all_system_variables` path. Value writes route
+  through `setSystemVariable`. Tested by `homegear_hub_wiring_test.go`
+  (unit, full type matrix) and `tests/integration/homegear_sysvar_test.go`
+  (real XML-RPC wire path against godevccu Homegear mode).
+  *Sysvar create/update-metadata/delete via the SPA stays nil for
+  Homegear: those carry ReGa-only metadata Homegear does not model.*
 
 ### Phase 4 — Trigger-driven / opportunistic (low, non-blocking)
 
@@ -109,27 +122,28 @@ deferred to a post-0.1.0 release.
 
 The `internal/client/backends/homegear.go` backend speaks the same
 XML-RPC surface as `CcuBackend` and works end-to-end for devices,
-data points, and value writes. What is intentionally **not** ported
-to 0.1.0:
+data points, and value writes. The hub surfaces, measured against
+aiohomematic's *Homegear* support (the correct parity target — see
+Phase 3 above):
 
-- **Programs** — Homegear exposes its automation programs through a
-  different JSON-RPC surface than the CCU's ReGa runtime; the
-  per-program API surface, including the WS commands and REST
-  routes, would need a Homegear-flavoured ReGa adapter.
-- **Rooms / Functions** — the CCU's `Subsection.getAll` + `Room.getAll`
-  JSON-RPC methods are CCU-specific; the Homegear analogue is a
-  per-device metadata field rather than a top-level catalogue, and
-  the daemon's room/function model currently assumes the CCU shape.
-- **Sysvar parity** — Homegear's sysvar surface diverges from the CCU
-  on type coercion and persistence; the ad-hoc handling needs a
-  proper adapter to avoid silent mis-renders in the SPA.
+- **Sysvars — DONE.** Loaded + refreshed over XML-RPC
+  `getAllSystemVariables` via
+  `internal/central/adapter/homegear_hub_wiring.go`; value writes via
+  `setSystemVariable`. `/api/v1/sysvars` now populates for Homegear.
+  Sysvar create / update-metadata / delete stays nil (ReGa-only
+  metadata Homegear does not model).
+- **Programs — at parity (no work).** aiohomematic sets
+  `programs=False` for Homegear and ships no program methods (no ReGa
+  engine). openccu-loom returns `ErrUnsupported`; `/api/v1/programs`
+  is empty on both stacks by design.
+- **Rooms / Functions — at parity (no work).** aiohomematic sets
+  `rooms=False` / `functions=False` for Homegear. openccu-loom derives
+  rooms/functions from device fields, not a top-level catalogue RPC
+  Homegear lacks; behaviour matches.
 
-These are scoped against the existing surfaces in
-`internal/central/adapter/hub*.go` and the REST routes under
-`/api/v1/programs/...`, `/api/v1/rooms/...`, `/api/v1/functions/...`,
-`/api/v1/sysvars/...`. A Homegear-backed installation runs today
-with sensors + actors working and the upper four surfaces returning
-empty results — acceptable for v0.1.0; not acceptable long-term.
+A Homegear-backed installation now runs with sensors + actors + sysvars
+working; programs/rooms/functions are empty by design, matching the
+reference stack.
 
 ## Upstream pin: openccu-data
 
