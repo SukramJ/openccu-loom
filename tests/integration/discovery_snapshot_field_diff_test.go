@@ -29,7 +29,7 @@
 //	- name              — warning only: the two stacks use different
 //	  naming algorithms (HA: CCU device name; gh: address + channel).
 //
-// Motivating bugs (detected by this test class):
+// Motivating bugs (originally detected by this test class, now fixed):
 //
 //  1. HMIP-PS / HMIP-PSM (VCU1366171, VCU3941846): empty model_id —
 //     SUBTYPE-based variants use uppercase "HMIP-" prefix that the
@@ -43,10 +43,26 @@
 //     common "SMO" root but each SUBTYPE maps to a distinct translation
 //     label that the snapshot-era code did not resolve.
 //
-// As of the last captured snapshot, the test reports:
-//   - 25 model_id invariant failures (all SUBTYPE-propagation bugs).
-//   - 0 device_class / entity_category / enabled_by_default drift.
-//   - ~1651 name warnings (by design: different naming algorithms).
+// All three classes are resolved by the multi-stage
+// Translations.DeviceModelLabel lookup (vendor-prefix strip + suffix
+// strip + SUBTYPE fallback), covered by
+// internal/ccudata/translations_subtype_lookup_test.go.
+//
+// Two residual devices had empty model_id for a different reason — a
+// missing device-model *label* in the upstream translation catalogue,
+// not a lookup bug: HmIP-DLP (Door Lock Drive - pro) and HmIP-UDI-SMI55
+// (Universal Dimming Control Element - motion detector). Both ship icons
+// + parameter help but no device_models entry; the curated overlay
+// (internal/ccudata/embedded/translation_custom/device_models_{en,de}.json)
+// now supplies the label, guarded by
+// internal/ccudata/device_models_overlay_test.go.
+//
+// With those closed, the model_id invariant is expected to report 0
+// failures on a freshly regenerated snapshot; 0 device_class /
+// entity_category / enabled_by_default drift; ~1651 name warnings (by
+// design: different naming algorithms). The committed openccu-loom
+// snapshot is produced on demand (gitignored) — regenerate via
+// `make snapshot-go` to pick up the two overlay labels.
 //
 // Run:
 //

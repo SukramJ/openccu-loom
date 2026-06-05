@@ -58,15 +58,23 @@ were stale and have been corrected to RESOLVED.
   block): `BuildInboxDiscovery` + initial publish + `Inbox.OnUpdate` →
   `PublishInbox`. Tested by `hub_mqtt_publisher_inbox_test.go`.
 
-### Phase 2 — Resolver / correctness hardening
+### Phase 2 — Resolver / correctness hardening — DONE
 
-- **Discovery-snapshot SUBTYPE / `model_id` resolver.** A
-  test-infrastructure gap (not a production defect) that masks the
-  parity signal: SUBTYPE propagation for HmIP-PS/PSM variants and
-  eTRV / SMO subtypes needs hardening in the translation resolver under
-  `internal/ccudata/`. *Effort: M. Risk: medium.*
-  **Gate:** `tests/integration/discovery_snapshot_field_diff_test.go`
-  reports 0 `model_id` invariant failures.
+- **Discovery-snapshot SUBTYPE / `model_id` resolver.** The 25
+  SUBTYPE-propagation failures (HmIP-PS/PSM uppercase, eTRV / SMO
+  subtypes) were already resolved by the multi-stage
+  `Translations.DeviceModelLabel` lookup (vendor-prefix strip + suffix
+  strip + SUBTYPE fallback), covered by
+  `internal/ccudata/translations_subtype_lookup_test.go`. Inspection of
+  the committed snapshot showed only **2** residual devices with empty
+  `model_id` — `HmIP-DLP` and `HmIP-UDI-SMI55` — and the cause was not
+  the resolver but a missing device-model *label* in the upstream
+  catalogue. Closed via the curated overlay
+  (`internal/ccudata/embedded/translation_custom/device_models_{en,de}.json`),
+  guarded by `internal/ccudata/device_models_overlay_test.go`. The
+  stale "25 failures" doc comment on the field-diff test was corrected.
+  **Gate:** regenerate the (gitignored) snapshot via `make snapshot-go`;
+  the `model_id` invariant is expected to report 0 failures.
 
 ### Phase 3 — Homegear depth-parity (largest block, own track)
 

@@ -20,6 +20,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   backward-compatible. See
   `docs/external-clients/ha-unique-id-migration.md`.
 
+### Added
+
+- **Device-model labels for HmIP-DLP and HmIP-UDI-SMI55.** These two
+  devices ship icons and parameter help but no device-model label in
+  the upstream translation catalogue, so their MQTT discovery payload
+  omitted `model_id` (HA fell back to the cryptic wire type). The
+  curated translation overlay now supplies the German and English
+  labels — "Türschlossantrieb - pro" / "Door Lock Drive - pro" and
+  "Universal Dimmeraufsatz - Bewegungsmelder" / "Universal Dimming
+  Control Element - motion detector".
+
 ### Fixed
 
 - **Model-snapshot drift gate honours its documented overrides.**
