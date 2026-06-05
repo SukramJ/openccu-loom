@@ -658,6 +658,32 @@ func TestHasConnectionIssueReturnsFalseWithNoClients(t *testing.T) {
 	}
 }
 
+// TestRegisterStandardJobsLastEventAgeRefresh verifies that a non-nil
+// LastEventAgeRefresh callback causes the "hub.last_event_age_refresh"
+// job to appear in the registered job list.
+func TestRegisterStandardJobsLastEventAgeRefresh(t *testing.T) {
+	c, err := New(Config{Name: "test-lear"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := StandardJobs{
+		LastEventAgeRefresh: func(context.Context) error { return nil },
+	}
+	names, err := RegisterStandardJobs(c, cfg)
+	if err != nil {
+		t.Fatalf("RegisterStandardJobs: %v", err)
+	}
+	found := false
+	for _, n := range names {
+		if n == "hub.last_event_age_refresh" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("registered=%v, want hub.last_event_age_refresh in list", names)
+	}
+}
+
 // TestHasConnectionIssueTrueWhenClientDisconnected verifies that one
 // disconnected client causes hasConnectionIssue to return true.
 func TestHasConnectionIssueTrueWhenClientDisconnected(t *testing.T) {

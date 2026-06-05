@@ -4,11 +4,14 @@
 package main
 
 import (
+	"context"
 	"log/slog"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/model/hub"
 )
 
 // registerStandardJobs registers the standard per-central background jobs
@@ -47,6 +50,17 @@ func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slo
 			jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
 			jobs.HubMetricsRefresh = u.Hub.RefreshMetrics
 			jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
+		}
+		// MetricLastEventAgeSecs: seconds since the most recent CCU callback
+		// across the central's interfaces. The metric and its MetricHubSensor
+		// are wired, but nothing observes the value without this job.
+		if u.Events != nil && u.HubModel != nil {
+			jobs.LastEventAgeRefresh = func(_ context.Context) error {
+				if age, ok := u.Events.NewestEventAge(time.Now()); ok {
+					u.HubModel.Metrics.Observe(hub.MetricLastEventAgeSecs, age)
+				}
+				return nil
+			}
 		}
 		// Wire and register the Reconciler so the slow-cadence
 		// connectivity/health pass emits ConnectivityChangedEvent on

@@ -1725,7 +1725,7 @@ Python `hub.py:388,510,554` wires `fetch_metrics_data`, `init_metrics`, and `pub
 
 OpenCCU-Loom's `MetricHubSensor` family (`internal/model/hub/metrics.go`) is fully implemented at the model level, and the MQTT surface is now wired: `wireOneCentral` (`internal/central/adapter/hub_mqtt_publisher.go`, `--- Metrics ---` block) publishes `BuildSystemHealthDiscovery` + `PublishHubSystemHealthScore` and subscribes `Metrics.OnUpdate(MetricSystemHealth, …)`; Connection Latency rides the per-interface `ConnectivityChangedEvent.LatencyMs` path (`PublishHubConnectionLatency`) in the `--- Connectivity ---` block. Coverage: `internal/central/adapter/hub_metric_sensors_test.go`. The REST surface (`GET /api/v1/hub/{central}/metrics`) remains in place alongside it.
 
-**Remaining sub-item (separate deferral):** `MetricLastEventAgeSecs` is not published — not for lack of an MQTT hook, but because no production code observes the value. The observer is a scheduler job measuring `time.Since(lastDataPointEventTimestamp)`, deferred for the reason documented in the `MetricLastEventAgeSecs` dead-code note below. Once that job lands, the existing `Metrics.OnUpdate` plumbing publishes it with no further wiring.
+**Remaining sub-item:** `MetricLastEventAgeSecs` is now observed by the `hub.last_event_age_refresh` scheduler job (see `BD-MetricLastEventAgeUnwired` below), so the value is live in the hub-metrics model. Its MQTT Discovery/publish path is still separate — `hub_mqtt_publisher.go` publishes only `MetricSystemHealth` today (tracked under `A3-BD-MetricLastEventAge`).
 
 Go paths: `internal/model/hub/metrics.go`, `internal/central/adapter/hub_mqtt_publisher.go`.
 
@@ -1791,13 +1791,13 @@ Go path: `internal/central/coordinators/hub.go::HubStatePaths`.
 
 ---
 
-### A5 — `LinkCoordinator.GetLinksForLocale` — locale parameter accepted but not applied
+### A5 — `LinkCoordinator.GetLinksForLocale` — locale enrichment lives in the adapter layer
 
-Python `link.py:168-261` enriches link labels with `get_channel_type_translation(locale=locale)`. Go `LinkCoordinator.GetLinksForLocale` (`internal/central/coordinators/link.go:180`) accepts the `locale` parameter but the channel-type-label enrichment from the i18n catalogue is not yet applied.
+Python `link.py:168-261` enriches link labels with `get_channel_type_translation(locale=locale)` inside the coordinator. The Go port performs the equivalent channel-type-label localization one layer up, in the domain adapter: `LinksDomain.enrichLink` calls `channelTypeLabel(locale, channel)` → `translations.ChannelType(locale, …)` (`internal/central/adapter/links.go:136,141,286`), and the REST DTO `handlers.Link` exposes `sender_channel_type_label` / `receiver_channel_type_label` (`internal/north/rest/handlers/links.go:42,47`). The REST/WS response a caller receives is therefore already localized — this is an architectural split (raw links in the coordinator, localized DTO in the adapter), not a missing feature.
 
-The missing enrichment is a v0.1.1 gap. The parameter is accepted in the API so callers need no signature change when the enrichment is added. Translation tables for channel types are available in `internal/i18n/catalogs/`; wiring them into `GetLinksForLocale` is a one-function change.
+The coordinator-level `LinkCoordinator.GetLinksForLocale` (`internal/central/coordinators/link.go:180`) has no production caller: it only role-filters, and its `locale` parameter is currently unused. The parameter is retained so a future coordinator-level consumer needs no signature change.
 
-Go path: `internal/central/coordinators/link.go::GetLinksForLocale`.
+Go path: `internal/central/coordinators/link.go::GetLinksForLocale`, `internal/central/adapter/links.go::enrichLink`.
 
 ---
 
@@ -2742,15 +2742,13 @@ Go path: `internal/north/mqtt/hub_discovery.go::BuildHubUpdateDiscovery`.
 
 ---
 
-### BD-MetricLastEventAgeUnwired — `MetricLastEventAgeSecs` hub sensor not yet populated
+### BD-MetricLastEventAgeUnwired — `MetricLastEventAgeSecs` observer — RESOLVED (observe path)
 
-`internal/model/hub/metrics.go` defines `MetricLastEventAgeSecs` and wires a `MetricHubSensor` for it in `NewMetricHubSensorPair`. No production code calls `Metrics.Observe(MetricLastEventAgeSecs, …)`: the value would need to come from a scheduler job that measures `time.Since(lastDataPointEventTimestamp)` and writes it on each tick. The scheduler job was deferred because the canonical `lastEvent` clock requires a thread-safe sentinel per `CentralUnit`, which interacts with the unobserved-DP sweep path.
+`internal/model/hub/metrics.go` defines `MetricLastEventAgeSecs` and wires a `MetricHubSensor` for it in `NewMetricHubSensorPair`. The Observe call site is now wired: the `hub.last_event_age_refresh` scheduler job (registered in `internal/central/jobs.go`, closure built in `cmd/openccu-loom/daemon_jobs.go`) computes `time.Since(newest)` over the per-interface event clock and calls `Metrics.Observe(MetricLastEventAgeSecs, …)` on each tick (default 30 s). `newest` is the most recent stamp across all of the central's interfaces via `EventCoordinator.LastEventMonotonicForInterface` — the thread-safe sentinel the original deferral was waiting on. When no event has been observed yet the job reports nothing.
 
-**Current state:** the metric kind, the sensor model, and the discovery builder are complete. The Observe call site is missing. The `loom:reachable` annotation was never added (the item is not in the reachability whitelist); the sensor remains unobserved at runtime and the MQTT state topic for it is never published.
+**Still separate:** the MQTT Discovery/publish path for this metric is tracked under `A3-BD-MetricLastEventAge`; `hub_mqtt_publisher.go` currently publishes only `MetricSystemHealth`, so the observed value is reachable through the hub-metrics model/REST surface but not yet over MQTT.
 
-Retained rather than deleted: removing the sensor type would break the `MetricHubSensorPair` shape which tests pin. Once the scheduler job is added (post-0.1.0), no model changes are needed.
-
-Go path: `internal/model/hub/metrics.go::MetricLastEventAgeSecs`, `internal/central/adapter/hub_mqtt_publisher.go`.
+Go path: `internal/central/jobs.go`, `cmd/openccu-loom/daemon_jobs.go`, `internal/model/hub/metrics.go::MetricLastEventAgeSecs`.
 
 ---
 
