@@ -107,13 +107,20 @@ only sysvars were a real gap.
 
 ### Phase 4 — Trigger-driven / opportunistic (low, non-blocking)
 
-- **`valve.Modulating` profile-registry wiring.** The type and
-  constructor exist (`internal/model/custom/valve/`); only the profile
-  registry does not map a device onto it. *Effort: S. **Blocked** until
-  a device profile needs it.*
-- **`GetProgramDataPointByStatePath` O(1) index.** Current O(n) scan is
-  fine at ≤300 programs. *Effort: S. Deferred to a performance
-  milestone.*
+Both items confirmed correctly deferred; no action this round.
+
+- **`valve.Modulating` profile-registry wiring — at parity, blocked.**
+  The type and constructor exist and are largely complete
+  (`internal/model/custom/valve/`, Info/Config/HA-discovery), but no
+  device profile maps onto it. Crucially, the reference stack has **no
+  modulating-valve device either** — it ships only an irrigation valve
+  (`IP_IRRIGATION_VALVE`). So leaving `valve.Modulating` unregistered is
+  parity, not a gap; wiring it would mean inventing a device mapping the
+  reference does not have. Wire it in `init.go` only if such a device
+  appears upstream. *Effort: S. Blocked on a real device.*
+- **`GetProgramDataPointByStatePath` O(1) index.** Pure performance, not
+  a parity item. Current O(n) scan is fine at the typical ≤300 programs.
+  *Effort: S. Deferred to a performance milestone.*
 
 ## HomegearBackend depth-parity
 
