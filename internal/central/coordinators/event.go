@@ -99,6 +99,26 @@ func (c *EventCoordinator) LastEventMonotonicForInterface(interfaceID string) (t
 	return t, ok
 }
 
+// NewestEventAge returns the seconds elapsed (relative to `now`) since the
+// most recent callback observed across every interface, and ok=false when no
+// event has been observed yet. It backs the MetricLastEventAgeSecs liveness
+// gauge: a single hub-level value derived from the freshest per-interface
+// stamp, so a quiet interface does not mask a busy one.
+func (c *EventCoordinator) NewestEventAge(now time.Time) (float64, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	var newest time.Time
+	for _, ts := range c.lastEventStamp {
+		if newest.IsZero() || ts.After(newest) {
+			newest = ts
+		}
+	}
+	if newest.IsZero() {
+		return 0, false
+	}
+	return now.Sub(newest).Seconds(), true
+}
+
 // MarkEvent stamps the per-interface event clock to `at`. Public so
 // transport-side callbacks (init, ping-pong, error) can refresh the
 // "interface alive" signal without going through the

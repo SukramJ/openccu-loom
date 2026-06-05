@@ -39,6 +39,12 @@ type StandardJobs struct {
 	HubMetricsRefresh  func(ctx context.Context) error
 	HubMetricsInterval time.Duration
 
+	// LastEventAgeRefresh observes MetricLastEventAgeSecs — seconds since
+	// the most recent CCU callback across all of the central's interfaces.
+	// Nil disables.
+	LastEventAgeRefresh  func(ctx context.Context) error
+	LastEventAgeInterval time.Duration
+
 	// FirmwareUpdateCheck polls for available firmware. Nil disables.
 	FirmwareUpdateCheck         func(ctx context.Context) error
 	FirmwareUpdateCheckInterval time.Duration
@@ -153,6 +159,7 @@ const (
 	defaultHealthHeartbeat       = 60 * time.Second
 	defaultHubConnectivity       = 2 * time.Minute
 	defaultHubMetrics            = 5 * time.Minute
+	defaultLastEventAge          = 30 * time.Second
 	defaultFirmwareCheckSlot     = 60 * time.Minute
 	defaultFirmwareDeliverySlot  = 1 * time.Hour
 	defaultFirmwareUpdatingSlot  = 30 * time.Second
@@ -451,6 +458,21 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 			return registered, fmt.Errorf("central: register metrics job: %w", err)
 		}
 		registered = append(registered, "hub.metrics_refresh")
+	}
+
+	if cfg.LastEventAgeRefresh != nil {
+		interval := cfg.LastEventAgeInterval
+		if interval <= 0 {
+			interval = defaultLastEventAge
+		}
+		if err := unit.Scheduler.Add(scheduler.Job{
+			Name:     "hub.last_event_age_refresh",
+			Interval: interval,
+			Run:      gatedRunWithDevicesCreatedGate(unit, true, cfg.LastEventAgeRefresh),
+		}); err != nil {
+			return registered, fmt.Errorf("central: register last_event_age job: %w", err)
+		}
+		registered = append(registered, "hub.last_event_age_refresh")
 	}
 
 	if cfg.FirmwareUpdateCheck != nil {

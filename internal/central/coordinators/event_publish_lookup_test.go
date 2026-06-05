@@ -411,6 +411,62 @@ func TestAddDataPointSubscriptionForKeyFiltersCorrectly(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// NewestEventAge — hub-level liveness gauge.
+// ---------------------------------------------------------------------------
+
+// TestNewestEventAgeNeverObserved verifies that NewestEventAge returns ok=false
+// when no event has been recorded on any interface.
+func TestNewestEventAgeNeverObserved(t *testing.T) {
+	t.Parallel()
+	ec, _, _ := newTestEC(t)
+
+	_, ok := ec.NewestEventAge(time.Now())
+	if ok {
+		t.Fatal("NewestEventAge must return ok=false when no event has been recorded")
+	}
+}
+
+// TestNewestEventAgeSingleInterface verifies that NewestEventAge returns the
+// correct elapsed seconds relative to the supplied now when exactly one
+// interface has an event recorded.
+func TestNewestEventAgeSingleInterface(t *testing.T) {
+	t.Parallel()
+	ec, _, _ := newTestEC(t)
+
+	t0 := time.Unix(1_000_000, 0)
+	ec.MarkEvent("BidCos-RF", t0)
+
+	age, ok := ec.NewestEventAge(t0.Add(10 * time.Second))
+	if !ok {
+		t.Fatal("NewestEventAge must return ok=true after a MarkEvent call")
+	}
+	if age != 10.0 {
+		t.Fatalf("age = %v, want 10.0", age)
+	}
+}
+
+// TestNewestEventAgeMultipleInterfaces verifies that NewestEventAge uses the
+// most recent stamp across all interfaces. The age is computed relative to the
+// newest stamp, not the oldest.
+func TestNewestEventAgeMultipleInterfaces(t *testing.T) {
+	t.Parallel()
+	ec, _, _ := newTestEC(t)
+
+	t0 := time.Unix(2_000_000, 0)
+	ec.MarkEvent("A", t0)
+	ec.MarkEvent("B", t0.Add(30*time.Second))
+
+	// now = t0 + 40s; newest event is B at t0+30s → age = 10s.
+	age, ok := ec.NewestEventAge(t0.Add(40 * time.Second))
+	if !ok {
+		t.Fatal("NewestEventAge must return ok=true after MarkEvent calls")
+	}
+	if age != 10.0 {
+		t.Fatalf("age = %v, want 10.0 (relative to newest interface B)", age)
+	}
+}
+
 // TestAddDataPointSubscriptionForKeyZeroIsWildcard verifies that passing the
 // zero DataPointKey behaves identically to AddDataPointSubscription: the
 // subscriber receives all events regardless of key.
