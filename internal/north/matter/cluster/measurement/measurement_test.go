@@ -1888,3 +1888,65 @@ func TestFromMeasurementClass_WrongType_ReturnsNil(t *testing.T) {
 		t.Errorf("FromMeasurementClass(Temperature, boolSrc): want nil, got %v", got)
 	}
 }
+
+// --- PowerSourceServer EndpointList (0x001F) ---
+
+// TestPowerSourceServer_EndpointList verifies the three states of
+// EndpointList (0x001F): unset → empty list; after SetEndpoint(n>0) →
+// single-element list; after SetEndpoint(0) → empty list again.
+// Matter §11.7.6.20 permits an empty list when the endpoint is unspecified.
+func TestPowerSourceServer_EndpointList(t *testing.T) {
+	t.Parallel()
+	src := fakeBool{class: interfaces.MatterMeasurementBattery, val: false, obs: true}
+
+	t.Run("default/unset returns empty list", func(t *testing.T) {
+		t.Parallel()
+		s := measurement.NewPowerSourceServer(src)
+		v, ok := s.MatterRead(0x001F)
+		if !ok {
+			t.Fatal("MatterRead(0x001F) ok = false, want true")
+		}
+		list, cast := v.([]uint16)
+		if !cast {
+			t.Fatalf("EndpointList type = %T, want []uint16", v)
+		}
+		if len(list) != 0 {
+			t.Errorf("EndpointList = %v, want empty (Matter §11.7.6.20 unspecified)", list)
+		}
+	})
+
+	t.Run("SetEndpoint(3) returns [3]", func(t *testing.T) {
+		t.Parallel()
+		s := measurement.NewPowerSourceServer(src)
+		s.SetEndpoint(3)
+		v, ok := s.MatterRead(0x001F)
+		if !ok {
+			t.Fatal("MatterRead(0x001F) ok = false, want true")
+		}
+		list, cast := v.([]uint16)
+		if !cast {
+			t.Fatalf("EndpointList type = %T, want []uint16", v)
+		}
+		if len(list) != 1 || list[0] != 3 {
+			t.Errorf("EndpointList = %v, want [3]", list)
+		}
+	})
+
+	t.Run("SetEndpoint(0) after SetEndpoint(3) returns empty list", func(t *testing.T) {
+		t.Parallel()
+		s := measurement.NewPowerSourceServer(src)
+		s.SetEndpoint(3)
+		s.SetEndpoint(0)
+		v, ok := s.MatterRead(0x001F)
+		if !ok {
+			t.Fatal("MatterRead(0x001F) ok = false, want true")
+		}
+		list, cast := v.([]uint16)
+		if !cast {
+			t.Fatalf("EndpointList type = %T, want []uint16", v)
+		}
+		if len(list) != 0 {
+			t.Errorf("EndpointList = %v, want empty after SetEndpoint(0)", list)
+		}
+	})
+}
