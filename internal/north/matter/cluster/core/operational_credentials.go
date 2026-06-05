@@ -163,14 +163,10 @@ func (o *OperationalCredentials) SetAttestationChallenge(challenge []byte) {
 
 // invokeSessionCtxKey is the context key for the operational session ID
 // carried into cluster command handlers. The bridge's receive loop
-// stamps WithInvokeSessionID(ctx, requestHdr.SessionID) before calling
-// the IM dispatcher, so handleCSRRequest and handleAddNOC can enforce
-// the csrSessionId !== session.id binding per Matter §11.18.7.5.5 and
-// matter.js OperationalCredentialsServer.ts:230-235.
-//
-// TODO: wire from daemon.go / bridge receive loop:
-//
-//	invokeCtx = core.WithInvokeSessionID(invokeCtx, requestHdr.SessionID)
+// stamps WithInvokeSessionID(ctx, requestHdr.SessionID) on the invoke
+// context before calling the IM dispatcher, so handleCSRRequest and
+// handleAddNOC can enforce the csrSessionId !== session.id binding per
+// Matter §11.18.7.5.5 and matter.js OperationalCredentialsServer.ts:230-235.
 type invokeSessionCtxKey struct{}
 
 // WithInvokeSessionID returns a derived context carrying the operational
