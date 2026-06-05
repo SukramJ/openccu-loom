@@ -21,8 +21,8 @@ import (
 // LINK paramsets need the peer channel address (the CCU uses it as
 // the paramset key on the wire) and therefore get their own method
 // pair. The REST surface reflects this with a dedicated route —
-// `/link-paramsets/{peer}` — to keep the `{key}` URL parameter free
-// of ambiguity.
+// `/devices/{addr}/link-ps/{peer}` — to keep the `{key}` URL parameter
+// free of ambiguity.
 type ParamsetService interface {
 	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
 	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
@@ -90,7 +90,7 @@ func PutParamset(svc ParamsetService) http.HandlerFunc {
 	}
 }
 
-// GetLinkParamset serves GET /devices/{addr}/link-paramsets/{peer}.
+// GetLinkParamset serves GET /devices/{addr}/link-ps/{peer}.
 func GetLinkParamset(svc ParamsetService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
@@ -115,7 +115,7 @@ func GetLinkParamset(svc ParamsetService) http.HandlerFunc {
 	}
 }
 
-// PutLinkParamset serves PUT /devices/{addr}/link-paramsets/{peer}.
+// PutLinkParamset serves PUT /devices/{addr}/link-ps/{peer}.
 func PutLinkParamset(svc ParamsetService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
