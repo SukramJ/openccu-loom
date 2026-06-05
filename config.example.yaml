@@ -14,13 +14,30 @@
 #     daemon needs before the database is open (data_dir, bind
 #     addresses, log handler, env-file path).
 #   * On a fresh install, anything you DO list here is copied
-#     into the database on first start as the initial seed. After
-#     that the database wins; further edits in this file are
-#     ignored unless the matching DB row is deleted.
+#     into the database on first start as the initial seed —
+#     including the full config sections (MQTT, Matter, REST, …),
+#     not just the bootstrap tier. After that the database wins;
+#     further edits in this file are ignored unless the matching
+#     DB row is deleted.
 #   * If you do not want the SPA to manage anything, you can keep
 #     setting every field via this YAML — the daemon will still
 #     read it. But the cleaner workflow is: bootstrap here, live-
 #     edit in the SPA.
+#
+# Full reference + environment variables:
+#
+#   * config.example.full.yaml — annotated reference of EVERY option.
+#   * example.env — every environment variable the daemon reads
+#     (referenced via `env_file:` below). Prefer env for secrets.
+#
+# Secrets at rest (see docs/adr/0027-encrypt-config-secrets-at-rest.md):
+#
+#   * Secret-classed fields (passwords, OIDC client_secret, …) are
+#     encrypted in the database. The master key comes from
+#     OPENCCU_LOOM_SECRET_KEY (base64, 32 bytes) or an auto-generated
+#     <data_dir>/secret.key (mode 0600). Back up secret.key together
+#     with the database — without it, restored secrets cannot be
+#     decrypted.
 #
 # This whole file is OPTIONAL — the daemon ships with built-in defaults
 # and is fully configurable through the SPA. Provide it only to pin the

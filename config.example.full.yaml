@@ -1,0 +1,536 @@
+# SPDX-License-Identifier: MIT
+#
+# openccu-loom — COMPLETE annotated reference configuration
+#
+# This file documents EVERY available YAML key of the daemon.
+# For a quick start, config.example.yaml (Bootstrap-Tier) is sufficient.
+#
+# ─── Bootstrap-Tier vs. DB-Tier ──────────────────────────────────────────────
+#
+#   The configuration model has two layers:
+#
+#   1. Bootstrap-Tier (read BEFORE opening the SQLite database):
+#      data_dir, logging, listen (north.rest.listen / north.ui.listen),
+#      bootstrap, env_file.
+#      These values are stored in config.yaml and re-evaluated on EVERY start;
+#      changes take effect immediately (daemon restart required).
+#
+#   2. DB-Tier (all remaining sections):
+#      On the FIRST start, every section that does not yet exist is seeded
+#      from this YAML file into the SQLite database
+#      (table `config_sections`, primary key = section name).
+#      After that the DB / the SPA wins; further changes to these
+#      fields in the YAML file are ignored until the corresponding
+#      DB row is deleted.
+#      Known section names: locale, north.mqtt, north.matter,
+#      north.discovery, north.rest, north.rest.auth.oidc, north.ui,
+#      callback, ccu_data, reliability, persistence, security.
+#
+# ─── Secrets ─────────────────────────────────────────────────────────────────
+#
+#   Fields marked as "secret" (passwords, client secrets,
+#   API tokens, Matter passcode / salt) are stored ENCRYPTED at rest
+#   in the SQLite DB (AES-GCM, 256-bit master key).
+#
+#   The master key is loaded from (priority descending):
+#     1. Environment variable OPENCCU_LOOM_SECRET_KEY (base64, 32 bytes)
+#     2. File <data_dir>/secret.key (0600, auto-generated on first start;
+#        contains 32 random bytes, base64-encoded)
+#
+#   IMPORTANT: secret.key must be included in every backup that also
+#   contains the DB; otherwise secrets cannot be decrypted after a restore.
+#
+#   In this YAML, secret fields may be set as plaintext
+#   (they are automatically encrypted during seeding). Recommendation:
+#   leave fields here empty and supply secrets via env var
+#   (syntax: KEY=VALUE in the env_file). Examples: example.env.
+#
+# ─── Binary invocation ───────────────────────────────────────────────────────
+#
+#   openccu-loom run --config config.full.yaml
+#   hmcli config validate config.full.yaml
+#
+# Retrieve effective configuration (after DB overlay):
+#   curl --user admin http://localhost:8080/api/v1/config/effective   # curl prompts for the password
+# Schema of all fields:
+#   curl http://localhost:8080/api/v1/config/schema
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+# =============================================================================
+# BOOTSTRAP-TIER
+# Read before opening the DB; re-evaluated on every start.
+# =============================================================================
+
+# Default UI language for the first SPA request (BCP-47).
+# Users can change the language individually via the SPA settings tab.
+# This value acts as the daemon-wide fallback.  [default: en]
+locale: de
+
+# Writable directory for the SQLite DB, sessions, backups, and logs.
+# Created on first start if it does not exist.  [default: ./var]
+data_dir: /var/lib/openccu-loom
+
+# KEY=VALUE file loaded by the daemon at startup; any env vars not yet
+# set are populated from it. Prevents passwords from ending up in YAML
+# or in the DB. The file is optional (no error if it is missing).
+# "-" or "/dev/null" disables loading.
+# [default: .env]
+env_file: /etc/openccu-loom/secrets.env
+
+# Structured logging.
+logging:
+  # debug | info | warn | error   [default: info]
+  level: info
+  # json | text | text-color      [default: json]
+  format: json
+  # Per-subsystem overrides (dot-separated logger path → level).
+  # Useful for temporarily switching a known noisy subsystem to debug.
+  # Runtime overrides (with TTL) are available via REST /api/v1/diagnostics/log-level
+  # without modifying the YAML file.
+  overrides: {}
+  #   openccu-loom.client.transport.xmlrpc: debug
+  #   openccu-loom.central.callback: warn
+
+# Security toggles for the first-run setup wizard.
+bootstrap:
+  # Controls whether the unprotected /setup route is reachable.
+  # true = required for a fresh installation (first admin user must be
+  # created here). Once an admin exists this toggle is effectively a
+  # no-op — /setup is blocked as soon as a user record is present.
+  # false = /setup remains locked even with an empty users table.
+  # [default: true]
+  allow_first_run_setup: true
+
+
+# =============================================================================
+# NORTH — REST + WebSocket
+# DB section: north.rest
+# Bind address is Bootstrap-Tier (re-evaluated on every start).
+# =============================================================================
+
+north:
+  rest:
+    # Bind address of the REST+WebSocket server.  [default: :8080]
+    listen: ":8080"
+
+    # Master switch. false = no REST server (no operator surface).
+    # Pointer-bool: nil → true.  [default: true]
+    # enabled: true
+
+    # CORS — list of allowed origins for cross-origin requests.
+    # Empty = no CORS header. Wildcard "*" allows all origins;
+    # recommended only for pure-API deployments without browser sessions.
+    cors:
+      - "http://localhost:5173"   # Vite dev server
+      # - "https://home.example.com"
+
+    # Double-submit cookie/header guard for mutating endpoints.
+    # true (default) protects browser session flows.
+    # false only for pure API-token deployments without browser sessions.
+    # Pointer-bool: nil → true.  [default: true]
+    csrf_enabled: true
+
+    # Sets the Secure flag on the CSRF cookie. Enable when the daemon
+    # runs behind an HTTPS terminator.  [default: false]
+    csrf_secure: false
+
+    # Path to the openapi.yaml file. Empty = assets/openapi.yaml next to
+    # the binary. Missing file → validator is not installed.
+    # openapi_spec_path: ""
+
+    # Request validation against the OpenAPI spec. Pointer-bool: nil → true.
+    # false = explicit opt-out (e.g. during a spec migration).
+    # openapi_validate: true
+
+    # ─── WebSocket ──────────────────────────────────────────────────────
+    ws:
+      # Size of the in-memory ring buffer for subscribe-with-since replays.
+      # 0 = replay disabled. Approx. 200 B RAM per event.  [default: 1024]
+      replay_capacity: 1024
+
+    # ─── Rate limiting ──────────────────────────────────────────────────
+    rate_limit:
+      # Master switch. false = no enforcement.  [default: false]
+      enabled: false
+      # Token refill rate per identity (requests/s).  [default: 10]
+      requests_per_second: 10.0
+      # Bucket size (max concurrent requests before gate).  [default: 30]
+      burst: 30
+
+    # ─── Authentication ─────────────────────────────────────────────────
+    auth:
+      # Enable HTTP Basic Auth.  [default: false]
+      basic_enabled: true
+      # Enable Bearer token auth.  [default: false]
+      bearer_enabled: false
+      # Enable session cookie auth.  [default: false]
+      session_enabled: true
+
+      # User map: username → bcrypt hash (or plaintext on initial seed).
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      users:
+        admin: "change-me"
+        # operator: "$2a$12$..."  # bcrypt hash
+
+      # API token map: token → role.
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      tokens: {}
+      #   supersecrettoken: admin
+      #   readonlytoken: viewer
+
+      # ─── OIDC (DB section: north.rest.auth.oidc) ──────────────────────
+      oidc:
+        # Master switch.  [default: false]
+        enabled: false
+        # Issuer URL of the OIDC provider (e.g. https://accounts.google.com).
+        # Empty = OIDC flow disabled.
+        issuer: ""
+        # Client ID of the application registered with the provider.
+        client_id: ""
+        # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+        client_secret: ""
+        # Redirect URL after a successful OIDC login.
+        redirect_url: "http://localhost:8081/oidc/callback"
+        # Name of the claim in the ID token that carries the user's role.
+        # Empty = no role mapping via OIDC.
+        role_claim: "groups"
+
+
+  # =============================================================================
+  # NORTH — Bootstrap UI (HTMX, login, setup wizard, /health, /about)
+  # DB section: north.ui
+  # Bind address is Bootstrap-Tier.
+  # =============================================================================
+
+  ui:
+    # Bind address of the HTMX bootstrap server.  [default: :8081]
+    listen: ":8081"
+    # Master switch. false = no bootstrap UI.
+    # Pointer-bool: nil → true.  [default: true]
+    # enabled: true
+
+
+  # =============================================================================
+  # NORTH — MQTT bridge
+  # DB section: north.mqtt
+  # =============================================================================
+
+  mqtt:
+    # Master switch.  [default: false]
+    enabled: false
+
+    # Broker URL. Schemes: tcp | mqtt | tls | ssl | mqtts.
+    # Required when enabled: true.
+    broker_url: "tcp://localhost:1883"
+
+    # MQTT client ID (must be unique per broker).
+    client_id: "openccu-loom"
+
+    # Broker credentials.
+    # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+    username: ""
+    # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+    password: ""
+
+    # Prefix for all MQTT topics.  [default: openccu-loom]
+    topic_base: "openccu-loom"
+
+    # Enable the raw topic plane (alongside HA discovery).  [default: false]
+    raw_enabled: false
+
+    # Enable HA auto-discovery.  [default: false]
+    discovery_enabled: false
+
+    # Payload format for state topics.
+    # "" / "bare" = primitive scalar (backwards compatible).
+    # "json" = {"value":..,"available":..} — enables value_template.
+    # WARNING: switching breaks bare-value subscribers.  [default: bare]
+    payload_format: bare
+
+    # Sub-devices: splits devices with multiple channel groups into one
+    # HA device per group. Parent device is linked via via_device.
+    # [default: false]
+    sub_devices_enabled: false
+
+
+  # =============================================================================
+  # NORTH — Matter bridge
+  # DB section: north.matter
+  # =============================================================================
+
+  matter:
+    # Master switch. false = no UDP listener, no mDNS advertisement.
+    # [default: false]
+    enabled: false
+
+    # UDP bind address.  [default: :5540 (MatterPort)]
+    listen: ":5540"
+
+    # IPv4-only socket. false = IPv6 dual-stack (also accepts IPv4).
+    # [default: false]
+    prefer_ipv4: false
+
+    # IANA vendor ID. 0xFFF1 = developer / test block.
+    # NEVER use 0xFFF1 in production.  [default: 0xFFF1]
+    vendor_id: 0xFFF1
+
+    # Vendor-assigned product ID.  [default: 0x8000]
+    product_id: 0x8000
+
+    # User-visible label of the bridge.  [default: openccu-loom]
+    node_label: "openccu-loom"
+
+    # 12-bit commissioning discriminator.  [default: 0xF00]
+    discriminator: 0xF00
+
+    # mDNS advertiser implementation.
+    # "" / "noop" = no multicast (unit tests, out-of-band discovery).
+    # "zeroconf" = _matter._tcp + _matterc._udp records via multicast.
+    # [default: noop]
+    mdns_advertise: noop
+
+    # Intentional UniqueID rotation on every boot (for T11 chip-tool test).
+    # false = stable UniqueID across restarts (production: Apple Home / Google Home).
+    # true = breaks accessory recognition after daemon restart (dev/test only).
+    # [default: false]
+    dev_rotate_unique_ids: false
+
+    # ─── PASE / Commissioning ───────────────────────────────────────────
+    commissioning:
+      # Matter setup code (27-bit, 00000001–99999998). 0 = PASE disabled.
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      passcode: 0
+
+      # PBKDF2 salt (16–32 bytes). Empty = fixed development salt.
+      # NEVER leave empty in production.
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      salt: ""
+
+      # PBKDF2 iterations (1000–100000).  [default: 1000]
+      iterations: 1000
+
+      # Parallel pairing sessions (multi-admin hub scenario).  [default: false]
+      concurrent_pairings: false
+
+      # Ephemeral window: each REST-triggered OCW generates a fresh
+      # discriminator + passcode. Recommended for production.  [default: false]
+      ephemeral_window: false
+
+    # ─── CASE / Operational session ─────────────────────────────────────
+    case:
+      # 64-bit operational node ID in the fabric. 0 = CASE disabled.
+      node_id: 0
+      # 64-bit fabric ID. Required when node_id != 0.
+      fabric_id: 0
+
+    # ─── Device attestation ──────────────────────────────────────────────
+    # Production attestation material (PEM or DER; format detected via
+    # magic bytes). Empty = dev DAC (only with --bypass-attestation-verifier).
+    attestation:
+      # Path to the Device Attestation Certificate file.
+      dac_path: ""
+      # Path to the DAC P-256 private key.
+      # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+      dac_key_path: ""
+      # Path to the Product Attestation Intermediate certificate file.
+      pai_path: ""
+      # Path to the CSA-signed Certification Declaration (CMS message).
+      cd_path: ""
+
+
+  # =============================================================================
+  # NORTH — mDNS / Zeroconf discovery
+  # DB section: north.discovery
+  # =============================================================================
+
+  discovery:
+    mdns:
+      # Advertise the daemon as _openccu-loom._tcp.local.
+      # true = Home Assistant and other Zeroconf clients discover the daemon automatically.
+      # Pointer-bool: nil → true.  [default: true]
+      enabled: true
+
+      # Instance name (left-hand label of the SRV/TXT record).
+      # Empty = OS hostname (without the .local suffix).
+      # Also used as the leading component of the wire interface_id (ADR-0024).
+      instance_name: ""
+
+
+  # =============================================================================
+  # NORTH — MCP (Model Context Protocol) server
+  # DB section: north.mcp
+  # =============================================================================
+
+  mcp:
+    # Master switch. false = no MCP route.  [default: false]
+    enabled: false
+
+    # Enable write tools (set_datapoint, …). false = read-only.
+    # [default: false]
+    allow_writes: false
+
+    # HTTP mount path on the REST listener.  [default: /mcp]
+    path: /mcp
+
+
+# =============================================================================
+# CALLBACK SERVER (XML-RPC + BIN-RPC)
+# DB section: callback
+# =============================================================================
+
+callback:
+  # IP address on which the callback servers listen.  [default: 0.0.0.0]
+  host: "0.0.0.0"
+
+  # XML-RPC callback port (HTTP). 0 = dynamic (OS-assigned).
+  # The CCU learns the effective port on every init() call.  [default: 8120]
+  port: 8120
+
+  # BIN-RPC callback port (raw TCP, CUxD). 0 = dynamic.  [default: 8129]
+  bin_port: 8129
+
+  # Port range for dynamic mode, e.g. "30000-30099".
+  # Empty = OS picks a free port (typically from the ephemeral range).
+  port_range: ""
+
+  # Public IP/hostname for NAT scenarios, e.g. when the daemon runs
+  # behind NAT and the CCU must reach a different address than the
+  # local bind address. Empty = host value is used.
+  public_host: ""
+
+
+# =============================================================================
+# CCU-DATA
+# DB section: ccu_data
+# Paths to the openccu-data extracts (translations, easymodes).
+# Empty = fall back to raw parameter / model names in the UI.
+# =============================================================================
+
+ccu_data:
+  # Path to the translations.json file (parameter labels, device descriptions).
+  translations_path: ""
+
+  # Path to the easymode.json file (simplified paramset views).
+  easymode_path: ""
+
+
+# =============================================================================
+# RELIABILITY — reliability stack tuning
+# DB section: reliability
+# =============================================================================
+
+reliability:
+  # Initial backoff delay for Retry-Config.Initial.
+  # 0 = openccu-loom default (250 ms).  [default: 0]
+  command_retry_initial_delay: 0s
+
+  # Minimum spacing between consecutive throttled commands.
+  # 0 = no inter-command pacing.  [default: 0]
+  # Example for heavily loaded BidCos-RF interfaces: 50ms or 500ms.
+  command_throttle_inter_command_delay: 0s
+
+
+# =============================================================================
+# PERSISTENCE — SQLite cache tuning
+# DB section: persistence
+# =============================================================================
+
+persistence:
+  values_cache:
+    # Master switch for the values cache (ADR 0019).
+    # Pointer-bool: nil → true (opt-out, not opt-in).  [default: true]
+    # enabled: true
+
+    # Flush interval (periodic write to SQLite).
+    # 0 = default (60s).  [default: 60s]
+    flush_interval: 0s
+
+    # Central names whose data points should NOT be cached.
+    # Useful for test rigs in multi-CCU deployments.
+    # Empty = all centrals are cached.
+    disabled_centrals: []
+
+
+# =============================================================================
+# CENTRALS — Homematic CCUs
+# At least one central with name, host, and interfaces is required
+# when the daemon is not configured exclusively via the SPA.
+# DB section: stored per central in `config_centrals`.
+# =============================================================================
+
+centrals:
+  - # Unique name of this central (scoping dimension, multi-CCU-safe).
+    # Required.
+    name: Home
+
+    # Hostname or IP address of the CCU.  Required.
+    host: "192.168.1.10"
+
+    # Legacy single-port override (all interfaces). 0 = backend default.
+    # Overridden by `ports` (per-interface).  [default: 0]
+    port: 0
+
+    # Per-interface port overrides (key = hmenum.Interface string).
+    # Overrides `port` for the named interfaces.
+    ports: {}
+    #   HmIP-RF: 2010
+    #   BidCos-RF: 2001
+
+    # HTTP port for JSON-RPC / top-level CCU web endpoints.
+    # 0 = backend default (80 plain / 443 TLS).  [default: 0]
+    json_rpc_port: 0
+
+    # CCU credentials.
+    # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+    username: "Admin"
+    # secret — encrypted at rest; prefer providing it via an env var (see example.env)
+    password: ""
+
+    # Enable TLS for XML-RPC connections to the CCU.  [default: false]
+    tls: false
+
+    # Disable certificate verification (self-signed CCUs on
+    # trusted networks). Set only when truly necessary.
+    # [default: false]
+    tls_insecure_skip_verify: false
+
+    # Primary interface for health aggregation.
+    # Empty = HmIP-RF substring heuristic.  [default: ""]
+    primary_interface: ""
+
+    # Cadence of the background check_connection job.
+    # 0 = compiled-in default (30s). Negative = job disabled.  [default: 0]
+    check_connection_interval: 0s
+
+    # Interfaces: short form (list of strings) or long form (list of maps).
+    # HmIP-Wired is NOT a separate interface name — devices are
+    # classified automatically via HmIP-RF (model prefix "hmipw-").
+    interfaces:
+      # Short form: interface name only
+      - HmIP-RF
+      - BidCos-RF
+      # Long form: full control over port, remote_path, and rpc_type
+      # - name: VirtualDevices
+      #   port: 9292
+      #   remote_path: /groups
+      #   rpc_type: xmlrpc
+      # - name: CUxD
+      #   rpc_type: binrpc
+
+    # Visibility overrides: promote parameters from the default hidden set
+    # into the visible data points.
+    # Format: "MODEL:CHANNEL:PARAMETER" (wildcards * for MODEL/CHANNEL).
+    # Bare parameter names (without colons) → "*:*:PARAMETER".
+    visibility:
+      un_ignore: []
+      # - "*:*:RSSI_DEVICE"
+      # - "HM-CC-RT-DN:4:VALVE_STATE"
+
+  # Second CCU (multi-CCU example)
+  # - name: Office
+  #   host: "192.168.2.10"
+  #   interfaces:
+  #     - HmIP-RF
+  #   username: "Admin"
+  #   password: ""
