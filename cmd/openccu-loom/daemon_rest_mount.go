@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
@@ -18,6 +19,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
+	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
@@ -223,7 +225,11 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		CSRFSecure:            cfg.North.REST.CSRFSecure,
 	}
 	router := rest.NewRouter(deps)
-	servers.add("rest", rest.NewServer(cfg.North.REST.Listen, router, logger))
+	var topHandler http.Handler = router
+	if cfg.North.MCP.Enabled {
+		topHandler = mountMCP(cfg, d, router, logger)
+	}
+	servers.add("rest", rest.NewServer(cfg.North.REST.Listen, topHandler, logger))
 
 	if cfg.North.Discovery.MDNS.IsEnabled() {
 		if adv, err := startMDNSAdvertiser(ctx, cfg, logger); err != nil {
@@ -237,4 +243,28 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		}
 	}
 	return teardown
+}
+
+// mountMCP wraps the REST router so the configured MCP path serves the
+// Streamable-HTTP MCP handler behind the same auth chain as REST, while
+// every other path falls through to the REST router. The MCP server is
+// read-only unless North.MCP.AllowWrites is also set. See ADR 0025.
+func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *slog.Logger) http.Handler {
+	mcpHandler := d.authMw.Require(mcp.Handler(mcp.Deps{
+		Centrals:    d.reg,
+		Devices:     d.devicesAdapter,
+		Writer:      d.dpWriterAdapter,
+		Audit:       d.auditRec,
+		AllowWrites: cfg.North.MCP.AllowWrites,
+		Version:     build.Version,
+	}))
+	path := cfg.North.MCP.MountPath()
+	mux := http.NewServeMux()
+	mux.Handle(path, mcpHandler)
+	mux.Handle(path+"/", mcpHandler)
+	mux.Handle("/", router)
+	logger.Info("north.mcp.enabled",
+		slog.String("path", path),
+		slog.Bool("allow_writes", cfg.North.MCP.AllowWrites))
+	return mux
 }

@@ -39,7 +39,8 @@ const (
 	// enabled. CapabilityMCPWrite is surfaced additionally when its
 	// write-capable tools are permitted (AllowWrites); a client reads
 	// the finer-grained token to decide whether to attempt a write tool.
-	CapabilityMCP      = "mcp.v1"
+	CapabilityMCP = "mcp.v1"
+	//nolint:gosec // G101 false positive: a capability token, not a credential.
 	CapabilityMCPWrite = "mcp.write.v1"
 )
 

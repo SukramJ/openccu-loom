@@ -524,15 +524,23 @@ is the complete specification — every Custom / Generic / Calculated
 DP currently in the model is accounted for, and no model-layer
 *structural* refactor is required.
 
-### 6.4 MCP (planned north-bound bridge)
+### 6.4 MCP north-bound bridge
 
 Matter is one of several north-bound adapters over the same domain
 core (alongside REST, WebSocket, and MQTT). A further bridge — an
-**MCP server** that exposes the domain to LLM agents as
-tools / resources / prompts — is decided but not yet implemented. It
-follows the same "rich model, dumb adapter" principle as the Matter
-bridge and the MQTT plane, is default-off and read-only by default,
-and is sequenced after the depth-parity work against aiohomematic.
+**MCP server** that exposes the domain to LLM agents as tools over a
+Streamable-HTTP transport — ships in `internal/north/mcp/`, default-off
+and read-only by default. It follows the same "rich model, dumb
+adapter" principle as the Matter bridge and the MQTT plane: each tool
+projects the same domain the REST surface serves, scoped per central.
+
+The adapter mounts on the REST listener at `North.MCP.Path` (default
+`/mcp`) behind the same auth chain, gated by `North.MCP.Enabled`. Read
+tools (`list_centrals`, `list_devices`, `get_device`, `list_audit`) are
+always registered; the write tool (`set_datapoint`) only when
+`North.MCP.AllowWrites` is also set, and it refuses to write to a device
+the named central does not own (ADR 0002). The `mcp.v1` / `mcp.write.v1`
+capability tokens surface the posture through `GET /info`.
 
 - **[ADR 0025](docs/adr/0025-mcp-northbound-adapter.md)** — the
   production MCP adapter: tool / resource shapes, multi-CCU scoping,

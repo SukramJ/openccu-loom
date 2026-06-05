@@ -1,0 +1,538 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package mcp_test
+
+import (
+	"context"
+	"encoding/json"
+	"iter"
+	"testing"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/mcp"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+)
+
+// ─── fakes ───────────────────────────────────────────────────────────────────
+
+type fakeCentrals struct{ names []string }
+
+func (f *fakeCentrals) Names() []string { return f.names }
+
+type fakeDevices struct {
+	devices  map[string]*device.Device
+	centrals map[string]string // address → central name
+}
+
+func newFakeDevices() *fakeDevices {
+	return &fakeDevices{
+		devices:  make(map[string]*device.Device),
+		centrals: make(map[string]string),
+	}
+}
+
+func (f *fakeDevices) add(d *device.Device, central string) {
+	f.devices[d.Address] = d
+	f.centrals[d.Address] = central
+}
+
+func (f *fakeDevices) Devices() []*device.Device {
+	out := make([]*device.Device, 0, len(f.devices))
+	for _, d := range f.devices {
+		out = append(out, d)
+	}
+	return out
+}
+
+func (f *fakeDevices) Device(address string) (*device.Device, bool) {
+	d, ok := f.devices[address]
+	return d, ok
+}
+
+func (f *fakeDevices) CentralOf(address string) string {
+	return f.centrals[address]
+}
+
+type writeCall struct {
+	address   string
+	parameter hmenum.Parameter
+	value     any
+	priority  hmenum.CommandPriority
+}
+
+type fakeWriter struct {
+	last writeCall
+	err  error
+}
+
+func (fw *fakeWriter) SetValue(
+	_ context.Context,
+	address string,
+	parameter hmenum.Parameter,
+	value any,
+	priority hmenum.CommandPriority,
+) error {
+	fw.last = writeCall{address: address, parameter: parameter, value: value, priority: priority}
+	return fw.err
+}
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+// connect pairs a new MCP server (built from deps) with an in-memory client
+// and returns the ready client session. The test calls defer cs.Close().
+func connect(t *testing.T, deps mcp.Deps) *mcpsdk.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+
+	srv := mcp.NewServer(deps)
+	t1, t2 := mcpsdk.NewInMemoryTransports()
+
+	_, err := srv.Connect(ctx, t1, nil)
+	if err != nil {
+		t.Fatalf("server Connect: %v", err)
+	}
+
+	c := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil)
+	cs, err := c.Connect(ctx, t2, nil)
+	if err != nil {
+		t.Fatalf("client Connect: %v", err)
+	}
+	return cs
+}
+
+// callTool invokes a tool by name and returns the raw result.
+func callTool(t *testing.T, cs *mcpsdk.ClientSession, name string, args map[string]any) *mcpsdk.CallToolResult {
+	t.Helper()
+	res, err := cs.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name:      name,
+		Arguments: args,
+	})
+	if err != nil {
+		t.Fatalf("CallTool %q: %v", name, err)
+	}
+	return res
+}
+
+// unmarshalStructured round-trips StructuredContent through JSON into dst.
+func unmarshalStructured(t *testing.T, res *mcpsdk.CallToolResult, dst any) {
+	t.Helper()
+	raw, err := json.Marshal(res.StructuredContent)
+	if err != nil {
+		t.Fatalf("marshal StructuredContent: %v", err)
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		t.Fatalf("unmarshal StructuredContent: %v", err)
+	}
+}
+
+// toolNames collects all tool names advertised by the server.
+func toolNames(t *testing.T, cs *mcpsdk.ClientSession) map[string]bool {
+	t.Helper()
+	names := make(map[string]bool)
+	next, stop := iter.Pull2(cs.Tools(context.Background(), nil))
+	defer stop()
+	for {
+		tool, err, ok := next()
+		if !ok {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Tools iterator: %v", err)
+		}
+		names[tool.Name] = true
+	}
+	return names
+}
+
+// ─── shared fixtures ─────────────────────────────────────────────────────────
+
+func makeDeviceFixture() (devs *fakeDevices, lampDev, sensorDev *device.Device) {
+	devs = newFakeDevices()
+
+	lampDev = device.New(device.Config{
+		Address:   "ADDR001",
+		Model:     "HmIP-PS",
+		Name:      "Lamp",
+		Interface: hmenum.InterfaceHmIPRF,
+	})
+	sensorDev = device.New(device.Config{
+		Address:   "ADDR002",
+		Model:     "HmIP-WTH-2",
+		Name:      "Thermostat",
+		Interface: hmenum.InterfaceHmIPRF,
+	})
+
+	devs.add(lampDev, "ccu1")
+	devs.add(sensorDev, "ccu2")
+
+	return devs, lampDev, sensorDev
+}
+
+// ─── tests ───────────────────────────────────────────────────────────────────
+
+func TestListCentrals(t *testing.T) {
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:  newFakeDevices(),
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_centrals", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_centrals returned error: %v", res.Content)
+	}
+
+	var out struct {
+		Centrals []string `json:"centrals"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if len(out.Centrals) != 2 {
+		t.Fatalf("expected 2 centrals, got %d: %v", len(out.Centrals), out.Centrals)
+	}
+	want := map[string]bool{"ccu1": true, "ccu2": true}
+	for _, name := range out.Centrals {
+		if !want[name] {
+			t.Errorf("unexpected central name %q", name)
+		}
+	}
+}
+
+func TestListDevices_AllCentrals(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:  devs,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_devices", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_devices returned error")
+	}
+
+	var out struct {
+		Devices []struct {
+			Address string `json:"address"`
+			Central string `json:"central"`
+		} `json:"devices"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if len(out.Devices) != 2 {
+		t.Fatalf("expected 2 devices (no filter), got %d", len(out.Devices))
+	}
+}
+
+func TestListDevices_FilteredByCentral(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:  devs,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_devices", map[string]any{"central_name": "ccu1"})
+	if res.IsError {
+		t.Fatalf("list_devices (filtered) returned error")
+	}
+
+	var out struct {
+		Devices []struct {
+			Address string `json:"address"`
+			Central string `json:"central"`
+		} `json:"devices"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if len(out.Devices) != 1 {
+		t.Fatalf("expected 1 device for ccu1, got %d", len(out.Devices))
+	}
+	if out.Devices[0].Address != "ADDR001" {
+		t.Errorf("expected ADDR001, got %q", out.Devices[0].Address)
+	}
+	if out.Devices[0].Central != "ccu1" {
+		t.Errorf("expected central ccu1, got %q", out.Devices[0].Central)
+	}
+}
+
+func TestGetDevice_Found(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:  devs,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_device", map[string]any{"address": "ADDR001"})
+	if res.IsError {
+		t.Fatalf("get_device returned error")
+	}
+
+	var out struct {
+		Found  bool `json:"found"`
+		Device struct {
+			Address   string `json:"address"`
+			Model     string `json:"model"`
+			Name      string `json:"name"`
+			Interface string `json:"interface"`
+			Central   string `json:"central"`
+		} `json:"device"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if !out.Found {
+		t.Fatal("expected Found=true for ADDR001")
+	}
+	if out.Device.Address != "ADDR001" {
+		t.Errorf("address: want ADDR001, got %q", out.Device.Address)
+	}
+	if out.Device.Model != "HmIP-PS" {
+		t.Errorf("model: want HmIP-PS, got %q", out.Device.Model)
+	}
+	if out.Device.Name != "Lamp" {
+		t.Errorf("name: want Lamp, got %q", out.Device.Name)
+	}
+	if out.Device.Central != "ccu1" {
+		t.Errorf("central: want ccu1, got %q", out.Device.Central)
+	}
+}
+
+func TestGetDevice_NotFound(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1"}},
+		Devices:  devs,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "get_device", map[string]any{"address": "DOESNOTEXIST"})
+	if res.IsError {
+		t.Fatalf("get_device returned error for unknown address (expected Found=false, not an error)")
+	}
+
+	var out struct {
+		Found bool `json:"found"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if out.Found {
+		t.Fatal("expected Found=false for unknown address")
+	}
+}
+
+func TestListAudit_WithEntries(t *testing.T) {
+	buf := audit.NewBuffer(100)
+	buf.Record(audit.Entry{
+		Action:        audit.ActionDataPointWrite,
+		DeviceAddress: "ADDR001",
+		Parameter:     "STATE",
+		Note:          "test note",
+		User:          "admin",
+	})
+
+	devs, _, _ := makeDeviceFixture()
+	deps := mcp.Deps{
+		Centrals: &fakeCentrals{names: []string{"ccu1"}},
+		Devices:  devs,
+		Audit:    buf,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "list_audit", map[string]any{})
+	if res.IsError {
+		t.Fatalf("list_audit returned error")
+	}
+
+	var out struct {
+		Entries []struct {
+			Action        string `json:"action"`
+			DeviceAddress string `json:"device_address"`
+			Parameter     string `json:"parameter"`
+			Note          string `json:"note"`
+			User          string `json:"user"`
+		} `json:"entries"`
+	}
+	unmarshalStructured(t, res, &out)
+
+	if len(out.Entries) != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", len(out.Entries))
+	}
+	e := out.Entries[0]
+	if e.Action != string(audit.ActionDataPointWrite) {
+		t.Errorf("action: want %q, got %q", audit.ActionDataPointWrite, e.Action)
+	}
+	if e.DeviceAddress != "ADDR001" {
+		t.Errorf("device_address: want ADDR001, got %q", e.DeviceAddress)
+	}
+	if e.Parameter != "STATE" {
+		t.Errorf("parameter: want STATE, got %q", e.Parameter)
+	}
+	if e.User != "admin" {
+		t.Errorf("user: want admin, got %q", e.User)
+	}
+}
+
+func TestSetDatapoint_NotInCatalogueWhenWritesDisabled(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+
+	// AllowWrites=false — set_datapoint must not be registered.
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		AllowWrites: false,
+		Writer:      &fakeWriter{},
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	names := toolNames(t, cs)
+	if names["set_datapoint"] {
+		t.Fatal("set_datapoint should not be in catalogue when AllowWrites=false")
+	}
+}
+
+func TestSetDatapoint_NotInCatalogueWhenWriterNil(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+
+	// AllowWrites=true but Writer=nil — still not registered.
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		AllowWrites: true,
+		Writer:      nil,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	names := toolNames(t, cs)
+	if names["set_datapoint"] {
+		t.Fatal("set_datapoint should not be in catalogue when Writer=nil")
+	}
+}
+
+func TestSetDatapoint_CallErrorWhenDisabled(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+
+	// Writes disabled — calling the tool (which won't be registered) must
+	// produce either a protocol-level error or IsError.
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1"}},
+		Devices:     devs,
+		AllowWrites: false,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	_, err := cs.CallTool(context.Background(), &mcpsdk.CallToolParams{
+		Name:      "set_datapoint",
+		Arguments: map[string]any{"central_name": "ccu1", "address": "ADDR001", "parameter": "STATE", "value": true},
+	})
+	if err == nil {
+		t.Fatal("expected error when calling unregistered set_datapoint")
+	}
+}
+
+func TestSetDatapoint_SuccessfulWrite(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	writer := &fakeWriter{}
+	buf := audit.NewBuffer(100)
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:     devs,
+		Writer:      writer,
+		Audit:       buf,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	res := callTool(t, cs, "set_datapoint", map[string]any{
+		"central_name": "ccu1",
+		"address":      "ADDR001",
+		"parameter":    "STATE",
+		"value":        true,
+	})
+	if res.IsError {
+		t.Fatalf("set_datapoint returned error: %v", res.Content)
+	}
+
+	var out struct {
+		OK bool `json:"ok"`
+	}
+	unmarshalStructured(t, res, &out)
+	if !out.OK {
+		t.Fatal("expected OK=true on successful write")
+	}
+
+	// Verify the writer received the correct call.
+	if writer.last.address != "ADDR001" {
+		t.Errorf("writer address: want ADDR001, got %q", writer.last.address)
+	}
+	if writer.last.parameter != hmenum.Parameter("STATE") {
+		t.Errorf("writer parameter: want STATE, got %q", writer.last.parameter)
+	}
+	if writer.last.priority != hmenum.CommandPriorityHigh {
+		t.Errorf("writer priority: want CommandPriorityHigh, got %v", writer.last.priority)
+	}
+
+	// Verify audit entry was recorded.
+	entries := buf.List(10)
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 audit entry after write, got %d", len(entries))
+	}
+	if entries[0].Action != audit.ActionDataPointWrite {
+		t.Errorf("audit action: want %q, got %q", audit.ActionDataPointWrite, entries[0].Action)
+	}
+	if entries[0].DeviceAddress != "ADDR001" {
+		t.Errorf("audit device_address: want ADDR001, got %q", entries[0].DeviceAddress)
+	}
+}
+
+func TestSetDatapoint_WrongCentral(t *testing.T) {
+	devs, _, _ := makeDeviceFixture()
+	writer := &fakeWriter{}
+	buf := audit.NewBuffer(100)
+
+	deps := mcp.Deps{
+		Centrals:    &fakeCentrals{names: []string{"ccu1", "ccu2"}},
+		Devices:     devs,
+		Writer:      writer,
+		Audit:       buf,
+		AllowWrites: true,
+	}
+	cs := connect(t, deps)
+	defer cs.Close()
+
+	// ADDR001 belongs to ccu1 — passing ccu2 must be refused.
+	res := callTool(t, cs, "set_datapoint", map[string]any{
+		"central_name": "ccu2",
+		"address":      "ADDR001",
+		"parameter":    "STATE",
+		"value":        true,
+	})
+	if !res.IsError {
+		t.Fatal("expected IsError=true when central_name does not own the device")
+	}
+
+	// Writer must NOT have been called.
+	if writer.last.address != "" {
+		t.Errorf("writer should not have been called, but got address %q", writer.last.address)
+	}
+
+	// No audit entry must have been recorded.
+	if buf.Len() != 0 {
+		t.Errorf("expected 0 audit entries after failed write, got %d", buf.Len())
+	}
+}

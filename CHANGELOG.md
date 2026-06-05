@@ -22,6 +22,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **MCP server (Model Context Protocol).** A new north-bound adapter
+  (`internal/north/mcp/`) exposes the daemon to LLM agents as tools over
+  a Streamable-HTTP transport, mounted on the REST listener behind the
+  same auth chain. Disabled by default (`North.MCP.Enabled`) and
+  read-only even when enabled — the write tool (`set_datapoint`) is
+  registered only when `North.MCP.AllowWrites` is also set, and it
+  refuses to write to a device the named central does not own. Read
+  tools: `list_centrals`, `list_devices`, `get_device`, `list_audit`.
+  The `mcp.v1` / `mcp.write.v1` capability tokens surface the posture via
+  `GET /info`. Built on the official `modelcontextprotocol/go-sdk`. See
+  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).
+
 - **System variables now work on Homegear backends.** Homegear is
   XML-RPC-only, so the JSON-RPC hub bootstrap could not populate its
   sysvar list and `/api/v1/sysvars` stayed empty. The daemon now loads
