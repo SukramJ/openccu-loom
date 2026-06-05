@@ -26,6 +26,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -92,7 +93,8 @@ func run() error {
 
 	// Bind the control listener first so we can advertise its port
 	// together with the simulator's resolved RPC ports.
-	ctlLn, err := net.Listen("tcp", *controlAddr)
+	var lc net.ListenConfig
+	ctlLn, err := lc.Listen(context.Background(), "tcp", *controlAddr)
 	if err != nil {
 		return fmt.Errorf("control listen: %w", err)
 	}
@@ -100,7 +102,7 @@ func run() error {
 	p := ports{
 		XMLRPCPort:  tcpPort(v.XMLRPCAddr()),
 		JSONRPCPort: tcpPort(v.JSONRPCAddr()),
-		ControlPort: ctlLn.Addr().(*net.TCPAddr).Port,
+		ControlPort: tcpPort(ctlLn.Addr()),
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(p); err != nil {
 		return fmt.Errorf("encode ports: %w", err)
