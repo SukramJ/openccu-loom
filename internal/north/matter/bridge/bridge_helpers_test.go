@@ -141,6 +141,16 @@ func TestProtocolHeaderSize_WithVendorIDAndAck(t *testing.T) {
 	}
 }
 
+func TestProtocolHeaderSize_WithSecuredExtension(t *testing.T) {
+	t.Parallel()
+	// 6 fixed + 2 length prefix + 3-byte block = 11; the payload must
+	// start past the secured-extension block, not at its first byte.
+	p := message.ProtocolHeader{HasSecuredExt: true, SecuredExtension: []byte{0x01, 0x02, 0x03}}
+	if got := protocolHeaderSize(p); got != 11 {
+		t.Errorf("with SecuredExt: want 11, got %d", got)
+	}
+}
+
 // ─── securityFlagsByte ───────────────────────────────────────────────────────
 
 func TestSecurityFlagsByte_AllZero(t *testing.T) {

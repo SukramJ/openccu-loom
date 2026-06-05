@@ -802,6 +802,9 @@ func protocolHeaderSize(p message.ProtocolHeader) int {
 	if p.HasAck {
 		size += 4
 	}
+	if p.HasSecuredExt {
+		size += 2 + len(p.SecuredExtension) // uint16 length prefix + block
+	}
 	return size
 }
 

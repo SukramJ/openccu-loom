@@ -4,7 +4,9 @@
 package message
 
 import (
+	"bytes"
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -27,7 +29,7 @@ func TestHeaderRoundTripUnsecured(t *testing.T) {
 	if n != 8 {
 		t.Errorf("consumed %d bytes, want 8", n)
 	}
-	if out != in {
+	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
 }
@@ -54,7 +56,7 @@ func TestHeaderWithSourceAndDestNodeID(t *testing.T) {
 	if n != 24 {
 		t.Errorf("consumed %d, want 24", n)
 	}
-	if out != in {
+	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
 }
@@ -75,7 +77,7 @@ func TestHeaderWithGroupDest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unmarshal err: %v", err)
 	}
-	if n != 10 || out != in {
+	if n != 10 || !reflect.DeepEqual(out, in) {
 		t.Errorf("decoded %d/%+v want 10/%+v", n, out, in)
 	}
 }
@@ -162,7 +164,7 @@ func TestProtocolHeaderRoundTripMinimum(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if n != 6 || out != in {
+	if n != 6 || !reflect.DeepEqual(out, in) {
 		t.Errorf("decoded %d/%+v want 6/%+v", n, out, in)
 	}
 }
@@ -186,7 +188,7 @@ func TestProtocolHeaderWithAckRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if out != in {
+	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
 }
@@ -209,7 +211,7 @@ func TestProtocolHeaderWithVendorRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if out != in {
+	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
 }
@@ -230,6 +232,128 @@ func TestProtocolHeaderTruncatedAckCounter(t *testing.T) {
 	_, _, err := UnmarshalProtocolHeader(wire[:6]) // chop the ack-counter
 	if !errors.Is(err, ErrTruncated) {
 		t.Fatalf("err = %v, want ErrTruncated", err)
+	}
+}
+
+// --- Extensions (Core Spec §4.4.1.8 message / §4.4.2.1 secured) ---
+
+// TestHeaderMessageExtensionRoundTrip locks the message-extension block
+// through encode/decode. The block is reserved in Matter 1.x but is part
+// of the message header (and thus the AEAD AAD), so it must survive a
+// round-trip byte-for-byte.
+func TestHeaderMessageExtensionRoundTrip(t *testing.T) {
+	in := Header{
+		MessageCounter:   7,
+		HasExtension:     true,
+		MessageExtension: []byte{0xDE, 0xAD, 0xBE, 0xEF},
+	}
+	wire := in.Marshal()
+	// 8 fixed + 2 length prefix + 4 data.
+	if len(wire) != 8+2+4 {
+		t.Fatalf("len(wire)=%d, want 14", len(wire))
+	}
+	out, n, err := UnmarshalHeader(wire)
+	if err != nil {
+		t.Fatalf("Unmarshal err: %v", err)
+	}
+	if n != len(wire) {
+		t.Errorf("consumed %d, want %d", n, len(wire))
+	}
+	if !reflect.DeepEqual(out, in) {
+		t.Errorf("got %+v, want %+v", out, in)
+	}
+}
+
+// TestHeaderExtensionThenProtocolHeader is the regression for the decode
+// gap in issue #6: when the extension block is present, the protocol
+// header MUST be located after it, not at the extension's first byte.
+func TestHeaderExtensionThenProtocolHeader(t *testing.T) {
+	hdr := Header{MessageCounter: 1, HasExtension: true, MessageExtension: []byte{0x01, 0x02}}
+	proto := ProtocolHeader{Opcode: 0x42, ExchangeID: 0x1234, ProtocolID: 0x0001}
+	frame := append(hdr.Marshal(), proto.Marshal()...)
+
+	out, n, err := UnmarshalHeader(frame)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	if !bytes.Equal(out.MessageExtension, hdr.MessageExtension) {
+		t.Fatalf("MessageExtension=%x, want %x", out.MessageExtension, hdr.MessageExtension)
+	}
+	gotProto, _, err := UnmarshalProtocolHeader(frame[n:])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader at offset %d: %v", n, err)
+	}
+	if gotProto.Opcode != proto.Opcode || gotProto.ExchangeID != proto.ExchangeID {
+		t.Errorf("protocol header decoded as %+v, want opcode/exch %#x/%#x — offset slipped past the extension",
+			gotProto, proto.Opcode, proto.ExchangeID)
+	}
+}
+
+// TestHeaderMessageExtensionLengthOverflow rejects a length prefix that
+// claims more bytes than the buffer holds — the bounds check mirrored
+// from matter.js MessageCodec.ts.
+func TestHeaderMessageExtensionLengthOverflow(t *testing.T) {
+	in := Header{MessageCounter: 1, HasExtension: true, MessageExtension: []byte{0xAA, 0xBB}}
+	wire := in.Marshal()
+	// Inflate the uint16 length prefix (immediately after the 8-byte fixed
+	// header) to exceed the 2 bytes that actually follow it.
+	wire[8] = 0xFF
+	wire[9] = 0xFF
+	_, _, err := UnmarshalHeader(wire)
+	if !errors.Is(err, ErrExtensionLength) {
+		t.Fatalf("err = %v, want ErrExtensionLength", err)
+	}
+}
+
+// TestHeaderMessageExtensionTruncatedLength rejects a header whose
+// extension flag is set but which ends before the 2-byte length prefix.
+func TestHeaderMessageExtensionTruncatedLength(t *testing.T) {
+	in := Header{MessageCounter: 1, HasExtension: true}
+	wire := in.Marshal()
+	_, _, err := UnmarshalHeader(wire[:8]) // drop the length prefix
+	if !errors.Is(err, ErrTruncated) {
+		t.Fatalf("err = %v, want ErrTruncated", err)
+	}
+}
+
+// TestProtocolHeaderSecuredExtensionRoundTrip locks the secured-extension
+// block through encode/decode.
+func TestProtocolHeaderSecuredExtensionRoundTrip(t *testing.T) {
+	in := ProtocolHeader{
+		Opcode:           0x05,
+		ExchangeID:       9,
+		ProtocolID:       1,
+		HasSecuredExt:    true,
+		SecuredExtension: []byte{0x11, 0x22, 0x33},
+	}
+	wire := in.Marshal()
+	// 6 fixed + 2 length prefix + 3 data.
+	if len(wire) != 6+2+3 {
+		t.Fatalf("len(wire)=%d, want 11", len(wire))
+	}
+	out, n, err := UnmarshalProtocolHeader(wire)
+	if err != nil {
+		t.Fatalf("Unmarshal err: %v", err)
+	}
+	if n != len(wire) {
+		t.Errorf("consumed %d, want %d", n, len(wire))
+	}
+	if !reflect.DeepEqual(out, in) {
+		t.Errorf("got %+v, want %+v", out, in)
+	}
+}
+
+// TestProtocolHeaderSecuredExtensionLengthOverflow rejects an inflated
+// secured-extension length prefix.
+func TestProtocolHeaderSecuredExtensionLengthOverflow(t *testing.T) {
+	in := ProtocolHeader{Opcode: 1, ProtocolID: 1, HasSecuredExt: true, SecuredExtension: []byte{0x01}}
+	wire := in.Marshal()
+	// The length prefix sits right after the 6-byte fixed portion.
+	wire[6] = 0xFF
+	wire[7] = 0xFF
+	_, _, err := UnmarshalProtocolHeader(wire)
+	if !errors.Is(err, ErrExtensionLength) {
+		t.Fatalf("err = %v, want ErrExtensionLength", err)
 	}
 }
 
