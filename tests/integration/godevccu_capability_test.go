@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/central/rpcserver"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 )
@@ -520,30 +521,149 @@ func TestCapability_deleteDevice(t *testing.T) {
 	}
 }
 
-// TestCapability_listBidcosInterfaces documents that godevccu does not yet
-// expose listBidcosInterfaces, which openccu-loom's CcuBackend calls during
-// interface detection.
-// Matrix: ✗ godevccu — tracked as Gap 5 in docs/audit/godevccu-capability.md.
-//
-// TODO(godevccu): add a listBidcosInterfaces stub (returns empty array) to
-// enable CcuBackend interface-detection integration tests.
+// TestCapability_listBidcosInterfaces checks that listBidcosInterfaces
+// returns an empty array without error.
+// Matrix: ✓ godevccu.
 func TestCapability_listBidcosInterfaces(t *testing.T) {
-	t.Skip("godevccu does not yet implement listBidcosInterfaces (Gap 5 in docs/audit/godevccu-capability.md)")
+	srv := startMockCCU(t)
+	c := newXMLRPCClient(t, srv.URL())
+	ctx, cancel := ctx5s(t)
+	defer cancel()
+
+	v, err := c.Call(ctx, "listBidcosInterfaces", nil)
+	if err != nil {
+		t.Fatalf("listBidcosInterfaces: %v", err)
+	}
+	if _, err := xmlrpc.AsArray(v); err != nil {
+		t.Fatalf("listBidcosInterfaces: expected array, got %T / %v: %v", v, v, err)
+	}
 }
 
-// TestCapability_replaceDevice and TestCapability_readdedDevice document that
-// Neither
-// events to callback receivers.
-// Matrix: ✗ both — tracked as Gap 4.
-//
-// TODO(godevccu): implement replaceDevice / readdedDevice push helpers in
-// RPCFunctions.fireEvent to enable CallbackCoordinator integration tests.
+// recordingHandlers is a minimal rpcserver.Handlers fake that records
+// replaceDevice and readdedDevice callbacks for assertion in tests.
+type recordingHandlers struct {
+	replaced chan replaceDeviceArgs
+	readded  chan readdedDeviceArgs
+}
+
+type replaceDeviceArgs struct {
+	interfaceID string
+	oldAddress  string
+	newAddress  string
+}
+
+type readdedDeviceArgs struct {
+	interfaceID string
+	addresses   []string
+}
+
+func (h *recordingHandlers) Event(_ context.Context, _, _, _ string, _ xmlrpc.Value) error {
+	return nil
+}
+
+func (h *recordingHandlers) NewDevices(_ context.Context, _ string, _ xmlrpc.ArrayValue) error {
+	return nil
+}
+
+func (h *recordingHandlers) DeleteDevices(_ context.Context, _ string, _ []string) error {
+	return nil
+}
+
+func (h *recordingHandlers) UpdateDevice(_ context.Context, _, _ string, _ int) error {
+	return nil
+}
+
+func (h *recordingHandlers) ReplaceDevice(_ context.Context, interfaceID, oldAddress, newAddress string) error {
+	h.replaced <- replaceDeviceArgs{interfaceID: interfaceID, oldAddress: oldAddress, newAddress: newAddress}
+	return nil
+}
+
+func (h *recordingHandlers) ReaddedDevice(_ context.Context, interfaceID string, addresses []string) error {
+	h.readded <- readdedDeviceArgs{interfaceID: interfaceID, addresses: addresses}
+	return nil
+}
+
+func (h *recordingHandlers) ListDevices(_ context.Context, _ string) (xmlrpc.ArrayValue, error) {
+	return nil, nil
+}
+
+func (h *recordingHandlers) Error(_ context.Context, _ string, _ int, _ string) error {
+	return nil
+}
+
+// startCallbackServer starts an XML-RPC callback server, registers fake under
+// centralName, calls Init on srv.v.RPC() with the callback URL, and returns
+// the fake for assertion. The server and context are cleaned up via t.Cleanup.
+func startCallbackServer(t *testing.T, srv *mockCCU, centralName, interfaceID string) *recordingHandlers {
+	t.Helper()
+	fake := &recordingHandlers{
+		replaced: make(chan replaceDeviceArgs, 1),
+		readded:  make(chan readdedDeviceArgs, 1),
+	}
+	cb, err := rpcserver.NewXMLRPCServer(rpcserver.XMLRPCConfig{Addr: "127.0.0.1:0"})
+	if err != nil {
+		t.Fatalf("rpcserver.NewXMLRPCServer: %v", err)
+	}
+	cb.Register(centralName, fake)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = cb.Serve(ctx) }()
+	callbackURL := "http://" + cb.Addr().String() + "/RPC2/" + centralName
+	srv.v.RPC().Init(callbackURL, interfaceID)
+	return fake
+}
+
+// TestCapability_replaceDevice checks that ReplaceDevice pushes a replaceDevice
+// callback to the registered XML-RPC callback server.
+// Matrix: ✓ godevccu.
 func TestCapability_replaceDevice(t *testing.T) {
-	t.Skip("godevccu does not yet emit replaceDevice system events (Gap 4 in docs/audit/godevccu-capability.md)")
+	srv := startMockCCU(t)
+	fake := startCallbackServer(t, srv, "itest", "itest-iface")
+
+	srv.v.RPC().ReplaceDevice(context.Background(), "OLD0000001:1", "NEW0000001:1")
+
+	select {
+	case got := <-fake.replaced:
+		if got.interfaceID != "itest-iface" {
+			t.Errorf("replaceDevice: interfaceID = %q, want %q", got.interfaceID, "itest-iface")
+		}
+		if got.oldAddress != "OLD0000001:1" {
+			t.Errorf("replaceDevice: oldAddress = %q, want %q", got.oldAddress, "OLD0000001:1")
+		}
+		if got.newAddress != "NEW0000001:1" {
+			t.Errorf("replaceDevice: newAddress = %q, want %q", got.newAddress, "NEW0000001:1")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("replaceDevice: no callback received within 3s")
+	}
 }
 
+// TestCapability_readdedDevice checks that ReaddedDevice pushes a readdedDevice
+// callback to the registered XML-RPC callback server.
+// Matrix: ✓ godevccu.
 func TestCapability_readdedDevice(t *testing.T) {
-	t.Skip("godevccu does not yet emit readdedDevice system events (Gap 4 in docs/audit/godevccu-capability.md)")
+	srv := startMockCCU(t)
+	fake := startCallbackServer(t, srv, "itest", "itest-iface")
+
+	addrs := []string{"ADDR0000001:0", "ADDR0000002:0"}
+	srv.v.RPC().ReaddedDevice(context.Background(), addrs)
+
+	select {
+	case got := <-fake.readded:
+		if got.interfaceID != "itest-iface" {
+			t.Errorf("readdedDevice: interfaceID = %q, want %q", got.interfaceID, "itest-iface")
+		}
+		if len(got.addresses) != len(addrs) {
+			t.Fatalf("readdedDevice: len(addresses) = %d, want %d", len(got.addresses), len(addrs))
+		}
+		for i, want := range addrs {
+			if got.addresses[i] != want {
+				t.Errorf("readdedDevice: addresses[%d] = %q, want %q", i, got.addresses[i], want)
+			}
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("readdedDevice: no callback received within 3s")
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
