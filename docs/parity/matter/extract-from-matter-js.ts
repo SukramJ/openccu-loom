@@ -86,10 +86,33 @@ function jsonable(v: any): any {
 const root: any = MatterDefinition;
 const children: any[] = root.children ?? [];
 
+// Index every named top-level element so a cluster declared as
+// `{ name, id, type: "Base" }` (e.g. the ConcentrationMeasurement /
+// ResourceMonitoring families) resolves its inherited ClusterRevision +
+// members from the base. Without this, type-inheriting clusters collapse to
+// revision 1 with empty attribute lists when matter.js HEAD declares them by
+// reference instead of inline.
+const byName = new Map<string, any>();
+for (const c of children) if (c.name && !byName.has(c.name)) byName.set(c.name, c);
+
+// Merge inherited children: base first, then own overrides keyed by (tag, id|name).
+function resolvedChildren(node: any, seen: Set<string> = new Set()): any[] {
+    let base: any[] = [];
+    if (node.type && byName.has(node.type) && !seen.has(node.type)) {
+        seen.add(node.type);
+        base = resolvedChildren(byName.get(node.type), seen);
+    }
+    const keyOf = (ch: any) => `${ch.tag}:${typeof ch.id === "number" ? ch.id : ch.name}`;
+    const merged = new Map<string, any>();
+    for (const ch of base) merged.set(keyOf(ch), ch);
+    for (const ch of (node.children ?? [])) merged.set(keyOf(ch), ch); // own wins
+    return [...merged.values()];
+}
+
 for (const c of children) {
     if (c.tag === "deviceType" && typeof c.id === "number") {
         let rev = 1;
-        const desc = c.children?.find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
+        const desc = resolvedChildren(c).find((ch: any) => ch.tag === "requirement" && ch.name === "Descriptor");
         if (desc) {
             const dtList = desc.children?.find((ch: any) => ch.name === "DeviceTypeList");
             if (dtList?.default?.[0]?.revision) rev = dtList.default[0].revision;
@@ -102,7 +125,7 @@ for (const c of children) {
         const commands: CmdOut[] = [];
         const events: EvtOut[] = [];
         const features: { name: string; conformance?: string; description?: string }[] = [];
-        for (const ch of (c.children ?? [])) {
+        for (const ch of resolvedChildren(c)) {
             if (ch.tag === "attribute") {
                 if (ch.id === 0xFFFD || ch.name === "ClusterRevision") {
                     if (ch.default !== undefined) rev = ch.default;

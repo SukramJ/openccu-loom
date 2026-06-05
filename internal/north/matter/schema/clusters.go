@@ -73,6 +73,7 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0090: 3,  // ElectricalPowerMeasurement
 	0x0091: 2,  // ElectricalEnergyMeasurement
 	0x0094: 2,  // WaterHeaterManagement
+	0x0095: 4,  // CommodityPrice
 	0x0097: 3,  // Messages
 	0x0098: 4,  // DeviceEnergyManagement
 	0x0099: 4,  // EnergyEvse
@@ -81,8 +82,11 @@ var ClusterRevisions = map[uint32]uint16{
 	0x009D: 2,  // EnergyEvseMode
 	0x009E: 1,  // WaterHeaterMode
 	0x009F: 2,  // DeviceEnergyManagementMode
+	0x00A0: 1,  // ElectricalGridConditions
 	0x0101: 10, // DoorLock
 	0x0102: 8,  // WindowCovering
+	0x0104: 1,  // ClosureControl
+	0x0105: 1,  // ClosureDimension
 	0x0150: 2,  // ServiceArea
 	0x0200: 5,  // PumpConfigurationAndControl
 	0x0201: 10, // Thermostat
@@ -101,10 +105,11 @@ var ClusterRevisions = map[uint32]uint16{
 	0x0415: 4,  // OzoneConcentrationMeasurement
 	0x042A: 4,  // Pm25ConcentrationMeasurement
 	0x042B: 4,  // FormaldehydeConcentrationMeasurement
-	0x042C: 1,  // Pm1ConcentrationMeasurement
+	0x042C: 4,  // Pm1ConcentrationMeasurement
 	0x042D: 4,  // Pm10ConcentrationMeasurement
 	0x042E: 4,  // TotalVolatileOrganicCompoundsConcentrationMeasurement
 	0x042F: 4,  // RadonConcentrationMeasurement
+	0x0430: 1,  // SoilMeasurement
 	0x0451: 1,  // WiFiNetworkManagement
 	0x0452: 1,  // ThreadBorderRouterManagement
 	0x0453: 1,  // ThreadNetworkDirectory
@@ -122,10 +127,22 @@ var ClusterRevisions = map[uint32]uint16{
 	0x050E: 2,  // AccountLogin
 	0x050F: 1,  // ContentControl
 	0x0510: 1,  // ContentAppObserver
+	0x0550: 1,  // ZoneManagement
+	0x0551: 1,  // CameraAvStreamManagement
+	0x0552: 1,  // CameraAvSettingsUserLevelManagement
+	0x0553: 2,  // WebRtcTransportProvider
+	0x0554: 2,  // WebRtcTransportRequestor
+	0x0555: 2,  // PushAvStreamTransport
+	0x0556: 2,  // Chime
+	0x0700: 1,  // CommodityTariff
 	0x0750: 1,  // EcosystemInformation
 	0x0751: 1,  // CommissionerControl
 	0x0752: 1,  // JointFabricDatastore
 	0x0753: 1,  // JointFabricAdministrator
+	0x0801: 1,  // TlsCertificateManagement
+	0x0802: 1,  // TlsClientManagement
+	0x0B06: 1,  // MeterIdentification
+	0x0B07: 1,  // CommodityMetering
 }
 
 // ClusterNames maps every cluster ID to its canonical matter.js name.
@@ -192,6 +209,7 @@ var ClusterNames = map[uint32]string{
 	0x0090: "ElectricalPowerMeasurement",
 	0x0091: "ElectricalEnergyMeasurement",
 	0x0094: "WaterHeaterManagement",
+	0x0095: "CommodityPrice",
 	0x0097: "Messages",
 	0x0098: "DeviceEnergyManagement",
 	0x0099: "EnergyEvse",
@@ -200,8 +218,11 @@ var ClusterNames = map[uint32]string{
 	0x009D: "EnergyEvseMode",
 	0x009E: "WaterHeaterMode",
 	0x009F: "DeviceEnergyManagementMode",
+	0x00A0: "ElectricalGridConditions",
 	0x0101: "DoorLock",
 	0x0102: "WindowCovering",
+	0x0104: "ClosureControl",
+	0x0105: "ClosureDimension",
 	0x0150: "ServiceArea",
 	0x0200: "PumpConfigurationAndControl",
 	0x0201: "Thermostat",
@@ -224,6 +245,7 @@ var ClusterNames = map[uint32]string{
 	0x042D: "Pm10ConcentrationMeasurement",
 	0x042E: "TotalVolatileOrganicCompoundsConcentrationMeasurement",
 	0x042F: "RadonConcentrationMeasurement",
+	0x0430: "SoilMeasurement",
 	0x0451: "WiFiNetworkManagement",
 	0x0452: "ThreadBorderRouterManagement",
 	0x0453: "ThreadNetworkDirectory",
@@ -241,8 +263,20 @@ var ClusterNames = map[uint32]string{
 	0x050E: "AccountLogin",
 	0x050F: "ContentControl",
 	0x0510: "ContentAppObserver",
+	0x0550: "ZoneManagement",
+	0x0551: "CameraAvStreamManagement",
+	0x0552: "CameraAvSettingsUserLevelManagement",
+	0x0553: "WebRtcTransportProvider",
+	0x0554: "WebRtcTransportRequestor",
+	0x0555: "PushAvStreamTransport",
+	0x0556: "Chime",
+	0x0700: "CommodityTariff",
 	0x0750: "EcosystemInformation",
 	0x0751: "CommissionerControl",
 	0x0752: "JointFabricDatastore",
 	0x0753: "JointFabricAdministrator",
+	0x0801: "TlsCertificateManagement",
+	0x0802: "TlsClientManagement",
+	0x0B06: "MeterIdentification",
+	0x0B07: "CommodityMetering",
 }
