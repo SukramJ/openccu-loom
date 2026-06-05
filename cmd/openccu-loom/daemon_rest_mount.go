@@ -153,6 +153,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			matter:            cfg.North.Matter.Enabled,
 			oidc:              cfg.North.REST.Auth.OIDC.Enabled && cfg.North.REST.Auth.OIDC.Issuer != "",
 			supervisedRestart: detectSupervisedRestart(),
+			mcp:               cfg.North.MCP.Enabled,
+			mcpWrite:          cfg.North.MCP.AllowWrites,
 		},
 		CORS:       buildCORS(cfg),
 		Idempotent: true,

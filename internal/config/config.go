@@ -223,7 +223,37 @@ type NorthConfig struct {
 	UI        NorthUI        `yaml:"ui" json:"ui" cfg:"basic"`
 	MQTT      NorthMQTT      `yaml:"mqtt" json:"mqtt" cfg:"basic"`
 	Matter    NorthMatter    `yaml:"matter" json:"matter" cfg:"basic"`
+	MCP       NorthMCP       `yaml:"mcp" json:"mcp" cfg:"basic"`
 	Discovery NorthDiscovery `yaml:"discovery" json:"discovery" cfg:"basic"`
+}
+
+// NorthMCP configures the Model Context Protocol server — a north-bound
+// adapter that exposes the domain to LLM agents as tools over a
+// Streamable-HTTP transport. Disabled by default; read-only even when
+// enabled until AllowWrites is also set. See ADR 0025.
+type NorthMCP struct {
+	// Enabled is the feature flag. Default false; flip explicitly to
+	// expose the MCP server. While disabled the daemon registers no MCP
+	// route and advertises no mcp.* capability.
+	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+
+	// AllowWrites gates the write-capable tools (set_datapoint, …).
+	// Default false: enabling the adapter alone yields a read-only
+	// surface. An operator who wants agent-driven control opts in twice.
+	AllowWrites bool `yaml:"allow_writes" json:"allow_writes" cfg:"basic"`
+
+	// Path is the HTTP mount path for the Streamable-HTTP transport,
+	// served on the existing REST listener. Defaults to "/mcp".
+	Path string `yaml:"path" json:"path" cfg:"expert"`
+}
+
+// MountPath returns the configured MCP mount path, or the "/mcp"
+// default when unset.
+func (m NorthMCP) MountPath() string {
+	if m.Path == "" {
+		return "/mcp"
+	}
+	return m.Path
 }
 
 // NorthDiscovery groups LAN-discovery surfaces external clients use
