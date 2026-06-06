@@ -2037,6 +2037,78 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /diagnostics/reliability:
+    get:
+      operationId: getDiagnosticsReliability
+      summary: Per-interface reliability snapshot (admin-only)
+      description: >
+        Read-only snapshot of circuit-breaker and connection state per
+        (central, interface). Optionally filtered to one central.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: query
+          name: central
+          schema: { type: string }
+          description: Filter to one central (default all).
+      responses:
+        "200":
+          description: Reliability rows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    central: { type: string }
+                    interface: { type: string }
+                    circuit_state: { type: integer }
+                    state: { type: object, additionalProperties: true }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /diagnostics/eventbus/tap:
+    get:
+      operationId: tapDiagnosticsEventBus
+      summary: Live event-bus tap (NDJSON, admin-only)
+      description: >
+        Bounded NDJSON stream of internal event-bus traffic for one central.
+        The stream ends at the window deadline or when the client disconnects.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - in: query
+          name: central
+          schema: { type: string }
+          description: Central to tap (required when more than one exists).
+        - in: query
+          name: type
+          schema: { type: array, items: { type: string } }
+          style: form
+          explode: true
+          description: >
+            Filter to these event type names (repeatable; default = all
+            curated types).
+        - in: query
+          name: seconds
+          schema: { type: integer }
+          description: Window length in seconds (default 30, capped at 300).
+      responses:
+        "200":
+          description: NDJSON stream of tapped events
+          content:
+            application/x-ndjson:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /diagnostics/capture:
     post:
       operationId: startCapture
