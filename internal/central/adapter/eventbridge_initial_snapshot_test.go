@@ -100,12 +100,15 @@ func TestPublishInitialSnapshotPushesEveryObservedDataPoint(t *testing.T) {
 	}
 }
 
-// TestPublishInitialSnapshotEvictsUnobservedWhenNoLoader guards that a
-// DataPoint without an observed value and no ValueLoader installed
-// causes an eviction publish (empty retained payload) instead of a
-// value publish. This prevents HA from keeping a stale retained value
-// from a previous daemon run while the device hasn't reported yet.
-func TestPublishInitialSnapshotEvictsUnobservedWhenNoLoader(t *testing.T) {
+// TestPublishInitialSnapshotPublishesAvailableForUnobservedDP guards
+// that a DataPoint without an observed value (and no ValueLoader
+// installed, so no wire load happens) is published with an explicit
+// `available:true` slot state carrying a `null` value — NOT evicted to
+// an empty payload. Availability tracks device reachability, not value
+// observation: a reachable device whose DP has not reported yet is
+// online with an `unknown` value. Evicting to empty left the entity
+// `unavailable` in HA under `availability_mode: all`.
+func TestPublishInitialSnapshotPublishesAvailableForUnobservedDP(t *testing.T) {
 	t.Parallel()
 
 	reg, dev := registryWithDevice(t)
@@ -123,7 +126,7 @@ func TestPublishInitialSnapshotEvictsUnobservedWhenNoLoader(t *testing.T) {
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
 		},
 	})
-	ch.Put(dp) // intentionally NOT seeded; no ValueLoader installed → ErrNoValueLoader
+	ch.Put(dp) // intentionally NOT seeded; no ValueLoader installed → no wire load
 
 	pub := mqtt.NewNoopClient()
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
@@ -139,35 +142,39 @@ func TestPublishInitialSnapshotEvictsUnobservedWhenNoLoader(t *testing.T) {
 
 	eb.PublishInitialSnapshot(context.Background())
 
-	// Expect exactly one publish to the state topic with empty payload
-	// and retain=true — the stale-eviction message.
+	// Expect exactly one available:true slot publish (null value) to the
+	// state topic and zero empty-payload evictions.
 	evictions := 0
-	valuePublishes := 0
+	availablePublishes := 0
 	for _, p := range pub.Published() {
 		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
-			if len(p.Payload) == 0 && p.Retain {
+			switch {
+			case len(p.Payload) == 0 && p.Retain:
 				evictions++
-			} else {
-				valuePublishes++
+			case strings.Contains(string(p.Payload), `"available":true`):
+				availablePublishes++
+				if !strings.Contains(string(p.Payload), `"value":null`) {
+					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
+				}
 			}
 		}
 	}
-	if evictions != 1 {
-		t.Fatalf("expected 1 eviction publish (empty+retain) for unobserved DP, got %d", evictions)
+	if evictions != 0 {
+		t.Fatalf("expected 0 evictions for unobserved DP, got %d", evictions)
 	}
-	if valuePublishes != 0 {
-		t.Fatalf("expected no value publishes for unobserved DP, got %d", valuePublishes)
+	if availablePublishes != 1 {
+		t.Fatalf("expected 1 available:true slot publish for unobserved DP, got %d", availablePublishes)
 	}
 }
 
-// TestPublishInitialSnapshotPublishesOfflineForUnobservedDevice pins
-// the offline-availability contract: a device whose data points have
-// never been observed is published as availability=offline
-// (not online). Without this, HA marks the entity as available, then
-// renders empty Jinja templates against the missing state JSON, which
-// produces "Invalid modes mode:" / template-variable warnings on every
-// MQTT-MQTT-Climate entity.
-func TestPublishInitialSnapshotPublishesOfflineForUnobservedDevice(t *testing.T) {
+// TestPublishInitialSnapshotPublishesOnlineForReachableDevice pins the
+// availability contract: a device with no observed UNREACH parameter is
+// reachable ([device.Device.Available] defaults to true) and is therefore
+// published as availability=online at boot — even when none of its data
+// points have reported a value yet. Availability tracks reachability,
+// not value observation; the per-DP slot states
+// carry `available:true` with `unknown` values until the CCU pushes.
+func TestPublishInitialSnapshotPublishesOnlineForReachableDevice(t *testing.T) {
 	t.Parallel()
 
 	reg, dev := registryWithDevice(t)
@@ -184,7 +191,7 @@ func TestPublishInitialSnapshotPublishesOfflineForUnobservedDevice(t *testing.T)
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
 		},
 	})
-	ch.Put(dp) // intentionally NOT seeded — no observed value.
+	ch.Put(dp) // intentionally NOT seeded — no observed value, but device stays reachable.
 
 	pub := mqtt.NewNoopClient()
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
@@ -211,8 +218,8 @@ func TestPublishInitialSnapshotPublishesOfflineForUnobservedDevice(t *testing.T)
 	if availabilityCount != 1 {
 		t.Fatalf("expected 1 availability publish, got %d", availabilityCount)
 	}
-	if availabilityPayload != "offline" {
-		t.Fatalf("availability payload = %q, want \"offline\" (no observed DP)", availabilityPayload)
+	if availabilityPayload != "online" {
+		t.Fatalf("availability payload = %q, want \"online\" (reachable device)", availabilityPayload)
 	}
 }
 
@@ -404,12 +411,13 @@ func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 	}
 }
 
-// TestEventBridgeFlipsAvailabilityToOnlineOnFirstObservedValue pins
-// the transition: a device that was unavailable at boot (no observed
-// DP → availability=offline) flips to online on its first real
-// value-change event. The cache gate ensures subsequent value-change
-// events on the same device do NOT republish availability.
-func TestEventBridgeFlipsAvailabilityToOnlineOnFirstObservedValue(t *testing.T) {
+// TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish pins the
+// availability contract for a reachable device: it is published online
+// once at boot (reachability defaults to true, independent of value
+// observation), and subsequent non-reachability value-change events do
+// NOT republish availability — the cache gate suppresses the redundant
+// "online" message.
+func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 	t.Parallel()
 
 	reg, dev := registryWithDevice(t)
@@ -438,13 +446,15 @@ func TestEventBridgeFlipsAvailabilityToOnlineOnFirstObservedValue(t *testing.T) 
 	eb.Start(context.Background())
 	defer eb.Stop()
 
-	// Step 1: boot snapshot publishes offline (no observed DP yet).
+	// Step 1: boot snapshot publishes online (reachable device).
 	eb.PublishInitialSnapshot(context.Background())
 
-	// Step 2: a value-change event arrives — flip to online.
+	// Step 2: a value-change event arrives — STATE is not a reachability
+	// parameter, so availability must NOT be republished (cache-gate).
 	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
 			ChannelAddress: "0001ABCD:1",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      "STATE",
@@ -453,10 +463,11 @@ func TestEventBridgeFlipsAvailabilityToOnlineOnFirstObservedValue(t *testing.T) 
 	})
 
 	// Step 3: a second value-change event must NOT republish availability
-	// (cache-gate prevents it — the device is already online).
+	// either (still online, still non-reachability parameter).
 	events.Publish(reg.List()[0].EventBus, hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBaseAt(time.Now()),
 		Key: hmtypes.DataPointKey{
+			InterfaceID:    "HmIP-RF",
 			ChannelAddress: "0001ABCD:1",
 			ParamsetKey:    hmenum.ParamsetKeyValues,
 			Parameter:      "STATE",
@@ -472,13 +483,10 @@ func TestEventBridgeFlipsAvailabilityToOnlineOnFirstObservedValue(t *testing.T) 
 			availability = append(availability, string(p.Payload))
 		}
 	}
-	if len(availability) != 2 {
-		t.Fatalf("expected 2 availability publishes (offline → online, no third on second event), got %d: %v", len(availability), availability)
+	if len(availability) != 1 {
+		t.Fatalf("expected 1 availability publish (online at boot, no republish on value events), got %d: %v", len(availability), availability)
 	}
-	if availability[0] != "offline" {
-		t.Errorf("first availability = %q, want offline", availability[0])
-	}
-	if availability[1] != "online" {
-		t.Errorf("second availability = %q, want online", availability[1])
+	if availability[0] != "online" {
+		t.Errorf("availability = %q, want online", availability[0])
 	}
 }

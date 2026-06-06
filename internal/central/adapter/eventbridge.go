@@ -183,18 +183,17 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 			// HA marks every entity as unavailable and the discovery
 			// effectively does nothing.
 			//
-			// We only advertise the device as `online` if at least one
-			// of its data points has actually produced an observed
-			// value. Without that guard a CCU that has not yet
-			// delivered any data still results in availability=online
-			// (Device.Available() defaults to true when neither UNREACH
-			// nor STICKY_UNREACH is observed) while the state topic is
-			// empty — HA then renders empty Jinja templates and logs
-			// "Invalid modes mode:" / template-variable warnings on
-			// every entity. Tying the publish to real data flow makes
-			// the topic semantically honest: unavailable until proven
-			// otherwise.
-			online := hasObservedDataPoint(d) && d.Available()
+			// Availability tracks device REACHABILITY (UNREACH /
+			// STICKY_UNREACH via Device.Available()), not "has a value
+			// been observed yet". A reachable
+			// device whose data points have not reported yet is `online`
+			// with each entity showing an `unknown` value, which is the
+			// Home-Assistant convention. The per-DP snapshot below
+			// publishes an explicit `{available:true}` state for every
+			// data point so the state topic is never empty (avoiding the
+			// empty-template warnings that the previous observed-gating
+			// design worked around by leaving entities unavailable).
+			online := d.Available()
 			b.markAvailability(ctx, centralName, ifaceID, d.Address, online)
 
 			// ADR 0011 phase 1c — device info + diagnostics topics.
@@ -322,49 +321,6 @@ func (b *EventBridge) markAvailability(ctx context.Context, centralName, iface, 
 	_ = bridge.PublishAvailability(ctx, centralName, iface, deviceAddr, online)
 }
 
-// hasObservedDataPoint reports whether at least one data point on at
-// least one channel of d has produced an observed value. Used by the
-// initial-snapshot path to decide whether a freshly-loaded device
-// should be advertised as available (it has data) or unavailable (the
-// CCU has not delivered any value yet — keeping the entity online with
-// an empty state topic produces "Invalid modes mode:" and friends in
-// HA).
-func hasObservedDataPoint(d *device.Device) bool {
-	if d == nil {
-		return false
-	}
-	for _, ch := range d.Channels() {
-		for _, dp := range ch.DataPoints() {
-			if _, observed := dp.RawValue(); observed {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// evictDataPoint clears a stale retained value from the MQTT broker
-// by publishing an empty payload with retain=true on the state topic
-// for the given data point. This is the stale-eviction half of the
-// [PublishInitialSnapshot] flow: called when LoadValue cannot produce
-// a fresh observed value so HA stops showing a value that is no longer
-// accurate. No-op when the MQTT wiring is not attached.
-func (b *EventBridge) evictDataPoint(
-	ctx context.Context,
-	centralName, iface, deviceAddr string,
-	channelNo int,
-	parameter string,
-) {
-	if b.mqtt == nil {
-		return
-	}
-	bridge := b.mqtt.Bridge()
-	if bridge == nil {
-		return
-	}
-	_ = bridge.EvictState(ctx, centralName, iface, deviceAddr, channelNo, parameter)
-}
-
 // isReachabilityParameter reports whether a parameter change implies
 // the per-device availability has flipped, so we should re-publish the
 // device-availability topic.
@@ -382,9 +338,17 @@ func isReachabilityParameter(p string) bool {
 //  1. The DP has an observed RawValue (persistent VALUES cache hit,
 //     fetch_all_device_data hit, or a push event during ingest):
 //     publish full state + discovery via onValueChanged.
-//  2. The DP is still unobserved: emit an HA discovery payload but
-//     evict the slot state so HA renders the entity as `unavailable`
-//     until the next CCU push delivers a value.
+//  2. The DP is still unobserved: emit an HA discovery payload and an
+//     explicit `{available:true}` slot state carrying an `unknown`
+//     value, so HA renders the entity as online-but-unknown until the
+//     next CCU push delivers a real value.
+//
+// Availability tracks device REACHABILITY, not value observation:
+// a reachable device whose DP has not reported
+// yet is online with an `unknown` value. Publishing the available slot
+// state (rather than evicting it to empty) is what keeps the entity
+// from rendering as `unavailable` under the discovery payload's
+// `availability_mode: all` + per-DP availability template.
 //
 // The function does NOT issue a getValue / LoadValue on the wire.
 // Per-DP boot-time loads were observed to fire one radio call per
@@ -415,8 +379,8 @@ func (b *EventBridge) registerAndLoadDP(
 	// Boot-time radio budget: we publish what the model already has
 	// (persistent VALUES cache + fetch_all_device_data + push events
 	// observed during ingest). DPs that are still unobserved are
-	// registered as `unavailable` in HA discovery and wait for the
-	// next CCU push. The previous "best-effort LoadValue per DP"
+	// registered in HA discovery with an `unknown`-value slot state and
+	// wait for the next CCU push. The previous "best-effort LoadValue per DP"
 	// path fanned out one getValue radio call per unobserved DP and
 	// drove the CCU DutyCycle into the warning band on every boot —
 	// the reference design only loads Channel-0 RELEVANT_INIT_PARAMETERS
@@ -439,10 +403,16 @@ func (b *EventBridge) registerAndLoadDP(
 		return
 	}
 
-	// Unobserved path — register the entity in HA without publishing
-	// state. The slot state is evicted (empty retained) so HA renders
-	// the entity as `unavailable`; a future wire event populates it.
-	b.evictDataPoint(ctx, centralName, ifaceID, d.Address, channelNo, parameter)
+	// Unobserved path — register the entity in HA discovery and publish
+	// an explicit `{available:true}` slot state with an `unknown` value
+	// (NoneValue → JSON `null`, zero Base → no timestamps). This is what
+	// keeps the entity online under `availability_mode: all`; a future
+	// wire event replaces the `unknown` value with the real one.
+	b.publishSlotState(ctx, centralName, ifaceID, d.Address, channelNo, hmevent.DataPointValueChangedEvent{
+		Key:      dpk,
+		OldValue: hmtypes.NoneValue(),
+		NewValue: hmtypes.NoneValue(),
+	}, ch)
 	b.publishDiscoveryForUnobservedDP(ctx, centralName, ifaceID, d, ch, channelNo, parameter, paramsetKey)
 }
 

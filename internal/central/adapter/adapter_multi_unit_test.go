@@ -14876,17 +14876,6 @@ func TestFirstPressParameterNoneFound(t *testing.T) {
 }
 
 // ============================================================
-// EventBridge.evictDataPoint — nil mqtt path (no panic)
-// ============================================================
-
-func TestEvictDataPointNilMQTT(t *testing.T) {
-	t.Parallel()
-	b := &EventBridge{} // mqtt is nil
-	// Must not panic.
-	b.evictDataPoint(context.TODO(), "ccu-01", "HmIP-RF", "DEV001", 1, "STATE")
-}
-
-// ============================================================
 // LinksDomain nil-registry guards for AddLink, RemoveLink, etc.
 // ============================================================
 

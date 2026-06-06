@@ -59,6 +59,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT entities no longer show as `unavailable` in Home Assistant.**
+  Availability now tracks device *reachability* (`UNREACH` /
+  `STICKY_UNREACH` via `Device.Available()`) rather than "has a value
+  been observed yet". A reachable device is published `online` at boot
+  even before its data points report, and every registered data point —
+  including not-yet-observed ones — publishes an explicit
+  `{"value":null,"available":true}` slot state instead of an empty
+  eviction payload. Under the discovery payload's
+  `availability_mode: all` this is what kept entities stuck on
+  `unavailable`. The HA value templates gained a `value_json.value is
+  not none` guard so an unobserved data point renders as `unknown`
+  rather than the literal `"None"` (or a misleading multiplied `0.0`).
+
 - **Model-snapshot drift gate honours its documented overrides.**
   `script/model_snapshot_drift_check.py` derived its env-override keys
   via a fragile string transform that did not match the documented

@@ -19,22 +19,30 @@ import (
 )
 
 // valueJSONValueTemplate is the canonical Jinja extractor for the
-// PerDPState `value` field. The defensive `is defined` guard avoids
-// the `'value_json' is undefined` template error HA otherwise raises
-// when the state_topic carries an empty retained payload (the
-// register-and-load-data eviction flow for unobserved DPs). Empty
-// rendering combined with the per-device availability topic yields
-// the expected "unavailable" entity badge.
-const valueJSONValueTemplate = `{% if value_json is defined %}{{ value_json.value }}{% endif %}`
+// PerDPState `value` field. The defensive guard renders empty (so HA
+// falls back to the "unknown" entity state) in two cases:
+//
+//   - `value_json is defined` — the payload is not the empty retained
+//     eviction body (the `'value_json' is undefined` template error HA
+//     otherwise raises).
+//   - `value_json.value is not none` — the DP is registered but has not
+//     reported a value yet (the unobserved-DP boot path publishes
+//     `{"value":null,"available":true}`). Without this clause
+//     `{{ value_json.value }}` renders the literal string "None".
+//
+// The entity stays available (the per-device + per-DP availability
+// topics resolve to online); only its value reads "unknown" until the
+// CCU pushes a real value.
+const valueJSONValueTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}`
 
 // valueJSONValueLowerTemplate is the boolean-aware variant used for
 // switch / lock / binary_sensor entities. PerDPState carries Python-
 // boolean rendering (`{"value":true}` → Jinja `True`/`False` with
 // capitalised initial), but HA compares to lowercase tokens
 // (`payload_on:"true"`, `payload_off:"false"`). Pipe through `| lower`
-// so the comparison is case-stable. Same `is defined` guard semantics
-// as the non-lower variant.
-const valueJSONValueLowerTemplate = `{% if value_json is defined %}{{ value_json.value | lower }}{% endif %}`
+// so the comparison is case-stable. Same guard semantics as the
+// non-lower variant (`none | lower` would otherwise render "none").
+const valueJSONValueLowerTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
 
 // HAComponent identifies a Home Assistant entity category. Only the
 // MVP-relevant subset is listed; the catalogue grows as profiles
@@ -308,16 +316,12 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// "modified_at": …, "refreshed_at": …}`). HA reads the wire
 		// value via the `.value` extractor.
 		//
-		// `value_json is defined` guards against the
-		// register-and-load-data flow where unobserved DPs publish
-		// an empty retained payload (eviction) so HA marks the
-		// entity unavailable. Without the guard, applying
-		// `{{ value_json.value }}` to "" raises the
-		// `'value_json' is undefined` template error visible in HA
-		// logs. The guard renders empty when no JSON is present
-		// HA falls back to "unknown" for the entity, which combined
-		// with the per-device availability topic produces the
-		// expected "unavailable" badge.
+		// The defined/not-none guard in valueJSONValueTemplate keeps HA
+		// from logging `'value_json' is undefined` on an empty payload
+		// and from rendering the literal "None" for an unobserved DP
+		// (which now publishes `{"value":null,"available":true}`). The
+		// entity stays available via the per-device + per-DP availability
+		// topics; its value reads "unknown" until the CCU pushes.
 		"value_template":    valueJSONValueTemplate,
 		"availability":      availability,
 		"availability_mode": "all",
@@ -738,10 +742,12 @@ func applyMultiplierSensor(ev Event, body map[string]any) {
 		return
 	}
 	// State topics carry the JSON envelope (ADR 0011); the multiplied
-	// template pulls value_json.value, wrapped in the `is defined`
-	// guard so HA renders empty (entity "unknown") when the slot has
-	// no observed payload yet rather than logging Jinja errors.
-	body["value_template"] = fmt.Sprintf("{%% if value_json is defined %%}{{ (value_json.value | float * %s) }}{%% endif %%}", formatMultiplier(m))
+	// template pulls value_json.value, wrapped in the defined/not-none
+	// guard so HA renders empty (entity "unknown") when the slot carries
+	// no payload yet (empty eviction body) or a null value (unobserved
+	// DP boot publish) rather than logging Jinja errors or rendering a
+	// misleading multiplied 0.0.
+	body["value_template"] = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", formatMultiplier(m))
 }
 
 // applyMultiplierNumber patches body so HA scales `min`/`max`/`step` to the
@@ -758,7 +764,10 @@ func applyMultiplierNumber(ev Event, body map[string]any, stateTopic, commandTop
 	mStr := formatMultiplier(m)
 	// State topics carry JSON; the multiplied template pulls
 	// value_json.value (ADR 0011 — JSON is the only supported shape).
-	body["value_template"] = fmt.Sprintf("{{ (value_json.value | float * %s) }}", mStr)
+	// The defined/not-none guard renders empty (entity "unknown") for
+	// the empty eviction body or an unobserved null value instead of a
+	// misleading multiplied 0.0.
+	body["value_template"] = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", mStr)
 	// Write template — invert (HA-supplied value / multiplier).
 	body["command_template"] = fmt.Sprintf("{{ (value | float / %s) }}", mStr)
 	// Bounds — multiply min/max/step if the discovery payload already

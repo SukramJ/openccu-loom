@@ -116,19 +116,23 @@ func TestStaleEviction_ObservedDP_NormalPublish(t *testing.T) {
 	}
 }
 
-// TestStaleEviction_UnobservedDP_NoWireLoad pins the boot-time radio
-// budget invariant: registerAndLoadDP MUST NOT issue a LoadValue /
-// getValue radio call for an unobserved DP. Unobserved DPs go straight
-// to HA-discovery + eviction so the entity registers as `unavailable`
-// and the next CCU push populates it.
+// TestUnobservedDP_NoWireLoad_AvailableSlotState pins two boot-time
+// invariants for an unobserved DP:
 //
-// Background: a per-DP LoadValue on boot fanned out one radio call per
-// unobserved DP across the whole fleet (thousands on a non-trivial CCU)
-// and drove the CCU DutyCycle into the warning band on every restart.
-// The reference design also skips per-DP wire loads — see
-// [seedRelevantInitParameters] / [seedReadableEvents] for the limited
-// boot loads that ARE permitted.
-func TestStaleEviction_UnobservedDP_NoWireLoad(t *testing.T) {
+//  1. registerAndLoadDP MUST NOT issue a LoadValue / getValue radio
+//     call (boot-time radio budget). A per-DP LoadValue on boot fanned
+//     out one radio call per unobserved DP across the whole fleet
+//     (thousands on a non-trivial CCU) and drove the CCU DutyCycle into
+//     the warning band on every restart. The reference design also
+//     skips per-DP wire loads — see [seedRelevantInitParameters] /
+//     [seedReadableEvents] for the limited boot loads that ARE permitted.
+//  2. The DP's slot state is published with `available:true` and a
+//     `null` value (NOT evicted to an empty payload). Availability
+//     tracks device reachability, not value observation — a reachable
+//     device whose DP has not reported yet is online with an `unknown`
+//     value. The previous evict-to-empty design left the entity
+//     `unavailable` in HA under `availability_mode: all`.
+func TestUnobservedDP_NoWireLoad_AvailableSlotState(t *testing.T) {
 	t.Parallel()
 
 	dp := generic.NewDataPoint[bool](generic.Spec{
@@ -163,21 +167,25 @@ func TestStaleEviction_UnobservedDP_NoWireLoad(t *testing.T) {
 	}
 
 	evictions := 0
-	valuePublishes := 0
+	availablePublishes := 0
 	for _, p := range pub.Published() {
 		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
-			if len(p.Payload) == 0 && p.Retain {
+			switch {
+			case len(p.Payload) == 0 && p.Retain:
 				evictions++
-			} else {
-				valuePublishes++
+			case strings.Contains(string(p.Payload), `"available":true`):
+				availablePublishes++
+				if !strings.Contains(string(p.Payload), `"value":null`) {
+					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
+				}
 			}
 		}
 	}
-	if evictions != 1 {
-		t.Fatalf("expected 1 eviction for unobserved DP, got %d", evictions)
+	if evictions != 0 {
+		t.Fatalf("expected 0 evictions for unobserved DP, got %d", evictions)
 	}
-	if valuePublishes != 0 {
-		t.Fatalf("expected 0 value publishes for unobserved DP, got %d", valuePublishes)
+	if availablePublishes != 1 {
+		t.Fatalf("expected 1 available:true slot publish for unobserved DP, got %d", availablePublishes)
 	}
 }
 

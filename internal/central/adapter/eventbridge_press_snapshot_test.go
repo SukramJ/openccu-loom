@@ -8,7 +8,6 @@
 //   - publishWeekProfileSnapshot nil-WeekProfile short-circuit
 //   - publishDeviceDiagnostics non-empty diag path
 //   - markAvailability cache-hit idempotency path
-//   - hasObservedDataPoint: nil device and empty channels
 
 package adapter
 
@@ -287,71 +286,6 @@ func TestMarkAvailabilityCacheTransition(t *testing.T) {
 	after := len(pub.Published())
 	if after == before {
 		t.Error("online→offline transition must emit a new publish")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// hasObservedDataPoint
-// ---------------------------------------------------------------------------
-
-// TestHasObservedDataPointNilDevice — nil device → false.
-func TestHasObservedDataPointNilDevice(t *testing.T) {
-	t.Parallel()
-	if hasObservedDataPoint(nil) {
-		t.Error("nil device must return false")
-	}
-}
-
-// TestHasObservedDataPointNoChannels — device with no channels → false.
-func TestHasObservedDataPointNoChannels(t *testing.T) {
-	t.Parallel()
-	dev := device.New(device.Config{Address: "OBSDEV001", InterfaceID: "HmIP-RF", Model: "HmIP-STH"})
-	if hasObservedDataPoint(dev) {
-		t.Error("device with no channels must return false")
-	}
-}
-
-// TestHasObservedDataPointNoObservedValues — device with channel but no observed DPs.
-func TestHasObservedDataPointNoObservedValues(t *testing.T) {
-	t.Parallel()
-	dev := device.New(device.Config{Address: "OBSDEV002", InterfaceID: "HmIP-RF", Model: "HmIP-STH"})
-	ch := dev.AddChannel("OBSDEV002:1", 1, "WEATHER", hmenum.ParamsetKeyValues)
-	dp := generic.NewDataPoint[float64](generic.Spec{
-		Key: hmtypes.DataPointKey{
-			InterfaceID:    "HmIP-RF",
-			ChannelAddress: "OBSDEV002:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      "TEMPERATURE",
-		},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat},
-	})
-	ch.Put(dp)
-	// Not observed yet.
-	if hasObservedDataPoint(dev) {
-		t.Error("no observed value must return false")
-	}
-}
-
-// TestHasObservedDataPointWithObservedValue — device with one observed DP → true.
-func TestHasObservedDataPointWithObservedValue(t *testing.T) {
-	t.Parallel()
-	dev := device.New(device.Config{Address: "OBSDEV003", InterfaceID: "HmIP-RF", Model: "HmIP-STH"})
-	ch := dev.AddChannel("OBSDEV003:1", 1, "WEATHER", hmenum.ParamsetKeyValues)
-	dp := generic.NewDataPoint[float64](generic.Spec{
-		Key: hmtypes.DataPointKey{
-			InterfaceID:    "HmIP-RF",
-			ChannelAddress: "OBSDEV003:1",
-			ParamsetKey:    hmenum.ParamsetKeyValues,
-			Parameter:      "TEMPERATURE",
-		},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeFloat},
-	})
-	ch.Put(dp)
-	if !dp.OnWireValue(21.5) {
-		t.Fatal("OnWireValue refused value")
-	}
-	if !hasObservedDataPoint(dev) {
-		t.Error("device with observed DP must return true")
 	}
 }
 
