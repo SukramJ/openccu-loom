@@ -725,22 +725,23 @@ func TestBasicInfo_CapabilityMinima_FloorsAtSpecMinimum(t *testing.T) {
 	}
 }
 
-// captureWarnLog redirects slog.Default() to a buffer for the duration of the
-// test. Not safe to run in parallel with other tests that mutate slog.Default.
-func captureWarnLog(t *testing.T) *bytes.Buffer {
+// captureLog redirects slog.Default() to a debug-level buffer for the
+// duration of the test. Not safe to run in parallel with other tests that
+// mutate slog.Default.
+func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	prev := slog.Default()
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	var buf bytes.Buffer
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	return &buf
 }
 
-// TestBasicInfo_ValidateWarnsEmptyVendorName verifies that constructing
-// BasicInformation with an empty VendorName emits a slog warning but
-// does not return an error — the validation is diagnostic only.
-func TestBasicInfo_ValidateWarnsEmptyVendorName(t *testing.T) {
-	buf := captureWarnLog(t)
+// TestBasicInfo_ValidateLogsEmptyVendorName verifies that constructing
+// BasicInformation with an empty VendorName logs a debug diagnostic but
+// does not return an error — the validation is advisory only.
+func TestBasicInfo_ValidateLogsEmptyVendorName(t *testing.T) {
+	buf := captureLog(t)
 	cfg := validBasicInfoConfig()
 	cfg.VendorName = ""
 	_, err := core.NewBasicInformation(cfg)
@@ -748,14 +749,14 @@ func TestBasicInfo_ValidateWarnsEmptyVendorName(t *testing.T) {
 		t.Fatalf("NewBasicInformation with empty VendorName must not error, got: %v", err)
 	}
 	if !strings.Contains(buf.String(), "VendorName") {
-		t.Fatalf("expected slog warning mentioning VendorName, got: %s", buf.String())
+		t.Fatalf("expected debug diagnostic mentioning VendorName, got: %s", buf.String())
 	}
 }
 
-// TestBasicInfo_ValidateWarnsEmptyProductName verifies the slog warning
+// TestBasicInfo_ValidateLogsEmptyProductName verifies the debug diagnostic
 // for a missing ProductName without blocking construction.
-func TestBasicInfo_ValidateWarnsEmptyProductName(t *testing.T) {
-	buf := captureWarnLog(t)
+func TestBasicInfo_ValidateLogsEmptyProductName(t *testing.T) {
+	buf := captureLog(t)
 	cfg := validBasicInfoConfig()
 	cfg.ProductName = ""
 	_, err := core.NewBasicInformation(cfg)
@@ -763,14 +764,14 @@ func TestBasicInfo_ValidateWarnsEmptyProductName(t *testing.T) {
 		t.Fatalf("NewBasicInformation with empty ProductName must not error, got: %v", err)
 	}
 	if !strings.Contains(buf.String(), "ProductName") {
-		t.Fatalf("expected slog warning mentioning ProductName, got: %s", buf.String())
+		t.Fatalf("expected debug diagnostic mentioning ProductName, got: %s", buf.String())
 	}
 }
 
-// TestBasicInfo_ValidateWarnsEmptyHardwareVersionStr verifies the slog
-// warning for a missing HardwareVersionStr without blocking construction.
-func TestBasicInfo_ValidateWarnsEmptyHardwareVersionStr(t *testing.T) {
-	buf := captureWarnLog(t)
+// TestBasicInfo_ValidateLogsEmptyHardwareVersionStr verifies the debug
+// diagnostic for a missing HardwareVersionStr without blocking construction.
+func TestBasicInfo_ValidateLogsEmptyHardwareVersionStr(t *testing.T) {
+	buf := captureLog(t)
 	cfg := validBasicInfoConfig()
 	cfg.HardwareVersionStr = ""
 	_, err := core.NewBasicInformation(cfg)
@@ -778,14 +779,15 @@ func TestBasicInfo_ValidateWarnsEmptyHardwareVersionStr(t *testing.T) {
 		t.Fatalf("NewBasicInformation with empty HardwareVersionStr must not error, got: %v", err)
 	}
 	if !strings.Contains(buf.String(), "HardwareVersionStr") {
-		t.Fatalf("expected slog warning mentioning HardwareVersionStr, got: %s", buf.String())
+		t.Fatalf("expected debug diagnostic mentioning HardwareVersionStr, got: %s", buf.String())
 	}
 }
 
-// TestBasicInfo_ValidateNoWarnWhenFieldsSet verifies that a fully-populated
-// config produces no validation warnings for the fields covered by validateBasicInfoAttributes.
-func TestBasicInfo_ValidateNoWarnWhenFieldsSet(t *testing.T) {
-	buf := captureWarnLog(t)
+// TestBasicInfo_ValidateNoDiagnosticWhenFieldsSet verifies that a
+// fully-populated config produces no validation diagnostics for the fields
+// covered by validateBasicInfoAttributes (even at debug level).
+func TestBasicInfo_ValidateNoDiagnosticWhenFieldsSet(t *testing.T) {
+	buf := captureLog(t)
 	cfg := validBasicInfoConfig()
 	cfg.VendorName = "Test Vendor"
 	cfg.ProductName = "Test Product"
@@ -795,7 +797,7 @@ func TestBasicInfo_ValidateNoWarnWhenFieldsSet(t *testing.T) {
 		t.Fatalf("NewBasicInformation: %v", err)
 	}
 	if strings.Contains(buf.String(), "matter.basic_information.validate") {
-		t.Fatalf("expected no validation warnings for well-formed config, got: %s", buf.String())
+		t.Fatalf("expected no validation diagnostics for well-formed config, got: %s", buf.String())
 	}
 }
 
