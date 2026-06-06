@@ -57,11 +57,10 @@ type EventBridge struct {
 
 	// availabilityCache is keyed by `<central>|<iface>|<deviceAddr>` and
 	// holds the last availability state we published for that device.
-	// Drives idempotent publishing: a device that already produced a
-	// value-change event must not re-trigger an "online" publish per
-	// event — only on the transition. Likewise the boot publishes
-	// "offline" for devices without observed DPs, and the first value
-	// change flips them to "online".
+	// Drives idempotent publishing: a reachable device is published
+	// "online" once at boot and must not re-trigger an "online" publish
+	// per value-change event — only on a reachability transition
+	// (UNREACH / STICKY_UNREACH flipping) does the topic change.
 	availabilityCache sync.Map
 }
 

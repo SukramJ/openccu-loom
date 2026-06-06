@@ -72,6 +72,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   not none` guard so an unobserved data point renders as `unknown`
   rather than the literal `"None"` (or a misleading multiplied `0.0`).
 
+- **MQTT raw-plane snapshot is republished on every broker reconnect.**
+  The boot-time `PublishInitialSnapshot` (per-device availability + every
+  data point's slot state) only ran once, after CCU hydration — and that
+  publish raced the MQTT connection. When the broker reset or the initial
+  connect completed only after hydration (observed live: a
+  `connection reset by peer` landing exactly as a multi-central
+  hydration finished), the whole snapshot hit a not-yet-connected client
+  and was dropped. `OnConnect` re-announced `bridge/status` and
+  re-published the HA-Discovery configs but **not** the raw plane those
+  configs reference, so the availability + slot-state topics were never
+  restored until a live CCU value change trickled in. Combined with the
+  sensors' `expire_after: 3600`, HA then expired the entities to
+  `unavailable`. The snapshot now runs on every broker (re)connect
+  (alongside the existing `AnnounceOnline` / `RepublishDiscovery` hooks),
+  so the raw plane is restored after any disconnect or broker restart.
+
 - **Model-snapshot drift gate honours its documented overrides.**
   `script/model_snapshot_drift_check.py` derived its env-override keys
   via a fragile string transform that did not match the documented
