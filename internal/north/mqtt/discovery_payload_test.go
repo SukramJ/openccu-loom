@@ -1125,6 +1125,43 @@ func TestWithHubInfoFluentSetsHub(t *testing.T) {
 
 // ─── sensors: force_update set, expire_after NOT set ────────────────────────
 
+// TestDiscoveryTopicsUseEventCentralNotBuilderDefault pins multi-CCU
+// correctness: every device-bound topic in a discovery payload must be
+// scoped to the CCU the device actually lives on (ev.Central), NOT the
+// builder's default central (one configured CCU — typically the first).
+// Regression: a daemon serving two CCUs configured the bridge with a
+// single CentralName; the discovery builder stamped that name into every
+// device's state/availability/command topic, while the publish path used
+// the device's real central. HA then subscribed to topics that never
+// received data and marked every non-first-CCU entity `unavailable`.
+func TestDiscoveryTopicsUseEventCentralNotBuilderDefault(t *testing.T) {
+	t.Parallel()
+	// Builder default central is the FIRST CCU; the event belongs to the
+	// SECOND CCU. No topic in the payload may carry the first CCU's name.
+	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "FirstCCU")
+	ev := Event{
+		Central:       "SecondCCU",
+		Interface:     "SecondCCU-HmIP-RF",
+		DeviceAddress: "000C9709AEF149",
+		ChannelNo:     1,
+		Parameter:     "ACTUAL_TEMPERATURE",
+		Category:      hmenum.DataPointCategorySensor,
+		Descriptor:    &pload.GenericConfig{Unit: "°C"},
+		Model:         "HmIP-BWTH",
+	}
+	_, _, _, payload, ok := db.Build(ev)
+	if !ok {
+		t.Fatal("Build returned ok=false")
+	}
+	s := string(payload)
+	if !strings.Contains(s, "openccu-loom/SecondCCU/") {
+		t.Errorf("payload has no SecondCCU-scoped topic; got %s", s)
+	}
+	if strings.Contains(s, "openccu-loom/FirstCCU/") {
+		t.Errorf("payload leaked the builder-default central into a topic: %s", s)
+	}
+}
+
 // TestSensorForceUpdateNoExpireAfter pins that a sensor carries
 // force_update=true but does NOT carry expire_after. Availability is
 // governed by the reachability model (per-device UNREACH topic + per-DP

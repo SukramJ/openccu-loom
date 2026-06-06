@@ -193,6 +193,23 @@ func (d *DefaultDiscoveryBuilder) serialSuffix(centralName string) string {
 	return routingkey.SerialSuffix(d.hubFor(centralName).Serial)
 }
 
+// centralFor resolves the CCU name to scope a device-bound topic to.
+// Multi-CCU correctness: the per-device topics MUST use the event's
+// central (the CCU the device actually lives on), not the builder's
+// default `Central` (which is just one configured CCU — typically the
+// first). Using d.Central for every device routes non-first-CCU devices'
+// discovery topics to the wrong central segment while the publish path
+// uses the device's real central, so HA subscribes to topics that never
+// receive data and marks the entity `unavailable`. Falls back to the
+// builder default only when the event carries no central (hub-level
+// payloads built without a device context).
+func (d *DefaultDiscoveryBuilder) centralFor(ev Event) string {
+	if ev.Central != "" {
+		return ev.Central
+	}
+	return d.Central
+}
+
 // hubAggregateUniqueID builds the unique_id for loom-specific hub
 // aggregate entities that have no equivalent in the canonical
 // routing-key contract (alarm_messages, service_messages, inbox,
@@ -288,12 +305,13 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		naming.Bucket(bucket),
 		ev.Parameter,
 	)
-	nodeID = pd.DiscoveryNodeID(d.Central)
+	central := d.centralFor(ev)
+	nodeID = pd.DiscoveryNodeID(central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
 	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
 
-	stateTopic := pd.MQTTState(d.TopicBuilder.Base, d.Central)
-	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, d.Central)
+	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
+	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
 	availability := []map[string]string{
 		{
 			"topic":                 d.TopicBuilder.BridgeStatus(),
@@ -301,7 +319,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(d.Central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -331,7 +349,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// json_attributes_topic + template — exposes the per-DP config payload
 	// (min/max/value_list/unit/default/usage) as HA entity attributes for
 	// diagnostics.
-	body["json_attributes_topic"] = d.TopicBuilder.ParameterConfig(d.Central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
+	body["json_attributes_topic"] = d.TopicBuilder.ParameterConfig(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
 	body["json_attributes_template"] = "{{ value_json | tojson }}"
 	// Device_class — Quantity-based resolution mirrors
 	// (deviceModel, parameter, unit) → Quantity → HA device_class.

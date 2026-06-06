@@ -59,6 +59,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT Discovery topics are scoped to the device's own CCU (multi-CCU).**
+  The HA-Discovery builder stamped the bridge's single configured central
+  name (the first CCU) into every device's `state_topic`,
+  `availability`, command and `json_attributes` topics, while the publish
+  path used the device's *actual* central. On a multi-CCU daemon this
+  routed every non-first-CCU device's discovery to a topic segment that
+  never received data (e.g. `…/FirstCCU/SecondCCU-HmIP-RF/…` instead of
+  `…/SecondCCU/SecondCCU-HmIP-RF/…`), so Home Assistant marked all of
+  those entities `unavailable`. Discovery now derives the topic central
+  from the event (the CCU the device lives on), falling back to the
+  builder default only for hub-level payloads with no device context.
+
 - **MQTT entities no longer show as `unavailable` in Home Assistant.**
   Availability now tracks device *reachability* (`UNREACH` /
   `STICKY_UNREACH` via `Device.Available()`) rather than "has a value
