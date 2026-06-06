@@ -2066,8 +2066,34 @@ paths:
                   properties:
                     central: { type: string }
                     interface: { type: string }
-                    circuit_state: { type: integer }
-                    state: { type: object, additionalProperties: true }
+                    circuit_state:
+                      type: integer
+                      description: >
+                        Circuit-breaker state code: 0 = closed, 1 = open,
+                        2 = half-open.
+                    state:
+                      type: object
+                      description: >
+                        Live InterfaceClient state. Omitted when the client
+                        exposes none.
+                      properties:
+                        state:
+                          type: string
+                          description: State-machine bucket (e.g. connected, degraded, disconnected).
+                        closed:
+                          type: boolean
+                          description: True once the client has been shut down.
+                        total_requests: { type: integer, format: int64 }
+                        executed_requests: { type: integer, format: int64 }
+                        pending_requests: { type: integer, format: int64 }
+                        last_failure_at:
+                          type: string
+                          format: date-time
+                          description: RFC3339 timestamp of the last request failure.
+                        last_callback_at:
+                          type: string
+                          format: date-time
+                          description: RFC3339 timestamp of the last received callback.
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /diagnostics/eventbus/tap:

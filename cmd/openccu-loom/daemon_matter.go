@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -1354,8 +1355,14 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 		VendorName:      "openccu-loom",
 		ProductName:     "openccu-loom Matter Bridge",
 		SoftwareVersion: 1,
-		HardwareVersion: 1,
-		SerialNumber:    rootSerial,
+		// SoftwareVersionStr carries the human-readable daemon build so
+		// controllers display a real version. HardwareVersionStr is a
+		// deliberate constant — a software bridge has no hardware revision,
+		// but Matter mandates a non-empty string (constraint "1 to 64").
+		SoftwareVersionStr: build.Version,
+		HardwareVersion:    1,
+		HardwareVersionStr: "1.0",
+		SerialNumber:       rootSerial,
 	})
 	if err != nil {
 		return nil, nil, refs, fmt.Errorf("BasicInformation: %w", err)

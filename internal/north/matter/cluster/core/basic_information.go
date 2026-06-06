@@ -259,27 +259,28 @@ func NewBasicInformation(cfg Config) (*BasicInformation, error) {
 	return bi, nil
 }
 
-// validateBasicInfoAttributes emits slog warnings for suspicious
-// configurations caught at construction time. All checks are
-// defensive diagnostics — none block construction.
+// validateBasicInfoAttributes emits slog debug diagnostics for suspicious
+// configurations caught at construction time. All checks are defensive and
+// advisory — none block construction, and each has a printable fallback, so
+// they log at debug rather than warn to avoid operational noise.
 func validateBasicInfoAttributes(cfg Config) {
 	if cfg.SerialNumber != "" && cfg.SerialNumber == fmt.Sprintf("%04X-%04X", cfg.VendorID, cfg.ProductID) {
-		slog.Default().Warn("matter.basic_information.validate",
+		slog.Default().Debug("matter.basic_information.validate",
 			slog.String("field", "UniqueID/SerialNumber"),
 			slog.String("reason", "UniqueID and SerialNumber are identical — they should differ for controller caches"))
 	}
 	if strings.TrimSpace(cfg.VendorName) == "" {
-		slog.Default().Warn("matter.basic_information.validate",
+		slog.Default().Debug("matter.basic_information.validate",
 			slog.String("field", "VendorName"),
 			slog.String("reason", "VendorName is empty — controllers may display an unknown vendor"))
 	}
 	if strings.TrimSpace(cfg.ProductName) == "" {
-		slog.Default().Warn("matter.basic_information.validate",
+		slog.Default().Debug("matter.basic_information.validate",
 			slog.String("field", "ProductName"),
 			slog.String("reason", "ProductName is empty — controllers may display an unknown product"))
 	}
 	if cfg.HardwareVersionStr == "" {
-		slog.Default().Warn("matter.basic_information.validate",
+		slog.Default().Debug("matter.basic_information.validate",
 			slog.String("field", "HardwareVersionStr"),
 			slog.String("reason", "HardwareVersionStr is empty — a fallback will be generated but callers should supply a real version string"))
 	}
