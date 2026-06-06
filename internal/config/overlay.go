@@ -33,7 +33,7 @@ import (
 //   - OPENCCU_LOOM_REST_OPENAPI_VALIDATE     → c.North.REST.OpenAPIValidate (bool)
 //   - OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH    → c.North.REST.OpenAPISpecPath
 //   - OPENCCU_LOOM_UI_LISTEN                 → c.North.UI.Listen
-//   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.Listen
+//   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.BrokerURL
 func (c *Config) OverlayFromEnv(getenv func(string) string) {
 	if getenv == nil {
 		getenv = os.Getenv
@@ -49,6 +49,7 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) {
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_REST_OPENAPI_VALIDATE", &c.North.REST.OpenAPIValidate)
 	overlayString(getenv, "OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH", &c.North.REST.OpenAPISpecPath)
 	overlayString(getenv, "OPENCCU_LOOM_UI_LISTEN", &c.North.UI.Listen)
+	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
 }
 
 // LoadWithEnv combines [Load] + [Config.OverlayFromEnv] in one call.
