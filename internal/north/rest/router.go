@@ -237,6 +237,10 @@ type Deps struct {
 	// XML/JSON-RPC session recorder for deterministic replay. Nil disables
 	// them (returns 503 / empty list).
 	RPCRecorder handlers.RPCRecorderService
+	// Introspect backs the live-introspection diagnostics endpoints
+	// (`GET /diagnostics/reliability`, `GET /diagnostics/eventbus/tap`).
+	// Read-only; nil disables them.
+	Introspect handlers.DiagnosticsIntrospectService
 	// AuditRecorder is the daemon-wide audit sink the diagnostics
 	// endpoints append override / capture events to. Same buffer as
 	// [Deps.MatterAuditRecorder] in production wiring; the separate
@@ -504,6 +508,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.LogFeed != nil {
 				pr.With(admin).Get("/diagnostics/logs", handlers.ListLogs(d.LogFeed))
 				pr.With(admin).Get("/diagnostics/logs/stream", handlers.StreamLogs(d.LogFeed))
+			}
+			if d.Introspect != nil {
+				pr.With(admin).Get("/diagnostics/reliability", handlers.DiagnosticsReliability(d.Introspect))
+				pr.With(admin).Get("/diagnostics/eventbus/tap", handlers.DiagnosticsEventBusTap(d.Introspect))
 			}
 			// Composite diagnostics dump — single artefact for support /
 			// agent escalation. Anonymises by default; pass

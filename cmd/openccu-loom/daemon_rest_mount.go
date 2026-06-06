@@ -208,6 +208,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		LogFeed:         d.liveFeed,
 		LogDefaultLevel: d.levels,
 		RPCRecorder:     rpcRecorder,
+		Introspect:      adapter.NewIntrospectAdapter(d.reg),
 		AuditRecorder:   d.auditRec,
 		StatusMetrics:   d.restStatusMetrics,
 		KnownCentrals:   d.reg.Names(),
