@@ -542,12 +542,22 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 				body["unit_of_measurement"] = cleaned
 			}
 		}
-		// H-028: sensors always carry force_update=true and expire_after=3600.
-		// force_update ensures HA re-evaluates the state even when the value
-		// has not changed (e.g., periodic heartbeat). expire_after=3600 marks
-		// the entity unavailable when no update arrives within one hour,
+		// force_update ensures HA re-evaluates the state (advancing
+		// last_changed) even when the value has not changed — useful for
+		// periodic heartbeat-style sensors.
+		//
+		// NOTE on expire_after: deliberately NOT set. Availability is
+		// governed by the reachability model — the per-device UNREACH
+		// topic ([EventBridge.markAvailability]) plus each DP's
+		// `available` flag in the slot-state envelope — not by value
+		// freshness. Many sensors update far less than hourly (battery
+		// devices, OPERATING_VOLTAGE) and a not-yet-observed sensor
+		// publishes `{"value":null,"available":true}` and never receives
+		// a value until the CCU pushes one; an `expire_after=3600` would
+		// falsely mark all of those `unavailable` after an hour of
+		// inactivity even though the device is perfectly reachable. This
+		// mirrors the binary_sensor branch above.
 		body["force_update"] = true
-		body["expire_after"] = 3600
 		// L6 — apply data_point.multiplier so HA receives the same scaled
 		// Value would emit (`sensor.py:161-169`
 		// `:201`: `new_value = self._data_point.value * self._multiplier`).

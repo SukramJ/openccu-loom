@@ -1123,9 +1123,16 @@ func TestWithHubInfoFluentSetsHub(t *testing.T) {
 	}
 }
 
-// ─── H-028 expire_after + force_update on sensors ───────────────────────────
+// ─── sensors: force_update set, expire_after NOT set ────────────────────────
 
-func TestSensorExpireAfterAndForceUpdate_H028(t *testing.T) {
+// TestSensorForceUpdateNoExpireAfter pins that a sensor carries
+// force_update=true but does NOT carry expire_after. Availability is
+// governed by the reachability model (per-device UNREACH topic + per-DP
+// `available` flag), not value freshness — an expire_after would falsely
+// mark slow-updating or not-yet-observed sensors `unavailable` after an
+// hour even though the device is reachable. Mirrors the binary_sensor
+// rationale.
+func TestSensorForceUpdateNoExpireAfter(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu-01")
 	ev := Event{
@@ -1152,9 +1159,8 @@ func TestSensorExpireAfterAndForceUpdate_H028(t *testing.T) {
 	if m["force_update"] != true {
 		t.Errorf("force_update: got %v want true", m["force_update"])
 	}
-	expireAfter, _ := m["expire_after"].(float64)
-	if expireAfter != 3600 {
-		t.Errorf("expire_after: got %v want 3600", m["expire_after"])
+	if _, present := m["expire_after"]; present {
+		t.Errorf("expire_after must not be set on sensors, got %v", m["expire_after"])
 	}
 }
 
