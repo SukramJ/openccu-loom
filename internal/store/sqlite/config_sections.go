@@ -16,11 +16,30 @@ import (
 // section is one row; the SPA's section-aware editor maps 1:1.
 type ConfigSectionStore struct {
 	db *sql.DB
+
+	// secretTransform, when set, seals secret-tagged fields on write
+	// (seal=true) and opens them on read (seal=false). The composition
+	// root wires it to the field-aware [configstore.TransformSectionJSON]
+	// so the store stays oblivious to struct shapes. Nil = no-op.
+	secretTransform func(section string, value []byte, seal bool) ([]byte, error)
 }
 
 // NewConfigSectionStore returns a store backed by db.
 func NewConfigSectionStore(db *sql.DB) *ConfigSectionStore {
 	return &ConfigSectionStore{db: db}
+}
+
+// SetSecretTransform installs the seal/open hook (see ADR 0027). Call
+// once at wiring time, before the store handles requests.
+func (s *ConfigSectionStore) SetSecretTransform(fn func(section string, value []byte, seal bool) ([]byte, error)) {
+	s.secretTransform = fn
+}
+
+func (s *ConfigSectionStore) applyTransform(section string, raw []byte, seal bool) ([]byte, error) {
+	if s.secretTransform == nil {
+		return raw, nil
+	}
+	return s.secretTransform(section, raw, seal)
 }
 
 // SectionRow is one section snapshot.
@@ -50,7 +69,11 @@ func (s *ConfigSectionStore) Get(ctx context.Context, section string) (SectionRo
 	if err != nil {
 		return SectionRow{}, fmt.Errorf("sqlite: config_sections get: %w", err)
 	}
-	r.ValueJSON = []byte(raw)
+	opened, terr := s.applyTransform(section, []byte(raw), false)
+	if terr != nil {
+		return SectionRow{}, fmt.Errorf("sqlite: config_sections get: open secrets: %w", terr)
+	}
+	r.ValueJSON = opened
 	return r, nil
 }
 
@@ -61,6 +84,10 @@ func (s *ConfigSectionStore) Put(ctx context.Context, section string, valueJSON 
 	}
 	if len(valueJSON) == 0 {
 		return SectionRow{}, errors.New("sqlite: config section value required")
+	}
+	stored, terr := s.applyTransform(section, valueJSON, true)
+	if terr != nil {
+		return SectionRow{}, fmt.Errorf("sqlite: config_sections put: seal secrets: %w", terr)
 	}
 	now := time.Now().UTC()
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -85,7 +112,7 @@ func (s *ConfigSectionStore) Put(ctx context.Context, section string, valueJSON 
 		 ON CONFLICT(section) DO UPDATE SET value_json=excluded.value_json,
 		     version=excluded.version, updated_at=excluded.updated_at,
 		     updated_by=excluded.updated_by`,
-		section, string(valueJSON), version, now, updatedBy)
+		section, string(stored), version, now, updatedBy)
 	if err != nil {
 		return SectionRow{}, fmt.Errorf("sqlite: config_sections put: exec: %w", err)
 	}
@@ -130,7 +157,11 @@ func (s *ConfigSectionStore) List(ctx context.Context) ([]SectionRow, error) {
 		if err := rows.Scan(&r.Section, &raw, &r.Version, &r.UpdatedAt, &r.UpdatedBy); err != nil {
 			return nil, fmt.Errorf("sqlite: config_sections list scan: %w", err)
 		}
-		r.ValueJSON = []byte(raw)
+		opened, terr := s.applyTransform(r.Section, []byte(raw), false)
+		if terr != nil {
+			return nil, fmt.Errorf("sqlite: config_sections list: open secrets: %w", terr)
+		}
+		r.ValueJSON = opened
 		out = append(out, r)
 	}
 	return out, rows.Err()

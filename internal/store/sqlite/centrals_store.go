@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 )
 
 // CentralsStore persists the CCU connection list. Replaces the
@@ -20,11 +21,33 @@ import (
 // CCU simulator continue to consume []config.CentralConfig directly.
 type CentralsStore struct {
 	db *sql.DB
+
+	// cipher, when set, seals the password_plain column on write and
+	// opens it on read (ADR 0027). Nil = plaintext (resilient fallback).
+	cipher *secret.Cipher
 }
 
 // NewCentralsStore returns a store backed by db.
 func NewCentralsStore(db *sql.DB) *CentralsStore {
 	return &CentralsStore{db: db}
+}
+
+// SetCipher installs the at-rest cipher for the password_plain column.
+// Call once at wiring time, before the store handles requests.
+func (s *CentralsStore) SetCipher(c *secret.Cipher) { s.cipher = c }
+
+func (s *CentralsStore) sealPlain(v string) (string, error) {
+	if s.cipher == nil {
+		return v, nil
+	}
+	return s.cipher.Seal(v)
+}
+
+func (s *CentralsStore) openPlain(v string) (string, error) {
+	if s.cipher == nil {
+		return v, nil
+	}
+	return s.cipher.Open(v)
 }
 
 // CentralRow is one row of the centrals table. Mirrors the runtime
@@ -76,6 +99,10 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: marshal visibility: %w", err)
 	}
+	sealedPlain, err := s.sealPlain(r.PasswordPlain)
+	if err != nil {
+		return fmt.Errorf("sqlite: centrals: seal password: %w", err)
+	}
 	now := time.Now().UTC()
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO centrals
@@ -92,7 +119,7 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   interfaces_json=excluded.interfaces_json, ports_json=excluded.ports_json,
 		   visibility_json=excluded.visibility_json, enabled=excluded.enabled,
 		   updated_at=excluded.updated_at`,
-		r.Name, r.Host, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, r.PasswordPlain,
+		r.Name, r.Host, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
 		boolInt(r.TLS), boolInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
 		string(ifJSON), string(portsJSON), string(visJSON), boolInt(r.Enabled),
 		now, now)
@@ -170,6 +197,9 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	r.TLS = tls != 0
 	r.TLSInsecureSkipVerify = insec != 0
 	r.Enabled = enabled != 0
+	if r.PasswordPlain, err = s.openPlain(r.PasswordPlain); err != nil {
+		return fmt.Errorf("sqlite: centrals: open password: %w", err)
+	}
 	if err := json.Unmarshal([]byte(ifJSON), &r.Interfaces); err != nil {
 		return fmt.Errorf("sqlite: centrals: parse interfaces: %w", err)
 	}

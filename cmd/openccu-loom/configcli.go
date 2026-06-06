@@ -14,8 +14,26 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/configstore"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
+
+// wireConfigStoreCrypto resolves the at-rest cipher (ADR 0027) and wires
+// it into the section + centrals stores so `config import` seals secrets
+// and `config export` opens them (the export's own redaction / the
+// --include-secrets flag then decide what actually leaves). Mirrors the
+// daemon's wiring so the CLI and the running daemon agree on the key.
+func wireConfigStoreCrypto(sectionStore *sqlite.ConfigSectionStore, centralsStore *sqlite.CentralsStore, dataDir string) {
+	cipher, err := secret.Load(dataDir, os.Getenv, nil)
+	if err != nil {
+		cipher = &secret.Cipher{}
+	}
+	centralsStore.SetCipher(cipher)
+	sectionStore.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
+		return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)
+	})
+}
 
 // runConfigCLI is the entry point for the `config` subcommand family.
 func runConfigCLI(args []string, stdout, stderr io.Writer) error {
@@ -90,6 +108,7 @@ func configExport(args []string, stdout, stderr io.Writer) error {
 
 	sectionStore := sqlite.NewConfigSectionStore(db)
 	centralsStore := sqlite.NewCentralsStore(db)
+	wireConfigStoreCrypto(sectionStore, centralsStore, bc.DataDir)
 	userStore := sqlite.NewUserStore(db)
 	tokenStore := sqlite.NewTokenStore(db)
 
@@ -224,6 +243,7 @@ func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funl
 
 	sectionStore := sqlite.NewConfigSectionStore(db)
 	centralsStore := sqlite.NewCentralsStore(db)
+	wireConfigStoreCrypto(sectionStore, centralsStore, bc.DataDir)
 
 	if *replaceMode {
 		// Delete all existing sections.
