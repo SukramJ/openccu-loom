@@ -19,22 +19,30 @@ import (
 )
 
 // valueJSONValueTemplate is the canonical Jinja extractor for the
-// PerDPState `value` field. The defensive `is defined` guard avoids
-// the `'value_json' is undefined` template error HA otherwise raises
-// when the state_topic carries an empty retained payload (the
-// register-and-load-data eviction flow for unobserved DPs). Empty
-// rendering combined with the per-device availability topic yields
-// the expected "unavailable" entity badge.
-const valueJSONValueTemplate = `{% if value_json is defined %}{{ value_json.value }}{% endif %}`
+// PerDPState `value` field. The defensive guard renders empty (so HA
+// falls back to the "unknown" entity state) in two cases:
+//
+//   - `value_json is defined` — the payload is not the empty retained
+//     eviction body (the `'value_json' is undefined` template error HA
+//     otherwise raises).
+//   - `value_json.value is not none` — the DP is registered but has not
+//     reported a value yet (the unobserved-DP boot path publishes
+//     `{"value":null,"available":true}`). Without this clause
+//     `{{ value_json.value }}` renders the literal string "None".
+//
+// The entity stays available (the per-device + per-DP availability
+// topics resolve to online); only its value reads "unknown" until the
+// CCU pushes a real value.
+const valueJSONValueTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value }}{% endif %}`
 
 // valueJSONValueLowerTemplate is the boolean-aware variant used for
 // switch / lock / binary_sensor entities. PerDPState carries Python-
 // boolean rendering (`{"value":true}` → Jinja `True`/`False` with
 // capitalised initial), but HA compares to lowercase tokens
 // (`payload_on:"true"`, `payload_off:"false"`). Pipe through `| lower`
-// so the comparison is case-stable. Same `is defined` guard semantics
-// as the non-lower variant.
-const valueJSONValueLowerTemplate = `{% if value_json is defined %}{{ value_json.value | lower }}{% endif %}`
+// so the comparison is case-stable. Same guard semantics as the
+// non-lower variant (`none | lower` would otherwise render "none").
+const valueJSONValueLowerTemplate = `{% if value_json is defined and value_json.value is not none %}{{ value_json.value | lower }}{% endif %}`
 
 // HAComponent identifies a Home Assistant entity category. Only the
 // MVP-relevant subset is listed; the catalogue grows as profiles
@@ -185,6 +193,23 @@ func (d *DefaultDiscoveryBuilder) serialSuffix(centralName string) string {
 	return routingkey.SerialSuffix(d.hubFor(centralName).Serial)
 }
 
+// centralFor resolves the CCU name to scope a device-bound topic to.
+// Multi-CCU correctness: the per-device topics MUST use the event's
+// central (the CCU the device actually lives on), not the builder's
+// default `Central` (which is just one configured CCU — typically the
+// first). Using d.Central for every device routes non-first-CCU devices'
+// discovery topics to the wrong central segment while the publish path
+// uses the device's real central, so HA subscribes to topics that never
+// receive data and marks the entity `unavailable`. Falls back to the
+// builder default only when the event carries no central (hub-level
+// payloads built without a device context).
+func (d *DefaultDiscoveryBuilder) centralFor(ev Event) string {
+	if ev.Central != "" {
+		return ev.Central
+	}
+	return d.Central
+}
+
 // hubAggregateUniqueID builds the unique_id for loom-specific hub
 // aggregate entities that have no equivalent in the canonical
 // routing-key contract (alarm_messages, service_messages, inbox,
@@ -280,12 +305,13 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		naming.Bucket(bucket),
 		ev.Parameter,
 	)
-	nodeID = pd.DiscoveryNodeID(d.Central)
+	central := d.centralFor(ev)
+	nodeID = pd.DiscoveryNodeID(central)
 	objectID = pd.DiscoveryObjectID(ev.Parameter)
 	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(ev.Central), ev.DeviceAddress+":"+strconv.Itoa(ev.ChannelNo), ev.Parameter, "")
 
-	stateTopic := pd.MQTTState(d.TopicBuilder.Base, d.Central)
-	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, d.Central)
+	stateTopic := pd.MQTTState(d.TopicBuilder.Base, central)
+	commandTopic := pd.MQTTCommand(d.TopicBuilder.Base, central)
 	availability := []map[string]string{
 		{
 			"topic":                 d.TopicBuilder.BridgeStatus(),
@@ -293,7 +319,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(d.Central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(central, ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
@@ -308,16 +334,12 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// "modified_at": …, "refreshed_at": …}`). HA reads the wire
 		// value via the `.value` extractor.
 		//
-		// `value_json is defined` guards against the
-		// register-and-load-data flow where unobserved DPs publish
-		// an empty retained payload (eviction) so HA marks the
-		// entity unavailable. Without the guard, applying
-		// `{{ value_json.value }}` to "" raises the
-		// `'value_json' is undefined` template error visible in HA
-		// logs. The guard renders empty when no JSON is present
-		// HA falls back to "unknown" for the entity, which combined
-		// with the per-device availability topic produces the
-		// expected "unavailable" badge.
+		// The defined/not-none guard in valueJSONValueTemplate keeps HA
+		// from logging `'value_json' is undefined` on an empty payload
+		// and from rendering the literal "None" for an unobserved DP
+		// (which now publishes `{"value":null,"available":true}`). The
+		// entity stays available via the per-device + per-DP availability
+		// topics; its value reads "unknown" until the CCU pushes.
 		"value_template":    valueJSONValueTemplate,
 		"availability":      availability,
 		"availability_mode": "all",
@@ -327,7 +349,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// json_attributes_topic + template — exposes the per-DP config payload
 	// (min/max/value_list/unit/default/usage) as HA entity attributes for
 	// diagnostics.
-	body["json_attributes_topic"] = d.TopicBuilder.ParameterConfig(d.Central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
+	body["json_attributes_topic"] = d.TopicBuilder.ParameterConfig(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
 	body["json_attributes_template"] = "{{ value_json | tojson }}"
 	// Device_class — Quantity-based resolution mirrors
 	// (deviceModel, parameter, unit) → Quantity → HA device_class.
@@ -538,12 +560,22 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 				body["unit_of_measurement"] = cleaned
 			}
 		}
-		// H-028: sensors always carry force_update=true and expire_after=3600.
-		// force_update ensures HA re-evaluates the state even when the value
-		// has not changed (e.g., periodic heartbeat). expire_after=3600 marks
-		// the entity unavailable when no update arrives within one hour,
+		// force_update ensures HA re-evaluates the state (advancing
+		// last_changed) even when the value has not changed — useful for
+		// periodic heartbeat-style sensors.
+		//
+		// NOTE on expire_after: deliberately NOT set. Availability is
+		// governed by the reachability model — the per-device UNREACH
+		// topic ([EventBridge.markAvailability]) plus each DP's
+		// `available` flag in the slot-state envelope — not by value
+		// freshness. Many sensors update far less than hourly (battery
+		// devices, OPERATING_VOLTAGE) and a not-yet-observed sensor
+		// publishes `{"value":null,"available":true}` and never receives
+		// a value until the CCU pushes one; an `expire_after=3600` would
+		// falsely mark all of those `unavailable` after an hour of
+		// inactivity even though the device is perfectly reachable. This
+		// mirrors the binary_sensor branch above.
 		body["force_update"] = true
-		body["expire_after"] = 3600
 		// L6 — apply data_point.multiplier so HA receives the same scaled
 		// Value would emit (`sensor.py:161-169`
 		// `:201`: `new_value = self._data_point.value * self._multiplier`).
@@ -738,10 +770,12 @@ func applyMultiplierSensor(ev Event, body map[string]any) {
 		return
 	}
 	// State topics carry the JSON envelope (ADR 0011); the multiplied
-	// template pulls value_json.value, wrapped in the `is defined`
-	// guard so HA renders empty (entity "unknown") when the slot has
-	// no observed payload yet rather than logging Jinja errors.
-	body["value_template"] = fmt.Sprintf("{%% if value_json is defined %%}{{ (value_json.value | float * %s) }}{%% endif %%}", formatMultiplier(m))
+	// template pulls value_json.value, wrapped in the defined/not-none
+	// guard so HA renders empty (entity "unknown") when the slot carries
+	// no payload yet (empty eviction body) or a null value (unobserved
+	// DP boot publish) rather than logging Jinja errors or rendering a
+	// misleading multiplied 0.0.
+	body["value_template"] = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", formatMultiplier(m))
 }
 
 // applyMultiplierNumber patches body so HA scales `min`/`max`/`step` to the
@@ -758,7 +792,10 @@ func applyMultiplierNumber(ev Event, body map[string]any, stateTopic, commandTop
 	mStr := formatMultiplier(m)
 	// State topics carry JSON; the multiplied template pulls
 	// value_json.value (ADR 0011 — JSON is the only supported shape).
-	body["value_template"] = fmt.Sprintf("{{ (value_json.value | float * %s) }}", mStr)
+	// The defined/not-none guard renders empty (entity "unknown") for
+	// the empty eviction body or an unobserved null value instead of a
+	// misleading multiplied 0.0.
+	body["value_template"] = fmt.Sprintf("{%% if value_json is defined and value_json.value is not none %%}{{ (value_json.value | float * %s) }}{%% endif %%}", mStr)
 	// Write template — invert (HA-supplied value / multiplier).
 	body["command_template"] = fmt.Sprintf("{{ (value | float / %s) }}", mStr)
 	// Bounds — multiply min/max/step if the discovery payload already

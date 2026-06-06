@@ -9,14 +9,17 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
-// mosquittoServer wraps a dockerised Mosquitto instance so the
-// MQTT bridge can be exercised end-to-end. Tests skip automatically
-// when Docker is not on PATH.
+// mosquittoServer wraps a Mosquitto instance (dockerised, or a native
+// `mosquitto` binary when Docker is unavailable) so the MQTT bridge can
+// be exercised end-to-end. Tests skip automatically when neither a
+// Docker daemon nor a native binary is reachable.
 type mosquittoServer struct {
 	name string
 	port int
@@ -27,13 +30,32 @@ func (m *mosquittoServer) URL() string {
 	return fmt.Sprintf("tcp://127.0.0.1:%d", m.port)
 }
 
-// startMosquitto spawns a Mosquitto container on an ephemeral port,
-// waits until it accepts TCP, and registers a Cleanup that stops
-// the container.
+// startMosquitto brings up a Mosquitto broker on an ephemeral port and
+// registers a Cleanup that stops it. It prefers a Docker container
+// (the reproducible CI path) and falls back to a native `mosquitto`
+// binary on PATH so the MQTT integration suite can run on developer
+// machines without a Docker daemon. The test skips only when neither
+// is available.
 func startMosquitto(t *testing.T) *mosquittoServer {
 	t.Helper()
+	if srv, ok := startMosquittoDocker(t); ok {
+		return srv
+	}
+	if srv, ok := startMosquittoNative(t); ok {
+		return srv
+	}
+	t.Skip("no MQTT broker available: Docker daemon not reachable and no `mosquitto` binary on PATH")
+	return nil
+}
+
+// startMosquittoDocker attempts the dockerised broker. Returns
+// ok=false (without failing the test) when Docker is not on PATH or the
+// daemon refuses the run, so the caller can fall back to the native
+// binary.
+func startMosquittoDocker(t *testing.T) (*mosquittoServer, bool) {
+	t.Helper()
 	if _, err := exec.LookPath("docker"); err != nil {
-		t.Skip("docker not on PATH; install Docker to run MQTT integration tests")
+		return nil, false
 	}
 	port, err := pickFreePort()
 	if err != nil {
@@ -52,7 +74,11 @@ func startMosquitto(t *testing.T) *mosquittoServer {
 	cmd := exec.Command("docker", args...) //nolint:gosec // integration harness
 	cmd.Stderr = &buf
 	if err := cmd.Run(); err != nil {
-		t.Skipf("docker run mosquitto failed: %v %s", err, buf.String())
+		// Docker is present but the daemon is not reachable (common on
+		// dev machines with Docker Desktop stopped). Fall back rather
+		// than skip.
+		t.Logf("docker run mosquitto failed, falling back to native binary: %v %s", err, buf.String())
+		return nil, false
 	}
 
 	if err := waitForPort(port, 10*time.Second); err != nil {
@@ -67,7 +93,48 @@ func startMosquitto(t *testing.T) *mosquittoServer {
 	t.Cleanup(func() {
 		_ = exec.Command("docker", "rm", "-f", name).Run() //nolint:gosec // cleanup
 	})
-	return &mosquittoServer{name: name, port: port}
+	return &mosquittoServer{name: name, port: port}, true
+}
+
+// startMosquittoNative runs a native `mosquitto` binary on an ephemeral
+// port with a minimal anonymous-listener config in a temp directory.
+// Returns ok=false when the binary is not on PATH.
+func startMosquittoNative(t *testing.T) (*mosquittoServer, bool) {
+	t.Helper()
+	bin, err := exec.LookPath("mosquitto")
+	if err != nil {
+		return nil, false
+	}
+	port, err := pickFreePort()
+	if err != nil {
+		t.Fatalf("pick port: %v", err)
+	}
+
+	dir := t.TempDir()
+	confPath := filepath.Join(dir, "mosquitto.conf")
+	conf := fmt.Sprintf("listener %d 127.0.0.1\nallow_anonymous true\npersistence false\n", port)
+	if err := os.WriteFile(confPath, []byte(conf), 0o600); err != nil {
+		t.Fatalf("write mosquitto.conf: %v", err)
+	}
+
+	var buf bytes.Buffer
+	cmd := exec.Command(bin, "-c", confPath) //nolint:gosec // integration harness, fixed binary
+	cmd.Stderr = &buf
+	cmd.Stdout = &buf
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("start native mosquitto: %v", err)
+	}
+
+	if err := waitForPort(port, 10*time.Second); err != nil {
+		_ = cmd.Process.Kill()
+		t.Fatalf("native mosquitto never accepted: %v (%s)", err, buf.String())
+	}
+	time.Sleep(300 * time.Millisecond)
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_, _ = cmd.Process.Wait()
+	})
+	return &mosquittoServer{name: "native-mosquitto", port: port}, true
 }
 
 func waitForPort(port int, timeout time.Duration) error {

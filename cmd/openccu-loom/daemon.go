@@ -156,6 +156,26 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		mqttSup.OnConnect(func(ctx context.Context) {
 			hubMQTT.Start(ctx)
 		})
+
+		// Re-publish the full raw-plane snapshot (per-device availability
+		// + every DP's slot state) on every broker (re)connect. The boot
+		// path also calls PublishInitialSnapshot directly after CCU
+		// hydration (see wireSouthbound), but that call races the MQTT
+		// connection: when the initial broker connect is slow or fails and
+		// only succeeds later in the background reconnect loop, the
+		// post-hydration publishes hit a not-yet-connected client and are
+		// dropped. Without this hook the availability + slot-state topics
+		// the HA-Discovery payloads reference (availability_mode: all) are
+		// never (re)published until a live CCU value change trickles in, so
+		// HA renders every entity `unavailable`. AnnounceOnline +
+		// RepublishDiscovery already run on connect (see daemon_north.go);
+		// this restores the raw plane they depend on, and also recovers it
+		// after a broker restart drops its retained store. Snapshot is
+		// idempotent (retained topics, same payload) and a no-op before
+		// hydration has populated the model.
+		mqttSup.OnConnect(func(ctx context.Context) {
+			bridge.PublishInitialSnapshot(ctx)
+		})
 	}
 
 	// --- XML-RPC callback server -------------------------------

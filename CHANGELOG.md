@@ -59,6 +59,47 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **MQTT Discovery topics are scoped to the device's own CCU (multi-CCU).**
+  The HA-Discovery builder stamped the bridge's single configured central
+  name (the first CCU) into every device's `state_topic`,
+  `availability`, command and `json_attributes` topics, while the publish
+  path used the device's *actual* central. On a multi-CCU daemon this
+  routed every non-first-CCU device's discovery to a topic segment that
+  never received data (e.g. `…/FirstCCU/SecondCCU-HmIP-RF/…` instead of
+  `…/SecondCCU/SecondCCU-HmIP-RF/…`), so Home Assistant marked all of
+  those entities `unavailable`. Discovery now derives the topic central
+  from the event (the CCU the device lives on), falling back to the
+  builder default only for hub-level payloads with no device context.
+
+- **MQTT entities no longer show as `unavailable` in Home Assistant.**
+  Availability now tracks device *reachability* (`UNREACH` /
+  `STICKY_UNREACH` via `Device.Available()`) rather than "has a value
+  been observed yet". A reachable device is published `online` at boot
+  even before its data points report, and every registered data point —
+  including not-yet-observed ones — publishes an explicit
+  `{"value":null,"available":true}` slot state instead of an empty
+  eviction payload. Under the discovery payload's
+  `availability_mode: all` this is what kept entities stuck on
+  `unavailable`. The HA value templates gained a `value_json.value is
+  not none` guard so an unobserved data point renders as `unknown`
+  rather than the literal `"None"` (or a misleading multiplied `0.0`).
+
+- **MQTT raw-plane snapshot is republished on every broker reconnect.**
+  The boot-time `PublishInitialSnapshot` (per-device availability + every
+  data point's slot state) only ran once, after CCU hydration — and that
+  publish raced the MQTT connection. When the broker reset or the initial
+  connect completed only after hydration (observed live: a
+  `connection reset by peer` landing exactly as a multi-central
+  hydration finished), the whole snapshot hit a not-yet-connected client
+  and was dropped. `OnConnect` re-announced `bridge/status` and
+  re-published the HA-Discovery configs but **not** the raw plane those
+  configs reference, so the availability + slot-state topics were never
+  restored until a live CCU value change trickled in. Combined with the
+  sensors' `expire_after: 3600`, HA then expired the entities to
+  `unavailable`. The snapshot now runs on every broker (re)connect
+  (alongside the existing `AnnounceOnline` / `RepublishDiscovery` hooks),
+  so the raw plane is restored after any disconnect or broker restart.
+
 - **Model-snapshot drift gate honours its documented overrides.**
   `script/model_snapshot_drift_check.py` derived its env-override keys
   via a fragile string transform that did not match the documented

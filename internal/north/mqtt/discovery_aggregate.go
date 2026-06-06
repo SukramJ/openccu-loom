@@ -79,8 +79,8 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 	}
 	objectID = d.channelObjectID(ev, "event")
 	uniqueID := d.channelUniqueID(ev, "event")
-	nodeID = discoveryNodeID(d.Central, ev.DeviceAddress)
-	stateTopic := d.TopicBuilder.ChannelEvent(d.Central, ev.Interface, ev.DeviceAddress, ev.ChannelNo)
+	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
+	stateTopic := d.TopicBuilder.ChannelEvent(d.centralFor(ev), ev.Interface, ev.DeviceAddress, ev.ChannelNo)
 	// Press-event entity name prefers the CCU-operator-assigned
 	// channel name ("Taster Wohnzimmer oben links") when present,
 	// falling back to `ch<N>` when the channel has no operator name.
@@ -152,7 +152,7 @@ func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID,
 	}
 	objectID = d.channelObjectID(ev, comp)
 	uniqueID := d.channelUniqueID(ev, comp)
-	nodeID = discoveryNodeID(d.Central, ev.DeviceAddress)
+	nodeID = discoveryNodeID(d.centralFor(ev), ev.DeviceAddress)
 	base := d.channelBaseBody(ev, displayChannelName(ev), uniqueID)
 	maps.Copy(body, base)
 	// Strict variant: when neither a rule nor a category-default matches, every
@@ -212,7 +212,7 @@ func (c discoveryCtx) CustomDPStateTopic() string {
 	if !ok {
 		return ""
 	}
-	return c.d.TopicBuilder.SlotState(c.d.Central, c.ev.Interface, slot)
+	return c.d.TopicBuilder.SlotState(c.d.centralFor(c.ev), c.ev.Interface, slot)
 }
 
 // customDPSlotForEvent extracts the [payload.TopicSlot] declared by
@@ -253,11 +253,11 @@ func (c discoveryCtx) ServiceMethodCommandTopic(method string) string {
 	if !ok {
 		return ""
 	}
-	return c.d.TopicBuilder.CustomDPServiceMethod(c.d.Central, c.ev.Interface, slot, method)
+	return c.d.TopicBuilder.CustomDPServiceMethod(c.d.centralFor(c.ev), c.ev.Interface, slot, method)
 }
 
 func (c discoveryCtx) WireParameterCommandTopic(parameter string) string {
-	return c.d.TopicBuilder.DataPointCommand(c.d.Central, c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo, parameter)
+	return c.d.TopicBuilder.DataPointCommand(c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo, parameter)
 }
 
 func (c discoveryCtx) WireParameterStateTopic(parameter string) string {
@@ -268,7 +268,7 @@ func (c discoveryCtx) WireParameterStateTopic(parameter string) string {
 	// "modified_at": ..., "type": ..., "unit": ...}` via
 	// `value_template "{{ value_json.value }}"`.
 	return c.d.TopicBuilder.ParameterState(
-		c.d.Central, c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo,
+		c.d.centralFor(c.ev), c.ev.Interface, c.ev.DeviceAddress, c.ev.ChannelNo,
 		string(payload.BucketValues), parameter,
 	)
 }
@@ -320,7 +320,7 @@ func (d *DefaultDiscoveryBuilder) channelBaseBody(ev Event, name, uniqueID strin
 			"payload_not_available": "offline",
 		},
 		{
-			"topic":                 d.TopicBuilder.DeviceAvailability(d.Central, ev.Interface, ev.DeviceAddress),
+			"topic":                 d.TopicBuilder.DeviceAvailability(d.centralFor(ev), ev.Interface, ev.DeviceAddress),
 			"payload_available":     "online",
 			"payload_not_available": "offline",
 		},
