@@ -1,7 +1,8 @@
 # ADR 0026 — MCP dev-mode: build-tag-gated introspection surface
 
-- **Status**: accepted
+- **Status**: deferred
 - **Date**: 2026-06-04
+- **Deferred**: 2026-06-06
 - **Related**:
   [ADR 0025 — MCP north-bound adapter](./0025-mcp-northbound-adapter.md),
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),
@@ -10,6 +11,29 @@
   `internal/observability/`,
   `tests/integration/` (godevccu),
   `CLAUDE.md` §Critical Rules (live-CCU writes)
+
+## Status note
+
+**Deferred (2026-06-06) — full adapter not built.** Most of the proposed
+tool surface overlaps tooling an agent can already drive: the diagnostics
+REST endpoints (`diagnostics_*`, `metrics`), `hmcli`, `go test` /
+`tests/integration` (godevccu + golden replay), stdlib
+`net/http/pprof`, and direct read-only SQLite. Only `eventbus_tap` and
+`reliability_state` exposed internals that had no surface at all.
+
+Building the full tag-gated MCP adapter + a second build target + a CI
+lane up front is perpetual maintenance against churning internals for an
+audience of one (the developer's agent), so it is deferred. The two
+pieces that genuinely lacked any surface — a reliability snapshot and an
+event-bus tap — were instead shipped as **production** diagnostics REST
+endpoints behind the existing admin auth chain
+(`GET /diagnostics/reliability`, `GET /diagnostics/eventbus/tap`),
+consistent with the `diagnostics_*` family, rather than as a dev-only
+adapter: they are read-only, useful to operators, and need no separate
+build target. The full MCP dev-mode adapter — specifically its
+write / fault-injection tooling (`godevccu_control`, `golden_replay`,
+forced reconnects) — remains deferred; the build-tag isolation design
+below is the record for *how* to isolate that if it is ever built.
 
 ## Context
 
