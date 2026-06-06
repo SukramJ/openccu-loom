@@ -5,7 +5,9 @@ package configstore
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -69,13 +71,9 @@ func TransformSectionJSON(c *secret.Cipher, sec Section, raw []byte, seal bool) 
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return raw, nil //nolint:nilerr // non-object/foreign payloads pass through untouched
 	}
-	fn := c.Open
-	if seal {
-		fn = c.Seal
-	}
 	changed := false
 	for _, p := range paths {
-		if err := applyAtPath(m, p, fn, &changed); err != nil {
+		if err := applyAtPath(m, p, c, seal, &changed); err != nil {
 			return nil, err
 		}
 	}
@@ -85,18 +83,28 @@ func TransformSectionJSON(c *secret.Cipher, sec Section, raw []byte, seal bool) 
 	return json.Marshal(m)
 }
 
+// pathKind classifies the JSON value type at a secret leaf so the
+// transform round-trips it correctly.
+type pathKind int
+
+const (
+	kindString pathKind = iota // a string leaf
+	kindMap                    // a map[string]string whose values are secrets
+	kindNumber                 // an integer leaf, sealed as its decimal string
+)
+
 // secretPath locates one secret-tagged leaf within a section's JSON,
-// addressed by its JSON keys. isMap marks a map[string]string field whose
-// values (not the map itself) are the secrets.
+// addressed by its JSON keys.
 type secretPath struct {
-	keys  []string
-	isMap bool
+	keys []string
+	kind pathKind
 }
 
 // secretPaths reflects over the section struct behind target and returns
-// the JSON paths of every cfg:"secret" string field and map[string]string
-// field. Non-string secret fields (e.g. a uint32 passcode) are skipped —
-// see ADR 0027.
+// the JSON paths of every cfg:"secret" leaf that can be encrypted: string
+// fields, map[string]string fields, and integer fields. Integer secrets
+// (e.g. the Matter commissioning passcode) are sealed as their decimal
+// string and decoded back to a number on open — see ADR 0027.
 func secretPaths(target any) []secretPath {
 	rt := reflect.TypeOf(target)
 	for rt.Kind() == reflect.Pointer {
@@ -133,26 +141,37 @@ func collectSecretPaths(rt reflect.Type, prefix []string, inSecret bool, out *[]
 		for ft.Kind() == reflect.Pointer {
 			ft = ft.Elem()
 		}
-		switch ft.Kind() {
-		case reflect.Struct:
+		switch {
+		case ft.Kind() == reflect.Struct:
 			collectSecretPaths(ft, path, fieldSecret, out)
-		case reflect.String:
-			if fieldSecret {
-				*out = append(*out, secretPath{keys: path})
-			}
-		case reflect.Map:
-			if fieldSecret && ft.Key().Kind() == reflect.String && ft.Elem().Kind() == reflect.String {
-				*out = append(*out, secretPath{keys: path, isMap: true})
-			}
-		default:
+		case !fieldSecret:
+			// non-secret leaf — nothing to collect
+		case ft.Kind() == reflect.String:
+			*out = append(*out, secretPath{keys: path, kind: kindString})
+		case ft.Kind() == reflect.Map && ft.Key().Kind() == reflect.String && ft.Elem().Kind() == reflect.String:
+			*out = append(*out, secretPath{keys: path, kind: kindMap})
+		case isIntegerKind(ft.Kind()):
+			*out = append(*out, secretPath{keys: path, kind: kindNumber})
 		}
 	}
 }
 
-// applyAtPath walks m to the secret leaf addressed by p and rewrites it
-// through fn. A path that is absent in m is silently skipped. changed is
-// set to true only when a value is actually rewritten.
-func applyAtPath(m map[string]any, p secretPath, fn func(string) (string, error), changed *bool) error {
+func isIntegerKind(k reflect.Kind) bool {
+	switch k {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return true
+	default:
+		return false
+	}
+}
+
+// applyAtPath walks m to the secret leaf addressed by p and seals/opens it.
+// A path that is absent is silently skipped. changed is set only when a
+// value is actually rewritten, so an unchanged value never alters the JSON
+// — including its type, which matters for numeric leaves (a number stays a
+// number until it is actually sealed into a string).
+func applyAtPath(m map[string]any, p secretPath, c *secret.Cipher, seal bool, changed *bool) error {
 	cur := m
 	for _, k := range p.keys[:len(p.keys)-1] {
 		next, ok := cur[k].(map[string]any)
@@ -167,7 +186,21 @@ func applyAtPath(m map[string]any, p secretPath, fn func(string) (string, error)
 		return nil
 	}
 
-	if p.isMap {
+	switch p.kind {
+	case kindString:
+		s, ok := v.(string)
+		if !ok {
+			return nil
+		}
+		out, err := transform(c, seal, s)
+		if err != nil {
+			return err
+		}
+		if out != s {
+			cur[last] = out
+			*changed = true
+		}
+	case kindMap:
 		mm, ok := v.(map[string]any)
 		if !ok {
 			return nil
@@ -177,7 +210,7 @@ func applyAtPath(m map[string]any, p secretPath, fn func(string) (string, error)
 			if !ok {
 				continue
 			}
-			out, err := fn(s)
+			out, err := transform(c, seal, s)
 			if err != nil {
 				return err
 			}
@@ -186,20 +219,57 @@ func applyAtPath(m map[string]any, p secretPath, fn func(string) (string, error)
 				*changed = true
 			}
 		}
-		return nil
+	case kindNumber:
+		return applyNumber(cur, last, v, c, seal, changed)
 	}
+	return nil
+}
 
-	s, ok := v.(string)
-	if !ok {
+// applyNumber handles an integer secret leaf. On seal the JSON number is
+// formatted to its decimal string and encrypted (the leaf becomes a
+// string); on open the sealed string is decrypted and parsed back to a
+// number. A value already in the target representation is left untouched.
+func applyNumber(cur map[string]any, key string, v any, c *secret.Cipher, seal bool, changed *bool) error {
+	if seal {
+		n, ok := v.(float64)
+		if !ok { // already a sealed string (or absent) — nothing to seal
+			return nil
+		}
+		s := strconv.FormatInt(int64(n), 10)
+		out, err := c.Seal(s)
+		if err != nil {
+			return err
+		}
+		if out != s {
+			cur[key] = out
+			*changed = true
+		}
 		return nil
 	}
-	out, err := fn(s)
+	s, ok := v.(string)
+	if !ok { // plaintext number — nothing to open
+		return nil
+	}
+	out, err := c.Open(s)
 	if err != nil {
 		return err
 	}
-	if out != s {
-		cur[last] = out
-		*changed = true
+	if out == s { // not sealed — leave as-is
+		return nil
 	}
+	n, perr := strconv.ParseInt(out, 10, 64)
+	if perr != nil {
+		return fmt.Errorf("configstore: decoded numeric secret %q: %w", key, perr)
+	}
+	cur[key] = float64(n)
+	*changed = true
 	return nil
+}
+
+// transform applies the cipher in the requested direction.
+func transform(c *secret.Cipher, seal bool, s string) (string, error) {
+	if seal {
+		return c.Seal(s)
+	}
+	return c.Open(s)
 }

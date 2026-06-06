@@ -71,18 +71,24 @@ hardening layer, not a boot dependency.
 
 ### Scope of encrypted fields
 
-All `cfg:"secret"` **string** and **`map[string]string`-value** leaf
-fields, discovered by reflection over the `cfg` tag (the same
-convention `internal/config/classify.go` already walks) — so new secret
-fields are covered automatically. Empty values are left empty (never
-encrypted), so env-only secrets stay absent from the DB and continue to
-resolve from their env var at load time. The `centrals.password_plain`
-column is sealed the same way.
+All `cfg:"secret"` leaf fields, discovered by reflection over the `cfg`
+tag (the same convention `internal/config/classify.go` already walks) —
+so new secret fields are covered automatically:
 
-**Out of scope (v1):** non-string secret fields — currently only the
-Matter commissioning `passcode` (`uint32`) — cannot hold a ciphertext
-string without a field-type change; they remain stored as-is. A future
-revision may widen the scheme.
+- **string** fields and **`map[string]string`** values are sealed
+  directly.
+- **integer** fields (e.g. the Matter commissioning `passcode`, a
+  `uint32`) are sealed as their decimal-string form: the JSON leaf
+  becomes an `enc:v1:` string on write and is decoded back to a number on
+  read. The non-destructive transform only changes the leaf's type when it
+  is actually encrypted, so an unsealed value (no key) stays a number.
+
+Empty values are left empty (never encrypted), so env-only secrets stay
+absent from the DB and continue to resolve from their env var at load
+time. The `centrals.password_plain` column is sealed the same way.
+
+**Out of scope:** non-integer numeric secrets (floats) — none exist in
+the config tree today; they are skipped rather than truncated.
 
 ### Integration
 

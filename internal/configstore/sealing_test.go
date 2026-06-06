@@ -77,6 +77,56 @@ func TestTransformSectionJSONMQTTRoundTrip(t *testing.T) {
 	}
 }
 
+// TestTransformSectionJSONMatterPasscodeRoundTrip verifies that an integer
+// secret (the Matter commissioning passcode) is sealed as a string and
+// decoded back to a number, while non-secret siblings (string and number)
+// are preserved.
+func TestTransformSectionJSONMatterPasscodeRoundTrip(t *testing.T) {
+	t.Parallel()
+	c := loadTestCipher(t)
+
+	raw := []byte(`{"node_label":"bridge","commissioning":{"passcode":20202021,"iterations":2000}}`)
+
+	sealed, err := TransformSectionJSON(c, SectionMatter, raw, true)
+	if err != nil {
+		t.Fatalf("TransformSectionJSON seal: %v", err)
+	}
+	if strings.Contains(string(sealed), "20202021") {
+		t.Errorf("sealed payload exposes passcode: %s", sealed)
+	}
+	if !strings.Contains(string(sealed), "enc:v1:") {
+		t.Errorf("sealed payload missing enc:v1: marker: %s", sealed)
+	}
+	// Non-secret siblings must survive untouched.
+	if !strings.Contains(string(sealed), "bridge") || !strings.Contains(string(sealed), "2000") {
+		t.Errorf("sealed payload lost a non-secret field: %s", sealed)
+	}
+
+	opened, err := TransformSectionJSON(c, SectionMatter, sealed, false)
+	if err != nil {
+		t.Fatalf("TransformSectionJSON open: %v", err)
+	}
+	var got struct {
+		NodeLabel     string `json:"node_label"`
+		Commissioning struct {
+			Passcode   uint32 `json:"passcode"`
+			Iterations int    `json:"iterations"`
+		} `json:"commissioning"`
+	}
+	if err := json.Unmarshal(opened, &got); err != nil {
+		t.Fatalf("unmarshal opened: %v", err)
+	}
+	if got.Commissioning.Passcode != 20202021 {
+		t.Errorf("passcode after open: %d want 20202021", got.Commissioning.Passcode)
+	}
+	if got.Commissioning.Iterations != 2000 {
+		t.Errorf("iterations after open: %d want 2000", got.Commissioning.Iterations)
+	}
+	if got.NodeLabel != "bridge" {
+		t.Errorf("node_label after open: %q want bridge", got.NodeLabel)
+	}
+}
+
 // TestTransformSectionJSONNoTargetPassthrough verifies that sections with no
 // struct target (SectionLocale, SectionSecurity) are returned byte-for-byte
 // unchanged on both seal and open.
