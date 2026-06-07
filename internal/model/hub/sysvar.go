@@ -457,11 +457,13 @@ func (s *Sysvar) resolveListIndex(v hmtypes.ParamValue) (int, bool) {
 			return v.Int, true
 		}
 	case hmtypes.ValueKindFloat:
-		// Reject values outside the int range before narrowing so a large
-		// float cannot overflow the conversion (same bound the analyser
-		// recognises in hmtypes.NewParamValue). The list-range check below
-		// then validates the resulting index.
-		if v.Float < 0 || v.Float > float64(math.MaxInt) {
+		// Bound to the int32 range before narrowing: int32's limits are
+		// exactly representable as float64 and safely inside the platform
+		// int range, so int(v.Float) cannot overflow (float64(math.MaxInt)
+		// rounds up to 2^63 and would leave the conversion unsound). A
+		// list index never approaches int32; the range check below
+		// validates the resulting index.
+		if v.Float < 0 || v.Float > math.MaxInt32 {
 			return 0, false
 		}
 		idx := int(v.Float)

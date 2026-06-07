@@ -105,10 +105,14 @@ func NewParamValue(v any) (ParamValue, error) {
 		return FloatValue(float64(x)), nil
 	case float64:
 		// Collapse integer-valued floats ("5" in JSON) back to int so
-		// sysvars keyed as INTEGER don't round-trip as a float. Bound the
-		// value to the int range before converting so a large float can't
-		// overflow the conversion.
-		if x == math.Trunc(x) && x >= float64(math.MinInt) && x <= float64(math.MaxInt) {
+		// sysvars keyed as INTEGER don't round-trip as a float. Bound to
+		// the int32 range before narrowing: int32's limits are exactly
+		// representable as float64 and lie safely inside the platform int
+		// range, so int(x) cannot overflow (unlike float64(math.MaxInt),
+		// which rounds up to 2^63 and leaves the conversion unsound). CCU
+		// integer values are well within int32; larger integer-valued
+		// floats keep their float representation.
+		if x == math.Trunc(x) && x >= math.MinInt32 && x <= math.MaxInt32 {
 			return IntValue(int(x)), nil
 		}
 		return FloatValue(x), nil
