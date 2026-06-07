@@ -3592,6 +3592,12 @@ components:
         address: { type: string }
         interface: { type: string }
         interface_id: { type: string }
+        ise_id:
+          type: integer
+          description: |
+            CCU-internal numeric device id. Lets clients that address
+            devices by ISE_ID (e.g. the HA rename-by-ise_id path) map back
+            to the device address. Absent when the backend reports none.
         model: { type: string }
         sub_model: { type: string }
         name: { type: string }
@@ -3642,7 +3648,24 @@ components:
       properties:
         address: { type: string }
         number: { type: integer }
+        type:
+          type: string
+          description: OCCU channel-type string (e.g. ENERGIE_METER_TRANSMITTER).
+        type_label:
+          type: string
+          description: |
+            Localised, human-readable channel-type label resolved through
+            the OCCU channel_types table. Empty when no translation exists;
+            consumers fall back to the raw `type`.
         paramset_key: { type: string }
+        paramset_keys:
+          type: array
+          items: { type: string }
+          description: |
+            Paramsets this channel actually exposes — "VALUES" when it has
+            value data points and "MASTER" when it has master (config) data
+            points. The config-panel / HA drop-in uses this to offer the
+            right paramset tabs.
         data_points_count: { type: integer }
         custom_dp_name:
           type: string

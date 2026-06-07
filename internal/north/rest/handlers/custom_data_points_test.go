@@ -306,11 +306,15 @@ func TestSupportedOperationsFor_Light(t *testing.T) {
 	}
 }
 
-func TestSupportedOperationsFor_Unknown_ReturnsNil(t *testing.T) {
+func TestSupportedOperationsFor_Unknown_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	ops := supportedOperationsFor(hmenum.DataPointCategoryUndefined)
-	if ops != nil {
-		t.Fatalf("expected nil for undefined category, got %v", ops)
+	// Must be non-nil so the required wire array never serialises as null.
+	if ops == nil {
+		t.Fatal("expected non-nil empty slice for undefined category, got nil")
+	}
+	if len(ops) != 0 {
+		t.Fatalf("expected empty slice for undefined category, got %v", ops)
 	}
 }
 
@@ -342,9 +346,11 @@ func TestSupportedOperationsFor_AllCategories(t *testing.T) {
 	checkCat("TextDisplay", supportedOperationsFor(hmenum.DataPointCategoryTextDisplay))
 	checkCat("Valve", supportedOperationsFor(hmenum.DataPointCategoryValve))
 	checkCat("Switch", supportedOperationsFor(hmenum.DataPointCategorySwitch))
-	// Default case returns nil — that's fine.
-	if got := supportedOperationsFor(hmenum.DataPointCategoryBinarySensor); got != nil {
-		t.Errorf("default case: expected nil, got %v", got)
+	// Default case returns a non-nil empty slice (the wire array is required).
+	if got := supportedOperationsFor(hmenum.DataPointCategoryBinarySensor); got == nil {
+		t.Error("default case: expected non-nil empty slice, got nil")
+	} else if len(got) != 0 {
+		t.Errorf("default case: expected empty slice, got %v", got)
 	}
 }
 
