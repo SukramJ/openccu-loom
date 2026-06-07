@@ -52,10 +52,15 @@ type DataPointWriter interface {
 
 // DeviceSummary is one entry in `GET /api/v1/devices`.
 type DeviceSummary struct {
-	Address       string `json:"address"`
-	Central       string `json:"central,omitempty"`
-	Interface     string `json:"interface"`
-	InterfaceID   string `json:"interface_id"`
+	Address     string `json:"address"`
+	Central     string `json:"central,omitempty"`
+	Interface   string `json:"interface"`
+	InterfaceID string `json:"interface_id"`
+	// IseID is the CCU-internal numeric device id. External clients that
+	// address devices by ISE_ID (e.g. the HA rename-by-ise_id path) need
+	// it to map back to the device address. 0 when the CCU did not report
+	// one (e.g. non-CCU backends).
+	IseID         int    `json:"ise_id,omitempty"`
 	Model         string `json:"model"`
 	ModelLabel    string `json:"model_label,omitempty"`
 	ModelIcon     string `json:"model_icon,omitempty"`
@@ -113,7 +118,12 @@ type ChannelSummary struct {
 	TypeLabel   string `json:"type_label,omitempty"`
 	Name        string `json:"name,omitempty"`
 	ParamsetKey string `json:"paramset_key"`
-	DataPoints  int    `json:"data_points_count"`
+	// ParamsetKeys lists the paramsets this channel actually exposes —
+	// "VALUES" when it has value data points and "MASTER" when it has
+	// master (config) data points. The config-panel / HA drop-in uses
+	// this to offer the right paramset tabs without probing each key.
+	ParamsetKeys []string `json:"paramset_keys,omitempty"`
+	DataPoints   int      `json:"data_points_count"`
 	// Category is the OCCU channel-type string (same as Type), exposed
 	// under its own `category` key so consumers can route on channel
 	// purpose without parsing the Type string.
@@ -481,16 +491,28 @@ func GetChannel(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	}
 }
 
+func channelParamsetKeys(ch *device.Channel) []string {
+	keys := make([]string, 0, 2)
+	if ch.Len() > 0 {
+		keys = append(keys, string(hmenum.ParamsetKeyValues))
+	}
+	if ch.MasterLen() > 0 {
+		keys = append(keys, string(hmenum.ParamsetKeyMaster))
+	}
+	return keys
+}
+
 func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummary {
 	s := ChannelSummary{
-		Address:     ch.Address,
-		Number:      ch.Number,
-		Type:        ch.Type,
-		TypeLabel:   channelTypeLabel(labels, ch.Type),
-		Category:    ch.Type,
-		Name:        ch.Name,
-		ParamsetKey: string(ch.ParamsetIn),
-		DataPoints:  ch.Len(),
+		Address:      ch.Address,
+		Number:       ch.Number,
+		Type:         ch.Type,
+		TypeLabel:    channelTypeLabel(labels, ch.Type),
+		Category:     ch.Type,
+		Name:         ch.Name,
+		ParamsetKey:  string(ch.ParamsetIn),
+		ParamsetKeys: channelParamsetKeys(ch),
+		DataPoints:   ch.Len(),
 	}
 	if cdp := ch.CustomDataPoint(); cdp != nil {
 		s.CustomDpName = cdp.DataPointKey().Parameter
@@ -653,6 +675,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		Central:                   centralName,
 		Interface:                 string(d.Interface),
 		InterfaceID:               d.InterfaceID,
+		IseID:                     d.IseID,
 		Model:                     d.Model,
 		ModelLabel:                d.ModelLabel,
 		ModelIcon:                 d.ModelIcon,

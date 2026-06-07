@@ -118,7 +118,7 @@ func customDPName(dp device.AttachableDataPoint) string {
 // supportedOperationsFor returns the list of valid operation strings for
 // the given data-point category. Mirrors the per-category dispatch tables
 // in the custom_dispatch_*.go files.
-func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:exhaustive // non-custom categories return nil deliberately
+func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:exhaustive // non-custom categories return an empty list
 	switch cat {
 	case hmenum.DataPointCategoryLight:
 		return []string{"turn_on", "turn_off", "set_brightness", "set_color", "set_color_temperature", "set_effect"}
@@ -137,7 +137,9 @@ func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:ex
 	case hmenum.DataPointCategorySwitch:
 		return []string{"turn_on", "turn_off", "turn_on_for", "toggle"}
 	default:
-		return nil
+		// Never nil: the wire schema declares supported_operations as a
+		// required array, and clients (the HA drop-in) reject a null.
+		return []string{}
 	}
 }
 
