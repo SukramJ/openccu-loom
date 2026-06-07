@@ -3648,6 +3648,15 @@ components:
       properties:
         address: { type: string }
         number: { type: integer }
+        name:
+          type: string
+          description: User-defined channel name. Empty when none is set.
+        category:
+          type: string
+          description: |
+            OCCU channel-type string (same value as `type`), exposed under
+            its own key so consumers can route on channel purpose without
+            parsing the `type` string.
         type:
           type: string
           description: OCCU channel-type string (e.g. ENERGIE_METER_TRANSMITTER).
