@@ -43,6 +43,23 @@ func RequestID(next http.Handler) http.Handler {
 	})
 }
 
+// SecurityHeaders stamps baseline security response headers on every
+// request. `X-Content-Type-Options: nosniff` is the key one: it stops
+// browsers from MIME-sniffing a JSON/text response as HTML, which is the
+// standard mitigation against reflected-XSS in a JSON API (any
+// user-provided value that ends up echoed in a response body can no
+// longer be coerced into executing as markup). The header is cheap and
+// applies uniformly through the logging/idempotency response wrappers.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		if h.Get("X-Content-Type-Options") == "" {
+			h.Set("X-Content-Type-Options", "nosniff")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RequestIDFrom extracts the current request ID, returning "" when
 // no middleware attached one.
 func RequestIDFrom(ctx context.Context) string {

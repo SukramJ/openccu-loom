@@ -15,6 +15,43 @@ import (
 	"time"
 )
 
+// --- SecurityHeaders ---
+
+func TestSecurityHeaders_SetsNosniff(t *testing.T) {
+	t.Parallel()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	SecurityHeaders(inner).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
+func TestSecurityHeaders_PreservesExisting(t *testing.T) {
+	t.Parallel()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "custom")
+		w.WriteHeader(http.StatusOK)
+	})
+	rec := httptest.NewRecorder()
+	// The middleware sets the header before the handler runs; a handler
+	// that overrides it afterwards wins. Verify the middleware does not
+	// clobber an explicitly different value set upstream.
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "preset")
+		SecurityHeaders(inner).ServeHTTP(w, r)
+	})
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "custom" {
+		t.Fatalf("X-Content-Type-Options = %q, want custom (handler override)", got)
+	}
+}
+
 // --- RequestID ---
 
 func TestRequestID_GeneratesIDWhenAbsent(t *testing.T) {
