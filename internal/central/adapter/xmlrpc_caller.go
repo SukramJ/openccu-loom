@@ -6,9 +6,25 @@ package adapter
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 )
+
+// toXMLRPCInt32 narrows a Go integer to the int32 range XML-RPC `<i4>`
+// can carry, clamping out-of-range inputs to the type bounds rather than
+// silently wrapping. CCU parameters are well within int32; the clamp is
+// a defensive guard against an overflowing conversion.
+func toXMLRPCInt32(n int64) int32 {
+	switch {
+	case n > math.MaxInt32:
+		return math.MaxInt32
+	case n < math.MinInt32:
+		return math.MinInt32
+	default:
+		return int32(n)
+	}
+}
 
 // xmlrpcCaller bridges the XML-RPC transport client to the
 // [backends.Caller] interface expected by the backend factory. It
@@ -46,11 +62,11 @@ func goToXMLRPCValue(v any) (xmlrpc.Value, error) {
 	case string:
 		return xmlrpc.StringValue(x), nil
 	case int:
-		return xmlrpc.IntValue(x), nil //nolint:gosec // bounded by CCU API
+		return xmlrpc.IntValue(toXMLRPCInt32(int64(x))), nil
 	case int32:
 		return xmlrpc.IntValue(x), nil
 	case int64:
-		return xmlrpc.IntValue(x), nil //nolint:gosec // bounded by CCU API
+		return xmlrpc.IntValue(toXMLRPCInt32(x)), nil
 	case bool:
 		return xmlrpc.BoolValue(x), nil
 	case float64:

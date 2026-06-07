@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -201,7 +202,15 @@ func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum
 	if v > l.MaxKelvin {
 		v = l.MaxKelvin
 	}
-	kelvinU16 := uint16(v) //nolint:gosec // clamped to [MinKelvin, MaxKelvin] which fit uint16
+	// Bound to the uint16 range so the narrowing is provably safe even if
+	// MinKelvin/MaxKelvin were ever misconfigured outside [0, 65535].
+	if v < 0 {
+		v = 0
+	}
+	if v > math.MaxUint16 {
+		v = math.MaxUint16
+	}
+	kelvinU16 := uint16(v)
 	if !l.IsStateChangeFull(StateChangeArgsFull{ColorTempKelvin: &kelvinU16}) {
 		return nil
 	}

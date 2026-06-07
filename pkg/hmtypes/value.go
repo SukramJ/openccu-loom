@@ -5,6 +5,7 @@ package hmtypes
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -94,13 +95,20 @@ func NewParamValue(v any) (ParamValue, error) {
 	case int32:
 		return IntValue(int(x)), nil
 	case int64:
+		// Preserve values that exceed the platform int range (relevant on
+		// 32-bit builds such as armv7) as a float rather than wrapping.
+		if x > math.MaxInt || x < math.MinInt {
+			return FloatValue(float64(x)), nil
+		}
 		return IntValue(int(x)), nil
 	case float32:
 		return FloatValue(float64(x)), nil
 	case float64:
 		// Collapse integer-valued floats ("5" in JSON) back to int so
-		// sysvars keyed as INTEGER don't round-trip as a float.
-		if x == float64(int(x)) {
+		// sysvars keyed as INTEGER don't round-trip as a float. Bound the
+		// value to the int range before converting so a large float can't
+		// overflow the conversion.
+		if x == math.Trunc(x) && x >= float64(math.MinInt) && x <= float64(math.MaxInt) {
 			return IntValue(int(x)), nil
 		}
 		return FloatValue(x), nil

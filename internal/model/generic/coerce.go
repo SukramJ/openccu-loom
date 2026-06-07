@@ -4,6 +4,7 @@
 package generic
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -28,12 +29,12 @@ func coerceWire[T any](v any) (T, bool) {
 			return any(b).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
 		}
 	case int32:
-		if n, ok := toInt64(v); ok {
-			return any(int32(n)).(T), true //nolint:errcheck,forcetypeassert,gosec // range-narrowing is tolerated for wire seeding
+		if n, ok := toInt64(v); ok && n >= math.MinInt32 && n <= math.MaxInt32 {
+			return any(int32(n)).(T), true //nolint:errcheck,forcetypeassert // bounds-checked above
 		}
 	case int:
-		if n, ok := toInt64(v); ok {
-			return any(int(n)).(T), true //nolint:errcheck,forcetypeassert // type switch guarantees
+		if n, ok := toInt64(v); ok && n >= math.MinInt && n <= math.MaxInt {
+			return any(int(n)).(T), true //nolint:errcheck,forcetypeassert // bounds-checked above
 		}
 	case int64:
 		if n, ok := toInt64(v); ok {

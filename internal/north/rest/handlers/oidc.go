@@ -181,8 +181,11 @@ func isSafeRelativeTarget(target string) bool {
 	if !strings.HasPrefix(target, "/") {
 		return false
 	}
-	if strings.HasPrefix(target, "//") {
-		return false // protocol-relative — points off-host
+	// Reject protocol-relative references. Browsers treat both `//host`
+	// and `/\host` (and `/\\host`) as absolute URLs pointing off-host,
+	// so the second character must not be a slash or backslash.
+	if len(target) > 1 && (target[1] == '/' || target[1] == '\\') {
+		return false
 	}
 	if strings.Contains(target, ":") {
 		return false // schemes embed a colon ("javascript:", "https:")

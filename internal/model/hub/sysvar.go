@@ -456,9 +456,10 @@ func (s *Sysvar) resolveListIndex(v hmtypes.ParamValue) (int, bool) {
 			return v.Int, true
 		}
 	case hmtypes.ValueKindFloat:
-		idx := int(v.Float)
-		if idx >= 0 && idx < len(s.ValueList) {
-			return idx, true
+		// Bound the float to the valid index range before converting so a
+		// large/NaN float cannot overflow the int conversion.
+		if v.Float >= 0 && v.Float < float64(len(s.ValueList)) {
+			return int(v.Float), true
 		}
 	case hmtypes.ValueKindString:
 		for i, label := range s.ValueList {
