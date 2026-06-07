@@ -40,9 +40,9 @@ func DecodeSetpointRaiseLower(payload []byte) (SetpointRaiseLowerRequest, error)
 	if err := walkContext(payload, ErrThermostatMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.Mode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.Mode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.Amount = int8(el.Int) //nolint:gosec // 8-bit signed per spec
+			req.Amount = int8(el.Int) //nolint:gosec // 8-bit signed per spec; see #20
 		}
 	}); err != nil {
 		return req, err

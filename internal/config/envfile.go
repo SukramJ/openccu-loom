@@ -40,7 +40,7 @@ func LoadEnvFile(path string) error {
 	if path == "" {
 		return nil
 	}
-	f, err := os.Open(path) //nolint:gosec // operator-supplied path
+	f, err := os.Open(path) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil

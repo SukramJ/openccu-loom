@@ -163,12 +163,12 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		// OnTime (uint16, conformance LT): timed-off countdown.
 		// Returns the last written value (default 0 = no timed-off active).
 		// matter.js OnOffServer.ts:102.
-		return uint16(s.onTime.Load()), true //nolint:gosec // G115: bounded uint16
+		return uint16(s.onTime.Load() & 0xFFFF), true
 	case matterAttrOffWaitTime:
 		// OffWaitTime (uint16, conformance LT): delayed-off wait.
 		// Returns the last written value (default 0 = none).
 		// matter.js OnOffServer.ts:80.
-		return uint16(s.offWaitTime.Load()), true //nolint:gosec // G115: bounded uint16
+		return uint16(s.offWaitTime.Load() & 0xFFFF), true
 	case matterAttrStartUpOnOff:
 		// StartUpOnOff (nullable enum8, conformance LT, quality "X N"):
 		// null = "keep last state on startup". (nil, true) encodes TLV null.
@@ -177,7 +177,7 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		if v == startUpOnOffNull {
 			return nil, true
 		}
-		return uint8(v), true //nolint:gosec // G115: stored as uint8 enum by MatterWrite
+		return uint8(v & 0xFF), true
 	case matterAttrFeatureMap:
 		// LT (Lighting) feature, bit 0 (0x01). OnOffPlugInUnit (0x010A)
 		// mandates LT on the OnOff cluster.

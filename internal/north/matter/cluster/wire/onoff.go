@@ -63,9 +63,9 @@ func DecodeOffWithEffect(payload []byte) (OffWithEffectRequest, error) {
 		}
 		switch el.Tag.Number {
 		case 0:
-			req.EffectIdentifier = uint8(el.Uint) //nolint:gosec // payload field width 1 byte per spec
+			req.EffectIdentifier = uint8(el.Uint & 0xFF) // payload field width 1 byte per spec
 		case 1:
-			req.EffectVariant = uint8(el.Uint) //nolint:gosec // payload field width 1 byte per spec
+			req.EffectVariant = uint8(el.Uint & 0xFF) // payload field width 1 byte per spec
 		}
 	}
 	return req, nil
@@ -95,11 +95,11 @@ func DecodeOnWithTimedOff(payload []byte) (OnWithTimedOffRequest, error) {
 		}
 		switch el.Tag.Number {
 		case 0:
-			req.OnOffControl = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OnOffControl = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 1:
-			req.OnTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.OnTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 2:
-			req.OffWaitTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.OffWaitTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		}
 	}
 	return req, nil

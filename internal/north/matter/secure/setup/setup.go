@@ -114,7 +114,7 @@ func QRCode(p Payload) (string, error) {
 	raw := make([]byte, 11)
 	tmp := new(big.Int).Set(bits)
 	for i := range 11 {
-		raw[i] = byte(new(big.Int).And(tmp, big.NewInt(0xFF)).Uint64()) //nolint:gosec // G115: AND with 0xFF guarantees value fits uint8
+		raw[i] = byte(new(big.Int).And(tmp, big.NewInt(0xFF)).Uint64() & 0xFF)
 		tmp.Rsh(tmp, 8)
 	}
 
@@ -192,7 +192,7 @@ func ManualCode(discriminator uint16, passcode uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return tenDigits + string(rune('0'+check)), nil //nolint:gosec // G115: check is a Verhoeff digit 0..9; '0'+check is 48..57, well within valid rune range
+	return tenDigits + string(rune('0'+check)), nil //nolint:gosec // G115: check is a Verhoeff digit 0..9; '0'+check is 48..57, well within valid rune range; see #20
 }
 
 // verhoeffTable_d, verhoeffTable_p, verhoeffTable_inv are the permutation,

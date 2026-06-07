@@ -532,7 +532,7 @@ func jsonrpcHTTPClient(cc config.CentralConfig) *http.Client {
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, //nolint:gosec // explicit opt-in via config
+				InsecureSkipVerify: true, //nolint:gosec // explicit opt-in via config; see #20
 			},
 		},
 	}

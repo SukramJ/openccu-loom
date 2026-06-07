@@ -92,9 +92,9 @@ func decodeACLEntry(dec *tlv.Decoder) (mattercore.AccessControlEntryStruct, erro
 		}
 		switch el.Tag.Number {
 		case 1:
-			e.Privilege = uint8(el.Uint) //nolint:gosec // enum8 per spec
+			e.Privilege = uint8(el.Uint & 0xFF)
 		case 2:
-			e.AuthMode = uint8(el.Uint) //nolint:gosec // enum8 per spec
+			e.AuthMode = uint8(el.Uint & 0xFF)
 		case 3:
 			if el.IsNull {
 				e.Subjects = nil
@@ -122,7 +122,7 @@ func decodeACLEntry(dec *tlv.Decoder) (mattercore.AccessControlEntryStruct, erro
 			}
 			e.Targets = tgts
 		case 254:
-			e.FabricIndex = uint8(el.Uint) //nolint:gosec // FabricIndex is uint8
+			e.FabricIndex = uint8(el.Uint & 0xFF)
 		default:
 			if el.IsContainer {
 				if err := skipContainerTLV(dec); err != nil {
@@ -184,17 +184,17 @@ func decodeACLTarget(dec *tlv.Decoder) (mattercore.ACLTargetStruct, error) {
 		switch el.Tag.Number {
 		case 0:
 			if !el.IsNull {
-				v := uint32(el.Uint) //nolint:gosec // ClusterID fits uint32 by spec
+				v := uint32(el.Uint & 0xFFFFFFFF)
 				t.Cluster = &v
 			}
 		case 1:
 			if !el.IsNull {
-				v := uint16(el.Uint) //nolint:gosec // EndpointID fits uint16 by spec
+				v := uint16(el.Uint & 0xFFFF)
 				t.Endpoint = &v
 			}
 		case 2:
 			if !el.IsNull {
-				v := uint32(el.Uint) //nolint:gosec // DeviceType fits uint32 by spec
+				v := uint32(el.Uint & 0xFFFFFFFF)
 				t.DeviceType = &v
 			}
 		}

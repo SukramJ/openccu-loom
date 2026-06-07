@@ -44,7 +44,7 @@ func matterEpochToTime(matterSecs uint64) time.Time {
 		// 5280 §4.1.2.5).
 		return time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
 	}
-	//nolint:gosec // matterSecs is uint64; sum cannot overflow int64 for any plausible input.
+	//nolint:gosec // matterSecs is uint64; sum cannot overflow int64 for any plausible input; see #20
 	return time.Unix(matterEpochUTCSeconds+int64(matterSecs), 0).UTC()
 }
 

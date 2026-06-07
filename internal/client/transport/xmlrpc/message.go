@@ -300,7 +300,7 @@ func encodeFault(e *xml.Encoder, f *hmerr.XMLRPCFault) error {
 		return err
 	}
 	payload := StructValue{Members: []Member{
-		{Name: "faultCode", Value: IntValue(int32(f.Code))}, //nolint:gosec // fault codes fit int32
+		{Name: "faultCode", Value: IntValue(int32(f.Code))}, //nolint:gosec // fault codes fit int32; see #20
 		{Name: "faultString", Value: StringValue(f.Message)},
 	}}
 	if err := payload.MarshalXML(e, valueEnvelope); err != nil {

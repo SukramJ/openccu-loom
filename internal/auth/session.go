@@ -102,7 +102,7 @@ func SessionMiddleware(store *SessionStore) func(http.Handler) http.Handler {
 // flag that the daemon sets based on TLS termination — gosec's static
 // analyser cannot prove the value, so the linter is suppressed.
 func WriteSessionCookie(w http.ResponseWriter, sess *Session, secure bool) {
-	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is runtime-bound; HttpOnly + SameSite=Lax already set
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is runtime-bound; HttpOnly + SameSite=Lax already set; see #20
 		Name:     SessionCookieName,
 		Value:    sess.ID,
 		Path:     "/",

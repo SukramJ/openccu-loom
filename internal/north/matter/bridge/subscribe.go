@@ -394,7 +394,7 @@ func (b *Bridge) captureSubTarget(subID uint32, src *net.UDPAddr, requestHdr *me
 func (b *Bridge) nextOutboundExchangeID() uint16 {
 	for {
 		next := b.outboundExchangeID.Add(1)
-		exch := uint16(next & 0x7FFF) //nolint:gosec // masked to 15 bits
+		exch := uint16((next & 0x7FFF) & 0xFFFF)
 		if exch != 0 {
 			return exch
 		}

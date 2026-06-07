@@ -944,7 +944,10 @@ func applyLockEncoding(e handlers.SimpleScheduleEntry) handlers.SimpleScheduleEn
 }
 
 func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
-	out := make(map[string]any, len(entries)*8+48)
+	// Size hint omitted deliberately: deriving it from len(entries) (a
+	// request-controlled length) risks an integer-overflowing allocation
+	// size. The map grows on demand; schedules are small.
+	out := make(map[string]any)
 	used := make(map[int]bool, len(entries))
 	for i := range entries {
 		e := entries[i]
@@ -1446,7 +1449,10 @@ func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
 // Non-overlapping period validation is applied; the call fails
 // rather than silently dropping conflicting periods.
 func serializeClimateSchedule(sched *handlers.ClimateSchedule) (map[string]any, error) {
-	out := make(map[string]any, 13*2*7*len(sched.Profiles))
+	// Size hint omitted deliberately: deriving it from len(sched.Profiles)
+	// (a request-controlled length) risks an integer-overflowing
+	// allocation size. The map grows on demand.
+	out := make(map[string]any)
 	for profileID, profile := range sched.Profiles {
 		if !isValidProfileID(profileID) {
 			return nil, fmt.Errorf("schedules: invalid profile id %q", profileID)

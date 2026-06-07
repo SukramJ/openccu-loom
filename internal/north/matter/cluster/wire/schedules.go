@@ -121,13 +121,13 @@ func (s *SchedulesServer) MatterRead(attrID uint32) (any, bool) {
 		return nil, false
 	case SchedulesAttrNumberOfSchedules:
 		groups := groupByDay(s.src.MatterScheduleEntries())
-		return uint8(len(groups)), true //nolint:gosec // count bounded by number of week days (≤7)
+		return uint8(len(groups)), true //nolint:gosec // count bounded by number of week days (≤7); see #20
 	case SchedulesAttrNumberOfScheduleTransitions:
 		entries := s.src.MatterScheduleEntries()
-		return uint8(len(entries)), true //nolint:gosec // count bounded by CCU profile capacity (≤168)
+		return uint8(len(entries)), true //nolint:gosec // count bounded by CCU profile capacity (≤168); see #20
 	case SchedulesAttrNumberOfScheduleTransitionsPerDay:
 		groups := groupByDay(s.src.MatterScheduleEntries())
-		return uint8(maxPerDay(groups)), true //nolint:gosec // per-day max bounded by CCU profile
+		return uint8(maxPerDay(groups)), true //nolint:gosec // per-day max bounded by CCU profile; see #20
 	case SchedulesAttrSchedules:
 		groups := groupByDay(s.src.MatterScheduleEntries())
 		if len(groups) == 0 {

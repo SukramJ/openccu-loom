@@ -32,7 +32,7 @@ func writeInt(v any) (int64, bool) {
 	case uint32:
 		return int64(x), true
 	case uint64:
-		return int64(x), true //nolint:gosec // write values are small native-width fields
+		return int64(x), true //nolint:gosec // write values are small native-width fields; see #20
 	case float32:
 		return int64(x), true
 	case float64:
@@ -49,7 +49,7 @@ func AsUint8(v any) (uint8, bool) {
 	if !ok {
 		return 0, false
 	}
-	return uint8(n), true //nolint:gosec // intentional narrowing of a native-width write value
+	return uint8(n), true //nolint:gosec // intentional narrowing of a native-width write value; see #20
 }
 
 // AsInt16 coerces a decoded write value to int16 — the Go type cluster
@@ -60,5 +60,5 @@ func AsInt16(v any) (int16, bool) {
 	if !ok {
 		return 0, false
 	}
-	return int16(n), true //nolint:gosec // intentional narrowing of a native-width write value
+	return int16(n), true //nolint:gosec // intentional narrowing of a native-width write value; see #20
 }

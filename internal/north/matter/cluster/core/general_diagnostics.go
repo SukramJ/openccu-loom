@@ -250,7 +250,7 @@ func (g *GeneralDiagnostics) MatterRead(attrID uint32) (any, bool) {
 		// Live = persisted base hours + current process uptime hours.
 		// Daemon shutdown hooks should snapshot the value back to the
 		// store; without that, the base portion stays at zero.
-		live := uint32(time.Since(g.startTime).Hours()) //nolint:gosec // hours since startTime fits uint32 for any realistic uptime
+		live := uint32(time.Since(g.startTime).Hours()) //nolint:gosec // hours since startTime fits uint32 for any realistic uptime; see #20
 		return g.baseOperationalHours + live, true
 	// BootReason / ActiveHardwareFaults / ActiveRadioFaults /
 	// ActiveNetworkFaults are OPTIONAL on GeneralDiagnostics. matter.js's
@@ -297,13 +297,13 @@ func (g *GeneralDiagnostics) MatterWrite(_ context.Context, attrID uint32, _ any
 //   - 0x03 PayloadTestRequest — DMTEST conformance only.
 func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
 	if cmdID == gendiagCmdTimeSnapshot {
-		systemMs := uint64(time.Since(g.startTime).Milliseconds()) //nolint:gosec // G115: wall-clock millis are non-negative for any valid host time
+		systemMs := uint64(time.Since(g.startTime).Milliseconds()) //nolint:gosec // G115: wall-clock millis are non-negative for any valid host time; see #20
 		// Mirrors matter.js packages/node/src/behaviors/general-diagnostics/
 		// GeneralDiagnosticsServer.ts::timeSnapshot — PosixTimeMs is
 		// nullable per spec; we always have a wall-clock so emit a real
 		// value, but the encoder must respect the nullable shape on the
 		// wire side.
-		posixMs := uint64(time.Now().UnixMilli()) //nolint:gosec // UnixMilli >= 0 for valid wall-clock
+		posixMs := uint64(time.Now().UnixMilli()) //nolint:gosec // UnixMilli >= 0 for valid wall-clock; see #20
 		return TimeSnapshotResponse{
 			SystemTimeMs: systemMs,
 			PosixTimeMs:  &posixMs,

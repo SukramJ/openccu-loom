@@ -76,17 +76,17 @@ func DecodeMoveToLevel(payload []byte) (MoveToLevelRequest, error) {
 	if err := walkContext(payload, ErrLevelControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.Level = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Level = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 1:
 			if el.IsNull {
 				return
 			}
-			v := uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			v := uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 			req.TransitionTime = &v
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -100,17 +100,17 @@ func DecodeMove(payload []byte) (MoveRequest, error) {
 	if err := walkContext(payload, ErrLevelControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.MoveMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.MoveMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
 			if el.IsNull {
 				return
 			}
-			v := uint8(el.Uint) //nolint:gosec // 8-bit rate per spec
+			v := uint8(el.Uint & 0xFF) // 8-bit rate per spec
 			req.Rate = &v
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -124,19 +124,19 @@ func DecodeStep(payload []byte) (StepRequest, error) {
 	if err := walkContext(payload, ErrLevelControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.StepMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.StepMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.StepSize = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.StepSize = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
 			if el.IsNull {
 				return
 			}
-			v := uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			v := uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 			req.TransitionTime = &v
 		case 3:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 4:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -150,9 +150,9 @@ func DecodeStop(payload []byte) (StopRequest, error) {
 	if err := walkContext(payload, ErrLevelControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 1:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err

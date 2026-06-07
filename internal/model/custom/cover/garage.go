@@ -329,13 +329,13 @@ func (g *Garage) OnSection(v int32) {
 func toInt32(v any) (int32, bool) {
 	switch x := v.(type) {
 	case int:
-		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range
+		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range; see #20
 	case int32:
 		return x, true
 	case int64:
-		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range
+		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range; see #20
 	case float64:
-		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range
+		return int32(x), true //nolint:gosec // G115: CCU door-state values are small integers well within int32 range; see #20
 	}
 	return 0, false
 }

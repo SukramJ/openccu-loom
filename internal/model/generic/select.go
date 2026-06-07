@@ -70,5 +70,5 @@ func (s *Select) SetLabel(ctx context.Context, label string, priority hmenum.Com
 	if !ok {
 		return fmt.Errorf("%q: %w", label, ErrUnknownLabel)
 	}
-	return s.SetIndex(ctx, int32(idx), priority) //nolint:gosec // bounds-checked above
+	return s.SetIndex(ctx, int32(idx), priority) //nolint:gosec // bounds-checked above; see #20
 }

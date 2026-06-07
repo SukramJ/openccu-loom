@@ -99,13 +99,13 @@ func (e *Encoder) PutUint(tag Tag, v uint64) {
 	switch {
 	case v <= 0xFF:
 		e.writeControlAndTag(TypeUnsignedInt1, tag)
-		e.buf = append(e.buf, byte(v)) //nolint:gosec // G115: range checked above
+		e.buf = append(e.buf, byte(v&0xFF))
 	case v <= 0xFFFF:
 		e.writeControlAndTag(TypeUnsignedInt2, tag)
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v&0xFFFF))
 	case v <= 0xFFFFFFFF:
 		e.writeControlAndTag(TypeUnsignedInt4, tag)
-		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v&0xFFFFFFFF))
 	default:
 		e.writeControlAndTag(TypeUnsignedInt8, tag)
 		e.buf = binary.LittleEndian.AppendUint64(e.buf, v)
@@ -130,13 +130,13 @@ func (e *Encoder) PutUintWidth(tag Tag, v uint64, widthBytes int) {
 	switch widthBytes {
 	case 1:
 		e.writeControlAndTag(TypeUnsignedInt1, tag)
-		e.buf = append(e.buf, byte(v)) //nolint:gosec // G115: caller declares width, truncation intentional
+		e.buf = append(e.buf, byte(v&0xFF)) // caller-declared width: explicit truncation
 	case 2:
 		e.writeControlAndTag(TypeUnsignedInt2, tag)
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: caller declares width, truncation intentional
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v&0xFFFF)) // caller-declared width: explicit truncation
 	case 4:
 		e.writeControlAndTag(TypeUnsignedInt4, tag)
-		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: caller declares width, truncation intentional
+		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v&0xFFFFFFFF)) // caller-declared width: explicit truncation
 	case 8:
 		e.writeControlAndTag(TypeUnsignedInt8, tag)
 		e.buf = binary.LittleEndian.AppendUint64(e.buf, v)
@@ -151,7 +151,7 @@ func (e *Encoder) PutUintWidth(tag Tag, v uint64, widthBytes int) {
 // whose declared type is `int16` if the wire shape is `TypeSignedInt1`.
 func (e *Encoder) PutInt16(tag Tag, v int16) {
 	e.writeControlAndTag(TypeSignedInt2, tag)
-	e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+	e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 }
 
 // PutInt32 writes an explicit 4-byte signed-int element regardless of
@@ -159,7 +159,7 @@ func (e *Encoder) PutInt16(tag Tag, v int16) {
 // `int32` slots.
 func (e *Encoder) PutInt32(tag Tag, v int32) {
 	e.writeControlAndTag(TypeSignedInt4, tag)
-	e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+	e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 }
 
 // PutInt64 writes an explicit 8-byte signed-int element regardless of
@@ -168,7 +168,7 @@ func (e *Encoder) PutInt32(tag Tag, v int32) {
 // fixed 64-bit width.
 func (e *Encoder) PutInt64(tag Tag, v int64) {
 	e.writeControlAndTag(TypeSignedInt8, tag)
-	e.buf = binary.LittleEndian.AppendUint64(e.buf, uint64(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+	e.buf = binary.LittleEndian.AppendUint64(e.buf, uint64(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 }
 
 // PutInt writes the smallest signed-int element that fits v. The
@@ -180,16 +180,16 @@ func (e *Encoder) PutInt(tag Tag, v int64) {
 	switch {
 	case v >= -0x80 && v <= 0x7F:
 		e.writeControlAndTag(TypeSignedInt1, tag)
-		e.buf = append(e.buf, byte(int8(v))) //nolint:gosec // G115: range checked above
+		e.buf = append(e.buf, byte(int8(v))) //nolint:gosec // G115: range checked above; see #20
 	case v >= -0x8000 && v <= 0x7FFF:
 		e.writeControlAndTag(TypeSignedInt2, tag)
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(int16(v))) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(int16(v))) //nolint:gosec // G115: range checked above; see #20
 	case v >= -0x80000000 && v <= 0x7FFFFFFF:
 		e.writeControlAndTag(TypeSignedInt4, tag)
-		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(int32(v))) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(int32(v))) //nolint:gosec // G115: range checked above; see #20
 	default:
 		e.writeControlAndTag(TypeSignedInt8, tag)
-		e.buf = binary.LittleEndian.AppendUint64(e.buf, uint64(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+		e.buf = binary.LittleEndian.AppendUint64(e.buf, uint64(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 	}
 }
 
@@ -332,7 +332,7 @@ func (e *Encoder) PutInt8Bounded(tag Tag, v int8) error {
 		return fmt.Errorf("%w: int8 sentinel −128 must be encoded as null, not as a value", ErrInt8NullableSentinel)
 	}
 	e.writeControlAndTag(TypeSignedInt1, tag)
-	e.buf = append(e.buf, byte(v)) //nolint:gosec // G115: range is int8, sentinel excluded above
+	e.buf = append(e.buf, byte(v)) //nolint:gosec // G115: range is int8, sentinel excluded above; see #20
 	return nil
 }
 
@@ -348,7 +348,7 @@ func (e *Encoder) PutInt16Bounded(tag Tag, v int16) error {
 		return fmt.Errorf("%w: int16 sentinel −32768 must be encoded as null", ErrInt16NullableSentinel)
 	}
 	e.writeControlAndTag(TypeSignedInt2, tag)
-	e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+	e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 	return nil
 }
 
@@ -364,7 +364,7 @@ func (e *Encoder) PutInt32Bounded(tag Tag, v int32) error {
 		return fmt.Errorf("%w: int32 sentinel −2147483648 must be encoded as null", ErrInt32NullableSentinel)
 	}
 	e.writeControlAndTag(TypeSignedInt4, tag)
-	e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+	e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(v)) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 	return nil
 }
 
@@ -444,13 +444,13 @@ func (e *Encoder) writeStringLike(tag Tag, b []byte, t1, t2, t4, t8 ElementType)
 	switch {
 	case n <= 0xFF:
 		e.writeControlAndTag(t1, tag)
-		e.buf = append(e.buf, byte(n)) //nolint:gosec // G115: range checked above
+		e.buf = append(e.buf, byte(n)) //nolint:gosec // G115: range checked above; see #20
 	case n <= 0xFFFF:
 		e.writeControlAndTag(t2, tag)
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(n)) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(n)) //nolint:gosec // G115: range checked above; see #20
 	case n <= 0xFFFFFFFF:
 		e.writeControlAndTag(t4, tag)
-		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(n)) //nolint:gosec // G115: range checked above
+		e.buf = binary.LittleEndian.AppendUint32(e.buf, uint32(n)) //nolint:gosec // G115: range checked above; see #20
 	default:
 		e.writeControlAndTag(t8, tag)
 		e.buf = binary.LittleEndian.AppendUint64(e.buf, n)
@@ -488,17 +488,17 @@ func (e *Encoder) writeControlAndTag(t ElementType, tag Tag) {
 		// no tag bytes
 	case TagKindContext:
 		// ContextTag(uint8) constructor guarantees Number ≤ 255.
-		e.buf = append(e.buf, byte(tag.Number)) //nolint:gosec // G115: ContextTag bounds Number to uint8
+		e.buf = append(e.buf, byte(tag.Number)) //nolint:gosec // G115: ContextTag bounds Number to uint8; see #20
 	case TagKindCommonProfile2, TagKindImplicitProfile2:
 		// CommonTag/ImplicitTag pick the *2 kind only when Number ≤ 0xFFFF.
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(tag.Number)) //nolint:gosec // G115: kind selection enforces Number ≤ 0xFFFF
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(tag.Number)) //nolint:gosec // G115: kind selection enforces Number ≤ 0xFFFF; see #20
 	case TagKindCommonProfile4, TagKindImplicitProfile4:
 		e.buf = binary.LittleEndian.AppendUint32(e.buf, tag.Number)
 	case TagKindFullyQualified6:
 		e.buf = binary.LittleEndian.AppendUint16(e.buf, tag.Vendor)
 		e.buf = binary.LittleEndian.AppendUint16(e.buf, tag.Profile)
 		// FullyQualifiedTag picks the *6 kind only when number ≤ 0xFFFF.
-		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(tag.Number)) //nolint:gosec // G115: kind selection enforces Number ≤ 0xFFFF
+		e.buf = binary.LittleEndian.AppendUint16(e.buf, uint16(tag.Number)) //nolint:gosec // G115: kind selection enforces Number ≤ 0xFFFF; see #20
 	case TagKindFullyQualified8:
 		e.buf = binary.LittleEndian.AppendUint16(e.buf, tag.Vendor)
 		e.buf = binary.LittleEndian.AppendUint16(e.buf, tag.Profile)

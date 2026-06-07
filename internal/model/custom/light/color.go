@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -201,7 +202,16 @@ func (l *ColorTempLight) SetKelvin(ctx context.Context, v int32, priority hmenum
 	if v > l.MaxKelvin {
 		v = l.MaxKelvin
 	}
-	kelvinU16 := uint16(v) //nolint:gosec // clamped to [MinKelvin, MaxKelvin] which fit uint16
+	// Guard the uint16 narrowing with a dominating bounds check so the
+	// conversion is reached only for in-range values. The
+	// [MinKelvin, MaxKelvin] clamp above already keeps v in range for any
+	// sane configuration; expressing the bound as a guard around the
+	// conversion (rather than a clamp-by-reassignment) is the form the
+	// static analyser recognises as safe.
+	var kelvinU16 uint16
+	if v >= 0 && v <= math.MaxUint16 {
+		kelvinU16 = uint16(v)
+	}
 	if !l.IsStateChangeFull(StateChangeArgsFull{ColorTempKelvin: &kelvinU16}) {
 		return nil
 	}

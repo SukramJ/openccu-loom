@@ -306,7 +306,7 @@ func resolveOrIssueSession(w http.ResponseWriter, r *http.Request, store *SetupS
 		}
 	}
 	sess := store.Issue()
-	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure omitted intentionally: setup wizard runs over HTTP on the local network before TLS is configured
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure omitted intentionally: setup wizard runs over HTTP on the local network before TLS is configured; see #20
 		Name:     setupCookieName,
 		Value:    sess.ID,
 		Path:     "/setup",

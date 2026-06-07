@@ -148,7 +148,7 @@ func (l *EffectLight) SetEffect(ctx context.Context, idx int32, priority hmenum.
 func (l *EffectLight) SetEffectByLabel(ctx context.Context, label string, priority hmenum.CommandPriority) error {
 	for i, e := range l.effects {
 		if e == label {
-			return l.SetEffect(ctx, int32(i), priority) //nolint:gosec // bounded by len(l.effects)
+			return l.SetEffect(ctx, int32(i), priority) //nolint:gosec // bounded by len(l.effects); see #20
 		}
 	}
 	return fmt.Errorf("effectlight: unknown effect label %q", label)

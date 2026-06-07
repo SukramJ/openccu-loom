@@ -40,7 +40,7 @@ const (
 	// write-capable tools are permitted (AllowWrites); a client reads
 	// the finer-grained token to decide whether to attempt a write tool.
 	CapabilityMCP = "mcp.v1"
-	//nolint:gosec // G101 false positive: a capability token, not a credential.
+	//nolint:gosec // G101 false positive: a capability token, not a credential; see #20
 	CapabilityMCPWrite = "mcp.write.v1"
 )
 

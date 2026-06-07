@@ -316,12 +316,12 @@ func readRemainingLength(r io.Reader) (int, error) {
 }
 
 func writeString(w *bytes.Buffer, s string) {
-	_ = binary.Write(w, binary.BigEndian, uint16(len(s))) //nolint:gosec // bounded by string length
+	_ = binary.Write(w, binary.BigEndian, uint16(len(s))) //nolint:gosec // bounded by string length; see #20
 	w.WriteString(s)
 }
 
 func writeBytes(w *bytes.Buffer, b []byte) {
-	_ = binary.Write(w, binary.BigEndian, uint16(len(b))) //nolint:gosec // bounded by payload length
+	_ = binary.Write(w, binary.BigEndian, uint16(len(b))) //nolint:gosec // bounded by payload length; see #20
 	w.Write(b)
 }
 

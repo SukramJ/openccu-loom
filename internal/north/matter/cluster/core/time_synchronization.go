@@ -69,7 +69,7 @@ func (t *TimeSynchronization) MatterRead(attrID uint32) (any, bool) {
 		if nowMicros < 0 {
 			return nil, true // null per spec when host clock is pre-Matter-epoch
 		}
-		return uint64(nowMicros), true //nolint:gosec // wall-clock micros fit uint64
+		return uint64(nowMicros), true //nolint:gosec // wall-clock micros fit uint64; see #20
 	case timeSyncAttrGranularity:
 		return GranularityMillisecGran, true
 	case cluster.AttrGlobalFeatureMap:

@@ -53,7 +53,7 @@ func LoadTranslations(path string) (*Translations, error) {
 	if path == "" {
 		return nil, ErrNoArchive
 	}
-	f, err := os.Open(path) //nolint:gosec // operator-supplied path
+	f, err := os.Open(path) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		return nil, fmt.Errorf("ccudata: open %s: %w", path, err)
 	}

@@ -182,18 +182,18 @@ func readEventPathFields(dec *tlv.Decoder) (ConcreteEventPath, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagEventPathNode:
 			p.Node = el.Uint
 			p.HasNode = true
 		case tagEventPathEndpoint:
-			p.Endpoint = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Endpoint = uint16(el.Uint & 0xFFFF)
 			p.HasEndpoint = true
 		case tagEventPathCluster:
-			p.Cluster = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Cluster = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCluster = true
 		case tagEventPathEvent:
-			p.Event = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Event = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasEvent = true
 		case tagEventPathIsUrgent:
 			p.IsUrgent = el.Bool

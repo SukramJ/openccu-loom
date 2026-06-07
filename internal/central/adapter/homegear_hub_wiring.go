@@ -183,7 +183,7 @@ func normalizeScalar(raw any) any {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return int(rv.Int())
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return int(rv.Uint()) //nolint:gosec // sysvar magnitudes are small; overflow is not a practical concern
+		return int(rv.Uint()) //nolint:gosec // sysvar magnitudes are small; overflow is not a practical concern; see #20
 	case reflect.Float32, reflect.Float64:
 		return rv.Float()
 	case reflect.String:

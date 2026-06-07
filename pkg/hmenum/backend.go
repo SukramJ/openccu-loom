@@ -39,7 +39,7 @@ type ProductGroup string
 const (
 	ProductGroupHM      ProductGroup = "BidCos-RF"
 	ProductGroupHmIP    ProductGroup = "HmIP-RF"
-	ProductGroupHmIPW   ProductGroup = "HmIP-Wired" //nolint:gosec // G101 false positive: not a credential
+	ProductGroupHmIPW   ProductGroup = "HmIP-Wired" //nolint:gosec // G101 false positive: not a credential; see #20
 	ProductGroupHmW     ProductGroup = "BidCos-Wired"
 	ProductGroupVirtual ProductGroup = "VirtualDevices"
 	ProductGroupUnknown ProductGroup = "unknown"

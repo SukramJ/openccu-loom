@@ -162,7 +162,7 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 
 	// Build sha256 map and write archive.
 	sha256Map := make(map[string]string)
-	outF, err := os.Create(dest) //nolint:gosec // operator-controlled destination path
+	outF, err := os.Create(dest) //nolint:gosec // operator-controlled destination path; see #20
 	if err != nil {
 		return fmt.Errorf("backup create: create output: %w", err)
 	}
@@ -279,7 +279,7 @@ func vacuumInto(src, dest string) error {
 // addFileToTar adds the file at diskPath to tw with the given archivePath and
 // returns the hex-encoded sha256 of the file content.
 func addFileToTar(tw *tar.Writer, archivePath, diskPath string) (string, error) {
-	f, err := os.Open(diskPath) //nolint:gosec // caller-controlled paths
+	f, err := os.Open(diskPath) //nolint:gosec // caller-controlled paths; see #20
 	if err != nil {
 		return "", fmt.Errorf("open %s: %w", diskPath, err)
 	}
@@ -359,7 +359,7 @@ func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:goc
 	}
 
 	// Open and read the archive, validate sha256 sums, collect entries.
-	f, err := os.Open(archivePath) //nolint:gosec // operator-supplied path
+	f, err := os.Open(archivePath) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		return fmt.Errorf("backup restore: open archive: %w", err)
 	}

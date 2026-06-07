@@ -157,7 +157,7 @@ func asInt(raw any) (int, error) {
 		if v > uint(math.MaxInt) {
 			return 0, fmt.Errorf("parameter: uint value %d overflows int", v)
 		}
-		return int(v), nil //nolint:gosec // bounds-checked above
+		return int(v), nil //nolint:gosec // bounds-checked above; see #20
 	case uint8:
 		return int(v), nil
 	case uint16:
@@ -168,7 +168,7 @@ func asInt(raw any) (int, error) {
 		if v > uint64(math.MaxInt) {
 			return 0, fmt.Errorf("parameter: uint64 value %d overflows int", v)
 		}
-		return int(v), nil //nolint:gosec // bounds-checked above
+		return int(v), nil //nolint:gosec // bounds-checked above; see #20
 	case float32:
 		return int(v), nil
 	case float64:

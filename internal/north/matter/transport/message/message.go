@@ -110,7 +110,7 @@ var (
 // length prefix followed by the bytes. Mirrors the length-delimited shape
 // matter.js packages/protocol/src/codec/MessageCodec.ts reads back.
 func appendExtension(buf, ext []byte) []byte {
-	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(ext))) //nolint:gosec // len bounded by MTU
+	buf = binary.LittleEndian.AppendUint16(buf, uint16(len(ext))) //nolint:gosec // len bounded by MTU; see #20
 	return append(buf, ext...)
 }
 

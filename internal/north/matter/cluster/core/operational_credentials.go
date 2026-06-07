@@ -552,7 +552,7 @@ func (o *OperationalCredentials) MatterRead(attrID uint32) (any, bool) { //nolin
 		if err != nil {
 			return nil, false
 		}
-		//nolint:gosec // fabric count capped at 254 by SupportedFabrics
+		//nolint:gosec // fabric count capped at 254 by SupportedFabrics; see #20
 		return uint8(len(fabrics)), true
 	case opcredsAttrTrustedRootCertificates:
 		// Matter §11.18.5.13: list<octet_string<400>> where each entry is
@@ -1191,14 +1191,14 @@ func computeCompressedFabricID(rootPubKey []byte, fabricID uint64) ([]byte, erro
 		return nil, fmt.Errorf("compressed fabric id: invalid root pub key (len=%d)", len(rootPubKey))
 	}
 	var salt [8]byte
-	salt[0] = byte(fabricID >> 56) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[1] = byte(fabricID >> 48) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[2] = byte(fabricID >> 40) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[3] = byte(fabricID >> 32) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[4] = byte(fabricID >> 24) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[5] = byte(fabricID >> 16) //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[6] = byte(fabricID >> 8)  //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-	salt[7] = byte(fabricID)       //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
+	salt[0] = byte((fabricID >> 56) & 0xFF) // big-endian byte extraction
+	salt[1] = byte((fabricID >> 48) & 0xFF) // big-endian byte extraction
+	salt[2] = byte((fabricID >> 40) & 0xFF) // big-endian byte extraction
+	salt[3] = byte((fabricID >> 32) & 0xFF) // big-endian byte extraction
+	salt[4] = byte((fabricID >> 24) & 0xFF) // big-endian byte extraction
+	salt[5] = byte((fabricID >> 16) & 0xFF) // big-endian byte extraction
+	salt[6] = byte((fabricID >> 8) & 0xFF)  // big-endian byte extraction
+	salt[7] = byte(fabricID & 0xFF)         // big-endian byte extraction
 	out, err := hkdfSHA256(rootPubKey[1:], salt[:], []byte("CompressedFabric"), 8)
 	if err != nil {
 		return nil, err
@@ -1311,7 +1311,7 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	// store fails the AddFabric INSERT and we'd surface FabricConflict
 	// — semantically wrong: the fabric is not in conflict, the table
 	// is exhausted.
-	if existing, lerr := o.store.ListFabrics(ctx); lerr == nil && uint8(len(existing)) >= supportedFabrics { //nolint:gosec // ListFabrics returns ≤ supportedFabrics by spec
+	if existing, lerr := o.store.ListFabrics(ctx); lerr == nil && uint8(len(existing)) >= supportedFabrics { //nolint:gosec // ListFabrics returns ≤ supportedFabrics by spec; see #20
 		return NOCResponse{
 			StatusCode: NOCStatusTableFull,
 			DebugText:  fmt.Sprintf("fabric table at capacity (%d/%d)", len(existing), supportedFabrics),

@@ -100,7 +100,7 @@ func (l *EventLog) Append(rec EventRecord) uint64 {
 	l.next++
 	rec.Number = l.next
 	if rec.EpochUS == 0 {
-		rec.EpochUS = uint64(time.Now().UnixMicro()) //nolint:gosec // time.Now() is non-negative
+		rec.EpochUS = uint64(time.Now().UnixMicro()) //nolint:gosec // time.Now() is non-negative; see #20
 	}
 	switch rec.Priority {
 	case EventPriorityCritical:

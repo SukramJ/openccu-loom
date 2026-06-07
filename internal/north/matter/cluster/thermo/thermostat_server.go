@@ -400,7 +400,7 @@ func (s *ThermostatServer) handleSetpointRaiseLower(fields any) error { //nolint
 		case uint8:
 			mode = v
 		case int:
-			mode = uint8(v) //nolint:gosec // field bound 0-2 by spec
+			mode = uint8(v) //nolint:gosec // field bound 0-2 by spec; see #20
 		}
 	}
 	if rawAmt, has := m["amount"]; has {
@@ -408,7 +408,7 @@ func (s *ThermostatServer) handleSetpointRaiseLower(fields any) error { //nolint
 		case int8:
 			amount = v
 		case int:
-			amount = int8(v) //nolint:gosec // field is signed byte by spec
+			amount = int8(v) //nolint:gosec // field is signed byte by spec; see #20
 		}
 	}
 

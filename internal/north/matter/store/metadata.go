@@ -29,7 +29,7 @@ func getNextFabricIndexFromMetadata(ctx context.Context, tx *sql.Tx) (uint8, err
 	if v < 1 || v > 254 {
 		return 0, fmt.Errorf("matter store: next_fabric_index out of range: %d", v)
 	}
-	return uint8(v), nil //nolint:gosec // bounded by range check above
+	return uint8(v), nil //nolint:gosec // bounded by range check above; see #20
 }
 
 // bumpNextFabricIndex advances the next_fabric_index counter to the next

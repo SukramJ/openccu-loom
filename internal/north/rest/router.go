@@ -307,6 +307,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(middleware.SecurityHeaders)
 	r.Use(middleware.ReqContextWithCentral(d.CentralName))
 	r.Use(middleware.Logger(d.Logger))
 	r.Use(middleware.Recover(d.Logger))

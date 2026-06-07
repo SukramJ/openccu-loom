@@ -80,9 +80,9 @@ func UnmarshalTimedRequestTLV(dec *tlv.Decoder) (TimedRequest, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagTimedReqTimeout:
-			req.TimeoutMs = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TimeoutMs = uint16(el.Uint & 0xFFFF)
 		case tagTimedReqInteractionModelRevision:
 			// Decoded but not retained — the IM-revision field is
 			// informational; we always reply with our own revision.

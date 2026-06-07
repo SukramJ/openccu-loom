@@ -57,7 +57,7 @@ ON CONFLICT(fabric_index, group_key_set_id) DO UPDATE SET
     epoch_key_2     = excluded.epoch_key_2,
     epoch_start_2   = excluded.epoch_start_2`,
 		rec.FabricIndex, rec.GroupKeySetID, uint8(rec.SecurityPolicy),
-		rec.EpochKey0, int64(rec.EpochStart0), //nolint:gosec // start time fits in int64 in practice
+		rec.EpochKey0, int64(rec.EpochStart0), //nolint:gosec // start time fits in int64 in practice; see #20
 		nullableBytes(rec.EpochKey1), nullableEpochStart(rec.EpochKey1, rec.EpochStart1),
 		nullableBytes(rec.EpochKey2), nullableEpochStart(rec.EpochKey2, rec.EpochStart2),
 	); err != nil {
@@ -216,18 +216,18 @@ func scanGroupKeySet(r scanRow) (GroupKeySet, error) {
 		return GroupKeySet{}, err
 	}
 	rec.SecurityPolicy = SecurityPolicy(policy)
-	rec.EpochStart0 = uint64(start0) //nolint:gosec // round-trip of stored value
+	rec.EpochStart0 = uint64(start0) //nolint:gosec // round-trip of stored value; see #20
 	if key1.Valid {
 		rec.EpochKey1 = []byte(key1.String)
 	}
 	if start1.Valid {
-		rec.EpochStart1 = uint64(start1.Int64) //nolint:gosec // round-trip of stored value
+		rec.EpochStart1 = uint64(start1.Int64) //nolint:gosec // round-trip of stored value; see #20
 	}
 	if key2.Valid {
 		rec.EpochKey2 = []byte(key2.String)
 	}
 	if start2.Valid {
-		rec.EpochStart2 = uint64(start2.Int64) //nolint:gosec // round-trip of stored value
+		rec.EpochStart2 = uint64(start2.Int64) //nolint:gosec // round-trip of stored value; see #20
 	}
 	return rec, nil
 }
@@ -239,5 +239,5 @@ func nullableEpochStart(key []byte, start uint64) any {
 	if key == nil {
 		return nil
 	}
-	return int64(start) //nolint:gosec // start time fits in int64 in practice
+	return int64(start) //nolint:gosec // start time fits in int64 in practice; see #20
 }

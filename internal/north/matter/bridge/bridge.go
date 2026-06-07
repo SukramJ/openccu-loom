@@ -1157,7 +1157,7 @@ func (b *Bridge) AnnounceFabric(ctx context.Context, compressedFabricID [8]byte,
 	svc := mdns.BuildOperationalService(mdns.OperationalServiceConfig{
 		CompressedFabricID: compressedFabricID,
 		NodeID:             nodeID,
-		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535
+		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
 		// HostName empty → advertiser uses the OS LocalHostName so the
 		// SRV target resolves via macOS Bonjour / Linux avahi A/AAAA.
 		HostName: "",
@@ -1224,7 +1224,7 @@ func (b *Bridge) AnnounceCommissioning(ctx context.Context, params Commissioning
 		PairingHint:        params.PairingHint,
 		PairingInstruction: params.PairingInstruction,
 		RotatingID:         params.RotatingID,
-		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535
+		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
 		// HostName empty → advertiser uses the OS LocalHostName so the
 		// SRV target resolves via macOS Bonjour / Linux avahi A/AAAA.
 		HostName: "",

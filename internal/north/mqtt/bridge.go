@@ -1202,11 +1202,11 @@ func indexFromValue(v any) (int64, bool) {
 	case int64:
 		return x, true
 	case uint:
-		return int64(x), true //nolint:gosec // bounded by ValueList length downstream
+		return int64(x), true //nolint:gosec // bounded by ValueList length downstream; see #20
 	case uint32:
 		return int64(x), true
 	case uint64:
-		return int64(x), true //nolint:gosec // bounded by ValueList length downstream
+		return int64(x), true //nolint:gosec // bounded by ValueList length downstream; see #20
 	case float64:
 		return int64(x), true
 	case float32:

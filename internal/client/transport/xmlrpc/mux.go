@@ -141,7 +141,7 @@ func (m *Mux) RegisterSystemMethods() {
 					fault = &hmerr.XMLRPCFault{Code: -1, Message: err.Error()}
 				}
 				results = append(results, StructValue{Members: []Member{
-					{Name: "faultCode", Value: IntValue(int32(fault.Code))}, //nolint:gosec // see message.go
+					{Name: "faultCode", Value: IntValue(int32(fault.Code))}, //nolint:gosec // fault codes fit int32; see #20
 					{Name: "faultString", Value: StringValue(fault.Message)},
 				}})
 				continue

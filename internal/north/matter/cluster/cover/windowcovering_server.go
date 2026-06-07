@@ -94,7 +94,7 @@ func (s *WindowCoveringServer) MatterRead(attrID uint32) (any, bool) {
 	case wire.WindowCoveringAttrCurrentPositionLiftPercentage:
 		// Deprecated uint8 field (0x0008); return scaled-down value for
 		// backward compatibility with Matter 1.0 controllers.
-		return uint8(s.currentPositionPercent100ths / 100), true //nolint:gosec // value bounded 0-100 by design
+		return uint8((s.currentPositionPercent100ths / 100) & 0xFF), true // value bounded 0-100 by design
 	case wire.WindowCoveringAttrOperationalStatus:
 		return s.operationalStatus, true
 	case wire.WindowCoveringAttrTargetPositionLiftPercent100ths:

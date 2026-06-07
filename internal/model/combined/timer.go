@@ -266,7 +266,7 @@ func (t *Timer) SetDuration(ctx context.Context, d time.Duration, priority hmenu
 	seconds := d.Seconds()
 	value, unit := RecalcUnit(seconds)
 
-	if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(unit), priority); err != nil { //nolint:gosec // unit in 0..2
+	if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(unit), priority); err != nil { //nolint:gosec // unit in 0..2; see #20
 		return fmt.Errorf("timer: UNIT: %w", err)
 	}
 	if err := t.Writer.SetValue(ctx, t.Address, t.ValueParameter, value, priority); err != nil {
@@ -362,7 +362,7 @@ func (t *Timer) SendDefault(
 	}
 	if t.UnitParameter != "" {
 		if v, ok := defaultFn(string(t.UnitParameter)); ok {
-			if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(v), priority); err != nil { //nolint:gosec // unit in 0..2
+			if err := t.Writer.SetValue(ctx, t.Address, t.UnitParameter, int32(v), priority); err != nil { //nolint:gosec // unit in 0..2; see #20
 				return fmt.Errorf("timer send_default UNIT: %w", err)
 			}
 		}

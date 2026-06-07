@@ -487,7 +487,7 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 				Privilege:   store.Privilege(e.Privilege),
 				AuthMode:    store.AuthMode(e.AuthMode),
 				Subjects:    append([]uint64(nil), e.Subjects...),
-				Position:    uint16(i), //nolint:gosec // i bounded by accessControlEntriesPerFabricLimit
+				Position:    uint16(i), //nolint:gosec // i bounded by accessControlEntriesPerFabricLimit; see #20
 			}
 			if len(e.Targets) > 0 {
 				rec.Targets = make([]store.ACLTarget, 0, len(e.Targets))

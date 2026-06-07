@@ -710,15 +710,15 @@ func (dp *ProfileDataPoint) SyncChannelLocksFromWire(rawValue any) {
 		locks = v
 	case int:
 		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow
+			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 		}
 	case int32:
 		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow
+			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 		}
 	case int64:
 		if v >= 0 {
-			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow
+			locks = uint32(v) //nolint:gosec // non-negative check above prevents overflow; see #20
 		}
 	case float64:
 		if v >= 0 {

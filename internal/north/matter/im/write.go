@@ -85,7 +85,7 @@ func UnmarshalWriteRequestTLV(dec *tlv.Decoder, valueReader AttributeValueReader
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagWriteReqSuppressResponse:
 			req.SuppressResponse = el.Bool
 		case tagWriteReqTimedRequest:
@@ -143,9 +143,9 @@ func readAttributeData(dec *tlv.Decoder, valueReader AttributeValueReader) (Attr
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagAttributeDataDataVersion:
-			w.DataVersion = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			w.DataVersion = uint32(el.Uint & 0xFFFFFFFF)
 			w.HasDataVersion = true
 		case tagAttributeDataPath:
 			if !el.IsContainer || el.Type != tlv.TypeList {

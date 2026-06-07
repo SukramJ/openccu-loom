@@ -162,8 +162,8 @@ func (d *DiagnosticLogs) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 	resp := RetrieveLogsResponse{
 		Status:        LogStatusNoLogs,
 		LogContent:    []byte{},
-		UTCTimeStamp:  uint64(time.Now().UnixNano()),               //nolint:gosec // wall clock; uint64 wide enough until year 2554
-		TimeSinceBoot: uint64(time.Since(bootEpoch).Nanoseconds()), //nolint:gosec // monotonic-ish; uint64 wide enough
+		UTCTimeStamp:  uint64(time.Now().UnixNano()),               //nolint:gosec // wall clock; uint64 wide enough until year 2554; see #20
+		TimeSinceBoot: uint64(time.Since(bootEpoch).Nanoseconds()), //nolint:gosec // monotonic-ish; uint64 wide enough; see #20
 	}
 
 	if provider == nil {
@@ -201,7 +201,7 @@ func decodeRetrieveLogsIntent(fields any) uint8 {
 	case map[uint8]any:
 		if raw, ok := f[0]; ok {
 			if v, ok := raw.(uint64); ok {
-				return uint8(v) //nolint:gosec // intent is a 1-byte enum
+				return uint8(v & 0xFF) // intent is a 1-byte enum
 			}
 			if v, ok := raw.(uint8); ok {
 				return v

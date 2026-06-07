@@ -6,6 +6,7 @@ package hub
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -456,6 +457,13 @@ func (s *Sysvar) resolveListIndex(v hmtypes.ParamValue) (int, bool) {
 			return v.Int, true
 		}
 	case hmtypes.ValueKindFloat:
+		// Reject values outside the int range before narrowing so a large
+		// float cannot overflow the conversion (same bound the analyser
+		// recognises in hmtypes.NewParamValue). The list-range check below
+		// then validates the resulting index.
+		if v.Float < 0 || v.Float > float64(math.MaxInt) {
+			return 0, false
+		}
 		idx := int(v.Float)
 		if idx >= 0 && idx < len(s.ValueList) {
 			return idx, true

@@ -168,7 +168,7 @@ func oidcRedirectError(w http.ResponseWriter, r *http.Request, reason, target st
 	// `target` was vetted by isSafeRelativeTarget above (path-only,
 	// same-origin); `reason` is a fixed error code from this package
 	// and is URL-encoded as a query value.
-	http.Redirect(w, r, target+"?error="+url.QueryEscape(reason), http.StatusSeeOther) //nolint:gosec // target validated, reason encoded
+	http.Redirect(w, r, target+"?error="+url.QueryEscape(reason), http.StatusSeeOther) //nolint:gosec // target validated, reason encoded; see #20
 }
 
 // isSafeRelativeTarget returns true when target is a path-only
@@ -181,8 +181,11 @@ func isSafeRelativeTarget(target string) bool {
 	if !strings.HasPrefix(target, "/") {
 		return false
 	}
-	if strings.HasPrefix(target, "//") {
-		return false // protocol-relative — points off-host
+	// Reject protocol-relative references. Browsers treat both `//host`
+	// and `/\host` (and `/\\host`) as absolute URLs pointing off-host,
+	// so the second character must not be a slash or backslash.
+	if len(target) > 1 && (target[1] == '/' || target[1] == '\\') {
+		return false
 	}
 	if strings.Contains(target, ":") {
 		return false // schemes embed a colon ("javascript:", "https:")

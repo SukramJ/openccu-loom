@@ -178,6 +178,6 @@ func DownloadCapture(svc CaptureService) http.HandlerFunc {
 		// data is a gzip-wrapped tar produced by the diagnostics
 		// manager; never reflects user-controlled HTML. The gosec
 		// XSS warning is a false positive on a binary download.
-		_, _ = w.Write(data) //nolint:gosec // tar.gz binary, not user-controlled HTML
+		_, _ = w.Write(data) //nolint:gosec // tar.gz binary, not user-controlled HTML; see #20
 	}
 }

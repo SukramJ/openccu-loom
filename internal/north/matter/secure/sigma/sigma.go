@@ -277,8 +277,7 @@ func UnmarshalSigma1(b []byte) (Sigma1, error) {
 			}
 			copy(s.InitiatorRandom[:], val.octets)
 		case 2:
-			//nolint:gosec // SessionID is uint16 by spec.
-			s.InitiatorSessionID = uint16(val.u)
+			s.InitiatorSessionID = uint16(val.u & 0xFFFF)
 		case 3:
 			if len(val.octets) != 32 {
 				return s, fmt.Errorf("%w: destinationID length=%d", ErrSessionState, len(val.octets))

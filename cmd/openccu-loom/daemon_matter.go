@@ -830,7 +830,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// left off.
 		if rootRefs.GeneralDiagnostics != nil && store != nil {
 			if rec, lerr := store.LoadDiagnostics(stopCtx); lerr == nil {
-				delta := uint32(rootRefs.GeneralDiagnostics.UpTimeSeconds() / 3600) //nolint:gosec // hours fits uint32 for any realistic uptime
+				delta := uint32(rootRefs.GeneralDiagnostics.UpTimeSeconds()/3600) & 0xFFFFFFFF
 				rec.BaseOperationalHours += delta
 				if serr := store.SaveDiagnostics(stopCtx, rec); serr != nil {
 					logger.Warn("matter.bridge.diagnostics.save_shutdown", slog.String("err", serr.Error()))
@@ -1937,8 +1937,8 @@ func computeFabricCompressedID(rootPubKey []byte, fabricID uint64) ([8]byte, err
 		return out, fmt.Errorf("rootPubKey must be 65-byte uncompressed, got %d", len(rootPubKey))
 	}
 	salt := []byte{
-		byte(fabricID >> 56), byte(fabricID >> 48), byte(fabricID >> 40), byte(fabricID >> 32), //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
-		byte(fabricID >> 24), byte(fabricID >> 16), byte(fabricID >> 8), byte(fabricID), //nolint:gosec // G115: big-endian byte extraction; each shift result fits uint8
+		byte(fabricID>>56) & 0xFF, byte(fabricID>>48) & 0xFF, byte(fabricID>>40) & 0xFF, byte(fabricID>>32) & 0xFF,
+		byte(fabricID>>24) & 0xFF, byte(fabricID>>16) & 0xFF, byte(fabricID>>8) & 0xFF, byte(fabricID) & 0xFF,
 	}
 	der, err := hkdf.Key(sha256.New, rootPubKey[1:], salt, "CompressedFabric", 8)
 	if err != nil {
@@ -2183,7 +2183,7 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 	// commissioner PBKDFParamRequest before Pake1 starts. Use the
 	// pre-allocated sessID as ResponderSessionID so the commissioner
 	// echoes back the correct id on post-PASE IM traffic.
-	paseAdapter.SetPBKDFParams(uint32(iterations), salt, sessID) //nolint:gosec // iterations was validated by NewVerifierContext
+	paseAdapter.SetPBKDFParams(uint32(iterations), salt, sessID) //nolint:gosec // iterations was validated by NewVerifierContext; see #20
 	paseAdapter.SetOnSessionEstablished(func(sharedSecret []byte, peerSessionID uint16) error {
 		// PASE pre-dates the operational fabric; both node ids ride
 		// as the bridge-allocated PASE-temporary values per Matter

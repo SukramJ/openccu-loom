@@ -174,6 +174,6 @@ func (l *Lifecycle) jittered(d time.Duration) time.Duration {
 	if l.cfg.Jitter <= 0 {
 		return d
 	}
-	delta := time.Duration(rand.Int63n(int64(l.cfg.Jitter*2))) - l.cfg.Jitter //nolint:gosec // jitter only
+	delta := time.Duration(rand.Int63n(int64(l.cfg.Jitter*2))) - l.cfg.Jitter //nolint:gosec // jitter only; see #20
 	return d + delta
 }

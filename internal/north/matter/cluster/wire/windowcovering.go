@@ -71,9 +71,9 @@ func DecodeGoToLiftPercentage(payload []byte) (GoToLiftPercentageRequest, error)
 		// both: tag 0 gets scaled up, tag 1 is canonical.
 		switch tag {
 		case 0:
-			req.LiftPercent100thsValue = uint16(el.Uint) * 100 //nolint:gosec // 8-bit percent → 16-bit percent100ths
+			req.LiftPercent100thsValue = uint16(el.Uint&0xFF) * 100 // 8-bit percent → 16-bit percent100ths
 		case 1:
-			req.LiftPercent100thsValue = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.LiftPercent100thsValue = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		}
 	}); err != nil {
 		return req, err
@@ -87,9 +87,9 @@ func DecodeGoToTiltPercentage(payload []byte) (GoToTiltPercentageRequest, error)
 	if err := walkContext(payload, ErrWindowCoveringMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.TiltPercent100thsValue = uint16(el.Uint) * 100 //nolint:gosec // 8-bit percent → 16-bit percent100ths
+			req.TiltPercent100thsValue = uint16(el.Uint&0xFF) * 100 // 8-bit percent → 16-bit percent100ths
 		case 1:
-			req.TiltPercent100thsValue = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TiltPercent100thsValue = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		}
 	}); err != nil {
 		return req, err
@@ -102,7 +102,7 @@ func DecodeGoToLiftValue(payload []byte) (GoToLiftValueRequest, error) {
 	var req GoToLiftValueRequest
 	if err := walkContext(payload, ErrWindowCoveringMalformed, func(tag uint32, el tlv.Element) {
 		if tag == 0 {
-			req.LiftValue = uint16(el.Uint) //nolint:gosec // 16-bit raw position per spec
+			req.LiftValue = uint16(el.Uint & 0xFFFF) // 16-bit raw position per spec
 		}
 	}); err != nil {
 		return req, err
@@ -115,7 +115,7 @@ func DecodeGoToTiltValue(payload []byte) (GoToTiltValueRequest, error) {
 	var req GoToTiltValueRequest
 	if err := walkContext(payload, ErrWindowCoveringMalformed, func(tag uint32, el tlv.Element) {
 		if tag == 0 {
-			req.TiltValue = uint16(el.Uint) //nolint:gosec // 16-bit raw position per spec
+			req.TiltValue = uint16(el.Uint & 0xFFFF) // 16-bit raw position per spec
 		}
 	}); err != nil {
 		return req, err

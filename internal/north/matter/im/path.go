@@ -117,21 +117,21 @@ func UnmarshalAttributePathTLV(dec *tlv.Decoder) (ConcreteAttributePath, error) 
 		if el.Tag.Kind != tlv.TagKindContext {
 			return ConcreteAttributePath{}, fmt.Errorf("%w: non-context tag inside path", ErrInvalidPath)
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagAttrPathNode:
 			p.Node = el.Uint
 			p.HasNode = true
 		case tagAttrPathEndpoint:
-			p.Endpoint = uint16(el.Uint) //nolint:gosec // G115: spec bounds endpoint to uint16
+			p.Endpoint = uint16(el.Uint & 0xFFFF)
 			p.HasEndpoint = true
 		case tagAttrPathCluster:
-			p.Cluster = uint32(el.Uint) //nolint:gosec // G115: spec bounds cluster to uint32
+			p.Cluster = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCluster = true
 		case tagAttrPathAttribute:
-			p.Attribute = uint32(el.Uint) //nolint:gosec // G115: spec bounds attribute to uint32
+			p.Attribute = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasAttribute = true
 		case tagAttrPathListIndex:
-			p.ListIndex = uint16(el.Uint) //nolint:gosec // G115: spec bounds list index to uint16
+			p.ListIndex = uint16(el.Uint & 0xFFFF)
 			p.HasListIndex = true
 		case tagAttrPathEnableTagCompression:
 			// Tag-compression is an encoder-side optimisation we do
@@ -193,15 +193,15 @@ func UnmarshalCommandPathTLV(dec *tlv.Decoder) (ConcreteCommandPath, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			return ConcreteCommandPath{}, fmt.Errorf("%w: non-context tag", ErrInvalidPath)
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagCmdPathEndpoint:
-			p.Endpoint = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Endpoint = uint16(el.Uint & 0xFFFF)
 			p.HasEndpoint = true
 		case tagCmdPathCluster:
-			p.Cluster = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Cluster = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCluster = true
 		case tagCmdPathCommand:
-			p.Command = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Command = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCommand = true
 		}
 	}

@@ -5,7 +5,7 @@ package ws
 
 import (
 	"bufio"
-	"crypto/sha1" //nolint:gosec // required by RFC 6455 handshake
+	"crypto/sha1" //nolint:gosec // required by RFC 6455 handshake; see #20
 	"encoding/base64"
 	"log/slog"
 	"net/http"
@@ -120,7 +120,7 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 }
 
 func acceptKey(key string) string {
-	h := sha1.New() //nolint:gosec // required by RFC 6455
+	h := sha1.New() //nolint:gosec // required by RFC 6455; see #20
 	_, _ = h.Write([]byte(key))
 	_, _ = h.Write([]byte(handshakeMagic))
 	return base64.StdEncoding.EncodeToString(h.Sum(nil))

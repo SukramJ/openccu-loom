@@ -476,7 +476,7 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 			if sum > int(matterLevelMax) {
 				next = matterLevelMax
 			} else {
-				next = uint8(sum) //nolint:gosec // clamped above
+				next = uint8(sum) //nolint:gosec // clamped above; see #20
 			}
 		}
 		if err := s.l.SetLevel(ctx, matterLevelToHM(next), priority); err != nil {

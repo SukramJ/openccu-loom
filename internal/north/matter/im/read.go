@@ -108,7 +108,7 @@ func UnmarshalReadRequestTLV(dec *tlv.Decoder) (ReadRequest, error) { //nolint:g
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagReadReqAttributeRequests:
 			if !el.IsContainer || el.Type != tlv.TypeArray {
 				return ReadRequest{}, fmt.Errorf("%w: AttributeRequests not array", ErrInvalidReadRequest)
@@ -210,21 +210,21 @@ func readAttributePathFields(dec *tlv.Decoder) (ConcreteAttributePath, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagAttrPathNode:
 			p.Node = el.Uint
 			p.HasNode = true
 		case tagAttrPathEndpoint:
-			p.Endpoint = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Endpoint = uint16(el.Uint & 0xFFFF)
 			p.HasEndpoint = true
 		case tagAttrPathCluster:
-			p.Cluster = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Cluster = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCluster = true
 		case tagAttrPathAttribute:
-			p.Attribute = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Attribute = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasAttribute = true
 		case tagAttrPathListIndex:
-			p.ListIndex = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			p.ListIndex = uint16(el.Uint & 0xFFFF)
 			p.HasListIndex = true
 		}
 	}

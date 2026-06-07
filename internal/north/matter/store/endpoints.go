@@ -247,7 +247,7 @@ SELECT endpoint_id FROM matter_endpoints ORDER BY endpoint_id ASC`)
 		if got < 2 || got > 65534 {
 			return 0, fmt.Errorf("matter store: next endpoint id: stored value %d out of range", got)
 		}
-		if uint16(got) != want { //nolint:gosec // bounded by the range check above
+		if uint16(got) != want { //nolint:gosec // bounded by the range check above; see #20
 			return want, nil
 		}
 		if want == 65534 {

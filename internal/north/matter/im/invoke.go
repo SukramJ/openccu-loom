@@ -98,7 +98,7 @@ func UnmarshalInvokeRequestTLV(dec *tlv.Decoder, fieldsReader CommandFieldsReade
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagInvokeReqSuppressResponse:
 			req.SuppressResponse = el.Bool
 		case tagInvokeReqTimedRequest:
@@ -156,7 +156,7 @@ func readCommandInvocation(dec *tlv.Decoder, fieldsReader CommandFieldsReader) (
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagCmdDataPath:
 			if !el.IsContainer || el.Type != tlv.TypeList {
 				return CommandInvocation{}, fmt.Errorf("%w: CommandPathIB not list", ErrInvalidInvokeRequest)
@@ -187,7 +187,7 @@ func readCommandInvocation(dec *tlv.Decoder, fieldsReader CommandFieldsReader) (
 			}
 			inv.Fields = f
 		case tagCmdDataRef:
-			inv.CommandRef = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			inv.CommandRef = uint16(el.Uint & 0xFFFF)
 			inv.HasCommandRef = true
 		}
 	}
@@ -209,15 +209,15 @@ func readCommandPathFields(dec *tlv.Decoder) (ConcreteCommandPath, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagCmdPathEndpoint:
-			p.Endpoint = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Endpoint = uint16(el.Uint & 0xFFFF)
 			p.HasEndpoint = true
 		case tagCmdPathCluster:
-			p.Cluster = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Cluster = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCluster = true
 		case tagCmdPathCommand:
-			p.Command = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			p.Command = uint32(el.Uint & 0xFFFFFFFF)
 			p.HasCommand = true
 		}
 	}

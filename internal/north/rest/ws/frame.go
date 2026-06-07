@@ -71,7 +71,7 @@ func readFrame(r *bufio.Reader) (frame, error) {
 		if ext > uint64(maxPayload) {
 			return frame{}, errors.New("ws: frame too large")
 		}
-		length = int64(ext) //nolint:gosec // bounded above by maxPayload
+		length = int64(ext) //nolint:gosec // bounded above by maxPayload; see #20
 	}
 	if length < 0 || length > maxPayload {
 		return frame{}, errors.New("ws: frame too large")
@@ -103,13 +103,13 @@ func writeFrame(w *bufio.Writer, opcode byte, payload []byte) error {
 	header := []byte{finBit | (opcode & opMask)}
 	switch {
 	case len(payload) < 126:
-		header = append(header, byte(len(payload))) //nolint:gosec // case-guard caps len at 125, fits in a byte
+		header = append(header, byte(len(payload))) //nolint:gosec // case-guard caps len at 125, fits in a byte; see #20
 	case len(payload) <= 0xFFFF:
 		header = append(header, 126, 0, 0)
-		binary.BigEndian.PutUint16(header[len(header)-2:], uint16(len(payload))) //nolint:gosec // length already bounded
+		binary.BigEndian.PutUint16(header[len(header)-2:], uint16(len(payload))) //nolint:gosec // length already bounded; see #20
 	default:
 		header = append(header, 127, 0, 0, 0, 0, 0, 0, 0, 0)
-		binary.BigEndian.PutUint64(header[len(header)-8:], uint64(len(payload))) //nolint:gosec // length non-negative
+		binary.BigEndian.PutUint64(header[len(header)-8:], uint64(len(payload))) //nolint:gosec // length non-negative; see #20
 	}
 	if _, err := w.Write(header); err != nil {
 		return err
