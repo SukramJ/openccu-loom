@@ -139,3 +139,7 @@ tests/integration/testdata/discovery_snapshot_aiohomematic2mqtt.json
 
 # Generated SBOM (run 'make sbom' / CI release artifact)
 /sbom.json
+
+# MkDocs build output
+site/
+__pycache__/
