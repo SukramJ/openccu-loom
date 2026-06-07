@@ -53,7 +53,7 @@ func WriteFault(w io.Writer, fault *hmerr.XMLRPCFault) error {
 		return errors.New("binrpc: WriteFault: nil fault")
 	}
 	payloadStruct := xmlrpc.StructValue{Members: []xmlrpc.Member{
-		{Name: "faultCode", Value: xmlrpc.IntValue(int32(fault.Code))}, //nolint:gosec // fault codes fit int32
+		{Name: "faultCode", Value: xmlrpc.IntValue(int32(fault.Code))}, //nolint:gosec // fault codes fit int32; see #20
 		{Name: "faultString", Value: xmlrpc.StringValue(fault.Message)},
 	}}
 	var payload bytes.Buffer
@@ -71,7 +71,7 @@ func writeFrame(w io.Writer, msgType uint8, payload []byte) error {
 	header := make([]byte, 0, 8)
 	header = append(header, marker[:]...)
 	header = append(header, msgType)
-	header = binary.BigEndian.AppendUint32(header, uint32(len(payload))) //nolint:gosec // bounds-checked above
+	header = binary.BigEndian.AppendUint32(header, uint32(len(payload))) //nolint:gosec // bounds-checked above; see #20
 	if _, err := w.Write(header); err != nil {
 		return fmt.Errorf("binrpc: write header: %w", err)
 	}
@@ -83,7 +83,7 @@ func writeFrame(w io.Writer, msgType uint8, payload []byte) error {
 
 // writeParamArray writes `<count:u32><value>…</value>*`.
 func writeParamArray(w io.Writer, params []xmlrpc.Value) error {
-	if err := binary.Write(w, binary.BigEndian, uint32(len(params))); err != nil { //nolint:gosec // len bound by int → u32 fits
+	if err := binary.Write(w, binary.BigEndian, uint32(len(params))); err != nil { //nolint:gosec // len bound by int → u32 fits; see #20
 		return fmt.Errorf("binrpc: write param count: %w", err)
 	}
 	for i, p := range params {
@@ -156,7 +156,7 @@ func writeRawString(w io.Writer, s string) error {
 	if err != nil {
 		return fmt.Errorf("binrpc: encode string to ISO-8859-1: %w", err)
 	}
-	if err := binary.Write(w, binary.BigEndian, uint32(len(raw))); err != nil { //nolint:gosec // string length bounded
+	if err := binary.Write(w, binary.BigEndian, uint32(len(raw))); err != nil { //nolint:gosec // string length bounded; see #20
 		return err
 	}
 	_, err = w.Write(raw)
@@ -181,7 +181,7 @@ func writeStruct(w io.Writer, s xmlrpc.StructValue) error {
 	if err := binary.Write(w, binary.BigEndian, typeStruct); err != nil {
 		return err
 	}
-	if err := binary.Write(w, binary.BigEndian, uint32(len(s.Members))); err != nil { //nolint:gosec // len bounded
+	if err := binary.Write(w, binary.BigEndian, uint32(len(s.Members))); err != nil { //nolint:gosec // len bounded; see #20
 		return err
 	}
 	for _, m := range s.Members {
@@ -202,7 +202,7 @@ func writeArray(w io.Writer, a xmlrpc.ArrayValue) error {
 	if err := binary.Write(w, binary.BigEndian, typeArray); err != nil {
 		return err
 	}
-	if err := binary.Write(w, binary.BigEndian, uint32(len(a))); err != nil { //nolint:gosec // len bounded
+	if err := binary.Write(w, binary.BigEndian, uint32(len(a))); err != nil { //nolint:gosec // len bounded; see #20
 		return err
 	}
 	for i, v := range a {

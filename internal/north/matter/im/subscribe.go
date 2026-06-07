@@ -143,13 +143,13 @@ func UnmarshalSubscribeRequestTLV(dec *tlv.Decoder) (SubscribeRequest, error) { 
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagSubReqKeepSubscriptions:
 			req.KeepSubscriptions = el.Bool
 		case tagSubReqMinIntervalFloor:
-			req.MinIntervalFloor = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			req.MinIntervalFloor = uint16(el.Uint & 0xFFFF)
 		case tagSubReqMaxIntervalCeiling:
-			req.MaxIntervalCeiling = uint16(el.Uint) //nolint:gosec // G115: spec-bound
+			req.MaxIntervalCeiling = uint16(el.Uint & 0xFFFF)
 		case tagSubReqAttributeRequests:
 			if !el.IsContainer || el.Type != tlv.TypeArray {
 				return SubscribeRequest{}, fmt.Errorf("%w: AttributeRequests not array", ErrInvalidSubscribeRequest)

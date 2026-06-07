@@ -83,7 +83,7 @@ func NewClient(cfg Config) (*Client, error) {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					MinVersion:         tls.VersionTLS12,
-					InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // explicit opt-in for CCU self-signed certs
+					InsecureSkipVerify: cfg.InsecureSkipVerify, //nolint:gosec // explicit opt-in for CCU self-signed certs; see #20
 				},
 			},
 		}

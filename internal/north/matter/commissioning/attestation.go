@@ -85,7 +85,7 @@ func BuildAttestation(in AttestationInput) (*AttestationResult, error) {
 	enc.StartStruct(tlv.AnonymousTag())
 	enc.PutOctets(tlv.ContextTag(attElCertificationDeclaration), in.CertificationDeclaration)
 	enc.PutOctets(tlv.ContextTag(attElAttestationNonce), in.AttestationNonce)
-	//nolint:gosec // unix-epoch-seconds fits in uint64 for centuries
+	//nolint:gosec // unix-epoch-seconds fits in uint64 for centuries; see #20
 	enc.PutUint(tlv.ContextTag(attElTimestamp), uint64(now.Unix()))
 	if len(in.FirmwareInformation) > 0 {
 		enc.PutOctets(tlv.ContextTag(attElFirmwareInformation), in.FirmwareInformation)

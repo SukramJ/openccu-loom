@@ -67,7 +67,7 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 				// (HttpOnly=false) so the SPA can echo it back via the
 				// double-submit header. SameSite=Lax + Secure (when
 				// behind HTTPS) keep the token bound to the origin.
-				http.SetCookie(w, &http.Cookie{ //nolint:gosec // double-submit CSRF cookie must be JS-readable
+				http.SetCookie(w, &http.Cookie{ //nolint:gosec // double-submit CSRF cookie must be JS-readable; see #20
 					Name:     CSRFCookieName,
 					Value:    token,
 					Path:     "/",

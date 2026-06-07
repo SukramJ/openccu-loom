@@ -927,27 +927,27 @@ func toFloat64(v any) (float64, error) {
 func toInt32(v any) (int32, error) {
 	switch x := v.(type) {
 	case float64:
-		return int32(x), nil //nolint:gosec // deliberate narrowing from JSON number
+		return int32(x), nil //nolint:gosec // deliberate narrowing from JSON number; see #20
 	case float32:
-		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range
+		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range; see #20
 	case int:
-		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range
+		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range; see #20
 	case int32:
 		return x, nil
 	case int64:
-		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range
+		return int32(x), nil //nolint:gosec // deliberate narrowing; caller validates range; see #20
 	case json.Number:
 		n, err := x.Int64()
 		if err != nil {
 			return 0, fmt.Errorf("cannot parse %q as int", x)
 		}
-		return int32(n), nil //nolint:gosec // deliberate narrowing; caller validates range
+		return int32(n), nil //nolint:gosec // deliberate narrowing; caller validates range; see #20
 	case string:
 		n, err := strconv.ParseInt(x, 10, 32)
 		if err != nil {
 			return 0, fmt.Errorf("cannot parse %q as int", x)
 		}
-		return int32(n), nil //nolint:gosec // ParseInt bit size 32 guarantees the range
+		return int32(n), nil //nolint:gosec // ParseInt bit size 32 guarantees the range; see #20
 	}
 	return 0, fmt.Errorf("unsupported type %T for int conversion", v)
 }

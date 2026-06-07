@@ -86,5 +86,5 @@ func (w *Window) Accept(c uint32) bool {
 // (i.e., a smaller-or-equal counter modulo 2^32). The argument is
 // named hi (not max) to avoid shadowing the builtin.
 func wraps(c, hi uint32) bool {
-	return int32(hi-c) > 0 //nolint:gosec // G115: signed delta is the modular-distance test
+	return int32(hi-c) > 0 //nolint:gosec // G115: signed delta is the modular-distance test; see #20
 }

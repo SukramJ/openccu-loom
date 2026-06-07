@@ -284,7 +284,7 @@ func (v *Verifier) VerifyAndExtractPubKey(noc, icac []byte) (*ecdsa.PublicKey, e
 // from 2000-01-01T00:00:00Z per §6.5.1.5); convert to Unix seconds
 // before comparing against the wall clock.
 func (v *Verifier) checkValidity(c *Certificate) error {
-	now := uint64(v.now.Now().Unix()) //nolint:gosec // unix-epoch fits in uint64 for centuries
+	now := uint64(v.now.Now().Unix()) //nolint:gosec // unix-epoch fits in uint64 for centuries; see #20
 	notBeforeUnix := c.NotBefore + uint64(matterEpochUTCSeconds)
 	if now < notBeforeUnix {
 		return fmt.Errorf("%w: now=%d < NotBefore=%d", ErrExpired, now, notBeforeUnix)

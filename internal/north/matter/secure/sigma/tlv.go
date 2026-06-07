@@ -125,8 +125,7 @@ func (d *sigmaDecoder) next() (tag uint8, val sigmaValue, end bool, err error) {
 	if el.Tag.Number > 255 {
 		return 0, sigmaValue{}, false, fmt.Errorf("context tag out of range: %d", el.Tag.Number)
 	}
-	//nolint:gosec // Tag.Number bounded above.
-	return uint8(el.Tag.Number), sigmaValue{
+	return uint8(el.Tag.Number & 0xFF), sigmaValue{
 		octets:    el.Octets,
 		u:         el.Uint,
 		elemType:  el.Type,

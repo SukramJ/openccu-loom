@@ -147,7 +147,7 @@ func EncodeTimerDuration(d time.Duration) (value, unit int32) {
 		if v < 0 {
 			v = 0
 		}
-		return int32(v) //nolint:gosec // bounded above
+		return int32(v) //nolint:gosec // bounded above; see #20
 	}
 	if secs <= 0 {
 		return 0, 0

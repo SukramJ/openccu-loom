@@ -155,7 +155,7 @@ func buildMultipart(id string, payload io.Reader) (io.Reader, string, error) {
 func defaultRestoreClient(insecure bool) *http.Client {
 	tr := &http.Transport{}
 	if insecure {
-		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // operator opt-in
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // operator opt-in; see #20
 	}
 	return &http.Client{Timeout: 5 * time.Minute, Transport: tr}
 }

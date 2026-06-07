@@ -121,7 +121,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			for rows.Next() {
 				var fi int
 				if scanErr := rows.Scan(&fi); scanErr == nil && fi >= 1 && fi <= 254 {
-					occupied = append(occupied, uint8(fi)) //nolint:gosec // bounded by check
+					occupied = append(occupied, uint8(fi)) //nolint:gosec // bounded by check; see #20
 				}
 			}
 			_ = rows.Close()
@@ -238,7 +238,7 @@ func nextFabricIndexFromCounter(ctx context.Context, tx *sql.Tx) (uint8, error) 
 			return 0, fmt.Errorf("matter store: next fabric index (counter): scan: %w", scanErr)
 		}
 		if got >= 1 && got <= 254 {
-			occupied[uint8(got)] = struct{}{} //nolint:gosec // bounded by check
+			occupied[uint8(got)] = struct{}{} //nolint:gosec // bounded by check; see #20
 		}
 	}
 	if rErr := rows.Err(); rErr != nil {
@@ -283,7 +283,7 @@ func nextFreeFabricIndex(ctx context.Context, tx *sql.Tx) (uint8, error) {
 		if got < 1 || got > 254 {
 			return 0, fmt.Errorf("matter store: next fabric index: stored value %d out of range", got)
 		}
-		if uint8(got) != want { //nolint:gosec // bounded by the range check above
+		if uint8(got) != want { //nolint:gosec // bounded by the range check above; see #20
 			return want, nil
 		}
 		if want == 254 {

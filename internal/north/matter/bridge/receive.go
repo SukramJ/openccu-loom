@@ -813,7 +813,7 @@ func protocolHeaderSize(p message.ProtocolHeader) int {
 // exposes. Mirrors the encode-side bit layout.
 func securityFlagsByte(hdr *message.Header) uint8 {
 	var b uint8
-	b |= uint8(hdr.SessionType) & 0x1F //nolint:gosec // 5-bit field per spec
+	b |= uint8(hdr.SessionType&0xFF) & 0x1F
 	if hdr.Privacy {
 		b |= 0x80
 	}

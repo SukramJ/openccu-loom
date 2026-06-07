@@ -133,7 +133,7 @@ func (c *CCM) cbcMAC(nonce, plaintext, aad []byte) []byte {
 	b0 := make([]byte, blockSize)
 	b0[0] = flags
 	copy(b0[1:1+NonceSize], nonce)
-	binary.BigEndian.PutUint16(b0[1+NonceSize:], uint16(len(plaintext))) //nolint:gosec // G115: plaintext-length capped to 2^16-1 by Seal/Open
+	binary.BigEndian.PutUint16(b0[1+NonceSize:], uint16(len(plaintext))) //nolint:gosec // G115: plaintext-length capped to 2^16-1 by Seal/Open; see #20
 
 	state := make([]byte, blockSize)
 	c.block.Encrypt(state, b0)
@@ -144,7 +144,7 @@ func (c *CCM) cbcMAC(nonce, plaintext, aad []byte) []byte {
 		// extended encoding which we don't implement because Matter
 		// never uses it).
 		aadBlock := make([]byte, 0, len(aad)+2)
-		aadBlock = binary.BigEndian.AppendUint16(aadBlock, uint16(len(aad))) //nolint:gosec // G115: Matter AAD never exceeds 0xFEFF
+		aadBlock = binary.BigEndian.AppendUint16(aadBlock, uint16(len(aad))) //nolint:gosec // G115: Matter AAD never exceeds 0xFEFF; see #20
 		aadBlock = append(aadBlock, aad...)
 		state = cbcMacBlocks(c.block, state, aadBlock)
 	}

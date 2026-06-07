@@ -97,7 +97,7 @@ func loadOrCreateKeyFile(dataDir string) ([]byte, error) {
 		return nil, errors.New("no data_dir for key file")
 	}
 	path := filepath.Join(dataDir, KeyFileName)
-	//nolint:gosec // path is data_dir (operator-controlled config) + a constant filename
+	//nolint:gosec // path is data_dir (operator-controlled config) + a constant filename; see #20
 	raw, err := os.ReadFile(path)
 	switch {
 	case err == nil:

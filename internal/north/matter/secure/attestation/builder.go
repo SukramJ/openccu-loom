@@ -7,7 +7,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha1" //nolint:gosec // SubjectKeyIdentifier derivation per RFC 5280; not security-relevant.
+	"crypto/sha1" //nolint:gosec // SubjectKeyIdentifier derivation per RFC 5280; not security-relevant; see #20
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -60,7 +60,7 @@ var oidCommonName = asn1.ObjectIdentifier{2, 5, 4, 3}
 // child certificate matches this SKID byte-for-byte.
 func computeSKID(pub *ecdsa.PublicKey) []byte {
 	raw := elliptic.Marshal(pub.Curve, pub.X, pub.Y) //nolint:staticcheck // matter.js / chip-tool compatibility
-	sum := sha1.Sum(raw)                             //nolint:gosec // SKID derivation per RFC 5280
+	sum := sha1.Sum(raw)                             //nolint:gosec // SKID derivation per RFC 5280; see #20
 	return sum[:]
 }
 

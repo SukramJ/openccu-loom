@@ -183,7 +183,7 @@ func LoadEasymode(path string) (*Easymode, error) {
 	if path == "" {
 		return nil, ErrNoEasymode
 	}
-	f, err := os.Open(path) //nolint:gosec // operator-supplied
+	f, err := os.Open(path) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		return nil, fmt.Errorf("ccudata: open %s: %w", path, err)
 	}

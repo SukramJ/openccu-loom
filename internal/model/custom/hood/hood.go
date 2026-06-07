@@ -156,7 +156,7 @@ func (h *Hood) SetFanSpeed(ctx context.Context, speed FanSpeed, priority hmenum.
 	if h.writer == nil {
 		return errors.New("hood: writer required")
 	}
-	code := int32(speed) //nolint:gosec // FanSpeed values are small constants (0-3); safe to narrow
+	code := int32(speed) //nolint:gosec // FanSpeed values are small constants (0-3); safe to narrow; see #20
 	if err := h.writer.SetValue(custom.EnsureContext(ctx), h.Address, hmenum.ParameterLevel, code, priority); err != nil {
 		return fmt.Errorf("hood: SetFanSpeed %s: %w", FanSpeedLabel(speed), err)
 	}

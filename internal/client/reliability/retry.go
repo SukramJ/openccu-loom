@@ -197,8 +197,8 @@ func NewRetrier(cfg RetryConfig) *Retrier {
 		if seed < 0 {
 			seed = -seed
 		}
-		src := rand.NewPCG(uint64(seed), 0xbaadf00d) //nolint:gosec // jitter only, not security-sensitive
-		cfg.Rand = rand.New(src)                     //nolint:gosec // jitter only, not security-sensitive
+		src := rand.NewPCG(uint64(seed), 0xbaadf00d) //nolint:gosec // jitter only, not security-sensitive; see #20
+		cfg.Rand = rand.New(src)                     //nolint:gosec // jitter only, not security-sensitive; see #20
 	}
 	if cfg.DutyCycleDelay <= 0 {
 		cfg.DutyCycleDelay = defaultDutyCycleDelay

@@ -90,11 +90,11 @@ func decodeMoveToLevelRequest(dec *tlv.Decoder) (uint8, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: Tag.Number is a uint64 but Matter context tags fit in uint8 by spec
+		if uint8(el.Tag.Number&0xFF) == 0 {
 			if el.Uint > 0xFF {
 				return 0, fmt.Errorf("MoveToLevel: Level %d > uint8 max", el.Uint)
 			}
-			level = uint8(el.Uint) //nolint:gosec // G115: range guarded by el.Uint > 0xFF check above
+			level = uint8(el.Uint & 0xFF)
 		}
 	}
 }
@@ -126,7 +126,7 @@ func decodeGenericTagMap(dec *tlv.Decoder) (map[uint8]any, error) {
 		if out == nil {
 			out = make(map[uint8]any, 4)
 		}
-		tag := uint8(el.Tag.Number) //nolint:gosec // G115: Tag.Number is a uint64 but Matter context tags fit in uint8 by spec
+		tag := uint8(el.Tag.Number & 0xFF)
 		switch {
 		case el.Type >= tlv.TypeUnsignedInt1 && el.Type <= tlv.TypeUnsignedInt8:
 			out[tag] = el.Uint
@@ -163,9 +163,9 @@ func decodeArmFailSafeRequest(dec *tlv.Decoder) (mattercore.ArmFailSafeRequest, 
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0:
-			req.ExpiryLengthSeconds = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.ExpiryLengthSeconds = uint16(el.Uint & 0xFFFF)
 		case 1:
 			req.Breadcrumb = el.Uint
 		}
@@ -188,9 +188,9 @@ func decodeSetRegulatoryConfigRequest(dec *tlv.Decoder) (mattercore.SetRegulator
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0:
-			req.NewRegulatoryConfig = uint8(el.Uint) //nolint:gosec // enum8 per spec
+			req.NewRegulatoryConfig = uint8(el.Uint & 0xFF)
 		case 1:
 			// CountryCode is a `TlvUTF8String` (char-string[2] per
 			// §11.10.7.4). TLV decoder lands UTF8 in `el.String`,
@@ -236,7 +236,7 @@ func decodeAttestationRequest(dec *tlv.Decoder) (mattercore.AttestationRequest, 
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		if uint8(el.Tag.Number&0xFF) == 0 {
 			req.AttestationNonce = append([]byte(nil), el.Octets...)
 		}
 	}
@@ -257,8 +257,8 @@ func decodeCertificateChainRequest(dec *tlv.Decoder) (mattercore.CertificateChai
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
-			req.CertificateType = uint8(el.Uint) //nolint:gosec // enum8 per spec
+		if uint8(el.Tag.Number&0xFF) == 0 {
+			req.CertificateType = uint8(el.Uint & 0xFF)
 		}
 	}
 }
@@ -278,7 +278,7 @@ func decodeCSRRequest(dec *tlv.Decoder) (mattercore.CSRRequest, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0:
 			req.CSRNonce = append([]byte(nil), el.Octets...)
 		case 1:
@@ -303,7 +303,7 @@ func decodeAddNOCRequest(dec *tlv.Decoder) (mattercore.AddNOCRequest, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0:
 			req.NOCValue = append([]byte(nil), el.Octets...)
 		case 1:
@@ -313,7 +313,7 @@ func decodeAddNOCRequest(dec *tlv.Decoder) (mattercore.AddNOCRequest, error) {
 		case 3:
 			req.CaseAdminSubject = el.Uint
 		case 4:
-			req.AdminVendorID = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.AdminVendorID = uint16(el.Uint & 0xFFFF)
 		}
 	}
 }
@@ -333,7 +333,7 @@ func decodeUpdateNOCRequest(dec *tlv.Decoder) (mattercore.UpdateNOCRequest, erro
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0:
 			req.NOCValue = append([]byte(nil), el.Octets...)
 		case 1:
@@ -368,7 +368,7 @@ func decodeUpdateFabricLabelRequest(dec *tlv.Decoder) (mattercore.UpdateFabricLa
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		if uint8(el.Tag.Number&0xFF) == 0 {
 			req.Label = el.String
 		}
 	}
@@ -389,8 +389,8 @@ func decodeRemoveFabricRequest(dec *tlv.Decoder) (mattercore.RemoveFabricRequest
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
-			req.FabricIndex = uint8(el.Uint) //nolint:gosec // FabricIndex is uint8
+		if uint8(el.Tag.Number&0xFF) == 0 {
+			req.FabricIndex = uint8(el.Uint & 0xFF)
 		}
 	}
 }
@@ -410,7 +410,7 @@ func decodeAddTrustedRootCertificateRequest(dec *tlv.Decoder) (mattercore.AddTru
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number) == 0 { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		if uint8(el.Tag.Number&0xFF) == 0 {
 			req.RootCACertificate = append([]byte(nil), el.Octets...)
 		}
 	}

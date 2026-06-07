@@ -147,15 +147,15 @@ func DecodeMoveToHue(payload []byte) (MoveToHueRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.Hue = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Hue = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 1:
-			req.Direction = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.Direction = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 2:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 3:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 4:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -169,13 +169,13 @@ func DecodeMoveToSaturation(payload []byte) (MoveToSaturationRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.Saturation = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Saturation = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 1:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -190,15 +190,15 @@ func DecodeMoveToHueAndSaturation(payload []byte) (MoveToHueAndSaturationRequest
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.Hue = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Hue = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 1:
-			req.Saturation = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Saturation = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 3:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 4:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -212,13 +212,13 @@ func DecodeMoveHue(payload []byte) (MoveHueRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.MoveMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.MoveMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.Rate = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Rate = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -232,15 +232,15 @@ func DecodeStepHue(payload []byte) (StepHueRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.StepMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.StepMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.StepSize = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.StepSize = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 3:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 4:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -254,13 +254,13 @@ func DecodeMoveSaturation(payload []byte) (MoveSaturationRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.MoveMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.MoveMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.Rate = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.Rate = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -274,15 +274,15 @@ func DecodeStepSaturation(payload []byte) (StepSaturationRequest, error) {
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.StepMode = uint8(el.Uint) //nolint:gosec // 8-bit enum per spec
+			req.StepMode = uint8(el.Uint & 0xFF) // 8-bit enum per spec
 		case 1:
-			req.StepSize = uint8(el.Uint) //nolint:gosec // 8-bit field per spec
+			req.StepSize = uint8(el.Uint & 0xFF) // 8-bit field per spec
 		case 2:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 3:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 4:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err
@@ -297,13 +297,13 @@ func DecodeMoveToColorTemperature(payload []byte) (MoveToColorTemperatureRequest
 	if err := walkContext(payload, ErrColorControlMalformed, func(tag uint32, el tlv.Element) {
 		switch tag {
 		case 0:
-			req.ColorTemperatureMireds = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.ColorTemperatureMireds = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 1:
-			req.TransitionTime = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.TransitionTime = uint16(el.Uint & 0xFFFF) // 16-bit field per spec
 		case 2:
-			req.OptionsMask = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsMask = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		case 3:
-			req.OptionsOverride = uint8(el.Uint) //nolint:gosec // 8-bit bitmap per spec
+			req.OptionsOverride = uint8(el.Uint & 0xFF) // 8-bit bitmap per spec
 		}
 	}); err != nil {
 		return req, err

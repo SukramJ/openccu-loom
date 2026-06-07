@@ -732,7 +732,7 @@ func (g *GeneralCommissioning) handleCommissioningComplete(ctx context.Context) 
 // chip CommissioningWindowManager.cpp ArmFailSafe() call.
 func (g *GeneralCommissioning) ArmFailSafeFor(ctx context.Context, seconds uint32, fabricIndex uint8) error {
 	req := ArmFailSafeRequest{
-		ExpiryLengthSeconds: uint16(seconds), //nolint:gosec // G115: window timeout ≤ 900 s, fits uint16
+		ExpiryLengthSeconds: uint16(seconds & 0xFFFF), // window timeout ≤ 900 s, fits uint16
 		Breadcrumb:          0,               // window open does not set Breadcrumb
 	}
 	// Temporarily inject the fabric index so handleArmFailSafe records it.

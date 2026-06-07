@@ -202,7 +202,7 @@ func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funl
 		*mergeMode = true
 	}
 
-	raw, err := os.ReadFile(importFile) //nolint:gosec // operator-supplied path
+	raw, err := os.ReadFile(importFile) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		return fmt.Errorf("config import: read file: %w", err)
 	}

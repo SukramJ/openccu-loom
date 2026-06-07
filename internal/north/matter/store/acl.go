@@ -117,7 +117,7 @@ VALUES (?, ?, ?, ?, ?, ?)`
 			}
 			targetsJSON = string(b)
 		}
-		//nolint:gosec // i fits in uint16 — ACL list size capped well below 65k
+		//nolint:gosec // i fits in uint16 — ACL list size capped well below 65k; see #20
 		if _, err := stmt.ExecContext(ctx, fabricIndex, uint8(entries[i].Privilege), uint8(entries[i].AuthMode),
 			string(subjectsJSON), targetsJSON, uint16(i)); err != nil {
 			return fmt.Errorf("matter store: replace acl: insert %d: %w", i, err)

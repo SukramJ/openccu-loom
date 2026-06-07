@@ -226,7 +226,7 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err error) {
 	switch sec {
 	case SectionMQTT:
-		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027)
+		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027); see #20
 		raw, err = json.Marshal(cfg.North.MQTT)
 	case SectionMatter:
 		raw, err = json.Marshal(cfg.North.Matter)
@@ -235,7 +235,7 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 	case SectionREST:
 		raw, err = json.Marshal(cfg.North.REST)
 	case SectionOIDC:
-		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027)
+		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027); see #20
 		raw, err = json.Marshal(cfg.North.REST.Auth.OIDC)
 	case SectionUI:
 		raw, err = json.Marshal(cfg.North.UI)

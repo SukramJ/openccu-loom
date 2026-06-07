@@ -223,7 +223,7 @@ func (p *EventBusProvider) HandlerStats() map[string]metrics.HandlerStatSnapshot
 		// hs.Matches is uint64; cap at math.MaxInt32 to avoid overflow on
 		// 32-bit targets. In practice match counts never approach this limit.
 		matches := min(hs.Matches, 1<<31-1)
-		snap.Executed += int(matches) //nolint:gosec // overflow guarded above
+		snap.Executed += int(matches) //nolint:gosec // overflow guarded above; see #20
 		out[key] = snap
 	}
 	return out

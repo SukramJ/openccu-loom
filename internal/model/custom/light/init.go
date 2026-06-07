@@ -283,7 +283,7 @@ func kelvinBoundsFromChannel(ch *device.Channel) (minK, maxK int32) {
 	if len(desc.Max) > 0 {
 		_ = json.Unmarshal(desc.Max, &hi) //nolint:errcheck // fallback to 0 on parse failure
 	}
-	return int32(lo), int32(hi) //nolint:gosec // CCU colour-temp values fit int32
+	return int32(lo), int32(hi) //nolint:gosec // CCU colour-temp values fit int32; see #20
 }
 
 // newSoundPlayerLEDConstructor builds a [SoundPlayerLED] for the

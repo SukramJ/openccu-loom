@@ -84,7 +84,7 @@ func (m *Manager) tick(ctx context.Context, now time.Time) {
 				for _, ev := range events {
 					ts := ev.Timestamp
 					if ts == 0 {
-						ts = uint64(now.UnixMilli()) //nolint:gosec // millis fit uint64
+						ts = uint64(now.UnixMilli()) //nolint:gosec // millis fit uint64; see #20
 					}
 					out = append(out, im.EventReport{
 						Path:      ev.Path,

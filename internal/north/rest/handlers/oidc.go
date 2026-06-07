@@ -168,7 +168,7 @@ func oidcRedirectError(w http.ResponseWriter, r *http.Request, reason, target st
 	// `target` was vetted by isSafeRelativeTarget above (path-only,
 	// same-origin); `reason` is a fixed error code from this package
 	// and is URL-encoded as a query value.
-	http.Redirect(w, r, target+"?error="+url.QueryEscape(reason), http.StatusSeeOther) //nolint:gosec // target validated, reason encoded
+	http.Redirect(w, r, target+"?error="+url.QueryEscape(reason), http.StatusSeeOther) //nolint:gosec // target validated, reason encoded; see #20
 }
 
 // isSafeRelativeTarget returns true when target is a path-only

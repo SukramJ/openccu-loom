@@ -108,7 +108,7 @@ func (s *Sensor[T]) OnWireValue(v any) bool {
 		case int32:
 			raw = x
 		case int:
-			raw = int32(x) //nolint:gosec // safe: RSSI range is ±256
+			raw = int32(x) //nolint:gosec // safe: RSSI range is ±256; see #20
 		default:
 			return s.DataPoint.OnWireValue(v)
 		}

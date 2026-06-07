@@ -101,7 +101,7 @@ func LoadBootstrap(path string) (*BootstrapConfig, error) {
 	if path == "" {
 		return nil, ErrNoConfig
 	}
-	buf, err := os.ReadFile(path) //nolint:gosec // path comes from operator-supplied CLI arg
+	buf, err := os.ReadFile(path) //nolint:gosec // path comes from operator-supplied CLI arg; see #20
 	if err != nil {
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
 	}

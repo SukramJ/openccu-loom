@@ -712,14 +712,14 @@ func isCASEAuthTagSubject(s uint64) bool {
 // entry's version (so a v1 grant covers a v1-NOC holder but a v2 grant
 // does not cover a v1-NOC holder).
 func matchesCATSubject(entryCAT uint32, subjectCATs []uint32) bool {
-	entryID := uint16((entryCAT & kCATIdentifierMask) >> 16) //nolint:gosec // CAT identifier is a 16-bit field by spec
-	entryVer := uint16(entryCAT & kCATVersionMask)           //nolint:gosec // CAT version is a 16-bit field by spec
+	entryID := uint16(((entryCAT & kCATIdentifierMask) >> 16) & 0xFFFF)
+	entryVer := uint16((entryCAT & kCATVersionMask) & 0xFFFF)
 	for _, sub := range subjectCATs {
 		if sub == 0 {
 			continue
 		}
-		subID := uint16((sub & kCATIdentifierMask) >> 16) //nolint:gosec // CAT identifier is a 16-bit field by spec
-		subVer := uint16(sub & kCATVersionMask)           //nolint:gosec // CAT version is a 16-bit field by spec
+		subID := uint16(((sub & kCATIdentifierMask) >> 16) & 0xFFFF)
+		subVer := uint16((sub & kCATVersionMask) & 0xFFFF)
 		if subID != entryID {
 			continue
 		}

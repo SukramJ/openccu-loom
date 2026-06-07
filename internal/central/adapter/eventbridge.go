@@ -1546,7 +1546,7 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch.
-		go func() { //nolint:gosec,contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load
+		go func() { //nolint:gosec,contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load; see #20
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_, _ = cp.Load(loadCtx)
@@ -1683,7 +1683,7 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	// the channel's refresher; on success it publishes through the
 	// Profile's OnChange, which we subscribe to below for re-publishing.
 	if sp := wp.Simple(); sp != nil {
-		go func(p *weekprofile.DefaultProfile) { //nolint:gosec,contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load
+		go func(p *weekprofile.DefaultProfile) { //nolint:gosec,contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load; see #20
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_, _ = p.Load(loadCtx)
@@ -1931,11 +1931,11 @@ func orderedTargetKeys(channels map[string]weekprofile.TargetChannelInfo) []stri
 func rawLocksToUint32(v any) (uint32, bool) {
 	switch x := v.(type) {
 	case int:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional
+		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
 	case int32:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional
+		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
 	case int64:
-		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional
+		return uint32(x), true //nolint:gosec // CCU sends a bitmask; bit-pattern reinterpretation is intentional; see #20
 	case uint32:
 		return x, true
 	case float64:

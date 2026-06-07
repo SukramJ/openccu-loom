@@ -138,7 +138,7 @@ func (c *TCPClient) Connect(ctx context.Context) error { //nolint:funlen // sing
 
 	pkt := &protocol.ConnectPacket{
 		ClientID:     c.cfg.ClientID,
-		KeepAlive:    uint16(c.cfg.KeepAlive.Seconds()), //nolint:gosec // clamped above
+		KeepAlive:    uint16(c.cfg.KeepAlive.Seconds()), //nolint:gosec // clamped above; see #20
 		Username:     c.cfg.Username,
 		Password:     c.cfg.Password,
 		CleanSession: c.cfg.CleanSession,
@@ -366,7 +366,7 @@ func (c *TCPClient) writeFrame(pkt frameEncoder) error {
 func (c *TCPClient) nextPacketID() uint16 {
 	for {
 		v := c.nextID.Add(1)
-		id := uint16(v & 0xFFFF) //nolint:gosec // ringed at 16-bit on purpose
+		id := uint16(v & 0xFFFF)
 		if id == 0 {
 			continue
 		}

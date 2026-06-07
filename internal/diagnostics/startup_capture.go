@@ -43,7 +43,7 @@ func LoadStartupCapture(dataDir string) (StartupCaptureConfig, error) {
 		return StartupCaptureConfig{}, nil
 	}
 	path := filepath.Join(dataDir, StartupCaptureFileName)
-	raw, err := os.ReadFile(path) //nolint:gosec // path is composed from the operator-controlled data dir
+	raw, err := os.ReadFile(path) //nolint:gosec // path is composed from the operator-controlled data dir; see #20
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return StartupCaptureConfig{}, nil

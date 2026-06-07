@@ -71,7 +71,7 @@ func readDataVersionFilterFields(dec *tlv.Decoder) (DataVersionFilter, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case 0: // Path (ClusterPathIB — a List)
 			if !el.IsContainer {
 				continue
@@ -87,15 +87,15 @@ func readDataVersionFilterFields(dec *tlv.Decoder) (DataVersionFilter, error) {
 				if inner.Tag.Kind != tlv.TagKindContext {
 					continue
 				}
-				switch uint8(inner.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+				switch uint8(inner.Tag.Number & 0xFF) {
 				case 1: // EndpointID
-					f.Endpoint = uint16(inner.Uint) //nolint:gosec // G115: spec-bound
+					f.Endpoint = uint16(inner.Uint & 0xFFFF)
 				case 2: // ClusterID
-					f.Cluster = uint32(inner.Uint) //nolint:gosec // G115: spec-bound
+					f.Cluster = uint32(inner.Uint & 0xFFFFFFFF)
 				}
 			}
 		case 1: // DataVersion (uint32)
-			f.DataVersion = uint32(el.Uint) //nolint:gosec // G115: spec-bound
+			f.DataVersion = uint32(el.Uint & 0xFFFFFFFF)
 		}
 	}
 }
@@ -160,7 +160,7 @@ func readEventFilterFields(dec *tlv.Decoder) (EventMinimumNumber, error) {
 			}
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagEventFilterNodeID:
 			f.NodeID = el.Uint
 			f.HasNodeID = true

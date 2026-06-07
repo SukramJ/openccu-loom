@@ -297,7 +297,7 @@ func (w *CommissioningWindow) OpenWindow(ctx context.Context, params wire.OpenWi
 	// Mirrors matter.js AdministratorCommissioningServer.ts:openCommissioningWindow
 	// → GeneralCommissioningBehavior.armFailSafeLogic(timeoutSeconds).
 	if armer != nil {
-		_ = armer.ArmFailSafeFor(ctx, uint32(params.CommissioningTimeoutSeconds), 0) //nolint:gosec // G115: timeout fits uint32 by spec
+		_ = armer.ArmFailSafeFor(ctx, uint32(params.CommissioningTimeoutSeconds), 0) //nolint:gosec // G115: timeout fits uint32 by spec; see #20
 	}
 	if hook != nil {
 		hook()

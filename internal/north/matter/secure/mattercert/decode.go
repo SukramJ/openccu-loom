@@ -247,7 +247,7 @@ func Decode(raw []byte) (*Certificate, error) {
 // from d. For container fields (Issuer/Subject/Extensions) the parser
 // is invoked recursively.
 func assignField(cert *Certificate, el tlv.Element, d *tlv.Decoder) error {
-	tag := uint8(el.Tag.Number) //nolint:gosec // context-tag numbers are 0..255 by definition
+	tag := uint8(el.Tag.Number & 0xFF)
 	switch tag {
 	case tagSerialNumber:
 		if el.Type < tlv.TypeOctetStr1 || el.Type > tlv.TypeOctetStr8 {
@@ -315,7 +315,7 @@ func decodeDN(d *tlv.Decoder) (DistinguishedName, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			return dn, fmt.Errorf("%w: dn entry with non-context tag", ErrMalformed)
 		}
-		tag := uint8(el.Tag.Number) //nolint:gosec // context-tag 0..255
+		tag := uint8(el.Tag.Number & 0xFF)
 		switch tag {
 		case dnTagMatterNodeID:
 			dn.MatterNodeID = el.Uint
@@ -334,8 +334,7 @@ func decodeDN(d *tlv.Decoder) (DistinguishedName, error) {
 			dn.HasFabricID = true
 			dn.Order = append(dn.Order, tag)
 		case dnTagMatterCASEAuth:
-			//nolint:gosec // CAT values are 32-bit by spec definition
-			dn.CASEAuthTags = append(dn.CASEAuthTags, uint32(el.Uint))
+			dn.CASEAuthTags = append(dn.CASEAuthTags, uint32(el.Uint&0xFFFFFFFF))
 			dn.Order = append(dn.Order, tag)
 		default:
 			// Skip — DN attributes the bridge does not consume.
@@ -430,7 +429,7 @@ func decodeExtensions(d *tlv.Decoder) (CertificateExtensions, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			return ext, fmt.Errorf("%w: extension entry with non-context tag", ErrMalformed)
 		}
-		tag := uint8(el.Tag.Number) //nolint:gosec // context-tag 0..255
+		tag := uint8(el.Tag.Number & 0xFF)
 		switch tag {
 		case extTagBasicConstraints:
 			if !el.IsContainer {
@@ -440,8 +439,7 @@ func decodeExtensions(d *tlv.Decoder) (CertificateExtensions, error) {
 				return ext, fmt.Errorf("basic-constraints: %w", err)
 			}
 		case extTagKeyUsage:
-			//nolint:gosec // KeyUsage TLV decodes as uint64; spec bounds at uint16.
-			ext.KeyUsage = uint16(el.Uint)
+			ext.KeyUsage = uint16(el.Uint & 0xFFFF)
 			ext.HasKeyUsage = true
 		case extTagExtendedKeyUsage:
 			if !el.IsContainer {
@@ -493,13 +491,12 @@ func decodeBasicConstraints(d *tlv.Decoder, ext *CertificateExtensions) error {
 		if el.Tag.Kind != tlv.TagKindContext {
 			return fmt.Errorf("%w: bc entry with non-context tag", ErrMalformed)
 		}
-		tag := uint8(el.Tag.Number) //nolint:gosec // context-tag 0..255
+		tag := uint8(el.Tag.Number & 0xFF)
 		switch tag {
 		case extBCInnerTagIsCa:
 			ext.BasicConstraintsIsCA = el.Type == tlv.TypeBoolTrue
 		case extBCInnerTagPathLen:
-			//nolint:gosec // path-len is uint8 by spec; el.Uint is uint64.
-			ext.BasicConstraintsPathLen = uint8(el.Uint)
+			ext.BasicConstraintsPathLen = uint8(el.Uint & 0xFF)
 			ext.BasicConstraintsHasPathLen = true
 		default:
 			if el.IsContainer {
@@ -523,7 +520,6 @@ func decodeUint8Array(d *tlv.Decoder) ([]uint8, error) {
 		if el.IsEndContainer {
 			return out, nil
 		}
-		//nolint:gosec // EKU enum bounded to 1..6 by spec; defensive cast.
-		out = append(out, uint8(el.Uint))
+		out = append(out, uint8(el.Uint&0xFF))
 	}
 }

@@ -140,7 +140,7 @@ func DecodePake2(payload []byte) (pB, cB []byte, err error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagPake2PB:
 			pB = appendOctets(pB, el.Octets)
 		case tagPake2CB:
@@ -273,13 +273,13 @@ func DecodePBKDFParamRequest(payload []byte) (PBKDFParamRequest, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagPBKDFReqInitiatorRandom:
 			req.InitiatorRandom = appendOctets(req.InitiatorRandom, el.Octets)
 		case tagPBKDFReqInitiatorSessionID:
-			req.InitiatorSessionID = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.InitiatorSessionID = uint16(el.Uint & 0xFFFF)
 		case tagPBKDFReqPasscodeID:
-			req.PasscodeID = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			req.PasscodeID = uint16(el.Uint & 0xFFFF)
 		case tagPBKDFReqHasPBKDFParameters:
 			req.HasPBKDFParameters = el.Bool
 		case tagPBKDFReqInitiatorMRPParams:
@@ -440,13 +440,13 @@ func DecodePBKDFParamResponse(payload []byte) (PBKDFParamResponse, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagPBKDFRespInitiatorRandom:
 			resp.InitiatorRandom = appendOctets(resp.InitiatorRandom, el.Octets)
 		case tagPBKDFRespResponderRandom:
 			resp.ResponderRandom = appendOctets(resp.ResponderRandom, el.Octets)
 		case tagPBKDFRespResponderSessionID:
-			resp.ResponderSessionID = uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			resp.ResponderSessionID = uint16(el.Uint & 0xFFFF)
 		case tagPBKDFRespPBKDFParameters:
 			if !el.IsContainer {
 				return resp, fmt.Errorf("%w: PBKDFParameters not a container", ErrWireMalformed)
@@ -495,9 +495,9 @@ func decodePBKDFParameters(dec *tlv.Decoder) (PBKDFParameters, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagPBKDFParamsIterations:
-			p.Iterations = uint32(el.Uint) //nolint:gosec // 32-bit field per spec
+			p.Iterations = uint32(el.Uint & 0xFFFFFFFF)
 		case tagPBKDFParamsSalt:
 			p.Salt = appendOctets(p.Salt, el.Octets)
 		}
@@ -525,15 +525,15 @@ func decodeMRPParameters(dec *tlv.Decoder) (MRPParameters, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tag number is 0..7 in spec-conforming TLV per Matter A.7.2
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagMRPParamsIdleRetransTimeoutMs:
-			v := uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			v := uint16(el.Uint & 0xFFFF)
 			p.IdleRetransTimeoutMs = &v
 		case tagMRPParamsActiveRetransTimeoutMs:
-			v := uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			v := uint16(el.Uint & 0xFFFF)
 			p.ActiveRetransTimeoutMs = &v
 		case tagMRPParamsActiveThresholdTimeMs:
-			v := uint16(el.Uint) //nolint:gosec // 16-bit field per spec
+			v := uint16(el.Uint & 0xFFFF)
 			p.ActiveThresholdTimeMs = &v
 		}
 	}

@@ -91,7 +91,7 @@ func (p *MasterPoller) SchedulePoll(address string, key hmenum.ParamsetKey) {
 	// cancel is invoked via entry.cancel() either by a deduplicating
 	// SchedulePoll call or by the deferred cleanup in run() — the
 	// gosec G118 lint can't see the indirection so we annotate.
-	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel called via entry.cancel in run()/SchedulePoll
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel called via entry.cancel in run()/SchedulePoll; see #20
 	p.scheduled[pk] = &pollEntry{cancel: cancel}
 	interval := p.Interval
 	if interval <= 0 {

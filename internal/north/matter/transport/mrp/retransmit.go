@@ -72,7 +72,7 @@ type Retransmitter struct {
 // session-key material under [..]/secure.
 func NewRetransmitter(send SendFunc, rng *rand.Rand) *Retransmitter {
 	if rng == nil {
-		rng = rand.New(rand.NewPCG(0xCAFEBABE, 0xDEADBEEF)) //nolint:gosec // G404: jitter only — see doc comment
+		rng = rand.New(rand.NewPCG(0xCAFEBABE, 0xDEADBEEF)) //nolint:gosec // G404: jitter only — see doc comment; see #20
 	}
 	return &Retransmitter{
 		entries: map[uint32]*pending{},

@@ -257,7 +257,7 @@ func (c *Climate) MatterScheduleEntries() []wire.ScheduleEntry {
 	prefix := fmt.Sprintf("P%d_", idx+1)
 	out := make([]wire.ScheduleEntry, 0, 7*13)
 	for matterDayInt, hmDay := range matterDayOfWeekFromHMName {
-		matterDay := uint8(matterDayInt) //nolint:gosec // bounded by array size 7
+		matterDay := uint8(matterDayInt) //nolint:gosec // bounded by array size 7; see #20
 		for slot := 1; slot <= 13; slot++ {
 			endtimeKey := hmenum.Parameter(prefix + "ENDTIME_" + hmDay + "_" + strconv.Itoa(slot))
 			tempKey := hmenum.Parameter(prefix + "TEMPERATURE_" + hmDay + "_" + strconv.Itoa(slot))
@@ -310,22 +310,22 @@ func toUint16Minutes(raw any) (uint16, bool) {
 		if v < 0 || v > 1440 {
 			return 0, false
 		}
-		return uint16(v), true //nolint:gosec // bounded by the if above
+		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
 	case int32:
 		if v < 0 || v > 1440 {
 			return 0, false
 		}
-		return uint16(v), true //nolint:gosec // bounded by the if above
+		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
 	case int64:
 		if v < 0 || v > 1440 {
 			return 0, false
 		}
-		return uint16(v), true //nolint:gosec // bounded by the if above
+		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
 	case float64:
 		if v < 0 || v > 1440 {
 			return 0, false
 		}
-		return uint16(v), true //nolint:gosec // bounded by the if above
+		return uint16(v), true //nolint:gosec // bounded by the if above; see #20
 	default:
 		return 0, false
 	}

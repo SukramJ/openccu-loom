@@ -202,12 +202,12 @@ func UnmarshalStatusIBTLV(dec *tlv.Decoder) (StatusIB, error) {
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		switch uint8(el.Tag.Number) { //nolint:gosec // G115: context tags fit uint8 by IM spec
+		switch uint8(el.Tag.Number & 0xFF) {
 		case tagStatusIBStatus:
-			sib.Status = StatusCode(el.Uint) //nolint:gosec // G115: status fits uint8 by definition
+			sib.Status = StatusCode(el.Uint & 0xFF)
 			sawStatus = true
 		case tagStatusIBClusterStatus:
-			sib.ClusterStatus = uint8(el.Uint) //nolint:gosec // G115: spec-bound
+			sib.ClusterStatus = uint8(el.Uint & 0xFF)
 			sib.HasClusterStatus = true
 		}
 	}

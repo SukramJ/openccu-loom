@@ -110,7 +110,7 @@ func (i *Identify) MatterDataVersion() uint32 { return i.dataVersion.Current() }
 func (i *Identify) MatterRead(attrID uint32) (any, bool) {
 	switch attrID {
 	case identifyAttrTime:
-		return uint16(i.identifyTime.Load()), true //nolint:gosec // value capped at uint16 by every writer
+		return uint16(i.identifyTime.Load() & 0xFFFF), true // value capped at uint16 by every writer
 	case identifyAttrType:
 		return identifyTypeNone, true
 	case cluster.AttrGlobalFeatureMap:
@@ -237,13 +237,13 @@ func coerceUint16(v any) (uint16, error) {
 	case uint16:
 		return x, nil
 	case uint32:
-		return uint16(x), nil //nolint:gosec // spec-bound
+		return uint16(x & 0xFFFF), nil // spec-bound: IdentifyTime fits uint16
 	case uint64:
-		return uint16(x), nil //nolint:gosec // spec-bound
+		return uint16(x & 0xFFFF), nil // spec-bound: IdentifyTime fits uint16
 	case int:
-		return uint16(x), nil //nolint:gosec // spec-bound
+		return uint16(x), nil //nolint:gosec // spec-bound; see #20
 	case int64:
-		return uint16(x), nil //nolint:gosec // spec-bound
+		return uint16(x), nil //nolint:gosec // spec-bound; see #20
 	case nil:
 		return 0, nil
 	}
