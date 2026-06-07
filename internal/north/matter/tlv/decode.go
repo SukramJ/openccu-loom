@@ -140,25 +140,25 @@ func (d *Decoder) readValue(el *Element) error { //nolint:funlen // wire/dispatc
 		}
 		// readU(1) returns at most 0xFF; the int8() narrowing reverses
 		// the encoder's two's-complement sign-extension.
-		el.Int = int64(int8(v)) //nolint:gosec // G115: width matches encoder
+		el.Int = int64(int8(v)) //nolint:gosec // G115: width matches encoder; see #20
 	case TypeSignedInt2:
 		v, err := d.readU(2)
 		if err != nil {
 			return err
 		}
-		el.Int = int64(int16(v)) //nolint:gosec // G115: width matches encoder
+		el.Int = int64(int16(v)) //nolint:gosec // G115: width matches encoder; see #20
 	case TypeSignedInt4:
 		v, err := d.readU(4)
 		if err != nil {
 			return err
 		}
-		el.Int = int64(int32(v)) //nolint:gosec // G115: width matches encoder
+		el.Int = int64(int32(v)) //nolint:gosec // G115: width matches encoder; see #20
 	case TypeSignedInt8:
 		v, err := d.readU(8)
 		if err != nil {
 			return err
 		}
-		el.Int = int64(v) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form
+		el.Int = int64(v) //nolint:gosec // G115: bit-pattern preserved, two's-complement is the wire form; see #20
 
 	case TypeUnsignedInt1, TypeUnsignedInt2, TypeUnsignedInt4, TypeUnsignedInt8:
 		w := []int{1, 2, 4, 8}[int(el.Type)-int(TypeUnsignedInt1)]
@@ -173,8 +173,8 @@ func (d *Decoder) readValue(el *Element) error { //nolint:funlen // wire/dispatc
 		if err != nil {
 			return err
 		}
-		// readU(4) returns ≤ 0xFFFFFFFF.
-		el.Float = float64(math.Float32frombits(uint32(v))) //nolint:gosec // G115: width matches readU(4)
+		// readU(4) returns ≤ 0xFFFFFFFF; mask makes the 32-bit truncation explicit.
+		el.Float = float64(math.Float32frombits(uint32(v & 0xFFFFFFFF)))
 	case TypeFloat8:
 		v, err := d.readU(8)
 		if err != nil {
@@ -240,11 +240,11 @@ func (d *Decoder) readStringLike(w int) ([]byte, error) {
 	}
 	remaining := len(d.buf) - d.pos
 	// remaining is guaranteed ≥ 0 by the d.pos invariants in [need].
-	if n > uint64(remaining) { //nolint:gosec // G115: remaining is non-negative by readU's bound check
+	if n > uint64(remaining) { //nolint:gosec // G115: remaining is non-negative by readU's bound check; see #20
 		return nil, fmt.Errorf("%w: declared %d, have %d", ErrLengthOverflow, n, remaining)
 	}
-	body := d.buf[d.pos : d.pos+int(n)] //nolint:gosec // G115: n bounded by remaining (int) above
-	d.pos += int(n)                     //nolint:gosec // G115: n bounded by remaining (int) above
+	body := d.buf[d.pos : d.pos+int(n)] //nolint:gosec // G115: n bounded by remaining (int) above; see #20
+	d.pos += int(n)                     //nolint:gosec // G115: n bounded by remaining (int) above; see #20
 	return body, nil
 }
 
