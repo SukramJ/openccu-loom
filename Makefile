@@ -519,6 +519,10 @@ release: ## goreleaser snapshot (local test build)
 	fi
 	$(GORELEASER) release --snapshot --clean
 
+.PHONY: ccu-addon
+ccu-addon: ui-build ## package the CCU/RaspberryMatic add-on tarball into dist/
+	script/build_ccu_addon.sh $(VERSION)
+
 .PHONY: clean
 clean: ## remove build artefacts
 	rm -rf $(BIN_DIR) dist/ coverage/

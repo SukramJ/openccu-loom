@@ -85,6 +85,22 @@ jobs:
           args: release --clean --release-notes=RELEASE_NOTES.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Package the CCU / RaspberryMatic add-on from goreleaser's
+      # cross-compiled binaries (the SPA is already embedded in them, since
+      # the bundle was built before goreleaser ran) and attach the tarball
+      # to the just-published release. goreleaser keeps each build output at
+      # dist/openccu-loom_linux_<arch>/openccu-loom.
+      - name: build CCU/RaspberryMatic add-on
+        run: |
+          set -euo pipefail
+          export BIN_AMD64="$(ls dist/openccu-loom_linux_amd64*/openccu-loom | head -1)"
+          export BIN_ARM64="$(ls dist/openccu-loom_linux_arm64*/openccu-loom | head -1)"
+          export BIN_ARMV7="$(ls dist/openccu-loom_linux_arm_7*/openccu-loom | head -1)"
+          script/build_ccu_addon.sh "${GITHUB_REF_NAME#v}"
+      - name: attach CCU add-on to the release
+        run: gh release upload "${GITHUB_REF_NAME}" dist/openccu-loom-ccu-*.tar.gz --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # CycloneDX SBOM for the daemon module graph, attached to the run.
       - name: generate SBOM
         run: make sbom

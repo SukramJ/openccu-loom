@@ -1,0 +1,88 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 OpenCCU-Loom authors.
+#
+# CCU / RaspberryMatic rc.d service script for OpenCCU-Loom. Started by
+# the CCU at boot via `init`, supervised by monit (see
+# etc/monit-openccu-loom.cfg), and driven from the add-on web page.
+
+ADDON_ID=openccu-loom
+ADDON_NAME="OpenCCU-Loom"
+ADDON_COPYRIGHT="(c) 2026 OpenCCU-Loom authors"
+ADDON_WWW='<a href="https://github.com/SukramJ/openccu-loom" target="_blank">https://github.com/SukramJ/openccu-loom</a>'
+
+ADDON_DIR=/usr/local/addons/${ADDON_ID}
+ETC_DIR=/usr/local/etc
+RCD_DIR=/usr/local/etc/config/rc.d
+WWW_DIR=/usr/local/etc/config/addons/www/${ADDON_ID}
+PIDFILE=/var/run/${ADDON_ID}.pid
+
+# Runtime configuration. The daemon is otherwise UI-configured — these
+# only pin the bootstrap tier (data dir, bind ports). Edit here to move a
+# port that clashes with another add-on. UI is the SPA + REST on :8080,
+# the pre-auth bootstrap surface on :8081; CCU callbacks on :8120/:8129.
+export OPENCCU_LOOM_DATA_DIR=${ADDON_DIR}/var
+export OPENCCU_LOOM_REST_LISTEN=:8080
+export OPENCCU_LOOM_UI_LISTEN=:8081
+export OPENCCU_LOOM_LOG_FORMAT=text
+
+stop() {
+  logger -t ${ADDON_ID} -p user.debug "Stopping"
+  start-stop-daemon -K -q -p ${PIDFILE}
+  sleep 3
+  logger -t ${ADDON_ID} -p user.info "Stopped"
+}
+
+start() {
+  logger -t ${ADDON_ID} -p user.debug "Starting"
+  cd ${ADDON_DIR}
+  # -b: background, -m: write the pidfile for start-stop-daemon's child.
+  start-stop-daemon -S -q -b -m -p ${PIDFILE} \
+    -x ${ADDON_DIR}/${ADDON_ID} -- run
+  logger -t ${ADDON_ID} -p user.info "Started"
+}
+
+info() {
+  echo "Info: <b>${ADDON_NAME} Add-On</b><br>"
+  echo "Info: ${ADDON_COPYRIGHT}<br>"
+  echo "Info: ${ADDON_WWW}"
+  echo "Name: ${ADDON_NAME}"
+  echo "Version: $(cat ${ADDON_DIR}/VERSION 2>/dev/null || echo unknown)"
+  echo "Operations: uninstall restart"
+  echo "Config-Url: /addons/${ADDON_ID}/config.cgi"
+  echo "Update: /addons/${ADDON_ID}/update-check.cgi"
+}
+
+uninstall() {
+  logger -t ${ADDON_ID} -p user.debug "Uninstalling"
+  if [ -x /usr/bin/monit ]; then
+    monit unmonitor ${ADDON_ID} 2>/dev/null || true
+  fi
+  stop
+  if [ -x /bin/update_hm_addons.tcl ]; then
+    /bin/update_hm_addons.tcl -d ${ADDON_ID} 2>/dev/null || true
+  fi
+  rm -f ${RCD_DIR}/${ADDON_ID}
+  rm -f ${ETC_DIR}/monit-${ADDON_ID}.cfg
+  rm -rf ${ADDON_DIR}
+  rm -rf ${WWW_DIR}
+  if [ -x /usr/bin/monit ]; then
+    monit reload 2>/dev/null || true
+  fi
+  logger -t ${ADDON_ID} -p user.info "Uninstalled"
+}
+
+case "$1" in
+  ""|init)   start ;;
+  start)     echo "use init to start" ;;
+  stop)      stop ;;
+  restart|reload) stop; start ;;
+  uninstall) uninstall ;;
+  info)      info ;;
+  *)
+    echo "usage: ${ADDON_ID} [init|start|stop|restart|uninstall|info]" >&2
+    exit 1
+  ;;
+esac
+
+exit $?
