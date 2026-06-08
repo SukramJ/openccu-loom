@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: f268aae
-HEAD: f268aae
+Generated: 849b1da
+HEAD: 849b1da
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 22268 |
+| Total Exported | 22263 |
 | Reachable | 3705 |
-| Whitelisted | 15871 |
-| **Unreachable** | **2692** |
+| Whitelisted | 15868 |
+| **Unreachable** | **2690** |
 
 ## Top-20 Packages by Dead Code
 
@@ -59,10 +59,8 @@ HEAD: f268aae
 | internal/auth | NewSessionStore | internal/auth/session.go | 39 |
 | internal/auth | SessionMiddleware | internal/auth/session.go | 83 |
 | internal/auth | WriteSessionCookie | internal/auth/session.go | 104 |
-| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 219 |
-| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 219 |
 | internal/auth/oidc | Discover | internal/auth/oidc/discovery.go | 27 |
-| internal/auth/oidc | New | internal/auth/oidc/client.go | 42 |
+| internal/auth/oidc | New | internal/auth/oidc/client.go | 41 |
 | internal/auth/oidc | NewPKCEPair | internal/auth/oidc/pkce.go | 23 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/ccudata | Empty | internal/ccudata/translations.go | 79 |
@@ -91,6 +89,8 @@ HEAD: f268aae
 | internal/central/adapter | NewDeviceAdminDomain | internal/central/adapter/device_admin.go | 27 |
 | internal/central/adapter | NewDevicePipeline | internal/central/adapter/device_pipeline.go | 122 |
 | internal/central/adapter | NewDeviceReloaderAdapter | internal/central/adapter/device_reloader.go | 41 |
+| internal/central/adapter | NewDevicesAdapter | internal/central/adapter/devices.go | 26 |
+| internal/central/adapter | NewEventBridge | internal/central/adapter/eventbridge.go | 68 |
 
 ## Full By-Package Breakdown
 
@@ -116,13 +116,13 @@ HEAD: f268aae
 | internal/store/sqlite | 8 | 51 | 18 |
 | internal/north/mqtt/protocol | 7 | 13 | 0 |
 | pkg/hmerr | 7 | 7 | 22 |
-| internal/auth/oidc | 6 | 17 | 2 |
 | internal/ccudata | 6 | 31 | 4 |
 | internal/client/transport/xmlrpc | 6 | 21 | 0 |
 | internal/metrics/wiring | 6 | 5 | 0 |
 | internal/model/event | 6 | 5 | 0 |
 | internal/routingkey | 6 | 0 | 0 |
 | internal/health | 5 | 22 | 0 |
+| internal/auth/oidc | 4 | 17 | 2 |
 | internal/central/registry | 4 | 15 | 4 |
 | internal/configstore | 4 | 17 | 0 |
 | internal/model/device | 4 | 43 | 12 |

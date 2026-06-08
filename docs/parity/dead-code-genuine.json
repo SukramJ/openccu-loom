@@ -1,24 +1,10 @@
 {
-  "generated": "2026-06-08T11:17:59Z",
-  "head": "f268aae",
-  "total_candidates": 388,
+  "generated": "2026-06-08T11:51:16Z",
+  "head": "849b1da",
+  "total_candidates": 386,
   "false_positives": 371,
-  "genuine_dead_code": 17,
+  "genuine_dead_code": 15,
   "genuine": [
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "DecodeIDToken",
-      "file": "internal/auth/oidc/client.go",
-      "line": 219,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "DecodeIDToken",
-      "file": "internal/auth/oidc/client.go",
-      "line": 219,
-      "kind": "func"
-    },
     {
       "package": "internal/central/adapter",
       "identifier": "BridgeCombinedDataPoint",

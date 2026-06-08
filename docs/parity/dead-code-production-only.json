@@ -1,6 +1,6 @@
 {
-  "generated": "f268aae",
-  "head": "f268aae",
+  "generated": "849b1da",
+  "head": "849b1da",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 22268,
+    "total_exported": 22263,
     "reachable": 3469,
-    "whitelisted": 15871,
-    "unreachable": 2928
+    "whitelisted": 15868,
+    "unreachable": 2926
   },
   "by_package": [
     {
@@ -165,12 +165,6 @@
       "unreachable_other": 0
     },
     {
-      "package": "internal/auth/oidc",
-      "unreachable_funcs": 6,
-      "unreachable_types": 17,
-      "unreachable_other": 2
-    },
-    {
       "package": "internal/ccudata",
       "unreachable_funcs": 6,
       "unreachable_types": 31,
@@ -211,6 +205,12 @@
       "unreachable_funcs": 6,
       "unreachable_types": 0,
       "unreachable_other": 0
+    },
+    {
+      "package": "internal/auth/oidc",
+      "unreachable_funcs": 4,
+      "unreachable_types": 17,
+      "unreachable_other": 2
     },
     {
       "package": "internal/central/registry",
@@ -1089,43 +1089,29 @@
       "package": "internal/auth/oidc",
       "identifier": "Audience",
       "file": "internal/auth/oidc/client.go",
-      "line": 149,
+      "line": 148,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "Client",
       "file": "internal/auth/oidc/client.go",
-      "line": 34,
+      "line": 33,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "Config",
       "file": "internal/auth/oidc/client.go",
-      "line": 22,
+      "line": 21,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "Config",
       "file": "internal/auth/oidc/client.go",
-      "line": 22,
+      "line": 21,
       "kind": "type"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "DecodeIDToken",
-      "file": "internal/auth/oidc/client.go",
-      "line": 219,
-      "kind": "func"
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "DecodeIDToken",
-      "file": "internal/auth/oidc/client.go",
-      "line": 219,
-      "kind": "func"
     },
     {
       "package": "internal/auth/oidc",
@@ -1152,14 +1138,14 @@
       "package": "internal/auth/oidc",
       "identifier": "IDClaims",
       "file": "internal/auth/oidc/client.go",
-      "line": 131,
+      "line": 130,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "IDClaims",
       "file": "internal/auth/oidc/client.go",
-      "line": 131,
+      "line": 130,
       "kind": "type"
     },
     {
@@ -1201,7 +1187,7 @@
       "package": "internal/auth/oidc",
       "identifier": "New",
       "file": "internal/auth/oidc/client.go",
-      "line": 42,
+      "line": 41,
       "kind": "func"
     },
     {
@@ -1243,14 +1229,14 @@
       "package": "internal/auth/oidc",
       "identifier": "TokenResponse",
       "file": "internal/auth/oidc/client.go",
-      "line": 83,
+      "line": 82,
       "kind": "type"
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TokenResponse",
       "file": "internal/auth/oidc/client.go",
-      "line": 83,
+      "line": 82,
       "kind": "type"
     },
     {
@@ -25802,28 +25788,7 @@
       "identifier": "TestDecodeHeaderInvalidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 571
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "TestDecodeIDTokenInvalidBase64",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 250
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "TestDecodeIDTokenInvalidPayloadJSON",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 296
-    },
-    {
-      "package": "internal/auth/oidc",
-      "identifier": "TestDecodeIDTokenRejectsMalformed",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/auth/oidc/oidc_test.go",
-      "line": 112
+      "line": 551
     },
     {
       "package": "internal/auth/oidc",
@@ -25844,7 +25809,7 @@
       "identifier": "TestDiscoverNilClientFallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 534
+      "line": 514
     },
     {
       "package": "internal/auth/oidc",
@@ -25865,7 +25830,7 @@
       "identifier": "TestExchangeInvalidJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 420
+      "line": 400
     },
     {
       "package": "internal/auth/oidc",
@@ -25879,14 +25844,14 @@
       "identifier": "TestIdentityFromAdminRole",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 259
+      "line": 250
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestJWKSCacheKeyFreshHit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 544
+      "line": 524
     },
     {
       "package": "internal/auth/oidc",
@@ -25914,14 +25879,14 @@
       "identifier": "TestJWKSRefreshDoError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 647
+      "line": 627
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestJWKSRefreshEmptyURL",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 450
+      "line": 430
     },
     {
       "package": "internal/auth/oidc",
@@ -25956,14 +25921,14 @@
       "identifier": "TestNewNilHTTPClientFallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 459
+      "line": 439
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestNewWithClientSecret",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 491
+      "line": 471
     },
     {
       "package": "internal/auth/oidc",
@@ -25977,35 +25942,35 @@
       "identifier": "TestPKCEPairChallengeIsS256OfVerifier",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 312
+      "line": 292
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestParseRSAPubEmptyE",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 401
+      "line": 381
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestParseRSAPubEmptyN",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 388
+      "line": 368
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestParseRSAPubInvalidE",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 372
+      "line": 352
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestParseRSAPubInvalidN",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 359
+      "line": 339
     },
     {
       "package": "internal/auth/oidc",
@@ -26068,7 +26033,7 @@
       "identifier": "TestVerifyInvalidSignatureBase64",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 332
+      "line": 312
     },
     {
       "package": "internal/auth/oidc",
@@ -26089,14 +26054,14 @@
       "identifier": "TestVerifyPayloadInvalidBase64",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 584
+      "line": 564
     },
     {
       "package": "internal/auth/oidc",
       "identifier": "TestVerifyPayloadInvalidJSONAfterBase64",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/auth/oidc/oidc_extra_test.go",
-      "line": 616
+      "line": 596
     },
     {
       "package": "internal/auth/oidc",

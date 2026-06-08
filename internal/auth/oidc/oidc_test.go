@@ -96,11 +96,9 @@ func TestClientAuthURLAndExchange(t *testing.T) {
 	if tok.AccessToken != "at" {
 		t.Fatalf("access token: %s", tok.AccessToken)
 	}
-	claims, err := DecodeIDToken(tok.IDToken)
-	if err != nil {
-		t.Fatalf("id token decode: %v", err)
-	}
-	id := c.IdentityFrom(claims)
+	// The ID-token contents (signature + claims) are covered by the
+	// VerifyIDToken tests; here we only assert the role/subject mapping.
+	id := c.IdentityFrom(&IDClaims{Subject: "alice", Role: "operator"})
 	if id.Subject != "alice" || id.Role != auth.RoleOperator {
 		t.Fatalf("identity: %+v", id)
 	}
@@ -109,14 +107,9 @@ func TestClientAuthURLAndExchange(t *testing.T) {
 	}
 }
 
-func TestDecodeIDTokenRejectsMalformed(t *testing.T) {
-	if _, err := DecodeIDToken("not-a-jwt"); err == nil {
-		t.Fatal("expected error")
-	}
-}
-
-// fakeIDToken builds a JWT with the given payload, an unsigned
-// signature segment. Sufficient for our non-verifying MVP decoder.
+// fakeIDToken builds a JWT with the given payload and an unsigned
+// signature segment — enough to populate the token-endpoint response
+// in tests that do not exercise verification.
 func fakeIDToken(payload map[string]any) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
 	b, _ := json.Marshal(payload)

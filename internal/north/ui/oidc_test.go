@@ -283,7 +283,7 @@ func TestOIDCCallbackBadCodeRedirectsWithExchangeFailed(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // newOIDCHarnessWithBadToken builds a fake IdP that returns a malformed
-// id_token ("notavalidjwt" — no "." — so DecodeIDToken returns an error).
+// id_token ("notavalidjwt" — no "." — so VerifyIDToken returns an error).
 func newOIDCHarnessWithBadToken(t *testing.T) http.Handler {
 	t.Helper()
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +294,7 @@ func newOIDCHarnessWithBadToken(t *testing.T) http.Handler {
 				`{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
 				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
 		case "/token":
-			// malformed id_token: single segment, DecodeIDToken will fail
+			// malformed id_token: single segment, VerifyIDToken will fail
 			_, _ = fmt.Fprintf(w,
 				`{"access_token":"at","id_token":"notavalidjwt","token_type":"Bearer","expires_in":3600}`)
 		}

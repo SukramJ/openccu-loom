@@ -246,15 +246,6 @@ func TestExchangeNon200(t *testing.T) {
 	}
 }
 
-// TestDecodeIDTokenInvalidBase64 exercises the base64 decode-error branch in DecodeIDToken.
-func TestDecodeIDTokenInvalidBase64(t *testing.T) {
-	// A token where the payload segment is not valid base64.
-	_, err := DecodeIDToken("header.!!!invalid!!!.sig")
-	if err == nil {
-		t.Fatal("expected error for invalid base64 payload")
-	}
-}
-
 // TestIdentityFromAdminRole exercises the admin role branch.
 func TestIdentityFromAdminRole(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -289,17 +280,6 @@ func TestIdentityFromAdminRole(t *testing.T) {
 	id = c.IdentityFrom(&IDClaims{Subject: "anon", Role: "unknown"})
 	if id.Role != auth.RoleViewer {
 		t.Fatalf("expected RoleViewer, got %v", id.Role)
-	}
-}
-
-// TestDecodeIDTokenInvalidPayloadJSON exercises the JSON unmarshal error branch.
-func TestDecodeIDTokenInvalidPayloadJSON(t *testing.T) {
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256"}`))
-	// Valid base64 but not valid JSON.
-	payload := base64.RawURLEncoding.EncodeToString([]byte(`not-json`))
-	_, err := DecodeIDToken(header + "." + payload + ".sig")
-	if err == nil {
-		t.Fatal("expected error for non-JSON payload")
 	}
 }
 

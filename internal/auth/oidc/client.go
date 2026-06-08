@@ -5,7 +5,6 @@ package oidc
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -187,8 +186,7 @@ const idTokenLeeway = 2 * time.Minute
 // It verifies the ID token's RS256 signature against the provider's
 // JWKS, then validates the issuer, audience, and expiry. A token that
 // is unsigned, signed by an unknown key, issued for a different
-// client, or expired is rejected. Use this — not [DecodeIDToken] —
-// for anything that grants a session.
+// client, or expired is rejected.
 func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string) (*IDClaims, error) {
 	claims, err := Verify(ctx, rawIDToken, c.jwks)
 	if err != nil {
@@ -211,25 +209,6 @@ func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string) (*IDClaim
 		return nil, errors.New("oidc: ID token not yet valid")
 	}
 	return claims, nil
-}
-
-// DecodeIDToken parses the JWT payload segment WITHOUT verifying the
-// signature. It is a low-level decoder; production code that grants a
-// session must use [Client.VerifyIDToken] instead.
-func DecodeIDToken(token string) (*IDClaims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) < 2 {
-		return nil, errors.New("oidc: ID token malformed")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("oidc: decode payload: %w", err)
-	}
-	var claims IDClaims
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, err
-	}
-	return &claims, nil
 }
 
 // IdentityFrom builds an [auth.Identity] from ID-token claims. The
