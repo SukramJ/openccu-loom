@@ -14,6 +14,10 @@ env:
   CGO_ENABLED: "0"
   GO_VERSION: "1.26.4"
   NODE_VERSION: "24"
+  # Toggle the CCU/RaspberryMatic add-on packaging + upload. Set to
+  # "false" to skip it for a release (or override per repo via the
+  # BUILD_CCU_ADDON repository variable — see the step conditions).
+  BUILD_CCU_ADDON: "true"
 
 jobs:
   goreleaser:
@@ -91,6 +95,7 @@ jobs:
       # to the just-published release. goreleaser keeps each build output at
       # dist/openccu-loom_linux_<arch>/openccu-loom.
       - name: build CCU/RaspberryMatic add-on
+        if: ${{ vars.BUILD_CCU_ADDON != 'false' && env.BUILD_CCU_ADDON == 'true' }}
         run: |
           set -euo pipefail
           export BIN_AMD64="$(ls dist/openccu-loom_linux_amd64*/openccu-loom | head -1)"
@@ -98,6 +103,7 @@ jobs:
           export BIN_ARMV7="$(ls dist/openccu-loom_linux_arm_7*/openccu-loom | head -1)"
           script/build_ccu_addon.sh "${GITHUB_REF_NAME#v}"
       - name: attach CCU add-on to the release
+        if: ${{ vars.BUILD_CCU_ADDON != 'false' && env.BUILD_CCU_ADDON == 'true' }}
         run: gh release upload "${GITHUB_REF_NAME}" dist/openccu-loom-ccu-*.tar.gz --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
