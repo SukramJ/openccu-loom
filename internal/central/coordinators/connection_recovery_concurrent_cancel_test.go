@@ -518,13 +518,23 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 	c.Subscribe()
 	defer c.Stop()
 
+	// laneIdle reports that the previous recovery has fully drained — its
+	// entry in c.active is deleted. Gating each publish on this (not just
+	// on runCount) closes a race: the pipeline's Run callback bumps
+	// runCount at the start of the stage, but c.active[iid] is only
+	// cleared in Run's defer, after the whole pipeline returns. A
+	// ConnectionLost published in that window hits the duplicate guard
+	// (already_active) and is dropped, so runCount never advances and the
+	// lane never reaches the maxAttempts cap.
+	laneIdle := func() bool { return !c.InRecoveryFor("HmIP-RF") }
+
 	// One failing attempt — attempts[iid] = 1.
 	events.Publish(bus, hmevent.ConnectionLostEvent{
 		Base:        hmevent.NewBase(),
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 1 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 1 && laneIdle() }, eventWaitTimeout) {
 		t.Fatal("first attempt did not run")
 	}
 
@@ -534,7 +544,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 		CentralName:  "hb-floor",
 		InterfaceIDs: []string{"HmIP-RF"},
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 2 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 2 && laneIdle() }, eventWaitTimeout) {
 		t.Fatal("heartbeat did not run on non-exhausted lane")
 	}
 
@@ -553,7 +563,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 3 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 3 && laneIdle() }, eventWaitTimeout) {
 		t.Fatalf("third attempt did not run, got %d", runCount.Load())
 	}
 	events.Publish(bus, hmevent.ConnectionLostEvent{
@@ -561,7 +571,7 @@ func TestHeartbeatDoesNotResetProgressOnHealthyLane(t *testing.T) {
 		CentralName: "hb-floor",
 		InterfaceID: "HmIP-RF",
 	})
-	if !waitFor(t, func() bool { return runCount.Load() >= 4 }, eventWaitTimeout) {
+	if !waitFor(t, func() bool { return runCount.Load() >= 4 && laneIdle() }, eventWaitTimeout) {
 		t.Fatalf("expected 4 runs before exhaustion, got %d", runCount.Load())
 	}
 
