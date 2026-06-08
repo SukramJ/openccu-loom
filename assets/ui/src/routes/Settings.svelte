@@ -142,6 +142,7 @@
     { id: "ccus", label: t("settings.tab.ccus") },
     { id: "mqtt", label: t("settings.tab.mqtt") },
     { id: "matter", label: t("settings.tab.matter") },
+    { id: "mcp", label: t("settings.tab.mcp") },
     { id: "discovery", label: t("settings.tab.discovery") },
     { id: "rest", label: t("settings.tab.rest") },
     { id: "oidc", label: t("settings.tab.oidc") },
@@ -304,6 +305,19 @@
         {:else}
           <SectionEditor
             section="north.matter"
+            {schemaFields}
+            {sources}
+            allSections={schemaSections}
+            {effectiveConfig}
+          />
+        {/if}
+
+      {:else if activeTab === "mcp"}
+        {#if schemaLoading}
+          <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+        {:else}
+          <SectionEditor
+            section="north.mcp"
             {schemaFields}
             {sources}
             allSections={schemaSections}

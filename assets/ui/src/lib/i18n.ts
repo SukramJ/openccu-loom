@@ -405,6 +405,11 @@ const EN: Catalog = {
     "Filesystem path to the CSA-signed Certification Declaration (a CMS / PKCS#7 message). The CD pins the vendor + product as a certified Matter device.",
   "settings.section.intro.north.matter":
     "Native-Go Matter bridge that exposes selected CCU devices as Matter accessories. Disabled by default. Production deployments need vendor-supplied attestation material (DAC / PAI / CD) in the Expert section; dev work pairs via chip-tool --bypass-attestation-verifier.",
+  "settings.section.intro.north.mcp":
+    "MCP (Model Context Protocol) server that exposes CCU devices to LLM agents as tools, served on the REST listener. Disabled by default and read-only until “Allow writes” is also enabled. Changes take effect after a daemon restart. See ADR 0025.",
+  "config.help.north.mcp.enabled": "Master switch for the MCP server, served over Streamable-HTTP on the REST listener. Off by default. Takes effect after a daemon restart.",
+  "config.help.north.mcp.allow_writes": "Enable write-capable MCP tools (e.g. set_datapoint). Off by default — the server alone is read-only; turn this on for agent-driven control. Takes effect after a daemon restart.",
+  "config.help.north.mcp.path": "HTTP mount path for the MCP transport on the REST listener. Empty defaults to /mcp. Takes effect after a daemon restart.",
   "config.help.north.discovery.mdns.enabled": "Advertise the daemon's REST listener via mDNS / Zeroconf so LAN clients (e.g. Home Assistant) can auto-discover it.",
   "config.help.north.discovery.mdns.instance_name": "Leftmost label of the mDNS SRV / TXT record. Empty falls back to the OS hostname.",
   "config.help.north.rest.enabled": "Master switch for the REST + WebSocket server. Disabling it leaves the daemon with no operator-facing surface.",
@@ -537,6 +542,7 @@ const EN: Catalog = {
   "settings.tab.ccus": "CCUs",
   "settings.tab.mqtt": "MQTT",
   "settings.tab.matter": "Matter",
+  "settings.tab.mcp": "MCP",
   "settings.tab.discovery": "Discovery (mDNS)",
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",
@@ -1593,6 +1599,11 @@ const DE: Catalog = {
     "Pfad zur CSA-signierten Certification Declaration (CMS-/PKCS#7-Nachricht). Die CD pinnt Vendor + Produkt als zertifiziertes Matter-Gerät.",
   "settings.section.intro.north.matter":
     "Native-Go Matter-Bridge, die ausgewählte CCU-Geräte als Matter-Accessories zur Verfügung stellt. Standardmäßig aus. Produktion benötigt Vendor-Attestation-Material (DAC / PAI / CD) im Experten-Bereich; Entwicklung pairt mit chip-tool --bypass-attestation-verifier.",
+  "settings.section.intro.north.mcp":
+    "MCP-Server (Model Context Protocol), der CCU-Geräte LLM-Agenten als Tools über den REST-Listener bereitstellt. Standardmäßig aus und nur lesend, bis zusätzlich „Schreibzugriff erlauben“ aktiviert ist. Änderungen greifen erst nach einem Daemon-Neustart. Siehe ADR 0025.",
+  "config.help.north.mcp.enabled": "Hauptschalter des MCP-Servers (Streamable-HTTP auf dem REST-Listener). Standardmäßig aus. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.mcp.allow_writes": "Schreibfähige MCP-Tools (z. B. set_datapoint) freischalten. Standardmäßig aus — der Server allein ist nur lesend; für Agenten-gesteuerte Steuerung aktivieren. Greift erst nach einem Daemon-Neustart.",
+  "config.help.north.mcp.path": "HTTP-Mount-Pfad des MCP-Transports auf dem REST-Listener. Leer = /mcp. Greift erst nach einem Daemon-Neustart.",
   "config.help.north.discovery.mdns.enabled": "Daemon via mDNS / Zeroconf im LAN bekannt machen, damit z. B. Home Assistant ihn auto-erkennt.",
   "config.help.north.discovery.mdns.instance_name": "Linkester Label des mDNS-SRV/TXT-Records. Leer = OS-Hostname.",
   "config.help.north.rest.enabled": "Hauptschalter des REST-/WebSocket-Servers. Aus = Daemon hat keine Operator-Oberfläche.",
@@ -1725,6 +1736,7 @@ const DE: Catalog = {
   "settings.tab.ccus": "CCUs",
   "settings.tab.mqtt": "MQTT",
   "settings.tab.matter": "Matter",
+  "settings.tab.mcp": "MCP",
   "settings.tab.discovery": "Discovery (mDNS)",
   "settings.tab.rest": "API & WebSocket",
   "settings.tab.oidc": "OIDC",

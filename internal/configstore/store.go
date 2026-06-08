@@ -185,6 +185,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return json.Unmarshal(raw, &cfg.North.MQTT)
 	case SectionMatter:
 		return json.Unmarshal(raw, &cfg.North.Matter)
+	case SectionMCP:
+		return json.Unmarshal(raw, &cfg.North.MCP)
 	case SectionDiscovery:
 		return json.Unmarshal(raw, &cfg.North.Discovery)
 	case SectionREST:
@@ -230,6 +232,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 		raw, err = json.Marshal(cfg.North.MQTT)
 	case SectionMatter:
 		raw, err = json.Marshal(cfg.North.Matter)
+	case SectionMCP:
+		raw, err = json.Marshal(cfg.North.MCP)
 	case SectionDiscovery:
 		raw, err = json.Marshal(cfg.North.Discovery)
 	case SectionREST:

@@ -13,6 +13,9 @@ const (
 	SectionMQTT Section = "north.mqtt"
 	// SectionMatter carries [config.NorthMatter].
 	SectionMatter Section = "north.matter"
+	// SectionMCP carries [config.NorthMCP] — the Model Context Protocol
+	// server toggle (enabled / allow_writes / path). See ADR 0025.
+	SectionMCP Section = "north.mcp"
 	// SectionDiscovery carries [config.NorthDiscovery].
 	SectionDiscovery Section = "north.discovery"
 	// SectionREST carries the CORS list + auth toggles +
@@ -48,6 +51,7 @@ func AllSections() []Section {
 		SectionLocale,
 		SectionMQTT,
 		SectionMatter,
+		SectionMCP,
 		SectionDiscovery,
 		SectionREST,
 		SectionOIDC,

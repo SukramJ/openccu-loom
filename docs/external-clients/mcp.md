@@ -27,8 +27,12 @@ own.
 
 ### 1.1 Enable the server
 
-The MCP route is **off by default**. Turn it on in your config
-(`config.yaml`):
+The MCP route is **off by default**. The quickest way to turn it on is
+the Config UI: open **Settings → MCP**, tick **Enabled** (and, if you
+want agent-driven control, **Allow writes**), then restart the daemon —
+the route is mounted at boot, so the change is restart-required.
+
+Prefer YAML? Set it in your config (`config.yaml`):
 
 ```yaml
 north:
