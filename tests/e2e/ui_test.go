@@ -65,7 +65,9 @@ func TestUISPAIndexServed(t *testing.T) {
 	for _, want := range []string{
 		"<!doctype html>",
 		`<div id="app"></div>`,
-		"/app/assets/", // hashed asset references rooted at /app/
+		"./assets/", // hashed asset refs are relative so they resolve against
+		// the document base — works under /app/ directly and behind a HA
+		// Ingress path prefix alike.
 	} {
 		if !strings.Contains(strings.ToLower(bodyStr), strings.ToLower(want)) {
 			t.Errorf("index.html missing %q\nbody (first 400):\n%s", want, truncate(bodyStr, 400))
@@ -142,7 +144,7 @@ func TestUISPAHashedAssetCacheable(t *testing.T) {
 
 	asset := scrapeAsset(string(body))
 	if asset == "" {
-		t.Skipf("index.html carries no /app/assets/* reference — likely a dev build:\n%s", truncate(string(body), 400))
+		t.Skipf("index.html carries no ./assets/* reference — likely a dev build:\n%s", truncate(string(body), 400))
 	}
 
 	resp2, err := h.REST().HTTPClient().Get(h.RESTBase() + asset)
@@ -257,20 +259,25 @@ func TestUIHTMXStaticAssetsServed(t *testing.T) {
 // helpers
 // ─────────────────────────────────────────────────────────────────
 
-// scrapeAsset returns the first /app/assets/* URL referenced from
-// the SPA shell, or the empty string when none is present.
+// scrapeAsset returns the served URL path of the first hashed asset
+// referenced from the SPA shell (e.g. "/app/assets/index-abc.js"), or the
+// empty string when none is present. The built index.html references assets
+// relatively ("./assets/…") so they resolve against the document base — this
+// is what makes the SPA work behind a HA Ingress path prefix. The files are
+// still served under /app/assets/… by the SPA mount, so map the reference
+// onto that path for a direct probe.
 func scrapeAsset(html string) string {
-	const marker = "/app/assets/"
+	const marker = "./assets/"
 	i := strings.Index(html, marker)
 	if i < 0 {
 		return ""
 	}
-	rest := html[i:]
+	rest := html[i+len("./"):] // drop the leading "./" → "assets/…"
 	end := strings.IndexAny(rest, `"' >`)
 	if end < 0 {
 		return ""
 	}
-	return rest[:end]
+	return "/app/" + rest[:end]
 }
 
 func truncate(s string, n int) string {

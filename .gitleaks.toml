@@ -5,6 +5,8 @@
 #   - test files / testdata: fixtures, not real secrets
 #   - docs: `curl -u user:pass` examples and placeholder values
 #   - example.config.yaml: annotated reference config with placeholders
+#     (the former name config.example.yaml is kept too — gitleaks scans
+#     the full git history, where the file still carries the old path)
 #   - the Matter attestation TEST PAA key (a well-known public test-bench
 #     key from the Matter/CHIP spec, never a production credential)
 #   - the HmIP device/parameter rule tables, whose long constant strings
@@ -25,6 +27,7 @@ paths = [
   '''.*/testdata/.*''',
   '''^docs/.*''',
   '''^example\.config\.yaml$''',
+  '''^config\.example\.yaml$''',
   '''^internal/north/matter/secure/attestation/testpaa\.go$''',
   '''^internal/north/mqtt/entity_description_rules_sensors\.go$''',
   '''^internal/north/mqtt/entity_descriptions_generated\.go$''',
