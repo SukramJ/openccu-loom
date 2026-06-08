@@ -132,10 +132,9 @@ jobs:
       # The official builder reads config.yaml/build.yaml, builds each arch from
       # the matching HA base image, and pushes ghcr.io/sukramj/openccu-loom-ha-<arch>:<version>.
       # ghcr login above is shared via the docker config the builder mounts.
-      # NOTE: SHA-pin this action before flipping BUILD_HA_ADDON on (repo convention).
       - name: build & publish Home Assistant add-on
         if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
-        uses: home-assistant/builder@2025.03.0
+        uses: home-assistant/builder@62a1597b84b3461abad9816d9cd92862a2b542c3 # 2026.03.2
         with:
           args: |
             --all
