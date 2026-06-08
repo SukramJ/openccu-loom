@@ -53,19 +53,13 @@ func TestSchedulerFakeClockAdvancesTicksDeterministically(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// Advance 5 × 100 ms = 500 ms of virtual time. Each advance fires the
-	// pending timer, then the goroutine re-registers a new one. We yield
-	// briefly between steps so the scheduler goroutine has a chance to call
-	// NewTimer again before the next Advance.
+	// Advance 5 × 100 ms of virtual time. advanceTick synchronises on the
+	// pending-timer count so the goroutine has always re-registered its
+	// timer before the next fire — no tick can be dropped.
 	const steps = 5
 	for range steps {
-		// Let the goroutine reach its next NewTimer call.
-		time.Sleep(5 * time.Millisecond)
-		fake.Advance(100 * time.Millisecond)
+		advanceTick(t, fake, 100*time.Millisecond)
 	}
-
-	// Allow the last invocation to finish.
-	time.Sleep(10 * time.Millisecond)
 	s.Stop()
 
 	got := calls.Load()
@@ -96,9 +90,10 @@ func TestSchedulerFakeClockStopBeforeFirstTick(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Do not advance the clock at all — no ticks should fire.
-	// Give the goroutine a moment to enter its select.
-	time.Sleep(5 * time.Millisecond)
+	// Do not advance the clock at all — no ticks should fire. Wait until
+	// the goroutine has parked its (1-hour) timer, proving it reached the
+	// select; since we never advance, that timer can never fire.
+	waitForPending(t, fake, 1)
 	s.Stop()
 
 	if calls.Load() != 0 {
@@ -145,23 +140,24 @@ func TestSchedulerOverrunWithFakeClock(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// Fire the first tick — goroutine is now blocked in the job.
-	time.Sleep(5 * time.Millisecond)
+	// Fire the first tick and wait until the job is actually running —
+	// it then blocks on the barrier, so no new timer is armed.
+	waitForPending(t, fake, 1)
 	fake.Advance(100 * time.Millisecond)
-	time.Sleep(5 * time.Millisecond)
+	waitForCount(t, &calls, 1)
 
 	// Advance the clock by many more intervals while the job is still running.
 	// With pile-up behaviour the timer channel would buffer ticks; with the
 	// recurring-NewTimer pattern no timers are registered during the run.
 	fake.Advance(500 * time.Millisecond)
 
-	// Release the blocked job.
+	// Release the blocked job; the loop returns and re-registers a timer.
 	close(release)
-	time.Sleep(10 * time.Millisecond)
+	waitForPending(t, fake, 1)
 
-	// Only one invocation should have happened (the first tick).
-	// After release the goroutine re-registers a timer; it should not
-	// immediately re-fire the accumulated advances.
+	// Only one invocation should have happened (the first tick). After
+	// release the goroutine re-registers a timer; it must not immediately
+	// re-fire the accumulated advances.
 	if got := calls.Load(); got != 1 {
 		t.Fatalf("expected 1 call (no pile-up), got %d", got)
 	}
@@ -198,15 +194,14 @@ func TestSchedulerMultipleJobsAdvanceTogether(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// Advance the clock step by step. Between steps we yield so all three
-	// goroutines can re-register their timers before the next advance.
+	// Advance the clock step by step. Wait for all three goroutines to
+	// park their timers before each advance (and once more at the end so
+	// the final invocations have completed), so every job sees every tick.
 	for range steps {
-		time.Sleep(5 * time.Millisecond)
+		waitForPending(t, fake, numJobs)
 		fake.Advance(100 * time.Millisecond)
 	}
-
-	// Allow the final invocations to complete.
-	time.Sleep(10 * time.Millisecond)
+	waitForPending(t, fake, numJobs)
 	s.Stop()
 
 	for i := range numJobs {

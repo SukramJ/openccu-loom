@@ -5,7 +5,6 @@ package oidc
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 )
@@ -34,6 +34,7 @@ type Client struct {
 	cfg       Config
 	providers *Providers
 	http      *http.Client
+	jwks      *JWKSCache
 }
 
 // New constructs a Client. httpClient may be nil (uses default).
@@ -54,7 +55,12 @@ func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, err
 	if err != nil {
 		return nil, err
 	}
-	return &Client{cfg: cfg, providers: prov, http: httpClient}, nil
+	return &Client{
+		cfg:       cfg,
+		providers: prov,
+		http:      httpClient,
+		jwks:      NewJWKSCache(prov.JWKSURI, httpClient),
+	}, nil
 }
 
 // AuthURL returns the redirect target for the browser. state + PKCE
@@ -117,35 +123,92 @@ func (c *Client) Exchange(ctx context.Context, code, verifier string) (*TokenRes
 	return &tr, nil
 }
 
-// IDClaims is the decoded ID token payload the Client reads. We do
-// NOT verify JWT signatures — the Spec §19 flags JWT validation as a
-// hardening item. The caller MUST pin a trusted IdP via TLS + Issuer.
+// IDClaims is the decoded ID token payload the Client reads. It
+// carries the registered claims ([Client.VerifyIDToken] validates
+// iss / aud / exp) alongside the profile claims the role mapping
+// consumes.
 type IDClaims struct {
-	Subject       string `json:"sub"`
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	Name          string `json:"name,omitempty"`
-	PreferredUser string `json:"preferred_username,omitempty"`
-	Role          string `json:"role,omitempty"`
-	Roles         []any  `json:"roles,omitempty"`
+	Issuer        string   `json:"iss,omitempty"`
+	Subject       string   `json:"sub"`
+	Audience      Audience `json:"aud,omitempty"`
+	Expiry        int64    `json:"exp,omitempty"`
+	IssuedAt      int64    `json:"iat,omitempty"`
+	NotBefore     int64    `json:"nbf,omitempty"`
+	Email         string   `json:"email,omitempty"`
+	EmailVerified bool     `json:"email_verified,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	PreferredUser string   `json:"preferred_username,omitempty"`
+	Role          string   `json:"role,omitempty"`
+	Roles         []any    `json:"roles,omitempty"`
 }
 
-// DecodeIDToken parses the JWT payload segment without verifying the
-// signature. See [IDClaims] for the unverified-signature caveat.
-func DecodeIDToken(token string) (*IDClaims, error) {
-	parts := strings.Split(token, ".")
-	if len(parts) < 2 {
-		return nil, errors.New("oidc: ID token malformed")
+// Audience models the OIDC "aud" claim. The spec allows it to be
+// either a single string or an array of strings, so it decodes both
+// shapes into a slice.
+type Audience []string
+
+// UnmarshalJSON accepts both the string and the array form of "aud".
+func (a *Audience) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || string(b) == "null" {
+		return nil
 	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if b[0] == '"' {
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		*a = Audience{s}
+		return nil
+	}
+	var ss []string
+	if err := json.Unmarshal(b, &ss); err != nil {
+		return err
+	}
+	*a = Audience(ss)
+	return nil
+}
+
+// contains reports whether want is one of the audiences.
+func (a Audience) contains(want string) bool {
+	for _, v := range a {
+		if v == want {
+			return true
+		}
+	}
+	return false
+}
+
+// idTokenLeeway absorbs small clock differences between the daemon
+// and the IdP when checking the exp / nbf bounds.
+const idTokenLeeway = 2 * time.Minute
+
+// VerifyIDToken is the production entry point for the OIDC callbacks.
+// It verifies the ID token's RS256 signature against the provider's
+// JWKS, then validates the issuer, audience, and expiry. A token that
+// is unsigned, signed by an unknown key, issued for a different
+// client, or expired is rejected.
+func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string) (*IDClaims, error) {
+	claims, err := Verify(ctx, rawIDToken, c.jwks)
 	if err != nil {
-		return nil, fmt.Errorf("oidc: decode payload: %w", err)
-	}
-	var claims IDClaims
-	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, err
 	}
-	return &claims, nil
+	if claims.Issuer == "" || claims.Issuer != c.providers.Issuer {
+		return nil, fmt.Errorf("oidc: issuer mismatch: got %q want %q", claims.Issuer, c.providers.Issuer)
+	}
+	if !claims.Audience.contains(c.cfg.ClientID) {
+		return nil, fmt.Errorf("oidc: audience %v does not include client %q", []string(claims.Audience), c.cfg.ClientID)
+	}
+	if claims.Expiry == 0 {
+		return nil, errors.New("oidc: ID token missing exp")
+	}
+	now := time.Now()
+	if now.After(time.Unix(claims.Expiry, 0).Add(idTokenLeeway)) {
+		return nil, errors.New("oidc: ID token expired")
+	}
+	if claims.NotBefore != 0 && now.Add(idTokenLeeway).Before(time.Unix(claims.NotBefore, 0)) {
+		return nil, errors.New("oidc: ID token not yet valid")
+	}
+	return claims, nil
 }
 
 // IdentityFrom builds an [auth.Identity] from ID-token claims. The

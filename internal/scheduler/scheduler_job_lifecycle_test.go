@@ -180,17 +180,15 @@ func TestSchedulerStopDeactivates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Fire one tick.
-	time.Sleep(5 * time.Millisecond)
-	fake.Advance(100 * time.Millisecond)
-	time.Sleep(10 * time.Millisecond)
+	// Fire one tick deterministically, then stop.
+	advanceTick(t, fake, 100*time.Millisecond)
 
 	s.Stop()
 	snapshot := calls.Load()
 
-	// Advance the clock further after Stop — no new calls should arrive.
+	// Advancing after Stop must not produce new calls — Stop has joined
+	// the run goroutine, so nothing is left to receive a timer fire.
 	fake.Advance(500 * time.Millisecond)
-	time.Sleep(20 * time.Millisecond)
 
 	if calls.Load() != snapshot {
 		t.Errorf("calls changed after Stop: before=%d after=%d", snapshot, calls.Load())
@@ -236,10 +234,8 @@ func TestJobExecutesAndContinues(t *testing.T) {
 	defer s.Stop()
 
 	for range ticks {
-		time.Sleep(5 * time.Millisecond)
-		fake.Advance(50 * time.Millisecond)
+		advanceTick(t, fake, 50*time.Millisecond)
 	}
-	time.Sleep(10 * time.Millisecond)
 
 	if got := count.Load(); got != ticks {
 		t.Errorf("expected %d executions, got %d", ticks, got)
@@ -275,10 +271,8 @@ func TestJobErrorDoesNotStopScheduling(t *testing.T) {
 
 	const ticks = 4
 	for range ticks {
-		time.Sleep(5 * time.Millisecond)
-		fake.Advance(50 * time.Millisecond)
+		advanceTick(t, fake, 50*time.Millisecond)
 	}
-	time.Sleep(10 * time.Millisecond)
 
 	if got := calls.Load(); got < ticks {
 		t.Errorf("scheduler stopped after error: got %d calls, want >= %d", got, ticks)
@@ -320,10 +314,10 @@ func TestMultipleJobsIndependentSchedules(t *testing.T) {
 
 	const ticks = 3
 	for range ticks {
-		time.Sleep(5 * time.Millisecond)
+		waitForPending(t, fake, 2)
 		fake.Advance(50 * time.Millisecond)
 	}
-	time.Sleep(10 * time.Millisecond)
+	waitForPending(t, fake, 2)
 	s.Stop()
 
 	if got := count1.Load(); got != ticks {

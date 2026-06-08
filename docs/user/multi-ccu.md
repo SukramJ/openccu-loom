@@ -1,5 +1,11 @@
 # Multi-CCU Operations Handbook
 
+!!! info "Who this page is for"
+    Administrators running more than one CCU from a single daemon. For
+    install and first-run see
+    [Installation & First Steps](../user-guide.md); for the full key
+    reference see the [Configuration reference](../admin/configuration.md).
+
 OpenCCU-Loom is multi-CCU-capable: a single daemon process can serve
 any number of Homematic CCUs concurrently. This handbook covers the
 operational workflow — adding a second CCU to a running daemon,
@@ -7,7 +13,8 @@ MQTT topic scoping, callback routing, and per-`central_name`
 diagnostics.
 
 Design rationale and non-operational aspects are in
-[ADR 0002](../adr/0002-multi-ccu-first-class.md). The mechanics
+[ADR 0002](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0002-multi-ccu-first-class.md).
+The mechanics
 described here all ship in v1.0 and are pinned by contract tests.
 
 ---
@@ -316,8 +323,9 @@ affect any other.
 
 ## 7. Related documents
 
-- [ADR 0002 — Multi-CCU as a first-class feature](../adr/0002-multi-ccu-first-class.md)
-- [ADR 0011 — MQTT topic + payload architecture](../adr/0011-mqtt-topic-and-payload-architecture.md)
-- [`docs/mqtt-topic-schema.md`](../mqtt-topic-schema.md)
-- [`docs/user-guide.md`](../user-guide.md) — daemon-global configuration
-- [`config.example.yaml`](../../config.example.yaml) — annotated config reference
+- [ADR 0002 — Multi-CCU as a first-class feature](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0002-multi-ccu-first-class.md)
+- [ADR 0011 — MQTT topic + payload architecture](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0011-mqtt-topic-and-payload-architecture.md)
+- [MQTT topic schema](../mqtt-topic-schema.md)
+- [Installation & First Steps](../user-guide.md) — install + bootstrap config
+- [Configuration reference](../admin/configuration.md) — every config key
+- [`config.example.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.yaml) — annotated config reference
