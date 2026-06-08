@@ -10,8 +10,13 @@ COPY openccu-loom /app/openccu-loom
 COPY assets/openapi.yaml /app/assets/openapi.yaml
 USER nonroot:nonroot
 
+# REST API + Config UI (SPA)
 EXPOSE 8080/tcp
+# first-run /setup + bootstrap HTMX (pre-auth)
+EXPOSE 8081/tcp
+# XML-RPC callback (CCU -> daemon)
 EXPOSE 8120/tcp
+# BIN-RPC callback (CUxD -> daemon)
 EXPOSE 8129/tcp
 
 ENTRYPOINT ["/app/openccu-loom"]

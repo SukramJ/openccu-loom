@@ -166,5 +166,5 @@ release:
   github:
     owner: SukramJ
     name: openccu-loom
-  draft: true
+  draft: false
   prerelease: auto
