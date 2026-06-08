@@ -81,10 +81,16 @@ backup/
 !internal/ccudata/embedded/translation_custom/
 !internal/ccudata/embedded/translation_custom/*.json
 
-# Svelte SPA build output. Keep the placeholder index.html checked in
-# so `go build` works in a fresh clone without requiring Node/npm.
+# Svelte SPA build output. Keep the placeholder .gitkeep checked in so
+# `go build` (//go:embed all:spa_dist) works in a fresh clone without
+# requiring Node/npm. The release workflow builds the real SPA into this
+# directory and restores .gitkeep afterwards so the tree stays clean.
 /internal/north/ui/spa_dist/*
-!/internal/north/ui/spa_dist/index.html
+!/internal/north/ui/spa_dist/.gitkeep
+
+# goreleaser release-notes scratch file, generated from CHANGELOG.md in
+# the release workflow. Untracked → would otherwise make the tree dirty.
+/RELEASE_NOTES.md
 
 # Session recorder output (runtime only — keep tests/golden/sessions/
 # committed, so the pattern must not be root-free).

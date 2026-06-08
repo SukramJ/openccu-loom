@@ -40,6 +40,12 @@ jobs:
         run: |
           npm ci
           npm run build
+      # vite's emptyOutDir wipes spa_dist (including the tracked .gitkeep
+      # placeholder) before writing the bundle. Restore .gitkeep so the
+      # tree is clean for goreleaser's dirty-state check; the built assets
+      # themselves are gitignored.
+      - name: restore spa_dist placeholder
+        run: git checkout -- internal/north/ui/spa_dist/.gitkeep
       - uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       - uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
       - name: log in to ghcr
