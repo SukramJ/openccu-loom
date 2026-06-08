@@ -17,7 +17,7 @@ env:
   # Toggle the CCU/RaspberryMatic add-on packaging + upload. Set to
   # "false" to skip it for a release (or override per repo via the
   # BUILD_CCU_ADDON repository variable — see the step conditions).
-  BUILD_CCU_ADDON: "true"
+  BUILD_CCU_ADDON: "false"
 
 jobs:
   goreleaser:
