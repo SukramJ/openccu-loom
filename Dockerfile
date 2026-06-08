@@ -14,7 +14,7 @@
 # QEMU emulation for each target arch. Vite's outDir is
 # ../../internal/north/ui/spa_dist (relative to assets/ui), so building from
 # /src/assets/ui lands the bundle at /src/internal/north/ui/spa_dist.
-FROM --platform=$BUILDPLATFORM node:20-alpine AS spa
+FROM --platform=$BUILDPLATFORM node:24-alpine AS spa
 WORKDIR /src/assets/ui
 COPY assets/ui/package.json assets/ui/package-lock.json ./
 RUN npm ci
@@ -53,8 +53,13 @@ COPY --from=builder /out/openccu-loom /app/openccu-loom
 COPY --from=builder /src/assets/openapi.yaml /app/assets/openapi.yaml
 USER nonroot:nonroot
 
+# REST API + Config UI (SPA)
 EXPOSE 8080/tcp
+# first-run /setup + bootstrap HTMX (pre-auth)
+EXPOSE 8081/tcp
+# XML-RPC callback (CCU -> daemon)
 EXPOSE 8120/tcp
+# BIN-RPC callback (CUxD -> daemon)
 EXPOSE 8129/tcp
 
 ENTRYPOINT ["/app/openccu-loom"]

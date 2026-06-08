@@ -4,120 +4,6 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- **Enable the MCP server from the Config UI.** `north.mcp` is now a
-  first-class settings section: the SPA shows an **MCP** tab (wired
-  through the config schema and the section store) where an operator can
-  toggle `enabled` / `allow_writes` and set the mount `path` without
-  editing YAML or env. The fields are flagged restart-required, matching
-  how the MCP route is mounted once at boot. See
-  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).
-
-- **WebSocket payloads carry the canonical `unique_id`.** The
-  value-bearing push payloads (`datapoint.value_changed`,
-  `custom_data_point.state_changed`, `hub.sysvar_changed`,
-  `hub.program_executed`, `datapoint.optimistic_rolled_back`,
-  `device.trigger`) now include an optional `unique_id` field — the
-  loom-namespaced routing key (`loom_<routing-key>`) external clients
-  use as the Home Assistant entity key. Clients consume it directly
-  instead of rebuilding it from the raw fields; the field is omitted
-  when the producer cannot resolve it, so the change is
-  backward-compatible. See
-  `docs/external-clients/ha-unique-id-migration.md`.
-
-### Added
-
-- **MCP server (Model Context Protocol).** A new north-bound adapter
-  (`internal/north/mcp/`) exposes the daemon to LLM agents as tools over
-  a Streamable-HTTP transport, mounted on the REST listener behind the
-  same auth chain. Disabled by default (`North.MCP.Enabled`) and
-  read-only even when enabled — write tools are registered only when
-  `North.MCP.AllowWrites` is also set, and the write tools that touch a
-  device refuse to act on one the named central does not own. Read
-  tools: `list_centrals`, `list_devices`, `get_device`, `read_paramset`,
-  `get_health`, `list_audit`. Write tools: `set_datapoint`,
-  `write_paramset`, `trigger_program`. Each tool also gates on its own
-  dependency, so a partial wiring never exposes a half-functional tool.
-  The `mcp.v1` / `mcp.write.v1` capability tokens surface the posture via
-  `GET /info`. Built on the official `modelcontextprotocol/go-sdk`. See
-  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).
-
-- **System variables now work on Homegear backends.** Homegear is
-  XML-RPC-only, so the JSON-RPC hub bootstrap could not populate its
-  sysvar list and `/api/v1/sysvars` stayed empty. The daemon now loads
-  and periodically refreshes Homegear system variables over the XML-RPC
-  `getAllSystemVariables` method (inferring each variable's type from
-  its value, since Homegear ships only name + value), and writes values
-  back via `setSystemVariable` — bringing Homegear to parity with the
-  reference stack's Homegear support. Programs, rooms, and functions
-  remain empty on Homegear by design (no ReGa engine / metadata RPC),
-  matching that stack.
-
-- **Device-model labels for HmIP-DLP and HmIP-UDI-SMI55.** These two
-  devices ship icons and parameter help but no device-model label in
-  the upstream translation catalogue, so their MQTT discovery payload
-  omitted `model_id` (HA fell back to the cryptic wire type). The
-  curated translation overlay now supplies the German and English
-  labels — "Türschlossantrieb - pro" / "Door Lock Drive - pro" and
-  "Universal Dimmeraufsatz - Bewegungsmelder" / "Universal Dimming
-  Control Element - motion detector".
-
-### Fixed
-
-- **MQTT Discovery topics are scoped to the device's own CCU (multi-CCU).**
-  The HA-Discovery builder stamped the bridge's single configured central
-  name (the first CCU) into every device's `state_topic`,
-  `availability`, command and `json_attributes` topics, while the publish
-  path used the device's *actual* central. On a multi-CCU daemon this
-  routed every non-first-CCU device's discovery to a topic segment that
-  never received data (e.g. `…/FirstCCU/SecondCCU-HmIP-RF/…` instead of
-  `…/SecondCCU/SecondCCU-HmIP-RF/…`), so Home Assistant marked all of
-  those entities `unavailable`. Discovery now derives the topic central
-  from the event (the CCU the device lives on), falling back to the
-  builder default only for hub-level payloads with no device context.
-
-- **MQTT entities no longer show as `unavailable` in Home Assistant.**
-  Availability now tracks device *reachability* (`UNREACH` /
-  `STICKY_UNREACH` via `Device.Available()`) rather than "has a value
-  been observed yet". A reachable device is published `online` at boot
-  even before its data points report, and every registered data point —
-  including not-yet-observed ones — publishes an explicit
-  `{"value":null,"available":true}` slot state instead of an empty
-  eviction payload. Under the discovery payload's
-  `availability_mode: all` this is what kept entities stuck on
-  `unavailable`. The HA value templates gained a `value_json.value is
-  not none` guard so an unobserved data point renders as `unknown`
-  rather than the literal `"None"` (or a misleading multiplied `0.0`).
-
-- **MQTT raw-plane snapshot is republished on every broker reconnect.**
-  The boot-time `PublishInitialSnapshot` (per-device availability + every
-  data point's slot state) only ran once, after CCU hydration — and that
-  publish raced the MQTT connection. When the broker reset or the initial
-  connect completed only after hydration (observed live: a
-  `connection reset by peer` landing exactly as a multi-central
-  hydration finished), the whole snapshot hit a not-yet-connected client
-  and was dropped. `OnConnect` re-announced `bridge/status` and
-  re-published the HA-Discovery configs but **not** the raw plane those
-  configs reference, so the availability + slot-state topics were never
-  restored until a live CCU value change trickled in. Combined with the
-  sensors' `expire_after: 3600`, HA then expired the entities to
-  `unavailable`. The snapshot now runs on every broker (re)connect
-  (alongside the existing `AnnounceOnline` / `RepublishDiscovery` hooks),
-  so the raw plane is restored after any disconnect or broker restart.
-
-- **Model-snapshot drift gate honours its documented overrides.**
-  `script/model_snapshot_drift_check.py` derived its env-override keys
-  via a fragile string transform that did not match the documented
-  `OPENCCU_LOOM_DRIFT_GENERIC` / `_CHANNEL` / `_CALC` names, so three
-  of the four baseline overrides silently had no effect. The keys are
-  now an explicit table. The script also prints a TOTAL line and now
-  fails on any drift bucket it has no baseline for (previously such
-  buckets slipped through unguarded), and its stale `parity_audit.md`
-  references were re-pointed at `docs/parity/by_design.md`.
-
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that
@@ -147,16 +33,55 @@ standalone-daemon surface on top.
   throttle, coalescer, ping/pong.
 - 139 generated device profiles with hand-written custom data-point types;
   ReGa script runner.
+- **Homegear backend support** — system variables load and periodically
+  refresh over the XML-RPC `getAllSystemVariables` method (each variable's
+  type inferred from its value, since Homegear ships only name + value) and
+  write back via `setSystemVariable`, bringing Homegear to system-variable
+  parity with the reference stack. Programs, rooms, and functions stay
+  empty on Homegear by design (no ReGa engine / metadata RPC).
 
 ### North-bound (bridges)
 
 - **MQTT** — Home Assistant Discovery **and** raw topic planes in parallel;
-  MQTT config applies without a daemon restart.
+  MQTT config applies without a daemon restart. Discovery topics are scoped
+  to each device's own CCU, so on a multi-CCU daemon every device's state,
+  availability, command, and `json_attributes` topics route to the central
+  the device actually lives on. Availability tracks device *reachability*
+  (`UNREACH` / `STICKY_UNREACH` via `Device.Available()`): a reachable
+  device is published `online` at boot even before its data points report,
+  and every registered data point — including not-yet-observed ones —
+  publishes an explicit `{"value":null,"available":true}` slot state (HA
+  value templates render an unobserved point as `unknown` rather than
+  `"None"`). The full boot snapshot — per-device availability plus every
+  data point's slot state — is republished on every broker (re)connect, so
+  a broker restart or transient TCP reset never leaves entities stuck
+  `unavailable`.
 - **REST + WebSocket API** — ~80 REST endpoints (`assets/openapi.yaml`) and
-  85 WebSocket commands.
+  85 WebSocket commands. Value-bearing WebSocket push payloads
+  (`datapoint.value_changed`, `custom_data_point.state_changed`,
+  `hub.sysvar_changed`, `hub.program_executed`,
+  `datapoint.optimistic_rolled_back`, `device.trigger`) carry the canonical
+  loom-namespaced `unique_id` (`loom_<routing-key>`) that external clients
+  use as the Home Assistant entity key.
+- **MCP server (Model Context Protocol)** — a north-bound adapter
+  (`internal/north/mcp/`) exposing the daemon to LLM agents as tools over a
+  Streamable-HTTP transport, mounted on the REST listener behind the same
+  auth chain. Disabled by default (`North.MCP.Enabled`) and read-only even
+  when enabled — write tools are registered only when `North.MCP.AllowWrites`
+  is also set, and a write tool that touches a device refuses to act on one
+  the named central does not own. Read tools: `list_centrals`,
+  `list_devices`, `get_device`, `read_paramset`, `get_health`,
+  `list_audit`; write tools: `set_datapoint`, `write_paramset`,
+  `trigger_program`. Each tool also gates on its own dependency, so a
+  partial wiring never exposes a half-functional tool. The `mcp.v1` /
+  `mcp.write.v1` capability tokens surface the posture via `GET /info`.
+  Built on the official `modelcontextprotocol/go-sdk` (ADR 0025).
 - **Config UI** — a Svelte 5 SPA (Tailwind 4, embedded via `go:embed`) as
   the primary surface, with a minimal HTMX bootstrap surface for pre-auth
-  flows (login, first-run setup, OIDC callback) and SPA-down diagnosis.
+  flows (login, first-run setup, OIDC callback) and SPA-down diagnosis. The
+  SPA includes an **MCP** tab (wired through the config schema and the
+  section store) to toggle `enabled` / `allow_writes` and set the mount
+  `path` — flagged restart-required — without editing YAML or env.
 - **Matter bridge** — native-Go, default off, operator opt-in; a semantic
   port of matter.js HEAD.
 
@@ -183,3 +108,17 @@ standalone-daemon surface on top.
 ### Internationalisation
 
 - German + English catalogues across UI and server-rendered surfaces.
+- A curated translation overlay supplies device-model labels the upstream
+  catalogue omits — e.g. HmIP-DLP ("Türschlossantrieb - pro" / "Door Lock
+  Drive - pro") and HmIP-UDI-SMI55 ("Universal Dimmeraufsatz -
+  Bewegungsmelder" / "Universal Dimming Control Element - motion
+  detector") — so their MQTT discovery payload carries a readable
+  `model_id` instead of falling back to the raw wire type.
+
+### Quality & parity
+
+- Cross-stack model-snapshot drift gate
+  (`script/model_snapshot_drift_check.py`) with an explicit env-override
+  table (`OPENCCU_LOOM_DRIFT_GENERIC` / `_CHANNEL` / `_CALC`), a printed
+  TOTAL line, and fail-closed behaviour on any drift bucket without a
+  baseline.
