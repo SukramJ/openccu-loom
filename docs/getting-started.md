@@ -63,8 +63,8 @@ default UI language). On a fresh install, anything you list there is
 seeded into the database on first start; after that the database wins
 and the SPA is the place to make changes.
 
-- `config.example.yaml` — the minimal reference config (bootstrap tier).
-- `config.example.full.yaml` — an annotated reference of every option.
+- `example.config.yaml` — the minimal reference config (bootstrap tier).
+- `example.config.full.yaml` — an annotated reference of every option.
 - `example.env` — every environment variable; prefer env for secrets.
 
 !!! warning "Secrets at rest"

@@ -221,7 +221,7 @@ introspection helper are pure-Go, MIT/Apache-2.0/BSD. `pprof` /
   `cmd/openccu-loom/daemon_devmcp.go` under the same tag).
 - A CI lane compiles `-tags dev_mcp` (build-only, not shipped) so the
   tag-gated tree keeps compiling against internal refactors.
-- No change to `config.example.yaml`, `GET /info`, or any release
+- No change to `example.config.yaml`, `GET /info`, or any release
   artefact.
 
 ## Follow-ups

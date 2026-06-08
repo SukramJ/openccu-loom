@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Home Assistant add-on.** OpenCCU-Loom can now be installed as a Home
+  Assistant add-on, a third distribution channel alongside the Docker image
+  and the CCU/RaspberryMatic add-on. The repository itself doubles as a HA
+  add-on repository (add `https://github.com/SukramJ/openccu-loom` under
+  *Settings → Add-ons → Add-on Store → Repositories*). The add-on is built on
+  the official HA base image (s6-overlay supervises the daemon, so the Config
+  UI's **Restart** action works in-container; bashio maps the `log_level`
+  option), runs with `host_network` (so per-central callbacks reach the
+  daemon), persists state in `/data`, and exposes the Config UI both via
+  **Ingress** (sidebar panel) and the direct port `:8080`. One image is
+  published per arch (`ghcr.io/sukramj/openccu-loom-ha-<arch>`, amd64 /
+  aarch64 / armv7). Sources live in `packaging/ha-addon/`; the release build
+  is toggled by `BUILD_HA_ADDON`. Delivers the channel anticipated in
+  [SPECIFICATION.md](SPECIFICATION.md) Q9.
 - **CCU / RaspberryMatic add-on packaging.** OpenCCU-Loom can now ship as
   a native CCU add-on alongside the Docker image. The release attaches
   `openccu-loom-ccu-<version>.tar.gz` (installable via the CCU's
@@ -24,6 +38,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`OPENCCU_LOOM_CALLBACK_PUBLIC_HOST`** env override for
   `callback.public_host` — there was an env knob for the callback *bind*
   host but none for the *advertised* host.
+
+### Changed
+
+- **Reference config files renamed** `config.example.yaml` →
+  `example.config.yaml` and `config.example.full.yaml` →
+  `example.config.full.yaml`. Required because a Home Assistant add-on
+  repository is scanned recursively for `config.{yaml,yml,json}`, and the
+  old names matched that glob (the Supervisor would have tried to parse them
+  as add-ons). Update any local references; the file contents are unchanged.
 
 ### Fixed
 

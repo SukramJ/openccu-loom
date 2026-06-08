@@ -82,12 +82,17 @@ Canonical references:
 ### Docker
 
 ```sh
-docker run -d \
+docker run -d --restart unless-stopped \
   -p 8080:8080 -p 8081:8081 -p 8120:8120 -p 8129:8129 \
   -v $(pwd)/config.yaml:/app/config.yaml:ro \
   -v openccu-loom-data:/app/var \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
 ```
+
+> `--restart unless-stopped` (already set in `docker-compose.yaml`) lets the
+> Config UI's **Restart** action work: the daemon exits on restart and Docker
+> brings the container back. Without a restart policy the container would stay
+> stopped. (The Home Assistant add-on handles this in-container via s6-overlay.)
 
 ### Binary
 
@@ -95,6 +100,16 @@ docker run -d \
 make build
 ./bin/openccu-loom run --config config.yaml
 ```
+
+### Home Assistant add-on
+
+Add `https://github.com/SukramJ/openccu-loom` as a repository under
+*Settings → Add-ons → Add-on Store → ⋮ → Repositories*, then install
+**OpenCCU-Loom**. The Config UI appears as a sidebar panel (Ingress) and
+on `:8080`; state persists in the add-on's `/data`. See
+[`packaging/ha-addon/README.md`](packaging/ha-addon/README.md). For native
+CCU3 / RaspberryMatic installs, see
+[`packaging/ccu-addon/README.md`](packaging/ccu-addon/README.md).
 
 First-run setup:
 
@@ -123,8 +138,8 @@ YAML provides, so:
   `DELETE /api/v1/config/sections/{section}` reverts to the YAML
   fallback.
 
-The shipped `config.example.yaml` is intentionally short — see
-[`config.example.yaml`](./config.example.yaml). Everything in the
+The shipped `example.config.yaml` is intentionally short — see
+[`example.config.yaml`](./example.config.yaml). Everything in the
 "live" tier can still be set declaratively in YAML if you prefer
 GitOps + restart over live-edit; the SPA is just an additional
 surface, not a replacement.

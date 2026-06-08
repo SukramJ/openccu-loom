@@ -256,7 +256,7 @@ Option B structurally cannot provide.
 - `cmd/openccu-loom/daemon.go` gains a `startMCPServer` helper guarded
   by the enabled flag, mirroring the Matter and mDNS start/stop
   wiring; registration failure is logged and does not abort startup.
-- `config.example.yaml` documents the two switches and the read-only
+- `example.config.yaml` documents the two switches and the read-only
   default.
 
 ## Follow-ups

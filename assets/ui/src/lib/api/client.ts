@@ -48,6 +48,7 @@ import type {
   UnIgnoreUpdateRequest,
   UnIgnoreUpdateResponse,
 } from "./visibility-types";
+import { apiBase } from "./base";
 
 export type Identity = {
   subject: string;
@@ -154,7 +155,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = csrfToken();
     if (token) headers[CSRF_HEADER] = token;
   }
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     credentials: "same-origin",
     ...init,
     // headers/credentials are spread last so the merged set (Accept +
@@ -384,7 +385,7 @@ export const api = {
     return request<BackupEntry[]>(`/backups`);
   },
   backupDownloadUrl(id: string): string {
-    return `/api/v1/backups/${encodeURIComponent(id)}/download`;
+    return `${apiBase()}/backups/${encodeURIComponent(id)}/download`;
   },
   // --- Sysvars / programs / messages ----------------------------
   listSysvars() {
@@ -607,7 +608,7 @@ export const api = {
     );
   },
   captureDownloadURL(id: string): string {
-    return `/api/v1/diagnostics/capture/${encodeURIComponent(id)}/download`;
+    return `${apiBase()}/diagnostics/capture/${encodeURIComponent(id)}/download`;
   },
   // --- RPC traffic recording -----------------------------------
   listRpcRecordings() {
@@ -638,7 +639,7 @@ export const api = {
     }).then((v) => v ?? []);
   },
   rpcRecordingDownloadUrl(central: string, format?: "map" | "golden"): string {
-    const base = `/api/v1/diagnostics/rpc-recording/${encodeURIComponent(central)}/download`;
+    const base = `${apiBase()}/diagnostics/rpc-recording/${encodeURIComponent(central)}/download`;
     return format ? `${base}?format=${encodeURIComponent(format)}` : base;
   },
   // --- Diagnostic log viewer ----------------------------------
@@ -664,14 +665,14 @@ export const api = {
   logsDownloadUrl(p: { limit: number; minLevel?: string }): string {
     const qs = new URLSearchParams({ download: "1", format: "ndjson", limit: String(p.limit) });
     if (p.minLevel) qs.set("min_level", p.minLevel);
-    return `/api/v1/diagnostics/logs?${qs.toString()}`;
+    return `${apiBase()}/diagnostics/logs?${qs.toString()}`;
   },
   logsStreamUrl(p: { since?: number; minLevel?: string }): string {
     const qs = new URLSearchParams();
     if (p.since !== undefined) qs.set("since", String(p.since));
     if (p.minLevel) qs.set("min_level", p.minLevel);
     const q = qs.toString() ? `?${qs.toString()}` : "";
-    return `/api/v1/diagnostics/logs/stream${q}`;
+    return `${apiBase()}/diagnostics/logs/stream${q}`;
   },
   // --- System admin (Wave 6r) ---------------------------------
   getStartupCapture() {

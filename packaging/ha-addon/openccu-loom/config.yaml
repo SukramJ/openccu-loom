@@ -1,0 +1,47 @@
+# version MUST equal the release tag and is bumped in the release commit.
+name: OpenCCU-Loom
+version: "0.1.0"
+slug: openccu-loom
+description: >-
+  Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket
+  API, and a built-in Config UI — with optional Matter support.
+url: https://github.com/SukramJ/openccu-loom
+arch:
+  - amd64
+  - aarch64
+  - armv7
+
+# The add-on image follows the HA convention of one tag per arch.
+# The base image is pulled from the pre-built multi-arch release image.
+image: "ghcr.io/sukramj/openccu-loom-ha-{arch}"
+
+host_network: true
+
+# The HA base image ships its own s6-overlay init as the entrypoint; tell the
+# Supervisor not to inject its own init on top (required for s6-overlay images).
+init: false
+
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:home-assistant
+panel_title: "OpenCCU-Loom"
+
+ports:
+  8080/tcp: 8080
+  8120/tcp: 8120
+  8129/tcp: 8129
+  8081/tcp: 8081
+ports_description:
+  8080/tcp: "REST API + Config UI (SPA)"
+  8120/tcp: "XML-RPC callback — CCU pushes events to the daemon on this port"
+  8129/tcp: "BIN-RPC callback — CUxD pushes events to the daemon on this port"
+  8081/tcp: "Pre-auth bootstrap (login page, OIDC callback, /health, /about)"
+
+map:
+  - addon_config:rw
+
+options:
+  log_level: info
+
+schema:
+  log_level: "list(debug|info|warn|error)?"

@@ -692,7 +692,7 @@ type chipToolConfigInputs struct {
 // The YAML is hand-written rather than marshalled from the
 // production config types so a refactor on the production side
 // cannot silently change harness behaviour. The schema is documented
-// in `config.example.yaml`.
+// in `example.config.yaml`.
 func buildChipToolConfigYAML(in chipToolConfigInputs) string {
 	caseNode := uint64(0)
 	caseFabric := uint64(0)

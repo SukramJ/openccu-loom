@@ -9,11 +9,16 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 
 // The SPA is mounted under /app/ so the existing HTMX UI on / stays
-// functional while the migration is in flight. Asset paths must be
-// prefixed accordingly (see `base`), and the Go handler strips /app
-// before hitting the embedded FS.
-export default defineConfig({
-  base: '/app/',
+// functional while the migration is in flight. The Go handler strips
+// /app before hitting the embedded FS.
+//
+// Build (`vite build`) uses a RELATIVE base so emitted asset URLs resolve
+// against the document location — which already carries any Home Assistant
+// Ingress proxy prefix once the browser is at `<prefix>/app/`. The dev
+// server keeps the absolute `/app/` base so `npm run dev` (opened at
+// http://localhost:5173/app/) and its `/api` proxy keep working.
+export default defineConfig(({ command }) => ({
+  base: command === 'build' ? './' : '/app/',
   plugins: [svelte(), tailwindcss()],
   build: {
     // Ship the build output directly into the Go package so the
@@ -58,4 +63,4 @@ export default defineConfig({
       $lib: '/src/lib',
     },
   },
-});
+}));
