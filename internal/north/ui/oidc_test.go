@@ -5,9 +5,14 @@ package ui
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -25,19 +30,32 @@ import (
 // handler can complete end-to-end.
 func newOIDCTestHarness(t *testing.T) (http.Handler, *httptest.Server) {
 	t.Helper()
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa: %v", err)
+	}
+	const kid = "test-key-1"
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		issuer := "http://" + r.Host
 		switch r.URL.Path {
 		case "/.well-known/openid-configuration":
-			issuer := "http://" + r.Host
 			_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
 				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
+		case "/jwks":
+			n := base64.RawURLEncoding.EncodeToString(priv.N.Bytes())
+			e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(priv.E)).Bytes())
+			_, _ = fmt.Fprintf(w, `{"keys":[{"kty":"RSA","kid":%q,"alg":"RS256","n":%q,"e":%q}]}`, kid, n, e)
 		case "/token":
 			_ = r.ParseForm()
 			if r.Form.Get("code") != "abc" {
 				http.Error(w, "bad code", http.StatusBadRequest)
 				return
 			}
-			id := fakeJWT(map[string]any{"sub": "alice", "role": "operator"})
+			now := time.Now().Unix()
+			id := signTestJWT(priv, kid, map[string]any{
+				"iss": issuer, "sub": "alice", "aud": "openccu-loom",
+				"iat": now, "exp": now + 3600, "role": "operator",
+			})
 			_, _ = fmt.Fprintf(w, `{"access_token":"at","id_token":%q,"token_type":"Bearer","expires_in":3600}`, id)
 		}
 	}))
@@ -138,11 +156,15 @@ func TestLoginPageShowsOIDCWhenEnabled(t *testing.T) {
 	}
 }
 
-func fakeJWT(payload map[string]any) string {
-	h := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
-	b, _ := json.Marshal(payload)
-	p := base64.RawURLEncoding.EncodeToString(b)
-	return strings.Join([]string{h, p, "sig"}, ".")
+// signTestJWT mints an RS256-signed JWT so the harness exercises the
+// real signature-verification path in the callback handler.
+func signTestJWT(priv *rsa.PrivateKey, kid string, payload map[string]any) string {
+	hb, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": kid})
+	pb, _ := json.Marshal(payload)
+	signing := base64.RawURLEncoding.EncodeToString(hb) + "." + base64.RawURLEncoding.EncodeToString(pb)
+	sum := sha256.Sum256([]byte(signing))
+	sig, _ := rsa.SignPKCS1v15(rand.Reader, priv, crypto.SHA256, sum[:])
+	return signing + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 
 // ---------------------------------------------------------------------------
@@ -261,7 +283,7 @@ func TestOIDCCallbackBadCodeRedirectsWithExchangeFailed(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // newOIDCHarnessWithBadToken builds a fake IdP that returns a malformed
-// id_token ("notavalidjwt" — no "." — so DecodeIDToken returns an error).
+// id_token ("notavalidjwt" — no "." — so VerifyIDToken returns an error).
 func newOIDCHarnessWithBadToken(t *testing.T) http.Handler {
 	t.Helper()
 	idp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +294,7 @@ func newOIDCHarnessWithBadToken(t *testing.T) http.Handler {
 				`{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
 				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
 		case "/token":
-			// malformed id_token: single segment, DecodeIDToken will fail
+			// malformed id_token: single segment, VerifyIDToken will fail
 			_, _ = fmt.Fprintf(w,
 				`{"access_token":"at","id_token":"notavalidjwt","token_type":"Bearer","expires_in":3600}`)
 		}

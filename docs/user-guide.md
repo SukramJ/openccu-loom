@@ -1,9 +1,17 @@
-# OpenCCU-Loom — User Guide
+# Administration: Installation & First Steps
+
+!!! info "Who this page is for"
+    Administrators installing and operating the daemon. End users who
+    just want to use an already-running instance should start at
+    [Getting Started](getting-started.md). For the full list of every
+    config key, see the [Configuration reference](admin/configuration.md).
 
 OpenCCU-Loom is a standalone Go daemon that bridges Homematic CCU
-systems to MQTT, a REST+WebSocket API, and a browser-based config
-UI. This guide covers the operator perspective: install, configure,
-monitor.
+systems to MQTT, a REST+WebSocket API, a Matter bridge, and a
+browser-based config UI. This page covers install methods, the ports
+to open, first-run setup, and the bootstrap config tier. The complete
+config-key reference, auth model, backup, and observability each have
+their own pages — linked below.
 
 ## Install
 
@@ -17,72 +25,103 @@ docker run -d \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
 ```
 
+Multi-arch images (amd64, arm64, armv7) are published to
+`ghcr.io/sukramj/openccu-loom`.
+
 ### Binary
 
-Download the matching archive from the releases page and extract:
+Download the matching archive from the releases page and extract. The
+binary is fully static (`CGO_ENABLED=0`) with no runtime dependencies:
 
 ```sh
 ./openccu-loom run --config ./config.yaml
 ```
 
-## Configuration (YAML)
+The daemon auto-discovers a config when `--config` is omitted (first
+existing wins): `$OPENCCU_LOOM_CONFIG`, `./config.yaml`,
+`~/.config/openccu-loom/config.yaml`, `/etc/openccu-loom/config.yaml`.
+
+Other subcommands: `openccu-loom version`, `openccu-loom backup`,
+`openccu-loom config`. Validate a config file ahead of time with
+`hmcli config validate ./config.yaml`.
+
+## Ports
+
+| Port | Purpose | Direction |
+| --- | --- | --- |
+| `8080` | REST + WebSocket API (the MCP route mounts here too) | inbound from clients |
+| `8081` | Config UI (Svelte SPA + HTMX bootstrap) | inbound from browsers |
+| `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) | inbound from the CCU |
+| `8129` | BIN-RPC push callback server (CUxD) | inbound from the CCU |
+| `5540` | Matter bridge (UDP; **off by default**) | inbound from controllers |
+
+The two callback ports are how the CCU pushes value changes back to
+the daemon, so they must be reachable **from** the CCU. The Matter
+listener only binds when `north.matter.enabled: true`.
+
+## The bootstrap config tier
+
+A small `config.yaml` covers only the **bootstrap tier** — the values
+the daemon needs before its database opens (data dir, bind addresses,
+log handler, default UI language, callback ports). On a fresh install,
+anything you list there is seeded into the database on first start;
+after that the database wins and the [web UI](user/web-ui.md) is the
+place to make changes.
 
 ```yaml
-locale: en        # de | en
-data_dir: ./var
+locale: en            # de | en — default UI language
+data_dir: ./var       # SQLite DB + per-central state live here
 
 logging:
-  level: info     # debug | info | warn | error
-  format: json    # json | text
+  level: info         # debug | info | warn | error
+  format: json        # json | text
 
 callback:
   host: 0.0.0.0
-  port: 8120      # XML-RPC callback listener
-  bin_port: 8129  # BIN-RPC callback listener (CUxD)
+  port: 8120          # XML-RPC callback listener (0 = dynamic)
+  bin_port: 8129      # BIN-RPC callback listener (CUxD; 0 = dynamic)
 
 north:
   rest:
-    enabled: true
     listen: ":8080"
-    cors: ["https://my-ui.example"]
-    auth:
-      basic_enabled: true
-      bearer_enabled: true
-      session_enabled: true
-      users: { "alice": "change-me" }
-      tokens: { "tok-abc": "admin" }
-
   ui:
-    enabled: true
     listen: ":8081"
-
-  mqtt:
-    enabled: true
-    broker_url: "tcp://mosquitto:1883"
-    client_id: openccu-loom
-    username: ""
-    password: ""
-    topic_base: openccu-loom
-    raw_enabled: true
-    discovery_enabled: true
 
 centrals:
   - name: ccu-01
     host: 192.168.1.10
     interfaces: [HmIP-RF, BidCos-RF]
-
-ccu_data:
-  # Optional — point at extracted OCCU metadata archives.
-  # See script/README.md for the extractor invocation.
-  translations_path: ./var/ccu_data/translation_extract.json.gz
-  easymode_path:     ./var/ccu_data/easymode_extract.json.gz
 ```
+
+This is enough to boot and reach the first-run setup. MQTT, Matter,
+REST auth, OIDC, and everything else are configured from the UI (or
+seeded once via the full config). For the annotated reference of every
+key, see:
+
+- **[Configuration reference](admin/configuration.md)** — every option,
+  grouped by area.
+- [`config.example.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.yaml)
+  — the minimal bootstrap-tier file.
+- [`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml)
+  — an annotated reference of every option.
+- [`example.env`](https://github.com/SukramJ/openccu-loom/blob/main/example.env)
+  — every environment variable; prefer env for secrets.
+
+!!! warning "Secrets at rest"
+    Secret-classed fields (passwords, OIDC client secret, …) are
+    encrypted in the database at `<data_dir>/openccu-loom.db`. The
+    master key comes from `OPENCCU_LOOM_SECRET_KEY` (base64, 32 bytes)
+    or an auto-generated `<data_dir>/secret.key` (mode `0600`).
+    **Back up `secret.key` together with the database** — without it,
+    restored secrets cannot be decrypted. See
+    [Backup](admin/backup.md) and [Security](SECURITY.md).
 
 ## First-run setup
 
-1. Start the daemon with the minimum config (no users yet).
+1. Start the daemon with the bootstrap config (no users yet).
 2. Open `http://localhost:8081/setup` — create the first admin account.
-3. Sign in at `/login`.
+3. Sign in at `/login`. OIDC is supported when configured (see
+   [Authentication](admin/auth.md)).
 
 ## API quickstart
 
@@ -127,6 +166,9 @@ homeassistant/<component>/openccu-loom/<object_id>/config
 ```
 
 ## Troubleshooting
+
+A few quick checks; the full catalogue is in
+[Troubleshooting](admin/troubleshooting.md).
 
 - `/api/v1/health` reports `unhealthy`: inspect `/api/v1/incidents`.
 - MQTT bridge not publishing: confirm `north.mqtt.enabled: true` and `broker_url` is reachable.
@@ -176,6 +218,12 @@ An active RPC recording survives a daemon restart (the active-recording marker i
 
 ## Further reading
 
-- `docs/SECURITY.md` — security model + audit checklist
-- `SPECIFICATION.md` — complete design spec
-- `assets/openapi.yaml` — REST API contract
+- [Configuration reference](admin/configuration.md) — every config key.
+- [Authentication](admin/auth.md) — Basic / Session / OIDC / API tokens.
+- [Backup](admin/backup.md) — what to back up and how to restore.
+- [Observability](admin/observability.md) — health, metrics, tracing.
+- [Troubleshooting](admin/troubleshooting.md) — common failure modes.
+- [Security](SECURITY.md) — security model + hardening checklist.
+- [REST + WebSocket API](integrations/rest-ws.md) — the full API contract.
+- [MQTT topic schema](mqtt-topic-schema.md) — topic layout reference.
+- [Multi-CCU](user/multi-ccu.md) — run many CCUs from one daemon.

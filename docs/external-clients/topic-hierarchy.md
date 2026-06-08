@@ -1,20 +1,22 @@
 # WebSocket Topic Hierarchy
 
+!!! info "Who this page is for"
+    Integrators writing an external WebSocket client against the daemon.
+    For the request/response side of the API see
+    [REST + WebSocket API](../integrations/rest-ws.md).
+
 **Status:** Normative reference
 **Owner:** OpenCCU-Loom Maintainer
-**Letzte Aktualisierung:** 2026-05-24
 
 ## Purpose
 
 This document is the source of truth for the WebSocket topic namespace
 external clients subscribe to. It complements:
 
-- [`assets/wsapi.json`](../../assets/wsapi.json) — per-broadcast catalogue
-  (event name → topic pattern → payload schema reference)
-- [`assets/openapi.yaml`](../../assets/openapi.yaml) — payload schema
-  definitions under `components.schemas`
-- [`asks.md`](./asks.md) — the backlog this hierarchy was extracted from
-  (entries A1, A2, A3)
+- [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json)
+  — per-broadcast catalogue (event name → topic pattern → payload schema reference)
+- [`assets/openapi.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/assets/openapi.yaml)
+  — payload schema definitions under `components.schemas`
 
 ## Envelope
 
@@ -154,7 +156,7 @@ The binding contract for clients:
   (and any future `device.*` event) — each carries `central`.
 - `central` equals the canonical central name
   (`central == SystemCCUEntry.name == payload.central`, see
-  [ADR-0024](../adr/0024-instance-and-ccu-identity.md) and the openapi
+  [ADR-0024](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0024-instance-and-ccu-identity.md) and the openapi
   `SystemCCUEntry` normative note); resolve it from a CCU `serial` via
   `GET /system/ccu`.
 - Hub / lifecycle / status events, by contrast, MAY be scoped by topic
@@ -267,8 +269,8 @@ either convention for cross-namespace generic dispatch.
 ## Not yet pushed (deferred asks)
 
 The following internal `hmevent` types exist but are not currently
-broadcast over the WebSocket surface. They are tracked in
-[`asks.md`](./asks.md) as deferred work:
+broadcast over the WebSocket surface. They are tracked in the project
+backlog as deferred work:
 
 - `DataPointOptimisticRolledBackEvent` — declared in
   `pkg/hmevent/catalogue.go` but **not emitted** by any producer.

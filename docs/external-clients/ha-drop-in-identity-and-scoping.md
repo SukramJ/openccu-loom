@@ -1,15 +1,20 @@
 # HA drop-in: central identity & scoping — daemon side resolved
 
+!!! info "Who this page is for"
+    Integrators building the Home Assistant drop-in client and daemon
+    maintainers who own the identity contract. Operators do not need this
+    page. Background: [Multi-CCU](../user/multi-ccu.md).
+
 **Status:** Daemon side resolved — every daemon-side decision (P1–P6) is
 taken (see the per-section *Resolution* notes below and
-[ADR-0024](../adr/0024-instance-and-ccu-identity.md)). The optional
+[ADR-0024](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0024-instance-and-ccu-identity.md)). The optional
 daemon enhancement **P6** (carry `unique_id` on the value-bearing push
 payloads) has landed. One follow-up remains and it is **client-side**:
 the one-time `unique_id` registry migration in the `homematicip_local` /
 `py-openccu-loom-client` repos (see Summary).
 **Audience:** openccu-loom daemon maintainers
-**Related:** [`topic-hierarchy.md`](./topic-hierarchy.md), [`asks.md`](./asks.md),
-[ADR-0002 (multi-CCU first-class)](../adr/0002-multi-ccu-first-class.md)
+**Related:** [`topic-hierarchy.md`](./topic-hierarchy.md),
+[ADR-0002 (multi-CCU first-class)](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0002-multi-ccu-first-class.md)
 
 ## Context
 
@@ -180,7 +185,7 @@ discovered entities and WS-client entities are ever expected to share a
 
 **Resolution (taken):** option 2. The daemon's three id namespaces are
 deliberately distinct and are now catalogued in
-[`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md):
+[`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/docs/parity/by_design.md):
 the MQTT-discovery `unique_id` stays daemon-namespaced and pinned (changing
 it would orphan existing MQTT entities); the daemon's internal data-point
 identity stays opaque to clients; and the cross-backend HA routing key is now mirrored

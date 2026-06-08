@@ -1,5 +1,11 @@
 # HA `unique_id` migration — legacy → loom canonical schema
 
+!!! info "Who this page is for"
+    Authors of the `homematicip_local` / `py-openccu-loom-client`
+    drop-in client. Operators do not need this page; it specifies a
+    one-time client-side registry migration. Background:
+    [identity & scoping](./ha-drop-in-identity-and-scoping.md).
+
 **Status:** Ready to implement (client-side). The daemon-side
 prerequisite has landed — the value-bearing push payloads now carry the
 optional canonical `unique_id` (P6, see
@@ -8,7 +14,7 @@ so the client can both consume the key and verify its own rebuild. This
 document specifies the one-time HA registry migration the client runs.
 **Audience:** `homematicip_local` / `py-openccu-loom-client` authors.
 **Related:** [`ha-drop-in-identity-and-scoping.md`](./ha-drop-in-identity-and-scoping.md),
-[`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md).
+[`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/docs/parity/by_design.md).
 
 ## Why a migration
 
@@ -161,7 +167,7 @@ contract, the rebuilt key is bit-identical to the daemon's.
 
 The namespace split (why three id producers exist and which is the HA key)
 is catalogued in
-[`by_design.md` → BD-Identity-RoutingKeyNamespaces](../parity/by_design.md).
+[`by_design.md` → BD-Identity-RoutingKeyNamespaces](https://github.com/SukramJ/openccu-loom/blob/main/docs/parity/by_design.md).
 
 ### Recommended daemon change: carry `unique_id` on the value-bearing payloads (landed, P6)
 

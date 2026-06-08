@@ -1,29 +1,36 @@
 {
-  "generated": "2026-05-29T08:05:01Z",
-  "head": "061893d",
-  "total_candidates": 379,
-  "false_positives": 362,
-  "genuine_dead_code": 17,
+  "generated": "2026-06-08T11:51:16Z",
+  "head": "849b1da",
+  "total_candidates": 386,
+  "false_positives": 371,
+  "genuine_dead_code": 15,
   "genuine": [
     {
-      "package": "pkg/hmerr",
-      "identifier": "LogBoundaryError",
-      "file": "pkg/hmerr/boundary.go",
-      "line": 61,
+      "package": "internal/central/adapter",
+      "identifier": "BridgeCombinedDataPoint",
+      "file": "internal/central/adapter/combined_bridge.go",
+      "line": 51,
       "kind": "func"
     },
     {
-      "package": "pkg/hmerr",
-      "identifier": "ExceptionToFailureReason",
-      "file": "pkg/hmerr/errors.go",
-      "line": 396,
+      "package": "internal/central/adapter",
+      "identifier": "BridgeCombinedDataPoint",
+      "file": "internal/central/adapter/combined_bridge.go",
+      "line": 51,
       "kind": "func"
     },
     {
       "package": "internal/central/events",
       "identifier": "PublishSync",
       "file": "internal/central/events/bus.go",
-      "line": 273,
+      "line": 274,
+      "kind": "func"
+    },
+    {
+      "package": "internal/central/events",
+      "identifier": "PublishSync",
+      "file": "internal/central/events/bus.go",
+      "line": 274,
       "kind": "func"
     },
     {
@@ -34,17 +41,10 @@
       "kind": "func"
     },
     {
-      "package": "internal/central/coordinators",
-      "identifier": "IdentifyIPAddr",
-      "file": "internal/central/coordinators/client.go",
-      "line": 517,
-      "kind": "func"
-    },
-    {
-      "package": "internal/health",
-      "identifier": "NewConnectionRegistry",
-      "file": "internal/health/connection.go",
-      "line": 311,
+      "package": "internal/client/backends",
+      "identifier": "EncodeHMLevel",
+      "file": "internal/client/backends/combined.go",
+      "line": 183,
       "kind": "func"
     },
     {
@@ -56,58 +56,9 @@
     },
     {
       "package": "internal/health",
-      "identifier": "WithConnectionClock",
+      "identifier": "NewConnectionRegistry",
       "file": "internal/health/connection.go",
-      "line": 90,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewJSONRPCConnectivityProbe",
-      "file": "internal/central/adapter/connectivity_probe.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "BridgeCombinedDataPoint",
-      "file": "internal/central/adapter/combined_bridge.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "NewJSONRPCConnectivityProbe",
-      "file": "internal/central/adapter/connectivity_probe.go",
-      "line": 34,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "BridgeCombinedDataPoint",
-      "file": "internal/central/adapter/combined_bridge.go",
-      "line": 51,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/coordinators",
-      "identifier": "IdentifyIPAddr",
-      "file": "internal/central/coordinators/client.go",
-      "line": 517,
-      "kind": "func"
-    },
-    {
-      "package": "internal/central/events",
-      "identifier": "PublishSync",
-      "file": "internal/central/events/bus.go",
-      "line": 273,
-      "kind": "func"
-    },
-    {
-      "package": "internal/client/backends",
-      "identifier": "EncodeHMLevel",
-      "file": "internal/client/backends/combined.go",
-      "line": 183,
+      "line": 311,
       "kind": "func"
     },
     {
@@ -118,10 +69,45 @@
       "kind": "func"
     },
     {
+      "package": "internal/health",
+      "identifier": "WithConnectionClock",
+      "file": "internal/health/connection.go",
+      "line": 90,
+      "kind": "func"
+    },
+    {
+      "package": "internal/routingkey",
+      "identifier": "GenerateChannelUniqueID",
+      "file": "internal/routingkey/uniqueid.go",
+      "line": 107,
+      "kind": "func"
+    },
+    {
+      "package": "internal/routingkey",
+      "identifier": "GenerateChannelUniqueID",
+      "file": "internal/routingkey/uniqueid.go",
+      "line": 107,
+      "kind": "func"
+    },
+    {
       "package": "pkg/hmerr",
       "identifier": "ExceptionToFailureReason",
       "file": "pkg/hmerr/errors.go",
-      "line": 396,
+      "line": 395,
+      "kind": "func"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "ExceptionToFailureReason",
+      "file": "pkg/hmerr/errors.go",
+      "line": 395,
+      "kind": "func"
+    },
+    {
+      "package": "pkg/hmerr",
+      "identifier": "LogBoundaryError",
+      "file": "pkg/hmerr/boundary.go",
+      "line": 61,
       "kind": "func"
     }
   ]

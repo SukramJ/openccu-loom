@@ -1,0 +1,339 @@
+# Using the OpenCCU-Loom MCP Server
+
+!!! info "Who this page is for"
+    Integrators connecting an LLM agent (Claude Desktop, Claude Code, or
+    any MCP client) to a running daemon. Administrators enable and scope
+    the server; see [Authentication](../admin/auth.md) for the auth chain
+    it inherits.
+
+OpenCCU-Loom ships a **Model Context Protocol (MCP)** server as a
+north-bound adapter. It lets LLM agents (Claude Desktop, Claude Code,
+or any MCP-capable client) read — and, if you opt in, write — your
+Homematic CCU domain through a small, typed tool surface.
+
+The MCP adapter is a thin projection of the same domain the REST API
+serves: every tool is scoped per central, reads are always available,
+and writes require a **second, explicit opt-in**. Authorization is the
+REST listener's auth chain — the adapter holds no privilege path of its
+own.
+
+- Design rationale: [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
+- Dev-mode surface: [ADR 0026 — MCP dev mode](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md)
+- Implementation: `internal/north/mcp/` (`server.go`, `tools.go`)
+
+---
+
+## 1. Quick start
+
+### 1.1 Enable the server
+
+The MCP route is **off by default**. Turn it on in your config
+(`config.yaml`):
+
+```yaml
+north:
+  rest:
+    listen: ":8080"        # the MCP route is mounted on the REST listener
+  mcp:
+    enabled: true          # master switch — false = no MCP route at all
+    allow_writes: false    # keep read-only for now (see §4)
+    path: /mcp             # HTTP mount path on the REST listener
+```
+
+Defaults: `enabled: false`, `allow_writes: false`, `path: /mcp`. The
+REST listener defaults to `:8080`.
+
+Restart the daemon. On startup you'll see:
+
+```
+INFO north.mcp.enabled path=/mcp allow_writes=false
+```
+
+The MCP endpoint is now served at:
+
+```
+http://<host>:8080/mcp
+```
+
+> **Note:** MCP does **not** get its own listener or port. It is mounted
+> on the existing REST listener at `path`; every other URL falls through
+> to the normal REST router.
+
+### 1.2 Transport
+
+The server speaks **Streamable-HTTP** — the official MCP HTTP transport
+(`github.com/modelcontextprotocol/go-sdk`). There is no stdio transport;
+point your client at the HTTP URL above. For stdio-only clients, bridge
+with a small proxy such as `mcp-remote` (see §3.2).
+
+### 1.3 Authentication
+
+The MCP endpoint sits **behind the same auth chain as REST**. Send a
+credential on every request:
+
+```
+Authorization: Bearer <api-token>
+```
+
+API tokens (Bearer) are the recommended path for agents and CI; Basic
+auth also works. Create a token the same way you would for any REST
+client. A request without a valid credential gets `401` before it ever
+reaches a tool.
+
+### 1.4 Discover the posture from `GET /info`
+
+The daemon advertises its MCP posture as capability tokens so a client
+can reason about what's available before connecting:
+
+| Capability token | Meaning |
+| --- | --- |
+| `mcp.v1` | MCP server is enabled (read tools available) |
+| `mcp.write.v1` | Write tools are also enabled (`allow_writes: true`) |
+
+```sh
+curl -s -H "Authorization: Bearer $TOKEN" http://host:8080/info \
+  | jq '.capabilities'
+# [..., "mcp.v1", "mcp.write.v1"]
+```
+
+---
+
+## 2. The tool surface
+
+Nine tools, in two tiers. **Read tools** are always registered (each
+gated on its backing subsystem being wired). **Write tools** are
+registered only when `allow_writes: true`.
+
+Every tool that touches a specific CCU takes a `central_name`. It is
+**optional on reads** (omit to span all centrals) and **required on
+writes** — and on a write the named central *must own* the target
+device, or the call is rejected (ADR 0002, multi-CCU safety).
+
+### 2.1 Read tools (always available)
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `list_centrals` | — | The configured CCU names. These are the scoping dimension for every other tool. |
+| `list_devices` | `central_name?` | Device summaries (address, model, name, interface, central). Omit `central_name` to list all. |
+| `get_device` | `address` | A single device summary + its owning central. |
+| `read_paramset` | `address` (channel, e.g. `ABC:1`), `key` (`MASTER` or `VALUES`) | The parameter→value map. `MASTER` = configuration, `VALUES` = current state. |
+| `list_audit` | `limit?` (default 50, max 1000) | Recent config change-log, newest first (who changed what, when). |
+| `get_health` | — | Overall daemon status + per-component status (CCU connectivity, subsystems). |
+
+### 2.2 Write tools (only when `allow_writes: true`)
+
+| Tool | Arguments | Effect |
+| --- | --- | --- |
+| `set_datapoint` | `central_name`, `address` (channel), `parameter` (e.g. `STATE`, `LEVEL`), `value` | Writes a value to a device data point. Recorded to the audit log with a `via mcp` note. |
+| `write_paramset` | `central_name`, `address` (channel), `key` (`MASTER`/`VALUES`), `values` (map) | Writes a paramset. Recorded to the audit log. |
+| `trigger_program` | `central_name`, `program_id` (CCU ISE object id) | Runs a CCU automation program. Recorded to the audit log. |
+
+Notes:
+
+- `set_datapoint` writes at `CommandPriorityHigh` — the same priority
+  the REST API uses for user-initiated writes.
+- `LINK` paramsets are intentionally **not** exposed (they need a peer
+  address and a different tool shape). Only `MASTER` and `VALUES`.
+- Channel addresses use the `<device>:<channel>` form (e.g.
+  `0001D3C99C1234:4`). Device-level addresses (no `:channel`) are used
+  by `get_device`.
+
+---
+
+## 3. Connecting a client
+
+### 3.1 Claude Code (this CLI)
+
+Add the server with the HTTP transport and a bearer token:
+
+```sh
+claude mcp add --transport http openccu-loom http://host:8080/mcp \
+  --header "Authorization: Bearer $TOKEN"
+```
+
+By default the server is registered at `local` scope (this project /
+machine only). Add `--scope user` to make it available across all your
+sessions, or `--scope project` to share it with collaborators via the
+project's `.mcp.json`:
+
+```sh
+claude mcp add --scope user --transport http openccu-loom \
+  http://host:8080/mcp --header "Authorization: Bearer $TOKEN"
+```
+
+> Avoid `--scope project` if the header carries a real token — a
+> project-scoped entry is checked in. Prefer `user` scope, or reference
+> the token via an environment variable.
+
+Then in a session: *"List my CCUs"* → the agent calls `list_centrals`.
+
+### 3.2 Claude Desktop / stdio-only clients
+
+Claude Desktop currently expects stdio servers, so bridge to the HTTP
+endpoint with `mcp-remote`:
+
+```jsonc
+// claude_desktop_config.json
+{
+  "mcpServers": {
+    "openccu-loom": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote",
+        "http://host:8080/mcp",
+        "--header", "Authorization: Bearer ${OCCU_TOKEN}"
+      ],
+      "env": { "OCCU_TOKEN": "<your-api-token>" }
+    }
+  }
+}
+```
+
+### 3.3 Raw protocol smoke test
+
+Initialize a session against the endpoint to confirm reachability and
+auth:
+
+```sh
+curl -s http://host:8080/mcp \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize",
+       "params":{"protocolVersion":"2025-06-18",
+                 "capabilities":{},
+                 "clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+A `401` means the token was missing/invalid; a `200` with a server
+`initialize` result means you're through the auth chain.
+
+---
+
+## 4. Read-only vs. write posture (the two opt-ins)
+
+The server is designed to be **safe to enable**:
+
+1. `enabled: true` alone → **read-only**. The agent can inventory
+   devices, read paramsets, inspect health, and read the audit log, but
+   cannot change anything on the CCU.
+2. `allow_writes: true` *in addition* → the three write tools are
+   registered. This is a **separate, deliberate decision** — enabling
+   MCP never silently grants write access.
+
+Why this matters for agents: an LLM exploring your home should be able
+to *answer questions* without any risk of toggling a real device. You
+flip `allow_writes` only when you actively want the agent to act.
+
+Every write is **recorded to the audit log** with a `via mcp` origin
+tag, so `list_audit` (or the REST audit surface, or the Config UI)
+shows exactly what the agent changed and when.
+
+> **Operational guidance for real CCUs.** A write tool drives the same
+> `setValue` / paramset path as the REST API — i.e. it actuates real,
+> in-use devices. Treat `allow_writes: true` as you would handing an
+> automation script write access to your home. Start read-only, scope
+> the API token tightly, and turn writes on only against a CCU/devices
+> you're comfortable letting an agent move.
+
+---
+
+## 5. Use cases
+
+### 5.1 "What's in my house?" — natural-language inventory (read-only)
+
+> *"How many HmIP switches do I have, and which room names did I give
+> them?"*
+
+The agent calls `list_centrals` → `list_devices`, then groups the
+returned summaries by `model` / `name`. No config change, no risk —
+this works with `allow_writes: false`.
+
+### 5.2 Triage a flaky device (read-only)
+
+> *"My bathroom thermostat dropped off — what's its current state and
+> last-seen config?"*
+
+`get_device` to confirm the address and interface → `read_paramset`
+with `VALUES` for the live state → `read_paramset` with `MASTER` to see
+its configured cycle/temperature parameters → `get_health` to check
+whether the whole CCU link is degraded vs. just that device.
+
+### 5.3 Change-log forensics (read-only)
+
+> *"Did anything change the living-room dimmer config in the last day,
+> and who did it?"*
+
+`list_audit` with a `limit`, filtered by the agent on `device_address`
+/ `parameter`. Useful for "why did this device behave differently
+today?" investigations across REST, UI, and MCP-origin changes alike
+(MCP writes carry the `via mcp` note).
+
+### 5.4 Health watchdog / status summarizer (read-only)
+
+> *"Give me a one-line health summary of all my CCUs every morning."*
+
+`get_health` → the agent renders `overall` plus any non-OK components.
+Pairs naturally with a scheduled agent run; the read-only posture means
+you can leave this running unattended.
+
+### 5.5 Voice/chat-driven control (writes on)
+
+> *"Turn off the bookshelf lamp."*
+
+The agent resolves the device with `get_device` / `list_devices`, then
+`set_datapoint` with `central_name`, the channel `address`, parameter
+`STATE`, value `false`. The owning-central check stops it from writing
+to the wrong CCU; the audit log records the action.
+
+### 5.6 Scene / routine kick-off (writes on)
+
+> *"Run my 'Leaving home' routine."*
+
+`trigger_program` with the CCU program's `program_id`. Lets you expose
+existing CCU-side automations to an agent without re-implementing them
+north-bound.
+
+### 5.7 Guided re-configuration (writes on)
+
+> *"Set the staircase light's on-time to 90 seconds."*
+
+`read_paramset` (`MASTER`) to discover the current values and parameter
+names → the agent proposes the change → `write_paramset` (`MASTER`)
+with just the changed keys. Because the write goes through the same
+validated paramset path as REST, invalid values are rejected at the
+boundary, and the change lands in the audit log.
+
+### 5.8 Cross-CCU operations (multi-CCU)
+
+> *"List every device across all my CCUs, then turn off all switches in
+> the 'Garage' central."*
+
+`list_devices` with no `central_name` spans every central; the write
+step names `central_name: garage` explicitly. The required-and-checked
+`central_name` on writes is what makes "do X on CCU B" safe in a
+multi-CCU deployment.
+
+---
+
+## 6. Troubleshooting
+
+| Symptom | Likely cause |
+| --- | --- |
+| No `/mcp` route (404) | `north.mcp.enabled` is `false`, or the client is pointed at the wrong `path`. |
+| `401 Unauthorized` | Missing/invalid `Authorization` header. Check the API token and that you send it on every request. |
+| Write tools missing from `tools/list` | `allow_writes` is `false`, or the relevant subsystem (writer/paramsets/hubs) isn't wired. |
+| `device X belongs to central "A", not "B"` | The `central_name` you passed doesn't own that device. Fix the name (see `get_device`'s reported central). |
+| `key must be MASTER or VALUES` | `read_paramset` / `write_paramset` only accept those two keys; `LINK` is not exposed. |
+| `mcp.v1` absent from `GET /info` | Server isn't enabled, or the daemon wasn't restarted after the config change. |
+
+---
+
+## 7. Where to read more
+
+- **Architecture & decisions:** [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
+- **Tool definitions (source of truth):** `internal/north/mcp/tools.go`
+- **Wiring / mount point:** `cmd/openccu-loom/daemon_rest_mount.go` (`mountMCP`)
+- **Config reference:** [`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml) (`north.mcp` section)
+- **Capability tokens:** `internal/north/rest/handlers/info.go`
+- **Authentication model:** [Authentication](../admin/auth.md)

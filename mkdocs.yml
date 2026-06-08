@@ -1,0 +1,188 @@
+site_name: OpenCCU-Loom
+site_description: Standalone Go daemon bridging Homematic CCUs to MQTT, REST/WebSocket, a Config UI, and Matter
+site_url: https://sukramj.github.io/openccu-loom/
+repo_url: https://github.com/SukramJ/openccu-loom
+repo_name: SukramJ/openccu-loom
+edit_uri: edit/main/docs/
+
+copyright: Copyright &copy; 2026 OpenCCU-Loom authors
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.instant.prefetch
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+# Published surface, organised by audience: End-user (User Guide),
+# Administrator (Administration), Integrator (Integrations), and
+# Developer. Internal engineering / audit / parity docs stay in the
+# repo but are excluded from the published site via exclude_docs below.
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: getting-started.md
+      - Concepts: user/concepts.md
+      - Using the Web UI: user/web-ui.md
+      - Matter in Apple, Google & Alexa Home: user/matter.md
+  - Administration:
+      - Installation & First Steps: user-guide.md
+      - Configuration Reference: admin/configuration.md
+      - Authentication & Users: admin/auth.md
+      - Multi-CCU Operations: user/multi-ccu.md
+      - Security: SECURITY.md
+      - Backup & Restore: admin/backup.md
+      - Caching & Performance: caching.md
+      - Observability: admin/observability.md
+      - Troubleshooting: admin/troubleshooting.md
+  - Integrations:
+      - MQTT Topics: mqtt-topic-schema.md
+      - REST & WebSocket API: integrations/rest-ws.md
+      - MCP Server: external-clients/mcp.md
+      - External Client Wire Contract: external-clients/topic-hierarchy.md
+      - Home Assistant Drop-in: external-clients/ha-drop-in-identity-and-scoping.md
+      - HA Unique-ID Migration: external-clients/ha-unique-id-migration.md
+  - Developer:
+      - Architecture: developer/architecture.md
+      - Development Setup: developer/setup.md
+      - Testing: developer/testing.md
+      - Matter Parity Workflow: matter-parity-contract.md
+      - Writing a Source: contributor/source-interface.md
+      - Architecture Decisions (ADRs): developer/adr-index.md
+  - Credits: attribution.md
+
+# Everything not in the nav above is kept out of the build so the
+# published site stays focused. Add a path back here (remove it from
+# the globs) when a doc is ready for a public audience. The audit /
+# parity / concept trees are intentionally repo-only (engineering
+# trail, not user documentation).
+exclude_docs: |
+  hooks/
+  adr/
+  audit/
+  matter/
+  parity/
+  testing/
+  ui/
+  contributor/goland-debugging.md
+  contributor/matter-mdns-test-setup.md
+  contributor/matter-smoke.md
+  e2e-testplan.md
+  testplan.md
+  roadmap.md
+  matter-conformance.md
+  matter-ui-concept.md
+  external-clients/asks.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: SukramJ
+      repo: openccu-loom
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Hides the language switcher on pages that have no real .de.md
+# translation yet, so the site reads as English-only until German
+# pages are added. See docs/hooks/i18n_alternate_filter.py.
+hooks:
+  - docs/hooks/i18n_alternate_filter.py
+
+plugins:
+  - search:
+      separator: '[\s​\-_,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  # Multilingual scaffolding: English is the only built content for now.
+  # German pages are added later as `<name>.de.md` siblings; until then
+  # fallback_to_default serves the English source under /de/ and the hook
+  # above keeps the switcher hidden on untranslated pages.
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      languages:
+        - locale: en
+          name: English
+          default: true
+          build: true
+        - locale: de
+          name: Deutsch
+          build: true
+  - minify:
+      minify_html: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/SukramJ/openccu-loom
+  generator: false
+
+extra_css:
+  - stylesheets/extra.css

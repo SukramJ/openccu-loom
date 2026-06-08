@@ -137,8 +137,11 @@ func OIDCCallback(d *OIDCDeps) http.HandlerFunc {
 			oidcRedirectError(w, r, "exchange_failed", d.SPARedirectURL)
 			return
 		}
-		claims, err := oidc.DecodeIDToken(tokens.IDToken)
+		claims, err := d.Client.VerifyIDToken(ctx, tokens.IDToken)
 		if err != nil {
+			if d.Logger != nil {
+				d.Logger.Warn("oidc.id_token_invalid", slog.String("err", err.Error()))
+			}
 			oidcRedirectError(w, r, "id_token_invalid", d.SPARedirectURL)
 			return
 		}

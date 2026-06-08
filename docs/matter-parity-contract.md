@@ -1,5 +1,16 @@
 # Matter Behavioral-Parity Contract
 
+!!! info "Who this page is for"
+    Contributors and AI agents working on the Matter bridge. End users
+    and administrators do not need this page — see [Matter](user/matter.md)
+    for the operator-facing guide.
+
+OpenCCU-Loom's Matter side is a deliberate, behaviour-level port of
+[matter.js](https://github.com/project-chip/matter.js) HEAD. This page
+defines what "parity" means in practice and which standing guards keep
+the port honest, so that a change which merely *looks* right but drifts
+from the gold standard cannot land unnoticed.
+
 **Audience:** every contributor and AI agent that touches Matter-side code in
 OpenCCU-Loom. This is a standing contract, not an audit you run once. Read it
 before your first Matter change and treat it as binding.

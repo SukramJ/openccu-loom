@@ -1,7 +1,9 @@
-# Third-party design inspiration
+# Credits
 
-OpenCCU-Loom is MIT-licensed (see `LICENSE`). The list below records
-external sources we have read and learned from. None of their code is
+OpenCCU-Loom is MIT-licensed (see
+[`LICENSE`](https://github.com/SukramJ/openccu-loom/blob/main/LICENSE)).
+This page records the external projects we have read and learned from,
+and credits the people and licences behind them. None of their code is
 copied verbatim into the OpenCCU-Loom source tree; we cite them in
 file-top comments wherever a Svelte primitive or Go type mirrors an
 external counterpart so the lineage stays auditable.
