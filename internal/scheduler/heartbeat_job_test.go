@@ -48,10 +48,9 @@ func TestHeartbeatJobRunsOnTick(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// Advance past interval; yield so goroutine can reach the select.
-	time.Sleep(5 * time.Millisecond)
-	fake.Advance(60 * time.Second)
-	time.Sleep(10 * time.Millisecond)
+	// Fire one interval tick deterministically: wait for the job to park
+	// on its timer, fire it, then wait for the invocation to complete.
+	advanceTick(t, fake, 60*time.Second)
 
 	if count.Load() < 1 {
 		t.Fatalf("heartbeat job did not run after tick; count=%d", count.Load())
@@ -133,17 +132,15 @@ func TestHeartbeatJobErrorDoesNotStopScheduler(t *testing.T) {
 	}
 	defer s.Stop()
 
-	// Fire ticks until the job has been invoked at least 3 times (past
-	// the failure band). Poll-and-advance instead of a fixed sleep so
-	// the test is robust under -race where goroutine scheduling is
-	// throttled.
-	deadline := time.Now().Add(5 * time.Second)
-	for invocations.Load() < 3 {
-		if time.Now().After(deadline) {
-			t.Fatalf("scheduler stopped after job error: invocations=%d want >=3", invocations.Load())
-		}
-		time.Sleep(5 * time.Millisecond)
-		fake.Advance(100 * time.Millisecond)
+	// Fire three ticks deterministically. The first two invocations
+	// return an error; the scheduler must keep ticking so the third
+	// runs. advanceTick waits for each invocation to finish before the
+	// next fire, so the count is race-free even under -race.
+	for range 3 {
+		advanceTick(t, fake, 100*time.Millisecond)
+	}
+	if invocations.Load() < 3 {
+		t.Fatalf("scheduler stopped after job error: invocations=%d want >=3", invocations.Load())
 	}
 }
 
@@ -178,13 +175,43 @@ func TestHeartbeatJobMultipleIntervalsFire(t *testing.T) {
 	defer s.Stop()
 
 	for range ticks {
-		time.Sleep(5 * time.Millisecond)
-		fake.Advance(60 * time.Second)
+		advanceTick(t, fake, 60*time.Second)
 	}
-	time.Sleep(10 * time.Millisecond)
 	s.Stop()
 
 	if got := count.Load(); got != ticks {
 		t.Fatalf("expected %d heartbeat firings, got %d", ticks, got)
 	}
+}
+
+// waitForPending polls until the fake clock has at least want timers
+// parked — i.e. the run loop has (re-)registered its interval timer
+// after the previous invocation returned — or a generous deadline
+// elapses. Synchronising on the pending-timer count instead of a fixed
+// real-time sleep keeps these tests deterministic on slow or loaded CI
+// runners, where the scheduler goroutine can otherwise miss a tick
+// window between two Advance calls.
+func waitForPending(t *testing.T, fake *clock.Fake, want int) {
+	t.Helper()
+	const deadline = 2 * time.Second
+	start := time.Now()
+	for time.Since(start) < deadline {
+		if fake.PendingCount() >= want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("scheduler did not park %d interval timer(s) within %s", want, deadline)
+}
+
+// advanceTick fires exactly one interval tick without racing the run
+// loop: it waits for the job to park on its timer, fires that timer,
+// then waits for the resulting invocation to finish (the loop
+// re-registers a fresh timer only after invoke returns). Counter
+// inspection after advanceTick is therefore race-free.
+func advanceTick(t *testing.T, fake *clock.Fake, interval time.Duration) {
+	t.Helper()
+	waitForPending(t, fake, 1)
+	fake.Advance(interval)
+	waitForPending(t, fake, 1)
 }
