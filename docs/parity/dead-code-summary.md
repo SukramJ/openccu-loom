@@ -1,22 +1,22 @@
 # Dead-Code Summary
 
-Generated: 83e3fb8
-HEAD: 83e3fb8
+Generated: f268aae
+HEAD: f268aae
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 22191 |
-| Reachable | 3690 |
-| Whitelisted | 15817 |
-| **Unreachable** | **2684** |
+| Total Exported | 22268 |
+| Reachable | 3705 |
+| Whitelisted | 15871 |
+| **Unreachable** | **2692** |
 
 ## Top-20 Packages by Dead Code
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
-| internal/central/adapter | 55 | 77 | 38 |
+| internal/central/adapter | 56 | 78 | 38 |
 | internal/model/naming | 22 | 2 | 4 |
 | internal/configui | 20 | 68 | 0 |
 | internal/client/backends | 19 | 25 | 4 |
@@ -28,12 +28,12 @@ HEAD: 83e3fb8
 | internal/auth | 10 | 21 | 4 |
 | internal/metrics | 10 | 63 | 2 |
 | internal/model/hub | 10 | 33 | 16 |
-| internal/store/sqlite | 10 | 53 | 18 |
 | internal/audit | 8 | 20 | 2 |
 | internal/central/coordinators | 8 | 117 | 4 |
 | internal/client/transport/binrpc | 8 | 11 | 0 |
 | internal/north/matter/im | 8 | 68 | 14 |
 | internal/north/matter/tlv | 8 | 11 | 26 |
+| internal/store/sqlite | 8 | 51 | 18 |
 | internal/north/mqtt/protocol | 7 | 13 | 0 |
 | pkg/hmerr | 7 | 7 | 22 |
 
@@ -59,11 +59,11 @@ HEAD: 83e3fb8
 | internal/auth | NewSessionStore | internal/auth/session.go | 39 |
 | internal/auth | SessionMiddleware | internal/auth/session.go | 83 |
 | internal/auth | WriteSessionCookie | internal/auth/session.go | 104 |
-| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 135 |
+| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 219 |
+| internal/auth/oidc | DecodeIDToken | internal/auth/oidc/client.go | 219 |
 | internal/auth/oidc | Discover | internal/auth/oidc/discovery.go | 27 |
-| internal/auth/oidc | New | internal/auth/oidc/client.go | 40 |
+| internal/auth/oidc | New | internal/auth/oidc/client.go | 42 |
 | internal/auth/oidc | NewPKCEPair | internal/auth/oidc/pkce.go | 23 |
-| internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/ccudata | Empty | internal/ccudata/translations.go | 79 |
 | internal/ccudata | EmptyEasymode | internal/ccudata/easymode.go | 237 |
@@ -72,7 +72,7 @@ HEAD: 83e3fb8
 | internal/ccudata | LoadTranslations | internal/ccudata/translations.go | 52 |
 | internal/ccudata | LoadTranslationsEmbedded | internal/ccudata/embed.go | 48 |
 | internal/central | NewRegistry | internal/central/central_registry.go | 26 |
-| internal/central | RegisterStandardJobs | internal/central/jobs.go | 293 |
+| internal/central | RegisterStandardJobs | internal/central/jobs.go | 300 |
 | internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
 | internal/central/adapter | BridgeCombinedDataPoint | internal/central/adapter/combined_bridge.go | 51 |
 | internal/central/adapter | ClassifyLinkParameter | internal/central/adapter/link_param_metadata.go | 184 |
@@ -96,7 +96,7 @@ HEAD: 83e3fb8
 
 | Package | Funcs | Types | Other |
 |---|---|---|---|
-| internal/central/adapter | 55 | 77 | 38 |
+| internal/central/adapter | 56 | 78 | 38 |
 | internal/model/naming | 22 | 2 | 4 |
 | internal/configui | 20 | 68 | 0 |
 | internal/client/backends | 19 | 25 | 4 |
@@ -108,12 +108,12 @@ HEAD: 83e3fb8
 | internal/auth | 10 | 21 | 4 |
 | internal/metrics | 10 | 63 | 2 |
 | internal/model/hub | 10 | 33 | 16 |
-| internal/store/sqlite | 10 | 53 | 18 |
 | internal/audit | 8 | 20 | 2 |
 | internal/central/coordinators | 8 | 117 | 4 |
 | internal/client/transport/binrpc | 8 | 11 | 0 |
 | internal/north/matter/im | 8 | 68 | 14 |
 | internal/north/matter/tlv | 8 | 11 | 26 |
+| internal/store/sqlite | 8 | 51 | 18 |
 | internal/north/mqtt/protocol | 7 | 13 | 0 |
 | pkg/hmerr | 7 | 7 | 22 |
 | internal/auth/oidc | 6 | 17 | 2 |
@@ -124,10 +124,10 @@ HEAD: 83e3fb8
 | internal/routingkey | 6 | 0 | 0 |
 | internal/health | 5 | 22 | 0 |
 | internal/central/registry | 4 | 15 | 4 |
+| internal/configstore | 4 | 17 | 0 |
 | internal/model/device | 4 | 43 | 12 |
 | internal/north/ui | 4 | 13 | 0 |
 | internal/client | 3 | 23 | 8 |
-| internal/configstore | 3 | 17 | 0 |
 | internal/north/discovery/mdns | 3 | 6 | 2 |
 | internal/north/matter/secure/setup | 3 | 3 | 0 |
 | internal/store/devicedetails | 3 | 2 | 0 |
@@ -185,9 +185,10 @@ HEAD: 83e3fb8
 | internal/north/matter/secure/mattercert | 0 | 7 | 16 |
 | internal/north/matter/secure/operational | 0 | 3 | 4 |
 | internal/north/matter/store | 0 | 17 | 9 |
-| internal/north/matter/transport/message | 0 | 6 | 6 |
+| internal/north/matter/transport/message | 0 | 6 | 8 |
 | internal/north/matter/transport/mrp | 0 | 8 | 2 |
 | internal/north/matter/transport/udp | 0 | 5 | 4 |
+| internal/north/mcp | 0 | 7 | 0 |
 | internal/north/rest/problem | 0 | 3 | 4 |
 | internal/scheduler | 0 | 4 | 0 |
 | internal/store/linkprofile | 0 | 1 | 1 |
