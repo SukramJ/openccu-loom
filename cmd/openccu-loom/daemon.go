@@ -199,6 +199,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// co-located CCU, the LAN IP for an external one (or PublicHost when
 	// set). A single global host would mis-advertise to any central not
 	// reached over the same interface as the first.
+	//nolint:contextcheck // egressHostToward does an instantaneous UDP bind on context.Background(); there is no cancellation point worth threading a ctx through
 	callbackHost := func(cc *config.CentralConfig) string { return callbackHostFor(cfg, cc) }
 
 	// --- southbound wiring -------------------------------------

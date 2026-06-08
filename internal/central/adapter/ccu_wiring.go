@@ -167,40 +167,12 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 			joined = append(joined, cc.Name+": not registered")
 			continue
 		}
-		// Resolve the host THIS central should push callbacks to —
-		// loopback for a co-located CCU, the LAN IP for an external one,
-		// or an explicit PublicHost override. Shared by the XML-RPC and
-		// BIN-RPC (CUxD) callback registrations.
-		callbackHost := ""
-		if deps.CallbackHostFor != nil {
-			callbackHost = deps.CallbackHostFor(cc)
-		}
-
-		// Register callback handlers first so events that arrive during
-		// (or right after) Init land on a live route.
-		var callbackURL string
-		switch {
-		case deps.CallbackServer != nil && deps.CallbackPort != 0 && callbackHost != "":
-			handlers := NewCallbackHandlers(unit, logger)
-			if deps.Writer != nil {
-				handlers.SetWriter(deps.Writer)
-			}
-			deps.CallbackServer.Register(cc.Name, handlers)
-			callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
-			centralName := cc.Name
-			srv := deps.CallbackServer
-			closers = append(closers, func() { srv.Deregister(centralName) })
-		case deps.CallbackServer != nil && callbackHost == "":
-			logger.Warn("wire.callback.no_host",
-				slog.String("central", cc.Name),
-				slog.String("detail", "could not resolve a reachable callback host; CCU will not push events"))
-		}
-
-		// Per-central BIN-RPC callback address (CUxD), same host as the
-		// XML-RPC callback so an external CCU's CUxD reaches us too.
-		binRPCCallbackAddr := ""
-		if deps.BINRPCCallbackServer != nil && deps.BINRPCCallbackPort != 0 && callbackHost != "" {
-			binRPCCallbackAddr = fmt.Sprintf("%s:%d", callbackHost, deps.BINRPCCallbackPort)
+		// Register callback handlers + resolve the per-central XML-RPC
+		// callback URL and BIN-RPC (CUxD) callback address. Extracted so
+		// WireCentrals stays within the cognitive-complexity budget.
+		callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(deps, cc, unit, logger)
+		if deregister != nil {
+			closers = append(closers, deregister)
 		}
 
 		// Hub wiring runs first so programs + sysvars are available and
@@ -411,6 +383,43 @@ func (r *backendRegistry) getter(interfaceID string) backends.MasterGetter {
 		return nil
 	}
 	return b
+}
+
+// registerCentralCallbacks resolves the host this central should push
+// callbacks to (loopback for a co-located CCU, the LAN IP for an external
+// one, or an explicit PublicHost override — see [WireDeps.CallbackHostFor]),
+// registers the XML-RPC callback handler, and returns the per-central
+// XML-RPC callback URL, the BIN-RPC (CUxD) callback address (same host so
+// an external CCU's CUxD reaches us too), and a deregister closure (nil
+// when no XML-RPC callback was registered). An empty host skips callback
+// registration for the central — it still works, just without push events.
+func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *central.Unit, logger *slog.Logger) (callbackURL, binRPCCallbackAddr string, deregister func()) {
+	callbackHost := ""
+	if deps.CallbackHostFor != nil {
+		callbackHost = deps.CallbackHostFor(cc)
+	}
+
+	switch {
+	case deps.CallbackServer != nil && deps.CallbackPort != 0 && callbackHost != "":
+		handlers := NewCallbackHandlers(unit, logger)
+		if deps.Writer != nil {
+			handlers.SetWriter(deps.Writer)
+		}
+		deps.CallbackServer.Register(cc.Name, handlers)
+		callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
+		centralName := cc.Name
+		srv := deps.CallbackServer
+		deregister = func() { srv.Deregister(centralName) }
+	case deps.CallbackServer != nil && callbackHost == "":
+		logger.Warn("wire.callback.no_host",
+			slog.String("central", cc.Name),
+			slog.String("detail", "could not resolve a reachable callback host; CCU will not push events"))
+	}
+
+	if deps.BINRPCCallbackServer != nil && deps.BINRPCCallbackPort != 0 && callbackHost != "" {
+		binRPCCallbackAddr = fmt.Sprintf("%s:%d", callbackHost, deps.BINRPCCallbackPort)
+	}
+	return callbackURL, binRPCCallbackAddr, deregister
 }
 
 //nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup
