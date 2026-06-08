@@ -49,6 +49,7 @@ type Lifecycle struct {
 	mu        sync.Mutex
 	started   bool
 	cancel    context.CancelFunc
+	loopDone  chan struct{}
 	onConnect []func(context.Context)
 }
 
@@ -94,10 +95,19 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 		cancel()
 		l.mu.Lock()
 		l.started = false
+		l.cancel = nil
 		l.mu.Unlock()
 		return err
 	}
-	go l.loop(runCtx)
+
+	done := make(chan struct{})
+	l.mu.Lock()
+	l.loopDone = done
+	l.mu.Unlock()
+	go func() {
+		defer close(done)
+		l.loop(runCtx)
+	}()
 	return nil
 }
 
@@ -105,11 +115,25 @@ func (l *Lifecycle) Start(ctx context.Context) error {
 func (l *Lifecycle) Stop(ctx context.Context) error {
 	l.mu.Lock()
 	cancel := l.cancel
+	done := l.loopDone
 	l.started = false
 	l.cancel = nil
+	l.loopDone = nil
 	l.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	// Wait for the reconnect loop to exit before disconnecting. A
+	// concurrent connectOnce still mid-dial would otherwise race the
+	// connector teardown — concretely, TCPClient.Connect's wg.Add(2)
+	// against the wg.Wait that Disconnect spawns. Cancelling runCtx
+	// above unblocks the dial, so the loop returns promptly; ctx bounds
+	// the wait so a wedged dial cannot stall Stop indefinitely.
+	if done != nil {
+		select {
+		case <-done:
+		case <-ctx.Done():
+		}
 	}
 	if l.connector != nil {
 		return l.connector.Disconnect(ctx)

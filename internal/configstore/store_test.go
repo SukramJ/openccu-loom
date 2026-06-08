@@ -168,6 +168,39 @@ func TestStoreEffectiveAppliesSectionMQTT(t *testing.T) {
 	}
 }
 
+// TestStoreEffectiveAppliesSectionMCP verifies that a north.mcp row in
+// the section loader is applied to cfg.North.MCP and attributed to
+// SourceDB — the persistence path behind the SPA's MCP settings tab.
+func TestStoreEffectiveAppliesSectionMCP(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+
+	mcp := config.NorthMCP{Enabled: true, AllowWrites: true, Path: "/agents"}
+	raw, _ := json.Marshal(mcp)
+	sl.rows[string(SectionMCP)] = sqlite.SectionRow{
+		Section:   string(SectionMCP),
+		ValueJSON: raw,
+	}
+
+	s := New(defaultBootstrap(), sl, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	if !res.Config.North.MCP.Enabled {
+		t.Error("North.MCP.Enabled: want true")
+	}
+	if !res.Config.North.MCP.AllowWrites {
+		t.Error("North.MCP.AllowWrites: want true")
+	}
+	if res.Config.North.MCP.Path != "/agents" {
+		t.Errorf("North.MCP.Path=%q want /agents", res.Config.North.MCP.Path)
+	}
+	if res.Sources[string(SectionMCP)] != SourceDB {
+		t.Errorf("Sources[north.mcp]=%q want db", res.Sources[string(SectionMCP)])
+	}
+}
+
 // TestStoreEffectiveSourceDBForPresentSection verifies that any
 // section present in the DB gets SourceDB attribution.
 func TestStoreEffectiveSourceDBForPresentSection(t *testing.T) {

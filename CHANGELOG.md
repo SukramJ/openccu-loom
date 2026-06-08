@@ -8,6 +8,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Enable the MCP server from the Config UI.** `north.mcp` is now a
+  first-class settings section: the SPA shows an **MCP** tab (wired
+  through the config schema and the section store) where an operator can
+  toggle `enabled` / `allow_writes` and set the mount `path` without
+  editing YAML or env. The fields are flagged restart-required, matching
+  how the MCP route is mounted once at boot. See
+  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md).
+
 - **WebSocket payloads carry the canonical `unique_id`.** The
   value-bearing push payloads (`datapoint.value_changed`,
   `custom_data_point.state_changed`, `hub.sysvar_changed`,

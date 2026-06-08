@@ -89,6 +89,9 @@ var consumerDefaults = map[string]any{
 	"north.matter.discriminator":            0xF00,
 	"north.matter.mdns_advertise":           "zeroconf",
 	"north.matter.commissioning.iterations": 1000,
+	// MCP — see internal/config/config.go NorthMCP.MountPath(): the
+	// empty path falls back to "/mcp" at mount time.
+	"north.mcp.path": "/mcp",
 	// REST / OIDC — see internal/auth/oidc and middleware/openapi.
 	// REST and UI surfaces default to ON; *bool fields render as
 	// `null` in JSON when unset, so the SPA needs the explicit
@@ -123,7 +126,12 @@ var restartRequiredPaths = map[string]struct{}{
 	"callback.port_range":  {},
 	"north.matter.enabled": {},
 	"north.matter.listen":  {},
-	"centrals":             {},
+	// MCP route is mounted once at boot (cmd/openccu-loom/daemon_rest_mount.go),
+	// so toggling any MCP field takes effect only after a restart.
+	"north.mcp.enabled":      {},
+	"north.mcp.allow_writes": {},
+	"north.mcp.path":         {},
+	"centrals":               {},
 }
 
 // GetConfigSchema renders the typed schema for the SPA editor. No
@@ -360,6 +368,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 	case configstore.SectionMatter:
 		var v config.NorthMatter
 		return strictUnmarshal(raw, &v)
+	case configstore.SectionMCP:
+		var v config.NorthMCP
+		return strictUnmarshal(raw, &v)
 	case configstore.SectionDiscovery:
 		var v config.NorthDiscovery
 		return strictUnmarshal(raw, &v)
@@ -409,7 +420,8 @@ func strictUnmarshal(raw json.RawMessage, target any) error {
 func sectionRestartRequired(section configstore.Section) bool {
 	switch section {
 	case configstore.SectionCallback,
-		configstore.SectionMatter:
+		configstore.SectionMatter,
+		configstore.SectionMCP:
 		return true
 	}
 	return false
