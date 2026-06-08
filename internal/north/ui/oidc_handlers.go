@@ -150,7 +150,7 @@ func handleOIDCCallback(d Deps) http.HandlerFunc {
 			redirectError(w, r, "exchange_failed")
 			return
 		}
-		claims, err := oidc.DecodeIDToken(tokens.IDToken)
+		claims, err := d.OIDC.Client.VerifyIDToken(ctx, tokens.IDToken)
 		if err != nil {
 			ifLogger(d).WarnContext(r.Context(), "auth.oidc.id_token_invalid",
 				slog.String("remote", r.RemoteAddr),

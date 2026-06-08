@@ -28,9 +28,10 @@ import (
 // tokens with an in-memory RS256 keypair, and exposes IssueAuthCode
 // so the auth-flow test can skip the user-agent redirect dance.
 //
-// The daemon does NOT verify the ID-token signature in v1.0 (see
-// internal/auth/oidc/client.go::DecodeIDToken — Spec §19 hardening
-// item). The mock signs anyway so the wire shape matches a real OP.
+// The daemon verifies the ID-token RS256 signature against this
+// mock's JWKS (see internal/auth/oidc/client.go::VerifyIDToken), so
+// the mock signs with a real in-memory keypair and serves the
+// matching JWKS at /jwks.
 type MockOP interface {
 	IssuerURL() string
 	IssueAuthCode(sub, role string) string

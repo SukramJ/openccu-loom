@@ -22,7 +22,7 @@ how the code defends them:
 | Mutating REST/UI requests | Cross-site request forgery | Double-submit CSRF token (cookie `openccu_loom_csrf` + `X-CSRF-Token` header / `_csrf` form field), enabled by default. See [CSRF](#csrf). |
 | API tokens and passwords | Timing side-channel on comparison | `crypto/subtle.ConstantTimeCompare` for both bearer-token and Basic-password matching. |
 | Bearer token storage | Token leak from the management API | The raw token is returned **only once at creation**; list/audit views expose just a stable ID and a six-character fingerprint. |
-| ID token from the IdP | Forged / tampered token | PKCE (`S256`) protects the code exchange; the Issuer is pinned by configuration. **The ID-token signature is not yet verified** — see [OIDC signature verification](#oidc-signature-verification). |
+| ID token from the IdP | Forged / tampered token | RS256 signature verified against the IdP's JWKS; `issuer`, `audience`, and `exp` validated; PKCE (`S256`) protects the code exchange. See [OIDC signature verification](#oidc-signature-verification). |
 | Transport in the clear | Eavesdropping on the LAN | The daemon serves plain HTTP; terminate TLS at a reverse proxy. See [TLS posture](#tls-posture). |
 | Request floods | Resource exhaustion on REST | Optional per-identity rate limiter (off by default) plus request timeouts; production should also rate-limit at the proxy. See [Known limitations](#known-limitations). |
 
@@ -109,18 +109,26 @@ HTTP**. The daemon does not terminate TLS itself.
 
 ## OIDC signature verification
 
-!!! warning "ID-token signatures are not verified today"
-    Both OIDC callback paths (the SPA REST callback and the bootstrap-UI
-    callback) decode the ID-token payload **without verifying its
-    signature**. The repository ships an RS256 JWKS verifier
-    (`internal/auth/oidc/jwks.go`), but it is not wired into the callback
-    flow — so a tampered ID token is not currently rejected by signature.
+Both OIDC callback paths (the SPA REST callback and the bootstrap-UI
+callback) verify the ID token before issuing a session:
 
-    Mitigate by pinning a trusted IdP: rely on the TLS connection to the
-    `issuer` and treat the OIDC `redirect_url` as a same-origin secret.
-    Do not point the daemon at an untrusted or man-in-the-middle-able
-    authority. This is a known hardening gap, tracked for a future
-    release.
+- **Signature** — the RS256 signature is checked against the provider's
+  JWKS (`internal/auth/oidc/jwks.go`), fetched from the `jwks_uri`
+  advertised by the IdP's discovery document and cached with a freshness
+  TTL. Only `RS256` is accepted; a token that is unsigned, uses another
+  algorithm, or is signed by a key the IdP does not publish is rejected.
+- **Claims** — the `issuer` is pinned to the discovered issuer, the
+  `audience` must contain the configured `client_id`, and `exp` is
+  enforced (with a small clock-skew leeway; `nbf` too when present).
+- **Code exchange** — PKCE (`S256`) protects the authorization-code
+  exchange.
+
+!!! note "Transport trust still matters"
+    Verification relies on reaching the IdP's JWKS over a trustworthy
+    connection. Keep the `issuer` on TLS and treat the OIDC
+    `redirect_url` as a same-origin value. A provider that does not
+    advertise a `jwks_uri` cannot be verified, so logins against it are
+    refused.
 
 ## Known limitations
 

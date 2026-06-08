@@ -24,14 +24,11 @@ Conventions:
 These are **code** gaps the documentation honestly exposed. They are not
 doc tasks but must be tracked so the docs and the code converge.
 
-- [ ] **OIDC ID-token signatures are not verified.** Both callbacks
+- [x] **OIDC ID-token signatures are now verified.** Both callbacks
       (`internal/north/ui/oidc_handlers.go`, `internal/north/rest/handlers/oidc.go`)
-      call `oidc.DecodeIDToken`, which only decodes the JWT — the RS256
-      JWKS verifier (`internal/auth/oidc/jwks.go` `Verify()`) exists but is
-      not wired in. The docs now state this as a `!!! warning` hardening
-      gap (corrected the old `SECURITY.md`, which falsely claimed
-      signatures were verified). Wire `Verify()` into both callbacks, then
-      update `docs/SECURITY.md` + `docs/admin/auth.md`.
+      call `Client.VerifyIDToken`, which checks the RS256 signature against
+      the provider's JWKS and validates `issuer` / `audience` / `exp`.
+      `docs/SECURITY.md` and `docs/admin/auth.md` are updated accordingly.
 - [ ] Confirm whether `GET /api/v1/metrics` is auth-gated; the router
       mounts it conditionally. Document the final answer in
       `docs/admin/observability.md`.

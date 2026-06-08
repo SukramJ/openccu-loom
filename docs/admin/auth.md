@@ -181,12 +181,15 @@ Step by step:
    → `viewer`. The session subject is `preferred_username` when present,
    otherwise the `sub` claim.
 
-!!! warning "ID-token signatures are not verified yet"
-    The callback decodes the ID token without verifying its signature.
-    PKCE protects the code exchange and the `issuer` is pinned by config,
-    but you must point the daemon only at a trusted IdP reached over TLS.
-    See [OIDC signature verification](../SECURITY.md#oidc-signature-verification)
-    for the full caveat.
+!!! note "How the ID token is validated"
+    The callback verifies the ID token's RS256 signature against the
+    provider's JWKS (discovered from `jwks_uri` and cached), and checks
+    that the `issuer` matches, the `audience` contains your `client_id`,
+    and the token has not expired. PKCE protects the code exchange. A
+    provider that advertises no `jwks_uri` cannot be verified, so logins
+    against it are refused. See
+    [OIDC signature verification](../SECURITY.md#oidc-signature-verification)
+    for details.
 
 ## CSRF for browser vs API clients
 
