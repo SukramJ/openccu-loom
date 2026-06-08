@@ -1,9 +1,19 @@
 # `payload.Source` — Author Guide
 
+!!! info "Who this page is for"
+    Contributors extending the model layer. It is internal developer
+    documentation — end users and administrators do not need it. For the
+    big picture see [Architecture](../developer/architecture.md).
+
+The `payload.Source` interface is the single contract every domain object
+implements so that the north-bound adapters (REST, WebSocket, MQTT, Matter)
+can project it uniformly. This guide walks a contributor through making a
+new model type satisfy that contract.
+
 This guide is for contributors adding a new domain object to the OpenCCU-Loom
 model layer. It explains how to make that object satisfy the universal
 `payload.Source` contract introduced in
-[ADR 0007](../adr/0007-strong-model-source-interface.md).
+[ADR 0007](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0007-strong-model-source-interface.md).
 
 The contract is short:
 

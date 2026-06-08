@@ -77,10 +77,12 @@ and the SPA is the place to make changes.
 
 ## Next steps
 
-- **[User Guide](user-guide.md)** — the complete install + config
-  walkthrough.
+- **[Installation & First Steps](user-guide.md)** — the administrator
+  install walkthrough (install methods, ports, the bootstrap config tier).
+- **[Configuration reference](admin/configuration.md)** — every config
+  key, grouped by area.
 - **[MQTT Topics](mqtt-topic-schema.md)** — the topic schema for Home
   Assistant Discovery and the raw plane.
-- **[MCP Server](external-clients/mcp.md)** — expose your CCU to LLM
-  agents over the Model Context Protocol.
+- **[Matter](user/matter.md)** — bring your CCU devices into Apple Home,
+  Google Home, and Alexa.
 - **[Multi-CCU](user/multi-ccu.md)** — run many CCUs from one daemon.

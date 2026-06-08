@@ -40,15 +40,46 @@ SQLite plus the filesystem — no external database, no CGo.
 
 ## Where to next
 
+Pick the lane that matches what you want to do.
+
 <div class="grid cards" markdown>
 
-- :material-rocket-launch: **[Getting Started](getting-started.md)** —
-  install, first run, and the ports you need to open.
-- :material-book-open-variant: **[User Guide](user-guide.md)** —
-  operator install + configuration walkthrough.
-- :material-transit-connection-variant: **[Integrations](mqtt-topic-schema.md)** —
-  MQTT topics, the [MCP server](external-clients/mcp.md), and the
-  external-client wire contract.
+- :material-account: **For end users**
+
+    ---
+
+    Get a CCU bridged and use your devices from a browser, MQTT, or a
+    Matter controller.
+
+    [:octicons-arrow-right-24: Getting Started](getting-started.md)
+
+    [:octicons-arrow-right-24: Concepts](user/concepts.md) ·
+    [Web UI](user/web-ui.md) ·
+    [Matter](user/matter.md)
+
+- :material-server-network: **For administrators**
+
+    ---
+
+    Install, secure, and operate the daemon — install methods, the
+    config reference, and the security model.
+
+    [:octicons-arrow-right-24: Installation & First Steps](user-guide.md)
+
+    [:octicons-arrow-right-24: Configuration reference](admin/configuration.md) ·
+    [Security](SECURITY.md)
+
+- :material-code-tags: **For developers & integrators**
+
+    ---
+
+    Talk to the REST/WebSocket API, understand the architecture, and
+    build from source.
+
+    [:octicons-arrow-right-24: REST + WebSocket API](integrations/rest-ws.md)
+
+    [:octicons-arrow-right-24: Architecture](developer/architecture.md) ·
+    [Dev setup](developer/setup.md)
 
 </div>
 

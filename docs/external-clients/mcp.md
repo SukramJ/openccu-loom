@@ -1,5 +1,11 @@
 # Using the OpenCCU-Loom MCP Server
 
+!!! info "Who this page is for"
+    Integrators connecting an LLM agent (Claude Desktop, Claude Code, or
+    any MCP client) to a running daemon. Administrators enable and scope
+    the server; see [Authentication](../admin/auth.md) for the auth chain
+    it inherits.
+
 OpenCCU-Loom ships a **Model Context Protocol (MCP)** server as a
 north-bound adapter. It lets LLM agents (Claude Desktop, Claude Code,
 or any MCP-capable client) read — and, if you opt in, write — your
@@ -11,8 +17,8 @@ and writes require a **second, explicit opt-in**. Authorization is the
 REST listener's auth chain — the adapter holds no privilege path of its
 own.
 
-- Design rationale: [`docs/adr/0025-mcp-northbound-adapter.md`](../adr/0025-mcp-northbound-adapter.md)
-- Dev-mode surface: [`docs/adr/0026-mcp-dev-mode.md`](../adr/0026-mcp-dev-mode.md)
+- Design rationale: [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
+- Dev-mode surface: [ADR 0026 — MCP dev mode](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0026-mcp-dev-mode.md)
 - Implementation: `internal/north/mcp/` (`server.go`, `tools.go`)
 
 ---
@@ -325,8 +331,9 @@ multi-CCU deployment.
 
 ## 7. Where to read more
 
-- **Architecture & decisions:** [`docs/adr/0025-mcp-northbound-adapter.md`](../adr/0025-mcp-northbound-adapter.md)
+- **Architecture & decisions:** [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
 - **Tool definitions (source of truth):** `internal/north/mcp/tools.go`
 - **Wiring / mount point:** `cmd/openccu-loom/daemon_rest_mount.go` (`mountMCP`)
-- **Config reference:** `config.example.full.yaml` (`north.mcp` section)
+- **Config reference:** [`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml) (`north.mcp` section)
 - **Capability tokens:** `internal/north/rest/handlers/info.go`
+- **Authentication model:** [Authentication](../admin/auth.md)
