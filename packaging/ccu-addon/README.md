@@ -47,6 +47,15 @@ Ports and data dir are set via `OPENCCU_LOOM_*` env vars in
 `rc.d/openccu-loom`; edit there to resolve a port clash with another
 add-on.
 
+## Restart from the UI
+
+The add-on runs the daemon under **monit** (active mode) and sets
+`OPENCCU_LOOM_SUPERVISOR=1`, so the SPA's **Restart** action is enabled:
+it SIGTERMs the daemon, which exits and is brought back up by monit on
+its next cycle (a brief gap is expected — it is a restart, not a
+hot-reload). Without the supervisor signal the daemon disables restart
+to avoid leaving itself offline.
+
 ## Build locally
 
 ```sh
