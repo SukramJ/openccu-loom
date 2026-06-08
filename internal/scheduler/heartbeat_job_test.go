@@ -215,3 +215,21 @@ func advanceTick(t *testing.T, fake *clock.Fake, interval time.Duration) {
 	fake.Advance(interval)
 	waitForPending(t, fake, 1)
 }
+
+// waitForCount polls until the counter reaches at least want, or a
+// generous deadline elapses. Used where a job blocks inside Run (so the
+// run loop cannot re-arm its timer) and advanceTick's re-arm wait would
+// therefore deadlock — there the test synchronises on the invocation
+// count instead.
+func waitForCount(t *testing.T, c *atomic.Int64, want int64) {
+	t.Helper()
+	const deadline = 2 * time.Second
+	start := time.Now()
+	for time.Since(start) < deadline {
+		if c.Load() >= want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("counter did not reach %d within %s (got %d)", want, deadline, c.Load())
+}
