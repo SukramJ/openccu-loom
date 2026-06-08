@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
 )
 
@@ -48,6 +49,7 @@ type CircuitBreaker struct {
 	RecoveryTimeout  time.Duration
 	logger           *slog.Logger
 	collector        *metrics.MqttCollector // may be nil
+	clk              clock.Clock            // wall-clock seam; real unless overridden in tests
 
 	mu              sync.Mutex
 	state           CircuitState
@@ -74,6 +76,7 @@ func NewMqttCircuitBreaker(failureThreshold int, recoveryTimeout time.Duration, 
 		FailureThreshold: failureThreshold,
 		RecoveryTimeout:  recoveryTimeout,
 		logger:           logger,
+		clk:              clock.New(),
 	}
 }
 
@@ -82,6 +85,18 @@ func NewMqttCircuitBreaker(failureThreshold int, recoveryTimeout time.Duration, 
 // Returns the receiver for call-site chaining.
 func (cb *CircuitBreaker) WithCollector(col *metrics.MqttCollector) *CircuitBreaker {
 	cb.collector = col
+	return cb
+}
+
+// WithClock overrides the wall-clock source. Tests inject a [clock.Fake]
+// so the OPEN → HALF_OPEN recovery transition is driven by an explicit
+// Advance rather than real time — a 1 ms timeout plus a sleep is racy on
+// coarse-grained clocks (notably Windows CI). Returns the receiver for
+// call-site chaining.
+func (cb *CircuitBreaker) WithClock(clk clock.Clock) *CircuitBreaker {
+	if clk != nil {
+		cb.clk = clk
+	}
 	return cb
 }
 
@@ -123,7 +138,7 @@ func (cb *CircuitBreaker) RecordSuccess() {
 func (cb *CircuitBreaker) RecordFailure() {
 	cb.mu.Lock()
 	cb.failureCount++
-	cb.lastFailureTime = time.Now()
+	cb.lastFailureTime = cb.clk.Now()
 	if cb.failureCount >= cb.FailureThreshold && cb.state != CircuitOpen {
 		cb.state = CircuitOpen
 		count := cb.failureCount
@@ -177,7 +192,7 @@ func (cb *CircuitBreaker) maybeTransitionToHalfOpenLocked() {
 	if cb.lastFailureTime.IsZero() {
 		return
 	}
-	if time.Since(cb.lastFailureTime) >= cb.RecoveryTimeout {
+	if cb.clk.Now().Sub(cb.lastFailureTime) >= cb.RecoveryTimeout {
 		cb.state = CircuitHalfOpen
 		cb.logger.Info("mqtt.circuit_breaker: recovery window elapsed, half-open")
 	}
