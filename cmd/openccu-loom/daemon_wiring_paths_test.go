@@ -66,17 +66,14 @@ func TestBuildOpenAPIValidator_InvalidSpecContent_ReturnsNil(t *testing.T) {
 	_ = v
 }
 
-// ── autodetectCallbackHost: Dial failure ─────────────────────────────────────
+// ── egressHostToward: Dial failure ───────────────────────────────────────────
 
-// TestAutodetectCallbackHost_InvalidHost_ReturnsEmpty exercises the
+// TestEgressHostToward_InvalidHost_ReturnsEmpty exercises the
 // `if err != nil { return "" }` path after net.Dial fails.
-func TestAutodetectCallbackHost_InvalidHost_ReturnsEmpty(t *testing.T) {
+func TestEgressHostToward_InvalidHost_ReturnsEmpty(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
 	// "::invalid::" is not a valid hostname → net.Dial("udp", "...:80") fails.
-	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "::invalid::"}}
-
-	got := autodetectCallbackHost(cfg)
+	got := egressHostToward("::invalid::")
 	if got != "" {
 		t.Errorf("expected empty string for invalid host, got %q", got)
 	}

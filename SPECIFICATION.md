@@ -170,7 +170,9 @@ eQ-3 HomeMatic Software License — see ADR 0003.
   tarball; FS-level backup of `state-dir` also works.
 
 **Explicitly out of scope for 0.1.0 MVP**: HA Add-on packaging,
-RaspberryMatic Add-on packaging, deep Homegear parity.
+RaspberryMatic Add-on packaging, deep Homegear parity. (The
+RaspberryMatic / CCU add-on channel landed post-0.1.0 — see Q10 and
+`packaging/ccu-addon/`; HA Add-on packaging is still pending.)
 
 ---
 
@@ -576,7 +578,7 @@ an ADR.
 | Q7 | Transport licensing | Native Go XML-RPC / BIN-RPC / JSON-RPC; project licensed MIT (ADR 0001) |
 | Q8 | Setup wizard scope | Admin user + CCU connection + language/theme (no MQTT in wizard) |
 | Q9 | HA Add-on packaging | Post-0.1.0 |
-| Q10 | RaspberryMatic Add-on | Post-0.1.0 |
+| Q10 | RaspberryMatic Add-on | Delivered post-0.1.0 — CCU/RaspberryMatic add-on (amd64/arm64/armv7) packaged from `packaging/ccu-addon/` and attached to each release (ADR 0012 channel) |
 | Q11 | Multi-CCU | Supported from 0.1.0 (ADR 0002) |
 | Q12 | Hot-reload | Logging (level, format) and CORS via file-watcher; **entire `north.mqtt` section is hot-swappable** (broker URL, credentials, topic base, discovery toggles) — applied automatically on file-watcher pickup or on demand via `POST /admin/mqtt/reload`. Structural CCU/Callback/REST listen changes still need restart |
 | Q13 | CUxD transport | Native BIN-RPC + BIN-RPC callback server. No MQTT workaround. |

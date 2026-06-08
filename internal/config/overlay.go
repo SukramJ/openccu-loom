@@ -27,6 +27,7 @@ import (
 //   - OPENCCU_LOOM_LOG_LEVEL                 → c.Logging.Level
 //   - OPENCCU_LOOM_LOG_FORMAT                → c.Logging.Format
 //   - OPENCCU_LOOM_CALLBACK_HOST             → c.Callback.Host
+//   - OPENCCU_LOOM_CALLBACK_PUBLIC_HOST      → c.Callback.PublicHost
 //   - OPENCCU_LOOM_CALLBACK_PORT             → c.Callback.Port (int)
 //   - OPENCCU_LOOM_CALLBACK_BIN_PORT         → c.Callback.BinPort (int)
 //   - OPENCCU_LOOM_REST_LISTEN               → c.North.REST.Listen
@@ -43,6 +44,7 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) {
 	overlayString(getenv, "OPENCCU_LOOM_LOG_LEVEL", &c.Logging.Level)
 	overlayString(getenv, "OPENCCU_LOOM_LOG_FORMAT", &c.Logging.Format)
 	overlayString(getenv, "OPENCCU_LOOM_CALLBACK_HOST", &c.Callback.Host)
+	overlayString(getenv, "OPENCCU_LOOM_CALLBACK_PUBLIC_HOST", &c.Callback.PublicHost)
 	overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_PORT", &c.Callback.Port)
 	overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_BIN_PORT", &c.Callback.BinPort)
 	overlayString(getenv, "OPENCCU_LOOM_REST_LISTEN", &c.North.REST.Listen)

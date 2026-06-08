@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -37,17 +36,19 @@ func bridgeHealthSupplier(cfg *config.Config, startedAt time.Time) func() map[st
 }
 
 // startCallbackServer binds the XML-RPC callback listener on
-// `cfg.Callback.{Host,Port}` and computes the URL the CCU is told
-// to push events to. The URL's host comes from PublicHost when
-// configured; otherwise it is autodetected via a UDP probe against
-// the first central's host (the kernel picks the egress interface,
-// which is what the CCU will see as our peer address).
+// `cfg.Callback.{Host,Port}` and returns the effective port. The host
+// advertised to each CCU is NOT computed here — it is resolved
+// per-central by the caller (see callbackHostFor) so a daemon serving a
+// local and an external CCU advertises loopback to the former and its
+// LAN IP to the latter. Baking one global host into the URL (the former
+// behaviour) was wrong for any central reached over a different
+// interface than central[0].
 //
 // When cfg.Callback.Port is 0 and cfg.Callback.PortRange is set (e.g.
 // "30000-30099"), the server scans the range and binds on the first
 // available port. The effective port is always read from srv.Addr()
 // after construction, never from the configured value.
-func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*rpcserver.XMLRPCServer, string, error) {
+func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*rpcserver.XMLRPCServer, int, error) {
 	host := cfg.Callback.Host
 	if host == "" {
 		host = "0.0.0.0"
@@ -61,14 +62,14 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 	if cfg.Callback.Port == 0 && cfg.Callback.PortRange != "" {
 		lo, hi, err := config.ParsePortRange(cfg.Callback.PortRange)
 		if err != nil {
-			return nil, "", fmt.Errorf("callback: %w", err)
+			return nil, 0, fmt.Errorf("callback: %w", err)
 		}
 		xcfg.PortRange = rpcserver.NewPortRange(lo, hi)
 	}
 
 	srv, err := rpcserver.NewXMLRPCServer(xcfg) //nolint:contextcheck // NewXMLRPCServer/bindAddr has no ctx parameter; bind is instantaneous
 	if err != nil {
-		return nil, "", fmt.Errorf("callback listen %s: %w", addr, err)
+		return nil, 0, fmt.Errorf("callback listen %s: %w", addr, err)
 	}
 	go func() {
 		if err := srv.Serve(ctx); err != nil {
@@ -76,32 +77,37 @@ func startCallbackServer(ctx context.Context, cfg *config.Config, logger *slog.L
 		}
 	}()
 
-	publicHost := cfg.Callback.PublicHost
-	if publicHost == "" {
-		publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
-	}
-	if publicHost == "" {
-		return srv, "", errors.New("callback: public host could not be determined — set callback.public_host")
-	}
-	tcpAddr, ok := srv.Addr().(*net.TCPAddr)
 	port := cfg.Callback.Port
-	if ok {
+	if tcpAddr, ok := srv.Addr().(*net.TCPAddr); ok {
 		port = tcpAddr.Port
 	}
-	baseURL := fmt.Sprintf("http://%s:%d", publicHost, port)
-	return srv, baseURL, nil
+	return srv, port, nil
 }
 
-// autodetectCallbackHost opens a throw-away UDP socket to the first
-// configured central and reads back the local address. This is the
-// standard "egress interface" trick — no packets are actually sent
-// because UDP "Dial" only binds.
-func autodetectCallbackHost(cfg *config.Config) string { //nolint:contextcheck // test callers outside owned set prevent ctx signature; UDP bind uses context.Background() below
-	if len(cfg.Centrals) == 0 {
+// callbackHostFor resolves the host the CCU `cc` should push callbacks
+// to. An explicit cfg.Callback.PublicHost wins (the operator's NAT
+// override, applied to every central); otherwise the host is detected
+// per-central as the egress interface toward THAT central, so the
+// advertised address is reachable from each CCU independently — loopback
+// for a co-located CCU, the LAN IP for an external one. Returns "" when
+// the host cannot be determined; the caller then skips callbacks for
+// that central (it still works, just without push events).
+func callbackHostFor(cfg *config.Config, cc *config.CentralConfig) string {
+	if cfg.Callback.PublicHost != "" {
+		return cfg.Callback.PublicHost
+	}
+	return egressHostToward(cc.Host)
+}
+
+// egressHostToward opens a throw-away UDP socket toward host and reads
+// back the local address the kernel picked. This is the standard "egress
+// interface" trick — no packets are actually sent because UDP "Dial"
+// only binds. Returns "" when host is empty or the bind fails.
+func egressHostToward(host string) string { //nolint:contextcheck // UDP bind uses context.Background(); it is instantaneous and has no cancellation point
+	if host == "" {
 		return ""
 	}
-	target := cfg.Centrals[0].Host
-	conn, err := (&net.Dialer{}).DialContext(context.Background(), "udp", target+":80")
+	conn, err := (&net.Dialer{}).DialContext(context.Background(), "udp", host+":80")
 	if err != nil {
 		return ""
 	}

@@ -31,9 +31,10 @@ type southboundWiringDeps struct {
 	valueWriter             *clientpkg.ValueWriter
 	translations            *ccudata.Translations
 	callbackSrv             *rpcserver.XMLRPCServer
-	callbackBaseURL         string
+	callbackPort            int
+	callbackHost            func(*config.CentralConfig) string
 	binRPCSrv               *rpcserver.BINRPCServer
-	binRPCAddr              string
+	binRPCPort              int
 	visReg                  *visibility.Registry
 	masterValuesStore       *sqlite.MasterValuesStore
 	valuesCacheStore        *sqlite.ValuesCacheStore
@@ -103,9 +104,10 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		Writer:               d.valueWriter,
 		Translations:         d.translations,
 		CallbackServer:       d.callbackSrv,
-		CallbackBaseURL:      d.callbackBaseURL,
+		CallbackPort:         d.callbackPort,
+		CallbackHostFor:      d.callbackHost,
 		BINRPCCallbackServer: d.binRPCSrv,
-		BINRPCCallbackAddr:   d.binRPCAddr,
+		BINRPCCallbackPort:   d.binRPCPort,
 		Backup:               backupAdapter,
 		Visibility:           d.visReg,
 		MasterValues:         d.masterValuesStore,

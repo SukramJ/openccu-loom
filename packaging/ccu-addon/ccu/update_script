@@ -1,0 +1,90 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Copyright (C) 2026 OpenCCU-Loom authors.
+#
+# CCU / RaspberryMatic add-on install + update hook. The CCU's
+# "Additional Software" page unpacks the tarball and runs this script
+# with the platform identifier as $1 (CCU2 / HM-RASPBERRYMATIC / CCU3).
+#
+# The tarball ships both ARM builds (openccu-loom.armv7 + .arm64); the
+# matching one is selected here from `uname -m` so a single package
+# installs on CCU3 (armv7l) and 64-bit RaspberryMatic (aarch64).
+
+set -e
+
+ADDON_ID=openccu-loom
+ADDON_NAME="OpenCCU-Loom"
+ADDON_DESCR_EN="OpenCCU-Loom bridges Homematic CCUs to MQTT, a REST + WebSocket API, a Config UI, and a Matter bridge."
+ADDON_DESCR_DE="OpenCCU-Loom verbindet Homematic-CCUs mit MQTT, einer REST- und WebSocket-API, einer Konfigurations-UI und einer Matter-Bridge."
+
+ADDON_DIR=/usr/local/addons/${ADDON_ID}
+ETC_DIR=/usr/local/etc
+RCD_DIR=/usr/local/etc/config/rc.d
+WWW_DIR=/usr/local/etc/config/addons/www/${ADDON_ID}
+
+# Mount the writable partition that holds /usr/local across reboots.
+if [ "$1" = "" ]; then
+  echo "${ADDON_NAME} requires CCU3 or RaspberryMatic"
+  lcdtool "Add-On needs CCU3/RM    " 2>/dev/null || true
+  exit 1
+elif [ "$1" = "CCU2" ]; then
+  echo "${ADDON_NAME} requires CCU3 or RaspberryMatic (CCU2 is unsupported)"
+  exit 1
+elif [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "CCU3" ]; then
+  echo "Installing on CCU3 / RaspberryMatic"
+  mount /usr/local 2>/dev/null || true
+fi
+
+# Select the binary for this CPU architecture. RaspberryMatic ships for
+# armv7 (CCU3 / Pi), aarch64 (64-bit Pi) and x86-64 (OVA / generic).
+ARCH=$(uname -m)
+case "${ARCH}" in
+  x86_64|amd64)         ADDON_BIN=openccu-loom.amd64 ;;
+  aarch64|arm64)        ADDON_BIN=openccu-loom.arm64 ;;
+  armv7l|armv6l|armhf)  ADDON_BIN=openccu-loom.armv7 ;;
+  *)
+    echo "Unsupported architecture: ${ARCH}"
+    exit 1
+  ;;
+esac
+
+# Stop a previous installation before overwriting its files.
+if [ -f ${RCD_DIR}/${ADDON_ID} ]; then
+  echo "Previous installation detected — stopping"
+  ${RCD_DIR}/${ADDON_ID} stop 2>/dev/null || true
+fi
+
+mkdir -p ${ADDON_DIR} ${RCD_DIR} ${WWW_DIR} ${ETC_DIR}
+chmod 755 ${ADDON_DIR} ${RCD_DIR} ${WWW_DIR}
+
+# Install the daemon binary under a stable name, plus the support files.
+cp -af addon/${ADDON_BIN} ${ADDON_DIR}/${ADDON_ID}
+chmod 755 ${ADDON_DIR}/${ADDON_ID}
+cp -af addon/VERSION ${ADDON_DIR}/VERSION 2>/dev/null || true
+cp -af addon/assets ${ADDON_DIR}/ 2>/dev/null || true
+cp -af rc.d/* ${RCD_DIR}/
+cp -af www/* ${WWW_DIR}/
+cp -af etc/* ${ETC_DIR}/
+chmod 755 ${RCD_DIR}/${ADDON_ID}
+
+# Persistent data dir for the SQLite DB + filesystem state.
+mkdir -p ${ADDON_DIR}/var
+chmod 755 ${ADDON_DIR}/var
+
+# Register the add-on in the CCU web menu via the system helper. Not
+# vendored here (it is eQ-3 platform code); skip gracefully if absent so
+# the daemon still installs and runs without the menu entry.
+if [ -x /bin/update_hm_addons.tcl ]; then
+  /bin/update_hm_addons.tcl -a ${ADDON_ID} -name "${ADDON_NAME}" \
+    -url /addons/${ADDON_ID}/config.cgi \
+    -de "${ADDON_DESCR_DE}" -en "${ADDON_DESCR_EN}" 2>/dev/null || true
+fi
+
+sync
+echo "Installed ${ADDON_NAME} (${ADDON_BIN})"
+
+# CCU3 / RaspberryMatic need a reboot to finalise add-on registration.
+if [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "CCU3" ]; then
+  exit 10
+fi
+exit 0

@@ -6,6 +6,8 @@ package mqtt
 import (
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // TestMqttCircuitBreakerClosedToOpen verifies the CLOSED → OPEN transition
@@ -33,20 +35,26 @@ func TestMqttCircuitBreakerClosedToOpen(t *testing.T) {
 }
 
 // TestMqttCircuitBreakerOpenToHalfOpen verifies the OPEN → HALF_OPEN
-// transition after the recovery timeout.
+// transition after the recovery timeout. Driven by a fake clock so the
+// transition is deterministic — a real 1 ms timeout plus a sleep is racy
+// on coarse-grained clocks (Windows CI flaked here).
 func TestMqttCircuitBreakerOpenToHalfOpen(t *testing.T) {
-	// Use a very short recovery timeout so the test does not need to sleep.
-	cb := NewMqttCircuitBreaker(1, 1*time.Millisecond, nil)
+	fake := clock.NewFake(time.Unix(0, 0))
+	cb := NewMqttCircuitBreaker(1, time.Minute, nil).WithClock(fake)
 
 	cb.RecordFailure() // → open
 	if cb.State() != CircuitOpen {
 		t.Fatalf("state should be open after 1 failure")
 	}
 
-	// Wait for recovery window to elapse.
-	time.Sleep(5 * time.Millisecond)
+	// Recovery window has not elapsed yet — still open.
+	fake.Advance(59 * time.Second)
+	if !cb.IsOpen() {
+		t.Fatalf("IsOpen() must stay true before the recovery timeout elapses")
+	}
 
-	// IsOpen() triggers the OPEN → HALF_OPEN transition.
+	// Cross the recovery timeout: IsOpen() triggers OPEN → HALF_OPEN.
+	fake.Advance(2 * time.Second)
 	if cb.IsOpen() {
 		t.Fatalf("IsOpen() should return false after recovery timeout (half-open probe)")
 	}
@@ -58,10 +66,11 @@ func TestMqttCircuitBreakerOpenToHalfOpen(t *testing.T) {
 // TestMqttCircuitBreakerHalfOpenToClosedOnSuccess verifies the
 // HALF_OPEN → CLOSED transition on RecordSuccess.
 func TestMqttCircuitBreakerHalfOpenToClosedOnSuccess(t *testing.T) {
-	cb := NewMqttCircuitBreaker(1, 1*time.Millisecond, nil)
+	fake := clock.NewFake(time.Unix(0, 0))
+	cb := NewMqttCircuitBreaker(1, time.Minute, nil).WithClock(fake)
 
 	cb.RecordFailure()
-	time.Sleep(5 * time.Millisecond)
+	fake.Advance(2 * time.Minute)
 	cb.IsOpen() // trigger OPEN → HALF_OPEN
 	if cb.State() != CircuitHalfOpen {
 		t.Fatalf("expected half_open, got %s", cb.State())

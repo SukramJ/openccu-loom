@@ -60,18 +60,29 @@ const connectionCheckerInterval = 15 * time.Second
 // beyond the config + registry pair. Fields marked optional can be
 // nil — the daemon degrades gracefully (no callbacks wired).
 type WireDeps struct {
-	Writer          *client.ValueWriter
-	Translations    *ccudata.Translations
-	CallbackServer  *rpcserver.XMLRPCServer // optional
-	CallbackBaseURL string                  // e.g. "http://192.168.1.20:8120"; required when CallbackServer != nil
+	Writer         *client.ValueWriter
+	Translations   *ccudata.Translations
+	CallbackServer *rpcserver.XMLRPCServer // optional
+	// CallbackPort is the effective XML-RPC callback port. Required when
+	// CallbackServer != nil. The host is resolved per-central via
+	// CallbackHostFor, so a daemon serving a local and an external CCU
+	// advertises a reachable address to each.
+	CallbackPort int
+	// CallbackHostFor returns the host the given central should push
+	// callbacks to (loopback for a co-located CCU, the LAN IP for an
+	// external one, or an explicit PublicHost override). Required when
+	// CallbackServer or BINRPCCallbackServer is non-nil. Returning "" for
+	// a central skips callback registration for it — that central still
+	// works, just without push events.
+	CallbackHostFor func(cc *config.CentralConfig) string
 
 	// BINRPCCallbackServer is the shared BIN-RPC TCP callback listener
 	// for CUxD. Optional — CUxD interfaces are skipped when nil.
 	BINRPCCallbackServer *rpcserver.BINRPCServer
-	// BINRPCCallbackAddr is the effective host:port of BINRPCCallbackServer
-	// as seen by the CCU (e.g. "192.168.1.20:8129"). Required when
+	// BINRPCCallbackPort is the effective port of BINRPCCallbackServer.
+	// The host is resolved per-central via CallbackHostFor. Required when
 	// BINRPCCallbackServer is non-nil.
-	BINRPCCallbackAddr string
+	BINRPCCallbackPort int
 
 	// Backup, when non-nil, gets a [HTTPBackupRestorer] wired against
 	// the first successfully-initialised central's JSON-RPC session.
@@ -156,19 +167,12 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 			joined = append(joined, cc.Name+": not registered")
 			continue
 		}
-		// Register callback handlers first so events that arrive during
-		// (or right after) Init land on a live route.
-		var callbackURL string
-		if deps.CallbackServer != nil && deps.CallbackBaseURL != "" {
-			handlers := NewCallbackHandlers(unit, logger)
-			if deps.Writer != nil {
-				handlers.SetWriter(deps.Writer)
-			}
-			deps.CallbackServer.Register(cc.Name, handlers)
-			callbackURL = fmt.Sprintf("%s/RPC2/%s", strings.TrimRight(deps.CallbackBaseURL, "/"), cc.Name)
-			centralName := cc.Name
-			srv := deps.CallbackServer
-			closers = append(closers, func() { srv.Deregister(centralName) })
+		// Register callback handlers + resolve the per-central XML-RPC
+		// callback URL and BIN-RPC (CUxD) callback address. Extracted so
+		// WireCentrals stays within the cognitive-complexity budget.
+		callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(deps, cc, unit, logger)
+		if deregister != nil {
+			closers = append(closers, deregister)
 		}
 
 		// Hub wiring runs first so programs + sysvars are available and
@@ -259,7 +263,7 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 
 		for _, ifaceSpec := range cc.Interfaces {
 			iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-			closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, deps.BINRPCCallbackAddr, logger)
+			closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
 			if err != nil {
 				joined = append(joined, fmt.Sprintf("%s/%s: %v", cc.Name, iface, err))
 				logger.Warn("wire.interface.failed",
@@ -379,6 +383,43 @@ func (r *backendRegistry) getter(interfaceID string) backends.MasterGetter {
 		return nil
 	}
 	return b
+}
+
+// registerCentralCallbacks resolves the host this central should push
+// callbacks to (loopback for a co-located CCU, the LAN IP for an external
+// one, or an explicit PublicHost override — see [WireDeps.CallbackHostFor]),
+// registers the XML-RPC callback handler, and returns the per-central
+// XML-RPC callback URL, the BIN-RPC (CUxD) callback address (same host so
+// an external CCU's CUxD reaches us too), and a deregister closure (nil
+// when no XML-RPC callback was registered). An empty host skips callback
+// registration for the central — it still works, just without push events.
+func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *central.Unit, logger *slog.Logger) (callbackURL, binRPCCallbackAddr string, deregister func()) {
+	callbackHost := ""
+	if deps.CallbackHostFor != nil {
+		callbackHost = deps.CallbackHostFor(cc)
+	}
+
+	switch {
+	case deps.CallbackServer != nil && deps.CallbackPort != 0 && callbackHost != "":
+		handlers := NewCallbackHandlers(unit, logger)
+		if deps.Writer != nil {
+			handlers.SetWriter(deps.Writer)
+		}
+		deps.CallbackServer.Register(cc.Name, handlers)
+		callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
+		centralName := cc.Name
+		srv := deps.CallbackServer
+		deregister = func() { srv.Deregister(centralName) }
+	case deps.CallbackServer != nil && callbackHost == "":
+		logger.Warn("wire.callback.no_host",
+			slog.String("central", cc.Name),
+			slog.String("detail", "could not resolve a reachable callback host; CCU will not push events"))
+	}
+
+	if deps.BINRPCCallbackServer != nil && deps.BINRPCCallbackPort != 0 && callbackHost != "" {
+		binRPCCallbackAddr = fmt.Sprintf("%s:%d", callbackHost, deps.BINRPCCallbackPort)
+	}
+	return callbackURL, binRPCCallbackAddr, deregister
 }
 
 //nolint:contextcheck,gocognit,gocyclo,funlen // the probe / async consistency-check / deinit contexts are intentionally rooted in a fresh context (cancelled via their own cancel funcs on teardown), not the wiring ctx — see the per-line notes below; composition/wiring: long sequential setup

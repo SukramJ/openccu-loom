@@ -4,6 +4,41 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **CCU / RaspberryMatic add-on packaging.** OpenCCU-Loom can now ship as
+  a native CCU add-on alongside the Docker image. The release attaches
+  `openccu-loom-ccu-<version>.tar.gz` (installable via the CCU's
+  *Additional software* page); a single tarball bundles the amd64, arm64,
+  and armv7 builds and the `update_script` selects the right one per
+  `uname -m`, covering CCU3 and every RaspberryMatic flavour (32-bit Pi,
+  64-bit Pi, x86-64 OVA / generic). The add-on installs an `rc.d` service
+  with monit supervision and wires *Settings* / *Update* entries into the
+  CCU add-on page; the daemon stays UI-configured, with state under
+  `/usr/local/addons/openccu-loom/var`. Sources live in
+  `packaging/ccu-addon/`, packaged by `script/build_ccu_addon.sh`
+  (`make ccu-addon`). Activates the CCU/RaspberryMatic channel anticipated
+  in [ADR 0012](docs/adr/0012-matter-pure-go-implementation.md).
+- **`OPENCCU_LOOM_CALLBACK_PUBLIC_HOST`** env override for
+  `callback.public_host` — there was an env knob for the callback *bind*
+  host but none for the *advertised* host.
+
+### Fixed
+
+- **Callback host is resolved per-central (multi-CCU).** The host the
+  daemon advertised in `init()` for CCU push events was computed once
+  globally — from `callback.public_host` or a UDP egress probe against
+  the *first* central — and reused for every CCU. On a daemon serving a
+  local CCU (reachable at `127.0.0.1`) and an external CCU (reachable at
+  the daemon's LAN IP) one of them always got an unreachable callback
+  address: no push events, "central heartbeat degraded". The advertised
+  host (XML-RPC and BIN-RPC/CUxD) is now detected per central as the
+  egress interface toward *that* CCU, so each gets a reachable address;
+  `callback.public_host`, when set, still overrides all centrals for NAT
+  setups.
+
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that
