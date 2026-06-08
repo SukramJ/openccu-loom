@@ -47,6 +47,12 @@ Ports and data dir are set via `OPENCCU_LOOM_*` env vars in
 `rc.d/openccu-loom`; edit there to resolve a port clash with another
 add-on.
 
+The add-on advertises its callback URL as `127.0.0.1`
+(`OPENCCU_LOOM_CALLBACK_PUBLIC_HOST`) because the daemon and the CCU's
+interface processes share the host — this is what makes the CCU push
+events back reliably (otherwise: no events, "central heartbeat
+degraded").
+
 ## Restart from the UI
 
 The add-on runs the daemon under **monit** (active mode) and sets

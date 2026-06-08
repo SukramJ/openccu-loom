@@ -25,6 +25,14 @@ export OPENCCU_LOOM_DATA_DIR=${ADDON_DIR}/var
 export OPENCCU_LOOM_REST_LISTEN=:8080
 export OPENCCU_LOOM_UI_LISTEN=:8081
 export OPENCCU_LOOM_LOG_FORMAT=text
+# The daemon and the CCU's interface processes (rfd/HmIPServer/CUxD) run
+# on the same host, so advertise the callback URL as loopback. Without
+# this the daemon auto-detects the egress IP toward the configured
+# central, which is brittle on the CCU and can leave the CCU unable to
+# reach the callback server — symptom: no push events, "central
+# heartbeat degraded". 127.0.0.1 is always reachable for the local
+# interface processes.
+export OPENCCU_LOOM_CALLBACK_PUBLIC_HOST=127.0.0.1
 # Tell the daemon it runs under a supervisor so the SPA "Restart" action
 # is enabled: a restart SIGTERMs the process, and monit (active mode, see
 # etc/monit-openccu-loom.cfg) brings it back up on the next cycle. Without
