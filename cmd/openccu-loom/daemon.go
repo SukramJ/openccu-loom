@@ -186,14 +186,20 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	defer cancelCallback()
 	callbackCtx := cb.ctx
 	callbackSrv := cb.srv
-	callbackBaseURL := cb.baseURL
+	callbackPort := cb.port
 
 	// --- BIN-RPC callback server --------------------------------
 	// Extracted into wireBINRPCCallback (daemon_boot.go). Serves on
 	// callbackCtx so it shuts down with the XML-RPC callback server.
 	binCB := wireBINRPCCallback(callbackCtx, cfg, logger) //nolint:contextcheck // callbackCtx is the cancellable callback context the BIN-RPC listener serves on; it is intentionally not re-derived from the daemon ctx
 	binRPCSrv := binCB.srv
-	binRPCAddr := binCB.addr
+	binRPCPort := binCB.port
+
+	// Resolve the host advertised to each CCU per-central: loopback for a
+	// co-located CCU, the LAN IP for an external one (or PublicHost when
+	// set). A single global host would mis-advertise to any central not
+	// reached over the same interface as the first.
+	callbackHost := func(cc *config.CentralConfig) string { return callbackHostFor(cfg, cc) }
 
 	// --- southbound wiring -------------------------------------
 	// Per-central XML-RPC/BIN-RPC client wiring, device pipeline and
@@ -215,9 +221,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		valueWriter:             valueWriter,
 		translations:            translations,
 		callbackSrv:             callbackSrv,
-		callbackBaseURL:         callbackBaseURL,
+		callbackPort:            callbackPort,
+		callbackHost:            callbackHost,
 		binRPCSrv:               binRPCSrv,
-		binRPCAddr:              binRPCAddr,
+		binRPCPort:              binRPCPort,
 		visReg:                  visReg,
 		masterValuesStore:       masterValuesStore,
 		valuesCacheStore:        valuesCacheStore,

@@ -135,9 +135,9 @@ func loadCCUArchive(cfg *config.Config, logger *slog.Logger) *ccuArchive {
 // The ctx field is consumed by the BIN-RPC phase, which serves its own
 // listener on the same cancellable context so both shut down together.
 type xmlrpcCallback struct {
-	ctx     context.Context
-	srv     *rpcserver.XMLRPCServer
-	baseURL string
+	ctx  context.Context
+	srv  *rpcserver.XMLRPCServer
+	port int
 }
 
 // wireXMLRPCCallback stands up the shared XML-RPC callback server (routes by
@@ -149,26 +149,28 @@ type xmlrpcCallback struct {
 func wireXMLRPCCallback(ctx context.Context, cfg *config.Config, logger *slog.Logger) (cb *xmlrpcCallback, teardown func()) {
 	callbackCtx, cancelCallback := context.WithCancel(ctx)
 	cb = &xmlrpcCallback{ctx: callbackCtx}
-	srv, baseURL, err := startCallbackServer(callbackCtx, cfg, logger)
+	srv, port, err := startCallbackServer(callbackCtx, cfg, logger)
 	if err != nil {
 		logger.Warn("callback.start.failed", slog.String("err", err.Error()))
 	}
 	cb.srv = srv
-	cb.baseURL = baseURL
+	cb.port = port
 	if srv != nil {
 		logger.Info("callback.listen",
 			slog.String("addr", srv.Addr().String()),
-			slog.String("base_url", baseURL))
+			slog.Int("port", port))
 	}
 	return cb, cancelCallback
 }
 
-// binrpcCallback bundles the shared BIN-RPC callback listener (CUxD) and the
-// public callback address advertised to CUxD. A nil server is a valid degraded
-// state — WireCentrals skips CUxD registration when BINRPCCallbackServer is nil.
+// binrpcCallback bundles the shared BIN-RPC callback listener (CUxD) and
+// its effective port. The host advertised to CUxD is resolved per-central
+// by the caller (callbackHostFor), like the XML-RPC path. A nil server is
+// a valid degraded state — WireCentrals skips CUxD registration when
+// BINRPCCallbackServer is nil.
 type binrpcCallback struct {
 	srv  *rpcserver.BINRPCServer
-	addr string
+	port int
 }
 
 // wireBINRPCCallback stands up the shared BIN-RPC callback listener for CUxD
@@ -198,15 +200,12 @@ func wireBINRPCCallback(callbackCtx context.Context, cfg *config.Config, logger 
 			logger.Warn("callback.binrpc.serve", slog.String("err", serveErr.Error()))
 		}
 	}()
-	publicHost := cfg.Callback.PublicHost
-	if publicHost == "" {
-		publicHost = autodetectCallbackHost(cfg) //nolint:contextcheck // test callers outside owned set prevent threading ctx; UDP bind is instantaneous
-	}
-	if tcpAddr, ok := srv.Addr().(*net.TCPAddr); ok && publicHost != "" {
-		cb.addr = fmt.Sprintf("%s:%d", publicHost, tcpAddr.Port)
+	cb.port = cfg.Callback.BinPort
+	if tcpAddr, ok := srv.Addr().(*net.TCPAddr); ok {
+		cb.port = tcpAddr.Port
 	}
 	logger.Info("callback.binrpc.listen",
 		slog.String("addr", srv.Addr().String()),
-		slog.String("public_addr", cb.addr))
+		slog.Int("port", cb.port))
 	return cb
 }

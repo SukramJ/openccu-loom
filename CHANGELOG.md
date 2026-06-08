@@ -21,6 +21,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `packaging/ccu-addon/`, packaged by `script/build_ccu_addon.sh`
   (`make ccu-addon`). Activates the CCU/RaspberryMatic channel anticipated
   in [ADR 0012](docs/adr/0012-matter-pure-go-implementation.md).
+- **`OPENCCU_LOOM_CALLBACK_PUBLIC_HOST`** env override for
+  `callback.public_host` — there was an env knob for the callback *bind*
+  host but none for the *advertised* host.
+
+### Fixed
+
+- **Callback host is resolved per-central (multi-CCU).** The host the
+  daemon advertised in `init()` for CCU push events was computed once
+  globally — from `callback.public_host` or a UDP egress probe against
+  the *first* central — and reused for every CCU. On a daemon serving a
+  local CCU (reachable at `127.0.0.1`) and an external CCU (reachable at
+  the daemon's LAN IP) one of them always got an unreachable callback
+  address: no push events, "central heartbeat degraded". The advertised
+  host (XML-RPC and BIN-RPC/CUxD) is now detected per central as the
+  egress interface toward *that* CCU, so each gets a reachable address;
+  `callback.public_host`, when set, still overrides all centrals for NAT
+  setups.
 
 ## [0.1.0] — Initial Release
 

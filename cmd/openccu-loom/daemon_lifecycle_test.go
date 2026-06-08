@@ -236,7 +236,8 @@ func TestDaemonServe_WithCASEConfigured(t *testing.T) {
 // ── startCallbackServer — additional branches ─────────────────────────────────
 
 // TestStartCallbackServer_PublicHostConfigured verifies that when
-// cfg.Callback.PublicHost is set the baseURL uses it.
+// cfg.Callback.PublicHost is set the server starts and callbackHostFor
+// returns the configured public host for any central.
 func TestStartCallbackServer_PublicHostConfigured(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
@@ -246,20 +247,30 @@ func TestStartCallbackServer_PublicHostConfigured(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, baseURL, err := startCallbackServer(ctx, cfg, logger)
+	srv, port, err := startCallbackServer(ctx, cfg, logger)
 	if err != nil {
 		t.Fatalf("startCallbackServer with public host: %v", err)
 	}
 	if srv == nil {
 		t.Fatal("expected non-nil server")
 	}
-	if !strings.Contains(baseURL, "192.0.2.1") {
-		t.Errorf("expected baseURL to contain PublicHost; got %q", baseURL)
+	if port == 0 {
+		t.Error("expected non-zero effective port")
+	}
+	// The host advertised to each CCU is now resolved per-central via
+	// callbackHostFor; PublicHost must be returned for any central.
+	cc := &config.CentralConfig{Name: "ccu-01", Host: "192.168.1.1"}
+	host := callbackHostFor(cfg, cc)
+	if host != "192.0.2.1" {
+		t.Errorf("callbackHostFor: expected PublicHost %q, got %q", "192.0.2.1", host)
 	}
 }
 
-// TestStartCallbackServer_NoCentralsNoPublicHost verifies the no-public-host
-// error path.
+// TestStartCallbackServer_NoCentralsNoPublicHost verifies that when there are
+// no centrals and no public host configured, startCallbackServer still
+// succeeds — host resolution is now deferred to the per-central wiring phase.
+// callbackHostFor returns "" for a central with an unreachable host, which
+// causes the wiring layer to skip callbacks for that central.
 func TestStartCallbackServer_NoCentralsNoPublicHost(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
@@ -270,12 +281,22 @@ func TestStartCallbackServer_NoCentralsNoPublicHost(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, _, err := startCallbackServer(ctx, cfg, logger)
-	if srv == nil {
-		t.Error("expected non-nil srv even when public host cannot be determined")
+	srv, port, err := startCallbackServer(ctx, cfg, logger)
+	if err != nil {
+		t.Fatalf("startCallbackServer must succeed even without centrals: %v", err)
 	}
-	if err == nil {
-		t.Error("expected error when public host cannot be determined")
+	if srv == nil {
+		t.Error("expected non-nil srv")
+	}
+	if port == 0 {
+		t.Error("expected non-zero effective port")
+	}
+	// With no PublicHost and an unreachable central host, callbackHostFor
+	// returns "" — the per-central wiring skips callbacks for that central.
+	cc := &config.CentralConfig{Name: "ccu-01", Host: "::invalid::"}
+	host := callbackHostFor(cfg, cc)
+	if host != "" {
+		t.Errorf("callbackHostFor for invalid host should return empty, got %q", host)
 	}
 }
 
@@ -290,15 +311,15 @@ func TestStartCallbackServer_WithPortRange(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 	ctx := t.Context()
 
-	srv, baseURL, err := startCallbackServer(ctx, cfg, logger)
+	srv, port, err := startCallbackServer(ctx, cfg, logger)
 	if err != nil {
 		t.Fatalf("startCallbackServer with port range: %v", err)
 	}
 	if srv == nil {
 		t.Fatal("expected non-nil server")
 	}
-	if baseURL == "" {
-		t.Error("expected non-empty baseURL")
+	if port == 0 {
+		t.Error("expected non-zero effective port")
 	}
 }
 
@@ -320,13 +341,22 @@ func TestStartCallbackServer_InvalidPortRange(t *testing.T) {
 	}
 }
 
-// ── autodetectCallbackHost ────────────────────────────────────────────────────
+// ── egressHostToward / callbackHostFor ────────────────────────────────────────
 
-func TestAutodetectCallbackHost_WithCentral_ReturnsIP(t *testing.T) {
+func TestEgressHostToward_RoutableHost_ReturnsIP(t *testing.T) {
+	t.Parallel()
+	ip := egressHostToward("8.8.8.8")
+	if ip == "" {
+		t.Error("expected non-empty IP for routable host")
+	}
+}
+
+func TestCallbackHostFor_WithCentral_ReturnsEgressIP(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.Centrals = []config.CentralConfig{{Host: "8.8.8.8"}}
-	ip := autodetectCallbackHost(cfg)
+	cfg.Callback.PublicHost = ""
+	cc := &config.CentralConfig{Name: "ccu-01", Host: "8.8.8.8"}
+	ip := callbackHostFor(cfg, cc)
 	if ip == "" {
 		t.Error("expected non-empty IP for routable central host")
 	}
