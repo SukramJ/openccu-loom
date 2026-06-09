@@ -57,7 +57,12 @@ func eventuallyGoroutineDelta(baseline, threshold int, total time.Duration) int 
 // - the goroutine count must have returned to within leakThreshold of the
 // pre-test baseline (no goroutine leaked).
 func TestCoalescerEvictionStress1000GoroutinesMultiKey(t *testing.T) {
-	t.Parallel()
+	// Intentionally NOT parallel. The post-run leak check compares
+	// runtime.NumGoroutine() — a process-global counter — against a baseline
+	// taken at the start of the test. Running the coalescer stress tests in
+	// parallel lets a sibling's goroutines (this one fans out 1000) pollute the
+	// measurement, inflating the delta and making the leak check flaky. Serial
+	// execution keeps the global count attributable to this test alone.
 
 	const (
 		totalGoroutines = 1000
@@ -121,7 +126,9 @@ func TestCoalescerEvictionStress1000GoroutinesMultiKey(t *testing.T) {
 // key to maximise the leader/follower ratio. After completion the calls map
 // must be empty and goroutines must not leak.
 func TestCoalescerEvictionStressSingleKey(t *testing.T) {
-	t.Parallel()
+	// Not parallel — the goroutine-leak check reads the process-global
+	// runtime.NumGoroutine, so a parallel sibling would pollute the baseline/
+	// delta. See TestCoalescerEvictionStress1000GoroutinesMultiKey.
 
 	const totalGoroutines = 200
 
@@ -210,7 +217,9 @@ func TestCoalescerEvictionStressSingleKey(t *testing.T) {
 // Clear(). After the stress finishes all goroutines must have returned (no
 // goroutine hangs) and the calls map must be empty.
 func TestCoalescerEvictionStressWithConcurrentClear(t *testing.T) {
-	t.Parallel()
+	// Not parallel — the goroutine-leak check reads the process-global
+	// runtime.NumGoroutine, so a parallel sibling would pollute the baseline/
+	// delta. See TestCoalescerEvictionStress1000GoroutinesMultiKey.
 
 	const (
 		totalGoroutines = 300
