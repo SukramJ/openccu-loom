@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
@@ -96,6 +97,26 @@ type Reconciler struct {
 
 	Bus      *events.Bus
 	Recorder observability.Recorder
+
+	// connectMu guards Connect against the background WireHub recovery, which
+	// re-assigns the probe after a transient boot-time hub failure while the
+	// reconcile job may concurrently read it. Use SetConnect / connectProbe.
+	connectMu sync.RWMutex
+}
+
+// SetConnect wires (or re-wires) the connectivity probe under connectMu. Use
+// this instead of assigning the exported Connect field directly when the
+// wiring can run concurrently with a reconcile tick.
+func (r *Reconciler) SetConnect(p ConnectivityProbe) {
+	r.connectMu.Lock()
+	defer r.connectMu.Unlock()
+	r.Connect = p
+}
+
+func (r *Reconciler) connectProbe() ConnectivityProbe {
+	r.connectMu.RLock()
+	defer r.connectMu.RUnlock()
+	return r.Connect
 }
 
 // Reconcile fetches the CCU's authoritative state and reconciles the
@@ -124,10 +145,11 @@ func (r *Reconciler) Reconcile(ctx context.Context) error {
 }
 
 func (r *Reconciler) reconcileConnectivity(ctx context.Context) error {
-	if r.Connect == nil || r.Connectivity == nil {
+	connect := r.connectProbe()
+	if connect == nil || r.Connectivity == nil {
 		return nil
 	}
-	probed, err := r.Connect.Probe(ctx)
+	probed, err := connect.Probe(ctx)
 	if err != nil {
 		return fmt.Errorf("reconciler: connectivity probe: %w", err)
 	}

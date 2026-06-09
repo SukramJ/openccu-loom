@@ -298,21 +298,27 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 		// because the sweep is a Rega script call. The scheduler gates the
 		// job to the operational state, so the sweep never races bootstrap.
 		if runner != nil {
-			refreshPipeline, refreshRunner := pipeline, runner
-			refreshIfaces := cc.Interfaces
-			unit.SetLoadAndRefreshFn(func(ctx context.Context) error {
-				var firstErr error
-				for _, ifaceSpec := range refreshIfaces {
-					id := strings.TrimSpace(ifaceSpec.Name)
-					if id == "" {
-						continue
+			wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
+		} else {
+			// Boot-time WireHub failed (e.g. the CCU's ReGa was not yet
+			// reachable during the daemon's startup window). Recover in the
+			// background so the central's hub surface (programs / sysvars /
+			// inbox / service+alarm messages) AND the refresh safety net
+			// self-heal once the CCU answers — WireHub otherwise runs exactly
+			// once at boot, leaving a transient failure permanent until a
+			// restart. The retry's WireHub re-applies the hub wiring through
+			// guarded setters, so it does not race the running daemon.
+			retryCtx, cancelRetry := context.WithCancel(context.Background()) //nolint:gosec // cancelRetry is invoked on shutdown via the closers slice on the next line
+			closers = append(closers, cancelRetry)
+			ccCopy, refreshPipeline := *cc, pipeline
+			//nolint:contextcheck // the retry deliberately uses a detached, teardown-bounded ctx (retryCtx) so it can outlive the short-lived wiring ctx
+			startHubRetry(retryCtx, ccCopy, unit, logger, WireHub, defaultHubRetryBackoff,
+				func(r *rega.Runner, closer func()) {
+					wireLoadAndRefresh(unit, refreshPipeline, ccCopy.Interfaces, r, logger)
+					if closer != nil {
+						unit.AddOnStopHook(closer)
 					}
-					if err := refreshPipeline.seedValues(ctx, id, refreshRunner, logger); err != nil && firstErr == nil {
-						firstErr = err
-					}
-				}
-				return firstErr
-			})
+				})
 		}
 
 		// wire the sysvar creator after all interfaces are

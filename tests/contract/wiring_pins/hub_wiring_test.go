@@ -33,15 +33,17 @@ func TestPin_LoadSysvars_UsesHubSysvarLookup(t *testing.T) {
 	)
 }
 
-// TestPin_UpdateFirmwareUpdater_WiredOnHub pins that hub_wiring.go sets
-// Update.FirmwareUpdater so that Update.Install() can trigger the CCU-side
-// firmware update. Without this assignment Install() always returns
-// ErrNoFirmwareUpdater even when Hub.FirmwareUpdater is wired.
+// TestPin_UpdateFirmwareUpdater_WiredOnHub pins that hub_wiring.go wires the
+// Update firmware-updater via the guarded Update.SetFirmwareUpdater setter so
+// that Update.Install() can trigger the CCU-side firmware update. Without it
+// Install() always returns ErrNoFirmwareUpdater even when the Hub mutators are
+// wired. (Guarded setter — not direct field assignment — so the background
+// WireHub recovery can re-apply it without racing a concurrent Install.)
 func TestPin_UpdateFirmwareUpdater_WiredOnHub(t *testing.T) {
-	contract.MustFindCallerInFile(
+	contract.MustFindMethodCall(
 		t,
 		"internal/central/adapter/hub_wiring.go",
-		"internal/model/hub", "FirmwareUpdater",
+		"Update", "SetFirmwareUpdater",
 	)
 }
 

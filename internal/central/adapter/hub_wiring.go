@@ -95,13 +95,10 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	}
 
 	writer := &hubJSONRPCWriter{json: jc, rega: runner}
-	unit.HubModel.SysvarMutator = writer
-	unit.HubModel.RoomMutator = writer
-	unit.HubModel.FunctionMutator = writer
-	unit.HubModel.BackupTrigger = writer
-	unit.HubModel.FirmwareUpdater = writer
-	unit.HubModel.Update.FirmwareUpdater = writer
-	unit.HubModel.InboxAccepter = writer
+	// Guarded setters (not direct field assignment) so the background WireHub
+	// recovery can re-apply these without racing a concurrent hub write.
+	unit.HubModel.SetMutator(writer)
+	unit.HubModel.Update.SetFirmwareUpdater(writer)
 
 	// Wire the JSON-RPC executor so HubCoordinator.ExecuteProgram
 	// delegates to the same session used for every other hub operation.
@@ -125,7 +122,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// reconcile job can run. Reconciler is nil in WireHub-only tests that
 	// run without the daemon bootstrap, hence the guard.
 	if unit.Reconciler != nil {
-		unit.Reconciler.Connect = NewJSONRPCConnectivityProbe(jc)
+		unit.Reconciler.SetConnect(NewJSONRPCConnectivityProbe(jc))
 	}
 
 	// Stamp the CCU's configuration URL on the central's SystemInfo so
