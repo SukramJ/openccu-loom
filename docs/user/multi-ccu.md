@@ -328,4 +328,4 @@ affect any other.
 - [MQTT topic schema](../mqtt-topic-schema.md)
 - [Installation & First Steps](../user-guide.md) — install + bootstrap config
 - [Configuration reference](../admin/configuration.md) — every config key
-- [`config.example.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.yaml) — annotated config reference
+- [`example.config.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.yaml) — annotated config reference

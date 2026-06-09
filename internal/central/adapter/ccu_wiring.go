@@ -523,7 +523,7 @@ func wireInterface(
 	// L10/L11: operator-supplied reliability overrides. Both fields
 	// default to openccu-loom's Go-idiomatic values when zero; setting
 	// A positive duration pins behaviour. See
-	// `config.example.yaml` (reliability: section) for the Python
+	// `example.config.yaml` (reliability: section) for the Python
 	// reference values.
 	if relCfg.CommandRetryInitialDelay > 0 {
 		icCfg.Retrier = reliability.NewRetrier(reliability.RetryConfig{

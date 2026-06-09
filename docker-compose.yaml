@@ -74,7 +74,7 @@ services:
       # centrals / MQTT / auth here — those are UI-managed. The daemon
       # AUTO-DISCOVERS a config at /app/config.yaml (the WORKDIR) or
       # /etc/openccu-loom/config.yaml — no --config needed. See
-      # config.example.yaml.
+      # example.config.yaml.
       # - ./config.yaml:/app/config.yaml:ro
 
     # Secrets kept out of config.yaml / the image. Optional; the daemon

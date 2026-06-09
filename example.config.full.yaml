@@ -3,7 +3,7 @@
 # openccu-loom — COMPLETE annotated reference configuration
 #
 # This file documents EVERY available YAML key of the daemon.
-# For a quick start, config.example.yaml (Bootstrap-Tier) is sufficient.
+# For a quick start, example.config.yaml (Bootstrap-Tier) is sufficient.
 #
 # ─── Bootstrap-Tier vs. DB-Tier ──────────────────────────────────────────────
 #

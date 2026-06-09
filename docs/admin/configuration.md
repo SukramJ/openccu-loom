@@ -85,9 +85,9 @@ north:
 ```
 
 For the complete annotated set of every key, see
-[`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml)
+[`example.config.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.full.yaml)
 in the repository, and
-[`config.example.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.yaml)
+[`example.config.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.yaml)
 for a shorter starter file.
 
 ## Environment overlays

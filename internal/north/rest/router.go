@@ -6,6 +6,7 @@ package rest
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -335,6 +336,21 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	// path falls through to SPAHandler's index.html (client-side
 	// routing) rather than triggering the REST 404.
 	if d.SPAHandler != nil {
+		// Root → SPA. Behind Home Assistant Ingress the Supervisor strips
+		// its proxy prefix before the request reaches us and passes it in
+		// X-Ingress-Path; echo it back so the browser lands on
+		// <prefix>/app/. A bare "/app/" would resolve against the Home
+		// Assistant origin and bypass the Ingress proxy.
+		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+			target := "/app/"
+			if prefix := safeIngressPrefix(req); prefix != "" {
+				target = prefix + "/app/"
+			}
+			// target is either the constant "/app/" or a validated local
+			// absolute path (safeIngressPrefix rejects scheme/host forms), so
+			// this cannot redirect to a foreign origin.
+			http.Redirect(w, req, target, http.StatusFound) //nolint:gosec // G710: target validated to a local path
+		})
 		r.Handle("/app", http.RedirectHandler("/app/", http.StatusMovedPermanently))
 		r.Handle("/app/*", http.StripPrefix("/app/", d.SPAHandler))
 	}
@@ -669,4 +685,20 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		})
 	})
 	return r
+}
+
+// safeIngressPrefix returns the Home Assistant Ingress proxy prefix from the
+// X-Ingress-Path header (e.g. "/api/hassio_ingress/<token>"), or "" when the
+// header is absent or not a local absolute path. It rejects scheme-relative
+// ("//host") and backslash ("/\") forms so the value can be used to build a
+// redirect target without becoming an open redirect to a foreign origin.
+func safeIngressPrefix(r *http.Request) string {
+	p := r.Header.Get("X-Ingress-Path")
+	if p == "" || !strings.HasPrefix(p, "/") {
+		return ""
+	}
+	if strings.HasPrefix(p, "//") || strings.HasPrefix(p, "/\\") {
+		return ""
+	}
+	return strings.TrimRight(p, "/")
 }

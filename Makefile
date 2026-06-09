@@ -523,6 +523,10 @@ release: ## goreleaser snapshot (local test build)
 ccu-addon: ui-build ## package the CCU/RaspberryMatic add-on tarball into dist/
 	script/build_ccu_addon.sh $(VERSION)
 
+.PHONY: ha-addon
+ha-addon: ## build the Home Assistant add-on image for the host arch (smoke build)
+	script/build_ha_addon.sh $(VERSION)
+
 .PHONY: clean
 clean: ## remove build artefacts
 	rm -rf $(BIN_DIR) dist/ coverage/

@@ -37,7 +37,7 @@ make dist      # ui-build, then build
 ## Run locally
 
 ```sh
-cp config.example.yaml config.yaml
+cp example.config.yaml config.yaml
 ./bin/openccu-loom --config config.yaml
 ```
 

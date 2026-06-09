@@ -494,7 +494,7 @@ mochi-mqtt/server v2 broker (MIT, pure-Go, MQTT v5):
 **Doc/code drifts surfaced and fixed**:
 
 - The `mqtt.raw_enabled` and `mqtt.discovery_enabled` defaults
-  documented in `config.example.yaml` (`[default: true]`) did NOT
+  documented in `example.config.yaml` (`[default: true]`) did NOT
   match the Go zero-value (`false`) — silently broke MQTT for any
   operator that set only `enabled: true` + `broker_url`. Fixing the
   defaults to be `*bool`-driven is invasive (Go has no

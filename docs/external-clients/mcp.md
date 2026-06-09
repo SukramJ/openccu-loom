@@ -338,6 +338,6 @@ multi-CCU deployment.
 - **Architecture & decisions:** [ADR 0025 — MCP north-bound adapter](https://github.com/SukramJ/openccu-loom/blob/main/docs/adr/0025-mcp-northbound-adapter.md)
 - **Tool definitions (source of truth):** `internal/north/mcp/tools.go`
 - **Wiring / mount point:** `cmd/openccu-loom/daemon_rest_mount.go` (`mountMCP`)
-- **Config reference:** [`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml) (`north.mcp` section)
+- **Config reference:** [`example.config.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.full.yaml) (`north.mcp` section)
 - **Capability tokens:** `internal/north/rest/handlers/info.go`
 - **Authentication model:** [Authentication](../admin/auth.md)

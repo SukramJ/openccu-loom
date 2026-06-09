@@ -442,6 +442,58 @@ paths:
 	}
 }
 
+// TestRootRedirectsToSPA covers the root handler that lands a browser on the
+// SPA, including the Home Assistant Ingress case where the Supervisor strips
+// its proxy prefix and passes it back in X-Ingress-Path.
+func TestRootRedirectsToSPA(t *testing.T) {
+	spa := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	r := NewRouter(Deps{StartedAt: time.Now(), SPAHandler: spa})
+
+	cases := []struct {
+		name        string
+		ingressPath string
+		wantLoc     string
+	}{
+		{"direct (no ingress)", "", "/app/"},
+		{"ingress prefix", "/api/hassio_ingress/tok3n", "/api/hassio_ingress/tok3n/app/"},
+		{"ingress prefix with trailing slash", "/api/hassio_ingress/tok3n/", "/api/hassio_ingress/tok3n/app/"},
+		// Open-redirect guard: a hostile X-Ingress-Path must never steer the
+		// redirect to a foreign origin — it falls back to the local SPA.
+		{"reject scheme-relative", "//evil.example", "/app/"},
+		{"reject absolute URL", "https://evil.example", "/app/"},
+		{"reject backslash trick", "/\\evil.example", "/app/"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+			if tc.ingressPath != "" {
+				req.Header.Set("X-Ingress-Path", tc.ingressPath)
+			}
+			rr := httptest.NewRecorder()
+			r.ServeHTTP(rr, req)
+			if rr.Code != http.StatusFound {
+				t.Fatalf("status=%d, want 302", rr.Code)
+			}
+			if loc := rr.Header().Get("Location"); loc != tc.wantLoc {
+				t.Errorf("Location=%q, want %q", loc, tc.wantLoc)
+			}
+		})
+	}
+}
+
+// TestRootHasNoRedirectWithoutSPA confirms the root redirect is only wired
+// when an SPA handler is present (a headless daemon keeps root as a 404).
+func TestRootHasNoRedirectWithoutSPA(t *testing.T) {
+	r := NewRouter(Deps{StartedAt: time.Now()})
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+	if rr.Code == http.StatusFound {
+		t.Fatalf("root unexpectedly redirected without an SPA handler")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Router dep-guarded route tests (nil/non-nil dep branches)
 // ---------------------------------------------------------------------------

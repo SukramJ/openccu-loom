@@ -6,7 +6,7 @@ intent (goals, non-goals, constraints, resolved decisions, risk
 register) lives in [`SPECIFICATION.md`](./SPECIFICATION.md);
 everything else lives in the authoritative sources listed in that
 spec's preamble (code, ADRs, `assets/openapi.yaml`,
-`config.example.yaml`, etc.). When in doubt about *intent*, read
+`example.config.yaml`, etc.). When in doubt about *intent*, read
 the spec; when in doubt about *implementation*, read the code.
 
 ---
@@ -265,7 +265,7 @@ openccu-loom/
 ├── .goreleaser.yaml
 ├── Dockerfile
 ├── .golangci.yaml
-├── config.example.yaml      — annotated reference config
+├── example.config.yaml      — annotated reference config
 ├── .github/workflows/       — CI/CD
 ├── cmd/
 │   ├── openccu-loom/         — main daemon (daemon.go, ws_adapters.go,

@@ -26,7 +26,7 @@
 #
 # Full reference + environment variables:
 #
-#   * config.example.full.yaml — annotated reference of EVERY option.
+#   * example.config.full.yaml — annotated reference of EVERY option.
 #   * example.env — every environment variable the daemon reads
 #     (referenced via `env_file:` below). Prefer env for secrets.
 #

@@ -18,6 +18,11 @@ env:
   # "false" to skip it for a release (or override per repo via the
   # BUILD_CCU_ADDON repository variable — see the step conditions).
   BUILD_CCU_ADDON: "false"
+  # Toggle the Home Assistant add-on image build + push (one tag per arch:
+  # ghcr.io/sukramj/openccu-loom-ha-<arch>). Same flag pattern as the CCU
+  # add-on — flip here or override via the BUILD_HA_ADDON repository variable.
+  # Default off until validated on real Home Assistant hardware.
+  BUILD_HA_ADDON: "false"
 
 jobs:
   goreleaser:
@@ -107,6 +112,34 @@ jobs:
         run: gh release upload "${GITHUB_REF_NAME}" dist/openccu-loom-ccu-*.tar.gz --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Home Assistant add-on: build one image per arch from the HA base image,
+      # COPYing the daemon binary out of the release image goreleaser just
+      # published. The add-on's config.yaml version IS the image tag and must
+      # equal the release tag, so guard it before building (a stale version
+      # would publish an image that no installed add-on can pull).
+      - name: verify HA add-on version matches the tag
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          CFG="$(sed -nE 's/^version:[[:space:]]*"?([^"]+)"?.*/\1/p' \
+            packaging/ha-addon/openccu-loom/config.yaml | head -1)"
+          if [ "$TAG" != "$CFG" ]; then
+            echo "HA add-on config.yaml version ($CFG) != release tag ($TAG)" >&2
+            echo "Bump packaging/ha-addon/openccu-loom/config.yaml in the release commit." >&2
+            exit 1
+          fi
+      # The official builder reads config.yaml/build.yaml, builds each arch from
+      # the matching HA base image, and pushes ghcr.io/sukramj/openccu-loom-ha-<arch>:<version>.
+      # ghcr login above is shared via the docker config the builder mounts.
+      - name: build & publish Home Assistant add-on
+        if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
+        uses: home-assistant/builder@62a1597b84b3461abad9816d9cd92862a2b542c3 # 2026.03.2
+        with:
+          args: |
+            --all
+            --target /data/packaging/ha-addon/openccu-loom
+            --docker-hub ghcr.io/sukramj
       # CycloneDX SBOM for the daemon module graph, attached to the run.
       - name: generate SBOM
         run: make sbom

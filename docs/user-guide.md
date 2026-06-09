@@ -100,9 +100,9 @@ key, see:
 
 - **[Configuration reference](admin/configuration.md)** — every option,
   grouped by area.
-- [`config.example.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.yaml)
+- [`example.config.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.yaml)
   — the minimal bootstrap-tier file.
-- [`config.example.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/config.example.full.yaml)
+- [`example.config.full.yaml`](https://github.com/SukramJ/openccu-loom/blob/main/example.config.full.yaml)
   — an annotated reference of every option.
 - [`example.env`](https://github.com/SukramJ/openccu-loom/blob/main/example.env)
   — every environment variable; prefer env for secrets.

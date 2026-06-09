@@ -25,7 +25,7 @@ the repo root. That file is **not** checked in (per-developer; see
 the CCU host/credentials for your local setup:
 
 ```sh
-cp config.example.yaml config.yaml
+cp example.config.yaml config.yaml
 $EDITOR config.yaml
 ```
 

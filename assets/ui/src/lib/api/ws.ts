@@ -1,4 +1,5 @@
 import type { EventEnvelope } from "./types";
+import { apiBase } from "./base";
 
 /**
  * Small WebSocket client with exponential-backoff reconnect. Auth is
@@ -117,7 +118,7 @@ export function connectEvents(): EventStream {
 
   function buildURL(): string {
     const proto = location.protocol === "https:" ? "wss:" : "ws:";
-    return `${proto}//${location.host}/api/v1/events`;
+    return `${proto}//${location.host}${apiBase()}/events`;
   }
 
   function connect() {
