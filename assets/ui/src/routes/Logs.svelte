@@ -376,7 +376,7 @@
         class="rounded border px-1 py-1 text-xs"
         style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
       >
-        {#each [100, 200, 500, 1000] as n (n)}
+        {#each [100, 200, 500, 1000, 2000, 5000] as n (n)}
           <option value={n}>{t("logs.download_last", { count: n })}</option>
         {/each}
       </select>

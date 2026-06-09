@@ -41,6 +41,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Log download offers larger sizes.** The diagnostics log viewer's download
+  selector now offers 2000 and 5000 lines in addition to 100 / 200 / 500 /
+  1000. The backend already served any `limit` up to the live-log ring
+  capacity (5000); only the UI choices were capped at 1000.
+- **CCU add-on Settings page is branded.** Clicking *Settings* for the
+  OpenCCU-Loom CCU / RaspberryMatic add-on now shows a small card with the
+  OpenCCU-Loom logo and an *Open Config UI* button (into the SPA on port
+  8080), mirroring how ccu-jack presents its logo — instead of an immediate
+  blank redirect.
 - **Reference config files renamed** `config.example.yaml` →
   `example.config.yaml` and `config.example.full.yaml` →
   `example.config.full.yaml`. Required because a Home Assistant add-on
