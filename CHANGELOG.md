@@ -67,6 +67,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   per-interface cap (100) and health stayed permanently *degraded* (and
   `/health` returned 503). PONG is now routed to the tracker before the
   device guard, closing the round-trip.
+- **Foreign / liveness PONGs filed as "unknown" mismatches.** The CCU
+  broadcasts `PONG` events to *every* registered logic-layer client, so on a
+  shared CCU the daemon also receives other instances' PONGs (e.g.
+  `Otto-HmIP-RF#<ts>`) on its own interface, plus the bare-name liveness
+  probe's tokenless PONGs. These were recorded as unmatched *unknown*
+  mismatches, decaying interface health to degraded/unhealthy. (The reconnect
+  loop above had masked this by clearing the tracker every ~180 s.) The
+  PONG-ingest hook now correlates a PONG only when its caller_id carries a
+  `#` token *and* the embedded prefix equals this client's own ping prefix
+  (the bare interface name) — mirroring the reference
+  `v_interface_id == interface_id` guard. Verified live against a CCU shared
+  with other Homematic instances: pending and unknown both stay at 0.
 - **Callback host is resolved per-central (multi-CCU).** The host the
   daemon advertised in `init()` for CCU push events was computed once
   globally — from `callback.public_host` or a UDP egress probe against

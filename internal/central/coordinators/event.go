@@ -369,18 +369,18 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 		pp := c.pingPongTracker
 		c.mu.RUnlock()
 		if pp != nil {
-			// The CCU echoes the caller_id it received in the ping RPC as the
-			// string value of the PONG event. When the caller embedded a token
-			// ("<interfaceID>#<token>"), extract the suffix after the last '#'.
-			// Falls back to an empty token when the string is bare (backends
-			// that do not support the token-correlation protocol).
-			var pongToken string
+			// Forward the raw caller_id the CCU echoed in the PONG event. The
+			// hook (wired in pingpong_wiring) owns correlation: it knows the
+			// client identity, so it both extracts the "<iface>#<token>" token
+			// and verifies the embedded prefix is THIS interface's own ping
+			// prefix. The CCU broadcasts PONG events to every registered
+			// logic-layer client, so we also receive other instances' PONGs
+			// (e.g. "Otto-HmIP-RF#...") on our interface — those must not be
+			// correlated. Mirrors the reference v_interface_id == interface_id
+			// guard.
 			if callerID, err := xmlrpc.AsString(raw); err == nil {
-				if idx := strings.LastIndex(callerID, "#"); idx >= 0 {
-					pongToken = callerID[idx+1:]
-				}
+				pp(interfaceID, callerID)
 			}
-			pp(interfaceID, pongToken)
 		}
 		c.MarkEvent(interfaceID, time.Time{})
 		return
@@ -396,11 +396,13 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 }
 
 // SetPingPongTracker wires an optional hook that is called when a PONG
-// parameter arrives (before cache dispatch). The hook receives the
-// interfaceID and the token extracted from the echoed caller_id
-// ("<interfaceID>#<token>"); pongToken is empty when the sender did not
-// embed a token. Pass nil to detach.
-func (c *EventCoordinator) SetPingPongTracker(fn func(interfaceID, pongToken string)) {
+// parameter arrives (before cache dispatch). The hook receives the event's
+// interfaceID and the raw caller_id the CCU echoed ("<iface>#<token>", or a
+// bare interface name for the lightweight liveness probe). The hook owns
+// correlation — it extracts the token and verifies the embedded prefix
+// identifies this interface — because that needs the client identity, which
+// lives in the wiring layer. Pass nil to detach.
+func (c *EventCoordinator) SetPingPongTracker(fn func(interfaceID, callerID string)) {
 	c.mu.Lock()
 	c.pingPongTracker = fn
 	c.mu.Unlock()

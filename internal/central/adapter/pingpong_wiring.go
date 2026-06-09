@@ -4,6 +4,8 @@
 package adapter
 
 import (
+	"strings"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
@@ -60,16 +62,31 @@ func WirePingPongBus(
 	}
 
 	// Wire the PONG ingest: when a PONG event arrives for any interface,
-	// route the extracted token to the matching InterfaceClient so the
-	// tracker can close the pending round-trip. One closure handles all
-	// interfaces — the ifID argument dispatches to the right client.
-	// Repeated calls from each interface's WirePingPongBus invocation are
-	// harmless: the last installed closure wins and is identical in behaviour.
+	// correlate it against the matching InterfaceClient's tracker. One closure
+	// handles all interfaces — the ifID argument dispatches to the right
+	// client. Repeated calls from each interface's WirePingPongBus invocation
+	// are harmless: the last installed closure wins and is identical.
+	//
+	// The CCU echoes the ping caller_id as the PONG value and broadcasts PONG
+	// events to EVERY registered logic-layer client — so on a shared CCU we
+	// also receive other instances' PONGs (e.g. "Otto-HmIP-RF#<ts>") plus the
+	// bare-name liveness probes ("HmIP-RF", no token) on our own interface.
+	// Correlate ONLY when the caller_id carries a '#' token AND its prefix
+	// equals this client's own ping prefix (the bare interface name sent in
+	// CheckConnectionAvailability). Otherwise every foreign / tokenless PONG
+	// would be filed as an unmatched "unknown" mismatch and decay interface
+	// health. Mirrors the reference v_interface_id == interface_id guard.
 	if unit.Events != nil && unit.Clients != nil {
-		unit.Events.SetPingPongTracker(func(ifID, pongToken string) {
-			if entry, ok := unit.Clients.Get(ifID); ok && entry != nil && entry.Client != nil {
-				entry.Client.RecordPong(pongToken)
+		unit.Events.SetPingPongTracker(func(ifID, callerID string) {
+			entry, ok := unit.Clients.Get(ifID)
+			if !ok || entry == nil || entry.Client == nil {
+				return
 			}
+			prefix, token, hasToken := strings.Cut(callerID, "#")
+			if !hasToken || prefix != string(entry.Interface) {
+				return
+			}
+			entry.Client.RecordPong(token)
 		})
 	}
 }

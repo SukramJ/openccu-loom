@@ -325,8 +325,9 @@ func TestHandleRawEventNormalizedPONGRoutesToTracker(t *testing.T) {
 		dpCalled <- struct{}{}
 	})
 
+	// A tracking PONG carries the echoed caller_id "<interfaceID>#<token>".
 	ec.HandleRawEventNormalized(context.Background(), "iface1", "ADDR001:0", "PONG",
-		xmlrpc.DoubleValue(0))
+		xmlrpc.StringValue("iface1#7"))
 
 	select {
 	case id := <-pongCalled:

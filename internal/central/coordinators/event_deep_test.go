@@ -413,17 +413,18 @@ func TestHandleRawEventUpdatesStampOnDuplicate(t *testing.T) {
 	}
 }
 
-// TestHandleRawEventNormalizedPONGExtractsToken verifies that when a PONG
-// event arrives with a caller_id of the form "<interfaceID>#<token>", the
-// tracker hook receives the correct interfaceID and the extracted token.
-func TestHandleRawEventNormalizedPONGExtractsToken(t *testing.T) {
+// TestHandleRawEventNormalizedPONGForwardsCallerID verifies that a PONG event
+// is forwarded to the tracker hook with the event's interfaceID and the raw
+// echoed caller_id. Token extraction + prefix verification live in the hook
+// (wiring layer), which has the client identity — the coordinator only routes.
+func TestHandleRawEventNormalizedPONGForwardsCallerID(t *testing.T) {
 	t.Parallel()
 	ec, _, _ := newTestEC(t)
 
-	var gotIfID, gotToken string
-	ec.SetPingPongTracker(func(ifID, pongToken string) {
+	var gotIfID, gotCallerID string
+	ec.SetPingPongTracker(func(ifID, callerID string) {
 		gotIfID = ifID
-		gotToken = pongToken
+		gotCallerID = callerID
 	})
 
 	const ifaceID = "HmIP-RF"
@@ -437,20 +438,26 @@ func TestHandleRawEventNormalizedPONGExtractsToken(t *testing.T) {
 	if gotIfID != ifaceID {
 		t.Errorf("interfaceID = %q, want %q", gotIfID, ifaceID)
 	}
-	if gotToken != "42" {
-		t.Errorf("pongToken = %q, want %q", gotToken, "42")
+	if gotCallerID != callerID {
+		t.Errorf("callerID = %q, want %q", gotCallerID, callerID)
 	}
 }
 
-// TestHandleRawEventNormalizedPONGBareCallerID verifies that when the PONG
-// caller_id carries no '#' separator the token is passed as an empty string.
-func TestHandleRawEventNormalizedPONGBareCallerID(t *testing.T) {
+// TestHandleRawEventNormalizedPONGForwardsBareCallerID verifies that the
+// coordinator forwards the raw caller_id even when it carries no '#' token.
+// The coordinator does not filter — that is the hook's job (it discards
+// tokenless and foreign-prefixed caller_ids so they are never recorded as
+// unknown mismatches). See the wiring-layer correlation test for the discard
+// behaviour.
+func TestHandleRawEventNormalizedPONGForwardsBareCallerID(t *testing.T) {
 	t.Parallel()
 	ec, _, _ := newTestEC(t)
 
-	var gotToken string
-	ec.SetPingPongTracker(func(_, pongToken string) {
-		gotToken = pongToken
+	var gotCallerID string
+	called := false
+	ec.SetPingPongTracker(func(_, callerID string) {
+		called = true
+		gotCallerID = callerID
 	})
 
 	ec.HandleRawEventNormalized(
@@ -459,8 +466,9 @@ func TestHandleRawEventNormalizedPONGBareCallerID(t *testing.T) {
 		xmlrpc.StringValue("HmIP-RF"), // no '#'
 	)
 
-	if gotToken != "" {
-		t.Errorf("pongToken = %q, want empty string for bare caller_id", gotToken)
+	if !called || gotCallerID != "HmIP-RF" {
+		t.Errorf("coordinator must forward the raw caller_id; called=%v callerID=%q",
+			called, gotCallerID)
 	}
 }
 
