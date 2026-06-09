@@ -22,13 +22,16 @@ const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // and hands them to [*Hub]. It is suitable as an http.Handler mount
 // point (see NewRouter wiring).
 //
-// When allowedOrigins is non-empty each incoming request must carry an
-// Origin header whose scheme+host matches one of the listed origins.
-// Requests from browsers that would carry a cross-site Origin are
-// rejected with 403 before the handshake completes, closing the
-// WebSocket CSRF vector that exists when session cookies are active.
-// Pass nil or an empty slice to skip the check (API-token-only
-// deployments without browser sessions).
+// When allowedOrigins is non-empty each incoming request that carries an
+// Origin header must match one of the listed origins (scheme+host);
+// cross-site browser handshakes are rejected with 403 before the upgrade
+// completes, closing the WebSocket CSRF vector that exists when session
+// cookies are active. Requests without an Origin header are allowed even
+// when the list is non-empty: CSRF is a browser-only attack vector and
+// browsers always attach an Origin to WebSocket handshakes, so an absent
+// Origin identifies a non-browser client (native app, server-side
+// API-token client) that no cross-site page could have forged. Pass nil
+// or an empty slice to skip the check entirely.
 func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handler {
 	if logger == nil {
 		logger = slog.Default()
@@ -55,12 +58,11 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 			http.Error(w, "missing Sec-WebSocket-Key", http.StatusBadRequest)
 			return
 		}
-		if len(originSet) > 0 {
-			origin := r.Header.Get("Origin")
-			if origin == "" {
-				http.Error(w, "websocket origin required", http.StatusForbidden)
-				return
-			}
+		// Only validate the Origin when one is present. A missing Origin is a
+		// non-browser client (CSRF is a browser-only vector and browsers always
+		// send Origin on WS handshakes), so it cannot be a forged cross-site
+		// request and is allowed through even with an active allowlist.
+		if origin := r.Header.Get("Origin"); len(originSet) > 0 && origin != "" {
 			u, err := url.Parse(origin)
 			if err != nil {
 				http.Error(w, "websocket origin invalid", http.StatusForbidden)

@@ -72,6 +72,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nil from their constructors when the DP is absent, so they are not exposed to
   the same hazard.)
 
+- **WebSocket Origin check no longer blocks non-browser clients.** With CSRF
+  enabled (the default), the `/api/v1/events` handler rejected any handshake
+  without an `Origin` header (`403 websocket origin required`) — which broke
+  headless API-token clients such as the Home Assistant integration's
+  `openccu-loom-client`, since non-browser clients legitimately omit `Origin`.
+  CSRF is a browser-only attack vector and browsers always attach an `Origin`
+  to WS handshakes, so a missing `Origin` cannot be a forged cross-site
+  request. The handler now allows handshakes with no `Origin` through and only
+  validates the value when one is actually present, preserving cross-site
+  protection for genuine browser connections.
+
 - **Hub wiring now recovers from a transient boot-time failure.** `WireHub`
   ran exactly once at boot; if the CCU's ReGa was not yet reachable during the
   daemon's startup window it failed, leaving that central's entire hub surface
