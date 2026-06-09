@@ -28,9 +28,12 @@ func TestSessionIssueAndLookup(t *testing.T) {
 func TestSessionExpiresEvicts(t *testing.T) {
 	store := NewSessionStore()
 	store.TTL = 10 * time.Millisecond
-	store.now = time.Now
+	// Drive eviction with virtual time via the store's now seam instead of
+	// a real sleep racing the 10ms TTL.
+	vnow := time.Now()
+	store.now = func() time.Time { return vnow }
 	sess, _ := store.Issue(Identity{Subject: "bob"})
-	time.Sleep(20 * time.Millisecond)
+	vnow = vnow.Add(20 * time.Millisecond) // advance past the TTL
 	if got := store.Lookup(sess.ID); got != nil {
 		t.Fatal("expired session must evict")
 	}

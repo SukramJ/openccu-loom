@@ -538,16 +538,19 @@ func TestDataPointModifiedVsRefreshedTimestamps(t *testing.T) {
 		t.Fatal("fresh data point must have both timestamps zero")
 	}
 
-	dp.OnEvent(5)
+	// Use explicit, strictly-increasing timestamps via OnEventAt so the
+	// modified/refreshed distinction is deterministic instead of relying on
+	// the wall clock advancing between OnEvent calls.
+	t0 := time.Now()
+	dp.OnEventAt(5, t0)
 	mod1 := dp.ModifiedAt()
 	ref1 := dp.RefreshedAt()
 	if mod1.IsZero() || ref1.IsZero() {
 		t.Fatal("first OnEvent must bump both timestamps")
 	}
 
-	// Same value again: refreshedAt advances, modifiedAt does not.
-	time.Sleep(2 * time.Millisecond)
-	dp.OnEvent(5)
+	// Same value at a later timestamp: refreshedAt advances, modifiedAt does not.
+	dp.OnEventAt(5, t0.Add(2*time.Millisecond))
 	if !dp.ModifiedAt().Equal(mod1) {
 		t.Fatalf("unchanged value must not bump modifiedAt: was=%v now=%v", mod1, dp.ModifiedAt())
 	}
@@ -555,9 +558,8 @@ func TestDataPointModifiedVsRefreshedTimestamps(t *testing.T) {
 		t.Fatalf("unchanged value must still bump refreshedAt: was=%v now=%v", ref1, dp.RefreshedAt())
 	}
 
-	// Different value: both bump.
-	time.Sleep(2 * time.Millisecond)
-	dp.OnEvent(7)
+	// Different value at a still-later timestamp: both bump.
+	dp.OnEventAt(7, t0.Add(4*time.Millisecond))
 	if !dp.ModifiedAt().After(mod1) {
 		t.Fatal("changed value must bump modifiedAt")
 	}

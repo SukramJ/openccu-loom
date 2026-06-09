@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
 	"github.com/SukramJ/openccu-loom/internal/model/optimistic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -126,6 +127,13 @@ type Spec struct {
 	// 1 ns) effectively disables time-bounded burst grouping so each
 	// Apply gets its own anchor.
 	OptimisticBurstWindow time.Duration
+
+	// Clock overrides the wall clock the optimistic tracker uses for its
+	// rollback timer and age accounting. Nil (the default) uses the real
+	// clock. This is primarily a test seam: injecting a [clock.Fake] makes
+	// timeout-rollback behaviour deterministic (Advance the fake instead of
+	// sleeping past a real grace period).
+	Clock clock.Clock
 
 	// RetryableOverride sets the _retryable flag explicitly. The
 	// zero value (false) means "use the per-Kind default": true for
@@ -349,7 +357,7 @@ func NewDataPoint[T comparable](cfg Spec) *DataPoint[T] {
 		Spec:                cfg,
 		enumValueIsIndex:    enumValueIsIndexFromDescriptor(cfg.Descriptor),
 		ignoreOnInitialLoad: hmenum.Parameter(cfg.Key.Parameter).IgnoreOnInitialLoad(),
-		optimistic:          optimistic.New[T](nil),
+		optimistic:          optimistic.New[T](cfg.Clock),
 		retryable:           retryable,
 		validateStateChange: validateSC,
 		// initial state is uncertain until the first CCU-confirmed value arrives.
