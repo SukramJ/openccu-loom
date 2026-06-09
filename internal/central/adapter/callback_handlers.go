@@ -103,6 +103,41 @@ func (h *CallbackHandlers) Stop() {
 	h.wg.Wait()
 }
 
+// noteCallbackAndRoutePong refreshes the per-client callback-liveness
+// timestamp and routes a PONG callback to the ping-pong tracker. It runs
+// before [Event]'s device-existence guard so neither signal is lost for
+// callbacks that do not map to a mirrored device.
+//
+// Every inbound callback — including a PONG and an event for a device we do
+// not mirror — is proof the callback channel is alive. Stamping liveness here
+// (not only on reconnect) is what stops IsCallbackAlive from going stale
+// callbackFreshness (180 s) after each reconnect on a quiet CCU, which would
+// otherwise make the check_connection watchdog reconnect in an endless loop.
+// Mirrors the reference set_last_event_seen_for_interface call at the top of
+// the event-coordinator's data_point_event flow.
+//
+// PONG arrives on the "CENTRAL" pseudo-address, which is not a mirrored
+// device, so Event's device-existence guard would otherwise drop it and the
+// tracker would never correlate the round-trip (pending piles to its cap and
+// health stays degraded). Returns true when the event was a PONG and is fully
+// handled.
+func (h *CallbackHandlers) noteCallbackAndRoutePong(
+	ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value,
+) bool {
+	if h.unit != nil && h.unit.Clients != nil {
+		if entry, ok := h.unit.Clients.Get(interfaceID); ok && entry != nil && entry.Client != nil {
+			entry.Client.NotifyCallback()
+		}
+	}
+	if parameter != string(hmenum.ParameterPong) {
+		return false
+	}
+	if h.unit != nil && h.unit.Events != nil {
+		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, value)
+	}
+	return true
+}
+
 // Event routes a CCU value-change callback onto the matching data point.
 // Missing devices/channels/parameters are silently ignored — the CCU
 // occasionally emits events for entities we deliberately don't mirror.
@@ -120,6 +155,13 @@ func (h *CallbackHandlers) Stop() {
 // and downstream topics never appear at the broker.
 func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddress, parameter string, value xmlrpc.Value) error {
 	interfaceID = h.canonicalInterfaceID(interfaceID)
+
+	// Stamp liveness and route PONG before the device-existence guard below.
+	// Returns true when the event was a PONG (fully handled here).
+	if h.noteCallbackAndRoutePong(ctx, interfaceID, channelAddress, parameter, value) {
+		return nil
+	}
+
 	deviceAddr := deviceAddressOf(channelAddress)
 	dev, ok := h.unit.ModelRegistry.Get(deviceAddr)
 	if !ok {

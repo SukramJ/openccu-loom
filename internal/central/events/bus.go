@@ -201,7 +201,8 @@ func Subscribe[T hmevent.Event](b *Bus, fn func(T), opts ...HandlerOption) func(
 // outer dispatch completes.
 func Publish[T hmevent.Event](b *Bus, e T) {
 	if b.dispatch.TryLock() {
-		defer b.dispatch.Unlock()
+		// flushDeferred releases b.dispatch (under b.mu) once the queue
+		// drains — see the handoff note there. Do NOT defer-unlock here.
 		b.dispatchNow(e)
 		b.flushDeferred()
 		return
@@ -214,8 +215,21 @@ func Publish[T hmevent.Event](b *Bus, e T) {
 	b.mu.Lock()
 	b.deferred = append(b.deferred, func() { b.dispatchNow(captured) })
 	depth := uint64(len(b.deferred))
+	// Close the dispatcher-handoff race: the current dispatcher releases
+	// b.dispatch only while holding b.mu (in flushDeferred). Attempting the
+	// take-over under the same b.mu makes release and re-acquisition mutually
+	// exclusive — so our just-enqueued event is either still visible to the
+	// outgoing dispatcher's empty-check (it drains it) or the lock is now free
+	// for us to take and drain it ourselves. Without this an event enqueued in
+	// the window between the dispatcher's last empty-check and its lock release
+	// would sit undrained until some future Publish (a lost event → e.g. a
+	// HandlerStat match counted as 999/1000).
+	tookOver := b.dispatch.TryLock()
 	b.mu.Unlock()
 	b.observeDeferredDepth(depth, e.Type())
+	if tookOver {
+		b.flushDeferred()
+	}
 }
 
 // observeDeferredDepth updates the high-water gauge and emits one
@@ -339,13 +353,22 @@ func (b *Bus) callHandler(h *registered, e hmevent.Event) {
 	h.fn(e)
 }
 
-// flushDeferred runs buffered publishes until the queue is empty.
-// Handlers that publish further re-entrant events cause the queue to
-// grow — we drain it iteratively rather than recursively.
+// flushDeferred runs buffered publishes until the queue is empty, then
+// releases b.dispatch. Handlers that publish further re-entrant events cause
+// the queue to grow — we drain it iteratively rather than recursively.
+//
+// The caller MUST hold b.dispatch (acquired via the TryLock in [Publish]).
+// The release happens here, while b.mu is held and the queue is observed
+// empty, so it is serialised against the slow-path take-over TryLock in
+// [Publish] (also under b.mu). That mutual exclusion is what closes the
+// handoff race: an event enqueued concurrently is either seen by the
+// empty-check below (drained in the next iteration) or lands after the
+// release, where the enqueuer's own TryLock succeeds and drains it.
 func (b *Bus) flushDeferred() {
 	for {
 		b.mu.Lock()
 		if len(b.deferred) == 0 {
+			b.dispatch.Unlock()
 			b.mu.Unlock()
 			return
 		}

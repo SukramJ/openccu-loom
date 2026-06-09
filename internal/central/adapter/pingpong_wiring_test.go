@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
+	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -135,6 +136,61 @@ func TestWirePingPongBusConnectionIssueGateSuppressesPings(t *testing.T) {
 	if ic2.PingPong().PendingCount() != 0 {
 		t.Fatalf("expected 0 pending when gate returns true (connection issue), got %d",
 			ic2.PingPong().PendingCount())
+	}
+}
+
+// TestWirePingPongBusPONGCorrelation verifies the PONG-ingest hook's
+// correlation rules against the live CCU broadcast quirk: the CCU echoes the
+// ping caller_id as the PONG value and broadcasts PONG events to EVERY
+// registered logic-layer client. On our own interface we therefore receive:
+//   - our own tracking PONGs   ("HmIP-RF#<token>")   → must close pending
+//   - other instances' PONGs   ("Otto-HmIP-RF#<ts>") → must be ignored
+//   - bare-name liveness probes ("HmIP-RF")          → must be ignored
+//
+// Recording the latter two would inflate the unknown-mismatch count and decay
+// interface health (the symptom that surfaced once the reconnect loop — which
+// used to clear the tracker every ~180 s — was fixed).
+func TestWirePingPongBusPONGCorrelation(t *testing.T) {
+	t.Parallel()
+
+	const (
+		centralName = "OttoGo"
+		ifaceID     = "OttoGo-HmIP-RF"
+	)
+	c := newTestCentralNamed(t, centralName)
+	ic := newTestInterfaceClient(t, centralName, "HmIP-RF", 5)
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: ifaceID,
+		Interface:   hmenum.InterfaceHmIPRF, // bare "HmIP-RF" — our ping prefix
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+	WirePingPongBus(c, ic, ifaceID, nil)
+
+	deliver := func(callerID string) {
+		c.Events.HandleRawEventNormalized(
+			context.Background(), ifaceID, "CENTRAL", "PONG",
+			xmlrpc.StringValue(callerID),
+		)
+	}
+
+	// Our own tracking ping → recorded, then matched by its PONG.
+	ic.RecordPing("42")
+	deliver("HmIP-RF#42")
+	if got := ic.PingPong().PendingCount(); got != 0 {
+		t.Fatalf("own PONG must close pending: pending=%d, want 0", got)
+	}
+
+	// Foreign instances' PONGs broadcast onto our interface → ignored.
+	deliver("Otto-HmIP-RF#09.06.2026 09:31:22.492782'")
+	deliver("Otto-RC-HmIP-RF#09.06.2026 09:31:14.466456'")
+	// Bare-name liveness probe PONG (no token) → ignored.
+	deliver("HmIP-RF")
+
+	if got := ic.PingPong().UnknownCount(); got != 0 {
+		t.Fatalf("foreign / tokenless PONGs must not be recorded as unknown: "+
+			"unknown=%d, want 0", got)
 	}
 }
 
