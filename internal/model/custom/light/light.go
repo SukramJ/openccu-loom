@@ -260,6 +260,19 @@ func (l *Light) IsStatusValid() bool {
 	return l.Float.IsStatusValid()
 }
 
+// Category returns the data-point category. When the channel has no LEVEL
+// parameter (a "half-formed" channel — e.g. a light loader fired before the
+// channel materialised LEVEL), Float is nil and the auto-promoted forwarder
+// dispatches to (*DataPoint[float64]).Category, which dereferences its nil
+// receiver and panics. Return Undefined in that case, mirroring
+// [cover.Cover.Category].
+func (l *Light) Category() hmenum.DataPointCategory {
+	if l == nil || l.Float == nil {
+		return hmenum.DataPointCategoryUndefined
+	}
+	return l.Float.Category()
+}
+
 // SetGroupLevel binds an optional group-channel LEVEL data point. The value
 // of this DP is used by [GroupBrightness] and [GroupBrightnessPct] to expose
 // the aggregated group brightness to north-bound consumers. Pass nil to
