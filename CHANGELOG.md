@@ -50,6 +50,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Central trapped in FAILED after connectivity returns (permanent `/health`
+  503).** The central state machine permitted `FAILED → RECOVERING` / `STOPPED`
+  only. When every interface reconnected *outside* an active recovery pipeline
+  (the clients' own reconnect path, `in_recovery=false`),
+  `evaluate_central_state` computed `RUNNING`/`DEGRADED` and the transition was
+  silently rejected — so the central stayed in `FAILED` indefinitely even
+  though all interfaces were connected: `/health` returned 503 and every
+  heartbeat logged a futile `failed→running`. `FAILED` is now recoverable
+  (`→ RUNNING` / `→ DEGRADED` added; only `STOPPED` is terminal), mirroring the
+  client state machine.
 - **Lost event under concurrent publish (event bus dispatcher handoff race).**
   `Publish` released the `dispatch` lock via `defer` *after* `flushDeferred`
   observed the deferred queue empty. A concurrent `Publish` whose `TryLock`
