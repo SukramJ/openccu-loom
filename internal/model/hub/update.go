@@ -63,14 +63,31 @@ func (u *Update) InProgress() bool {
 // automatically by this method — callers must call [SetInProgress](false)
 // once the CCU update is done (e.g. from a progress-monitor goroutine).
 func (u *Update) Install(ctx context.Context) error {
-	if u.FirmwareUpdater == nil {
+	fw := u.firmwareUpdater()
+	if fw == nil {
 		return ErrNoFirmwareUpdater
 	}
-	if err := u.FirmwareUpdater.TriggerFirmwareUpdate(ctx); err != nil {
+	if err := fw.TriggerFirmwareUpdate(ctx); err != nil {
 		return err
 	}
 	u.SetInProgress(true)
 	return nil
+}
+
+// SetFirmwareUpdater wires (or re-wires) the CCU-side install trigger under
+// the update mutex. Use this instead of assigning the exported field directly
+// when the wiring can run concurrently with [Install] — specifically the
+// background WireHub recovery.
+func (u *Update) SetFirmwareUpdater(fw FirmwareUpdater) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.FirmwareUpdater = fw
+}
+
+func (u *Update) firmwareUpdater() FirmwareUpdater {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.FirmwareUpdater
 }
 
 // SetInProgress sets the in-progress flag and fires update callbacks.

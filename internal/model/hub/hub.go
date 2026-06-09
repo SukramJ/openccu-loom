@@ -343,6 +343,52 @@ func (h *Hub) RemoveSysvar(name string) bool {
 	return true
 }
 
+// Mutator bundles every CCU-side write interface the hub exposes. The
+// hub-wiring adapter wires a single object (the JSON-RPC writer) that
+// implements all of them via [Hub.SetMutator].
+type Mutator interface {
+	SysvarMutator
+	RoomMutator
+	FunctionMutator
+	BackupTrigger
+	FirmwareUpdater
+	InboxAccepter
+}
+
+// SetMutator wires (or re-wires) every CCU-side mutator under the hub mutex.
+// Use this instead of assigning the exported fields directly whenever the
+// wiring can run concurrently with a reader — specifically the background
+// WireHub recovery, which re-applies the mutators after a transient boot-time
+// hub failure while the daemon may already be servicing a hub write. The
+// guarded reader methods below (and SetMutator) serialise through h.mu, so a
+// recovery write never races a concurrent remote operation.
+func (h *Hub) SetMutator(m Mutator) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.SysvarMutator = m
+	h.RoomMutator = m
+	h.FunctionMutator = m
+	h.BackupTrigger = m
+	h.FirmwareUpdater = m
+	h.InboxAccepter = m
+}
+
+func (h *Hub) sysvarMut() SysvarMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.SysvarMutator }
+
+func (h *Hub) roomMut() RoomMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.RoomMutator }
+
+func (h *Hub) funcMut() FunctionMutator { h.mu.RLock(); defer h.mu.RUnlock(); return h.FunctionMutator }
+
+func (h *Hub) backupMut() BackupTrigger { h.mu.RLock(); defer h.mu.RUnlock(); return h.BackupTrigger }
+
+func (h *Hub) firmwareMut() FirmwareUpdater {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.FirmwareUpdater
+}
+
+func (h *Hub) inboxMut() InboxAccepter { h.mu.RLock(); defer h.mu.RUnlock(); return h.InboxAccepter }
+
 // CreateSysvarRemote provisions a sysvar on the CCU. The hub mirror
 // is updated lazily by the periodic sysvar refresh; the REST handler
 // returns 202 once the call lands.
@@ -351,19 +397,21 @@ func (h *Hub) CreateSysvarRemote(
 	name, valueType, unit, vmin, vmax string,
 	valueList []string,
 ) error {
-	if h.SysvarMutator == nil {
+	m := h.sysvarMut()
+	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return h.SysvarMutator.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, valueList)
+	return m.CreateSysvar(ctx, name, valueType, unit, vmin, vmax, valueList)
 }
 
 // DeleteSysvarRemote removes a sysvar on the CCU and drops it from
 // the in-memory cache once the call succeeded.
 func (h *Hub) DeleteSysvarRemote(ctx context.Context, name string) error {
-	if h.SysvarMutator == nil {
+	m := h.sysvarMut()
+	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	if err := h.SysvarMutator.DeleteSysvar(ctx, name); err != nil {
+	if err := m.DeleteSysvar(ctx, name); err != nil {
 		return err
 	}
 	h.RemoveSysvar(name)
@@ -379,10 +427,11 @@ func (h *Hub) UpdateSysvarRemote(
 	name, unit, vmin, vmax, description string,
 	valueList []string,
 ) error {
-	if h.SysvarMutator == nil {
+	m := h.sysvarMut()
+	if m == nil {
 		return ErrNoSysvarMutator
 	}
-	return h.SysvarMutator.UpdateSysvar(ctx, name, unit, vmin, vmax, description, valueList)
+	return m.UpdateSysvar(ctx, name, unit, vmin, vmax, description, valueList)
 }
 
 // SetDeviceRoomsRemote replaces the device's room assignments via
@@ -391,10 +440,11 @@ func (h *Hub) UpdateSysvarRemote(
 func (h *Hub) SetDeviceRoomsRemote(
 	ctx context.Context, deviceAddress string, rooms []string,
 ) error {
-	if h.RoomMutator == nil {
+	m := h.roomMut()
+	if m == nil {
 		return ErrNoRoomMutator
 	}
-	return h.RoomMutator.SetDeviceRooms(ctx, deviceAddress, rooms)
+	return m.SetDeviceRooms(ctx, deviceAddress, rooms)
 }
 
 // SetDeviceFunctionsRemote replaces the device's function
@@ -402,45 +452,50 @@ func (h *Hub) SetDeviceRoomsRemote(
 func (h *Hub) SetDeviceFunctionsRemote(
 	ctx context.Context, deviceAddress string, functions []string,
 ) error {
-	if h.FunctionMutator == nil {
+	m := h.funcMut()
+	if m == nil {
 		return ErrNoFunctionMutator
 	}
-	return h.FunctionMutator.SetDeviceFunctions(ctx, deviceAddress, functions)
+	return m.SetDeviceFunctions(ctx, deviceAddress, functions)
 }
 
 // TriggerBackupRemote runs the CCU backup script.
 func (h *Hub) TriggerBackupRemote(ctx context.Context) error {
-	if h.BackupTrigger == nil {
+	m := h.backupMut()
+	if m == nil {
 		return ErrNoBackupTrigger
 	}
-	return h.BackupTrigger.TriggerBackup(ctx)
+	return m.TriggerBackup(ctx)
 }
 
 // BackupStatusRemote polls the CCU backup script status.
 func (h *Hub) BackupStatusRemote(ctx context.Context) (string, error) {
-	if h.BackupTrigger == nil {
+	m := h.backupMut()
+	if m == nil {
 		return "", ErrNoBackupTrigger
 	}
-	return h.BackupTrigger.BackupStatus(ctx)
+	return m.BackupStatus(ctx)
 }
 
 // TriggerFirmwareUpdateRemote kicks off the global CCU firmware
 // update flow.
 func (h *Hub) TriggerFirmwareUpdateRemote(ctx context.Context) error {
-	if h.FirmwareUpdater == nil {
+	m := h.firmwareMut()
+	if m == nil {
 		return ErrNoFirmwareUpdater
 	}
-	return h.FirmwareUpdater.TriggerFirmwareUpdate(ctx)
+	return m.TriggerFirmwareUpdate(ctx)
 }
 
 // AcceptInboxDeviceRemote flips the device's ReadyConfig flag.
 func (h *Hub) AcceptInboxDeviceRemote(
 	ctx context.Context, deviceAddress string,
 ) error {
-	if h.InboxAccepter == nil {
+	m := h.inboxMut()
+	if m == nil {
 		return ErrNoInboxAccepter
 	}
-	return h.InboxAccepter.AcceptDeviceInInbox(ctx, deviceAddress)
+	return m.AcceptDeviceInInbox(ctx, deviceAddress)
 }
 
 // --- InstallMode data points ---

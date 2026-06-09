@@ -164,14 +164,15 @@ func TestPin_SetOriginVersion_WiredInDaemon(t *testing.T) {
 // --- Periodic client-data refresh ---
 
 // TestPin_SetLoadAndRefreshFn_WiredInCCUWiring pins that the southbound wiring
-// installs the data-point reload handler. Without it the registered
-// central.refresh_client_data scheduler job (default 5 min) fails every tick
-// with "LoadAndRefreshDataPointData not wired" and the push-event-first
-// reconciliation safety net — the periodic fetch-all-device-data sweep — never
-// runs. LoadAndRefreshDataPointDataForInterface also depends on this (it falls
-// back to the global handler).
+// installs the data-point reload handler via wireLoadAndRefresh. Without it the
+// registered central.refresh_client_data scheduler job (default 5 min) fails
+// every tick with "LoadAndRefreshDataPointData not wired" and the
+// push-event-first reconciliation safety net — the periodic
+// fetch-all-device-data sweep — never runs. The call lives in hub_retry.go's
+// wireLoadAndRefresh, shared by the boot path and the background hub-recovery
+// path (so a transient boot-time WireHub failure self-heals).
 func TestPin_SetLoadAndRefreshFn_WiredInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"internal/central/adapter/ccu_wiring.go",
+		"internal/central/adapter/hub_retry.go",
 		"unit", "SetLoadAndRefreshFn")
 }

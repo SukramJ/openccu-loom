@@ -59,6 +59,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Hub wiring now recovers from a transient boot-time failure.** `WireHub`
+  ran exactly once at boot; if the CCU's ReGa was not yet reachable during the
+  daemon's startup window it failed, leaving that central's entire hub surface
+  (programs / sysvars / inbox / service+alarm messages) **and** the
+  `central.refresh_client_data` safety net dead until a manual restart —
+  observed live as a central logging `refresh_client_data: LoadAndRefreshData­
+  PointData not wired` every tick with zero hub activity. A failed boot-time
+  WireHub now schedules a background retry (5 s→60 s backoff, bounded by the
+  daemon lifecycle) that re-establishes the hub once the CCU answers and wires
+  the refresh handler. The retry re-applies the hub mutators through new
+  mutex-guarded setters (`Hub.SetMutator`, `Update.SetFirmwareUpdater`,
+  `Reconciler.SetConnect`), so it does not race the running daemon.
 - **Central trapped in FAILED after connectivity returns (permanent `/health`
   503).** The central state machine permitted `FAILED → RECOVERING` / `STOPPED`
   only. When every interface reconnected *outside* an active recovery pipeline
