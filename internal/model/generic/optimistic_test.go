@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/clock"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -104,6 +105,29 @@ func withOptTimeout(d time.Duration) func(*Spec) {
 // withOptimisticDisabled skips the tracker entirely.
 func withOptimisticDisabled() func(*Spec) {
 	return func(c *Spec) { c.OptimisticDisabled = true }
+}
+
+// withClock injects a clock so timeout-rollback tests can drive the
+// rollback timer with clock.Fake.Advance instead of sleeping past a real
+// grace period — making them deterministic regardless of CI scheduling.
+func withClock(clk clock.Clock) func(*Spec) {
+	return func(c *Spec) { c.Clock = clk }
+}
+
+// waitUntil polls cond until true or a generous deadline passes. Use it
+// after advancing a fake clock: the rollback timer has fired
+// deterministically, so this only waits for the (always-runnable) rollback
+// goroutine to be scheduled — it is not a real-time race.
+func waitUntil(t *testing.T, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal(msg)
 }
 
 // sendBoolWith wraps the typed setter so tests don't need to import
@@ -258,14 +282,15 @@ func TestOptimisticSendErrorRollback(t *testing.T) {
 
 func TestOptimisticTimeoutRollback(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(50*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(50*time.Millisecond), withClock(fake))
 	dp.OnEvent(false)
 	_ = sendBool(t, dp, true)
-	// Wait past the timeout window.
-	time.Sleep(120 * time.Millisecond)
-	if dp.IsOptimistic() {
-		t.Fatal("tracker should have rolled back after timeout")
-	}
+	// Drive the fake clock past the timeout window: the rollback timer
+	// fires deterministically instead of depending on a real 50ms timer.
+	fake.Advance(60 * time.Millisecond)
+	waitUntil(t, func() bool { return !dp.IsOptimistic() },
+		"tracker should have rolled back after timeout")
 	if v, _ := dp.Value(); v != false {
 		t.Fatal("timeout rollback should restore previous value")
 	}
@@ -273,7 +298,8 @@ func TestOptimisticTimeoutRollback(t *testing.T) {
 
 func TestOptimisticTimeoutPublishesRollbackEvent(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond), withClock(fake))
 	dp.OnEvent(false)
 
 	type rollback struct {
@@ -290,7 +316,12 @@ func TestOptimisticTimeoutPublishesRollbackEvent(t *testing.T) {
 	})
 
 	_ = sendBool(t, dp, true)
-	time.Sleep(120 * time.Millisecond)
+	fake.Advance(50 * time.Millisecond)
+	waitUntil(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(got) == 1
+	}, "rollback callback must fire after timeout")
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -436,7 +467,8 @@ func TestOptimisticUpdateSubscriberSeesOptimisticThenConfirm(t *testing.T) {
 
 func TestOptimisticTimerCancelledOnConfirm(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(80*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(80*time.Millisecond), withClock(fake))
 	dp.OnEvent(false)
 
 	var rollbacks atomic.Int32
@@ -446,7 +478,7 @@ func TestOptimisticTimerCancelledOnConfirm(t *testing.T) {
 
 	_ = sendBool(t, dp, true)
 	dp.OnEvent(true) // confirm fast — should cancel timer
-	time.Sleep(150 * time.Millisecond)
+	fake.Advance(130 * time.Millisecond)
 
 	if rollbacks.Load() != 0 {
 		t.Fatal("timer must be cancelled on confirm")
@@ -505,7 +537,8 @@ func TestOptimisticConcurrentConfirms(t *testing.T) {
 
 func TestOptimisticUnsubscribeRollback(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond), withClock(fake))
 
 	var fired atomic.Bool
 	unsub := dp.OnRollback(func(_ RollbackReason, _, _, _ bool) {
@@ -514,7 +547,8 @@ func TestOptimisticUnsubscribeRollback(t *testing.T) {
 	unsub()
 
 	_ = sendBool(t, dp, true)
-	time.Sleep(120 * time.Millisecond)
+	fake.Advance(50 * time.Millisecond)
+	waitUntil(t, func() bool { return !dp.IsOptimistic() }, "tracker should have rolled back after timeout")
 
 	if fired.Load() {
 		t.Fatal("unsubscribed callback must not fire")
@@ -523,11 +557,12 @@ func TestOptimisticUnsubscribeRollback(t *testing.T) {
 
 func TestOptimisticAgeMonotonicallyIncreasing(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(5*time.Second))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(5*time.Second), withClock(fake))
 
 	_ = sendBool(t, dp, true)
 	a1 := dp.OptimisticAge()
-	time.Sleep(20 * time.Millisecond)
+	fake.Advance(20 * time.Millisecond)
 	a2 := dp.OptimisticAge()
 	if a2 <= a1 {
 		t.Fatalf("age must grow: a1=%v a2=%v", a1, a2)
@@ -540,13 +575,15 @@ func TestOptimisticAgeMonotonicallyIncreasing(t *testing.T) {
 
 func TestOptimisticPreviousAnchorRescuedOnRollbackChain(t *testing.T) {
 	w := &optWriter{}
-	dp := newFloatDP(t, w, withOptTimeout(40*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newFloatDP(t, w, withOptTimeout(40*time.Millisecond), withClock(fake))
 	dp.OnEvent(0.42) // anchor
 
 	_ = sendFloat(t, dp, 0.5)
 	_ = sendFloat(t, dp, 0.7)
 
-	time.Sleep(120 * time.Millisecond) // rollback fires
+	fake.Advance(50 * time.Millisecond)
+	waitUntil(t, func() bool { return !dp.IsOptimistic() }, "tracker should have rolled back after timeout")
 
 	if v, ok := dp.Value(); !ok || v != 0.42 {
 		t.Fatalf("Value after timeout rollback = (%v, %v), want (0.42, true)", v, ok)
@@ -557,10 +594,12 @@ func TestOptimisticRollbackWithoutPreviousValue(t *testing.T) {
 	// No OnEvent called → previousSet=false. Rollback must restore
 	// "unobserved" state without panicking.
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond), withClock(fake))
 
 	_ = sendBool(t, dp, true)
-	time.Sleep(120 * time.Millisecond)
+	fake.Advance(50 * time.Millisecond)
+	waitUntil(t, func() bool { return !dp.IsOptimistic() }, "tracker should be cleared after timeout")
 
 	if dp.IsOptimistic() {
 		t.Fatal("tracker should be cleared")
@@ -572,7 +611,8 @@ func TestOptimisticRollbackWithoutPreviousValue(t *testing.T) {
 
 func TestOptimisticRollbackFromUnobservedFiresEvent(t *testing.T) {
 	w := &optWriter{}
-	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond))
+	fake := clock.NewFake(time.Now())
+	dp := newBoolDP(t, w, withOptTimeout(40*time.Millisecond), withClock(fake))
 
 	type rec struct {
 		reason   RollbackReason
@@ -588,7 +628,12 @@ func TestOptimisticRollbackFromUnobservedFiresEvent(t *testing.T) {
 	})
 
 	_ = sendBool(t, dp, true)
-	time.Sleep(120 * time.Millisecond)
+	fake.Advance(50 * time.Millisecond)
+	waitUntil(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(rollbacks) == 1
+	}, "rollback callback must fire after timeout")
 
 	mu.Lock()
 	defer mu.Unlock()

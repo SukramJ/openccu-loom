@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
 // TestSnapshotInactiveTracker verifies Snapshot returns a zero-value when inactive.
@@ -28,10 +30,11 @@ func TestSnapshotInactiveTracker(t *testing.T) {
 // TestSnapshotActiveTrackerAge verifies Snapshot.Age is positive when sentAt is set.
 func TestSnapshotActiveTrackerAge(t *testing.T) {
 	t.Parallel()
-	tr := New[int](nil)
+	fake := clock.NewFake(time.Now())
+	tr := New[int](fake)
 	tr.Apply(1, 0, false)
-	// Give a tiny sleep to ensure age > 0.
-	time.Sleep(2 * time.Millisecond)
+	// Advance virtual time deterministically instead of sleeping.
+	fake.Advance(2 * time.Millisecond)
 	snap := tr.Snapshot()
 	if !snap.Active {
 		t.Error("should be active after Apply")

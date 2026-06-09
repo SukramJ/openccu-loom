@@ -75,24 +75,22 @@ func TestServerStartShutdown(t *testing.T) {
 func TestServerAddrUpdatedAfterStart(t *testing.T) {
 	srv := NewServer(":0", http.NotFoundHandler(), nil)
 
-	started := make(chan struct{})
-	go func() {
-		// Signal caller after a tiny delay — enough for Serve to bind.
-		time.AfterFunc(20*time.Millisecond, func() { close(started) })
-		_ = srv.Start()
-	}()
+	go func() { _ = srv.Start() }()
 
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("server did not start within 2s")
-	}
-
-	// Give the OS a moment to bind.
-	time.Sleep(30 * time.Millisecond)
-	addr := srv.Addr()
-	if addr == ":0" || addr == "" {
-		t.Fatalf("Addr still %q after Start", addr)
+	// Start() binds the listener and stores the resolved address before
+	// Serve blocks, so poll Addr() until it reflects the OS-assigned port
+	// rather than guessing the bind latency with fixed sleeps.
+	deadline := time.Now().Add(2 * time.Second)
+	var addr string
+	for {
+		addr = srv.Addr()
+		if addr != "" && addr != ":0" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("Addr still %q after Start (2s)", addr)
+		}
+		time.Sleep(2 * time.Millisecond)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
