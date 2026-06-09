@@ -50,6 +50,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Lost event under concurrent publish (event bus dispatcher handoff race).**
+  `Publish` released the `dispatch` lock via `defer` *after* `flushDeferred`
+  observed the deferred queue empty. A concurrent `Publish` whose `TryLock`
+  failed in that window enqueued its event to `deferred` but never re-checked,
+  so the event sat undrained until some future publish — effectively dropped
+  if none came. Surfaced as an intermittent macOS-CI failure
+  (`HandlerStat.Matches=999, want 1000`). The dispatcher now releases
+  `dispatch` inside `flushDeferred` while holding `mu`, and the slow path
+  attempts the take-over under the same `mu`, making release and re-acquisition
+  mutually exclusive — so a concurrently enqueued event is always drained.
 - **Endless reconnect loop on quiet CCUs (~every 180 s).** Inbound CCU
   callbacks never refreshed the per-interface callback-liveness timestamp —
   it was stamped only on reconnect. On a CCU with little spontaneous device
