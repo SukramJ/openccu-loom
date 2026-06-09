@@ -81,6 +81,19 @@ func TestPin_RecordPong_WiredInPingPongBus(t *testing.T) {
 		"Client", "RecordPong")
 }
 
+// TestPin_NotifyCallback_WiredInCallbackHandler pins that the inbound callback
+// handler stamps the per-client callback-liveness timestamp for every event.
+// Without this call the timestamp is refreshed only on reconnect, so on a
+// quiet CCU IsCallbackAlive goes stale 180 s after each reconnect, the
+// check_connection watchdog declares the channel dead, and the daemon
+// reconnects in an endless ~180 s loop. The behavioural end-to-end guard lives
+// in tests/contract/callback_liveness_contract_test.go.
+func TestPin_NotifyCallback_WiredInCallbackHandler(t *testing.T) {
+	contract.MustFindMethodCall(t,
+		"internal/central/adapter/callback_handlers.go",
+		"Client", "NotifyCallback")
+}
+
 // TestPin_KeepaliveEnablesPingPong pins that the periodic keepalive probes
 // with ping-pong tracking ON. The PONG-correlation wiring above is inert
 // unless the keepalive actually records outbound pings — the prior bug was a

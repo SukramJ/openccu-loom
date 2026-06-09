@@ -50,6 +50,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Endless reconnect loop on quiet CCUs (~every 180 s).** Inbound CCU
+  callbacks never refreshed the per-interface callback-liveness timestamp —
+  it was stamped only on reconnect. On a CCU with little spontaneous device
+  traffic, `IsCallbackAlive` therefore went stale exactly `callbackFreshness`
+  (180 s) after each reconnect, the `check_connection` watchdog declared the
+  channel dead, and a full recovery fired — re-stamping the timestamp and
+  restarting the 180 s clock, forever. Affected every interface on every
+  central (local and remote alike). `CallbackHandlers.Event` now stamps
+  liveness for every inbound callback, before the device-existence guard.
+- **PONG callbacks never correlated (ping/pong pending pile-up).** The CCU
+  echoes a ping's caller_id back as a `PONG` event on the `CENTRAL`
+  pseudo-address. Because that address is not a mirrored device,
+  `CallbackHandlers.Event`'s device-existence guard dropped the PONG before
+  it reached the ping-pong tracker, so pending PINGs grew unbounded to their
+  per-interface cap (100) and health stayed permanently *degraded* (and
+  `/health` returned 503). PONG is now routed to the tracker before the
+  device guard, closing the round-trip.
 - **Callback host is resolved per-central (multi-CCU).** The host the
   daemon advertised in `init()` for CCU push events was computed once
   globally — from `callback.public_host` or a UDP egress probe against
