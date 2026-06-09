@@ -76,7 +76,17 @@ var centralTransitions = map[hmenum.CentralState]map[hmenum.CentralState]struct{
 	},
 	hmenum.CentralStateFailed: {
 		hmenum.CentralStateRecovering: {},
-		hmenum.CentralStateStopped:    {},
+		// FAILED is recoverable, not terminal (only STOPPED is). When every
+		// interface reconnects outside an active recovery pipeline — e.g. the
+		// clients' own reconnect path, in_recovery=false — evaluate_central_state
+		// computes RUNNING/DEGRADED directly. Without these edges that
+		// transition is silently rejected and the central is trapped in FAILED
+		// (permanent /health 503, endless futile failed→running heartbeats)
+		// even though connectivity is fine. Mirrors the client state machine,
+		// where ClientStateFailed transitions back into the connect path.
+		hmenum.CentralStateRunning:  {},
+		hmenum.CentralStateDegraded: {},
+		hmenum.CentralStateStopped:  {},
 	},
 	hmenum.CentralStateStopped: {}, // terminal
 }
