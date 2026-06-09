@@ -29,7 +29,21 @@ CTX="$ROOT/packaging/ha-addon/openccu-loom"
 # Upstream release image to COPY the binary from (override the tag for local
 # smoke tests where :$VERSION is not published yet).
 UPSTREAM_IMAGE="${OPENCCU_LOOM_IMAGE:-ghcr.io/sukramj/openccu-loom}"
-BASE_TAG="${OPENCCU_LOOM_BASE_TAG:-$VERSION}"
+# Which tag of the upstream image to COPY the daemon binary from. An explicit
+# OPENCCU_LOOM_BASE_TAG always wins. Otherwise: a clean release version (e.g.
+# 1.2.3) has a matching published image, so use it; but a dev checkout's
+# `git describe` (e.g. 1.2.3-4-gabcdef / -dirty / dev) has no published image,
+# so fall back to :latest for a local smoke build. The LOCAL add-on image is
+# still tagged with the real $VERSION either way.
+if [ -n "${OPENCCU_LOOM_BASE_TAG:-}" ]; then
+  BASE_TAG="$OPENCCU_LOOM_BASE_TAG"
+elif printf '%s' "$VERSION" | grep -qE '(-g[0-9a-f]+|-dirty$|^dev$)'; then
+  BASE_TAG="latest"
+  echo "note: dev version '${VERSION}' has no published image; pulling the daemon from :latest"
+  echo "      (override with OPENCCU_LOOM_BASE_TAG=<tag>)"
+else
+  BASE_TAG="$VERSION"
+fi
 
 # Map the host arch to the Home Assistant arch name + base image. The base pins
 # mirror build.yaml; keep them in sync when bumping there.
