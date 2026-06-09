@@ -303,8 +303,11 @@ func TestCoalescerClearLeaderRetainsOwnResult(t *testing.T) {
 		}{v, err}
 	}()
 
-	// Give follower time to park.
-	time.Sleep(10 * time.Millisecond)
+	// Wait until the follower has actually registered with the coalescer
+	// (leader=1 + follower=2 callers) before clearing, so Clear()
+	// deterministically unblocks a parked follower instead of racing its
+	// registration. A fixed sleep was racy under scheduling jitter.
+	waitForCoalescerCallers(t, c, 2)
 
 	// Clear unblocks the follower.
 	c.Clear()
@@ -572,4 +575,19 @@ func TestThrottleCloseSuspendsBurstWaiters(t *testing.T) {
 	if n := tt.Suspended(); n < blocked {
 		t.Errorf("Suspended=%d, want ≥%d", n, blocked)
 	}
+}
+
+// waitForCoalescerCallers polls until the coalescer has registered at least
+// wantN total callers (leader + followers) or the deadline passes. It turns a
+// racy "sleep then assume the follower has parked" into a deterministic wait.
+func waitForCoalescerCallers(t *testing.T, c *Coalescer, wantN uint64) {
+	t.Helper()
+	deadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		if c.Stats().Total >= wantN {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d coalescer callers; got %d", wantN, c.Stats().Total)
 }

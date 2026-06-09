@@ -174,13 +174,17 @@ func TestThrottlePriorityOrder(t *testing.T) {
 		}()
 	}
 
+	// Queue each waiter and wait until it has actually parked in the
+	// priority queue (Waiting() reflects it) before queuing the next, so
+	// the heap ordering is deterministic regardless of goroutine
+	// scheduling. A fixed sleep between queue() calls was racy: under load
+	// a goroutine might not have parked yet, scrambling the dequeue order.
 	queue("low", hmenum.CommandPriorityLow)
-	// give it a moment to register so sequence numbers match intent
-	time.Sleep(5 * time.Millisecond)
+	waitForWaiters(t, tr, 1)
 	queue("high", hmenum.CommandPriorityHigh)
-	time.Sleep(5 * time.Millisecond)
+	waitForWaiters(t, tr, 2)
 	queue("critical", hmenum.CommandPriorityCritical)
-	time.Sleep(5 * time.Millisecond)
+	waitForWaiters(t, tr, 3)
 
 	// Release the initial permit; critical should admit first.
 	tr.Release()

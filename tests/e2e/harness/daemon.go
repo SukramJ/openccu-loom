@@ -63,8 +63,10 @@ type Options struct {
 	// EnableMatter is reserved for v1.1; no-op today.
 	EnableMatter bool
 
-	// StartupDeadline overrides the default 30 s wait for the
-	// /api/v1/health endpoint to start returning 200.
+	// StartupDeadline overrides the default 60 s wait for the
+	// /api/v1/health endpoint to start returning 200. When zero, the
+	// default applies and OPENCCU_LOOM_E2E_STARTUP_DEADLINE (a Go
+	// duration) can override it without a rebuild.
 	StartupDeadline time.Duration
 
 	// CheckConnectionInterval overrides the central's background
@@ -195,7 +197,18 @@ func Start(t *testing.T, opts Options) *Harness {
 
 	deadline := opts.StartupDeadline
 	if deadline == 0 {
-		deadline = 30 * time.Second
+		// Default generously: every e2e test spawns its own daemon +
+		// godevccu, and under parallel CI load the fleet-loading startup
+		// can exceed a tight budget (a loaded runner was observed taking
+		// >30s). 60s is still a meaningful "genuinely stuck" bound, not a
+		// real performance assertion. OPENCCU_LOOM_E2E_STARTUP_DEADLINE
+		// (a Go duration, e.g. "90s") overrides it without a rebuild.
+		deadline = 60 * time.Second
+		if v := os.Getenv("OPENCCU_LOOM_E2E_STARTUP_DEADLINE"); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				deadline = d
+			}
+		}
 	}
 	if err := waitForHealth(h.t, h.restAddr, deadline, h.cmdDone); err != nil {
 		t.Logf("daemon stdout:\n%s", h.stdoutBuf.String())
