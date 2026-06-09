@@ -3484,9 +3484,15 @@ components:
             `rest.v1`, `ws.broadcasts.v1`, `errors.problem_details.v1`.
             Conditional entries surface only when configured:
             `mqtt.discovery.v1`, `matter.bridge.v1`, `auth.oidc.v1`.
+
+            Open-ended on purpose: the daemon may advertise additional
+            capabilities (e.g. `system.restart.supervised.v1`, `mcp.v1`)
+            as features are added. Clients MUST treat this as a forward-
+            compatible string set and ignore values they do not recognise
+            — never reject an `Info` payload because of an unknown entry.
           items:
             type: string
-            enum:
+            examples:
               - rest.v1
               - ws.broadcasts.v1
               - errors.problem_details.v1
