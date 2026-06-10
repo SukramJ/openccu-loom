@@ -77,6 +77,38 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 	}
 }
 
+// ParameterTranslator resolves a locale-aware parameter label. The
+// (label, found) result distinguishes "no entry" from an explicit-empty
+// translation — the "primary parameter" marker in the embedded
+// translation_custom catalogue.
+type ParameterTranslator interface {
+	ChannelTypedParameterLabelOk(channelType, parameter string) (string, bool)
+}
+
+// TranslatedDataPointLabel resolves the locale-aware entity label for a
+// (channel, parameter) and whether the label is omitted (the parameter
+// is flagged "primary" → consumers collapse the entity name to the
+// device name alone).
+//
+// It mirrors the MQTT EventBridge resolution (internal/central/adapter
+// eventbridge.go): look up the channel-typed translation, treat an
+// explicit-empty translation as the primary marker, and fold the
+// translation into the channel-aware name via [BuildDataPointName].
+// Both the EventBridge (MQTT discovery) and the REST data-point handler
+// feed the returned label/flag into [naming.EntityDisplayName] so every
+// north-bound consumer emits identical entity names.
+func TranslatedDataPointLabel(
+	channel *Channel, parameter, channelType string, labels ParameterTranslator,
+) (label string, labelOmitted bool) {
+	translation, translated := "", false
+	if labels != nil {
+		translation, translated = labels.ChannelTypedParameterLabelOk(channelType, parameter)
+	}
+	labelOmitted = translated && translation == ""
+	label = BuildDataPointName(channel, parameter, translation).TranslatedName()
+	return label, labelOmitted
+}
+
 // baseChannelName implements
 // returns the operator-assigned channel name when it is a real label,
 // otherwise the synthetic `f"{device.name}:{ch.no}"` form.

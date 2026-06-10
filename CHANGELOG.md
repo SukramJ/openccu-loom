@@ -38,6 +38,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`OPENCCU_LOOM_CALLBACK_PUBLIC_HOST`** env override for
   `callback.public_host` — there was an env knob for the callback *bind*
   host but none for the *advertised* host.
+- **REST data-point summaries carry `translated_name` + `label_omitted`.**
+  `GET /api/v1/devices/{addr}/cdps` (and the snapshot / values-batch
+  surfaces) now expose the same per-entity display name the MQTT discovery
+  builder emits — both resolve through a single shared primitive
+  (`naming.EntityDisplayName`), so a REST drop-in and the MQTT plane spawn
+  Home Assistant entities with identical names. `label_omitted` mirrors the
+  "primary parameter" marker (HA collapses the entity name to the device
+  name alone; MQTT emits `name: null`).
 
 ### Changed
 
