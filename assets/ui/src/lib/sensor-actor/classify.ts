@@ -175,14 +175,19 @@ function formatNumber(n: number, dp: DataPointSummary): string {
 }
 
 /**
- * Human-readable label for a DP. Uses parameter_label when the CCU
- * shipped one, otherwise title-cases the parameter name.
+ * Human-readable label for a DP row. The server resolves the caption
+ * (`parameter_label`: locale-aware translation, else title-cased
+ * parameter) through the shared naming primitives — render it
+ * verbatim so all north-bound surfaces agree. The raw parameter is
+ * only a transport fallback for responses that predate the field.
  */
 export function dpLabel(dp: DataPointSummary): string {
   if (dp.parameter_label && dp.parameter_label.trim()) return dp.parameter_label;
-  return titleCase(dp.parameter);
+  return dp.parameter;
 }
 
+/** Title-cases enum *value* tokens (`IDLE_OFF` → `Idle Off`). Values
+ * have no server-resolved caption — only parameter labels do. */
 function titleCase(s: string): string {
   return s
     .toLowerCase()

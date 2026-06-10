@@ -376,6 +376,20 @@ func channelTypedParameterLabel(labels ParameterLabeler, channelType, paramName 
 	return labels.ParameterLabel(paramName)
 }
 
+// resolvedParameterLabel renders the ready-to-display caption for a
+// parameter row: the channel-typed translation when one exists,
+// otherwise the title-cased parameter via the shared naming
+// primitive — so clients (the SPA in particular) never re-derive a
+// fallback label themselves. Unlike `translated_name` the result
+// always carries text; the "primary parameter" collapse semantics
+// live in `label_omitted`, not here.
+func resolvedParameterLabel(labels ParameterLabeler, channelType, paramName string) string {
+	if s := channelTypedParameterLabel(labels, channelType, paramName); s != "" {
+		return s
+	}
+	return naming.TitleCaseParameter(paramName)
+}
+
 // SetValueRequest is the body for `PUT .../value`.
 type SetValueRequest struct {
 	Value    any    `json:"value"`
@@ -724,8 +738,9 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// Channel-typed lookup wins when the labeler supports it — so e.g.
 	// `POWER` on `ENERGIE_METER_TRANSMITTER` resolves to "Wirkleistung"
 	// instead of the bare-parameter "Leistung". Falls back to the
-	// un-typed translation when the channel-type entry is missing.
-	s.ParameterLabel = channelTypedParameterLabel(labels, channelType, s.Parameter)
+	// un-typed translation, then to the title-cased parameter, so the
+	// field is always ready to render.
+	s.ParameterLabel = resolvedParameterLabel(labels, channelType, s.Parameter)
 	// TranslatedName + LabelOmitted resolve through the same primitives
 	// as the MQTT discovery builder (device.TranslatedDataPointLabel →
 	// naming.EntityDisplayName), so REST and MQTT consumers spawn

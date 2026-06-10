@@ -21,6 +21,7 @@
   import { toastStore } from "$lib/stores/toast.svelte";
 
   import { composeTile, type ControlSpec } from "./composer";
+  import { dpLabel } from "./classify";
   import { lifecycleTint } from "./state-color";
 
   import NumericReadout from "./readouts/NumericReadout.svelte";
@@ -108,7 +109,7 @@
   function writeNumber(dp: DataPointSummary, next: number) {
     api.setValue(address, channelNo, dp.parameter, next).catch((err) => {
       toastStore.error(
-        t("sensor_actor.action_failed", { name: dp.parameter_label || dp.parameter }),
+        t("sensor_actor.action_failed", { name: dpLabel(dp) }),
         friendlyError(err, t),
       );
     });
@@ -119,7 +120,7 @@
     const value: unknown = idx !== undefined && idx >= 0 ? idx : next;
     api.setValue(address, channelNo, dp.parameter, value).catch((err) => {
       toastStore.error(
-        t("sensor_actor.action_failed", { name: dp.parameter_label || dp.parameter }),
+        t("sensor_actor.action_failed", { name: dpLabel(dp) }),
         friendlyError(err, t),
       );
     });
@@ -212,7 +213,7 @@
               {address}
               channel={channelNo}
               parameter={a.dp.parameter}
-              label={a.dp.parameter_label || a.dp.parameter}
+              label={dpLabel(a.dp)}
               icon="⟳"
             />
           {:else}
@@ -220,7 +221,7 @@
               {address}
               channel={channelNo}
               dp={a.dp}
-              label={a.dp.parameter_label || a.dp.parameter}
+              label={dpLabel(a.dp)}
               icon="⏱"
             />
           {/if}
@@ -236,13 +237,13 @@
       {address}
       channel={channelNo}
       parameter={c.dp.parameter}
-      label={c.dp.parameter_label || c.dp.parameter}
+      label={dpLabel(c.dp)}
       value={c.dp.value === true}
     />
   {:else if c.kind === "slider"}
     <div class="flex min-w-[160px] flex-1 items-center gap-2">
       <span class="text-xs text-[var(--ha-secondary-text-color)]">
-        {c.dp.parameter_label || c.dp.parameter}
+        {dpLabel(c.dp)}
       </span>
       <ControlSlider
         value={typeof c.dp.value === "number" ? c.dp.value : (c.min ?? 0)}
@@ -256,14 +257,14 @@
     <ControlEnumSelect
       value={typeof c.dp.value === "number" ? c.dp.value : c.dp.value as string | undefined}
       options={c.options}
-      label={c.dp.parameter_label || c.dp.parameter}
+      label={dpLabel(c.dp)}
       onChange={(v) => writeEnum(c.dp, v)}
     />
   {:else if c.kind === "dropdown" && c.options}
     <ControlEnumSelect
       value={typeof c.dp.value === "number" ? c.dp.value : c.dp.value as string | undefined}
       options={c.options}
-      label={c.dp.parameter_label || c.dp.parameter}
+      label={dpLabel(c.dp)}
       onChange={(v) => writeEnum(c.dp, v)}
     />
   {:else}
@@ -272,7 +273,7 @@
       {address}
       channel={channelNo}
       dp={c.dp}
-      label={c.dp.parameter_label || c.dp.parameter}
+      label={dpLabel(c.dp)}
       icon="✎"
     />
   {/if}

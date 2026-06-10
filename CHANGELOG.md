@@ -63,6 +63,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **REST `parameter_label` is now always ready to render.** The field
+  carried the locale-aware channel-typed translation *or empty*, leaving
+  the fallback to each client — and the SPA rendered raw parameter keys
+  (`RSSI_DEVICE`) in tiles, readouts, and the channel status badge when
+  no translation existed. The server now resolves the title-cased
+  fallback itself (`Rssi Device`) via the shared naming primitive, on
+  both `DataPointSummary.parameter_label` and the Matter exposure
+  candidates' `parameter_label`; the SPA renders the field verbatim
+  through a single `dpLabel()` helper (its client-side title-casing
+  copy is gone) and its API types gained `translated_name` /
+  `label_omitted`. `assets/openapi.yaml` documents the field contract.
 - **Log download offers larger sizes.** The diagnostics log viewer's download
   selector now offers 2000 and 5000 lines in addition to 100 / 200 / 500 /
   1000. The backend already served any `limit` up to the live-log ring

@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
+  import { dpLabel } from "../classify";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
 
@@ -50,7 +51,7 @@
   }
 
   const display = $derived(boolText(dp.value));
-  const label = $derived(dp.parameter_label || dp.parameter);
+  const label = $derived(dpLabel(dp));
   const age = $derived(showAge ? formatAge(dp.value_age_seconds) : "");
 </script>
 

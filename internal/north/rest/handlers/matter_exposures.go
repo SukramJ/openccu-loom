@@ -114,7 +114,7 @@ func MatterExposable(provider MatterCandidateProvider, store MatterExposureStore
 				ChannelNo:       c.Key.ChannelNo,
 				DPKind:          string(c.Key.DPKind),
 				DPKey:           c.Key.DPKey,
-				ParameterLabel:  channelTypedParameterLabel(labels, c.ChannelType, c.Key.DPKey),
+				ParameterLabel:  resolvedParameterLabel(labels, c.ChannelType, c.Key.DPKey),
 				DisplayName:     c.DisplayName,
 				Mappable:        c.Verdict.State.String(),
 				DeviceType:      c.Verdict.DeviceType,

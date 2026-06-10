@@ -14,6 +14,7 @@
   import { onMount } from "svelte";
   import { api, friendlyError } from "$lib/api/client";
   import type { DataPointSummary } from "$lib/api/types";
+  import { dpLabel } from "$lib/sensor-actor/classify";
   import { subscribe } from "$lib/stores/events.svelte";
   import { STATUS_HEADLINE_KEYS } from "$lib/quickcontrol/domain";
   import { t } from "$lib/i18n";
@@ -220,7 +221,7 @@
             ? ` · zuletzt vor ${formatAge(dp.value_age_seconds)}`
             : ""}
           <li class="flex items-center justify-between gap-2">
-            <span class="truncate">{dp.parameter_label ?? dp.parameter}</span>
+            <span class="truncate">{dpLabel(dp)}</span>
             <span
               class="text-[var(--ha-primary-text-color)]"
               class:opacity-40={!dp.observed}

@@ -99,7 +99,17 @@ export type DataPointSource = "unobserved" | "cache" | "live" | "stale";
 
 export type DataPointSummary = {
   parameter: string;
+  /** Ready-to-display row caption: locale-aware translation, else
+   *  title-cased parameter. Server-resolved through the shared naming
+   *  primitives — render verbatim (see `dpLabel()` in classify.ts). */
   parameter_label?: string;
+  /** Locale-aware per-entity name, identical to the MQTT discovery
+   *  `name` field (channel-composed, device prefix stripped). Empty
+   *  when `label_omitted` is true. */
+  translated_name?: string;
+  /** True when the parameter is flagged "primary" — entity-naming
+   *  consumers collapse the name to the device name alone. */
+  label_omitted?: boolean;
   value: unknown;
   observed: boolean;
   modified_at?: string;

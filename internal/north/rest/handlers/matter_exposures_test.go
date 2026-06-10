@@ -708,6 +708,55 @@ func TestMatterExposable_SortOrder(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// MatterExposable: ParameterLabel title-case fallback
+// ---------------------------------------------------------------------------
+
+// TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil verifies that
+// when no labeler is wired, each candidate row carries the title-cased dp_key
+// as parameter_label so the SPA always has a caption without requiring a second
+// lookup. This pins the resolvedParameterLabel contract for the Matter path.
+func TestMatterExposable_ParameterLabel_TitleCasedWhenLabelerIsNil(t *testing.T) {
+	t.Parallel()
+	provider := &fakeCandidateProvider{
+		candidates: []eligibility.Candidate{
+			{
+				Key: matterstore.EndpointKey{
+					CentralName:   "ccu-01",
+					DeviceAddress: "DEV001",
+					ChannelNo:     1,
+					DPKind:        matterstore.DPKindGeneric,
+					DPKey:         "RSSI_DEVICE",
+				},
+				ChannelType: "MAINTENANCE",
+				DisplayName: "Rssi Device",
+				Verdict:     eligibility.Verdict{State: eligibility.StateMappable},
+			},
+		},
+	}
+	store := &fakeExposureStore{}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/matter/exposable", http.NoBody)
+	w := httptest.NewRecorder()
+
+	// nil labels: resolvedParameterLabel must fall back to title-case.
+	MatterExposable(provider, store, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body MatterExposureList
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(body.Items))
+	}
+	// "RSSI_DEVICE" must title-case to "Rssi Device".
+	if body.Items[0].ParameterLabel != "Rssi Device" {
+		t.Errorf("parameter_label = %q, want %q (title-case fallback)", body.Items[0].ParameterLabel, "Rssi Device")
+	}
+}
+
 // --- typeFromTopic ---
 
 func TestTypeFromTopic_NoPrefix_ReturnsTopic(t *testing.T) {

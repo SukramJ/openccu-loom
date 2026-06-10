@@ -3713,7 +3713,18 @@ components:
       required: [parameter, observed, operations]
       properties:
         parameter: { type: string }
-        parameter_label: { type: string }
+        parameter_label:
+          type: string
+          description: |
+            Ready-to-display caption for the parameter row: the
+            locale-aware channel-typed translation when one exists,
+            otherwise the title-cased parameter (`RSSI_DEVICE` →
+            `Rssi Device`). Always non-empty; clients render it
+            verbatim instead of deriving their own fallback. Unlike
+            `translated_name` it carries text even when
+            `label_omitted` is true — the "primary parameter"
+            collapse is an entity-naming concern, row captions keep
+            their label.
         value: {}
         observed: { type: boolean }
         modified_at:
@@ -4206,6 +4217,13 @@ components:
           type: string
           enum: [custom, generic, calculated, combined, measurement]
         dp_key: { type: string }
+        parameter_label:
+          type: string
+          description: |
+            Ready-to-display caption for the data point behind
+            `dp_key`: locale-aware channel-typed translation when one
+            exists, otherwise the title-cased key. Same resolution as
+            `DataPointSummary.parameter_label`.
         display_name: { type: string }
         enabled: { type: boolean }
         friendly_name: { type: string }

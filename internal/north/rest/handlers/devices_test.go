@@ -1090,3 +1090,116 @@ func (m *minimalDP) ParameterData() hmproto.ParameterData     { return hmproto.P
 func (m *minimalDP) RawValue() (any, bool)                    { return nil, false }
 func (m *minimalDP) ModifiedAt() time.Time                    { return time.Time{} }
 func (m *minimalDP) OnAnyUpdate(_ func(old, next any)) func() { return func() {} }
+
+// ---------------------------------------------------------------------------
+// resolvedParameterLabel
+// ---------------------------------------------------------------------------
+
+// TestResolvedParameterLabel_ChannelTypedLabelWins verifies that when
+// the labeler has a channel-type-specific entry it is returned directly,
+// without consulting the title-case fallback.
+func TestResolvedParameterLabel_ChannelTypedLabelWins(t *testing.T) {
+	t.Parallel()
+	lab := &stubChannelTypedLabeler{
+		ctpLabel:   map[string]string{"POWER": "Wirkleistung"},
+		paramLabel: "Power",
+	}
+	got := resolvedParameterLabel(lab, "ENERGIE_METER_TRANSMITTER", "POWER")
+	if got != "Wirkleistung" {
+		t.Errorf("resolvedParameterLabel: got %q, want %q", got, "Wirkleistung")
+	}
+}
+
+// TestResolvedParameterLabel_BareParamLabelUsed verifies that when there is no
+// channel-type-specific entry but the bare-parameter translation is present, it
+// is returned instead of the title-case fallback.
+func TestResolvedParameterLabel_BareParamLabelUsed(t *testing.T) {
+	t.Parallel()
+	lab := &stubChannelTypedLabeler{
+		ctpLabel:   map[string]string{},
+		paramLabel: "State",
+	}
+	got := resolvedParameterLabel(lab, "SWITCH", "STATE")
+	if got != "State" {
+		t.Errorf("resolvedParameterLabel: got %q, want %q (bare param fallback)", got, "State")
+	}
+}
+
+// TestResolvedParameterLabel_NoTranslation_TitleCasedFallback verifies that
+// when neither the channel-typed nor the bare-parameter translation is present,
+// the function returns the title-cased parameter name so the field is never empty.
+func TestResolvedParameterLabel_NoTranslation_TitleCasedFallback(t *testing.T) {
+	t.Parallel()
+	// Both lookups miss — paramLabel is empty, ctpLabel is empty.
+	lab := &stubChannelTypedLabeler{
+		ctpLabel:   map[string]string{},
+		paramLabel: "",
+	}
+	got := resolvedParameterLabel(lab, "MAINTENANCE", "RSSI_DEVICE")
+	if got != "Rssi Device" {
+		t.Errorf("resolvedParameterLabel: got %q, want %q (title-case fallback)", got, "Rssi Device")
+	}
+}
+
+// TestResolvedParameterLabel_NilLabeler_TitleCasedFallback verifies that a nil
+// labeler triggers the title-case fallback so the field is always non-empty.
+func TestResolvedParameterLabel_NilLabeler_TitleCasedFallback(t *testing.T) {
+	t.Parallel()
+	got := resolvedParameterLabel(nil, "MAINTENANCE", "RSSI_DEVICE")
+	if got != "Rssi Device" {
+		t.Errorf("resolvedParameterLabel(nil): got %q, want %q", got, "Rssi Device")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// toDataPointSummary: ParameterLabel is never empty
+// ---------------------------------------------------------------------------
+
+// TestToDataPointSummary_ParameterLabel_TitleCasedWhenUntranslated verifies that
+// when the labeler cannot resolve a translation, ParameterLabel falls back to
+// the title-cased parameter name rather than the empty string. This pins the
+// contract that the field is always ready to render for any parameter.
+func TestToDataPointSummary_ParameterLabel_TitleCasedWhenUntranslated(t *testing.T) {
+	t.Parallel()
+	// Labeler with empty bare-parameter label and no channel-typed entry.
+	lab := &stubChannelTypedLabeler{
+		ctpLabel:   map[string]string{},
+		paramLabel: "",
+	}
+	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
+	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"})
+
+	// "STATE" → "State"
+	if s.ParameterLabel != "State" {
+		t.Errorf("ParameterLabel = %q, want %q for untranslated parameter", s.ParameterLabel, "State")
+	}
+}
+
+// TestToDataPointSummary_ParameterLabel_UsesChannelTypedLabel verifies that when
+// the labeler has a channel-type-specific entry, ParameterLabel carries that value.
+func TestToDataPointSummary_ParameterLabel_UsesChannelTypedLabel(t *testing.T) {
+	t.Parallel()
+	lab := &stubChannelTypedLabeler{
+		ctpLabel:   map[string]string{"STATE": "Schaltzustand"},
+		paramLabel: "State",
+	}
+	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
+	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"})
+
+	if s.ParameterLabel != "Schaltzustand" {
+		t.Errorf("ParameterLabel = %q, want %q (channel-typed label)", s.ParameterLabel, "Schaltzustand")
+	}
+}
+
+// TestToDataPointSummary_ParameterLabel_NilLabeler_TitleCasedFallback verifies
+// that a nil labeler still produces a non-empty ParameterLabel via the
+// title-case fallback — so the JSON field is always present for clients.
+func TestToDataPointSummary_ParameterLabel_NilLabeler_TitleCasedFallback(t *testing.T) {
+	t.Parallel()
+	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
+
+	if s.ParameterLabel != "State" {
+		t.Errorf("ParameterLabel = %q with nil labeler, want %q (title-case fallback)", s.ParameterLabel, "State")
+	}
+}
