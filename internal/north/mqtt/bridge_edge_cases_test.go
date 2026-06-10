@@ -2655,25 +2655,6 @@ func TestCustomDPSlotForEventFillsAddressFromEvent(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// titleCaseParameter — additional edge cases not covered elsewhere.
-// ---------------------------------------------------------------------------
-
-func TestTitleCaseParameterEdgeCases(t *testing.T) {
-	t.Parallel()
-	// Double underscores produce an empty word that should be skipped.
-	got := titleCaseParameter("SET__POINT")
-	// Double underscore → middle word is empty → skipped.
-	if got == "" {
-		t.Fatalf("expected non-empty result for SET__POINT, got %q", got)
-	}
-	// Single lowercase letter.
-	got2 := titleCaseParameter("x")
-	if got2 != "X" {
-		t.Errorf("titleCaseParameter(\"x\") = %q, want %q", got2, "X")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Event.descDefault — 0 % covered.
 // The method returns d.Default when Descriptor is a *pload.GenericConfig,
 // nil when the Descriptor is nil or a different ConfigPayload type.

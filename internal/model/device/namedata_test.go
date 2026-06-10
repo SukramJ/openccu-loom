@@ -42,34 +42,6 @@ func makeDevice(name, model, address string) *Device {
 }
 
 // ---------------------------------------------------------------------------
-// titleCaseParameter
-// ---------------------------------------------------------------------------
-
-func TestTitleCaseParameter(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		input string
-		want  string
-	}{
-		{"", ""},
-		{"STATE", "State"},
-		{"RSSI_DEVICE", "Rssi Device"},
-		{"SET_POINT_TEMPERATURE", "Set Point Temperature"},
-		{"LEVEL_2", "Level 2"},
-		{"LOW_BAT", "Low Bat"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.input, func(t *testing.T) {
-			t.Parallel()
-			got := titleCaseParameter(tc.input)
-			if got != tc.want {
-				t.Fatalf("titleCaseParameter(%q) = %q, want %q", tc.input, got, tc.want)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // stripChannelAddressSuffix
 // ---------------------------------------------------------------------------
 

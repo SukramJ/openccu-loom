@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"unicode"
 
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -944,29 +943,6 @@ func entityName(ev Event) any {
 		return nil
 	}
 	return name
-}
-
-// titleCaseParameter mirrors Python's `str.title().replace("_", " ")`
-// for HM parameter names: each underscore-delimited segment becomes
-// title-cased and joined with spaces. Numeric segments stay as-is.
-//
-//	"RSSI_DEVICE" → "Rssi Device"
-//	"SET_POINT_TEMPERATURE" → "Set Point Temperature"
-//	"LEVEL_2" → "Level 2"
-func titleCaseParameter(parameter string) string {
-	if parameter == "" {
-		return ""
-	}
-	parts := strings.Split(parameter, "_")
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		runes := []rune(strings.ToLower(p))
-		runes[0] = unicode.ToUpper(runes[0])
-		parts[i] = string(runes)
-	}
-	return strings.Join(parts, " ")
 }
 
 // haDeviceFields is the closed set of keys HA accepts inside an MQTT

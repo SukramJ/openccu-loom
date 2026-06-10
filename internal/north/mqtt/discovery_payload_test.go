@@ -322,24 +322,6 @@ func TestDiscoveryNameTitleCaseFallback(t *testing.T) {
 	}
 }
 
-// TestTitleCaseParameter pins the canonical mappings so future
-// parameters with numeric segments or empty inputs don't regress.
-func TestTitleCaseParameter(t *testing.T) {
-	cases := map[string]string{
-		"":                      "",
-		"STATE":                 "State",
-		"RSSI_DEVICE":           "Rssi Device",
-		"SET_POINT_TEMPERATURE": "Set Point Temperature",
-		"LEVEL_2":               "Level 2",
-		"LOW_BAT":               "Low Bat",
-	}
-	for in, want := range cases {
-		if got := titleCaseParameter(in); got != want {
-			t.Errorf("titleCaseParameter(%q)=%q want %q", in, got, want)
-		}
-	}
-}
-
 func TestDiscoveryFallbackWithoutDeviceObject(t *testing.T) {
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
 	_, _, _, buf, ok := db.Build(Event{

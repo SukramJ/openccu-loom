@@ -130,19 +130,6 @@ func TestHelpTextNilResolver(t *testing.T) {
 	}
 }
 
-// TestTitleCase exercises the unexported titleCase helper for the
-// empty-string and normal paths.
-func TestTitleCase(t *testing.T) {
-	t.Parallel()
-
-	if got := titleCase(""); got != "" {
-		t.Fatalf("titleCase(\"\") = %q, want empty", got)
-	}
-	if got := titleCase("hello"); got != "Hello" {
-		t.Fatalf("titleCase(\"hello\") = %q, want Hello", got)
-	}
-}
-
 // TestHumanizeEmpty verifies the empty-string short-circuit.
 func TestHumanizeEmpty(t *testing.T) {
 	t.Parallel()

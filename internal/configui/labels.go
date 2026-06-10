@@ -4,8 +4,7 @@
 package configui
 
 import (
-	"strings"
-	"unicode"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
 // TranslationProvider is the minimal interface a label resolver
@@ -114,23 +113,9 @@ func (r *LabelResolver) Resolve(parameter, channelType string) string {
 
 // Humanize converts a SCREAMING_SNAKE_CASE parameter id to a Title-
 // Cased label. Exposed because consumers without a resolver
-// occasionally need the same fallback formatting.
+// occasionally need the same fallback formatting. Delegates to the
+// repo-wide title-casing primitive so config-form fallback labels and
+// north-bound entity-name fallbacks can never drift apart.
 func Humanize(id string) string {
-	if id == "" {
-		return ""
-	}
-	parts := strings.Split(id, "_")
-	for i, p := range parts {
-		parts[i] = titleCase(strings.ToLower(p))
-	}
-	return strings.Join(parts, " ")
-}
-
-func titleCase(s string) string {
-	if s == "" {
-		return s
-	}
-	r := []rune(s)
-	r[0] = unicode.ToUpper(r[0])
-	return string(r)
+	return naming.TitleCaseParameter(id)
 }
