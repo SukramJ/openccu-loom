@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -67,6 +68,31 @@ func friendlyName(dev *device.Device, ch *device.Channel, paramSuffix string) st
 	}
 	label := strings.Join(parts, " ")
 	return truncateUTF8(label, 32)
+}
+
+// parameterSuffix resolves the parameter-level display label embedded
+// as the [friendlyName] suffix of measurement sub-endpoints. It routes
+// through the same primitives as the MQTT discovery builder and the
+// REST data-point handler ([device.TranslatedParameterLabel] →
+// [naming.EntityDisplayName]) so the suffix matches the entity name
+// those surfaces emit for the same data point: locale-aware OCCU
+// translation first, title-cased parameter as fallback.
+//
+// A parameter flagged "primary" (explicit-empty translation) yields an
+// empty suffix — the endpoint then carries the device + channel name
+// alone, mirroring how MQTT / REST collapse the entity name to the
+// device name for primary parameters.
+func (a *Assembler) parameterSuffix(ch *device.Channel, parameter string) string {
+	channelType := ""
+	if ch != nil {
+		channelType = ch.Type
+	}
+	translation, labelOmitted := device.TranslatedParameterLabel(parameter, channelType, a.cfg.Labels)
+	name, omitted := naming.EntityDisplayName(translation, labelOmitted, parameter)
+	if omitted {
+		return ""
+	}
+	return name
 }
 
 // equalOrPrefix reports whether a and b are equal or one is a

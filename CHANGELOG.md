@@ -8,6 +8,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Matter NodeLabel suffixes share the entity display-name resolution.**
+  Measurement sub-endpoints previously embedded the raw parameter key in
+  their `BridgedDeviceBasicInformation.NodeLabel`
+  (`"Wohnzimmer Kanal 1 (TEMPERATURE)"`). The assembler now routes the
+  suffix through the same primitives as the MQTT discovery builder and
+  the REST data-point handler (`device.TranslatedParameterLabel` →
+  `naming.EntityDisplayName`), bound to the daemon locale
+  (`locale` config key): translated parameters render their OCCU label
+  (`"… (Temperatur)"`), untranslated ones fall back to the title-cased
+  parameter (`"… (Temperature)"`), and "primary" parameters drop the
+  suffix entirely — matching how MQTT/REST collapse the entity name to
+  the device name. All three north-bound surfaces now resolve
+  per-parameter display names from the same source of truth.
+
 - **Home Assistant add-on.** OpenCCU-Loom can now be installed as a Home
   Assistant add-on, a third distribution channel alongside the Docker image
   and the CCU/RaspberryMatic add-on. The repository itself doubles as a HA

@@ -116,7 +116,7 @@ func TestStartMatterBridge_DisabledReturnsNil(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := t.Context()
 
-	if bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger); bundle != nil {
+	if bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger); bundle != nil {
 		t.Error("expected nil bundle when Matter is disabled")
 	}
 }
@@ -136,7 +136,7 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle when Matter is enabled")
 	}
@@ -170,7 +170,7 @@ func TestStartMatterBridge_PASEDisabledByDefault(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle")
 	}
@@ -200,7 +200,7 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle; PASE adapter construction may have failed — check logs:\n" + buf.String())
 	}
@@ -325,7 +325,7 @@ func TestStartMatterBridge_CASEArmedByDefault(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle")
 	}
@@ -358,7 +358,7 @@ func TestStartMatterBridge_CASEArmedWhenConfigured(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), logger)
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle; CASE adapter construction may have failed — check logs:\n" + buf.String())
 	}

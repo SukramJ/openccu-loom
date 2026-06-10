@@ -31,6 +31,14 @@ type Config struct {
 	// [interfaces.MatterMeasurementSource] (but not MatterEndpointSource)
 	// produce standalone sensor endpoints. Off by default.
 	IncludeMeasurements bool
+	// Labels resolves the locale-aware parameter label embedded as the
+	// NodeLabel suffix of measurement sub-endpoints, pre-bound to the
+	// daemon locale. Shares [device.TranslatedParameterLabel] +
+	// [naming.EntityDisplayName] with the MQTT discovery builder and
+	// the REST data-point handler so all three north-bound surfaces
+	// render the same per-parameter display name. Nil is tolerated —
+	// the suffix then falls back to the title-cased parameter.
+	Labels device.ParameterTranslator
 }
 
 // Validate returns nil when the config is internally consistent.
@@ -454,7 +462,7 @@ func (a *Assembler) makeMeasurementEndpoint(
 		ID:            id,
 		DeviceType:    deviceType,
 		Reachable:     dev.Available(),
-		FriendlyName:  friendlyName(dev, ch, key),
+		FriendlyName:  friendlyName(dev, ch, a.parameterSuffix(ch, key)),
 		BridgedDevice: dev,
 		Channel:       ch,
 		Source:        nil,

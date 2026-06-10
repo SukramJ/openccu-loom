@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/endpoint"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im/subscription"
@@ -115,6 +116,12 @@ type Config struct {
 	// DPs. Off by default; operators enable it via the config UI or
 	// daemon config flag.
 	IncludeMeasurements bool
+
+	// Labels passes [endpoint.Config.Labels] through to the assembler:
+	// the daemon-locale-bound parameter translator used for the
+	// NodeLabel suffix of measurement sub-endpoints. Nil is tolerated
+	// (title-cased parameter fallback).
+	Labels device.ParameterTranslator
 }
 
 // validate reports whether the config carries every required field.
@@ -402,6 +409,7 @@ func New(s endpoint.Store, snap Snapshotter, advertiser mdns.Advertiser, cfg Con
 		ProductID:           cfg.ProductID,
 		NodeLabel:           cfg.NodeLabel,
 		IncludeMeasurements: cfg.IncludeMeasurements,
+		Labels:              cfg.Labels,
 	}, logger)
 	if err != nil {
 		return nil, fmt.Errorf("bridge: assembler: %w", err)

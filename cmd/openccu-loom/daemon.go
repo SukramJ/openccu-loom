@@ -135,11 +135,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	easymode := arch.easymode
 	profiles := arch.profiles
 
+	// Daemon-locale-bound parameter translator — the shared label
+	// source for MQTT discovery names and the Matter NodeLabel suffix.
+	parameterLabels := adapter.NewParameterLabelAdapter(translations, cfg.Locale)
+
 	bridge := adapter.NewEventBridge(reg, wsHub, mqttWiring).
 		WithVisibility(visFilter).
-		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(
-			adapter.NewParameterLabelAdapter(translations, cfg.Locale),
-		))
+		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(parameterLabels))
 	bridge.Start(ctx)
 	defer bridge.Stop()
 
@@ -316,7 +318,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// the UDP listener, assemble the endpoint topology, and publish
 	// the operational mDNS record. Failure here never aborts the
 	// daemon — the bridge is best-effort until GA.
-	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, healthTracker, logger, wsHub)
+	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, healthTracker, parameterLabels, logger, wsHub)
 	defer matterStop()
 	availClosers = append(availClosers, matterAvailClosers...)
 	centralLinksDomain := adapter.NewCentralLinksDomain(reg, valueWriter)

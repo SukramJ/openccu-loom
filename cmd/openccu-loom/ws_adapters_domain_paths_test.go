@@ -310,7 +310,7 @@ func TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping concurrent mode test")
 	}
@@ -370,7 +370,7 @@ func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping RevokeFabric live test")
 	}

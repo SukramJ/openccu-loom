@@ -59,7 +59,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs_DoesNotPanic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -82,7 +82,7 @@ func TestStartMatterBridge_ConcurrentPairings_Armed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -104,7 +104,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		bundle.stop()
 		t.Error("expected nil bundle when DB open fails")
@@ -115,7 +115,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 
 func TestStartMatterBridge_NilCfg_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	bundle := startMatterBridge(context.Background(), nil, nil, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil for nil cfg")
 	}
@@ -125,7 +125,7 @@ func TestStartMatterBridge_Disabled_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = false
-	bundle := startMatterBridge(context.Background(), cfg, nil, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), cfg, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil when matter disabled")
 	}
@@ -148,7 +148,7 @@ func TestStartMatterBridge_EphemeralWindow_ConcurrentPairings(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -172,7 +172,7 @@ func TestStartMatterBridge_EphemeralWindow_Singleton(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -195,7 +195,7 @@ func TestStartMatterBridge_DefaultDataDir_NotEmpty(t *testing.T) {
 
 	// May succeed or fail (depends on ./var writeability in test sandbox).
 	// Either way must not panic.
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Cleanup(bundle.stop)
 	}
@@ -218,7 +218,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -269,7 +269,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -623,7 +623,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 	innerCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(innerCtx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(innerCtx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

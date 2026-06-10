@@ -87,7 +87,7 @@ func TestAnnouncePersistedFabric_EmptyStore_IsNoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.Default())
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.Default())
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping empty-store test")
 	}

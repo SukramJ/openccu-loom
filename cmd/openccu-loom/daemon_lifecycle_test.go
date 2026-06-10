@@ -676,7 +676,7 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -789,7 +789,7 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

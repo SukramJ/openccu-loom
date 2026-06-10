@@ -5,12 +5,43 @@
 package endpoint
 
 import (
+	"context"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
+
+// minimalStore is the smallest valid [Store] for tests that only need
+// endpoint.New to succeed — it returns ErrEndpointNotFound for every
+// lookup and assigns sequential IDs on upsert.
+type minimalStore struct {
+	nextID uint16
+}
+
+func newMinimalStore() *minimalStore { return &minimalStore{nextID: 2} }
+
+func (s *minimalStore) GetEndpoint(_ context.Context, _ store.EndpointKey) (store.EndpointRecord, error) {
+	return store.EndpointRecord{}, store.ErrEndpointNotFound
+}
+
+func (s *minimalStore) UpsertEndpointAssigning(_ context.Context, rec store.EndpointRecord) (uint16, error) {
+	if rec.EndpointID == 0 {
+		rec.EndpointID = s.nextID
+		s.nextID++
+	}
+	return rec.EndpointID, nil
+}
+
+func (s *minimalStore) ListEndpoints(_ context.Context, _ string) ([]store.EndpointRecord, error) {
+	return nil, nil
+}
+
+func (s *minimalStore) RemoveEndpoint(_ context.Context, _ store.EndpointKey) error {
+	return nil
+}
 
 // ─── truncateUTF8 ────────────────────────────────────────────────────
 
@@ -166,5 +197,124 @@ func TestFriendlyName_LengthCapping(t *testing.T) {
 	got := friendlyName(dev, ch, "")
 	if len(got) > 32 {
 		t.Errorf("friendlyName capping: result %q has %d bytes, want ≤32", got, len(got))
+	}
+}
+
+// ─── parameterSuffix ─────────────────────────────────────────────────
+
+// fakeTranslator is a map-backed [device.ParameterTranslator] for
+// internal endpoint tests. The key is "<channelType>|<parameter>"; a
+// present key with an empty value represents the primary-parameter
+// marker.
+type fakeTranslator struct {
+	entries map[string]string
+}
+
+func (f *fakeTranslator) ChannelTypedParameterLabelOk(channelType, parameter string) (string, bool) {
+	v, ok := f.entries[channelType+"|"+parameter]
+	return v, ok
+}
+
+func newAssemblerWithLabels(t *testing.T, tr device.ParameterTranslator) *Assembler {
+	t.Helper()
+	s := newMinimalStore()
+	a, err := New(s, Config{VendorID: 1, ProductID: 1, NodeLabel: "x", Labels: tr}, nil)
+	if err != nil {
+		t.Fatalf("endpoint.New: %v", err)
+	}
+	return a
+}
+
+func TestParameterSuffix_NilLabels(t *testing.T) {
+	t.Parallel()
+	// nil Labels → title-cased parameter as suffix.
+	a := newAssemblerWithLabels(t, nil)
+	ch := makeChannel(makeDevice("ABC0001", "Sensor"), "ABC0001:1", 1, "")
+	ch.Type = "WEATHER_TRANSMIT"
+	got := a.parameterSuffix(ch, "TEMPERATURE")
+	if got != "Temperature" {
+		t.Errorf("nil Labels: got %q, want %q", got, "Temperature")
+	}
+}
+
+func TestParameterSuffix_TranslatedLabel(t *testing.T) {
+	t.Parallel()
+	tr := &fakeTranslator{entries: map[string]string{
+		"WEATHER_TRANSMIT|TEMPERATURE": "Temperatur",
+	}}
+	a := newAssemblerWithLabels(t, tr)
+	ch := makeChannel(makeDevice("ABC0001", "Sensor"), "ABC0001:1", 1, "")
+	ch.Type = "WEATHER_TRANSMIT"
+	got := a.parameterSuffix(ch, "TEMPERATURE")
+	if got != "Temperatur" {
+		t.Errorf("translated label: got %q, want %q", got, "Temperatur")
+	}
+}
+
+func TestParameterSuffix_PrimaryMarker(t *testing.T) {
+	t.Parallel()
+	// Explicit-empty translation is the primary-parameter marker → suffix omitted.
+	tr := &fakeTranslator{entries: map[string]string{
+		"SWITCH|STATE": "",
+	}}
+	a := newAssemblerWithLabels(t, tr)
+	ch := makeChannel(makeDevice("ABC0001", "Switch"), "ABC0001:1", 1, "")
+	ch.Type = "SWITCH"
+	got := a.parameterSuffix(ch, "STATE")
+	if got != "" {
+		t.Errorf("primary marker: got %q, want empty", got)
+	}
+}
+
+func TestParameterSuffix_ChannelTypedLookup(t *testing.T) {
+	t.Parallel()
+	// Label only registered for HEATING_CLIMATECONTROL_TRANSCEIVER; verifies
+	// the channel type is passed through to the translator.
+	tr := &fakeTranslator{entries: map[string]string{
+		"HEATING_CLIMATECONTROL_TRANSCEIVER|SET_POINT_TEMPERATURE": "Solltemperatur",
+	}}
+	a := newAssemblerWithLabels(t, tr)
+
+	t.Run("matching channel type returns translation", func(t *testing.T) {
+		t.Parallel()
+		ch := makeChannel(makeDevice("DEF0001", "Thermostat"), "DEF0001:1", 1, "")
+		ch.Type = "HEATING_CLIMATECONTROL_TRANSCEIVER"
+		got := a.parameterSuffix(ch, "SET_POINT_TEMPERATURE")
+		if got != "Solltemperatur" {
+			t.Errorf("matching channel type: got %q, want %q", got, "Solltemperatur")
+		}
+	})
+
+	t.Run("non-matching channel type falls back to title-case", func(t *testing.T) {
+		t.Parallel()
+		ch := makeChannel(makeDevice("DEF0001", "Thermostat"), "DEF0001:2", 2, "")
+		ch.Type = "SWITCH"
+		got := a.parameterSuffix(ch, "SET_POINT_TEMPERATURE")
+		if got != "Set Point Temperature" {
+			t.Errorf("non-matching channel type: got %q, want %q", got, "Set Point Temperature")
+		}
+	})
+}
+
+func TestParameterSuffix_NilChannel(t *testing.T) {
+	t.Parallel()
+	// nil channel → channelType "" → bare parameter lookup / title-case fallback.
+	tr := &fakeTranslator{entries: map[string]string{
+		"|TEMPERATURE": "Temperatur",
+	}}
+	a := newAssemblerWithLabels(t, tr)
+	got := a.parameterSuffix(nil, "TEMPERATURE")
+	if got != "Temperatur" {
+		t.Errorf("nil channel with bare-key entry: got %q, want %q", got, "Temperatur")
+	}
+}
+
+func TestParameterSuffix_NilChannelTitleCase(t *testing.T) {
+	t.Parallel()
+	// nil channel, no catalogue entry → title-cased parameter.
+	a := newAssemblerWithLabels(t, &fakeTranslator{entries: map[string]string{}})
+	got := a.parameterSuffix(nil, "TEMPERATURE")
+	if got != "Temperature" {
+		t.Errorf("nil channel no entry: got %q, want %q", got, "Temperature")
 	}
 }

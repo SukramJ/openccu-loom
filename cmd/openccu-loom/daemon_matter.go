@@ -29,6 +29,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	discoverymdns "github.com/SukramJ/openccu-loom/internal/north/discovery/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/bootid"
 	matterbridge "github.com/SukramJ/openccu-loom/internal/north/matter/bridge"
@@ -129,7 +130,7 @@ type matterBridgeBundle struct {
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
 }
 
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, logger *slog.Logger) *matterBridgeBundle { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger) *matterBridgeBundle { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
@@ -195,6 +196,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		ProductID:     mc.ProductID,
 		NodeLabel:     mc.NodeLabel,
 		Discriminator: mc.Discriminator,
+		Labels:        labels,
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
@@ -2329,9 +2331,9 @@ type matterWiring struct {
 // matterWiring + nil closers + a no-op teardown when the bridge is off.
 //
 //nolint:gocognit,funlen // composition/wiring: long sequential Matter bridge setup
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
-	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, logger); bundle != nil {
+	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, labels, logger); bundle != nil {
 		mb := bundle.bridge
 		mfs := bundle.store
 		teardown = bundle.stop

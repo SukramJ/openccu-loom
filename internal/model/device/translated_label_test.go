@@ -22,6 +22,72 @@ func (f fakeParameterTranslator) ChannelTypedParameterLabelOk(channelType, param
 	return v, ok
 }
 
+func TestTranslatedParameterLabel_NilLabels(t *testing.T) {
+	t.Parallel()
+	translation, omitted := TranslatedParameterLabel("TEMPERATURE", "HEATING_CLIMATECONTROL_TRANSCEIVER", nil)
+	if translation != "" || omitted {
+		t.Fatalf("nil labels: got (%q, %v), want (%q, false)", translation, omitted, "")
+	}
+}
+
+func TestTranslatedParameterLabel_TranslationFound(t *testing.T) {
+	t.Parallel()
+	tr := fakeParameterTranslator{entries: map[string]string{"SWITCH|LEVEL": "Helligkeit"}}
+	translation, omitted := TranslatedParameterLabel("LEVEL", "SWITCH", tr)
+	if translation != "Helligkeit" || omitted {
+		t.Fatalf("got (%q, %v), want (%q, false)", translation, omitted, "Helligkeit")
+	}
+}
+
+func TestTranslatedParameterLabel_PrimaryMarker(t *testing.T) {
+	t.Parallel()
+	// An explicit-empty translation signals the "primary parameter" marker.
+	tr := fakeParameterTranslator{entries: map[string]string{"SWITCH|STATE": ""}}
+	translation, omitted := TranslatedParameterLabel("STATE", "SWITCH", tr)
+	if translation != "" || !omitted {
+		t.Fatalf("primary marker: got (%q, %v), want (%q, true)", translation, omitted, "")
+	}
+}
+
+func TestTranslatedParameterLabel_NotFound(t *testing.T) {
+	t.Parallel()
+	// No entry in the catalogue → ("", false), not the primary marker.
+	tr := fakeParameterTranslator{entries: map[string]string{}}
+	translation, omitted := TranslatedParameterLabel("RSSI_DEVICE", "SWITCH", tr)
+	if translation != "" || omitted {
+		t.Fatalf("not found: got (%q, %v), want (%q, false)", translation, omitted, "")
+	}
+}
+
+func TestTranslatedParameterLabel_ChannelTypeScoping(t *testing.T) {
+	t.Parallel()
+	// Entry only exists for the specific channelType — a different channelType
+	// must not match it.
+	tr := fakeParameterTranslator{entries: map[string]string{
+		"HEATING_CLIMATECONTROL_TRANSCEIVER|SET_POINT_TEMPERATURE": "Solltemperatur",
+	}}
+
+	t.Run("matching channel type returns label", func(t *testing.T) {
+		t.Parallel()
+		translation, omitted := TranslatedParameterLabel(
+			"SET_POINT_TEMPERATURE", "HEATING_CLIMATECONTROL_TRANSCEIVER", tr,
+		)
+		if translation != "Solltemperatur" || omitted {
+			t.Fatalf("got (%q, %v), want (%q, false)", translation, omitted, "Solltemperatur")
+		}
+	})
+
+	t.Run("different channel type returns not-found", func(t *testing.T) {
+		t.Parallel()
+		translation, omitted := TranslatedParameterLabel(
+			"SET_POINT_TEMPERATURE", "SWITCH", tr,
+		)
+		if translation != "" || omitted {
+			t.Fatalf("wrong channel type: got (%q, %v), want (%q, false)", translation, omitted, "")
+		}
+	})
+}
+
 func TestTranslatedDataPointLabel(t *testing.T) {
 	t.Parallel()
 

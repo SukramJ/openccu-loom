@@ -28,7 +28,7 @@ func TestBuildRootClusters_WithLiveBridge(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -78,7 +78,7 @@ func TestBuildRootClusters_NilStore(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

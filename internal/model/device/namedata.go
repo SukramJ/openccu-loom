@@ -100,13 +100,31 @@ type ParameterTranslator interface {
 func TranslatedDataPointLabel(
 	channel *Channel, parameter, channelType string, labels ParameterTranslator,
 ) (label string, labelOmitted bool) {
-	translation, translated := "", false
-	if labels != nil {
-		translation, translated = labels.ChannelTypedParameterLabelOk(channelType, parameter)
-	}
-	labelOmitted = translated && translation == ""
+	translation, labelOmitted := TranslatedParameterLabel(parameter, channelType, labels)
 	label = BuildDataPointName(channel, parameter, translation).TranslatedName()
 	return label, labelOmitted
+}
+
+// TranslatedParameterLabel is the channel-independent core of
+// [TranslatedDataPointLabel]: it resolves the locale-aware translation
+// for a (channelType, parameter) pair and whether the label is omitted
+// (the explicit-empty "primary parameter" marker in the embedded
+// translation_custom catalogue).
+//
+// Consumers that compose the device / channel context themselves — the
+// Matter endpoint assembler builds its NodeLabel from device-name +
+// channel-name and only needs the parameter-level portion as a suffix —
+// call this directly and feed the result into
+// [naming.EntityDisplayName], so the per-parameter display name stays
+// identical across MQTT, REST, and Matter.
+func TranslatedParameterLabel(
+	parameter, channelType string, labels ParameterTranslator,
+) (translation string, labelOmitted bool) {
+	if labels == nil {
+		return "", false
+	}
+	translation, translated := labels.ChannelTypedParameterLabelOk(channelType, parameter)
+	return translation, translated && translation == ""
 }
 
 // baseChannelName implements
