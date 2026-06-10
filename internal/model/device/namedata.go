@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
@@ -56,7 +55,7 @@ func BuildDataPointName(channel *Channel, parameter, parameterTranslation string
 		return naming.EmptyNameData
 	}
 
-	pName := titleCaseParameter(parameter)
+	pName := naming.TitleCaseParameter(parameter)
 	postfix := ""
 	if channel.IsParameterInMultipleChannels(parameter) && channel.Number != 0 {
 		postfix = fmt.Sprintf(" ch%d", channel.Number)
@@ -154,27 +153,4 @@ func stripChannelAddressSuffix(channelName string) string {
 		return channelName
 	}
 	return channelName[:idx]
-}
-
-// titleCaseParameter mirrors Python's `str.title().replace("_", " ")`
-// for HM parameter names: each underscore-delimited segment becomes
-// title-cased and joined with spaces.
-//
-//	"RSSI_DEVICE"           → "Rssi Device"
-//	"SET_POINT_TEMPERATURE" → "Set Point Temperature"
-//	"LEVEL_2"               → "Level 2"
-func titleCaseParameter(parameter string) string {
-	if parameter == "" {
-		return ""
-	}
-	parts := strings.Split(parameter, "_")
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		runes := []rune(strings.ToLower(p))
-		runes[0] = unicode.ToUpper(runes[0])
-		parts[i] = string(runes)
-	}
-	return strings.Join(parts, " ")
 }
