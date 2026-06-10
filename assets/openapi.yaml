@@ -3776,6 +3776,22 @@ components:
             hmenum.CategoryToType ("light", "number", "select", "sensor",
             …). Distinct from `type` (the CCU descriptor primitive); the
             two must not be conflated.
+        translated_name:
+          type: string
+          description: |
+            Locale-aware per-entity name a north-bound consumer (HA via
+            MQTT discovery or the REST drop-in) assigns to this data
+            point. Identical to the MQTT discovery `name` field — both
+            resolve through the same naming primitive. The parameter
+            portion only; HA prepends the device name. Empty when
+            `label_omitted` is true.
+        label_omitted:
+          type: boolean
+          description: |
+            True when the parameter is flagged "primary" in the embedded
+            translation_custom catalogue (translation key present, value
+            empty). Consumers then collapse the entity name to the device
+            name alone (MQTT discovery emits `name: null`).
         control:
           type: string
           description: |

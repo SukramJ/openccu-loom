@@ -931,36 +931,19 @@ func entityCategoryFor(parameter string) (string, bool) {
 	return "", false
 }
 
-// displayName returns the per-entity `name` HA shows in the UI. HA
-// automatically prepends the device name (from the `device` block)
-// when rendering, so this should be the parameter portion only
-// duplicating the device name here produces "Wandthermostat
-// Wandthermostat RSSI_DEVICE" in the HA frontend.
-//
-// Resolution order
-// 1. `ev.descLabel()` — the locale-aware OCCU translation (prefers Descriptor.Label,
-// falls back to ev.ParameterLabel).
-// 2. Title-cased parameter (`RSSI_DEVICE` → `Rssi Device`) when no
-// Translation is available — the same fallback
-// applies in `support.py::get_data_point_name_data`.
-func displayName(ev Event) string {
-	if lbl := ev.descLabel(); lbl != "" {
-		return lbl
-	}
-	return titleCaseParameter(ev.Parameter)
-}
-
 // entityName returns the value to assign to the HA Discovery `name`
 // field. Returns the literal `nil` (HA's signal for "use the device
 // name alone for friendly_name and entity_id") when the parameter is
 // flagged primary by the embedded translation_custom catalogue (see
-// [GenericConfig.LabelOmitted]). Otherwise delegates to
-// [displayName] for the locale-aware label.
+// [GenericConfig.LabelOmitted]). Otherwise returns the locale-aware
+// label via [naming.EntityDisplayName] — the single source of truth
+// shared with the REST data-point handler so both emit identical names.
 func entityName(ev Event) any {
-	if ev.descLabelOmitted() {
+	name, omitted := naming.EntityDisplayName(ev.descLabel(), ev.descLabelOmitted(), ev.Parameter)
+	if omitted {
 		return nil
 	}
-	return displayName(ev)
+	return name
 }
 
 // titleCaseParameter mirrors Python's `str.title().replace("_", " ")`

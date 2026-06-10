@@ -1016,7 +1016,7 @@ func newCategorisedDP(t *testing.T, chAddr string, param hmenum.Parameter, kind 
 func TestToDataPointSummary_CategoryAndType(t *testing.T) {
 	t.Parallel()
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, nil, "SWITCH")
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
 
 	if s.Category == "" {
 		t.Error("category must not be empty for a CategorisedDataPoint")
@@ -1044,7 +1044,7 @@ func TestToDataPointSummary_NoCategory_FieldsAbsent(t *testing.T) {
 	// To get a DP that truly does NOT implement CategorisedDataPoint we use
 	// a minimal inline stub — not a generic.DataPoint subtype.
 	dp := &minimalDP{param: hmenum.ParameterState}
-	s := toDataPointSummary(dp, nil, "SWITCH")
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
 
 	if s.Category != "" {
 		t.Errorf("category must be empty for a non-categorised DP, got %q", s.Category)
@@ -1060,7 +1060,7 @@ func TestToDataPointSummary_NoCategory_FieldsAbsent(t *testing.T) {
 func TestToDataPointSummary_TypeFieldDistinctFromDataPointType(t *testing.T) {
 	t.Parallel()
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, nil, "SWITCH")
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
 
 	// descriptor type is "BOOL" (ParameterTypeBool)
 	if s.Type == "" {

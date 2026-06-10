@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
@@ -188,6 +189,16 @@ type DataPointSummary struct {
 	// "sensor", …). Distinct from Type above, which is the CCU descriptor
 	// primitive (BOOL/INTEGER/FLOAT/ENUM); the two must not be conflated.
 	DataPointType string `json:"data_point_type,omitempty"`
+	// TranslatedName is the locale-aware per-entity name HA assigns to
+	// this data point — identical to the MQTT discovery `name` field
+	// (both resolve through naming.EntityDisplayName). It is the
+	// parameter portion only; HA prepends the device name. Empty when
+	// LabelOmitted is true.
+	TranslatedName string `json:"translated_name,omitempty"`
+	// LabelOmitted is true when the parameter is flagged "primary" in
+	// the embedded translation_custom catalogue. Consumers then collapse
+	// the entity name to the device name alone (MQTT emits `name: null`).
+	LabelOmitted bool `json:"label_omitted,omitempty"`
 	// Control is the CCU paramset descriptor's CONTROL attribute,
 	// of the form WIDGET_FAMILY.SLOT (e.g. "HEATING_CONTROL_HMIP.SETPOINT",
 	// "DIMMER.LEVEL"). Drives the SPA's CONTROL-aware widget resolver
@@ -555,7 +566,7 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 			if !includeAll && vis != nil && !vis.VisibleForChannel(model, ch.Type, ch.Number, ch.ParamsetIn, dp.Parameter()) {
 				continue
 			}
-			out = append(out, toDataPointSummary(dp, labels, ch.Type))
+			out = append(out, toDataPointSummary(dp, labels, ch))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -576,7 +587,7 @@ func GetDataPoint(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Parameter not found", string(param)))
 			return
 		}
-		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch.Type))
+		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch))
 	}
 }
 
@@ -694,7 +705,11 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	}
 }
 
-func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, channelType string) DataPointSummary {
+func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, ch *device.Channel) DataPointSummary {
+	channelType := ""
+	if ch != nil {
+		channelType = ch.Type
+	}
 	raw, ok := dp.RawValue()
 	pd := dp.ParameterData()
 	s := DataPointSummary{
@@ -711,6 +726,14 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	// instead of the bare-parameter "Leistung". Falls back to the
 	// un-typed translation when the channel-type entry is missing.
 	s.ParameterLabel = channelTypedParameterLabel(labels, channelType, s.Parameter)
+	// TranslatedName + LabelOmitted resolve through the same primitives
+	// as the MQTT discovery builder (device.TranslatedDataPointLabel →
+	// naming.EntityDisplayName), so REST and MQTT consumers spawn
+	// entities with identical names.
+	if t, ok := labels.(device.ParameterTranslator); ok && ch != nil {
+		label, labelOmitted := device.TranslatedDataPointLabel(ch, s.Parameter, channelType, t)
+		s.TranslatedName, s.LabelOmitted = naming.EntityDisplayName(label, labelOmitted, s.Parameter)
+	}
 	// Category + functional type let a client classify the DP declaratively.
 	// Same assertion pattern as CustomDPSummary / calculated_data_points.go:
 	// every concrete generic.DataPoint implements CategorisedDataPoint.

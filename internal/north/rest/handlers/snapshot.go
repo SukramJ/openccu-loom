@@ -385,7 +385,7 @@ func snapshotDeviceChannels(devs []*device.Device, labels ParameterLabeler, with
 				dps := ch.DataPoints()
 				entry.DataPoints = make([]DataPointSummary, 0, len(dps))
 				for _, dp := range dps {
-					entry.DataPoints = append(entry.DataPoints, toDataPointSummary(dp, labels, ch.Type))
+					entry.DataPoints = append(entry.DataPoints, toDataPointSummary(dp, labels, ch))
 				}
 			}
 			entries = append(entries, entry)
