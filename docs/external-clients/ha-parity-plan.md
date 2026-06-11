@@ -108,6 +108,32 @@ Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
   registriert — echte Zahlenparität zeigt erst ein frisch angelegter
   Entry; der Orphan-Cleanup ist auf loom noch deaktiviert.
 
+### Messung 2026-06-11 nachmittags (frischer Otto-Rem-Spawn, Registry bereinigt)
+
+Struktur: climate/lock/valve/notify exakt ✓ (Valve 9/9!), siren 8/7,
+gematcht 1725 (von 1065), Live-Abweichungen 21 von 692. Disabled-Parität
+greift (loom 1352 disabled).
+
+**Neuer präziser Daemon-Bug (Blocker für die letzten 21 Wert-Abweichungen):**
+Jedes CCU-Wire-Event wird DOPPELT ingestiert — derselbe DP publiziert
+binnen ~1 ms zwei `datapoint.value_changed` (fortlaufende seq), einmal
+mit dem echten Wert, einmal mit **0**; die Reihenfolge variiert, der
+letzte gewinnt (deshalb pendeln HA-Werte zwischen korrekt und 0).
+Beleg: seq=43209 value=17.8 / seq=43211 value=0 (000EE0C9A7062C:1,
+ACTUAL_TEMPERATURE), beobachtet auf TEMPERATURE/HUMIDITY/VOLTAGE/
+FREQUENCY/ILLUMINATION. Verdacht: doppelt registrierte Event-Quelle
+bzw. paralleler Ingestion-Pfad, dessen Wert-Parse auf 0 fällt.
+Hinweis Messartefakt: WS-Topic der DP-Events ist `device.<addr>.…`
+(Type `datapoint.value_changed`) — eine `datapoint.*`-Topic-Subscription
+matcht nichts; Events kommen über `device.*`.
+
+Verbleibende Strukturklassen: 132+45 Schedule-Layer (Punkt 12),
+Virtual-Remote-Behandlung (ccu: 50 Event-Groups, loom: 100 Event-Groups
++ 100 Buttons + uid-Wechsel durch Serial-Fix), 212 press_*-Buttons
+(usage=event sollte generischen Spawn unterdrücken), 42
+operating_voltage + 16 current_illumination (Visibility-Nuance), 26
+Sysvar-Überhang (is_internal fehlt am Sysvar-Wire), Hub-Singletons.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
