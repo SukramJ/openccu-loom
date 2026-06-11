@@ -17,7 +17,7 @@ env:
   # Toggle the CCU/RaspberryMatic add-on packaging + upload. Set to
   # "false" to skip it for a release (or override per repo via the
   # BUILD_CCU_ADDON repository variable — see the step conditions).
-  BUILD_CCU_ADDON: "false"
+  BUILD_CCU_ADDON: "true"
   # Toggle the Home Assistant add-on image build + push (one tag per arch:
   # ghcr.io/sukramj/openccu-loom-ha-<arch>). Same flag pattern as the CCU
   # add-on — flip here or override via the BUILD_HA_ADDON repository variable.
