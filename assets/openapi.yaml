@@ -3813,6 +3813,14 @@ components:
             hmenum.CategoryToType ("light", "number", "select", "sensor",
             …). Distinct from `type` (the CCU descriptor primitive); the
             two must not be conflated.
+        usage:
+          type: string
+          description: |
+            Visibility verdict from the daemon's pipeline ("data_point",
+            "no_create", "ignored", "ce_primary", "ce_secondary",
+            "ce_visible", "event"). Clients skip entity creation for
+            "no_create"/"ignored" — the same gate the MQTT discovery
+            plane applies; mirrors aiohomematic's DataPointUsage.
         translated_name:
           type: string
           description: |
