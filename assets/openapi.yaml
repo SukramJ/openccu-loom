@@ -3912,14 +3912,29 @@ components:
       type: object
       required: [id, name]
       properties:
+        central:
+          type: string
+          description: CCU this program belongs to (multi-central grouping).
         id: { type: string }
         name: { type: string }
         description: { type: string }
         active: { type: boolean, nullable: true }
+        last_executed:
+          type: string
+          description: RFC3339 timestamp of the most recent execution.
+        is_internal:
+          type: boolean
+          description: |
+            True for CCU-internal helper programs (prgEnergyCounter_…,
+            Tmp_…). Clients skip these for HA entities, mirroring
+            aiohomematic's DEFAULT_INCLUDE_INTERNAL_PROGRAMS=false.
     SysvarSummary:
       type: object
       required: [name, value_type, observed]
       properties:
+        central:
+          type: string
+          description: CCU this system variable belongs to.
         name: { type: string }
         description: { type: string }
         unit: { type: string }
@@ -3929,6 +3944,12 @@ components:
         value_list:
           type: array
           items: { type: string }
+        min:
+          type: number
+          description: Declared lower bound from the CCU Rega response.
+        max:
+          type: number
+          description: Declared upper bound from the CCU Rega response.
     SysvarSetRequest:
       type: object
       required: [value]
