@@ -489,6 +489,11 @@ generate-matter-schema: ## regenerate matter schema snapshot + internal/north/ma
 .PHONY: export-schemas
 export-schemas: ## emit assets/schemas/{enums,types}.json for external-language codegen
 	$(GO) run ./script/export_schemas.go
+	$(MAKE) generate-schema-digest
+
+.PHONY: generate-schema-digest
+generate-schema-digest: ## regenerate the contract digest constant from the schema assets
+	$(GO) run ./script/generate_schema_digest.go
 
 .PHONY: generate
 generate: ## run all code generators

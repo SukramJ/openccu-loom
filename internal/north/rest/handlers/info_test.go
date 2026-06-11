@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -118,5 +119,23 @@ func TestInfo_ConditionalCapabilities(t *testing.T) {
 	}
 	if has(CapabilityOIDC) {
 		t.Error("auth.oidc.v1 should be absent")
+	}
+}
+
+func TestInfo_SchemaDigestIsServed(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/info", http.NoBody)
+	w := httptest.NewRecorder()
+	Info(time.Now(), nil).ServeHTTP(w, req)
+
+	var body InfoResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.SchemaDigest != SchemaDigest {
+		t.Fatalf("schema_digest=%q, want generated constant %q", body.SchemaDigest, SchemaDigest)
+	}
+	if !strings.HasPrefix(body.SchemaDigest, "sha256:") || len(body.SchemaDigest) != len("sha256:")+64 {
+		t.Fatalf("schema_digest %q must be sha256: plus 64 hex chars", body.SchemaDigest)
 	}
 }

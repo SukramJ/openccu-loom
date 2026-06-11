@@ -162,3 +162,28 @@ jobs:
           severity: CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+  # Notify the types repo so it regenerates openccu-loom-types from
+  # this release's contract assets (ADR 0028). The receiving workflow
+  # checks out this repo at the released tag, regenerates the Pydantic
+  # models, and opens a PR there. Requires the TYPES_REPO_DISPATCH_TOKEN
+  # secret (fine-grained PAT with contents:write on the types repo);
+  # without it the step warns and the release proceeds — the types repo
+  # can always regenerate manually from the tag.
+  notify-types-repo:
+    name: trigger types regeneration
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    steps:
+      - name: dispatch daemon-release event
+        env:
+          GH_TOKEN: ${{ secrets.TYPES_REPO_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::TYPES_REPO_DISPATCH_TOKEN not configured — skipping types-repo dispatch"
+            exit 0
+          fi
+          gh api repos/SukramJ/openccu-loom-types-py/dispatches \
+            -f event_type=daemon-release \
+            -f "client_payload[tag]=${GITHUB_REF_NAME}"

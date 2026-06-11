@@ -53,6 +53,25 @@ jobs:
       - name: go mod tidy + verify
         run: make tidy-check
 
+  # Contract-version guard (ADR 0028): changing a contract asset
+  # (openapi.yaml, wsapi.json, schemas/*.json) without bumping
+  # APIVersion fails the PR; oasdiff-classified breaking changes
+  # require a major bump. PR-only — pushes to main already passed it.
+  api-contract-guard:
+    name: api contract guard
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: check APIVersion bump
+        run: script/check_api_version_bump.sh "origin/${{ github.base_ref }}"
+
   security:
     name: security (vuln + licenses)
     runs-on: ubuntu-latest

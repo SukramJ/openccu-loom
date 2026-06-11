@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3483,7 +3483,7 @@ components:
               max: {}
     Info:
       type: object
-      required: [version, commit, build_date, uptime, started_at, api_version, capabilities]
+      required: [version, commit, build_date, uptime, started_at, api_version, schema_digest, capabilities]
       description: |
         Daemon build + runtime info plus a wire-contract version and a
         capability list. External clients should switch on
@@ -3503,6 +3503,21 @@ components:
             of `version`. Minor bumps add backwards-compatible
             capabilities; major bumps remove or rename existing
             payload fields, scopes, or capabilities.
+        schema_digest:
+          type: string
+          description: |
+            Canonical digest of the contract assets (openapi.yaml,
+            wsapi.json, schemas/enums.json, schemas/types.json) this
+            binary was built from, e.g. `sha256:ab12…`. Generated
+            client type packages carry the same value; a client
+            compares the two at connect time to verify its types
+            match the daemon build exactly. Equality means exact
+            contract identity; inequality means the types were
+            generated from a different build (not necessarily an
+            incompatible one — use `api_version` for compatibility
+            reasoning).
+          examples:
+            - "sha256:0c63c1e3a9f0b14d2e5b7a86c14d9b21f0aa3340be71f5c6d8e92041ab57cd10"
         capabilities:
           type: array
           description: |

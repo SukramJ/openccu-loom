@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Contract schema digest on `GET /api/v1/info`.** The new
+  `schema_digest` field identifies the exact contract state
+  (openapi.yaml, wsapi.json, enums/types schemas) the binary was built
+  from; generated client type packages carry the same value, so clients
+  can verify type/daemon parity at connect time. `api_version` is now
+  guarded in CI: contract-asset changes without a version bump fail the
+  PR (breaking OpenAPI diffs require a major bump), and releases
+  dispatch a regeneration event to the openccu-loom-types repo.
+  See ADR 0028. `api_version` bumped to 1.1.0 (additive).
+
 - **Matter NodeLabel suffixes share the entity display-name resolution.**
   Measurement sub-endpoints previously embedded the raw parameter key in
   their `BridgedDeviceBasicInformation.NodeLabel`
