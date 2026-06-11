@@ -6,7 +6,6 @@ package coordinators
 import (
 	"context"
 	"log/slog"
-	"strings"
 	"sync"
 	"time"
 
@@ -350,14 +349,18 @@ func (c *EventCoordinator) EmitDevicesDelayedEvent(interfaceID string, deviceAdd
 	}
 }
 
-// HandleRawEventNormalized is a wrapper around [HandleRawEvent] that applies
-// parameter-name normalization before dispatch. Specifically, parameter names
-// ending with the `_STATUS` suffix are mapped to their base name so that e.g.
-// `LEVEL_STATUS` is treated identically to `LEVEL` — the CCU emits both
-// forms for the same underlying parameter on some hardware variants.
+// HandleRawEventNormalized is a wrapper around [HandleRawEvent] that routes
+// the PONG sentinel to the optional ping-pong tracker rather than the
+// cache/event path; every other parameter dispatches unchanged.
 //
-// When the parameter name matches the PONG sentinel, the call is routed to
-// the optional ping-pong tracker rather than the cache/event path.
+// `<X>_STATUS` parameters are deliberately NOT mapped to their base name:
+// they carry the MEASUREMENT STATUS of `<X>` (NORMAL / UNKNOWN / OVERFLOW,
+// wire value 0/1/2), not a value echo. The former suffix-stripping published
+// the status index (usually 0) as a `value_changed` for the base parameter,
+// corrupting the dynamic cache and oscillating north-bound consumers (WS,
+// MQTT, external clients) between the real measurement and 0 — the model
+// layer was correct the whole time. The status itself lands on the base
+// data point via UpdateStatusFromWire in the callback handler.
 func (c *EventCoordinator) HandleRawEventNormalized(
 	ctx context.Context,
 	interfaceID, channelAddress, parameter string,
@@ -384,12 +387,6 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 		}
 		c.MarkEvent(interfaceID, time.Time{})
 		return
-	}
-
-	// _STATUS suffix normalisation: LEVEL_STATUS → LEVEL.
-	const statusSuffix = "_STATUS"
-	if len(parameter) > len(statusSuffix) && strings.HasSuffix(parameter, statusSuffix) {
-		parameter = parameter[:len(parameter)-len(statusSuffix)]
 	}
 
 	c.HandleRawEvent(ctx, interfaceID, channelAddress, parameter, raw)

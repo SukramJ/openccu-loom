@@ -41,10 +41,10 @@ func TestCallbackHandlersStatusPairFallback(t *testing.T) {
 	}
 }
 
-// TestCallbackHandlersStatusPairPrefersDedicatedDP verifies that the
-// fallback only kicks in when no dedicated _STATUS data point exists:
-// if both LEVEL and LEVEL_STATUS are registered, the _STATUS event
-// goes to LEVEL_STATUS, not to LEVEL.
+// TestCallbackHandlersStatusPairPrefersDedicatedDP verifies the regular
+// case (openccu-loom creates a DP for every wire parameter): the _STATUS
+// event lands on the dedicated LEVEL_STATUS DP as its value, the base
+// DP's VALUE stays untouched, and the base DP's STATUS is updated.
 func TestCallbackHandlersStatusPairPrefersDedicatedDP(t *testing.T) {
 	reg, dev := registryWithDevice(t)
 	ch := dev.AddChannel("0001ABCD:1", 1, "TEST", hmenum.ParamsetKeyValues)
@@ -53,18 +53,22 @@ func TestCallbackHandlersStatusPairPrefersDedicatedDP(t *testing.T) {
 	levelStatus := newFloatDP(hmenum.Parameter("LEVEL_STATUS"), "0001ABCD:1")
 	ch.Put(level)
 	ch.Put(levelStatus)
+	level.SetStatusParameter("LEVEL_STATUS", []string{"NORMAL", "UNKNOWN", "OVERFLOW"})
 
 	c := reg.List()[0]
 	h := NewCallbackHandlers(c, nil)
+
+	// Seed a real measurement, then deliver the paired status (0 = NORMAL).
+	level.OnWireValue(19.6)
 	if err := h.Event(context.Background(), "HmIP-RF", "0001ABCD:1",
-		"LEVEL_STATUS", xmlrpc.DoubleValue(0.7)); err != nil {
+		"LEVEL_STATUS", xmlrpc.IntValue(0)); err != nil {
 		t.Fatalf("Event: %v", err)
 	}
-	if v, ok := levelStatus.Value(); !ok || v != 0.7 {
-		t.Fatalf("LEVEL_STATUS: v=%v ok=%v want 0.7", v, ok)
+	if v, ok := level.Value(); !ok || v != 19.6 {
+		t.Fatalf("LEVEL value after _STATUS event: v=%v ok=%v want 19.6 (unchanged)", v, ok)
 	}
-	if _, ok := level.Value(); ok {
-		t.Fatal("LEVEL must NOT receive the _STATUS event when a dedicated DP exists")
+	if s, ok := level.Status(); !ok || s != hmenum.ParameterStatusNormal {
+		t.Fatalf("LEVEL status = %v ok=%v, want NORMAL", s, ok)
 	}
 }
 
