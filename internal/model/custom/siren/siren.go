@@ -75,6 +75,10 @@ type Siren struct {
 // can attach the Siren to a channel.
 func (s *Siren) DataPointKey() hmtypes.DataPointKey { return s.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (siren platform).
+func (s *Siren) Category() hmenum.DataPointCategory { return hmenum.DataPointCategorySiren }
+
 // Config is the constructor record. Channel must already carry the
 // per-channel ACOUSTIC_ALARM_* and OPTICAL_ALARM_* DPs; absent fields
 // degrade to "(zero, false)" on the corresponding accessors and are

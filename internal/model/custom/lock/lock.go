@@ -245,6 +245,10 @@ func (l *Lock) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 // [device.AttachableDataPoint].
 func (l *Lock) DataPointKey() hmtypes.DataPointKey { return l.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (lock platform).
+func (l *Lock) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryLock }
+
 // IgnoreMultipleChannelsForName opts the Lock custom DP out of the
 // multi-primary `ch<N>` naming suffix. Multi-channel locks render as
 // "<Lock>" / "<Lock>" instead of "<Lock> ch1" / "<Lock> ch2".

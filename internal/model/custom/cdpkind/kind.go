@@ -51,6 +51,8 @@ const (
 
 	KindLock        = "lock"
 	KindSiren       = "siren"
+	KindSirenSmoke  = "siren_smoke"
+	KindSirenSound  = "siren_sound"
 	KindSwitch      = "switch"
 	KindTextDisplay = "text_display"
 	KindValveIrr    = "valve_irrigation"
@@ -106,6 +108,10 @@ func Of(dp device.AttachableDataPoint) string {
 		return KindLock
 	case *siren.Siren:
 		return KindSiren
+	case *siren.SmokeSiren:
+		return KindSirenSmoke
+	case *siren.SoundPlayer:
+		return KindSirenSound
 	case *switchdev.Switch:
 		return KindSwitch
 	case *textdisplay.TextDisplay:

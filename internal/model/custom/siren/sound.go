@@ -76,6 +76,10 @@ type SoundPlayer struct {
 // can attach the SoundPlayer to a channel.
 func (sp *SoundPlayer) DataPointKey() hmtypes.DataPointKey { return sp.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (siren platform, sound-player variant).
+func (sp *SoundPlayer) Category() hmenum.DataPointCategory { return hmenum.DataPointCategorySiren }
+
 // SoundPlayerConfig is the constructor record. The channel must
 // already carry the LEVEL / SOUNDFILE / REPETITIONS / DURATION_*
 // generic data points.

@@ -18,6 +18,10 @@ import (
 // identity of this multi-parameter DP.
 func (t *TextDisplay) DataPointKey() hmtypes.DataPointKey { return t.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (text-display platform).
+func (t *TextDisplay) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryTextDisplay }
+
 // init registers the [Constructor] for the IPTextDisplay profile on
 // the process-wide [custom.DefaultRegistry]. D.12.
 //
