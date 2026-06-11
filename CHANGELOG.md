@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-11
+
 ### Added
 
 - **Contract schema digest on `GET /api/v1/info`.** The new
