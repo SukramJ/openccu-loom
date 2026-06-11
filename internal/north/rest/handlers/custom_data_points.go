@@ -115,13 +115,6 @@ type CustomDPOperationRequest struct {
 
 // --- helpers ---
 
-// customDPName returns a stable string name for an AttachableDataPoint.
-// The name is derived from the DataPointKey's Parameter field, which is
-// the canonical identifier used across the model.
-func customDPName(dp device.AttachableDataPoint) string {
-	return dp.DataPointKey().Parameter
-}
-
 // supportedOperationsFor returns the list of valid operation strings for
 // the given data-point category. Mirrors the per-category dispatch tables
 // in the custom_dispatch_*.go files.
