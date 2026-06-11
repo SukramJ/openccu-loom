@@ -193,7 +193,7 @@ type DataPointSummary struct {
 	// this DP ("data_point", "no_create", "ignored", "ce_primary",
 	// "ce_secondary", "ce_visible", "event"). Clients skip entity
 	// creation for "no_create"/"ignored" — the same gate the MQTT
-	// discovery plane applies; mirrors aiohomematic's DataPointUsage.
+	// discovery plane applies.
 	Usage string `json:"usage,omitempty"`
 	// TranslatedName is the locale-aware per-entity name HA assigns to
 	// this data point — identical to the MQTT discovery `name` field

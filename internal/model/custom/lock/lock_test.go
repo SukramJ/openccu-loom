@@ -237,8 +237,8 @@ func TestLockButtonKindWritesBUTTONLOCK(t *testing.T) {
 
 	l := New(Config{Channel: ch, Writer: w, Kind: KindButton})
 
-	// aiohomematic semantics (CustomDpButtonLock): lock() -> turn_on
-	// (true, keys disabled), unlock() -> turn_off (false).
+	// Button-lock semantics: lock() -> turn_on (true, keys disabled),
+	// unlock() -> turn_off (false).
 	if err := l.Lock(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func (s *paramsetStubWriter) PutParamset(_ context.Context, ch string, key hmenu
 // TestLockButtonGlobalButtonLockFromMaster pins the shipping button-lock
 // wiring: the wire parameter is GLOBAL_BUTTON_LOCK in the MASTER paramset
 // (HmIP thermostats ch0). The state must read off the seeded MASTER value
-// (true = LOCKED, aiohomematic semantics) and writes must route through
+// (true = LOCKED) and writes must route through
 // put_paramset — setValue on a MASTER parameter faults with XML-RPC -5.
 func TestLockButtonGlobalButtonLockFromMaster(t *testing.T) {
 	t.Parallel()

@@ -203,9 +203,9 @@ func New(cfg Config) *Lock {
 		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterState)
 	case KindButton:
 		// Button locks: the wire parameter is GLOBAL_BUTTON_LOCK (a
-		// MASTER-paramset bool on ch0; aiohomematic's IP_/RF_BUTTON_LOCK
-		// profiles both map Field.BUTTON_LOCK to it). BUTTON_LOCK is kept
-		// as a fallback for paramsets that carry it literally.
+		// MASTER-paramset bool on ch0 that both the IP and RF button-lock
+		// profiles resolve their BUTTON_LOCK field to). BUTTON_LOCK is
+		// kept as a fallback for paramsets that carry it literally.
 		l.buttonParam = hmenum.ParameterGlobalButtonLock
 		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterGlobalButtonLock)
 		if l.boolStateDp == nil {
@@ -310,9 +310,8 @@ func (l *Lock) LockState() (State, bool) {
 			return StateUnknown, false
 		}
 		// Button locks invert the RF STATE semantics:
-		// GLOBAL_BUTTON_LOCK=true means the keys are locked
-		// (aiohomematic: `is_locked = value is True`), while RF STATE
-		// reads true as "unlocked".
+		// GLOBAL_BUTTON_LOCK=true means the keys are locked,
+		// while RF STATE reads true as "unlocked".
 		if l.Kind == KindButton {
 			if v {
 				return StateLocked, true
@@ -550,8 +549,8 @@ func (l *Lock) sendRF(ctx context.Context, cmd command, priority hmenum.CommandP
 
 func (l *Lock) sendButton(ctx context.Context, cmd command, priority hmenum.CommandPriority) error {
 	// Button locks write the resolved button parameter
-	// (GLOBAL_BUTTON_LOCK) with aiohomematic semantics: lock → true
-	// (keys disabled), unlock → false. The parameter lives in the
+	// (GLOBAL_BUTTON_LOCK): lock → true (keys disabled),
+	// unlock → false. The parameter lives in the
 	// MASTER paramset on every shipping device, so the write must go
 	// through put_paramset — setValue on a MASTER parameter faults
 	// with XML-RPC -5 "Invalid parameter or value".

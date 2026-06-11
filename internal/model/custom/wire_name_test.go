@@ -18,23 +18,23 @@ type stubCDP struct {
 
 func (s *stubCDP) DataPointKey() hmtypes.DataPointKey { return s.key }
 
-func newWireNameRig(t *testing.T) (*device.Device, map[int]device.AttachableDataPoint) {
+func newWireNameRig(t *testing.T) (dev *device.Device, dps map[int]device.AttachableDataPoint) {
 	t.Helper()
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "DRD0001"})
-	dps := make(map[int]device.AttachableDataPoint)
+	dev = device.New(device.Config{InterfaceID: "HmIP-RF", Address: "DRD0001"})
+	dps = make(map[int]device.AttachableDataPoint)
 	// Channel group: LEVEL on 4/5/6 (dimmer + virtual channels); a
 	// unique BUTTON_LOCK CDP on ch0.
 	for _, no := range []int{4, 5, 6} {
-		ch := d.AddChannel("DRD0001:"+string(rune('0'+no)), no, "DIMMER", hmenum.ParamsetKeyValues)
+		ch := dev.AddChannel("DRD0001:"+string(rune('0'+no)), no, "DIMMER", hmenum.ParamsetKeyValues)
 		dp := &stubCDP{key: hmtypes.DataPointKey{ChannelAddress: ch.Address, Parameter: "LEVEL"}}
 		ch.SetCustomDataPoint(dp)
 		dps[no] = dp
 	}
-	ch0 := d.AddChannel("DRD0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	ch0 := dev.AddChannel("DRD0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	lock := &stubCDP{key: hmtypes.DataPointKey{ChannelAddress: ch0.Address, Parameter: "BUTTON_LOCK"}}
 	ch0.SetCustomDataPoint(lock)
 	dps[0] = lock
-	return d, dps
+	return dev, dps
 }
 
 func TestWireNameDisambiguatesChannelGroups(t *testing.T) {
