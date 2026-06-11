@@ -89,6 +89,12 @@ type CustomDPSummary struct {
 	// preset_modes, hvac_modes; cover capability hints) without a
 	// second round-trip.
 	Config payload.ConfigPayload `json:"config,omitempty"`
+	// State is the live state snapshot from the Custom-DP — the same
+	// semantic keys the WS `custom_data_point.state_changed` event
+	// carries (`is_locked`, `hvac_mode`, `brightness`, …). Including
+	// it in the list lets clients seed entity state at bootstrap
+	// without one extra round-trip per CDP.
+	State payload.StatePayload `json:"state,omitempty"`
 }
 
 // CustomDPDetail is returned by GET .../cdps/{name}.
@@ -164,17 +170,17 @@ func customDPConfig(dp device.AttachableDataPoint) payload.ConfigPayload {
 // packages.
 //
 // Resolution order:
-//  1. `State() map[string]any` — every shipping Custom-DP
-//     implements this (it powers HA-Discovery aggregated state too),
-//     so this is the canonical source of truth.
+//  1. [payload.Source] — the universal contract every shipping
+//     Custom-DP implements (ADR 0007); `State()` returns the typed
+//     payload struct (`*LockState`, `*ClimateState`, …) that also
+//     powers HA-Discovery aggregated state.
 //  2. `DataPointState() any` — legacy / future hook; kept so a DP
-//     that needs a non-map shape can override.
+//     that needs a non-Source shape can override.
 //  3. Fallback: expose the DataPointKey so the DP stays addressable
 //     even when state is unavailable.
 func customDPState(dp device.AttachableDataPoint) any {
-	type stater interface{ State() map[string]any }
-	if s, ok := dp.(stater); ok {
-		if p := s.State(); p != nil {
+	if src, ok := dp.(payload.Source); ok {
+		if p := src.State(); p != nil {
 			return p
 		}
 	}
@@ -238,6 +244,7 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 				Channels:            []int{ch.Number},
 				Capabilities:        cdpkind.Capabilities(dp),
 				Config:              customDPConfig(dp),
+				State:               customDPState(dp),
 			})
 		}
 		JSON(w, http.StatusOK, out)

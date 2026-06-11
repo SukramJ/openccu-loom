@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -264,7 +265,15 @@ func customDPEntry(dp device.AttachableDataPoint, channelNo int) map[string]any 
 		"channel_no": channelNo,
 		"operations": supportedOperationsForWS(cat),
 	}
-	// Include state snapshot when possible.
+	// Include state snapshot when possible. payload.Source is the
+	// universal contract (ADR 0007) every shipping Custom-DP
+	// implements; DataPointState() is the legacy hook.
+	if src, ok2 := dp.(payload.Source); ok2 {
+		if p := src.State(); p != nil {
+			entry["state"] = p
+			return entry
+		}
+	}
 	type stater interface{ DataPointState() any }
 	if s, ok2 := dp.(stater); ok2 {
 		entry["state"] = s.DataPointState()

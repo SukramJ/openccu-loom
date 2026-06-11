@@ -3388,6 +3388,25 @@ components:
             `effects`, `tilt`, `boost`, `away`. Mirrors the
             per-category Capability struct from
             `internal/model/custom/mixins.go`.
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Static configuration block from the Custom-DP — temperature
+            bounds (`min_temp`, `max_temp`, `temp_step`), available
+            `hvac_modes`, available `preset_modes`, capability hints.
+            Populated from the DP's `Config()` ([payload.Source]).
+            Lets clients render kind-specific choice lists and seed
+            HA entity capabilities without a second round-trip.
+        state:
+          type: object
+          additionalProperties: true
+          description: |
+            Live state snapshot from the Custom-DP — the same semantic
+            keys the WS `custom_data_point.state_changed` event carries
+            (`is_locked`, `hvac_mode`, `brightness`, …). Lets clients
+            seed entity state at bootstrap without one extra
+            round-trip per CDP.
     Problem:
       type: object
       description: |
