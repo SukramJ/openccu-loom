@@ -3352,7 +3352,14 @@ components:
       type: object
       required: [name, category, channel_no, supported_operations]
       properties:
-        name: { type: string }
+        name:
+          type: string
+          description: |
+            Wire identity of the Custom-DP. The bare parameter name
+            (`LEVEL`, `BUTTON_LOCK`) when it is unique on the device;
+            `PARAM@<channel>` (e.g. `LEVEL@5`) when a profile channel
+            group materialises the same parameter on multiple channels.
+            Round-trip this value verbatim into `GET/POST …/cdps/{name}`.
         category: { type: string }
         channel_no: { type: integer }
         supported_operations:

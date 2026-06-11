@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
@@ -196,22 +197,20 @@ func customDPState(dp device.AttachableDataPoint) any {
 	}
 }
 
-// lookupCustomDP resolves the named custom data point across all channels
-// of the device and returns it together with the channel number.
-func lookupCustomDP(d *device.Device, name string) (device.AttachableDataPoint, int, bool) {
-	for _, ch := range d.Channels() {
-		dp := ch.CustomDataPoint()
-		if dp == nil {
-			continue
-		}
-		if customDPName(dp) == name {
-			return dp, ch.Number, true
-		}
-	}
-	return nil, 0, false
+// customDPWireName returns the wire identity for a custom DP — the bare
+// parameter name when unique on the device, `PARAM@<channel>` for
+// profile channel groups. Delegates to [custom.WireName].
+func customDPWireName(d *device.Device, dp device.AttachableDataPoint, channelNo int) string {
+	return custom.WireName(d, dp, channelNo)
 }
 
-// --- handlers ---
+// lookupCustomDP resolves the named custom data point across all
+// channels of the device. Accepts both the bare parameter name and the
+// channel-exact `PARAM@<channel>` form. Delegates to
+// [custom.FindByWireName].
+func lookupCustomDP(d *device.Device, name string) (device.AttachableDataPoint, int, bool) {
+	return custom.FindByWireName(d, name)
+}
 
 // ListCustomDataPoints returns all custom DPs of a device.
 //
@@ -236,7 +235,7 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 				cat = cdp.Category()
 			}
 			out = append(out, CustomDPSummary{
-				Name:                customDPName(dp),
+				Name:                customDPWireName(d, dp, ch.Number),
 				Category:            string(cat),
 				ChannelNo:           ch.Number,
 				SupportedOperations: supportedOperationsFor(cat),
