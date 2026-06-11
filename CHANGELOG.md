@@ -102,6 +102,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Multi-CCU: client health no longer collapses same-named interfaces.**
+  The aggregated health view deduplicated components by bare name, so
+  two CCUs both running e.g. `HmIP-RF` surfaced as a single entry and
+  the diagnostics "client health" panel showed only one CCU's
+  interfaces (which one depended on sample timing). Components from a
+  central's tracker are now scoped as `<central>/<component>`;
+  `ClientDetail`/`ClientScore` route scoped names to the owning
+  central's tracker, bare names keep the legacy first-match lookup.
+
 - **`GET /api/v1/devices/{addr}/cdps` no longer panics on a half-formed light
   channel.** `*light.Light` relied on the method promoted from its embedded
   `*generic.Float` for `Category()`. On a "half-formed" channel — one whose

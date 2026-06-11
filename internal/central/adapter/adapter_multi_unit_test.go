@@ -15355,3 +15355,98 @@ func TestMasterOperationsZeroConstantValue(t *testing.T) {
 		t.Errorf("OperationsRead|OperationsWrite must be 3 (mirrors Python OPERATIONS=3), got %d", fixed)
 	}
 }
+
+// ============================================================
+// HealthAdapter — multi-central component scoping
+// ============================================================
+
+// Two centrals run the same interface name; the aggregated view must
+// keep both, scoped as <central>/<component>, instead of collapsing
+// them to one entry. Daemon-global fallback components stay bare.
+func TestHealthAdapterScopesSameNamedComponentsPerCentral(t *testing.T) {
+	t.Parallel()
+	ca, err := central.New(central.Config{Name: "ccu-a"})
+	if err != nil {
+		t.Fatalf("central.New ccu-a: %v", err)
+	}
+	cb, err := central.New(central.Config{Name: "ccu-b"})
+	if err != nil {
+		t.Fatalf("central.New ccu-b: %v", err)
+	}
+	reg := central.NewRegistry()
+	for _, c := range []*central.Unit{ca, cb} {
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register %s: %v", c.Name(), err)
+		}
+	}
+
+	ca.Health.Record("HmIP-RF", health.Sample{Healthy: true, Note: "a-side"})
+	cb.Health.Record("HmIP-RF", health.Sample{Healthy: false, Note: "b-side"})
+	ca.Health.RecordRequest("HmIP-RF", true)
+	cb.Health.RecordRequest("HmIP-RF", false)
+	cb.Health.RecordRequest("HmIP-RF", false)
+
+	fallback := health.NewTracker()
+	fallback.Record("sqlite", health.Sample{Healthy: true})
+
+	ad := NewHealthAdapter(reg, fallback)
+
+	names := make(map[string]bool)
+	for _, c := range ad.Snapshot() {
+		names[c.Name] = true
+	}
+	for _, want := range []string{"ccu-a/HmIP-RF", "ccu-b/HmIP-RF", "sqlite"} {
+		if !names[want] {
+			t.Errorf("Snapshot missing %q (got %v)", want, names)
+		}
+	}
+	if names["HmIP-RF"] {
+		t.Errorf("Snapshot still carries the unscoped duplicate-prone name (got %v)", names)
+	}
+}
+
+// Scoped names route ClientDetail / ClientScore to the right central's
+// tracker; bare names keep the legacy first-match behaviour so older
+// callers do not break.
+func TestHealthAdapterClientDetailRoutesScopedNames(t *testing.T) {
+	t.Parallel()
+	ca, err := central.New(central.Config{Name: "ccu-a"})
+	if err != nil {
+		t.Fatalf("central.New ccu-a: %v", err)
+	}
+	cb, err := central.New(central.Config{Name: "ccu-b"})
+	if err != nil {
+		t.Fatalf("central.New ccu-b: %v", err)
+	}
+	reg := central.NewRegistry()
+	for _, c := range []*central.Unit{ca, cb} {
+		if err := reg.Register(c); err != nil {
+			t.Fatalf("reg.Register %s: %v", c.Name(), err)
+		}
+	}
+	ca.Health.Record("HmIP-RF", health.Sample{Healthy: true, Note: "up"})
+	cb.Health.Record("HmIP-RF", health.Sample{Healthy: false, Note: "down"})
+	ca.Health.RecordRequest("HmIP-RF", true)
+	cb.Health.RecordRequest("HmIP-RF", false)
+	cb.Health.RecordRequest("HmIP-RF", false)
+
+	ad := NewHealthAdapter(reg, nil)
+
+	da, ok := ad.ClientDetail("ccu-a/HmIP-RF")
+	if !ok || da.ConsecutiveFailures != 0 {
+		t.Errorf("ClientDetail ccu-a/HmIP-RF = (%+v, %v), want healthy detail", da, ok)
+	}
+	db, ok := ad.ClientDetail("ccu-b/HmIP-RF")
+	if !ok || db.ConsecutiveFailures != 2 {
+		t.Errorf("ClientDetail ccu-b/HmIP-RF = (%+v, %v), want 2 consecutive failures", db, ok)
+	}
+	if _, ok := ad.ClientDetail("ccu-c/HmIP-RF"); ok {
+		t.Error("ClientDetail for an unknown central must report not-found")
+	}
+	if _, ok := ad.ClientDetail("HmIP-RF"); !ok {
+		t.Error("bare component name must keep the legacy first-match behaviour")
+	}
+	if got := ad.ClientScore("ccu-b/HmIP-RF"); got >= ad.ClientScore("ccu-a/HmIP-RF") {
+		t.Errorf("ClientScore routing broken: b=%v should be below a=%v", got, ad.ClientScore("ccu-a/HmIP-RF"))
+	}
+}

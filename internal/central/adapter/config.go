@@ -6,6 +6,7 @@ package adapter
 import (
 	"maps"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -88,21 +89,42 @@ func NewHealthAdapter(r *central.Registry, fallback *health.Tracker) *HealthAdap
 	return &HealthAdapter{registry: r, fallback: fallback}
 }
 
-// trackers returns every tracker the adapter should consult, in the
-// order daemon-global first → centrals in registry order. The
+// scopedTracker pairs a tracker with the central it belongs to. The
+// central name is empty for the daemon-global fallback tracker —
+// its components (REST 5xx, WS subscribers, SQLite/MQTT probes) are
+// daemon-wide resources and stay unscoped in the aggregated view.
+type scopedTracker struct {
+	central string
+	tracker *health.Tracker
+}
+
+// scopedTrackers returns every tracker the adapter should consult, in
+// the order daemon-global first → centrals in registry order. The
 // resulting slice is fresh per call so a concurrent registry mutation
 // cannot leak into the iteration.
-func (a *HealthAdapter) trackers() []*health.Tracker {
-	out := make([]*health.Tracker, 0, 1)
+func (a *HealthAdapter) scopedTrackers() []scopedTracker {
+	out := make([]scopedTracker, 0, 1)
 	if a.fallback != nil {
-		out = append(out, a.fallback)
+		out = append(out, scopedTracker{tracker: a.fallback})
 	}
 	if a.registry != nil {
 		for _, u := range a.registry.List() {
 			if u.Health != nil {
-				out = append(out, u.Health)
+				out = append(out, scopedTracker{central: u.Name(), tracker: u.Health})
 			}
 		}
+	}
+	return out
+}
+
+// trackers returns the bare tracker list for callers that aggregate
+// without per-component naming (Overall, PrimaryClientHealthy,
+// CentralScoreInt, Gauges).
+func (a *HealthAdapter) trackers() []*health.Tracker {
+	scoped := a.scopedTrackers()
+	out := make([]*health.Tracker, 0, len(scoped))
+	for _, st := range scoped {
+		out = append(out, st.tracker)
 	}
 	return out
 }
@@ -146,14 +168,23 @@ func (a *HealthAdapter) Overall() health.Status {
 }
 
 // Snapshot implements handlers.HealthReader. Unions the component
-// lists across every tracker; duplicates (same component name in two
-// trackers) keep the entry with the newest sample. The result is
-// sorted alphabetically so the SPA renders a stable order.
+// lists across every tracker. Components from a central's tracker are
+// scoped as `<central>/<component>` — two CCUs typically run the same
+// interface names (HmIP-RF, BidCos-RF, the `central` heartbeat), and
+// an unscoped union would collapse them to a single entry, hiding all
+// but one CCU from the diagnostics view. Daemon-global fallback
+// components stay bare. Same-name duplicates (only possible within
+// the fallback after scoping) keep the entry with the newest sample.
+// The result is sorted alphabetically so the SPA renders a stable
+// order.
 func (a *HealthAdapter) Snapshot() []health.Component {
 	seen := make(map[string]int)
 	var out []health.Component
-	for _, t := range a.trackers() {
-		for _, c := range t.Snapshot() {
+	for _, st := range a.scopedTrackers() {
+		for _, c := range st.tracker.Snapshot() {
+			if st.central != "" {
+				c.Name = st.central + "/" + c.Name
+			}
 			if idx, ok := seen[c.Name]; ok {
 				if c.LastSample.Timestamp.After(out[idx].LastSample.Timestamp) {
 					out[idx] = c
@@ -216,25 +247,48 @@ func (a *HealthAdapter) PrimaryClientHealthy() bool {
 	return false
 }
 
-// ClientScore searches every tracker for a registered detail entry
-// for name and returns the first match's score. Returns 0 when no
-// tracker has seen the named client.
-func (a *HealthAdapter) ClientScore(name string) float64 {
+// resolveClientTracker resolves a (possibly scoped) component name to
+// the tracker that owns it. `<central>/<component>` routes to exactly
+// that central's tracker — the names [HealthAdapter.Snapshot] emits
+// round-trip through here. Bare names keep the legacy first-match
+// scan so callers predating the scoping do not break.
+func (a *HealthAdapter) resolveClientTracker(name string) (*health.Tracker, string, bool) {
+	if centralName, comp, scoped := strings.Cut(name, "/"); scoped {
+		for _, st := range a.scopedTrackers() {
+			if st.central == centralName {
+				if _, ok := st.tracker.ClientDetail(comp); ok {
+					return st.tracker, comp, true
+				}
+				return nil, "", false
+			}
+		}
+		// No central by that name — fall through to the bare-name
+		// scan: a daemon-global component may legitimately contain
+		// a slash.
+	}
 	for _, t := range a.trackers() {
 		if _, ok := t.ClientDetail(name); ok {
-			return t.ClientScore(name)
+			return t, name, true
 		}
+	}
+	return nil, "", false
+}
+
+// ClientScore resolves name (scoped or bare) to its owning tracker
+// and returns that client's score. Returns 0 when no tracker has
+// seen the named client.
+func (a *HealthAdapter) ClientScore(name string) float64 {
+	if t, comp, ok := a.resolveClientTracker(name); ok {
+		return t.ClientScore(comp)
 	}
 	return 0
 }
 
-// ClientDetail searches every tracker for a registered detail entry
-// for name and returns the first match.
+// ClientDetail resolves name (scoped or bare) to its owning tracker
+// and returns that client's detail entry.
 func (a *HealthAdapter) ClientDetail(name string) (health.ClientHealth, bool) {
-	for _, t := range a.trackers() {
-		if d, ok := t.ClientDetail(name); ok {
-			return d, true
-		}
+	if t, comp, ok := a.resolveClientTracker(name); ok {
+		return t.ClientDetail(comp)
 	}
 	return health.ClientHealth{}, false
 }
