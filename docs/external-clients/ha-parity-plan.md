@@ -75,11 +75,30 @@ Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
   aiohomematics `calculated_<addr>_<ch>_<param>`), liegen im normalen
   (address, channel, parameter)-Store und empfangen WS-Wertänderungen
   ohne Sonderfälle.
-- Offen: Punkt 3 (VALUES-Seeding), 5/6 (Visibility + Enabled-Defaults,
-  braucht Daemon-Marker/Descriptions), 12 (Schedule), 13
-  (Rest-Namensparität), Hub-Singletons (alarm/service messages, inbox,
-  HUB_UPDATE, Connectivity, Install-Mode), Valve 0/9 + Siren 2/7
-  (CDP-Residual).
+- Valve/Siren-Residual ✅ (2026-06-11): Ursache war Kategorie-/Kind-
+  Mapping, nicht fehlende Materialisierung. Nur Light/Cover
+  implementierten `Category()`; das Valve promotete das `switch` seines
+  anonym eingebetteten `*generic.Switch`, Smoke-Sirenen (HmIP-SWSD) und
+  SoundPlayer (HmIP-MP3P) hatten keinen kind-Token. Fix: explizite
+  `Category()` auf allen Custom-Typen + `siren_smoke`/`siren_sound`
+  Kinds; Client mappt die neuen Kinds. **Daemon-Redeploy nötig.**
+- Punkt 5/6 ✅ (Hub-Teil): `resolve_hub_inclusion` spiegelt
+  `_resolve_sysvar_enabled_default` (Marker-Präfix-Match auf der
+  description, die der Daemon bereits shipped); ohne Marker spawnt
+  alles Nicht-Interne **default-disabled** (ccu-Referenz: alle 69
+  Sysvar- und 12 Programm-Entitäten disabled_by=integration);
+  CCU-interne Programme (`prgEnergyCounter-…`, `is_internal`) spawnen
+  nie; je Programm Button+Switch; Marker laufen Integration →
+  CentralConfig → HubCoordinator. Geräte-Parameter-Visibility
+  (SECTION/ACTIVITY_STATE/Climate-Interna, ~600 Entitäten) bleibt
+  offen → braucht ein service/hidden-Flag je DP vom Daemon.
+- Offen: Punkt 3 (VALUES-Seeding), Geräte-Parameter-Visibility (Rest
+  von 5/6), 12 (Schedule), 13 (Rest-Namensparität), Hub-Singletons
+  (alarm/service messages, inbox, HUB_UPDATE, Connectivity,
+  Install-Mode). Hinweis Verifikation: bestehende Registry-Einträge
+  (59 interne Programm-Buttons, enabled Hub-Entitäten) bleiben
+  registriert — echte Zahlenparität zeigt erst ein frisch angelegter
+  Entry; der Orphan-Cleanup ist auf loom noch deaktiviert.
 
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
