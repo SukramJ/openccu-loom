@@ -270,6 +270,11 @@ func (r *Runner) GetBackendInfo(ctx context.Context) (BackendInfo, error) {
 // GetSerial queries the CCU for its hardware serial number by running the
 // get_serial.fn ReGa script. Returns an empty string when the CCU cannot
 // determine the serial.
+//
+// The CCU may report the full radio-module serial; only the last 10
+// characters are the canonical hardware serial shown in the WebUI. Clients
+// embed this value as the central-id slot of their unique_ids, so it must
+// match that canonical form byte for byte.
 func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 	var result struct {
 		Serial string `json:"serial"`
@@ -277,7 +282,11 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetSerial, nil, &result); err != nil {
 		return "", err
 	}
-	return result.Serial, nil
+	serial := result.Serial
+	if len(serial) > 10 {
+		serial = serial[len(serial)-10:]
+	}
+	return serial, nil
 }
 
 // ProgramDescription is one entry returned by [Runner.GetProgramDescriptions].
