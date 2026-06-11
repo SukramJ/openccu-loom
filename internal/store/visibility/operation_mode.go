@@ -284,20 +284,15 @@ func markIfIgnored(dev *device.Device, ch *device.Channel, dp device.ParameterDa
 	if r, ok := dp.(unIgnoredReader); ok && r.IsUnIgnored() {
 		return
 	}
-	// Preserve an explicit DataPoint promotion set by the custom-DP
-	// pipeline (markAdditionalDataPoints / applyFieldVisibility).
-	// `force_usage(DATA_POINT)` in `_mark_data_points` takes precedence
-	// over the ignored-parameter filter because it is applied at DP
-	// creation time, before any post-create suppression pass runs.
-	// In Go the creation-time mark is `ForcedUsage=DataPoint`; if that
-	// mark is already set we must not overwrite it with NoCreate.
-	// Closes snapshot drift for HM-Sec-Key/Win DIRECTION/ERROR/WORKING
-	// and HmIP-PCBS(-BAT) LOW_BAT/OPERATING_VOLTAGE.
-	if r, ok := dp.(forcedUsageReader); ok {
-		if u, set := r.ForcedUsage(); set && u == hmenum.DataPointUsageDataPoint {
-			return
-		}
-	}
+	// A custom-DP promotion (`ForcedUsage=DataPoint` from
+	// markAdditionalDataPoints / applyFieldVisibility) does NOT shield a
+	// device-ignored parameter: in the reference stack an ignored parameter
+	// never gets a generic DP, so the custom-DP `_mark_data_point` promotion
+	// finds nothing to promote. The cases that must survive this pass
+	// (HM-Sec-Key/Win DIRECTION/ERROR/WORKING, HmIP-PCBS(-BAT)
+	// LOW_BAT/OPERATING_VOLTAGE) are covered by the decider's leading
+	// un-ignore guard (`unIgnoreParametersByDevice`), which already returned
+	// false from IsParameterIgnored above.
 	if f, ok := dp.(usageForcer); ok {
 		f.SetForcedUsage(hmenum.DataPointUsageIgnored)
 	}

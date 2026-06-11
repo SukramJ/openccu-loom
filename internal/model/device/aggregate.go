@@ -524,6 +524,16 @@ var virtualRemoteModels = map[string]struct{}{
 	"HmIP-RCV-50": {},
 }
 
+// IsVirtualRemote reports whether this device is one of the CCU's
+// virtual-remote pseudo-devices (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50).
+// Their press parameters are real, clickable actions (HA exposes them
+// as buttons); on physical devices the same parameters are pure event
+// emitters.
+func (d *Device) IsVirtualRemote() bool {
+	_, ok := virtualRemoteModels[d.Model]
+	return ok
+}
+
 // RelevantForCentralLinkManagement reports whether this device is a candidate
 // for CCU central-link management.
 //

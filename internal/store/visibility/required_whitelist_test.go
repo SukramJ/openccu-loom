@@ -180,3 +180,45 @@ func TestRequiredParameterDoesNotAffectMaster(t *testing.T) {
 			beforeWhitelist, afterWhitelist)
 	}
 }
+
+// TestDeviceIgnoreBeatsRequiredWhitelist verifies that the device-specific
+// suppress list (ignoreParametersByDevice) applies even when the parameter is
+// on the required whitelist. Mirrors the reference stack, where
+// `_required_parameters` only exempts from the static ignore list:
+// OPERATING_VOLTAGE is a default DP (required) yet mains-powered models like
+// HmIP-BSM must still suppress it — only battery models report a meaningful
+// voltage.
+func TestDeviceIgnoreBeatsRequiredWhitelist(t *testing.T) {
+	t.Parallel()
+
+	d := NewParameterDecider(nil)
+	d.SetRequiredParameters([]hmenum.Parameter{
+		hmenum.ParameterOperatingVoltage,
+		hmenum.ParameterCurrentIllumination,
+	})
+
+	// Mains-powered models: device ignore wins over required.
+	for _, model := range []string{"HmIP-BSM", "HmIP-BROLL", "HmIP-FSM", "HmIP-BDT"} {
+		if !d.IsParameterIgnored(model, "MAINTENANCE", 0, hmenum.ParamsetKeyValues, hmenum.ParameterOperatingVoltage) {
+			t.Errorf("OPERATING_VOLTAGE on %s must be ignored despite required whitelist", model)
+		}
+	}
+	// Motion sensors: CURRENT_ILLUMINATION suppressed by device ignore.
+	for _, model := range []string{"HmIP-SMI", "HmIP-SMO-A", "HmIP-SPI"} {
+		if !d.IsParameterIgnored(model, "MOTION_DETECTOR", 1, hmenum.ParamsetKeyValues, hmenum.ParameterCurrentIllumination) {
+			t.Errorf("CURRENT_ILLUMINATION on %s must be ignored despite required whitelist", model)
+		}
+	}
+
+	// Battery models keep OPERATING_VOLTAGE (not on the device ignore list).
+	if d.IsParameterIgnored("HmIP-SWDO", "MAINTENANCE", 0, hmenum.ParamsetKeyValues, hmenum.ParameterOperatingVoltage) {
+		t.Error("OPERATING_VOLTAGE on HmIP-SWDO (battery) must not be ignored")
+	}
+
+	// Built-in un-ignore wins over the device ignore list: HmIP-PCBS-BAT
+	// matches the HmIP-PCBS ignore prefix but unIgnoreParametersByDevice
+	// re-promotes OPERATING_VOLTAGE/LOW_BAT for it.
+	if d.IsParameterIgnored("HmIP-PCBS-BAT", "MAINTENANCE", 0, hmenum.ParamsetKeyValues, hmenum.ParameterOperatingVoltage) {
+		t.Error("OPERATING_VOLTAGE on HmIP-PCBS-BAT must survive via built-in un-ignore")
+	}
+}

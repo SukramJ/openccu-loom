@@ -50,6 +50,11 @@ type Sysvar struct {
 	// sysvars support additional operations and are reported separately
 	// from plain system variables.
 	IsExtended bool
+	// IsInternal mirrors the CCU's isInternal flag from SysVar.getAll.
+	// Internal variables back CCU-internal bookkeeping; clients skip
+	// them for HA entities unless explicitly opted in (the reference stack's
+	// INTERNAL description marker).
+	IsInternal bool
 
 	// ServiceRegistry implements the write-half of [payload.Source].
 	// Each Sysvar instance gets its own registry so service methods are
