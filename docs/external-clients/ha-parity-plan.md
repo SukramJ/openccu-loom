@@ -201,6 +201,39 @@ sensor/week_profile, Punkt 12), Hub-Singletons, BidCos-Bestandsdifferenz
 (OttoMac ohne BidCos-RF-Interface), Kleinposten (3 level-Sensor-uid-Drift,
 2 calculated duration, zentraler Backup-Button-uid).
 
+### Messung 2026-06-11 spät (nach PR #49/#12-Redeploy, frischer Spawn)
+
+**Live-Abweichungen: 0 (von 692).** Struktur: binary_sensor, button,
+climate, event, light, lock, notify, siren, valve **exakt**; gematcht
+1773, nur loom 29, nur ccu 193.
+
+Rest-Analyse und Fixes (Daemon PR #50, Types 0.1.15 PR #8, Client
+2026.6.6 PR #13):
+
+- **23 sysvar nur-loom**: OldVal/pcCCUID-Scratch-Werte (hub.py
+  `_EXCLUDED`) + IDs 40/41 (Alarm-/Servicemeldungen,
+  `IGNORE_SYSVARS_BY_ID`). Exklusion jetzt ZENTRAL im Daemon
+  (`loadSysvars`), damit REST/MQTT/Matter/Clients dieselbe Semantik
+  haben; Client-Filter als Fallback. `SysvarSummary.vid` neu am Wire
+  (api 1.3.0).
+- **4 Kategorie-Drifts auf gematchten uids** (switch/select auf ccu vs
+  binary_sensor/sensor auf loom): `SysVar.getAll` liefert keine
+  Descriptions → is_extended feuerte nie. Daemon lädt Descriptions nun
+  via vorhandenem ReGa-Script (`sv.DPInfo`), HAHM-Marker greift.
+- **3 level_sensor nur-ccu**: Legacy-uids im OttoMac-Registry-Altbestand
+  (`<addr>_1_level_sensor`); aktueller aiohomematic-Code erzeugt
+  `<addr>_1_level` — identisch mit loom. Kein Handlungsbedarf.
+- **2 number:combined duration nur-ccu** (+2 calculated sensor
+  nur-loom): aiohomematics combined-DP-Layer (DURATION_VALUE+UNIT →
+  schreibbare Number, hue+saturation) fehlt im Loom-Stack — neues
+  Plan-Item.
+- **1 button:backup nur-loom**: bewusstes Loom-Extra (Daemon-Backup).
+
+Verbleibend: Schedule-Layer (132 switch + 45 sensor + 41 week_profile),
+Hub-Singletons (~10: alarm/service messages, connectivity, latency,
+inbox, system-health, system-update, install-mode, last-event-age),
+combined-DP-Layer, BidCos-Bestandsdifferenz.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
