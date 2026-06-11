@@ -63,11 +63,23 @@ Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
 - Punkt 9 ✅ Update-Entitäten: ein DpUpdate je updatable Device
   (uid `loom_<address>_update`), HmIP-Ready/In-Progress-Gating wie
   aiohomematic, Install via `POST /devices/{addr}/firmware/update`.
+- Punkt 10 ✅ Events: Event-Groups werden mit dem Bootstrap-Batch
+  angekündigt (Cache auf der Query-Facade), tragen den `loom_`-Namespace
+  (`loom_event_group_<typ>_<channel_uid>`), und die Refresh-Bridge
+  zeichnet jeden Device-Trigger am passenden Group-Objekt auf
+  (`last_triggered_event`) und pingt dessen keyed
+  DataPointStateChangedEvent — die HA-event-Entität feuert.
+- Punkt 11 ✅ Calculated DPs: Bootstrap zieht
+  `GET …/channels/{no}/calc-dps` je Kanal; die DPs subclassen die
+  generischen Dp*-Zwillinge (uid-Präfix `calculated`, parity zu
+  aiohomematics `calculated_<addr>_<ch>_<param>`), liegen im normalen
+  (address, channel, parameter)-Store und empfangen WS-Wertänderungen
+  ohne Sonderfälle.
 - Offen: Punkt 3 (VALUES-Seeding), 5/6 (Visibility + Enabled-Defaults,
-  braucht Daemon-Marker/Descriptions), 10 (Events), 11 (Calculated),
-  12 (Schedule), 13 (Rest-Namensparität), Hub-Singletons
-  (alarm/service messages, inbox, HUB_UPDATE, Connectivity,
-  Install-Mode).
+  braucht Daemon-Marker/Descriptions), 12 (Schedule), 13
+  (Rest-Namensparität), Hub-Singletons (alarm/service messages, inbox,
+  HUB_UPDATE, Connectivity, Install-Mode), Valve 0/9 + Siren 2/7
+  (CDP-Residual).
 
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
