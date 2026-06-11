@@ -162,16 +162,24 @@ func (d *ParameterDecider) computeIgnored(model string, channelNo int, paramset 
 func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, paramset hmenum.ParamsetKey, p hmenum.Parameter) bool {
 	name := string(p)
 
-	// 0. Early-exit guard: if the parameter is required, un-ignored (custom or
+	// 0. Early-exit guard: if the parameter is un-ignored (custom or
 	// device-built-in), return false immediately — bypassing ALL ignore rules.
 	// This mirrors _check_values_parameter_is_ignored (parameter_decider.py):
 	// the un-ignored check fires first, before any static-list test.
-	if d.isRequired(p) || d.matchesUnIgnore(model, channelNo, paramset, p) || deviceUnIgnoresByPrefix(model, p) {
+	//
+	// The required-parameters whitelist is intentionally NOT part of this
+	// guard: in the reference stack `_required_parameters` only exempts from
+	// the static ignore list (step 1); the device-specific suppress list
+	// (step 2) applies regardless. OPERATING_VOLTAGE is required (it sits in
+	// the default-DP catalogue) yet mains-powered models like HmIP-BSM must
+	// still suppress it.
+	if d.matchesUnIgnore(model, channelNo, paramset, p) || deviceUnIgnoresByPrefix(model, p) {
 		return false
 	}
 
-	// 1. Check static IGNORED_PARAMETERS and wildcard patterns.
-	if _, inIgnoreList := ignoredParameters[name]; inIgnoreList || parameterIsWildcardIgnored(name) {
+	// 1. Check static IGNORED_PARAMETERS and wildcard patterns — unless the
+	// parameter is on the required whitelist (default DPs, profile fields).
+	if _, inIgnoreList := ignoredParameters[name]; (inIgnoreList || parameterIsWildcardIgnored(name)) && !d.isRequired(p) {
 		return true
 	}
 
@@ -185,8 +193,12 @@ func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, par
 
 	// 3. Check Rules (includes hiddenParameters from NewRules). Un-ignore
 	// has already been handled by the leading guard above (step 0), so no
-	// second matchesUnIgnore call is needed here.
-	if d.rules.Evaluate(model, p) == DecisionHide {
+	// second matchesUnIgnore call is needed here. Like the static list,
+	// this branch honours the required whitelist: the rules container is a
+	// superset of the reference stack's static hides, which the whitelist
+	// exempts — only the device-specific suppress list (step 2) and the
+	// channel/event gates below apply unconditionally.
+	if d.rules.Evaluate(model, p) == DecisionHide && !d.isRequired(p) {
 		return true
 	}
 
