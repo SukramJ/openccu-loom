@@ -657,19 +657,17 @@ func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
 				if !dp.Parameter().IsClickEvent() {
 					continue
 				}
-				// A suppression mark from an earlier pass wins: the
-				// event-suppression gate (IGNORE_DEVICES_FOR_DATA_POINT_EVENTS,
-				// e.g. HmIP-PS click parameters) and the hidden-parameter pass
-				// have already forced Ignored/NoCreate — in the reference
-				// stack those parameters never spawn an event at all, so
-				// promoting them to usage=event here would resurrect their
-				// keypress groups.
-				if r, ok := dp.(interface {
-					ForcedUsage() (hmenum.DataPointUsage, bool)
-				}); ok {
-					if _, set := r.ForcedUsage(); set {
-						continue
-					}
+				// Event-suppression wins: IGNORE_DEVICES_FOR_DATA_POINT_EVENTS
+				// (HmIP-PS* click parameters) means the reference stack never
+				// spawns an event at all — promoting to usage=event here would
+				// resurrect their keypress groups. Every OTHER earlier mark is
+				// deliberately overridden: the custom-DP suppression's NoCreate
+				// (in the reference stack a CDP device still fires click events,
+				// the suppression only hides the generic entity) and the
+				// channel-operation-mode gating's DataPoint (KEY channels in an
+				// active mode fire events, they don't spawn buttons).
+				if visibility.IsParameterIgnoredForDataPointEvent(d.Model, dp.Parameter()) {
+					continue
 				}
 				if setter, ok := dp.(interface {
 					SetForcedUsage(hmenum.DataPointUsage)

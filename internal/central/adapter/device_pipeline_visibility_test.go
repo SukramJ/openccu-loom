@@ -337,6 +337,41 @@ func TestClickEventMarksPreserveEventSuppression(t *testing.T) {
 		assertForcedUsageIgnored(t, dp, "HmIP-PSM PRESS_SHORT")
 	})
 
+	t.Run("custom-DP NoCreate is overridden to event", func(t *testing.T) {
+		t.Parallel()
+		// CDP devices still fire click events in the reference stack — the
+		// custom-DP suppression only hides the generic entity. A NoCreate
+		// mark from that pass must not survive on click parameters, else
+		// the keypress groups of e.g. HmIP-BSM vanish.
+		c, _ := central.New(central.Config{Name: "ccu-vis-click-cdp"})
+		p := NewDevicePipeline(c)
+		p.WithVisibility(visibility.NewRegistry())
+		b := backendWithParams("AABBCC03", "HmIP-BSM", "KEY_TRANSCEIVER", pressShort)
+		if err := p.IngestFromBackend(
+			context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+			b, &fakeWriter{}, nil, slog.Default(),
+		); err != nil {
+			t.Fatalf("IngestFromBackend: %v", err)
+		}
+		dev, _ := c.ModelRegistry.Get("AABBCC03")
+		dp := dev.Channel("AABBCC03:1").Parameter(hmenum.ParameterPressShort)
+		if dp == nil {
+			t.Fatal("PRESS_SHORT DP missing")
+		}
+		// Simulate the custom-DP suppression having marked it NoCreate,
+		// then re-run the click pass (idempotent) — event must win.
+		dp.(interface {
+			SetForcedUsage(hmenum.DataPointUsage)
+		}).SetForcedUsage(hmenum.DataPointUsageNoCreate)
+		p.applyClickEventMarks("HmIP-RF")
+		u, set := dp.(interface {
+			ForcedUsage() (hmenum.DataPointUsage, bool)
+		}).ForcedUsage()
+		if !set || u != hmenum.DataPointUsageEvent {
+			t.Errorf("forced_usage=%v set=%v want Event (override NoCreate)", u, set)
+		}
+	})
+
 	t.Run("wall remote gets usage=event", func(t *testing.T) {
 		t.Parallel()
 		dp := run(t, "HmIP-WRC2")
