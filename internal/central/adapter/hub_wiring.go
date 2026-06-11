@@ -125,16 +125,31 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		unit.Reconciler.SetConnect(NewJSONRPCConnectivityProbe(jc))
 	}
 
-	// Stamp the CCU's configuration URL on the central's SystemInfo so
-	// MQTT-Discovery can surface it as the per-device `configuration_url`.
-	// Without this the field is empty and HA's "Visit device" link disappears
-	// from the device card.
-	//
-	// Only the URL is stamped here; model / version / serial are set by future
-	// getVersion / system.getSystemInfo calls and preserve the URL via the
-	// read-modify-write below.
+	// Stamp the CCU-side metadata on the central's SystemInfo:
+	// configuration URL (MQTT-Discovery `configuration_url`; without it
+	// HA's "Visit device" link disappears), model / version / hostname
+	// (get_backend_info.fn) and the hardware serial (get_serial.fn).
+	// The serial is the central-id slot of every canonical HA routing
+	// key for hub / internal / virtual-remote data points — clients read
+	// it off `GET /system/ccu` (SystemCCUEntry.Serial); an empty serial
+	// makes them emit broken `loom__…` unique_ids. Failures are logged
+	// but non-fatal: an incomplete identity block is preferable to a
+	// dead daemon.
 	si := unit.SystemInformation()
 	si.URL = ccuBaseURLFor(cc)
+	if info, infoErr := runner.GetBackendInfo(ctx); infoErr != nil {
+		logger.Warn("hub.backend_info.fetch_failed", slog.String("err", infoErr.Error()))
+	} else {
+		si.Model = info.Product
+		si.Version = info.Version
+		si.Hostname = info.Hostname
+		si.IsHaApp = info.IsHAApp
+	}
+	if serial, serialErr := runner.GetSerial(ctx); serialErr != nil {
+		logger.Warn("hub.serial.fetch_failed", slog.String("err", serialErr.Error()))
+	} else if serial != "" && serial != "unknown" {
+		si.Serial = serial
+	}
 	unit.SetSystemInformation(si)
 
 	// InitHub must run before the first refresh cycle so stale state from a

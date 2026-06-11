@@ -135,9 +135,16 @@ type Lock struct {
 	// RF locks report jammed state as ERROR != "NO_ERROR" rather than
 	// through a binary ERROR_JAMMED flag.
 	rfErrorDp *generic.Sensor[string]
-	// boolStateDp carries the RF / Button STATE wire value: false means
-	// "locked", true means "unlocked".
+	// boolStateDp carries the RF / Button bool wire value. Semantics
+	// differ per kind: RF STATE reads false="locked" / true="unlocked",
+	// while the button-lock parameter (GLOBAL_BUTTON_LOCK) reads
+	// true="locked" (keys disabled) / false="unlocked".
 	boolStateDp *generic.Switch
+	// buttonParam is the resolved wire parameter for KindButton —
+	// GLOBAL_BUTTON_LOCK on every shipping device, BUTTON_LOCK kept as
+	// fallback. The DataPointKey deliberately stays "BUTTON_LOCK" so the
+	// CDP name (REST/MQTT identity, HA postfix matching) is stable.
+	buttonParam hmenum.Parameter
 }
 
 // Config is the constructor record. Channel must already carry the
@@ -195,9 +202,16 @@ func New(cfg Config) *Lock {
 		// DIRECTION on these channels.
 		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterState)
 	case KindButton:
-		// Button locks: BUTTON_LOCK bool — distinct from STATE, which does
-		// not exist on HmIP-DLD ch0 channels.
-		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterButtonLock)
+		// Button locks: the wire parameter is GLOBAL_BUTTON_LOCK (a
+		// MASTER-paramset bool on ch0 that both the IP and RF button-lock
+		// profiles resolve their BUTTON_LOCK field to). BUTTON_LOCK is
+		// kept as a fallback for paramsets that carry it literally.
+		l.buttonParam = hmenum.ParameterGlobalButtonLock
+		l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterGlobalButtonLock)
+		if l.boolStateDp == nil {
+			l.buttonParam = hmenum.ParameterButtonLock
+			l.boolStateDp = custom.SwitchField(cfg.Channel, hmenum.ParameterButtonLock)
+		}
 	}
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed wire-DP
 	// change. Physical operation at the device updates LOCK_STATE / STATE /
@@ -230,6 +244,10 @@ func (l *Lock) MatterDataVersion() uint32 { return l.dataVersion.Current() }
 // to attach this custom DP to its primary channel. Satisfies
 // [device.AttachableDataPoint].
 func (l *Lock) DataPointKey() hmtypes.DataPointKey { return l.key }
+
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (lock platform).
+func (l *Lock) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryLock }
 
 // IgnoreMultipleChannelsForName opts the Lock custom DP out of the
 // multi-primary `ch<N>` naming suffix. Multi-channel locks render as
@@ -290,6 +308,15 @@ func (l *Lock) LockState() (State, bool) {
 		v, ok := l.boolStateDp.Value()
 		if !ok {
 			return StateUnknown, false
+		}
+		// Button locks invert the RF STATE semantics:
+		// GLOBAL_BUTTON_LOCK=true means the keys are locked,
+		// while RF STATE reads true as "unlocked".
+		if l.Kind == KindButton {
+			if v {
+				return StateLocked, true
+			}
+			return StateUnlocked, true
 		}
 		if v {
 			return StateUnlocked, true
@@ -459,8 +486,10 @@ func (l *Lock) send(ctx context.Context, cmd command, priority hmenum.CommandPri
 	switch l.Kind {
 	case KindIP:
 		return l.sendIP(ctx, cmd, priority)
-	case KindRF, KindButton:
+	case KindRF:
 		return l.sendRF(ctx, cmd, priority)
+	case KindButton:
+		return l.sendButton(ctx, cmd, priority)
 	}
 	return ErrNotSupported
 }
@@ -496,20 +525,14 @@ func (l *Lock) sendIP(ctx context.Context, cmd command, priority hmenum.CommandP
 }
 
 func (l *Lock) sendRF(ctx context.Context, cmd command, priority hmenum.CommandPriority) error {
-	// KindButton uses BUTTON_LOCK (bool); KindRF uses STATE (bool).
-	// HmIP-DLD ch0 (button-lock channel) has no STATE parameter — writing
-	// STATE would produce an XML-RPC fault "parameter not found".
-	param := hmenum.ParameterState
-	if l.Kind == KindButton {
-		param = hmenum.ParameterButtonLock
-	}
+	// KindRF uses the bool STATE parameter: false locks, true unlocks.
 	switch cmd {
 	case commandLock:
-		if err := l.writer.SetValue(ctx, l.Address, param, false, priority); err != nil {
+		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, false, priority); err != nil {
 			return fmt.Errorf("lock: send lock: %w", err)
 		}
 	case commandUnlock:
-		if err := l.writer.SetValue(ctx, l.Address, param, true, priority); err != nil {
+		if err := l.writer.SetValue(ctx, l.Address, hmenum.ParameterState, true, priority); err != nil {
 			return fmt.Errorf("lock: send unlock: %w", err)
 		}
 	case commandOpen:
@@ -522,6 +545,53 @@ func (l *Lock) sendRF(ctx context.Context, cmd command, priority hmenum.CommandP
 		l.recordUnlock()
 	}
 	return nil
+}
+
+func (l *Lock) sendButton(ctx context.Context, cmd command, priority hmenum.CommandPriority) error {
+	// Button locks write the resolved button parameter
+	// (GLOBAL_BUTTON_LOCK): lock → true (keys disabled),
+	// unlock → false. The parameter lives in the
+	// MASTER paramset on every shipping device, so the write must go
+	// through put_paramset — setValue on a MASTER parameter faults
+	// with XML-RPC -5 "Invalid parameter or value".
+	var value bool
+	switch cmd {
+	case commandLock:
+		value = true
+	case commandUnlock:
+		value = false
+	case commandOpen:
+		return ErrNotSupported
+	}
+	if err := l.writeButtonParam(ctx, value, priority); err != nil {
+		verb := "lock"
+		if cmd == commandUnlock {
+			verb = "unlock"
+		}
+		return fmt.Errorf("lock: send %s: %w", verb, err)
+	}
+	l.observeCommand(cmd)
+	return nil
+}
+
+// writeButtonParam routes the button-lock write through the paramset
+// the resolved DP lives in: MASTER values go through put_paramset,
+// VALUES parameters through the regular setValue path.
+func (l *Lock) writeButtonParam(ctx context.Context, value bool, priority hmenum.CommandPriority) error {
+	isMaster := l.boolStateDp != nil &&
+		l.boolStateDp.DataPointKey().ParamsetKey == hmenum.ParamsetKeyMaster
+	if isMaster {
+		if pw, ok := l.writer.(generic.ParamsetWriter); ok {
+			return pw.PutParamset(
+				ctx,
+				l.Address,
+				hmenum.ParamsetKeyMaster,
+				map[string]any{string(l.buttonParam): value},
+				priority,
+			)
+		}
+	}
+	return l.writer.SetValue(ctx, l.Address, l.buttonParam, value, priority)
 }
 
 func (l *Lock) observeCommand(cmd command) {
@@ -543,11 +613,17 @@ func (l *Lock) observeCommand(cmd command) {
 		return
 	}
 	if l.boolStateDp != nil {
+		// Button locks invert the RF STATE wire semantics: true means
+		// "locked" (GLOBAL_BUTTON_LOCK active).
+		locked, unlocked := false, true
+		if l.Kind == KindButton {
+			locked, unlocked = true, false
+		}
 		switch cmd {
 		case commandLock:
-			l.boolStateDp.OnEvent(false) // locked state
+			l.boolStateDp.OnEvent(locked)
 		case commandUnlock, commandOpen:
-			l.boolStateDp.OnEvent(true) // unlocked/open state
+			l.boolStateDp.OnEvent(unlocked)
 		}
 	}
 }

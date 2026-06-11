@@ -3352,7 +3352,14 @@ components:
       type: object
       required: [name, category, channel_no, supported_operations]
       properties:
-        name: { type: string }
+        name:
+          type: string
+          description: |
+            Wire identity of the Custom-DP. The bare parameter name
+            (`LEVEL`, `BUTTON_LOCK`) when it is unique on the device;
+            `PARAM@<channel>` (e.g. `LEVEL@5`) when a profile channel
+            group materialises the same parameter on multiple channels.
+            Round-trip this value verbatim into `GET/POST …/cdps/{name}`.
         category: { type: string }
         channel_no: { type: integer }
         supported_operations:
@@ -3806,6 +3813,14 @@ components:
             hmenum.CategoryToType ("light", "number", "select", "sensor",
             …). Distinct from `type` (the CCU descriptor primitive); the
             two must not be conflated.
+        usage:
+          type: string
+          description: |
+            Visibility verdict from the daemon's pipeline ("data_point",
+            "no_create", "ignored", "ce_primary", "ce_secondary",
+            "ce_visible", "event"). Clients skip entity creation for
+            "no_create"/"ignored" — the same gate the MQTT discovery
+            plane applies; mirrors aiohomematic's DataPointUsage.
         translated_name:
           type: string
           description: |
@@ -3905,14 +3920,29 @@ components:
       type: object
       required: [id, name]
       properties:
+        central:
+          type: string
+          description: CCU this program belongs to (multi-central grouping).
         id: { type: string }
         name: { type: string }
         description: { type: string }
         active: { type: boolean, nullable: true }
+        last_executed:
+          type: string
+          description: RFC3339 timestamp of the most recent execution.
+        is_internal:
+          type: boolean
+          description: |
+            True for CCU-internal helper programs (prgEnergyCounter_…,
+            Tmp_…). Clients skip these for HA entities, mirroring
+            aiohomematic's DEFAULT_INCLUDE_INTERNAL_PROGRAMS=false.
     SysvarSummary:
       type: object
       required: [name, value_type, observed]
       properties:
+        central:
+          type: string
+          description: CCU this system variable belongs to.
         name: { type: string }
         description: { type: string }
         unit: { type: string }
@@ -3922,6 +3952,12 @@ components:
         value_list:
           type: array
           items: { type: string }
+        min:
+          type: number
+          description: Declared lower bound from the CCU Rega response.
+        max:
+          type: number
+          description: Declared upper bound from the CCU Rega response.
     SysvarSetRequest:
       type: object
       required: [value]

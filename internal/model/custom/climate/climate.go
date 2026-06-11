@@ -299,6 +299,10 @@ func New(cfg Config) *Climate {
 // [device.AttachableDataPoint].
 func (c *Climate) DataPointKey() hmtypes.DataPointKey { return c.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (climate platform).
+func (c *Climate) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryClimate }
+
 // aggregate returns the AggregateView over Climate's wire-backed slots
 // (setpoint + actual_temperature + humidity). The synthetic fields (mode /
 // profile / activity) are derived state so they don't participate in the

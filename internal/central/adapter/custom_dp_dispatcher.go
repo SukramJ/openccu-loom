@@ -17,6 +17,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
@@ -122,14 +123,10 @@ func (d *CustomDPDispatcher) resolveCustomDP(deviceAddress, name string) (device
 		if !ok {
 			continue
 		}
-		for _, ch := range dev.Channels() {
-			dp := ch.CustomDataPoint()
-			if dp == nil {
-				continue
-			}
-			if dp.DataPointKey().Parameter == name {
-				return dp, ch.Number, nil
-			}
+		// Accepts the bare parameter name and the channel-exact
+		// `PARAM@<channel>` wire form (profile channel groups).
+		if dp, chNo, found := custom.FindByWireName(dev, name); found {
+			return dp, chNo, nil
 		}
 		// Device found but DP not found.
 		return nil, 0, fmt.Errorf("custom_dp: data point %q not found on device %s", name, deviceAddress)

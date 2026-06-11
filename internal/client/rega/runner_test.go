@@ -899,3 +899,35 @@ func TestRunConcurrentCallsAreSafe(t *testing.T) {
 		t.Errorf("count=%d, want %d (some calls did not reach the server)", count, goroutines)
 	}
 }
+
+func TestGetSerialTruncatesLongSerialToLastTenChars(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"serial":"3014F711A0001F58A99BC0DE"}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	serial, err := r.GetSerial(context.Background())
+	if err != nil {
+		t.Fatalf("GetSerial: %v", err)
+	}
+	if serial != "58A99BC0DE" {
+		t.Errorf("serial=%q, want last-10 truncation %q", serial, "58A99BC0DE")
+	}
+}
+
+func TestGetSerialKeepsShortSerialVerbatim(t *testing.T) {
+	t.Parallel()
+	capture := &scriptCapture{}
+	srv := newFakeCCU(t, capture, `{"serial":"ABC1234567"}`)
+	defer srv.Close()
+
+	r := newRunner(t, srv.URL)
+	serial, err := r.GetSerial(context.Background())
+	if err != nil {
+		t.Fatalf("GetSerial: %v", err)
+	}
+	if serial != "ABC1234567" {
+		t.Errorf("serial=%q, want ABC1234567 verbatim", serial)
+	}
+}

@@ -189,6 +189,12 @@ type DataPointSummary struct {
 	// "sensor", …). Distinct from Type above, which is the CCU descriptor
 	// primitive (BOOL/INTEGER/FLOAT/ENUM); the two must not be conflated.
 	DataPointType string `json:"data_point_type,omitempty"`
+	// Usage is the visibility verdict the daemon's pipeline computed for
+	// this DP ("data_point", "no_create", "ignored", "ce_primary",
+	// "ce_secondary", "ce_visible", "event"). Clients skip entity
+	// creation for "no_create"/"ignored" — the same gate the MQTT
+	// discovery plane applies.
+	Usage string `json:"usage,omitempty"`
 	// TranslatedName is the locale-aware per-entity name HA assigns to
 	// this data point — identical to the MQTT discovery `name` field
 	// (both resolve through naming.EntityDisplayName). It is the
@@ -756,6 +762,11 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 		cat := cdp.Category()
 		s.Category = string(cat)
 		s.DataPointType = string(hmenum.CategoryToType[cat])
+	}
+	// Usage carries the pipeline's visibility verdict (forced sensors,
+	// un-ignore overrides, HIDDEN_PARAMETERS, custom-DP absorption).
+	if u, ok := dp.(interface{ Usage() hmenum.DataPointUsage }); ok {
+		s.Usage = string(u.Usage())
 	}
 	s.Control = pd.Control
 	s.Type = string(pd.Type)

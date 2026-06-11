@@ -24,6 +24,90 @@ Erwarteter Effekt nach Deployment: alle 107 Live-Wert-Abweichungen
 beseitigt; Climate-capabilities (hvac_modes, min/max, PRESET_MODE)
 korrekt.
 
+## Fortschritt 2026-06-11 (Branch `feat/ha-parity-phase1` + Client `fix/climate-enum-members`)
+
+- Punkt 1 ✅ Serial: `WireHub` stampt model/version/hostname/serial via
+  `get_backend_info.fn`/`get_serial.fn`; `GET /system/ccu` liefert sie.
+- Punkt 2 ✅ (Identität): Die Materialisierung pro Kanal existierte
+  bereits — die CDPs eines Kanal-Verbunds teilten sich aber den Wire-
+  Namen (`LEVEL`), wodurch die per-Name-REST/WS-Fläche den Verbund
+  kollabierte (Client behielt nur den letzten Kanal; Invoke traf immer
+  den ersten). Kollisionen heißen jetzt `PARAM@<channel>`
+  (`custom.WireName`/`FindByWireName`, REST + WS + Dispatcher); der
+  Client keyed sie getrennt und benennt Verbund-Mitglieder
+  aiohomematic-konform über den CCU-Kanalnamen (primary → Gerätename,
+  `vch5`/`vch6`).
+- Punkt 4 ✅ Bediensperren: Lock löst `GLOBAL_BUTTON_LOCK` (MASTER) auf,
+  Semantik invertiert (true=LOCKED), Schreibpfad via put_paramset.
+- Punkt 7 ✅ als Nicht-Bug geschlossen (RF_SIREN auch in aiohomematic tot).
+- Punkt 14 ✅ Dimmer-`onoff`: Capability-Aliase im Client
+  (`brightness`→`dimmable`, `tones`→`acoustic`, `profiles`→`profile`).
+- Client-Folgefix: Climate `modes`/`profiles` liefern echte
+  aiohomematic-Enums (HA liest `.value`; Strings crashten das Setup).
+
+Live-Verifikation nach Merge/Deploy ausstehend; erwartet: 23 → ~0
+Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
+
+### Nachtrag 2026-06-11 (Blöcke 8 + 9, Client-Branch `fix/climate-enum-members`)
+
+- Punkt 8 ✅ Hub-Layer: Sysvars + Programme spawnen in HA (Otto-Rem live:
+  193 Hub-Entitäten — 80 Sensoren, 52 binary, 61 Programm-Buttons).
+  Fixes: Hub-DPs in der Bootstrap-Ankündigung, voller Katalog via
+  `GET /sysvars`/`/programs` (der Snapshot-Hub-Block trägt nur den
+  Index der ERSTEN Central — Daemon-Folge-Item: Multi-Central-Snapshot),
+  Central-Filter + `${…}`-Internals-Filter, ALARM/LOGIC→binary_sensor
+  (aiohomematic-Default-Mapping), `/system/ccu`-Eintrag per Namens-Match.
+  Offen für exakte Parität: Marker-Filterung (ccu: 69 von 132 Sysvars,
+  6 von 59 Programmen) — braucht das description-Feld an
+  SysvarSummary/ProgramSummary im Daemon (→ Punkt 5/6).
+- Punkt 9 ✅ Update-Entitäten: ein DpUpdate je updatable Device
+  (uid `loom_<address>_update`), HmIP-Ready/In-Progress-Gating wie
+  aiohomematic, Install via `POST /devices/{addr}/firmware/update`.
+- Punkt 10 ✅ Events: Event-Groups werden mit dem Bootstrap-Batch
+  angekündigt (Cache auf der Query-Facade), tragen den `loom_`-Namespace
+  (`loom_event_group_<typ>_<channel_uid>`), und die Refresh-Bridge
+  zeichnet jeden Device-Trigger am passenden Group-Objekt auf
+  (`last_triggered_event`) und pingt dessen keyed
+  DataPointStateChangedEvent — die HA-event-Entität feuert.
+- Punkt 11 ✅ Calculated DPs: Bootstrap zieht
+  `GET …/channels/{no}/calc-dps` je Kanal; die DPs subclassen die
+  generischen Dp*-Zwillinge (uid-Präfix `calculated`, parity zu
+  aiohomematics `calculated_<addr>_<ch>_<param>`), liegen im normalen
+  (address, channel, parameter)-Store und empfangen WS-Wertänderungen
+  ohne Sonderfälle.
+- Valve/Siren-Residual ✅ (2026-06-11): Ursache war Kategorie-/Kind-
+  Mapping, nicht fehlende Materialisierung. Nur Light/Cover
+  implementierten `Category()`; das Valve promotete das `switch` seines
+  anonym eingebetteten `*generic.Switch`, Smoke-Sirenen (HmIP-SWSD) und
+  SoundPlayer (HmIP-MP3P) hatten keinen kind-Token. Fix: explizite
+  `Category()` auf allen Custom-Typen + `siren_smoke`/`siren_sound`
+  Kinds; Client mappt die neuen Kinds. **Daemon-Redeploy nötig.**
+- Punkt 5/6 ✅ (Hub-Teil): `resolve_hub_inclusion` spiegelt
+  `_resolve_sysvar_enabled_default` (Marker-Präfix-Match auf der
+  description, die der Daemon bereits shipped); ohne Marker spawnt
+  alles Nicht-Interne **default-disabled** (ccu-Referenz: alle 69
+  Sysvar- und 12 Programm-Entitäten disabled_by=integration);
+  CCU-interne Programme (`prgEnergyCounter-…`, `is_internal`) spawnen
+  nie; je Programm Button+Switch; Marker laufen Integration →
+  CentralConfig → HubCoordinator. Geräte-Parameter-Visibility
+  (SECTION/ACTIVITY_STATE/Climate-Interna, ~600 Entitäten) bleibt
+  offen → braucht ein service/hidden-Flag je DP vom Daemon.
+- Geräte-Parameter-Visibility ✅ (Rest von 5/6, 2026-06-11): Die
+  Pipeline berechnete das volle Visibility-Modell schon immer
+  (forced sensors, un-ignore, HIDDEN_PARAMETERS, CDP-Absorption →
+  forced no_create) und MQTT-Discovery nutzte es — nur der REST-Wire
+  trug das Verdict nicht. `DataPointSummary.usage` shipped es jetzt;
+  der Client überspringt `no_create`/`ignored` in Announcement und
+  `get_data_points(exclude_no_create=True)`. Erwartet: ~600
+  Überhang-Entitäten weniger. **Daemon-Redeploy + Types 0.1.12.**
+- Offen: Punkt 3 (VALUES-Seeding), 12 (Schedule), 13
+  (Rest-Namensparität), Hub-Singletons (alarm/service messages, inbox,
+  HUB_UPDATE, Connectivity, Install-Mode), Orphan-Cleanup für loom,
+  Sysvar-`is_internal` am Wire. Hinweis Verifikation: bestehende Registry-Einträge
+  (59 interne Programm-Buttons, enabled Hub-Entitäten) bleiben
+  registriert — echte Zahlenparität zeigt erst ein frisch angelegter
+  Entry; der Orphan-Cleanup ist auf loom noch deaktiviert.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
@@ -65,9 +149,10 @@ Priorisiert nach Nutzerwirkung:
 6. **Enabled-Default-Parität**: 565 gematchte Entitäten sind auf loom
    default-disabled, auf ccu aktiv (duty_cycle 118, rssi 232, sabotage
    43, actual_temperature 20, …). Regeln an aiohomematic angleichen.
-7. **RF_SIREN-Profil fehlt** im Daemon (`pkg/hmenum/device_profile.go`
-   kennt nur IPSiren/IPSirenSmoke); aiohomematic hat 33 Profile, der
-   Daemon registriert 32.
+7. ~~RF_SIREN-Profil fehlt~~ — geprüft 2026-06-11: `RF_SIREN` ist auch
+   in aiohomematic nur ein Enum-Wert ohne Profil-Config und ohne
+   Modell-Registrierung (Sirenen: HmIP-ASIR, HmIP-SWSD, HmIP-MP3P).
+   Kein Defizit; faktische Parität.
 8. **Hub-Layer**: Sysvars/Programme liegen im Snapshot und Store, aber
    es entstehen keine HA-Entitäten (0 vs. 88: 69 Sysvars, 12
    Programme, 7 Connectivity/Hub, 2 Install-Mode). Compat-`model/hub`

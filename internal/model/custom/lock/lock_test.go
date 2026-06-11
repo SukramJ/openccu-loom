@@ -237,6 +237,8 @@ func TestLockButtonKindWritesBUTTONLOCK(t *testing.T) {
 
 	l := New(Config{Channel: ch, Writer: w, Kind: KindButton})
 
+	// Button-lock semantics: lock() -> turn_on (true, keys disabled),
+	// unlock() -> turn_off (false).
 	if err := l.Lock(context.Background(), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
@@ -244,8 +246,11 @@ func TestLockButtonKindWritesBUTTONLOCK(t *testing.T) {
 	if got.param != hmenum.ParameterButtonLock {
 		t.Errorf("KindButton Lock() wrote param=%v, want BUTTON_LOCK", got.param)
 	}
-	if got.value != false {
-		t.Errorf("KindButton Lock() value=%v, want false (locked)", got.value)
+	if got.value != true {
+		t.Errorf("KindButton Lock() value=%v, want true (locked)", got.value)
+	}
+	if st, ok := l.LockState(); !ok || st != StateLocked {
+		t.Errorf("after Lock(): state=%v ok=%v, want LOCKED", st, ok)
 	}
 
 	if err := l.Unlock(context.Background(), hmenum.CommandPriorityHigh); err != nil {
@@ -255,8 +260,11 @@ func TestLockButtonKindWritesBUTTONLOCK(t *testing.T) {
 	if got.param != hmenum.ParameterButtonLock {
 		t.Errorf("KindButton Unlock() wrote param=%v, want BUTTON_LOCK", got.param)
 	}
-	if got.value != true {
-		t.Errorf("KindButton Unlock() value=%v, want true (unlocked)", got.value)
+	if got.value != false {
+		t.Errorf("KindButton Unlock() value=%v, want false (unlocked)", got.value)
+	}
+	if st, ok := l.LockState(); !ok || st != StateUnlocked {
+		t.Errorf("after Unlock(): state=%v ok=%v, want UNLOCKED", st, ok)
 	}
 }
 
@@ -536,5 +544,87 @@ func TestLockIPKindPostfix(t *testing.T) {
 	r := newRig(t, "x", KindIP, &stubWriter{}, custom.LockCapabilities{})
 	if got := r.lock.NamePostfix(); got != "" {
 		t.Errorf("NamePostfix() for KindIP = %q, want empty", got)
+	}
+}
+
+// paramsetStubWriter extends stubWriter with PutParamset recording so
+// tests can assert MASTER-paramset routing.
+type paramsetStubWriter struct {
+	stubWriter
+	mu2  sync.Mutex
+	puts []putCall
+}
+
+type putCall struct {
+	channel string
+	key     hmenum.ParamsetKey
+	values  map[string]any
+}
+
+func (s *paramsetStubWriter) PutParamset(_ context.Context, ch string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandPriority) error {
+	s.mu2.Lock()
+	defer s.mu2.Unlock()
+	s.puts = append(s.puts, putCall{ch, key, values})
+	return nil
+}
+
+// TestLockButtonGlobalButtonLockFromMaster pins the shipping button-lock
+// wiring: the wire parameter is GLOBAL_BUTTON_LOCK in the MASTER paramset
+// (HmIP thermostats ch0). The state must read off the seeded MASTER value
+// (true = LOCKED) and writes must route through
+// put_paramset — setValue on a MASTER parameter faults with XML-RPC -5.
+func TestLockButtonGlobalButtonLockFromMaster(t *testing.T) {
+	t.Parallel()
+	w := &paramsetStubWriter{}
+
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "BWTH0001"})
+	ch := d.AddChannel("BWTH0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	gblDP := generic.NewSwitch(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "BWTH0001:0",
+			ParamsetKey:    hmenum.ParamsetKeyMaster,
+			Parameter:      string(hmenum.ParameterGlobalButtonLock),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+	ch.PutMaster(gblDP)
+
+	l := New(Config{Channel: ch, Writer: w, Kind: KindButton})
+
+	// Pre-seed: no value observed yet → unknown.
+	if _, ok := l.LockState(); ok {
+		t.Error("LockState() ok before any MASTER seed, want unknown")
+	}
+
+	// seedMasterValues delivers GLOBAL_BUTTON_LOCK=true → LOCKED.
+	gblDP.OnWireValue(true)
+	if st, ok := l.LockState(); !ok || st != StateLocked {
+		t.Errorf("after MASTER seed true: state=%v ok=%v, want LOCKED", st, ok)
+	}
+
+	// Unlock writes GLOBAL_BUTTON_LOCK=false via put_paramset MASTER.
+	if err := l.Unlock(context.Background(), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.puts) != 1 {
+		t.Fatalf("Unlock(): %d PutParamset calls, want 1 (MASTER routing)", len(w.puts))
+	}
+	put := w.puts[0]
+	if put.key != hmenum.ParamsetKeyMaster {
+		t.Errorf("Unlock() paramset=%v, want MASTER", put.key)
+	}
+	if v, okv := put.values[string(hmenum.ParameterGlobalButtonLock)]; !okv || v != false {
+		t.Errorf("Unlock() values=%v, want GLOBAL_BUTTON_LOCK=false", put.values)
+	}
+	if st, ok := l.LockState(); !ok || st != StateUnlocked {
+		t.Errorf("after Unlock(): state=%v ok=%v, want UNLOCKED (optimistic echo)", st, ok)
+	}
+
+	// Open is not supported on button locks.
+	if err := l.Open(context.Background(), hmenum.CommandPriorityHigh); err == nil {
+		t.Error("Open() on a button lock must fail")
 	}
 }

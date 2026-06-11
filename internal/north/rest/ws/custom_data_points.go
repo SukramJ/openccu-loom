@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -114,14 +115,8 @@ func customDPGetHandler(idx CustomDPIndex) CommandHandler {
 		if !ok {
 			return nil, errors.New("ws: device not found: " + p.Device)
 		}
-		for _, ch := range d.Channels() {
-			dp := ch.CustomDataPoint()
-			if dp == nil {
-				continue
-			}
-			if dp.DataPointKey().Parameter == p.Name {
-				return customDPEntry(dp, ch.Number), nil
-			}
+		if dp, chNo, found := custom.FindByWireName(d, p.Name); found {
+			return customDPEntry(d, dp, chNo), nil
 		}
 		return nil, errors.New("ws: custom data point not found: " + p.Name)
 	}
@@ -248,19 +243,18 @@ func customDPsForDevice(d *device.Device) []map[string]any {
 		if dp.DataPointKey().Parameter == "" {
 			continue
 		}
-		out = append(out, customDPEntry(dp, ch.Number))
+		out = append(out, customDPEntry(d, dp, ch.Number))
 	}
 	return out
 }
 
-func customDPEntry(dp device.AttachableDataPoint, channelNo int) map[string]any {
-	key := dp.DataPointKey()
+func customDPEntry(d *device.Device, dp device.AttachableDataPoint, channelNo int) map[string]any {
 	cat := hmenum.DataPointCategoryUndefined
 	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
 		cat = cdp.Category()
 	}
 	entry := map[string]any{
-		"name":       key.Parameter,
+		"name":       custom.WireName(d, dp, channelNo),
 		"category":   string(cat),
 		"channel_no": channelNo,
 		"operations": supportedOperationsForWS(cat),

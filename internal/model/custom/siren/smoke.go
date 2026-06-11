@@ -56,6 +56,10 @@ type SmokeSiren struct {
 // can attach the SmokeSiren to a channel.
 func (s *SmokeSiren) DataPointKey() hmtypes.DataPointKey { return s.key }
 
+// Category reports the HA data-point category — clients spawn the
+// entity off this value (siren platform).
+func (s *SmokeSiren) Category() hmenum.DataPointCategory { return hmenum.DataPointCategorySiren }
+
 // Subscribe satisfies [device.SubscribingDataPoint]. SmokeSiren has
 // no hot-path aggregate cache to hydrate — Status() / IsActive() /
 // IsPrimaryAlarm() etc. read directly from the embedded wire DPs,

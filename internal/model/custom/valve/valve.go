@@ -141,6 +141,15 @@ type Modulating struct {
 	custom.BaseDP
 }
 
+// Category reports the HA data-point category. Explicit override: the
+// embedded wire DP (*generic.Switch / *generic.Float) would otherwise
+// promote its own Category() ("switch"/"number") and clients would
+// spawn the valve on the wrong platform.
+func (v *Irrigation) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryValve }
+
+// Category reports the HA data-point category (see [Irrigation.Category]).
+func (v *Modulating) Category() hmenum.DataPointCategory { return hmenum.DataPointCategoryValve }
+
 // NewModulating constructs a Modulating valve that wraps the
 // channel's existing LEVEL [*generic.Float] (registered by the
 // device pipeline via [device.Channel.Put]).
