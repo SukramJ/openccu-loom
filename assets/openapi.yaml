@@ -3973,6 +3973,18 @@ components:
         max:
           type: number
           description: Declared upper bound from the CCU Rega response.
+        is_internal:
+          type: boolean
+          description: |
+            Mirrors the CCU's isInternal flag. Internal variables back
+            CCU bookkeeping; clients skip them for HA entities unless
+            opted in (aiohomematic's INTERNAL description marker).
+        is_extended:
+          type: boolean
+          description: |
+            True when the variable's description carried the extended
+            marker — clients expose the writable entity flavour
+            (switch/number/select/text) instead of the read-only default.
     SysvarSetRequest:
       type: object
       required: [value]

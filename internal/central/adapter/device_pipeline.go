@@ -497,6 +497,11 @@ func (p *DevicePipeline) IngestFromBackend(
 	// (CONFIG_PENDING, UNREACH, UPDATE_PENDING, CHANNEL_OPERATION_MODE,
 	// LOW_BAT_LIMIT, …).
 	p.applyHiddenParameterMarks(interfaceID)
+	// Force usage=event on click-event parameters (PRESS_*) of physical
+	// devices: the reference stack models them as events (HA spawns keypress
+	// event groups, never generic button entities). Virtual remotes are
+	// the exception — their press parameters are real clickable actions.
+	p.applyClickEventMarks(interfaceID)
 	// Force NoCreate on every parameter whose FLAGS bitmask carries
 	// `Flag.INTERNAL`, unless it appears in the
 	// [generic.AllowedInternalParameters] whitelist or the operator has
@@ -629,6 +634,36 @@ func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
 			continue
 		}
 		visibility.ApplyHiddenParameterMarksWithDecider(d, decider)
+	}
+}
+
+// applyClickEventMarks forces usage=event on every click-event
+// parameter (PRESS_SHORT, PRESS_LONG, …) of non-virtual-remote
+// devices. Mirrors the reference stack, where click parameters become event
+// data points (surfaced through keypress event groups) instead of
+// generic entities; without the mark every wall remote spawned four
+// button entities per channel in HA. Un-ignored parameters win — the
+// Usage() head returns DataPoint for them regardless of forced usage.
+func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
+	if p.unit == nil {
+		return
+	}
+	for _, d := range p.unit.ModelRegistry.List() {
+		if d.InterfaceID != interfaceID || d.IsVirtualRemote() {
+			continue
+		}
+		for _, ch := range d.Channels() {
+			for _, dp := range ch.DataPoints() {
+				if !dp.Parameter().IsClickEvent() {
+					continue
+				}
+				if setter, ok := dp.(interface {
+					SetForcedUsage(hmenum.DataPointUsage)
+				}); ok {
+					setter.SetForcedUsage(hmenum.DataPointUsageEvent)
+				}
+			}
+		}
 	}
 }
 

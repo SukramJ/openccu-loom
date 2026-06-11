@@ -659,6 +659,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			existing.ValueList = valueList
 			existing.Writer = writer
 			existing.IsExtended = isExtended
+			existing.IsInternal = v.IsInternal
 			existing.Description = desc
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				existing.OnValue(pv)
@@ -668,6 +669,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			sv.Unit = v.Unit
 			sv.ValueList = valueList
 			sv.IsExtended = isExtended
+			sv.IsInternal = v.IsInternal
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				sv.OnValue(pv)
 			}

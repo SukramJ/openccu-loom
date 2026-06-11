@@ -95,6 +95,14 @@ type SysvarSummary struct {
 	// Closes H-033.
 	Min *float64 `json:"min,omitempty"`
 	Max *float64 `json:"max,omitempty"`
+	// IsInternal mirrors the CCU's isInternal flag — internal variables
+	// back CCU bookkeeping; clients skip them for HA entities unless
+	// opted in (the reference stack's INTERNAL description marker).
+	IsInternal bool `json:"is_internal,omitempty"`
+	// IsExtended is true when the variable's description carried the
+	// extended marker — clients then expose the writable entity flavour
+	// (switch/number/select/text) instead of the read-only default.
+	IsExtended bool `json:"is_extended,omitempty"`
 }
 
 // SysvarSetRequest is the body of `PUT /sysvars/{name}`.
@@ -516,6 +524,8 @@ func toSysvarSummary(s *hub.Sysvar) SysvarSummary {
 		ValueType:   string(s.ValueType),
 		Observed:    ok,
 		ValueList:   s.ValueList,
+		IsInternal:  s.IsInternal,
+		IsExtended:  s.IsExtended,
 	}
 	if ok {
 		sum.Value = v.Unwrap()
