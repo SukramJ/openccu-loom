@@ -48,6 +48,27 @@ korrekt.
 Live-Verifikation nach Merge/Deploy ausstehend; erwartet: 23 → ~0
 Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
 
+### Nachtrag 2026-06-11 (Blöcke 8 + 9, Client-Branch `fix/climate-enum-members`)
+
+- Punkt 8 ✅ Hub-Layer: Sysvars + Programme spawnen in HA (Otto-Rem live:
+  193 Hub-Entitäten — 80 Sensoren, 52 binary, 61 Programm-Buttons).
+  Fixes: Hub-DPs in der Bootstrap-Ankündigung, voller Katalog via
+  `GET /sysvars`/`/programs` (der Snapshot-Hub-Block trägt nur den
+  Index der ERSTEN Central — Daemon-Folge-Item: Multi-Central-Snapshot),
+  Central-Filter + `${…}`-Internals-Filter, ALARM/LOGIC→binary_sensor
+  (aiohomematic-Default-Mapping), `/system/ccu`-Eintrag per Namens-Match.
+  Offen für exakte Parität: Marker-Filterung (ccu: 69 von 132 Sysvars,
+  6 von 59 Programmen) — braucht das description-Feld an
+  SysvarSummary/ProgramSummary im Daemon (→ Punkt 5/6).
+- Punkt 9 ✅ Update-Entitäten: ein DpUpdate je updatable Device
+  (uid `loom_<address>_update`), HmIP-Ready/In-Progress-Gating wie
+  aiohomematic, Install via `POST /devices/{addr}/firmware/update`.
+- Offen: Punkt 3 (VALUES-Seeding), 5/6 (Visibility + Enabled-Defaults,
+  braucht Daemon-Marker/Descriptions), 10 (Events), 11 (Calculated),
+  12 (Schedule), 13 (Rest-Namensparität), Hub-Singletons
+  (alarm/service messages, inbox, HUB_UPDATE, Connectivity,
+  Install-Mode).
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
