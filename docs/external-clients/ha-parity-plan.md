@@ -65,9 +65,10 @@ Priorisiert nach Nutzerwirkung:
 6. **Enabled-Default-Parität**: 565 gematchte Entitäten sind auf loom
    default-disabled, auf ccu aktiv (duty_cycle 118, rssi 232, sabotage
    43, actual_temperature 20, …). Regeln an aiohomematic angleichen.
-7. **RF_SIREN-Profil fehlt** im Daemon (`pkg/hmenum/device_profile.go`
-   kennt nur IPSiren/IPSirenSmoke); aiohomematic hat 33 Profile, der
-   Daemon registriert 32.
+7. ~~RF_SIREN-Profil fehlt~~ — geprüft 2026-06-11: `RF_SIREN` ist auch
+   in aiohomematic nur ein Enum-Wert ohne Profil-Config und ohne
+   Modell-Registrierung (Sirenen: HmIP-ASIR, HmIP-SWSD, HmIP-MP3P).
+   Kein Defizit; faktische Parität.
 8. **Hub-Layer**: Sysvars/Programme liegen im Snapshot und Store, aber
    es entstehen keine HA-Entitäten (0 vs. 88: 69 Sysvars, 12
    Programme, 7 Connectivity/Hub, 2 Install-Mode). Compat-`model/hub`
