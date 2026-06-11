@@ -24,6 +24,30 @@ Erwarteter Effekt nach Deployment: alle 107 Live-Wert-Abweichungen
 beseitigt; Climate-capabilities (hvac_modes, min/max, PRESET_MODE)
 korrekt.
 
+## Fortschritt 2026-06-11 (Branch `feat/ha-parity-phase1` + Client `fix/climate-enum-members`)
+
+- Punkt 1 ✅ Serial: `WireHub` stampt model/version/hostname/serial via
+  `get_backend_info.fn`/`get_serial.fn`; `GET /system/ccu` liefert sie.
+- Punkt 2 ✅ (Identität): Die Materialisierung pro Kanal existierte
+  bereits — die CDPs eines Kanal-Verbunds teilten sich aber den Wire-
+  Namen (`LEVEL`), wodurch die per-Name-REST/WS-Fläche den Verbund
+  kollabierte (Client behielt nur den letzten Kanal; Invoke traf immer
+  den ersten). Kollisionen heißen jetzt `PARAM@<channel>`
+  (`custom.WireName`/`FindByWireName`, REST + WS + Dispatcher); der
+  Client keyed sie getrennt und benennt Verbund-Mitglieder
+  aiohomematic-konform über den CCU-Kanalnamen (primary → Gerätename,
+  `vch5`/`vch6`).
+- Punkt 4 ✅ Bediensperren: Lock löst `GLOBAL_BUTTON_LOCK` (MASTER) auf,
+  Semantik invertiert (true=LOCKED), Schreibpfad via put_paramset.
+- Punkt 7 ✅ als Nicht-Bug geschlossen (RF_SIREN auch in aiohomematic tot).
+- Punkt 14 ✅ Dimmer-`onoff`: Capability-Aliase im Client
+  (`brightness`→`dimmable`, `tones`→`acoustic`, `profiles`→`profile`).
+- Client-Folgefix: Climate `modes`/`profiles` liefern echte
+  aiohomematic-Enums (HA liest `.value`; Strings crashten das Setup).
+
+Live-Verifikation nach Merge/Deploy ausstehend; erwartet: 23 → ~0
+Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
