@@ -134,6 +134,42 @@ Virtual-Remote-Behandlung (ccu: 50 Event-Groups, loom: 100 Event-Groups
 operating_voltage + 16 current_illumination (Visibility-Nuance), 26
 Sysvar-Überhang (is_internal fehlt am Sysvar-Wire), Hub-Singletons.
 
+### Fix-Runde 2026-06-11 abends (Daemon `fix/parity-round3`, Client `fix/parity-round3`, Types `feat/sysvar-flags` 0.1.13)
+
+Alle Issue-Klassen der Nachmittagsmessung außer Schedule-Layer und
+Hub-Singletons behoben:
+
+- **Doppel-Null-Ingestion (21 Live-Abweichungen):** Status-Pair-Fallback
+  schrieb den `<X>_STATUS`-Index (0) via `OnWireValue` über die Messwerte;
+  jetzt `UpdateStatusFromWire` (Daemon `03a940f`).
+- **212 press_*-Buttons:** `applyClickEventMarks` forciert usage=event auf
+  Click-Parametern physischer Geräte (Daemon `b5f2213`); Client nimmt
+  `event` in `_NON_CREATABLE_USAGES` auf (Client `11bef61`).
+- **Sysvar-Überhang:** `is_internal`/`is_extended` am SysvarSummary-Wire
+  (Daemon `b5f2213`, Types 0.1.13); Client bevorzugt Wire-Flag und mappt
+  extended auf schreibbare Klassen (Switch/Select/Number/Text).
+- **42 operating_voltage + 16 current_illumination:** Required-Whitelist
+  short-circuitete den ganzen Ignore-Entscheid; Spiegel-Semantik
+  wiederhergestellt — Whitelist exemptet nur statische Liste/Hides,
+  `ignoreParametersByDevice` greift bedingungslos; ForcedUsage-Preserve
+  in `markIfIgnored` entfernt (Daemon `9c29301`).
+- **HmIP-PS*-Event-Gruppen (~10):** Event-Suppression-Gate matchte das
+  Modell exakt statt per Prefix (HmIP-PSM/HMIP-PS fielen durch);
+  `applyClickEventMarks` überschreibt keine bestehende Suppression mehr
+  (Daemon `d25ab5c`); Client filtert no_create/ignored aus
+  `build_event_groups` (Client `3b22cc7`).
+
+**VR-/Bestandsbilanz geklärt (kein Bug):** Die 50 Event-Groups + 100
+Buttons `bidcos_rf` plus KEQ0117547 existieren nur auf loom, weil OttoMac
+das BidCos-RF-Interface nicht konfiguriert hat; 000D1A49A3D83F
+(HmIP-MOD-OC8 „ModOC8 Test“) fehlt im OttoMac-Bestand. Die
+HmIP-RCV-Entities (50 EG + 100 Buttons) matchen beidseitig.
+
+Erwartung nächste Messung (nach Daemon-Redeploy + Client-Install):
+Live-Abweichungen 0, „nur loom“ schrumpft um ~212 Buttons, 58 Sensoren,
+26 Sysvars, ~10 Event-Gruppen; verbleibend Schedule-Layer (Punkt 12),
+Hub-Singletons, BidCos-Bestandsdifferenz.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
