@@ -18,6 +18,7 @@
 #   GOHM_PRECOMMIT_SKIP=1            skip the entire hook
 #   GOHM_PRECOMMIT_SKIP_TESTS=1      skip the contract test stage
 #   GOHM_PRECOMMIT_SKIP_LINT=1       skip golangci-lint
+#   GOHM_PRECOMMIT_ALLOW_MAIN=1      allow a commit on the main branch
 #   GIT_SKIP_HOOKS / git --no-verify standard escape hatches
 #
 # Output is colourised when stderr is a TTY.
@@ -64,6 +65,21 @@ require_bin() {
         exit 1
     fi
 }
+
+# ---------------------------------------------------------------------------
+# Stage 0a — branch guard. main is protected (CLAUDE.md: no direct
+# commits to main); every change lands through a feature branch + PR.
+# Detached HEAD (rebase/cherry-pick in progress) is deliberately
+# allowed — those commits replay onto a branch afterwards.
+# ---------------------------------------------------------------------------
+current_branch="$(git symbolic-ref --quiet --short HEAD || true)"
+if [[ "$current_branch" == "main" && "${GOHM_PRECOMMIT_ALLOW_MAIN:-0}" != "1" ]]; then
+    fail "commit on 'main' blocked — main only moves through merged PRs"
+    note "create a branch first:  git switch -c feature/<desc>"
+    note "carry this commit over: git switch -c feature/<desc> && git commit ..."
+    note "override once (maintainer): GOHM_PRECOMMIT_ALLOW_MAIN=1 git commit ..."
+    exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Stage 0 — collect staged Go files.
