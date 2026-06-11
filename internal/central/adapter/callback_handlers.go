@@ -181,21 +181,27 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 	}
 	dp := ch.Parameter(hmenum.Parameter(parameter))
 	if dp == nil {
-		// Status-pair fallback: a CCU echo for "<X>_STATUS" is the canonical
-		// confirmation for an optimistic write on "<X>". When no dedicated _STATUS
-		// data point is registered, route the event to the source data point so its
-		// tracker can confirm or mismatch.
+		// Status-pair fallback: "<X>_STATUS" carries the MEASUREMENT
+		// STATUS of "<X>" (NORMAL / UNKNOWN / OVERFLOW, wire value 0/1/2),
+		// not a value echo. When no dedicated _STATUS data point is
+		// registered, record the status on the base data point via
+		// UpdateStatusFromWire — and stop there. Routing the event into
+		// the base DP's OnWireValue wrote the STATUS INDEX (usually 0)
+		// over the real measurement: every CCU burst then published the
+		// true value AND a bogus 0 within ~1 ms, and whichever landed
+		// last won (HA sensors oscillated between 19.6 and 0).
 		if base, isPair := hmenum.Parameter(parameter).BasePair(); isPair {
-			if dp = ch.Parameter(base); dp != nil {
+			if baseDP := ch.Parameter(base); baseDP != nil {
 				h.logger.Debug("callback.event.status_pair",
 					slog.String("interface", interfaceID),
 					slog.String("channel", channelAddress),
 					slog.String("status_param", parameter),
 					slog.String("base_param", string(base)))
+				if su, ok := baseDP.(interface{ UpdateStatusFromWire(any) }); ok {
+					su.UpdateStatusFromWire(xmlRPCValueToGo(value))
+				}
 			}
 		}
-	}
-	if dp == nil {
 		return nil
 	}
 	goValue := xmlRPCValueToGo(value)

@@ -24,14 +24,20 @@ func TestCallbackHandlersStatusPairFallback(t *testing.T) {
 	c := reg.List()[0]
 	h := NewCallbackHandlers(c, nil)
 
-	// CCU echoes a STATUS event for LEVEL — should land on the LEVEL
-	// data point because of the suffix-based fallback.
+	// Seed a real measurement first.
+	level.OnWireValue(19.6)
+
+	// CCU sends a STATUS event for LEVEL (measurement status index,
+	// typically 0 = NORMAL). It must update the base DP's STATUS — and
+	// MUST NOT overwrite the measurement: writing the status index over
+	// the value made every HA sensor oscillate between the real value
+	// and 0 (one bogus zero per CCU burst).
 	if err := h.Event(context.Background(), "HmIP-RF", "0001ABCD:1",
-		"LEVEL_STATUS", xmlrpc.DoubleValue(0.42)); err != nil {
+		"LEVEL_STATUS", xmlrpc.IntValue(0)); err != nil {
 		t.Fatalf("Event: %v", err)
 	}
-	if v, ok := level.Value(); !ok || v != 0.42 {
-		t.Fatalf("LEVEL after _STATUS event: v=%v ok=%v want 0.42", v, ok)
+	if v, ok := level.Value(); !ok || v != 19.6 {
+		t.Fatalf("LEVEL value after _STATUS event: v=%v ok=%v want 19.6 (unchanged)", v, ok)
 	}
 }
 
