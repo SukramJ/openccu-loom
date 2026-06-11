@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -661,6 +662,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			existing.IsExtended = isExtended
 			existing.IsInternal = v.IsInternal
 			existing.Description = desc
+			if vid, err := strconv.Atoi(v.ID); err == nil {
+				existing.Vid = vid
+			}
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				existing.OnValue(pv)
 			}
@@ -670,6 +674,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			sv.ValueList = valueList
 			sv.IsExtended = isExtended
 			sv.IsInternal = v.IsInternal
+			if vid, err := strconv.Atoi(v.ID); err == nil {
+				sv.Vid = vid
+			}
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				sv.OnValue(pv)
 			}
