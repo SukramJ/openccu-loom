@@ -170,6 +170,37 @@ Live-Abweichungen 0, „nur loom“ schrumpft um ~212 Buttons, 58 Sensoren,
 26 Sysvars, ~10 Event-Gruppen; verbleibend Schedule-Layer (Punkt 12),
 Hub-Singletons, BidCos-Bestandsdifferenz.
 
+### Messung 2026-06-11 abends (nach Round-3-Redeploy, frischer Spawn)
+
+Struktur: climate/light/lock/notify/siren/valve exakt ✓, gematcht 1710,
+**nur loom: 74** (vorher 609), nur ccu: 256. Live: 692 verglichen,
+13 Abweichungen — alle wieder `loom='0'` auf Status-Pair-Messwerten,
+diesmal als Push NACH dem Bootstrap (`last_updated` Minuten nach Start),
+während der Daemon-Store korrekt war (`ACTUAL_TEMPERATURE=21.3, live`).
+
+**Root-Cause Nr. 2 der Doppel-Null (PR #49, Branch `fix/status-event-topic`):**
+`EventCoordinator.HandleRawEventNormalized` strippte das `_STATUS`-Suffix
+und publizierte den Status-Index (0) als `value_changed` des
+BASIS-Parameters — Cache-Korruption + Null-Pushes an WS/MQTT/Clients;
+der Round-3-Callback-Fix deckte nur den praktisch toten dp==nil-Fallback
+ab. Fix: kein Suffix-Stripping mehr; Basis-DP-Status wird im Handler
+immer via `UpdateStatusFromWire` gepflegt (`c99dc36`).
+
+**Folge-Befunde der Struktur-Deltas (gefixt):**
+- 27 fehlende Keypress-Gruppen (HmIP-BSM & Co) + 68 überzählige
+  press-Buttons (KEY-Kanäle im aktiven Op-Mode): der ForcedUsage-Preserve
+  in `applyClickEventMarks` war zu breit — jetzt überschreibt der Pass
+  alles außer der Event-Suppression (Decider-Abfrage, `e593ba4`).
+- 36 fehlende Sysvar-Entities: Wire-`is_internal` schloss ALLE internen
+  aus; aiohomematic inkludiert sie disabled
+  (`DEFAULT_INCLUDE_INTERNAL_SYSVARS=True`), nur `${…}` nie
+  (Client PR #12, `32a0568`).
+
+Verbleibend nach PR #49 + #12: Schedule-Layer (132 switch + 45
+sensor/week_profile, Punkt 12), Hub-Singletons, BidCos-Bestandsdifferenz
+(OttoMac ohne BidCos-RF-Interface), Kleinposten (3 level-Sensor-uid-Drift,
+2 calculated duration, zentraler Backup-Button-uid).
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:

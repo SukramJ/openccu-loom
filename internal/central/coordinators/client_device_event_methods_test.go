@@ -268,9 +268,15 @@ func TestRenameNewDeviceFromOverrideNoMatchIsNoOp(t *testing.T) {
 	}
 }
 
-// ---- L-A5-28: _STATUS suffix normalisation ----
+// ---- L-A5-28: _STATUS events keep their own parameter name ----
 
-func TestHandleRawEventNormalizedStatusSuffix(t *testing.T) {
+// TestHandleRawEventNormalizedStatusKeepsOwnName pins the fix for the
+// double-zero ingestion: "<X>_STATUS" carries the measurement status of
+// "<X>" (0 = NORMAL), not a value echo. The former suffix-stripping
+// published the status index as a value_changed for the BASE parameter,
+// so north-bound consumers oscillated between the real measurement and 0.
+// The event must dispatch under its own name.
+func TestHandleRawEventNormalizedStatusKeepsOwnName(t *testing.T) {
 	bus := events.NewBus()
 	cache := NewCacheCoordinator()
 	ec := NewEventCoordinator(bus, cache, nil)
@@ -282,11 +288,11 @@ func TestHandleRawEventNormalizedStatusSuffix(t *testing.T) {
 	})
 
 	ec.HandleRawEventNormalized(context.Background(), "iface1", "ADDR001:0", "LEVEL_STATUS",
-		xmlrpc.DoubleValue(0.5))
+		xmlrpc.IntValue(0))
 
 	time.Sleep(50 * time.Millisecond)
-	if receivedParam != "LEVEL" {
-		t.Fatalf("parameter = %q after STATUS normalisation, want LEVEL", receivedParam)
+	if receivedParam != "LEVEL_STATUS" {
+		t.Fatalf("parameter = %q, want LEVEL_STATUS (no base-name rewrite)", receivedParam)
 	}
 }
 
