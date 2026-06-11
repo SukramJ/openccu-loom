@@ -175,6 +175,35 @@ jobs:
     needs: goreleaser
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+      # Breaking classification rides on the APIVersion major: the
+      # api-contract-guard CI job already forces a major bump for
+      # oasdiff-classified breaking diffs, so comparing the major
+      # against the previous release tag is authoritative — no
+      # re-classification needed at release time. The types repo uses
+      # the flag to bump its minor (instead of patch) version.
+      - name: classify contract change vs previous release
+        run: |
+          set -euo pipefail
+          api_version_at() {
+            git show "$1:internal/north/rest/handlers/info.go" \
+              | sed -nE 's/^const APIVersion = "([^"]+)"$/\1/p'
+          }
+          HEAD_VER="$(api_version_at "${GITHUB_REF_NAME}")"
+          PREV_TAG="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          BREAKING=false
+          if [ -n "$PREV_TAG" ]; then
+            PREV_VER="$(api_version_at "$PREV_TAG" || true)"
+            if [ -n "$PREV_VER" ] && \
+               [ "${HEAD_VER%%.*}" -gt "${PREV_VER%%.*}" ]; then
+              BREAKING=true
+            fi
+          fi
+          echo "API_VERSION=${HEAD_VER}" >> "$GITHUB_ENV"
+          echo "BREAKING=${BREAKING}" >> "$GITHUB_ENV"
+          echo "api_version=${HEAD_VER} prev_tag=${PREV_TAG:-none} breaking=${BREAKING}"
       - name: dispatch daemon-release event
         env:
           GH_TOKEN: ${{ secrets.TYPES_REPO_DISPATCH_TOKEN }}
@@ -186,4 +215,6 @@ jobs:
           fi
           gh api repos/SukramJ/openccu-loom-types-py/dispatches \
             -f event_type=daemon-release \
-            -f "client_payload[tag]=${GITHUB_REF_NAME}"
+            -f "client_payload[tag]=${GITHUB_REF_NAME}" \
+            -f "client_payload[api_version]=${API_VERSION}" \
+            -f "client_payload[breaking]=${BREAKING}"
