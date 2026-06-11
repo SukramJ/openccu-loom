@@ -6,6 +6,7 @@ package visibility
 import (
 	"io"
 	"maps"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -217,13 +218,21 @@ func AcceptParameterOnlyOnChannelMap() map[string]int {
 // IsParameterIgnoredForDataPointEvent reports whether a data-point event
 // for (model, parameter) should be suppressed according to the
 // IGNORE_DEVICES_FOR_DATA_POINT_EVENTS rule set.
+//
+// The model match is a case-insensitive prefix match (`_get_search_key`
+// does `search_key.startswith(element)` in the reference stack): the sole
+// entry "HmIP-PS" must also cover HmIP-PSM and the all-caps HMIP-PS
+// spelling some firmware reports.
 func IsParameterIgnoredForDataPointEvent(model string, p hmenum.Parameter) bool {
-	params, ok := ignoreDevicesForDataPointEvents[model]
-	if !ok {
-		return false
+	modelL := strings.ToLower(model)
+	for key, params := range ignoreDevicesForDataPointEvents {
+		if !strings.HasPrefix(modelL, strings.ToLower(key)) {
+			continue
+		}
+		_, suppressed := params[p]
+		return suppressed
 	}
-	_, suppressed := params[p]
-	return suppressed
+	return false
 }
 
 // IsAcceptedOnlyOnChannel reports whether parameter is restricted to a single

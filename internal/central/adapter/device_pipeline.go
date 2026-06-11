@@ -657,6 +657,20 @@ func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
 				if !dp.Parameter().IsClickEvent() {
 					continue
 				}
+				// A suppression mark from an earlier pass wins: the
+				// event-suppression gate (IGNORE_DEVICES_FOR_DATA_POINT_EVENTS,
+				// e.g. HmIP-PS click parameters) and the hidden-parameter pass
+				// have already forced Ignored/NoCreate — in the reference
+				// stack those parameters never spawn an event at all, so
+				// promoting them to usage=event here would resurrect their
+				// keypress groups.
+				if r, ok := dp.(interface {
+					ForcedUsage() (hmenum.DataPointUsage, bool)
+				}); ok {
+					if _, set := r.ForcedUsage(); set {
+						continue
+					}
+				}
 				if setter, ok := dp.(interface {
 					SetForcedUsage(hmenum.DataPointUsage)
 				}); ok {

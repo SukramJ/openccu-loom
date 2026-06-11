@@ -291,3 +291,64 @@ func TestHydrateChannelWildcardIgnoredParameterGated(t *testing.T) {
 	}
 	assertForcedUsageIgnored(t, dp, "PARTY_MODE_SUBMIT")
 }
+
+// TestClickEventMarksPreserveEventSuppression verifies the pass ordering
+// between the event-suppression gate and the click-event marking: HmIP-PS
+// click parameters are suppressed via IGNORE_DEVICES_FOR_DATA_POINT_EVENTS
+// (forced Ignored), and applyClickEventMarks must NOT overwrite that mark
+// with usage=event — in the reference stack those parameters never spawn an
+// event, so no keypress group may surface for them.
+func TestClickEventMarksPreserveEventSuppression(t *testing.T) {
+	t.Parallel()
+
+	pressShort := map[string]hmproto.ParameterData{
+		string(hmenum.ParameterPressShort): {
+			Type:       hmenum.ParameterTypeAction,
+			Operations: hmenum.OperationsEvent,
+		},
+	}
+
+	run := func(t *testing.T, model string) device.ParameterDataPoint {
+		t.Helper()
+		c, _ := central.New(central.Config{Name: "ccu-vis-click"})
+		p := NewDevicePipeline(c)
+		p.WithVisibility(visibility.NewRegistry())
+		b := backendWithParams("AABBCC02", model, "KEY_TRANSCEIVER", pressShort)
+		if err := p.IngestFromBackend(
+			context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+			b, &fakeWriter{}, nil, slog.Default(),
+		); err != nil {
+			t.Fatalf("IngestFromBackend: %v", err)
+		}
+		dev, ok := c.ModelRegistry.Get("AABBCC02")
+		if !ok {
+			t.Fatal("device not in registry")
+		}
+		dp := dev.Channel("AABBCC02:1").Parameter(hmenum.ParameterPressShort)
+		if dp == nil {
+			t.Fatal("PRESS_SHORT DP missing")
+		}
+		return dp
+	}
+
+	t.Run("suppressed model keeps Ignored", func(t *testing.T) {
+		t.Parallel()
+		dp := run(t, "HmIP-PSM")
+		assertForcedUsageIgnored(t, dp, "HmIP-PSM PRESS_SHORT")
+	})
+
+	t.Run("wall remote gets usage=event", func(t *testing.T) {
+		t.Parallel()
+		dp := run(t, "HmIP-WRC2")
+		f, ok := dp.(interface {
+			ForcedUsage() (hmenum.DataPointUsage, bool)
+		})
+		if !ok {
+			t.Fatal("DP does not expose ForcedUsage()")
+		}
+		u, set := f.ForcedUsage()
+		if !set || u != hmenum.DataPointUsageEvent {
+			t.Errorf("HmIP-WRC2 PRESS_SHORT: forced_usage=%v set=%v want Event", u, set)
+		}
+	})
+}

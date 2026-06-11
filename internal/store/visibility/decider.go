@@ -211,10 +211,10 @@ func (d *ParameterDecider) computeIgnoredValues(model string, channelNo int, par
 		return true
 	}
 
-	// 5. Event-suppression gate: IGNORE_DEVICES_FOR_DATA_POINT_EVENTS. Unlike
-	// other maps it is NOT a prefix match — the model key must match the
-	// beginning of parameter (compare_with=parameter, search_key=model_l). In
-	// practice the sole entry is "HmIP-PS" → ClickEvents, meaning HmIP-PS click
+	// 5. Event-suppression gate: IGNORE_DEVICES_FOR_DATA_POINT_EVENTS. The
+	// model key matches by case-insensitive prefix, like the other device
+	// maps. In practice the sole entry is "HmIP-PS" → ClickEvents, covering
+	// the whole HmIP-PS* family (HmIP-PS, HmIP-PSM, …): their click
 	// parameters are filtered from the data-point event surface.
 	if IsParameterIgnoredForDataPointEvent(model, p) {
 		return true
