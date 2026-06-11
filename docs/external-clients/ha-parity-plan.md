@@ -92,10 +92,18 @@ Wert-Abweichungen. Offen: Punkte 3, 5, 6, 8–13.
   CentralConfig → HubCoordinator. Geräte-Parameter-Visibility
   (SECTION/ACTIVITY_STATE/Climate-Interna, ~600 Entitäten) bleibt
   offen → braucht ein service/hidden-Flag je DP vom Daemon.
-- Offen: Punkt 3 (VALUES-Seeding), Geräte-Parameter-Visibility (Rest
-  von 5/6), 12 (Schedule), 13 (Rest-Namensparität), Hub-Singletons
-  (alarm/service messages, inbox, HUB_UPDATE, Connectivity,
-  Install-Mode). Hinweis Verifikation: bestehende Registry-Einträge
+- Geräte-Parameter-Visibility ✅ (Rest von 5/6, 2026-06-11): Die
+  Pipeline berechnete das volle Visibility-Modell schon immer
+  (forced sensors, un-ignore, HIDDEN_PARAMETERS, CDP-Absorption →
+  forced no_create) und MQTT-Discovery nutzte es — nur der REST-Wire
+  trug das Verdict nicht. `DataPointSummary.usage` shipped es jetzt;
+  der Client überspringt `no_create`/`ignored` in Announcement und
+  `get_data_points(exclude_no_create=True)`. Erwartet: ~600
+  Überhang-Entitäten weniger. **Daemon-Redeploy + Types 0.1.12.**
+- Offen: Punkt 3 (VALUES-Seeding), 12 (Schedule), 13
+  (Rest-Namensparität), Hub-Singletons (alarm/service messages, inbox,
+  HUB_UPDATE, Connectivity, Install-Mode), Orphan-Cleanup für loom,
+  Sysvar-`is_internal` am Wire. Hinweis Verifikation: bestehende Registry-Einträge
   (59 interne Programm-Buttons, enabled Hub-Entitäten) bleiben
   registriert — echte Zahlenparität zeigt erst ein frisch angelegter
   Entry; der Orphan-Cleanup ist auf loom noch deaktiviert.
