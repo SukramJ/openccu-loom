@@ -234,6 +234,34 @@ Hub-Singletons (~10: alarm/service messages, connectivity, latency,
 inbox, system-health, system-update, install-mode, last-event-age),
 combined-DP-Layer, BidCos-Bestandsdifferenz.
 
+### Schlussblöcke 2026-06-12 (Hub-Singletons, Schedule-Layer, Combined-DPs)
+
+Befund der Tiefenanalyse: Der Daemon hat den kompletten Schedule-Layer
+(weekprofile.ProfileDataPoint + ChannelSwitch inkl. TurnOn/Off) und alle
+Hub-Singleton-Daten bereits intern — die MQTT-Plane konsumiert beides
+seit jeher. Es fehlte nur die REST-Exposition für externe Clients:
+
+- **PR #51** (`feat/rest-hub-schedule-parity`, stacked auf #50, api 1.4.0):
+  GET /system/update (+ install), GET /system/metrics (JSON-Zwilling der
+  drei Hub-Sensoren), GET+POST /install-mode/interfaces (pro Interface),
+  PUT …/week_profile/channel-locks/{key} (Schreibhälfte von
+  schedule_enabled). Types 0.1.16 (PR #9).
+- Lesepfade existierten schon: /alarm-messages, /service-messages,
+  /inbox, /interfaces, …/week_profile (schedule_enabled mit den
+  channel_keys 1_1…, exakt die ccu-Switch-uids), …/schedule.
+
+Client-Arbeitsplan (2026.6.7): Hub-Singleton-DPs (uid-Slugs
+alarm-messages/service-messages/inbox/system-health/connection-latency/
+last-event-age/system-update/connectivity-…/install_mode_hmip[-button]),
+WeekProfileDp + ScheduleChannelSwitch (uids week_profile_<addr>_… /
+schedule_channel_switch_<addr>_schedule_channel_lock_<key>),
+CombinedDurationDp (Number, ersetzt calculated-duration-Sensoren),
+30s-Singleton-Refresh.
+
+uid-Hinweis: connectivity-/install-mode-uids tragen den Instanznamen
+(ottomac vs otto-rem) bzw. das Interface-Set — BidCos-Paare und der
+connectivity-Name matchen by design nicht 1:1.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
