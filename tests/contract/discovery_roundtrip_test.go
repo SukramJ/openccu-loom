@@ -602,9 +602,11 @@ func TestDiscoveryRoundTrip_Number(t *testing.T) {
 }
 
 // TestDiscoveryRoundTrip_Select verifies the writable-LIST path
-// classifies as HAComponentSelect, advertises an `options` array,
-// emits a value_template that yields the raw scalar, and round-trips
-// the wire payload to a label the options list contains.
+// classifies as HAComponentSelect, advertises lower-cased `options`
+// (the reference stack lowercases enum tokens so HA can translate
+// them), renders the wire label through `| lower` so state and options
+// agree, and maps the chosen option back to the uppercase CCU token
+// via the command_template.
 func TestDiscoveryRoundTrip_Select(t *testing.T) {
 	t.Parallel()
 	payload := buildDiscovery(t, mqtt.Event{
@@ -613,19 +615,27 @@ func TestDiscoveryRoundTrip_Select(t *testing.T) {
 		Writable:   true,
 		Descriptor: &pload.GenericConfig{ValueList: []string{"OFF", "ON", "AUTO"}},
 	})
-	if _, has := payload["options"]; !has {
-		t.Errorf("select must declare options")
+	opts, has := payload["options"].([]any)
+	if !has || len(opts) != 3 {
+		t.Fatalf("select must declare 3 options, got %v", payload["options"])
+	}
+	if opts[0] != "off" || opts[1] != "on" || opts[2] != "auto" {
+		t.Errorf("select options must be lower-cased, got %v", opts)
 	}
 	vt, ok := payload["value_template"].(string)
 	if !ok || vt == "" {
 		t.Fatal("select must have value_template")
 	}
-	if strings.Contains(vt, "| lower") {
-		t.Errorf("select value_template %q must NOT apply | lower (labels are case-sensitive)", vt)
+	if !strings.Contains(vt, "| lower") {
+		t.Errorf("select value_template %q must apply | lower so the state matches the lower-cased options", vt)
 	}
 	rendered := renderJinja(t, vt, `{"value":"AUTO","available":true}`)
-	if rendered != "AUTO" {
-		t.Errorf("select render = %q, want %q", rendered, "AUTO")
+	if rendered != "auto" {
+		t.Errorf("select render = %q, want %q", rendered, "auto")
+	}
+	ct, ok := payload["command_template"].(string)
+	if !ok || !strings.Contains(ct, "| upper") {
+		t.Errorf("select command_template %q must restore the uppercase CCU token", ct)
 	}
 }
 

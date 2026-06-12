@@ -624,6 +624,13 @@ func parseCommandPayload(body []byte) any {
 	switch strings.ToLower(s) {
 	case "true", "on":
 		return true
+	// "PRESS" is the payload_press token every HA `button` discovery
+	// payload declares (per-parameter buttons, virtual-remote press
+	// buttons). The target parameters are write-only ACTIONs whose
+	// wire type is boolean — map the token to `true` so the press
+	// actually triggers instead of failing bool coercion downstream.
+	case "press":
+		return true
 	case "false", "off":
 		return false
 	}

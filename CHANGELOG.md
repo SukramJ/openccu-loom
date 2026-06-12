@@ -6,6 +6,61 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Virtual-remote press buttons on MQTT discovery.** Virtual remotes
+  (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) now expose two clickable HA
+  `button` entities per channel (`press_short`, `press_long`, disabled
+  by default) next to the per-channel keypress `event` entity —
+  matching the reference stack's per-channel surface. The command
+  subscriber maps HA's `payload_press` token ("PRESS") to the boolean
+  `true` the write-only ACTION parameters expect, which also makes the
+  existing RESET_MOTION / RESET_PRESENCE buttons actually trigger.
+
+### Fixed
+
+- **Multi-central hub unique_id collision on MQTT discovery.** The hub
+  publisher built its own discovery builder and never saw the
+  per-central HubInfo registered on the bridge, so every central's hub
+  entities (sysvars, programs, alarm/service messages, inbox,
+  install-mode, connectivity, metrics, update) collided on serial-less
+  unique_ids (`loom__alarm_messages`) and HA silently dropped all but
+  one CCU's hub plane. The publisher now shares the bridge's builder,
+  hub discovery skips publishing until the CCU serial is known (never
+  an empty slot), and the daemon re-runs the publisher after stamping
+  HubInfo post-hydration.
+
+- **Sysvar HA typing keys on the extended-sysvar marker.** Component
+  selection for sysvar discovery used writability, rendering nearly
+  every ReGa variable as a writable switch/number/select. It now
+  mirrors the reference stack: only extended sysvars (ReGa-description
+  marker) surface as switch / select / number / text; everything else
+  is a read-only sensor or binary_sensor (ALARM keeps the `problem`
+  device class).
+
+- **DataPointUsage verdict gates per-parameter MQTT discovery.**
+  `no_create` / `ignored` data points and the `ce_primary` /
+  `ce_secondary` constituents of a channel's custom-DP aggregate no
+  longer spawn duplicate generic entities next to the aggregate
+  (climate / switch / cover / light …). `ce_visible` extras (HmIP-BWTH
+  HUMIDITY, ACTUAL_TEMPERATURE) still pass.
+
+- **Action categories no longer surface as HA entities.**
+  `action_number` (ON_TIME, RAMP_TIME, DURATION_VALUE) mirrors the
+  reference stack's empty ActionNumber whitelist; plain `action`
+  parameters (COMBINED_PARAMETER, RAMP_STOP) have no HA platform there
+  either. Both stay writable through the per-DP command topics and
+  custom-DP service methods. Write-only enum parameters
+  (`action_select`) keep their select surface and are now relegated to
+  HA's Configuration section.
+
+- **ENUM tokens are lower-cased toward HA.** Enum sensor and select
+  discovery now lower-cases `options` and pipes the state through
+  `| lower` (the reference stack renders translatable lowercase tokens
+  like `closed`, `auto_mode`); selects map the chosen option back to
+  the uppercase CCU token via `command_template` on write. Hub sysvar
+  enum labels stay verbatim, matching the reference.
+
 ## [0.2.0] — 2026-06-11
 
 ### Added

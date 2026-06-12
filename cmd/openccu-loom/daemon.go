@@ -151,8 +151,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// so retained hub state (sysvars, programs, alarm/service messages)
 	// is restored after the broker drops its retained store or the
 	// supervisor swaps the stack — Start() is idempotent (Stop+rewire).
+	//
+	// hubMQTT is declared outside the guard so wireSouthbound can re-run
+	// Start after stamping the per-central HubInfo (CCU serials) — hub
+	// discovery payloads are skipped until the serial that feeds their
+	// unique_ids is known.
+	var hubMQTT *adapter.HubMQTTPublisher
 	if mqttWiring != nil {
-		hubMQTT := adapter.NewHubMQTTPublisher(reg, mqttWiring, logger)
+		hubMQTT = adapter.NewHubMQTTPublisher(reg, mqttWiring, logger)
 		hubMQTT.Start(ctx)
 		defer hubMQTT.Stop()
 		mqttSup.OnConnect(func(ctx context.Context) {
@@ -235,6 +241,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
 		bridge:                  bridge,
+		hubMQTT:                 hubMQTT,
 	}, &availClosers)
 	defer southboundTeardown()
 	backupAdapter := sb.backupAdapter

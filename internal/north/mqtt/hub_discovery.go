@@ -45,9 +45,17 @@ type HubSysvarSpec struct {
 	Unit        string
 	ValueList   []string
 	ValueType   hmenum.HubValueType
-	Writable    bool
-	Min         *float64
-	Max         *float64
+	// Writable reports whether the daemon holds a write path for the
+	// sysvar. It is a safety gate only — the HA component selection is
+	// keyed on IsExtended (see [DefaultDiscoveryBuilder.BuildSysvarDiscovery]).
+	Writable bool
+	// IsExtended marks a sysvar whose ReGa description carries the
+	// extended-sysvar marker. The reference stack renders only extended
+	// sysvars as writable HA entities (switch / select / number / text);
+	// everything else is a read-only sensor or binary_sensor.
+	IsExtended bool
+	Min        *float64
+	Max        *float64
 }
 
 // HubInfo carries the optional CCU metadata that enriches the synthetic
@@ -189,30 +197,52 @@ func safeLower(s string) string {
 	return res
 }
 
+// hubSerial returns the per-central serial discriminator for hub
+// unique_ids and whether one is available. Hub-entity unique_ids embed
+// the serial suffix to disambiguate identical slots across CCUs
+// (`loom_<serial10>_alarm_messages`); without a serial two centrals
+// would collide on the SAME unique_id (`loom__alarm_messages`) and HA
+// silently discards the duplicate. Callers MUST skip the discovery
+// publish when ok=false — the daemon re-publishes the hub plane once
+// the CCU's serial has been registered via [Bridge.SetHubInfoFor].
+func (d *DefaultDiscoveryBuilder) hubSerial(centralName string) (serial10 string, ok bool) {
+	s := d.serialSuffix(centralName)
+	return s, s != ""
+}
+
 // ----------------------------- Sysvar -----------------------------
 
 // BuildSysvarDiscovery emits the HA Discovery payload for one sysvar.
-// Component selection mirrors
-// mapping:
+// Component selection mirrors the reference stack's mapping, which is
+// keyed on the extended-sysvar marker (a ReGa-description flag), NOT
+// on writability:
 //
-// - LOGIC → switch (writable) / binary_sensor (read-only)
-// - ALARM → binary_sensor (problem device_class)
-// - LIST → select (writable) / sensor (read-only)
-// - STRING → text (writable) / sensor
-// - NUMBER, FLOAT,
-// INTEGER → number (writable) / sensor
+// - LOGIC, ALARM → switch (extended) / binary_sensor (read-only;
+// ALARM adds the problem device_class)
+// - LIST → select (extended) / sensor with enum options
+// - STRING → text (extended) / sensor
+// - NUMBER, FLOAT, INTEGER → number (extended) / sensor
+//
+// A spec that is extended but carries no write path (Writable=false)
+// falls back to the read-only shape so HA never renders a control
+// whose commands would fail.
 //
 // The stable HA `unique_id` is `loom_<serial10>_sysvar_<slug>`,
 // independent of the friendly description so renames in the CCU don't
-// orphan HA history.
-func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem { //nolint:funlen // single-purpose sysvar discovery builder with many type branches
+// orphan HA history. Skipped (OK=false) until the central's serial is
+// known — see [DefaultDiscoveryBuilder.hubSerial].
+func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv HubSysvarSpec) DiscoveryItem { //nolint:funlen,gocognit // single-purpose sysvar discovery builder with many type branches
 	if sv.Name == "" {
+		return DiscoveryItem{}
+	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
 		return DiscoveryItem{}
 	}
 	var component string
 	stateTopic := naming.MQTTHubSysvarState(d.BridgeBase, centralName, sv.Name)
 	commandTopic := naming.MQTTHubSysvarCommand(d.BridgeBase, centralName, sv.Name)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "sysvar", routingkey.HubSlug(sv.Name), "")
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "sysvar", routingkey.HubSlug(sv.Name), "")
 
 	body := map[string]any{
 		"name":              displaySysvarName(sv),
@@ -225,9 +255,15 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		"origin":            BuildOriginInfo(),
 	}
 
+	// `editable` selects the writable HA surface. The reference stack
+	// keys the component on the extended-sysvar marker alone; Writable
+	// is ANDed in as a daemon-side safety so an extended sysvar without
+	// a write path still renders read-only.
+	editable := sv.IsExtended && sv.Writable
+
 	switch sv.ValueType {
-	case hmenum.HubValueTypeLogic:
-		if sv.Writable {
+	case hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm:
+		if editable {
 			component = string(HAComponentSwitch)
 			body["command_topic"] = commandTopic
 			body["payload_on"] = "true"
@@ -239,14 +275,12 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			component = string(HAComponentBinarySensor)
 			body["payload_on"] = "true"
 			body["payload_off"] = "false"
+			if sv.ValueType == hmenum.HubValueTypeAlarm {
+				body["device_class"] = "problem"
+			}
 		}
-	case hmenum.HubValueTypeAlarm:
-		component = string(HAComponentBinarySensor)
-		body["payload_on"] = "true"
-		body["payload_off"] = "false"
-		body["device_class"] = "problem"
 	case hmenum.HubValueTypeList:
-		if sv.Writable && len(sv.ValueList) > 0 {
+		if editable && len(sv.ValueList) > 0 {
 			component = string(HAComponentSelect)
 			body["command_topic"] = commandTopic
 			body["options"] = sv.ValueList
@@ -260,16 +294,25 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 			}
 		}
 	case hmenum.HubValueTypeString:
-		// HA's `text` entity caps state payloads at 255 chars and warns
-		// loudly on every overrun. CCU string sysvars (e.g.
-		// `AlleServicemeldungen`) routinely exceed that with multi-line
-		// service-message dumps, so we render every string sysvar as a
-		// read-only `sensor` — no length cap, no truncation, no
-		// inbound-write surface from HA. Operators who need to write a
-		// string sysvar still have the CCU UI and our REST API.
-		component = string(HAComponentSensor)
+		if editable {
+			// Extended string sysvars are operator-declared HA inputs —
+			// render them writable like the reference stack does.
+			component = string(HAComponentText)
+			body["command_topic"] = commandTopic
+			body["mode"] = "text"
+			body["optimistic"] = false
+		} else {
+			// HA's `text` entity caps state payloads at 255 chars and warns
+			// loudly on every overrun. CCU string sysvars (e.g.
+			// `AlleServicemeldungen`) routinely exceed that with multi-line
+			// service-message dumps, so non-extended string sysvars render
+			// as a read-only `sensor` — no length cap, no truncation, no
+			// inbound-write surface from HA. Operators who need to write a
+			// string sysvar still have the CCU UI and our REST API.
+			component = string(HAComponentSensor)
+		}
 	case hmenum.HubValueTypeNumber, hmenum.HubValueTypeFloat, hmenum.HubValueTypeInteger:
-		if sv.Writable {
+		if editable {
 			component = string(HAComponentNumber)
 			body["command_topic"] = commandTopic
 			body["optimistic"] = false
@@ -289,9 +332,9 @@ func (d *DefaultDiscoveryBuilder) BuildSysvarDiscovery(centralName string, sv Hu
 		// triggered the "Invalid value … (range 0.0 - 100.0)" warnings
 		// for energy / sunshine counters delivering 10 ⁶+ readings.
 		// Send a wide fallback range whenever the model does not carry
-		// a declared bound; the sensor path (`!Writable`) is unaffected
-		// because HA sensors have no min/max contract.
-		if sv.Writable {
+		// a declared bound; the sensor path is unaffected because HA
+		// sensors have no min/max contract.
+		if editable {
 			if sv.Min != nil {
 				body["min"] = *sv.Min
 			} else {
@@ -342,6 +385,10 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name st
 	if id == "" {
 		return DiscoveryItem{}
 	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	stateTopic := naming.MQTTHubProgramState(d.BridgeBase, centralName, id)
 	commandTopic := naming.MQTTHubProgramTrigger(d.BridgeBase, centralName, id)
 	// Programs are keyed by NAME (slug), not by ID. When no name is supplied,
@@ -350,7 +397,7 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name st
 	if programSlug == "" {
 		programSlug = routingkey.HubSlug(id)
 	}
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "program", programSlug, "")
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "program", programSlug, "")
 	displayName := name
 	if displayName == "" {
 		displayName = id
@@ -385,8 +432,12 @@ func (d *DefaultDiscoveryBuilder) BuildProgramDiscovery(centralName, id, name st
 // carries the full list. `device_class: problem` belongs to binary_sensor and
 // would be rejected on a sensor entity, so it is intentionally omitted.
 func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubAlarmMessages(d.BridgeBase, centralName)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "alarm_messages")
+	uniqueID := hubAggregateUniqueID(serial10, "alarm_messages")
 	body := map[string]any{
 		"name":                     "Alarm Messages",
 		"unique_id":                uniqueID,
@@ -413,8 +464,12 @@ func (d *DefaultDiscoveryBuilder) BuildAlarmMessagesDiscovery(centralName string
 // to [BuildAlarmMessagesDiscovery]. Diagnostic category, no
 // device_class (HA shows a neutral icon).
 func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName string) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubServiceMessages(d.BridgeBase, centralName)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "service_messages")
+	uniqueID := hubAggregateUniqueID(serial10, "service_messages")
 	body := map[string]any{
 		"name":                     "Service Messages",
 		"unique_id":                uniqueID,
@@ -445,8 +500,12 @@ func (d *DefaultDiscoveryBuilder) BuildServiceMessagesDiscovery(centralName stri
 // Mirrors the inbox sensor in the hub model (translation_key="inbox",
 // state_class="measurement", enabled_default=True).
 func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubInbox(d.BridgeBase, centralName)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "inbox")
+	uniqueID := hubAggregateUniqueID(serial10, "inbox")
 	body := map[string]any{
 		"name":                     "Inbox",
 		"unique_id":                uniqueID,
@@ -476,8 +535,12 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 // because the value is read-only — actual install-mode toggling
 // happens through REST.
 func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(centralName string) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubInstallMode(d.BridgeBase, centralName)
-	uniqueID := routingkey.CanonicalUniqueID(d.serialSuffix(centralName), "install_mode", "", "")
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", "", "")
 	body := map[string]any{
 		"name":                "Install Mode",
 		"unique_id":           uniqueID,
@@ -508,8 +571,12 @@ func (d *DefaultDiscoveryBuilder) BuildConnectivityDiscovery(centralName, iface 
 	if iface == "" {
 		return DiscoveryItem{}
 	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubConnectivity(d.BridgeBase, centralName, iface)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "connectivity_"+safeLower(iface))
+	uniqueID := hubAggregateUniqueID(serial10, "connectivity_"+safeLower(iface))
 	body := map[string]any{
 		"name":              "Connectivity " + iface,
 		"unique_id":         uniqueID,
@@ -541,7 +608,11 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	if centralName == "" {
 		return DiscoveryItem{}
 	}
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "system_health_score")
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
+	uniqueID := hubAggregateUniqueID(serial10, "system_health_score")
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/health_score"
 	body := map[string]any{
 		"name":                        "System Health Score",
@@ -574,9 +645,13 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, i
 	if centralName == "" || iface == "" {
 		return DiscoveryItem{}
 	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	nodeID := hubNodeID(centralName, "latency")
 	objID := safeLower(iface)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "latency_"+objID)
+	uniqueID := hubAggregateUniqueID(serial10, "latency_"+objID)
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency/" + objID
 	body := map[string]any{
 		"name":                        "Latency " + iface,
@@ -609,8 +684,12 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, i
 // Mirrors the hub update entity (Category=HubUpdate,
 // translation_key="update", enabled_default=True).
 func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) DiscoveryItem {
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
 	topic := naming.MQTTHubUpdate(d.BridgeBase, centralName)
-	uniqueID := hubAggregateUniqueID(d.serialSuffix(centralName), "update")
+	uniqueID := hubAggregateUniqueID(serial10, "update")
 	body := map[string]any{
 		"name":                    "System Update",
 		"unique_id":               uniqueID,

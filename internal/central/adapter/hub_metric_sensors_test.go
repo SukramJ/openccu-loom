@@ -39,6 +39,10 @@ func hubMQTTDiscoveryFixture(t *testing.T) (
 		RawEnabled:         true,
 		HADiscoveryEnabled: true,
 	}, pub)
+	// Hub discovery payloads embed the per-central serial in their
+	// unique_ids and skip publishing while it is unknown — stamp it like
+	// the daemon's post-hydration HubInfo pass does.
+	bridge.SetHubInfoFor("ccu-01", mqtt.HubInfo{Serial: "3014F711A0001234"})
 	wiring := mqtt.NewWiring(bridge, nil)
 	publisher = NewHubMQTTPublisher(reg, wiring, nil)
 	return reg, c, pub, publisher

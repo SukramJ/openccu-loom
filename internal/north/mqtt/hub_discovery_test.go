@@ -13,9 +13,14 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// helper: build a standard builder for all hub-discovery tests.
+// helper: build a standard builder for all hub-discovery tests. The
+// per-central serial is stamped up front because hub discovery payloads
+// skip publishing (OK=false) until the serial that feeds their
+// unique_ids is known.
 func newHubBuilder() *DefaultDiscoveryBuilder {
-	return NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu-01")
+	b := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu-01")
+	b.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
+	return b
 }
 
 // jsonMap decodes a DiscoveryItem's Payload into a map for assertion.
@@ -48,9 +53,17 @@ func TestSysvarComponentSelection(t *testing.T) {
 		wantObjID string // derived from lower-cased sv.Name
 	}{
 		{
-			name:      "Logic writable → switch",
-			sv:        HubSysvarSpec{Name: "Active", ValueType: hmenum.HubValueTypeLogic, Writable: true},
+			name:      "Logic extended writable → switch",
+			sv:        HubSysvarSpec{Name: "Active", ValueType: hmenum.HubValueTypeLogic, Writable: true, IsExtended: true},
 			wantComp:  "switch",
+			wantOK:    true,
+			wantNode:  "ccu-01_sysvars",
+			wantObjID: "active",
+		},
+		{
+			name:      "Logic writable but not extended → binary_sensor",
+			sv:        HubSysvarSpec{Name: "Active", ValueType: hmenum.HubValueTypeLogic, Writable: true},
+			wantComp:  "binary_sensor",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
 			wantObjID: "active",
@@ -64,7 +77,15 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "active",
 		},
 		{
-			name:      "Alarm writable → binary_sensor",
+			name:      "Alarm extended writable → switch",
+			sv:        HubSysvarSpec{Name: "Alarm", ValueType: hmenum.HubValueTypeAlarm, Writable: true, IsExtended: true},
+			wantComp:  "switch",
+			wantOK:    true,
+			wantNode:  "ccu-01_sysvars",
+			wantObjID: "alarm",
+		},
+		{
+			name:      "Alarm writable but not extended → binary_sensor",
 			sv:        HubSysvarSpec{Name: "Alarm", ValueType: hmenum.HubValueTypeAlarm, Writable: true},
 			wantComp:  "binary_sensor",
 			wantOK:    true,
@@ -80,9 +101,17 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "alarm",
 		},
 		{
-			name:      "List writable with 2 entries → select",
-			sv:        HubSysvarSpec{Name: "Mode", ValueType: hmenum.HubValueTypeList, Writable: true, ValueList: valueList2},
+			name:      "List extended writable with 2 entries → select",
+			sv:        HubSysvarSpec{Name: "Mode", ValueType: hmenum.HubValueTypeList, Writable: true, IsExtended: true, ValueList: valueList2},
 			wantComp:  "select",
+			wantOK:    true,
+			wantNode:  "ccu-01_sysvars",
+			wantObjID: "mode",
+		},
+		{
+			name:      "List writable but not extended → sensor",
+			sv:        HubSysvarSpec{Name: "Mode", ValueType: hmenum.HubValueTypeList, Writable: true, ValueList: valueList2},
+			wantComp:  "sensor",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
 			wantObjID: "mode",
@@ -96,8 +125,8 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "mode",
 		},
 		{
-			name:      "List writable empty → sensor (not select)",
-			sv:        HubSysvarSpec{Name: "Mode", ValueType: hmenum.HubValueTypeList, Writable: true, ValueList: nil},
+			name:      "List extended writable empty → sensor (not select)",
+			sv:        HubSysvarSpec{Name: "Mode", ValueType: hmenum.HubValueTypeList, Writable: true, IsExtended: true, ValueList: nil},
 			wantComp:  "sensor",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
@@ -112,7 +141,15 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "mode",
 		},
 		{
-			name:      "String writable → sensor (text caps at 255)",
+			name:      "String extended writable → text",
+			sv:        HubSysvarSpec{Name: "Msg", ValueType: hmenum.HubValueTypeString, Writable: true, IsExtended: true},
+			wantComp:  "text",
+			wantOK:    true,
+			wantNode:  "ccu-01_sysvars",
+			wantObjID: "msg",
+		},
+		{
+			name:      "String writable but not extended → sensor (text caps at 255)",
 			sv:        HubSysvarSpec{Name: "Msg", ValueType: hmenum.HubValueTypeString, Writable: true},
 			wantComp:  "sensor",
 			wantOK:    true,
@@ -128,9 +165,17 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "msg",
 		},
 		{
-			name:      "Number writable → number",
-			sv:        HubSysvarSpec{Name: "Count", ValueType: hmenum.HubValueTypeNumber, Writable: true, Min: fptr(0), Max: fptr(100)},
+			name:      "Number extended writable → number",
+			sv:        HubSysvarSpec{Name: "Count", ValueType: hmenum.HubValueTypeNumber, Writable: true, IsExtended: true, Min: fptr(0), Max: fptr(100)},
 			wantComp:  "number",
+			wantOK:    true,
+			wantNode:  "ccu-01_sysvars",
+			wantObjID: "count",
+		},
+		{
+			name:      "Number writable but not extended → sensor",
+			sv:        HubSysvarSpec{Name: "Count", ValueType: hmenum.HubValueTypeNumber, Writable: true},
+			wantComp:  "sensor",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
 			wantObjID: "count",
@@ -144,8 +189,8 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "count",
 		},
 		{
-			name:      "Float writable → number",
-			sv:        HubSysvarSpec{Name: "Temp", ValueType: hmenum.HubValueTypeFloat, Writable: true},
+			name:      "Float extended writable → number",
+			sv:        HubSysvarSpec{Name: "Temp", ValueType: hmenum.HubValueTypeFloat, Writable: true, IsExtended: true},
 			wantComp:  "number",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
@@ -160,8 +205,8 @@ func TestSysvarComponentSelection(t *testing.T) {
 			wantObjID: "temp",
 		},
 		{
-			name:      "Integer writable → number",
-			sv:        HubSysvarSpec{Name: "Idx", ValueType: hmenum.HubValueTypeInteger, Writable: true},
+			name:      "Integer extended writable → number",
+			sv:        HubSysvarSpec{Name: "Idx", ValueType: hmenum.HubValueTypeInteger, Writable: true, IsExtended: true},
 			wantComp:  "number",
 			wantOK:    true,
 			wantNode:  "ccu-01_sysvars",
@@ -218,9 +263,10 @@ func TestSysvarPayloadLogicWritable(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Active",
-		ValueType: hmenum.HubValueTypeLogic,
-		Writable:  true,
+		Name:       "Active",
+		ValueType:  hmenum.HubValueTypeLogic,
+		Writable:   true,
+		IsExtended: true,
 	})
 	m := jsonMap(t, item)
 	if _, hasCmd := m["command_topic"]; !hasCmd {
@@ -247,12 +293,13 @@ func TestSysvarPayloadNumberWritable(t *testing.T) {
 	fptr := func(v float64) *float64 { return &v }
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Brightness",
-		ValueType: hmenum.HubValueTypeNumber,
-		Writable:  true,
-		Min:       fptr(0),
-		Max:       fptr(100),
-		Unit:      "%",
+		Name:       "Brightness",
+		ValueType:  hmenum.HubValueTypeNumber,
+		Writable:   true,
+		IsExtended: true,
+		Min:        fptr(0),
+		Max:        fptr(100),
+		Unit:       "%",
 	})
 	m := jsonMap(t, item)
 	if _, hasCmd := m["command_topic"]; !hasCmd {
@@ -278,9 +325,10 @@ func TestSysvarPayloadIntegerWritableHasModeBox(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Counter",
-		ValueType: hmenum.HubValueTypeInteger,
-		Writable:  true,
+		Name:       "Counter",
+		ValueType:  hmenum.HubValueTypeInteger,
+		Writable:   true,
+		IsExtended: true,
 	})
 	m := jsonMap(t, item)
 	if m["mode"] != "box" {
@@ -294,10 +342,11 @@ func TestSysvarPayloadListWritableOptions(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Scene",
-		ValueType: hmenum.HubValueTypeList,
-		Writable:  true,
-		ValueList: []string{"A", "B", "C"},
+		Name:       "Scene",
+		ValueType:  hmenum.HubValueTypeList,
+		Writable:   true,
+		IsExtended: true,
+		ValueList:  []string{"A", "B", "C"},
 	})
 	m := jsonMap(t, item)
 	raw, ok := m["options"]
@@ -337,8 +386,8 @@ func TestProgramBuilderHappyPath(t *testing.T) {
 	if m["name"] != "Morning Lights" {
 		t.Fatalf("name: got %v want %q", m["name"], "Morning Lights")
 	}
-	if m["unique_id"] != "loom__program_morning-lights" {
-		t.Fatalf("unique_id: got %v want loom__program_morning-lights", m["unique_id"])
+	if m["unique_id"] != "loom_11a0001234_program_morning-lights" {
+		t.Fatalf("unique_id: got %v want loom_11a0001234_program_morning-lights", m["unique_id"])
 	}
 	if _, hasCmd := m["command_topic"]; !hasCmd {
 		t.Fatal("expected command_topic")
@@ -509,9 +558,10 @@ func TestHubDeviceBlockContent(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Active",
-		ValueType: hmenum.HubValueTypeLogic,
-		Writable:  true,
+		Name:       "Active",
+		ValueType:  hmenum.HubValueTypeLogic,
+		Writable:   true,
+		IsExtended: true,
 	})
 	m := jsonMap(t, item)
 
@@ -547,10 +597,12 @@ func TestPublishHubDiscoveryHappyPath(t *testing.T) {
 		c.CentralName = "ccu"
 	})
 	builder := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu")
+	builder.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 	spec := HubSysvarSpec{
-		Name:      "foo",
-		ValueType: hmenum.HubValueTypeLogic,
-		Writable:  true,
+		Name:       "foo",
+		ValueType:  hmenum.HubValueTypeLogic,
+		Writable:   true,
+		IsExtended: true,
 	}
 	item := builder.BuildSysvarDiscovery("ccu", spec)
 	if !item.OK {
@@ -590,10 +642,12 @@ func TestPublishHubDiscoveryDisabledIsNoop(t *testing.T) {
 		c.HADiscoveryEnabled = false
 	})
 	builder := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu")
+	builder.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 	spec := HubSysvarSpec{
-		Name:      "foo",
-		ValueType: hmenum.HubValueTypeLogic,
-		Writable:  true,
+		Name:       "foo",
+		ValueType:  hmenum.HubValueTypeLogic,
+		Writable:   true,
+		IsExtended: true,
 	}
 	item := builder.BuildSysvarDiscovery("ccu", spec)
 	if !item.OK {
@@ -830,11 +884,12 @@ func TestSysvarDiscoveryNumberWideFallback_WhenUnbounded(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Counter",
-		ValueType: hmenum.HubValueTypeFloat,
-		Writable:  true,
-		Min:       nil,
-		Max:       nil,
+		Name:       "Counter",
+		ValueType:  hmenum.HubValueTypeFloat,
+		Writable:   true,
+		IsExtended: true,
+		Min:        nil,
+		Max:        nil,
 	})
 	m := jsonMap(t, item)
 	if m["min"] != -1e9 {
@@ -852,11 +907,12 @@ func TestSysvarDiscoveryIntegerStep(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Count",
-		ValueType: hmenum.HubValueTypeInteger,
-		Writable:  true,
-		Min:       nil,
-		Max:       nil,
+		Name:       "Count",
+		ValueType:  hmenum.HubValueTypeInteger,
+		Writable:   true,
+		IsExtended: true,
+		Min:        nil,
+		Max:        nil,
 	})
 	m := jsonMap(t, item)
 	if m["step"] != float64(1) {
@@ -878,11 +934,12 @@ func TestSysvarDiscoveryNumberRespectsBounds(t *testing.T) {
 	fptr := func(v float64) *float64 { return &v }
 	db := newHubBuilder()
 	item := db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{
-		Name:      "Brightness",
-		ValueType: hmenum.HubValueTypeFloat,
-		Writable:  true,
-		Min:       fptr(0),
-		Max:       fptr(50),
+		Name:       "Brightness",
+		ValueType:  hmenum.HubValueTypeFloat,
+		Writable:   true,
+		IsExtended: true,
+		Min:        fptr(0),
+		Max:        fptr(50),
 	})
 	m := jsonMap(t, item)
 	if m["min"] != float64(0) {

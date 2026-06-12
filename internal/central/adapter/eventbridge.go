@@ -821,6 +821,14 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 			}); ok {
 				ev.Category = cd.Category()
 			}
+			// Usage verdict — the same classification REST surfaces as
+			// `DataPointSummary.usage`. The discovery builder gates the
+			// per-parameter HA entity on it (no_create / ignored DPs and
+			// ce_primary / ce_secondary custom-DP constituents never get
+			// their own entity).
+			if u, ok := dp.(interface{ Usage() hmenum.DataPointUsage }); ok {
+				ev.Usage = u.Usage()
+			}
 			ev.Writable = pd.Operations&hmenum.OperationsWrite != 0
 			desc := &payload.GenericConfig{
 				Unit:         pd.Unit,

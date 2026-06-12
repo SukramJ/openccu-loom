@@ -258,6 +258,30 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// Single-press channel (< 2 PRESS_* params) — fall through to the
 		// per-parameter path below.
 	}
+	// Usage gate — the model's DataPointUsage verdict (same source as
+	// the REST `DataPointSummary.usage` field) decides whether a wire DP
+	// surfaces as its own HA entity:
+	//
+	//   - no_create / ignored — suppressed everywhere in the reference
+	//     stack (hidden parameters, custom-DP absorption, operator
+	//     ignores). No per-parameter entity.
+	//   - ce_primary / ce_secondary — constituents of the channel's
+	//     custom-DP aggregate (the STATE behind a Switch CDP, the LEVEL
+	//     behind a Cover CDP, …). The aggregate path above is their only
+	//     HA surface; emitting a generic switch/number NEXT TO the
+	//     aggregate duplicates the control. ce_visible deliberately
+	//     passes — those are the aggregate's declared extra sensors
+	//     (HmIP-BWTH HUMIDITY / ACTUAL_TEMPERATURE).
+	//
+	// The zero value passes: synthetic events and calculated DPs carry
+	// no verdict.
+	switch ev.Usage { //nolint:exhaustive // every other usage (data_point, event, ce_visible, …) passes the gate
+	case hmenum.DataPointUsageNoCreate,
+		hmenum.DataPointUsageIgnored,
+		hmenum.DataPointUsageCDPPrimary,
+		hmenum.DataPointUsageCDPSecondary:
+		return "", "", "", nil, false
+	}
 	comp, classified := resolveComponent(ev)
 	if !classified {
 		return "", "", "", nil, false
@@ -529,14 +553,13 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	case HAComponentSensor:
 		// Enum-typed sensors (device_class=enum) require an `options` list —
 		// without it HA refuses the discovery. Source: paramset descriptor's
-		// VALUE_LIST.
+		// VALUE_LIST. The reference stack lowercases enum sensor options and
+		// states ("CLOSED" → "closed", "IDLE_OFF" → "idle_off") so they are
+		// translatable in HA; mirror that by lowercasing the options and
+		// piping the state through the `| lower` template.
 		if dc, _ := body["device_class"].(string); dc == "enum" && len(ev.descValueList()) > 0 {
-			vl := ev.descValueList()
-			opts := make([]any, len(vl))
-			for i, v := range vl {
-				opts[i] = v
-			}
-			body["options"] = opts
+			body["options"] = lowercasedOptions(ev.descValueList())
+			body["value_template"] = valueJSONValueLowerTemplate
 		}
 		// Apply
 		// canonical unit string regardless of CCU firmware quirks
@@ -644,12 +667,22 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// payload outright. Source: paramset descriptor's VALUE_LIST (e.g.
 		// `SET_POINT_MODE` → ["AUTO_MODE", "MANU_MODE", "PARTY_MODE",
 		// "BOOST_MODE"]).
+		//
+		// The reference stack lowercases select options and the current
+		// option ("MANU_MODE" → "manu_mode") so they are translatable in
+		// HA, and maps the chosen option back to its uppercase CCU token
+		// on write. Mirror that: lowercase options, `| lower` on the
+		// state template, `| upper` on the command template so the CCU
+		// receives the exact VALUE_LIST entry.
 		if vl := ev.descValueList(); len(vl) > 0 {
-			opts := make([]any, len(vl))
-			for i, v := range vl {
-				opts[i] = v
-			}
-			body["options"] = opts
+			body["options"] = lowercasedOptions(vl)
+			body["value_template"] = valueJSONValueLowerTemplate
+			body["command_template"] = "{{ value | upper }}"
+		}
+		// Action-selects (write-only enum parameters) are operator inputs;
+		// the reference stack relegates them to HA's Configuration section.
+		if ev.Category == hmenum.DataPointCategoryActionSelect {
+			body["entity_category"] = EntityCategoryConfig
 		}
 	case HAComponentButton:
 		// Payload_press="PRESS" mirrors
@@ -743,6 +776,20 @@ func jsonValueTemplate(comp HAComponent) string {
 	default:
 		return valueJSONValueTemplate
 	}
+}
+
+// lowercasedOptions converts a descriptor VALUE_LIST into the
+// lower-cased `options` array HA receives for enum sensors and
+// selects. The reference stack lowercases enum tokens so HA can
+// translate them; the `| lower` value_template keeps the state side
+// consistent and the select command_template (`| upper`) restores the
+// CCU token on write.
+func lowercasedOptions(valueList []string) []any {
+	opts := make([]any, len(valueList))
+	for i, v := range valueList {
+		opts[i] = strings.ToLower(v)
+	}
+	return opts
 }
 
 // discoveryNodeID is retained as a thin alias to the canonical
