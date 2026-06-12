@@ -301,6 +301,20 @@ Alle aktionablen Posten aus dem Vergleich OttoMac (aiohomematic) vs
 Otto-Rem (openccu-loom-client) sind damit abgearbeitet; verbleibende
 Differenzen sind Instanz-Identität oder Mess-Timing.
 
+### Sub-Devices/Areas 2026-06-12 (api 1.6.0, Client 2026.6.11)
+
+Geräte-Registry: **189=189, alle gematcht, 0 via_device-/Namens-Diffs**
+(45/45 Geräte splitten identisch). Areas: 55 Diffs → **1** nach zwei
+Integrations-Fixes (dev_loom): (a) `suggested_area` an allen
+Device-anlegenden DeviceInfos (event/update/hub-Entities — HA wendet
+suggested_area nur beim Erst-Anlegen an; das traf nur loom, weil dessen
+Geräte bei jedem Fresh-Spawn neu entstehen), (b)
+`ensure_via_device_exists` seedet das Parent mit dem eigenen Raum statt
+der Sub-Area. Verbleibender Einzelfall: HmIP-RCV-Virtual-Remote trägt
+auf loom den Raum seines zugeordneten VR-Kanals ('Arbeitszimmer
+Markus'), aiohomematic lässt VR-Räume aus — Datenquellen-Detail,
+dokumentiert.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
