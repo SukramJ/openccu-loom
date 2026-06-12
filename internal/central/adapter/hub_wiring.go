@@ -277,6 +277,18 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				return loadConnectivity(ctx, unit)
 			},
 		})
+		// Initial system-update fetch. The reference stack's scheduler
+		// runs every job immediately at start (next_run = now), so the
+		// firmware state is on the wire right after boot. The Go
+		// scheduler first fires hub.system_update_refresh after its
+		// 60-minute slot, which left a cleanly booted central without
+		// firmware data (observed=false) for up to an hour — only
+		// centrals that happened to run a connection recovery (whose
+		// pipeline calls RefreshSystemUpdate) had data early.
+		// checkFirmwareUpdate.sh contacts the update server and can take
+		// several seconds, so the fetch runs detached instead of
+		// blocking the remaining hub wiring.
+		go runInitialSystemUpdateLoad(unit.Hub, cc.Name, logger) //nolint:gosec,contextcheck // G118: deliberately detached from the wiring ctx — the fetch must survive WireHub returning
 	}
 
 	closer := func() { //nolint:contextcheck // shutdown path must not inherit the already-expired wiring ctx
@@ -842,6 +854,44 @@ func decodeRegaField(s string) string {
 		return dec
 	}
 	return s
+}
+
+// systemUpdateRefresher is the narrow slice of the HubCoordinator the
+// initial system-update load consumes. Declared as an interface so the
+// boot-time path is testable without a full coordinator rig.
+type systemUpdateRefresher interface {
+	RefreshSystemUpdate(ctx context.Context) error
+}
+
+// initialSystemUpdateTimeout bounds the boot-time firmware fetch.
+// checkFirmwareUpdate.sh contacts the vendor update server, which can
+// stall on networks without internet access; two minutes is generous
+// without keeping a goroutine alive forever.
+const initialSystemUpdateTimeout = 2 * time.Minute
+
+// runInitialSystemUpdateLoad performs the one-shot boot-time
+// system-update fetch through the coordinator's refresh hook (which
+// serialises against the scheduler's hub.system_update_refresh job).
+// Runs on its own context — callers detach it with `go` so hub wiring
+// is not blocked by the CCU's update-server round-trip.
+func runInitialSystemUpdateLoad(h systemUpdateRefresher, centralName string, logger *slog.Logger) {
+	if h == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), initialSystemUpdateTimeout)
+	defer cancel()
+	if err := h.RefreshSystemUpdate(ctx); err != nil {
+		if logger != nil {
+			logger.Warn("hub.system_update.initial_load",
+				slog.String("central", centralName),
+				slog.String("err", err.Error()))
+		}
+		return
+	}
+	if logger != nil {
+		logger.Info("hub.system_update.ok",
+			slog.String("central", centralName))
+	}
 }
 
 // loadSystemUpdate fetches the CCU's firmware-update state via the ReGa

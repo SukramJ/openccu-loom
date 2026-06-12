@@ -9,6 +9,7 @@ package adapter
 
 import (
 	"context"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -258,6 +259,54 @@ func TestLoadSystemUpdateEmptyFirstObservation(t *testing.T) {
 	if info.CurrentFirmware != "" {
 		t.Errorf("CurrentFirmware = %q, want empty on first observation", info.CurrentFirmware)
 	}
+}
+
+// ============================================================
+// runInitialSystemUpdateLoad — boot-time fetch
+// ============================================================
+
+// recordingSystemUpdateRefresher captures RefreshSystemUpdate calls.
+type recordingSystemUpdateRefresher struct {
+	calls int
+	err   error
+}
+
+func (r *recordingSystemUpdateRefresher) RefreshSystemUpdate(_ context.Context) error {
+	r.calls++
+	return r.err
+}
+
+// TestRunInitialSystemUpdateLoadInvokesRefresher pins the boot-time
+// one-shot: the reference stack's scheduler runs every job immediately
+// at start, so the Go wiring must trigger the system-update fetch once
+// without waiting for the 60-minute hub.system_update_refresh slot.
+func TestRunInitialSystemUpdateLoadInvokesRefresher(t *testing.T) {
+	t.Parallel()
+	rec := &recordingSystemUpdateRefresher{}
+	runInitialSystemUpdateLoad(rec, "test-central", slog.New(slog.DiscardHandler))
+	if rec.calls != 1 {
+		t.Errorf("RefreshSystemUpdate calls = %d, want 1", rec.calls)
+	}
+}
+
+// TestRunInitialSystemUpdateLoadToleratesFailure pins that a failing
+// boot-time fetch is logged and swallowed — the scheduled refresh
+// retries later; boot must not be affected.
+func TestRunInitialSystemUpdateLoadToleratesFailure(t *testing.T) {
+	t.Parallel()
+	rec := &recordingSystemUpdateRefresher{err: context.DeadlineExceeded}
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("runInitialSystemUpdateLoad panicked on refresh error: %v", r)
+		}
+	}()
+	runInitialSystemUpdateLoad(rec, "test-central", slog.New(slog.DiscardHandler))
+	if rec.calls != 1 {
+		t.Errorf("RefreshSystemUpdate calls = %d, want 1", rec.calls)
+	}
+	// Nil refresher and nil logger must be no-ops, not panics.
+	runInitialSystemUpdateLoad(nil, "test-central", nil)
+	runInitialSystemUpdateLoad(&recordingSystemUpdateRefresher{err: context.Canceled}, "test-central", nil)
 }
 
 // ============================================================

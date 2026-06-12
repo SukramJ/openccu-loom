@@ -114,6 +114,13 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 	// thermostats the aggregate state never carries an `action` key, and
 	// HA must not subscribe an action_topic that would render as
 	// "unknown" where the reference stack shows no hvac_action at all.
+	//
+	// Peer-only-source climates (activity wired late via
+	// [Climate.RefreshLinkPeerActivitySources]) converge on their own:
+	// the first peer push feeds OnActivity, the next channel event
+	// rebuilds this payload with the action surface included, and the
+	// MQTT bridge's diff-gated discovery cache re-publishes the changed
+	// bytes (retained).
 	if c.HasActivitySource() {
 		body["action_topic"] = ctx.CustomDPStateTopic()
 		body["action_template"] = "{{ value_json.action }}"

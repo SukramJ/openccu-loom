@@ -169,6 +169,44 @@ func TestDisplayOnlyThermostatOmitsAction(t *testing.T) {
 	}
 }
 
+// TestDiscoveryGainsActionTopicAfterPeerActivity pins the convergence
+// path for peer-only-source climates: a thermostat without own
+// LEVEL/STATE sources omits the action surface at first, but once a
+// linked peer push feeds OnActivity (via the subscriptions installed
+// by RefreshLinkPeerActivitySources) the rebuilt discovery payload
+// carries action_topic — the bridge's diff-gated cache then
+// re-publishes the changed bytes.
+func TestDiscoveryGainsActionTopicAfterPeerActivity(t *testing.T) {
+	t.Parallel()
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "PEERWTH01"})
+	climateCh := d.AddChannel("PEERWTH01:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	peerDev := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "PEERTRV01"})
+	peerCh := peerDev.AddChannel("PEERTRV01:1", 1, "HEATING_CLIMATECONTROL_TRANSCEIVER", hmenum.ParamsetKeyValues)
+	peerLevel := putFloatSensor(peerCh, hmenum.ParameterLevel)
+
+	c := New(Config{Channel: climateCh, Writer: &stubWriter{}, Kind: KindIP})
+	c.OnMode(ModeHeat) // a non-off mode so the OFF override does not mask the activity
+	if _, body := c.HADiscoveryPayload(discoveryCtx{}); body["action_topic"] != nil {
+		t.Fatal("discovery must omit action_topic before any source exists")
+	}
+
+	closer := c.RefreshLinkPeerActivitySources([]*device.Channel{peerCh})
+	defer closer()
+	peerLevel.OnEvent(0.4)
+
+	if got, observed := c.Activity(); !observed || got != ActivityHeating {
+		t.Fatalf("Activity = (%v, %v), want (heating, true) after peer LEVEL push", got, observed)
+	}
+	_, body := c.HADiscoveryPayload(discoveryCtx{})
+	if body["action_topic"] == nil {
+		t.Error("rebuilt discovery must carry action_topic once peer activity is fed")
+	}
+	state, _ := c.State().(*payload.ClimateState)
+	if state == nil || state.Action != string(ActivityHeating) {
+		t.Errorf("State().Action = %v, want heating", state)
+	}
+}
+
 // TestSimpleRFThermostatHasNoActivitySource pins that SimpleRF
 // thermostats never derive activity from wire DPs — the reference
 // stack's basic climate class has no activity property.
