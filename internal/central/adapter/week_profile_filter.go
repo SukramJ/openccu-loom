@@ -31,6 +31,7 @@ import (
 	"log/slog"
 	"sort"
 
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
@@ -115,6 +116,12 @@ func attachNonClimateWeekProfileToDevice(dev *device.Device, centralName string)
 			return
 		}
 	}
+	// Suppress the redundant target-lock wire DPs on the schedule channel
+	// in every case — even when no CDP-backed target map can be derived
+	// below (e.g. HmIP-MIO16-PCB, which carries no custom DPs): the
+	// reference stack never surfaces the target-lock select/number as
+	// entities, regardless of whether schedule switches exist.
+	suppressRedundantScheduleDPs(scheduleCh)
 	targets := deriveTargetChannels(dev)
 	if len(targets) == 0 {
 		return
@@ -152,18 +159,17 @@ func attachNonClimateWeekProfileToDevice(dev *device.Device, centralName string)
 		switches = append(switches, weekprofile.NewChannelSwitch(centralName, dev.Address, k, wp))
 	}
 	dev.SetScheduleChannelSwitches(switches)
-	// Suppress the wire DPs that the per-channel switches replace.
-	// Without this HA shows a redundant bitfield-sensor, a target-lock
-	// select, and a target-locks number entity alongside the proper
-	// schedule switches. The channel-locks DP is an internal one and
-	// must never surface as its own HA entity.
-	suppressRedundantScheduleDPs(scheduleCh)
 }
 
-// suppressRedundantScheduleDPs marks the WEEK_PROGRAM_CHANNEL_LOCKS,
-// WEEK_PROGRAM_TARGET_CHANNEL_LOCK and WEEK_PROGRAM_TARGET_CHANNEL_LOCKS
-// generic DPs as NoCreate so HA only sees the per-channel
-// ScheduleChannelSwitch surface. Idempotent.
+// suppressRedundantScheduleDPs marks the WEEK_PROGRAM_TARGET_CHANNEL_LOCK
+// and WEEK_PROGRAM_TARGET_CHANNEL_LOCKS generic DPs as NoCreate so HA
+// only sees the per-channel ScheduleChannelSwitch surface. Idempotent.
+//
+// WEEK_PROGRAM_CHANNEL_LOCKS is deliberately NOT suppressed here: the
+// reference stack surfaces the bitfield as a regular sensor on devices
+// without a custom DP (HmIP-MIO16-PCB). On CDP-carrying devices the
+// undefined-generic-DP suppression pass already marks it NoCreate, so
+// no extra forcing is needed in either case.
 func suppressRedundantScheduleDPs(ch *device.Channel) {
 	if ch == nil {
 		return
@@ -186,7 +192,6 @@ func suppressRedundantScheduleDPs(ch *device.Channel) {
 // MIO16-PCB channel 49 inventory; the same names apply to every other
 // schedule-channel device family in the CCU catalogue.
 var scheduleSurfaceSuppressed = []hmenum.Parameter{
-	hmenum.ParameterWeekProgramChannelLocks,
 	"WEEK_PROGRAM_TARGET_CHANNEL_LOCK",
 	"WEEK_PROGRAM_TARGET_CHANNEL_LOCKS",
 }
@@ -207,73 +212,56 @@ func findScheduleChannel(dev *device.Device) *device.Channel {
 	return nil
 }
 
-// deriveTargetChannels walks dev's channels and emits a
-// `<actor>_<sub>` mapping for every SWITCH_VIRTUAL_RECEIVER-style channel.
-// Heuristic: the first 3 receivers form actor 1 (sub 1=primary, 2/3=secondary),
-// the next 3 actor 2, … up to 24 receivers (8 actors × 3 subs — matches the
-// 24-bit WEEK_PROGRAM_CHANNEL_LOCKS bitfield).
+// deriveTargetChannels builds the `<actor>_<sub>` target-channel map
+// from the device's custom-DP channel groups, mirroring the reference
+// stack's `_build_target_channel_map`:
 //
-// A more faithful approach would read each device's pre-configured
-// channel_groups, which the current pipeline does not yet carry. The
-// heuristic covers HmIP-MIO16-PCB and similar uniform-receiver
-// devices; deviating topologies will need an explicit ProfileRegistry
-// entry later.
+//   - actor index = 1-based position in the sorted set of
+//     schedule-relevant channel groups
+//     ([custom.ScheduleRelevantChannelGroups]),
+//   - sub index = 1-based position within the group: primary channel
+//     first, then the profile's secondary channels.
+//
+// Devices without any custom DP yield an empty map — the reference
+// stack derives the non-climate week profile from a custom DP, so a
+// CDP-less schedule channel (HmIP-MIO16-PCB) carries no schedule
+// switches there either; only the raw WEEK_PROGRAM_CHANNEL_LOCKS
+// sensor remains.
+//
+// The earlier 3-receivers-per-actor heuristic over *_VIRTUAL_RECEIVER
+// channel types is gone: it produced no targets for ELV-SH-WSM /
+// HmIP-WSM (WATER_SWITCH_VIRTUAL_RECEIVER channels) and wrong keys for
+// HmIP-MP3P and HmIP-WRC6-230 (mixed single-channel groups).
 func deriveTargetChannels(dev *device.Device) map[string]weekprofile.TargetChannelInfo {
 	if dev == nil {
 		return nil
 	}
-	type recv struct {
-		number  int
-		address string
-		name    string
+	groups := custom.ScheduleRelevantChannelGroups(dev, custom.DefaultRegistry())
+	if len(groups) == 0 {
+		return nil
 	}
-	var receivers []recv
-	for _, ch := range dev.Channels() {
-		if !isScheduleTargetChannelType(ch.Type) {
-			continue
-		}
-		receivers = append(receivers, recv{
-			number:  ch.Number,
-			address: ch.Address,
-			name:    fmt.Sprintf("Channel %d", ch.Number),
-		})
-	}
-	sort.Slice(receivers, func(i, j int) bool { return receivers[i].number < receivers[j].number })
-
-	out := make(map[string]weekprofile.TargetChannelInfo, len(receivers))
-	for idx, r := range receivers {
-		actorIdx := idx/3 + 1
-		subIdx := idx%3 + 1
-		if actorIdx > 8 {
-			break // ScheduleActorChannel maxes out at 8_3 (24-bit bitfield).
-		}
-		key := fmt.Sprintf("%d_%d", actorIdx, subIdx)
-		chType := "secondary"
-		if subIdx == 1 {
-			chType = "primary"
-		}
-		out[key] = weekprofile.TargetChannelInfo{
-			ChannelNo:      r.number,
-			ChannelAddress: r.address,
-			Name:           r.name,
-			ChannelType:    chType,
+	out := make(map[string]weekprofile.TargetChannelInfo)
+	for actorIdx, group := range groups {
+		for subIdx, member := range group.Channels {
+			key := fmt.Sprintf("%d_%d", actorIdx+1, subIdx+1)
+			chType := "secondary"
+			if member.Primary {
+				chType = "primary"
+			}
+			address := fmt.Sprintf("%s:%d", dev.Address, member.ChannelNo)
+			name := fmt.Sprintf("Channel %d", member.ChannelNo)
+			if ch := dev.Channel(address); ch != nil && ch.Name != "" {
+				name = ch.Name
+			}
+			out[key] = weekprofile.TargetChannelInfo{
+				ChannelNo:      member.ChannelNo,
+				ChannelAddress: address,
+				Name:           name,
+				ChannelType:    chType,
+			}
 		}
 	}
 	return out
-}
-
-// isScheduleTargetChannelType reports whether a channel type acts as a
-// schedule target (i.e. its STATE / LEVEL / similar wire parameter is
-// what the schedule turns on/off). The current allow-list covers the
-// uniform "VIRTUAL_RECEIVER" naming used by HmIP-MIO16-PCB and similar.
-func isScheduleTargetChannelType(channelType string) bool {
-	switch channelType {
-	case "SWITCH_VIRTUAL_RECEIVER",
-		"DIMMER_VIRTUAL_RECEIVER",
-		"BLIND_VIRTUAL_RECEIVER":
-		return true
-	}
-	return false
 }
 
 // scheduleWriteForwarder exposes [device.Channel]'s installed writer
