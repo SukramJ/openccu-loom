@@ -71,7 +71,7 @@ func TestListCalculatedDataPoints_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0010", "no": "1"}))
 	w := httptest.NewRecorder()
-	ListCalculatedDataPoints(idx).ServeHTTP(w, req)
+	ListCalculatedDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -97,7 +97,7 @@ func TestListCalculatedDataPoints_DeviceNotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "MISSING", "no": "1"}))
 	w := httptest.NewRecorder()
-	ListCalculatedDataPoints(idx).ServeHTTP(w, req)
+	ListCalculatedDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -112,7 +112,7 @@ func TestListCalculatedDataPoints_ChannelNotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0011", "no": "99"}))
 	w := httptest.NewRecorder()
-	ListCalculatedDataPoints(idx).ServeHTTP(w, req)
+	ListCalculatedDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -128,7 +128,7 @@ func TestListCalculatedDataPoints_EmptyChannel_ReturnsEmptyList(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0012", "no": "1"}))
 	w := httptest.NewRecorder()
-	ListCalculatedDataPoints(idx).ServeHTTP(w, req)
+	ListCalculatedDataPoints(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -151,7 +151,7 @@ func TestGetCalculatedDataPoint_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0013", "no": "1", "name": "FROST_POINT"}))
 	w := httptest.NewRecorder()
-	GetCalculatedDataPoint(idx).ServeHTTP(w, req)
+	GetCalculatedDataPoint(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -177,7 +177,7 @@ func TestGetCalculatedDataPoint_NotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0014", "no": "1", "name": "MISSING"}))
 	w := httptest.NewRecorder()
-	GetCalculatedDataPoint(idx).ServeHTTP(w, req)
+	GetCalculatedDataPoint(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -191,7 +191,7 @@ func TestGetCalculatedDataPoint_DeviceNotFound_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "MISSING", "no": "1", "name": "DEW_POINT"}))
 	w := httptest.NewRecorder()
-	GetCalculatedDataPoint(idx).ServeHTTP(w, req)
+	GetCalculatedDataPoint(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
@@ -207,7 +207,7 @@ func TestGetCalculatedDataPoint_DependsOnPopulated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0015", "no": "1", "name": "DEW_POINT"}))
 	w := httptest.NewRecorder()
-	GetCalculatedDataPoint(idx).ServeHTTP(w, req)
+	GetCalculatedDataPoint(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
@@ -227,7 +227,7 @@ func TestGetCalculatedDataPoint_InvalidChannelNo_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0016", "no": "abc", "name": "DEW_POINT"}))
 	w := httptest.NewRecorder()
-	GetCalculatedDataPoint(idx).ServeHTTP(w, req)
+	GetCalculatedDataPoint(idx, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -259,5 +259,80 @@ func TestDependsOnForKey_OperatingVoltageLevel(t *testing.T) {
 	got := dependsOnForKey(key)
 	if len(got) != 1 {
 		t.Errorf("OPERATING_VOLTAGE_LEVEL: expected 1 dep, got %d: %v", len(got), got)
+	}
+}
+
+// --- tests: translated_name resolution ---
+
+// TestCalculatedDPTranslatedName_Fallback pins the title-cased
+// fallback: the OCCU catalogue carries no entries for the synthetic
+// calculated parameters, so the entity name must match the reference
+// stack's `parameter.title().replace("_", " ")` fallback.
+func TestCalculatedDPTranslatedName_Fallback(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0020", "HmIP-STHD")
+	addCalculatedDP(d, "DEV0020", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0020": d}}
+	lab := translatorLabeler{entries: map[string]string{}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0020", "no": "1"}))
+	w := httptest.NewRecorder()
+	ListCalculatedDataPoints(idx, lab).ServeHTTP(w, req)
+
+	var out []CalculatedDPSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out) != 1 || out[0].TranslatedName != "Dew Point" {
+		t.Fatalf("TranslatedName = %+v, want Dew Point", out)
+	}
+}
+
+// TestCalculatedDPTranslatedName_LocaleLabelWins pins that a
+// channel-typed OCCU translation overrides the fallback — the same
+// chain generic data points resolve through.
+func TestCalculatedDPTranslatedName_LocaleLabelWins(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0021", "HmIP-STHD")
+	addCalculatedDP(d, "DEV0021", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0021": d}}
+	lab := translatorLabeler{entries: map[string]string{"SENSOR|DEW_POINT": "Taupunkt"}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0021", "no": "1"}))
+	w := httptest.NewRecorder()
+	ListCalculatedDataPoints(idx, lab).ServeHTTP(w, req)
+
+	var out []CalculatedDPSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(out) != 1 || out[0].TranslatedName != "Taupunkt" {
+		t.Fatalf("TranslatedName = %+v, want Taupunkt", out)
+	}
+}
+
+// TestCalculatedDPTranslatedName_CombinedDuration pins the combined-DP
+// path: the synthetic DURATION parameter of a combined timer resolves
+// to "Duration" — identical to the reference stack's fallback for
+// combined data points.
+func TestCalculatedDPTranslatedName_CombinedDuration(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("DEV0022", "HmIP-BSM")
+	addCalculatedDP(d, "DEV0022", "DURATION", 4, hmenum.DataPointCategoryNumber, 30)
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0022": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0022", "no": "4", "name": "DURATION"}))
+	w := httptest.NewRecorder()
+	GetCalculatedDataPoint(idx, translatorLabeler{}).ServeHTTP(w, req)
+
+	var out CalculatedDPDetail
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.TranslatedName != "Duration" {
+		t.Fatalf("TranslatedName = %q, want Duration", out.TranslatedName)
 	}
 }

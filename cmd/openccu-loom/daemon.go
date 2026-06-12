@@ -377,6 +377,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		centralName:    singleCentralName(reg),
 		sessionStore:   sessionStore,
 		changeLog:      configChangeLog,
+		labels:         parameterLabels,
 	})
 	_ = uiSchemaAdapter
 	_ = dpWriterAdapter
