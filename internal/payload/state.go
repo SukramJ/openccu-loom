@@ -29,6 +29,10 @@ type ColorHS struct {
 // HA-friendly sentinels ("off"/"none"/"idle") so HA's value_template
 // filters never resolve to undefined.
 //
+// Action is omitted entirely for thermostats without an activity
+// source (display-only devices like HmIP-STHD) — the discovery payload
+// skips the action_topic for those, so no template ever reads the key.
+//
 // Layer-Trennung: identity fields (Address, UniqueID) live in
 // [ClimateInfo]. The HA-Discovery json_attributes_template derives
 // the `value_state` UI label from `state_uncertain` directly.
@@ -36,7 +40,7 @@ type ClimateState struct {
 	StateUncertain bool   `json:"state_uncertain"`
 	HVACMode       string `json:"hvac_mode"`
 	PresetMode     string `json:"preset_mode"`
-	Action         string `json:"action"`
+	Action         string `json:"action,omitempty"`
 	// CurrentTemperature / SetTemperature / CurrentHumidity mirror the
 	// channel's measurement field DPs so REST/WS consumers (external
 	// clients, SPA tiles) can populate a climate card from the CDP

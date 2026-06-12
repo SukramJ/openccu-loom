@@ -550,11 +550,13 @@ func TestThermostatActivityHonoursCoolingMode(t *testing.T) {
 			dp: dpLevel, value: float64(30),
 			wantAct: ActivityHeating, wantObsv: true,
 		},
-		// 6: KindRF + COOLING + LEVEL > 0 → ActivityHeating (RF ignores COOLING)
+		// 6: KindRF + COOLING + VALVE_STATE > 0 → ActivityHeating (RF
+		// ignores COOLING; classic RF derives activity from VALVE_STATE
+		// only — LEVEL is not an RF activity source).
 		{
-			name: "KindRF_COOLING_LEVEL_gt0_heats_only",
+			name: "KindRF_COOLING_VALVE_STATE_gt0_heats_only",
 			kind: KindRF, hcMode: "COOLING",
-			dp: dpLevel, value: float64(75),
+			dp: dpValveState, value: float64(75),
 			wantAct: ActivityHeating, wantObsv: true,
 		},
 		// 7: KindRF + HEATING + VALVE_STATE > 0 → ActivityHeating (regression)
