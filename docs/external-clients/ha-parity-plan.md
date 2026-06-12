@@ -262,6 +262,32 @@ uid-Hinweis: connectivity-/install-mode-uids tragen den Instanznamen
 (ottomac vs otto-rem) bzw. das Interface-Set — BidCos-Paare und der
 connectivity-Name matchen by design nicht 1:1.
 
+### Finale Messung 2026-06-12 (Client 2026.6.8, Daemon mit PR #52)
+
+**Struktur: gematcht 1940, nur ccu 26, nur loom 7** (von einst 247/609).
+11/14 Domains exakt. **Live-Abweichungen: 4** — davon 3 lebende
+Hub-Werte verschiedener Backends (servicemeldungen, last-event-age),
+1 Zeitplan-Zählerdifferenz. **Attribute: friendly_name-Diffs 277 → 8**
+(4 calculated ohne daemon-translated_name, 4 Hub-Singleton-Instanznamen
+by design); übrige Attribut-Diffs nur noch 5× hvac_action
+(idle vs heating an eTRV — Activity-Ableitung prüfen).
+
+**Climate-Cards: 16/16 mit Ist-/Soll-Temperatur** (PR #52 CDP-State +
+Client-Fallback); Wandthermostat-Humidity via Fallback, am Wire nach
+Deploy von `eda541a` (INTEGER-HUMIDITY-Fix).
+
+Verbleibende Einzelposten:
+- 17+2 Schedule-Switches, 2+1 schedule/profile-Sensoren: Daemon 404t
+  auf WATER_SWITCH_WEEK_PROFILE (HmIP-WSM/ELV-SH-WSM); MP3P/WRC6-230
+  schedule_enabled-Keys weichen von aiohomematics Actor-Map ab.
+- update:system-update + sensor:week_program_channel_locks (je 1):
+  HA-Entity fehlt loom-seitig — Spawn-Pfad prüfen (Otto-Rem
+  current_firmware am Wire leer).
+- 5× hvac_action idle/heating an eTRV: Daemon-Activity()-Ableitung.
+- 3 level-Sensor-uids + connectivity-/backup-Namen: Altbestand/by design.
+- 10 calculated + 2 combined Namen: brauchen daemon-translated_name
+  für calc-/combined-DPs.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
