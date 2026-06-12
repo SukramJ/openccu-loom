@@ -13,10 +13,18 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // for a given wire DP.
 //
 // Returns ("", false) when the category is empty (zero value),
-// "undefined", or a category that does not surface as an HA entity
-// (e.g. action / event_group / no_create).
+// "undefined", or a category that does not surface as an HA entity:
+//
+//   - action — write-only fire-and-forget parameters (COMBINED_PARAMETER,
+//     RAMP_STOP, …) have no HA platform in the reference stack.
+//   - action_number — the reference stack exposes these only through an
+//     explicit per-parameter whitelist that is currently EMPTY, so
+//     ON_TIME / RAMP_TIME / DURATION_VALUE never surface as number
+//     entities. They stay writable through the per-DP command topic and
+//     the custom-DP service methods (`set_on_time`, …).
+//   - event_group / no_create — internal book-keeping categories.
 func componentFromCategory(c hmenum.DataPointCategory) (HAComponent, bool) {
-	switch c { //nolint:exhaustive // Undefined category does not surface as an HA entity; caller falls through to heuristic
+	switch c { //nolint:exhaustive // Undefined/action/action_number categories do not surface as an HA entity; caller falls through to heuristic
 	case hmenum.DataPointCategorySensor,
 		hmenum.DataPointCategoryHubSensor:
 		return HAComponentSensor, true
@@ -24,7 +32,6 @@ func componentFromCategory(c hmenum.DataPointCategory) (HAComponent, bool) {
 		hmenum.DataPointCategoryHubBinarySensor:
 		return HAComponentBinarySensor, true
 	case hmenum.DataPointCategoryNumber,
-		hmenum.DataPointCategoryActionNumber,
 		hmenum.DataPointCategoryHubNumber:
 		return HAComponentNumber, true
 	case hmenum.DataPointCategorySwitch,
@@ -32,7 +39,6 @@ func componentFromCategory(c hmenum.DataPointCategory) (HAComponent, bool) {
 		hmenum.DataPointCategoryHubSwitch:
 		return HAComponentSwitch, true
 	case hmenum.DataPointCategoryButton,
-		hmenum.DataPointCategoryAction,
 		hmenum.DataPointCategoryHubButton:
 		return HAComponentButton, true
 	case hmenum.DataPointCategorySelect,

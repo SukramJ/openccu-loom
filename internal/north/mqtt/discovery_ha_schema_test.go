@@ -286,6 +286,7 @@ func TestClimateBuilderBoundsPassThrough(t *testing.T) {
 func TestAlarmMessagesDiscoveryHasNoBinarySensorOnlyDeviceClass(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	db.SetHubInfoFor("ccu-01", HubInfo{Serial: "3014F711A0001234"})
 	item := db.BuildAlarmMessagesDiscovery("ccu-01")
 	if !item.OK {
 		t.Fatal("Build returned OK=false")

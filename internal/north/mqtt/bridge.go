@@ -152,6 +152,16 @@ type Event struct {
 	// it from the DP it just observed.
 	Writable bool
 
+	// Usage carries the model's [hmenum.DataPointUsage] verdict for the
+	// originating data point — the same value the REST plane surfaces as
+	// `DataPointSummary.usage`. The per-parameter discovery path consults
+	// it to suppress entities the reference stack never creates:
+	// `no_create` / `ignored` DPs and the `ce_primary` / `ce_secondary`
+	// constituents that are absorbed by the channel's custom-DP
+	// aggregate. The zero value (empty string) means "no verdict
+	// available" and passes the gate (synthetic events, calculated DPs).
+	Usage hmenum.DataPointUsage
+
 	// Device, when non-nil, is consulted by the
 	// [DefaultDiscoveryBuilder] for its `info_payload` map. Any
 	// struct that carries `payload:"info"` tags works — the
@@ -456,6 +466,22 @@ func (b *Bridge) SetHubInfoFor(centralName string, info HubInfo) {
 	}
 }
 
+// DefaultBuilder returns the bridge's [DefaultDiscoveryBuilder] when
+// the configured DiscoveryBuilder is the default implementation, nil
+// otherwise. Hub-entity publishers MUST use this shared instance (not
+// a fresh builder) so the per-central HubInfo registered via
+// [Bridge.SetHubInfoFor] — most importantly the CCU serial that feeds
+// every hub unique_id — is visible to the hub discovery builders.
+func (b *Bridge) DefaultBuilder() *DefaultDiscoveryBuilder {
+	if b == nil || b.cfg.DiscoveryBuilder == nil {
+		return nil
+	}
+	if dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder); ok {
+		return dd
+	}
+	return nil
+}
+
 // RepublishDiscovery re-emits every cached Discovery config. Used by
 // the HA-Birth-Sync hook: when HA emits `homeassistant/status: online`
 // after a restart the broker has the retained configs but HA may not
@@ -547,6 +573,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 				return err
 			}
 		}
+		b.publishVirtualRemotePressButton(ctx, ev)
 	}
 	return nil
 }
@@ -569,13 +596,13 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 		return nil
 	}
 	component, nodeID, objectID, cfgPayload, ok := b.cfg.DiscoveryBuilder.Build(ev)
-	if !ok {
-		return nil
+	if ok {
+		if err := b.publishDiscovery(ctx, component, nodeID, objectID, cfgPayload); err != nil {
+			b.incPublishErrors()
+			return err
+		}
 	}
-	if err := b.publishDiscovery(ctx, component, nodeID, objectID, cfgPayload); err != nil {
-		b.incPublishErrors()
-		return err
-	}
+	b.publishVirtualRemotePressButton(ctx, ev)
 	return nil
 }
 
@@ -1089,7 +1116,36 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 	if !ok {
 		return nil
 	}
-	return b.publishDiscovery(ctx, component, nodeID, objectID, payload)
+	if err := b.publishDiscovery(ctx, component, nodeID, objectID, payload); err != nil {
+		return err
+	}
+	b.publishVirtualRemotePressButton(ctx, ev)
+	return nil
+}
+
+// publishVirtualRemotePressButton publishes the press-button companion
+// entity for a virtual-remote PRESS_* event. Virtual remotes (HM-RCV-50 /
+// HMW-RCV-50 / HmIP-RCV-50) carry writable press parameters; the
+// reference stack exposes each as a clickable HA `button` (disabled by
+// default) IN ADDITION to the per-channel keypress `event` entity that
+// every press channel gets. Best-effort: errors are swallowed — the
+// primary discovery publish has already succeeded, and the button
+// re-publishes on the next press / snapshot pass.
+//
+// No-op when the configured builder is not the [DefaultDiscoveryBuilder]
+// or the event is not a virtual-remote press parameter.
+func (b *Bridge) publishVirtualRemotePressButton(ctx context.Context, ev Event) {
+	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
+	if !ok {
+		return
+	}
+	item := dd.BuildVirtualRemoteButton(ev)
+	if !item.OK {
+		return
+	}
+	if err := b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
+		b.incPublishErrors()
+	}
 }
 
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {

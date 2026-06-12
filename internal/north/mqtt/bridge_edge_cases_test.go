@@ -1497,13 +1497,18 @@ func TestComponentFromCategory(t *testing.T) {
 		{hmenum.DataPointCategoryBinarySensor, HAComponentBinarySensor, true},
 		{hmenum.DataPointCategoryHubBinarySensor, HAComponentBinarySensor, true},
 		{hmenum.DataPointCategoryNumber, HAComponentNumber, true},
-		{hmenum.DataPointCategoryActionNumber, HAComponentNumber, true},
+		// ActionNumber mirrors the reference stack's EMPTY ActionNumber
+		// whitelist: ON_TIME / RAMP_TIME / DURATION_VALUE never surface
+		// as HA number entities.
+		{hmenum.DataPointCategoryActionNumber, "", false},
 		{hmenum.DataPointCategoryHubNumber, HAComponentNumber, true},
 		{hmenum.DataPointCategorySwitch, HAComponentSwitch, true},
 		{hmenum.DataPointCategoryScheduleSwitch, HAComponentSwitch, true},
 		{hmenum.DataPointCategoryHubSwitch, HAComponentSwitch, true},
 		{hmenum.DataPointCategoryButton, HAComponentButton, true},
-		{hmenum.DataPointCategoryAction, HAComponentButton, true},
+		// Plain actions (COMBINED_PARAMETER, RAMP_STOP, …) have no HA
+		// platform in the reference stack.
+		{hmenum.DataPointCategoryAction, "", false},
 		{hmenum.DataPointCategoryHubButton, HAComponentButton, true},
 		{hmenum.DataPointCategorySelect, HAComponentSelect, true},
 		{hmenum.DataPointCategoryActionSelect, HAComponentSelect, true},

@@ -1364,11 +1364,13 @@ func TestValveReportsPositionTrueWhenBuilderSetsIt(t *testing.T) {
 func TestSysvarWritableSelectGetsConfigCategory(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	db.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 	sv := HubSysvarSpec{
-		Name:      "scene_mode",
-		ValueType: hmenum.HubValueTypeList,
-		ValueList: []string{"OFF", "DAY", "NIGHT"},
-		Writable:  true,
+		Name:       "scene_mode",
+		ValueType:  hmenum.HubValueTypeList,
+		ValueList:  []string{"OFF", "DAY", "NIGHT"},
+		Writable:   true,
+		IsExtended: true,
 	}
 	item := db.BuildSysvarDiscovery("ccu", sv)
 	if !item.OK {
@@ -1387,6 +1389,7 @@ func TestSysvarWritableSelectGetsConfigCategory(t *testing.T) {
 func TestSysvarReadOnlySensorHasNoCategory(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	db.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 	sv := HubSysvarSpec{
 		Name:      "outdoor_temp",
 		ValueType: hmenum.HubValueTypeFloat,
@@ -1408,6 +1411,7 @@ func TestSysvarReadOnlySensorHasNoCategory(t *testing.T) {
 func TestSysvarReadOnlyListSensorHasNoCategory(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
+	db.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 	sv := HubSysvarSpec{
 		Name:      "wind_dir",
 		ValueType: hmenum.HubValueTypeList,

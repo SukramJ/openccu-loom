@@ -42,6 +42,11 @@ type southboundWiringDeps struct {
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
 	bridge                  *adapter.EventBridge
+	// hubMQTT is re-started after the per-central HubInfo stamping so
+	// hub discovery payloads — skipped while the CCU serial that feeds
+	// their unique_ids is unknown — are published with the correct
+	// per-central serial discriminator. Nil when MQTT is not configured.
+	hubMQTT *adapter.HubMQTTPublisher
 }
 
 // southboundWiring is the result of the southbound wiring phase. It
@@ -272,6 +277,15 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 				Serial:  si.Serial,
 				URL:     si.URL,
 			})
+		}
+		// Re-run the hub publisher now that every central's serial is
+		// registered: hub discovery payloads embed the serial in their
+		// unique_ids and are skipped while it is unknown (the boot-time
+		// Start ran before WireCentrals populated SystemInformation).
+		// Start is idempotent (Stop + rewire) and re-publishes the
+		// retained hub discovery + state for every central.
+		if d.hubMQTT != nil {
+			d.hubMQTT.Start(ctx)
 		}
 	}
 

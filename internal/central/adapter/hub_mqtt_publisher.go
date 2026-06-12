@@ -88,7 +88,22 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	centralName := u.Name()
 	w := p.wiring
 	b := w.Bridge()
-	disco := mqtt.NewDefaultDiscoveryBuilder(b.Topics(), centralName)
+	// Use the BRIDGE's discovery builder so the per-central HubInfo the
+	// daemon registers via [mqtt.Bridge.SetHubInfoFor] — most importantly
+	// the CCU serial that disambiguates hub unique_ids across centrals —
+	// is visible to every hub discovery payload built here. A fresh
+	// builder would never see the serials: every central's hub entities
+	// would collide on identical unique_ids (`loom__alarm_messages`) and
+	// HA would silently drop all but one CCU's hub plane. The hub
+	// builders skip publishing entirely while the serial is unknown; the
+	// daemon re-runs [HubMQTTPublisher.Start] after stamping HubInfo.
+	disco := b.DefaultBuilder()
+	if disco == nil {
+		// Bridge runs a custom (non-default) builder — typically tests.
+		// Fall back to a local instance; hub discovery then publishes
+		// only once a serial is stamped onto it.
+		disco = mqtt.NewDefaultDiscoveryBuilder(b.Topics(), centralName)
+	}
 
 	// --- Programs ---
 	// Subscribe to PutProgram FIRST so programs registered between the
@@ -304,6 +319,7 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 		ValueList:   sv.ValueList,
 		ValueType:   sv.ValueType,
 		Writable:    sv.Writer != nil,
+		IsExtended:  sv.IsExtended,
 		Min:         paramValueAsFloat(sv.Min),
 		Max:         paramValueAsFloat(sv.Max),
 	}
