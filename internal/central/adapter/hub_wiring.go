@@ -846,6 +846,15 @@ func decodeRegaField(s string) string {
 
 // loadSystemUpdate fetches the CCU's firmware-update state via the ReGa
 // script engine and refreshes h.Update.
+//
+// The get_system_update_info script derives current_firmware from
+// `grep VERSION= /VERSION` via system.Exec. ReGaHss occasionally
+// returns an empty exec output while the rest of the payload is valid
+// (observed once on a remote OpenCCU 3.87.6 right after a reconnect;
+// direct re-runs of the same script over both tclrega and JSON-RPC
+// returned the version normally). An empty current_firmware therefore
+// never overwrites a previously observed non-empty value — the next
+// scheduled refresh re-delivers the real one anyway.
 func loadSystemUpdate(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
 	if h == nil {
 		return nil
@@ -853,6 +862,11 @@ func loadSystemUpdate(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
 	info, err := r.GetSystemUpdateInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("loadSystemUpdate: %w", err)
+	}
+	if info.CurrentFirmware == "" {
+		if prev, observed := h.Update.UpdateInfo(); observed && prev.CurrentFirmware != "" {
+			info.CurrentFirmware = prev.CurrentFirmware
+		}
 	}
 	h.Update.OnInfo(hub.UpdateInfo{
 		CurrentFirmware:      info.CurrentFirmware,

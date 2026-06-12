@@ -200,6 +200,66 @@ func TestLoadSystemUpdateNoAvailableVersion(t *testing.T) {
 	}
 }
 
+// TestLoadSystemUpdateKeepsLastKnownFirmware pins the transient-exec
+// guard: ReGaHss occasionally returns an empty current_firmware (the
+// `grep VERSION= /VERSION` system.Exec yields no output) while the
+// rest of the payload is valid. A previously observed non-empty
+// firmware version must survive such a refresh instead of regressing
+// the surface to an empty string.
+func TestLoadSystemUpdateKeepsLastKnownFirmware(t *testing.T) {
+	t.Parallel()
+
+	h := hubmodel.NewHub("test-central")
+
+	good := newRegaRunnerFor(
+		t,
+		`{"current_firmware":"3.87.6.20260509","available_firmware":"","update_available":false,"check_script_available":true}`,
+	)
+	if err := loadSystemUpdate(context.Background(), good, h); err != nil {
+		t.Fatalf("loadSystemUpdate (good): %v", err)
+	}
+
+	empty := newRegaRunnerFor(
+		t,
+		`{"current_firmware":"","available_firmware":"","update_available":false,"check_script_available":true}`,
+	)
+	if err := loadSystemUpdate(context.Background(), empty, h); err != nil {
+		t.Fatalf("loadSystemUpdate (empty): %v", err)
+	}
+
+	info, observed := h.Update.UpdateInfo()
+	if !observed {
+		t.Fatal("Update.observed must stay true")
+	}
+	if info.CurrentFirmware != "3.87.6.20260509" {
+		t.Errorf("CurrentFirmware = %q, want last known 3.87.6.20260509", info.CurrentFirmware)
+	}
+}
+
+// TestLoadSystemUpdateEmptyFirstObservation pins that a first-ever
+// refresh delivering an empty current_firmware is still recorded
+// (observed=true, empty value) — there is no previous value to keep,
+// and the next scheduled refresh delivers the real one.
+func TestLoadSystemUpdateEmptyFirstObservation(t *testing.T) {
+	t.Parallel()
+
+	r := newRegaRunnerFor(
+		t,
+		`{"current_firmware":"","available_firmware":"","update_available":false,"check_script_available":true}`,
+	)
+	h := hubmodel.NewHub("test-central")
+	if err := loadSystemUpdate(context.Background(), r, h); err != nil {
+		t.Fatalf("loadSystemUpdate: %v", err)
+	}
+	info, observed := h.Update.UpdateInfo()
+	if !observed {
+		t.Fatal("Update.observed must be true after a successful refresh")
+	}
+	if info.CurrentFirmware != "" {
+		t.Errorf("CurrentFirmware = %q, want empty on first observation", info.CurrentFirmware)
+	}
+}
+
 // ============================================================
 // loadInbox — central-wide ReGa query
 // ============================================================
