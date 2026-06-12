@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.5.0
+  version: 1.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3845,6 +3845,36 @@ components:
             Empty when the channel is not owned by any CDP. Lets the
             SPA's CDP-first Übersicht view (ADR 0016) filter channels
             that are already represented by a CDP tile.
+        group_no:
+          type: integer
+          description: |
+            Channel-group number this channel belongs to (the group
+            master's channel number). Omitted when the channel is not
+            part of any channel group.
+        is_group_master:
+          type: boolean
+          description: |
+            True when this channel is the master of its channel group
+            (`group_no == number`). Only present alongside `group_no`.
+        is_in_multi_group:
+          type: boolean
+          description: |
+            True when the channel's group has more than one member —
+            i.e. the channel participates in the parent device's
+            sub-device split. Singleton groups omit the flag.
+        sub_device_name:
+          type: string
+          description: |
+            Resolved sub-device label for the channel's group (the
+            group master's name with device-name/number fallbacks).
+            Only present for multi-member groups.
+        room:
+          type: string
+          description: |
+            The channel's single resolved room with the group-master
+            fallback applied. Empty when no unique room can be
+            resolved. External clients use it as the suggested area of
+            the channel group's sub-device.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]
