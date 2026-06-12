@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.4.0
+  version: 1.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5345,6 +5345,14 @@ components:
         category: { type: string }
         value: {}
         observed: { type: boolean }
+        translated_name:
+          type: string
+          description: |
+            Locale-aware per-entity name, resolved through the same
+            chain as generic data points (channel-typed translation →
+            bare-parameter translation → title-cased parameter). Lets
+            clients spawn calculated/combined entities with the same
+            names the reference stack generates.
         modified_at: { type: string, format: date-time }
     CalculatedDPDetail:
       allOf:

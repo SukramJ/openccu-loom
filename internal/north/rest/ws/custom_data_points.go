@@ -43,6 +43,10 @@ type CustomDPInvoker interface {
 type CustomDPCommandsConfig struct {
 	Index   CustomDPIndex
 	Invoker CustomDPInvoker
+	// Labels resolves locale-aware parameter labels for the
+	// `translated_name` field of calc_dp.* responses. Optional —
+	// nil omits the field.
+	Labels handlers.ParameterLabeler
 }
 
 // RegisterCustomDPCommands wires the custom/calculated data-point WS
@@ -55,8 +59,8 @@ func RegisterCustomDPCommands(router *Router, cfg CustomDPCommandsConfig) {
 	if cfg.Index != nil {
 		router.Register("cdp.list", customDPListHandler(cfg.Index))
 		router.Register("cdp.get", customDPGetHandler(cfg.Index))
-		router.Register("calc_dp.list", calculatedDPListHandler(cfg.Index))
-		router.Register("calc_dp.get", calculatedDPGetHandler(cfg.Index))
+		router.Register("calc_dp.list", calculatedDPListHandler(cfg.Index, cfg.Labels))
+		router.Register("calc_dp.get", calculatedDPGetHandler(cfg.Index, cfg.Labels))
 	}
 	if cfg.Index != nil && cfg.Invoker != nil {
 		router.Register("cdp.invoke", customDPSetHandler(cfg.Index, cfg.Invoker))
@@ -161,7 +165,7 @@ func customDPSetHandler(idx CustomDPIndex, invoker CustomDPInvoker) CommandHandl
 
 // --- calc_dp.list ---
 
-func calculatedDPListHandler(idx CustomDPIndex) CommandHandler {
+func calculatedDPListHandler(idx CustomDPIndex, labels handlers.ParameterLabeler) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device    string `json:"device"`
@@ -175,12 +179,12 @@ func calculatedDPListHandler(idx CustomDPIndex) CommandHandler {
 			if !ok {
 				return nil, errors.New("ws: device not found: " + p.Device)
 			}
-			return calculatedDPsForDevice(d, p.ChannelNo), nil
+			return calculatedDPsForDevice(d, p.ChannelNo, labels), nil
 		}
 		// All devices.
 		out := make(map[string]any)
 		for _, d := range idx.Devices() {
-			dps := calculatedDPsForDevice(d, nil)
+			dps := calculatedDPsForDevice(d, nil, labels)
 			if len(dps) > 0 {
 				out[d.Address] = dps
 			}
@@ -191,7 +195,7 @@ func calculatedDPListHandler(idx CustomDPIndex) CommandHandler {
 
 // --- calc_dp.get ---
 
-func calculatedDPGetHandler(idx CustomDPIndex) CommandHandler {
+func calculatedDPGetHandler(idx CustomDPIndex, labels handlers.ParameterLabeler) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Device    string `json:"device"`
@@ -217,7 +221,7 @@ func calculatedDPGetHandler(idx CustomDPIndex) CommandHandler {
 			}
 			for _, dp := range ch.CalculatedDataPoints() {
 				if dp.DataPointKey().Parameter == p.Name {
-					return toCalculatedDPEntry(dp), nil
+					return toCalculatedDPEntry(dp, ch, labels), nil
 				}
 			}
 		}
@@ -275,23 +279,29 @@ func customDPEntry(d *device.Device, dp device.AttachableDataPoint, channelNo in
 	return entry
 }
 
-func calculatedDPsForDevice(d *device.Device, channelNo *int) []map[string]any {
+func calculatedDPsForDevice(d *device.Device, channelNo *int, labels handlers.ParameterLabeler) []map[string]any {
 	out := make([]map[string]any, 0)
 	for _, ch := range d.Channels() {
 		if channelNo != nil && ch.Number != *channelNo {
 			continue
 		}
 		for _, dp := range ch.CalculatedDataPoints() {
-			out = append(out, toCalculatedDPEntry(dp))
+			out = append(out, toCalculatedDPEntry(dp, ch, labels))
 		}
 	}
 	return out
 }
 
-func toCalculatedDPEntry(dp device.AttachableDataPoint) map[string]any {
+func toCalculatedDPEntry(dp device.AttachableDataPoint, ch *device.Channel, labels handlers.ParameterLabeler) map[string]any {
 	key := dp.DataPointKey()
 	entry := map[string]any{
 		"name": key.Parameter,
+	}
+	// translated_name resolves through the same chain as the REST
+	// calc-dps handler so WS consumers spawn identically-named
+	// entities.
+	if tn := handlers.CalculatedDPTranslatedName(ch, key.Parameter, labels); tn != "" {
+		entry["translated_name"] = tn
 	}
 	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
 		entry["category"] = string(cdp.Category())

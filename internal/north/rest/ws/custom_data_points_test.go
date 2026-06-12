@@ -419,3 +419,68 @@ func TestCalculatedDPGet_MissingDeviceParam_ReturnsError(t *testing.T) {
 // --- helper ---
 
 func jsonParam(s string) []byte { return []byte(s) }
+
+// --- tests: calc_dp translated_name ---
+
+// wsTranslatorLabeler implements handlers.ParameterLabeler AND
+// device.ParameterTranslator so the WS calc-DP entries exercise the
+// same translated-name chain as the REST handler.
+type wsTranslatorLabeler struct {
+	entries map[string]string // "<channelType>|<parameter>" → label
+}
+
+func (l wsTranslatorLabeler) ParameterLabel(string) string { return "" }
+func (l wsTranslatorLabeler) ChannelTypedParameterLabelOk(channelType, parameter string) (string, bool) {
+	v, ok := l.entries[channelType+"|"+parameter]
+	return v, ok
+}
+
+// TestCalculatedDPList_TranslatedName pins that the WS calc_dp.list
+// entries carry the locale-aware translated_name with the title-cased
+// fallback the reference stack generates for untranslated calculated
+// parameters.
+func TestCalculatedDPList_TranslatedName(t *testing.T) {
+	t.Parallel()
+	d := newWSTestDevice("DEV0040", "HmIP-STHD")
+	addWSCalculatedDP(d, "DEV0040", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	idx := &stubCustomDPIndex{devices: map[string]*device.Device{"DEV0040": d}}
+	r := NewRouter()
+	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx, Labels: wsTranslatorLabeler{}})
+
+	res := r.Dispatch(context.Background(), "calc_dp.list", jsonParam(`{"device":"DEV0040"}`))
+	if res.Error != nil {
+		t.Fatalf("dispatch error: %+v", res.Error)
+	}
+	items, ok := res.Data.([]map[string]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("expected 1 entry, got %T %v", res.Data, res.Data)
+	}
+	if items[0]["translated_name"] != "Dew Point" {
+		t.Fatalf("translated_name = %v, want Dew Point", items[0]["translated_name"])
+	}
+}
+
+// TestCalculatedDPGet_TranslatedNameLocaleWins pins that a
+// channel-typed OCCU translation overrides the fallback on calc_dp.get.
+func TestCalculatedDPGet_TranslatedNameLocaleWins(t *testing.T) {
+	t.Parallel()
+	d := newWSTestDevice("DEV0041", "HmIP-STHD")
+	addWSCalculatedDP(d, "DEV0041", "DEW_POINT", 1, hmenum.DataPointCategorySensor, 12.5)
+	idx := &stubCustomDPIndex{devices: map[string]*device.Device{"DEV0041": d}}
+	lab := wsTranslatorLabeler{entries: map[string]string{"SENSOR|DEW_POINT": "Taupunkt"}}
+	r := NewRouter()
+	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx, Labels: lab})
+
+	res := r.Dispatch(context.Background(), "calc_dp.get",
+		jsonParam(`{"device":"DEV0041","channel_no":1,"name":"DEW_POINT"}`))
+	if res.Error != nil {
+		t.Fatalf("dispatch error: %+v", res.Error)
+	}
+	m, ok := res.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map, got %T", res.Data)
+	}
+	if m["translated_name"] != "Taupunkt" {
+		t.Fatalf("translated_name = %v, want Taupunkt", m["translated_name"])
+	}
+}

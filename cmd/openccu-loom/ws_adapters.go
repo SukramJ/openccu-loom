@@ -26,6 +26,7 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
@@ -63,6 +64,9 @@ type wsCommandWiring struct {
 	// changeLog receives one entry per successful config.session.save.
 	// When nil the save path proceeds without recording.
 	changeLog *audit.ChangeLog
+	// labels resolves locale-aware parameter labels for the
+	// translated_name field of calc_dp.* responses.
+	labels handlers.ParameterLabeler
 }
 
 // wireWSCommands registers every WS command set onto hub.
@@ -117,6 +121,7 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	ws.RegisterCustomDPCommands(router, ws.CustomDPCommandsConfig{
 		Index:   w.devices, // *adapter.DevicesAdapter satisfies ws.CustomDPIndex
 		Invoker: w.customDP,
+		Labels:  w.labels,
 	})
 
 	// RegisterMissingCommands wires all 9 previously-missing WS commands.

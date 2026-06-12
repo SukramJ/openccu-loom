@@ -447,9 +447,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.InvokeCustomDataPoint(d.Devices, d.CustomDPWriter))
 				// Calculated data points (Phase C).
 				pr.Get("/devices/{addr}/channels/{no}/calc-dps",
-					handlers.ListCalculatedDataPoints(d.Devices))
+					handlers.ListCalculatedDataPoints(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/channels/{no}/calc-dps/{name}",
-					handlers.GetCalculatedDataPoint(d.Devices))
+					handlers.GetCalculatedDataPoint(d.Devices, d.Labels))
 				// Week-profile metadata (read-only; full schedule data via schedule routes).
 				pr.Get("/devices/{addr}/channels/{no}/week_profile",
 					handlers.GetWeekProfile(d.Devices))

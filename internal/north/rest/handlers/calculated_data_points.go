@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -19,11 +20,19 @@ import (
 
 // CalculatedDPSummary is one entry in GET .../calc-dps.
 type CalculatedDPSummary struct {
-	Name       string `json:"name"`
-	Category   string `json:"category,omitempty"`
-	Value      any    `json:"value"`
-	Observed   bool   `json:"observed"`
-	ModifiedAt string `json:"modified_at,omitempty"`
+	Name     string `json:"name"`
+	Category string `json:"category,omitempty"`
+	Value    any    `json:"value"`
+	Observed bool   `json:"observed"`
+	// TranslatedName is the locale-aware per-entity name, resolved
+	// through the same chain as generic data points (channel-typed
+	// OCCU translation → bare-parameter translation → title-cased
+	// parameter). The reference stack consults the identical
+	// translation catalogue for calculated and combined data points
+	// and falls back to `parameter.title().replace("_", " ")`, so a
+	// client rendering this field spawns identically-named entities.
+	TranslatedName string `json:"translated_name,omitempty"`
+	ModifiedAt     string `json:"modified_at,omitempty"`
 }
 
 // CalculatedDPDetail extends [CalculatedDPSummary] with the dependency list.
@@ -33,11 +42,14 @@ type CalculatedDPDetail struct {
 }
 
 // toCalculatedDPSummary renders an AttachableDataPoint as a CalculatedDPSummary.
-func toCalculatedDPSummary(dp device.AttachableDataPoint) CalculatedDPSummary {
+// ch and labels feed the translated-name resolution; both are
+// nil-tolerant (the field is simply omitted then).
+func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, labels ParameterLabeler) CalculatedDPSummary {
 	key := dp.DataPointKey()
 	s := CalculatedDPSummary{
 		Name: key.Parameter,
 	}
+	s.TranslatedName = CalculatedDPTranslatedName(ch, key.Parameter, labels)
 	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
 		s.Category = string(cdp.Category())
 	}
@@ -58,6 +70,27 @@ func toCalculatedDPSummary(dp device.AttachableDataPoint) CalculatedDPSummary {
 	return s
 }
 
+// CalculatedDPTranslatedName resolves the locale-aware entity name for
+// a calculated/combined data point through the same primitives as the
+// generic data-point handler (device.TranslatedDataPointLabel →
+// naming.EntityDisplayName), so REST, WS, and MQTT consumers spawn
+// entities with identical names. The OCCU catalogue carries no entries
+// for the synthetic calculated parameters (DEW_POINT, DURATION, …), so
+// the usual outcome is the title-cased fallback — exactly the name the
+// reference stack generates when its translation lookup returns None.
+func CalculatedDPTranslatedName(ch *device.Channel, parameter string, labels ParameterLabeler) string {
+	if ch == nil {
+		return ""
+	}
+	t, ok := labels.(device.ParameterTranslator)
+	if !ok {
+		return naming.TitleCaseParameter(parameter)
+	}
+	label, labelOmitted := device.TranslatedDataPointLabel(ch, parameter, ch.Type, t)
+	name, _ := naming.EntityDisplayName(label, labelOmitted, parameter)
+	return name
+}
+
 // dependsOnForKey returns the wire parameters a calculated DP depends on,
 // inferred from the parameter name conventions. This is a best-effort
 // mapping that covers the known sensor types.
@@ -72,7 +105,9 @@ func dependsOnForKey(key hmtypes.DataPointKey) []string {
 }
 
 // lookupCalculatedDP finds the calculated DP by channel number and name.
-func lookupCalculatedDPByChannelAndName(d *device.Device, channelNo int, name string) (device.AttachableDataPoint, bool) {
+// Returns the hosting channel alongside so callers can resolve the
+// channel-typed translated name.
+func lookupCalculatedDPByChannelAndName(d *device.Device, channelNo int, name string) (device.AttachableDataPoint, *device.Channel, bool) {
 	// Find the channel by number.
 	for _, ch := range d.Channels() {
 		if ch.Number != channelNo {
@@ -80,11 +115,11 @@ func lookupCalculatedDPByChannelAndName(d *device.Device, channelNo int, name st
 		}
 		for _, dp := range ch.CalculatedDataPoints() {
 			if dp.DataPointKey().Parameter == name {
-				return dp, true
+				return dp, ch, true
 			}
 		}
 	}
-	return nil, false
+	return nil, nil, false
 }
 
 // --- handlers ---
@@ -92,7 +127,7 @@ func lookupCalculatedDPByChannelAndName(d *device.Device, channelNo int, name st
 // ListCalculatedDataPoints returns all calculated DPs on a channel.
 //
 //	GET /api/v1/devices/{addr}/channels/{no}/calc-dps
-func ListCalculatedDataPoints(idx DeviceIndex) http.HandlerFunc {
+func ListCalculatedDataPoints(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
 		d, ok := idx.Device(addr)
@@ -120,7 +155,7 @@ func ListCalculatedDataPoints(idx DeviceIndex) http.HandlerFunc {
 		dps := ch.CalculatedDataPoints()
 		out := make([]CalculatedDPSummary, 0, len(dps))
 		for _, dp := range dps {
-			out = append(out, toCalculatedDPSummary(dp))
+			out = append(out, toCalculatedDPSummary(dp, ch, labels))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -129,7 +164,7 @@ func ListCalculatedDataPoints(idx DeviceIndex) http.HandlerFunc {
 // GetCalculatedDataPoint returns a single calculated DP by name.
 //
 //	GET /api/v1/devices/{addr}/channels/{no}/calc-dps/{name}
-func GetCalculatedDataPoint(idx DeviceIndex) http.HandlerFunc {
+func GetCalculatedDataPoint(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		addr := chi.URLParam(r, "addr")
 		d, ok := idx.Device(addr)
@@ -146,13 +181,13 @@ func GetCalculatedDataPoint(idx DeviceIndex) http.HandlerFunc {
 			return
 		}
 		name := chi.URLParam(r, "name")
-		dp, found := lookupCalculatedDPByChannelAndName(d, chNo, name)
+		dp, ch, found := lookupCalculatedDPByChannelAndName(d, chNo, name)
 		if !found {
 			problem.Write(w, http.StatusNotFound,
 				problem.New(problem.TypeNotFound, r, "Calculated data point not found", name))
 			return
 		}
-		summary := toCalculatedDPSummary(dp)
+		summary := toCalculatedDPSummary(dp, ch, labels)
 		detail := CalculatedDPDetail{
 			CalculatedDPSummary: summary,
 			DependsOn:           dependsOnForKey(dp.DataPointKey()),
