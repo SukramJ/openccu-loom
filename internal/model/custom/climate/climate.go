@@ -158,9 +158,12 @@ type Climate struct {
 	// channel exposes via Channel.Parameter — there is exactly one
 	// instance per (channel, parameter), and an event arriving on the
 	// channel's DP is immediately visible here.
-	setpoint           *generic.Float
-	actualTemperature  *generic.Sensor[float64]
-	humidity           *generic.Sensor[float64]
+	setpoint          *generic.Float
+	actualTemperature *generic.Sensor[float64]
+	humidity          *generic.Sensor[float64]
+	// humidityInt covers HmIP thermostats, whose HUMIDITY parameter is
+	// INTEGER-typed on the wire (BidCos wall thermostats ship FLOAT).
+	humidityInt        *generic.Sensor[int32]
 	temperatureMinimum *generic.Float // TEMPERATURE_MINIMUM operator override
 	temperatureMaximum *generic.Float // TEMPERATURE_MAXIMUM operator override
 	// channelRef is the climate channel handed to the constructor.
@@ -265,6 +268,7 @@ func New(cfg Config) *Climate {
 		setpoint:           custom.FloatField(cfg.Channel, paramForSetpoint(cfg.Kind)),
 		actualTemperature:  custom.FloatSensorField(cfg.Channel, hmenum.ParameterActualTemperature),
 		humidity:           custom.FloatSensorField(cfg.Channel, hmenum.ParameterHumidity),
+		humidityInt:        custom.IntegerSensorField(cfg.Channel, hmenum.ParameterHumidity),
 		temperatureMinimum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMinimum),
 		temperatureMaximum: custom.FloatField(cfg.Channel, hmenum.ParameterTemperatureMaximum),
 		// channelRef carries the climate channel so the lazy week-
@@ -284,6 +288,9 @@ func New(cfg Config) *Climate {
 	}
 	if c.humidity != nil {
 		_ = c.humidity.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
+	}
+	if c.humidityInt != nil {
+		_ = c.humidityInt.OnConfirmedUpdate(func(_, _ int32) { c.dataVersion.Bump() })
 	}
 	if c.temperatureMinimum != nil {
 		_ = c.temperatureMinimum.OnConfirmedUpdate(func(_, _ float64) { c.dataVersion.Bump() })
@@ -318,6 +325,9 @@ func (c *Climate) aggregate() custom.AggregateView {
 	}
 	if c.humidity != nil {
 		slots = append(slots, c.humidity)
+	}
+	if c.humidityInt != nil {
+		slots = append(slots, c.humidityInt)
 	}
 	return custom.AggregateStatus(slots...)
 }
@@ -394,12 +404,19 @@ func (c *Climate) Profile() (Profile, bool) {
 	return c.profile, c.hasProfile
 }
 
-// Humidity returns the last observed ACTUAL_HUMIDITY.
+// Humidity returns the last observed HUMIDITY. HmIP thermostats type
+// the parameter INTEGER on the wire, BidCos wall thermostats FLOAT —
+// whichever slot resolved is read.
 func (c *Climate) Humidity() (float64, bool) {
-	if c.humidity == nil {
-		return 0, false
+	if c.humidity != nil {
+		return c.humidity.Value()
 	}
-	return c.humidity.Value()
+	if c.humidityInt != nil {
+		if v, ok := c.humidityInt.Value(); ok {
+			return float64(v), true
+		}
+	}
+	return 0, false
 }
 
 // Modes returns the list of modes this climate device supports,

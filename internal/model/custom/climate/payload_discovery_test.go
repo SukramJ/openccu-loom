@@ -7,7 +7,11 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
@@ -421,5 +425,31 @@ func TestClimateStatePayloadCarriesMeasurements(t *testing.T) {
 	}
 	if state.SetTemperature == nil || *state.SetTemperature != 15.0 {
 		t.Errorf("set_temperature = %v, want 15.0", state.SetTemperature)
+	}
+}
+
+// TestClimateHumidityIntegerTyped pins the HmIP humidity quirk: the
+// HUMIDITY parameter is INTEGER-typed on HmIP thermostats, so the
+// float-only slot never resolved and current_humidity stayed absent
+// from the aggregate state (wall thermostats showed no humidity in HA).
+func TestClimateHumidityIntegerTyped(t *testing.T) {
+	t.Parallel()
+	c := &Climate{humidityInt: generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "HmIP-BWTH:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterHumidity),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})}
+	if _, ok := c.Humidity(); ok {
+		t.Fatal("Humidity() must be unobserved before any event")
+	}
+	c.humidityInt.OnEvent(int32(51))
+	if v, ok := c.Humidity(); !ok || v != 51 {
+		t.Fatalf("Humidity() = (%v,%v), want (51,true)", v, ok)
 	}
 }
