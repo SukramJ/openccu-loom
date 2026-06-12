@@ -149,6 +149,11 @@ type ChannelSummary struct {
 	// [device.Channel.SubDeviceName]. Empty when no sub-device split
 	// applies to this channel.
 	SubDeviceName string `json:"sub_device_name,omitempty"`
+	// Room is the channel's single resolved room with the group-master
+	// fallback applied ([device.Channel.Room]). Empty when no unique
+	// room can be resolved. External clients use it as the
+	// suggested-area of the channel group's sub-device.
+	Room string `json:"room,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -556,6 +561,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 			s.SubDeviceName = ch.SubDeviceName()
 		}
 	}
+	s.Room = ch.Room()
 	return s
 }
 

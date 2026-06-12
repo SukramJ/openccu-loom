@@ -1203,3 +1203,59 @@ func TestToDataPointSummary_ParameterLabel_NilLabeler_TitleCasedFallback(t *test
 		t.Errorf("ParameterLabel = %q with nil labeler, want %q (title-case fallback)", s.ParameterLabel, "State")
 	}
 }
+
+// TestListChannels_GroupAndRoomFields pins the channel-group contract
+// external clients consume for the sub-device split: group_no,
+// is_group_master, is_in_multi_group, sub_device_name on grouped
+// channels plus the group-master-resolved room.
+func TestListChannels_GroupAndRoomFields(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("0001GRP", "HmIP-BSM")
+	d.AddChannel("0001GRP:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	state := d.AddChannel("0001GRP:3", 3, "SWITCH_TRANSMITTER", hmenum.ParamsetKeyValues)
+	master := d.AddChannel("0001GRP:4", 4, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	master.Name = "Galerie Aktor"
+	master.Rooms = []string{"Galerie"}
+	for _, no := range []int{3, 4, 5} {
+		d.AddChannelToGroup(4, no)
+	}
+	state.GroupNo = 4
+	master.GroupNo = 4
+	vch := d.AddChannel("0001GRP:5", 5, "SWITCH_VIRTUAL_RECEIVER", hmenum.ParamsetKeyValues)
+	vch.GroupNo = 4
+	idx := &stubDeviceIndex{devices: map[string]*device.Device{"0001GRP": d}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/devices/0001GRP/channels", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001GRP"}))
+	w := httptest.NewRecorder()
+	ListChannels(idx, nil).ServeHTTP(w, req)
+
+	var body []ChannelSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	byNo := map[int]ChannelSummary{}
+	for _, c := range body {
+		byNo[c.Number] = c
+	}
+	if c := byNo[0]; c.GroupNo != 0 || c.IsInMultiGroup || c.Room != "" {
+		t.Errorf("maintenance channel must carry no group fields, got %+v", c)
+	}
+	m := byNo[4]
+	if m.GroupNo != 4 || !m.IsGroupMaster || !m.IsInMultiGroup {
+		t.Errorf("master: group_no/is_group_master/is_in_multi_group = %d/%v/%v, want 4/true/true", m.GroupNo, m.IsGroupMaster, m.IsInMultiGroup)
+	}
+	if m.SubDeviceName != "Galerie Aktor" {
+		t.Errorf("master sub_device_name = %q, want Galerie Aktor", m.SubDeviceName)
+	}
+	if m.Room != "Galerie" {
+		t.Errorf("master room = %q, want Galerie", m.Room)
+	}
+	v := byNo[5]
+	if v.GroupNo != 4 || v.IsGroupMaster || !v.IsInMultiGroup {
+		t.Errorf("vch: group fields = %+v, want member of group 4", v)
+	}
+	if v.Room != "Galerie" {
+		t.Errorf("vch room = %q, want group-master fallback Galerie", v.Room)
+	}
+}
