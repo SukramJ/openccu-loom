@@ -392,3 +392,34 @@ func TestClimateHADiscoveryPayload_TempBoundsAndUnit(t *testing.T) {
 		t.Errorf("temperature_unit = %q, want %q", v, "C")
 	}
 }
+
+// TestClimateStatePayloadCarriesMeasurements pins the aggregate-state
+// measurement fields: once the channel field DPs report, the CDP state
+// must carry current_temperature / set_temperature / current_humidity so
+// REST/WS consumers can populate a climate card from the state alone —
+// before observation the keys are omitted (nil), never zero-stamped.
+func TestClimateStatePayloadCarriesMeasurements(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
+		MinTemperature: 4.5, MaxTemperature: 30.5,
+	})
+
+	state, ok := r.climate.State().(*payload.ClimateState)
+	if !ok {
+		t.Fatal("StatePayload did not return *payload.ClimateState")
+	}
+	if state.CurrentTemperature != nil || state.SetTemperature != nil || state.CurrentHumidity != nil {
+		t.Fatal("measurement fields must be omitted before observation")
+	}
+
+	r.actualTemperature.OnEvent(21.7)
+	r.setpoint.OnEvent(15.0)
+
+	state, _ = r.climate.State().(*payload.ClimateState)
+	if state.CurrentTemperature == nil || *state.CurrentTemperature != 21.7 {
+		t.Errorf("current_temperature = %v, want 21.7", state.CurrentTemperature)
+	}
+	if state.SetTemperature == nil || *state.SetTemperature != 15.0 {
+		t.Errorf("set_temperature = %v, want 15.0", state.SetTemperature)
+	}
+}
