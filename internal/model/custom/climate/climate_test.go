@@ -146,6 +146,29 @@ func newRig(t *testing.T, address string, kind Kind, w Writer, caps custom.Clima
 		ch.PutMaster(pointer)
 	}
 
+	// Activity source: IP rigs model a LEVEL-carrying thermostat
+	// (HmIP-eTRV shape), RF rigs a VALVE_STATE-carrying one. Without
+	// any source the action surface is omitted entirely (HmIP-STHD
+	// display-only shape) — covered by dedicated tests.
+	if kind == KindIP || kind == KindRF {
+		activityParam := hmenum.ParameterLevel
+		if kind == KindRF {
+			activityParam = hmenum.ParameterValveState
+		}
+		activity := generic.NewFloatSensor(generic.Spec{
+			Key: hmtypes.DataPointKey{
+				ChannelAddress: address,
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      string(activityParam),
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       hmenum.ParameterTypeFloat,
+				Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+			},
+		})
+		ch.Put(activity)
+	}
+
 	c := New(Config{Channel: ch, Writer: w, Capabilities: caps, Kind: kind})
 	return &rig{
 		climate:           c,

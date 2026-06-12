@@ -127,6 +127,14 @@ type Config struct {
 	Writer       Writer
 	Capabilities custom.ClimateCapabilities
 	Kind         Kind
+
+	// ActivityStateChannels lists the absolute channel numbers whose
+	// STATE parameter acts as the heating-activity source per the
+	// device profile's channel-field map (e.g. the HmIP-BWTH relay on
+	// channel 9, the heating-group switch channel). Resolved by the
+	// IP profile constructors from the rebased channel-group schema;
+	// empty for devices whose profile maps no STATE field.
+	ActivityStateChannels []int
 }
 
 // Climate is a thermostat custom data point.
@@ -166,6 +174,10 @@ type Climate struct {
 	humidityInt        *generic.Sensor[int32]
 	temperatureMinimum *generic.Float // TEMPERATURE_MINIMUM operator override
 	temperatureMaximum *generic.Float // TEMPERATURE_MAXIMUM operator override
+	// activityStateChannels carries [Config.ActivityStateChannels];
+	// consulted by [Climate.activityStateDPs] to resolve the heating-
+	// relay STATE data points on sibling channels at call time.
+	activityStateChannels []int
 	// channelRef is the climate channel handed to the constructor.
 	// Held only so [numWeekPrograms] can walk to the device root at
 	// call-time — the WEEK_PROGRAM_POINTER DP for several RF
@@ -276,7 +288,8 @@ func New(cfg Config) *Climate {
 		// device root at call time. Construction-time resolution
 		// missed RF thermostats whose root MASTER paramset is
 		// populated only after Climate is registered.
-		channelRef: cfg.Channel,
+		channelRef:            cfg.Channel,
+		activityStateChannels: cfg.ActivityStateChannels,
 	}
 	c.registerServices()
 	// Matter §10.6.5: DataVersion advances on every CCU-confirmed attribute change.
@@ -710,7 +723,7 @@ func (c *Climate) OnTemperatureOffset(v any) {
 }
 
 // Activity reports the current heating-vs-idle status of the thermostat.
-// Computed from VALVE_STATE / LEVEL / STATE depending on device family.
+// Computed from LEVEL / STATE (IP) or VALVE_STATE (classic RF).
 // Returns observed=false when the underlying source has not reported yet.
 func (c *Climate) Activity() (Activity, bool) {
 	c.mu.RLock()
@@ -719,6 +732,78 @@ func (c *Climate) Activity() (Activity, bool) {
 		return ActivityIdle, false
 	}
 	return c.activity, true
+}
+
+// HasActivitySource reports whether the thermostat carries any wire
+// source the activity (HA `hvac_action`) can be derived from:
+//
+//   - KindIP: LEVEL or STATE on the climate channel, or a STATE DP on
+//     one of the profile-mapped activity-state channels (HmIP-BWTH
+//     relay channel, heating-group switch channel).
+//   - KindRF: VALVE_STATE on the climate channel.
+//   - KindSimpleRF: none.
+//
+// A previously fed activity value (e.g. from linked peer channels via
+// [Climate.RefreshLinkPeerActivitySources]) also counts as a source.
+//
+// Display-only thermostats without any source (HmIP-STHD) report
+// false; the reference stack returns `activity = None` for them, so
+// the aggregate state and the HA discovery omit the action surface
+// entirely instead of stamping a misleading "idle".
+func (c *Climate) HasActivitySource() bool {
+	c.mu.RLock()
+	fed := c.hasActivity
+	c.mu.RUnlock()
+	if fed {
+		return true
+	}
+	ch := c.channelRef
+	if ch == nil {
+		return false
+	}
+	switch c.Kind {
+	case KindIP:
+		if ch.Parameter(hmenum.ParameterLevel) != nil || ch.Parameter(hmenum.ParameterState) != nil {
+			return true
+		}
+		return len(c.activityStateDPs()) > 0
+	case KindRF:
+		return ch.Parameter(hmenum.ParameterValveState) != nil
+	case KindSimpleRF:
+		return false
+	default:
+		return false
+	}
+}
+
+// activityStateDPs resolves the STATE data points of the profile-
+// mapped activity-state channels ([Config.ActivityStateChannels])
+// against the device at call time, so pipeline ordering (channels
+// hydrated after Climate construction) does not matter. Channels that
+// do not exist on the device — the profile schema lists offsets for
+// the whole family, e.g. the HmIP-WGTC config channel — are skipped.
+func (c *Climate) activityStateDPs() []device.ParameterDataPoint {
+	ch := c.channelRef
+	if ch == nil || len(c.activityStateChannels) == 0 {
+		return nil
+	}
+	dev := ch.Device()
+	if dev == nil {
+		return nil
+	}
+	var out []device.ParameterDataPoint
+	for _, no := range c.activityStateChannels {
+		for _, sibling := range dev.Channels() {
+			if sibling == nil || sibling.Number != no {
+				continue
+			}
+			if dp := sibling.Parameter(hmenum.ParameterState); dp != nil {
+				out = append(out, dp)
+			}
+			break
+		}
+	}
+	return out
 }
 
 // OnActivity records an inferred activity state. Coordinator-side
@@ -1436,14 +1521,15 @@ func replayCurrentValue(dp interface {
 }
 
 // Subscribe wires the channel's activity-source parameters into [OnActivity]
-// so callers do not need to forward VALVE_STATE / LEVEL STATE updates
+// so callers do not need to forward VALVE_STATE / LEVEL / STATE updates
 // themselves. Implements [device.SubscribingDataPoint].
 //
 // - KindIP: subscribes to LEVEL (valve openness) and STATE (heating/idle
-// bool); LEVEL > 0 ⇒ heating, otherwise idle. Also subscribes to
-// SET_POINT_MODE to update Mode / Profile. - KindRF / KindSimpleRF:
-// subscribes to VALVE_STATE (0–100 %); >0 ⇒ heating, =0 ⇒ idle. KindRF also
-// subscribes to CONTROL_MODE to update Mode / Profile.
+// bool, own channel plus the profile-mapped activity-state channels);
+// LEVEL > 0 ⇒ heating, otherwise idle. Also subscribes to
+// SET_POINT_MODE to update Mode / Profile. - KindRF: subscribes to
+// VALVE_STATE (0–100 %); >0 ⇒ heating, =0 ⇒ idle, plus CONTROL_MODE to
+// update Mode / Profile. - KindSimpleRF: no activity source.
 //
 // Returns a closure that detaches every subscription. Each subscription also
 // replays the wire DP's currently observed value through the same handler so
@@ -1485,17 +1571,38 @@ func (c *Climate) Subscribe(ch *device.Channel) func() { //nolint:gocognit,gocyc
 			}
 		}
 	}
-	if dp := ch.Parameter(hmenum.ParameterValveState); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityFloat(next) }))
-		replayCurrentValue(dp, applyActivityFloat)
-	}
-	if dp := ch.Parameter(hmenum.ParameterLevel); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityFloat(next) }))
-		replayCurrentValue(dp, applyActivityFloat)
-	}
-	if dp := ch.Parameter(hmenum.ParameterState); dp != nil {
-		unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityBool(next) }))
-		replayCurrentValue(dp, applyActivityBool)
+	// Activity wiring is kind-gated to mirror the reference stack:
+	//
+	// - KindIP derives activity from LEVEL (valve openness) and STATE
+	//   (heating relay — possibly on a profile-mapped sibling channel,
+	//   e.g. the HmIP-BWTH relay on channel 9). HmIP VALVE_STATE is an
+	//   adaption-state ENUM (4 == ADAPTION_DONE), NOT a valve-openness
+	//   percentage; treating it as one reported "heating" on idle
+	//   eTRVs whose LEVEL was 0.
+	// - KindRF derives activity from VALVE_STATE (0–100 %).
+	// - KindSimpleRF has no activity source at all — hvac_action stays
+	//   absent for these thermostats.
+	switch c.Kind {
+	case KindIP:
+		if dp := ch.Parameter(hmenum.ParameterLevel); dp != nil {
+			unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityFloat(next) }))
+			replayCurrentValue(dp, applyActivityFloat)
+		}
+		if dp := ch.Parameter(hmenum.ParameterState); dp != nil {
+			unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityBool(next) }))
+			replayCurrentValue(dp, applyActivityBool)
+		}
+		for _, dp := range c.activityStateDPs() {
+			unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityBool(next) }))
+			replayCurrentValue(dp, applyActivityBool)
+		}
+	case KindRF:
+		if dp := ch.Parameter(hmenum.ParameterValveState); dp != nil {
+			unsubs = append(unsubs, dp.OnAnyUpdate(func(_, next any) { applyActivityFloat(next) }))
+			replayCurrentValue(dp, applyActivityFloat)
+		}
+	case KindSimpleRF:
+		// No activity source.
 	}
 	applyTemperatureOffset := func(next any) {
 		if next != nil {

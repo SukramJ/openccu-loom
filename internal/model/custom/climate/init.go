@@ -23,6 +23,8 @@
 package climate
 
 import (
+	"sort"
+
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -163,21 +165,44 @@ var simpleRfCapabilities = custom.ClimateCapabilities{
 	TemperatureUnit: "°C",
 }
 
-func ipThermostatConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+// activityStateChannels extracts the absolute channel numbers whose
+// profile-mapped STATE field acts as the heating-activity source for
+// an IP thermostat — e.g. channel offset 8 on the IPThermostat schema
+// (HmIP-BWTH relay channel 9) or offset 3 on the heating-group schema.
+// Entries under the [custom.AnyChannelOffset] sentinel apply to the
+// primary channel itself and are excluded here; channels the concrete
+// device does not carry are skipped at resolution time.
+func activityStateChannels(group custom.RebasedChannelGroupConfig) []int {
+	var out []int
+	for chNo, fields := range group.ChannelFields {
+		if chNo == custom.AnyChannelOffset {
+			continue
+		}
+		if _, ok := fields[hmenum.FieldState]; ok {
+			out = append(out, chNo)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
+func ipThermostatConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
-		Channel:      channel,
-		Writer:       channel.Writer(),
-		Capabilities: ipCapabilities,
-		Kind:         KindIP,
+		Channel:               channel,
+		Writer:                channel.Writer(),
+		Capabilities:          ipCapabilities,
+		Kind:                  KindIP,
+		ActivityStateChannels: activityStateChannels(group),
 	}), nil
 }
 
-func ipThermostatGroupConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+func ipThermostatGroupConstructor(channel *device.Channel, group custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
 	return New(Config{
-		Channel:      channel,
-		Writer:       channel.Writer(),
-		Capabilities: ipCapabilities,
-		Kind:         KindIP,
+		Channel:               channel,
+		Writer:                channel.Writer(),
+		Capabilities:          ipCapabilities,
+		Kind:                  KindIP,
+		ActivityStateChannels: activityStateChannels(group),
 	}), nil
 }
 

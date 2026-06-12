@@ -195,9 +195,11 @@ func TestSubscribeReplay_Garage_State(t *testing.T) {
 
 // ─── Climate ─────────────────────────────────────────────────────────────────
 
-// TestSubscribeReplay_Climate_ValveState verifies that a SimpleRF Climate whose
-// channel already carries an observed VALVE_STATE value has Activity() set
-// immediately after Subscribe() returns.
+// TestSubscribeReplay_Climate_ValveState verifies that a classic RF Climate
+// whose channel already carries an observed VALVE_STATE value has Activity()
+// set immediately after Subscribe() returns. (KindRF is the only kind that
+// derives activity from VALVE_STATE — SimpleRF has no activity source and
+// HmIP uses LEVEL/STATE.)
 func TestSubscribeReplay_Climate_ValveState(t *testing.T) {
 	t.Parallel()
 
@@ -211,7 +213,7 @@ func TestSubscribeReplay_Climate_ValveState(t *testing.T) {
 
 	c := climate.New(climate.Config{
 		Channel:      ch,
-		Kind:         climate.KindSimpleRF,
+		Kind:         climate.KindRF,
 		Capabilities: custom.ClimateCapabilities{},
 	})
 

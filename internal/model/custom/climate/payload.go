@@ -109,8 +109,22 @@ func (c *Climate) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component 
 		body["current_humidity_topic"] = ctx.WireParameterStateTopic("HUMIDITY")
 		body["current_humidity_template"] = "{{ value_json.value }}"
 	}
-	body["action_topic"] = ctx.CustomDPStateTopic()
-	body["action_template"] = "{{ value_json.action }}"
+	// The action surface is only advertised when the thermostat has an
+	// activity source — see [Climate.HasActivitySource]. For display-only
+	// thermostats the aggregate state never carries an `action` key, and
+	// HA must not subscribe an action_topic that would render as
+	// "unknown" where the reference stack shows no hvac_action at all.
+	//
+	// Peer-only-source climates (activity wired late via
+	// [Climate.RefreshLinkPeerActivitySources]) converge on their own:
+	// the first peer push feeds OnActivity, the next channel event
+	// rebuilds this payload with the action surface included, and the
+	// MQTT bridge's diff-gated discovery cache re-publishes the changed
+	// bytes (retained).
+	if c.HasActivitySource() {
+		body["action_topic"] = ctx.CustomDPStateTopic()
+		body["action_template"] = "{{ value_json.action }}"
+	}
 	// Json_attributes — surface
 	// extra_state_attributes (schedule_data, temperature_offset,
 	// optimum_start_stop, available_profiles, current_schedule_profile,
@@ -303,18 +317,26 @@ func (c *Climate) State() payload.StatePayload {
 	} else {
 		out.PresetMode = string(ProfileNone)
 	}
-	// When the thermostat is in OFF mode the action must be "off", not "idle".
-	// The internal activity field is not updated when the user switches off the
-	// thermostat (the CCU only pushes VALVE_STATE/LEVEL), so we must override it
-	// here based on the current mode.
-	if currentMode == ModeOff {
-		out.Action = string(ActivityOff)
-	} else if a, ok := c.Activity(); ok {
-		out.Action = string(a)
-	} else {
-		// "idle" matches HA's MQTT Climate `action_topic` schema and
-		// renders the card as not-currently-heating/cooling.
-		out.Action = string(ActivityIdle)
+	// The action field is only stamped when the thermostat actually has
+	// an activity source (LEVEL / STATE / VALVE_STATE / linked peers).
+	// Display-only thermostats (HmIP-STHD) carry none — the reference
+	// stack reports `hvac_action = None` for them, so the aggregate
+	// state omits the key instead of inventing "idle".
+	if c.HasActivitySource() {
+		// When the thermostat is in OFF mode the action must be "off", not
+		// "idle". The internal activity field is not updated when the user
+		// switches off the thermostat (the CCU only pushes VALVE_STATE /
+		// LEVEL), so we must override it here based on the current mode.
+		if currentMode == ModeOff {
+			out.Action = string(ActivityOff)
+		} else if a, ok := c.Activity(); ok {
+			out.Action = string(a)
+		} else {
+			// "idle" matches HA's MQTT Climate `action_topic` schema and
+			// renders the card as not-currently-heating/cooling until the
+			// first source value arrives.
+			out.Action = string(ActivityIdle)
+		}
 	}
 
 	// Measurement fields from the channel's field DPs — observed-only
