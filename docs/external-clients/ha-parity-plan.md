@@ -288,6 +288,19 @@ Verbleibende Einzelposten:
 - 10 calculated + 2 combined Namen: brauchen daemon-translated_name
   für calc-/combined-DPs.
 
+### ENDSTAND 2026-06-12 (api 1.5.0, Client 2026.6.10) — Parität erreicht
+
+**14/14 Domains exakt** (update 124=124 inkl. System-Update-Wert),
+gematcht 1962, nur ccu 4 / nur loom 5 — sämtlich by design (3
+Legacy-uids im Referenz-Altbestand, Connectivity-Instanznamen,
+Loom-Backup-Button). Live-Abweichungen 4 (2 lebende Hub-Werte, 2
+Schedule-Cache-Staleness). friendly_names: 5, ausschließlich
+Instanznamen. **Attribut-/Card-Differenzen: 0.**
+
+Alle aktionablen Posten aus dem Vergleich OttoMac (aiohomematic) vs
+Otto-Rem (openccu-loom-client) sind damit abgearbeitet; verbleibende
+Differenzen sind Instanz-Identität oder Mess-Timing.
+
 ## Phase 1 — Daemon-Lücken (openccu-loom)
 
 Priorisiert nach Nutzerwirkung:
