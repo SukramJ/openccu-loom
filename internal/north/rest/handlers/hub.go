@@ -103,6 +103,11 @@ type SysvarSummary struct {
 	// extended marker — clients then expose the writable entity flavour
 	// (switch/number/select/text) instead of the read-only default.
 	IsExtended bool `json:"is_extended,omitempty"`
+	// Vid is the CCU-internal numeric variable ID (ise_id). Stable across
+	// renames; clients use it to apply the reference stack's fixed-ID
+	// exclusions (40 = alarm messages, 41 = service messages — both are
+	// surfaced through dedicated hub singletons instead).
+	Vid int `json:"vid,omitempty"`
 }
 
 // SysvarSetRequest is the body of `PUT /sysvars/{name}`.
@@ -526,6 +531,7 @@ func toSysvarSummary(s *hub.Sysvar) SysvarSummary {
 		ValueList:   s.ValueList,
 		IsInternal:  s.IsInternal,
 		IsExtended:  s.IsExtended,
+		Vid:         s.Vid,
 	}
 	if ok {
 		sum.Value = v.Unwrap()

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -167,7 +168,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			slog.String("central", cc.Name),
 			slog.Int("count", len(unit.HubModel.Programs())))
 	}
-	if err := loadSysvars(ctx, jc, unit.HubModel, writer); err != nil {
+	if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer); err != nil {
 		logger.Warn("hub.sysvars.load",
 			slog.String("central", cc.Name),
 			slog.String("err", err.Error()))
@@ -255,7 +256,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				return loadPrograms(ctx, jc, unit.HubModel, writer)
 			},
 			Sysvars: func(ctx context.Context) error {
-				return loadSysvars(ctx, jc, unit.HubModel, writer)
+				return loadSysvars(ctx, jc, runner, unit.HubModel, writer)
 			},
 			Inbox: func(ctx context.Context) error {
 				return loadInbox(ctx, runner, unit)
@@ -631,16 +632,54 @@ func parseSysvarDescription(raw string) (cleaned string, isExtended bool) {
 	return strings.TrimSpace(out), isExtended
 }
 
-func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub.SysvarWriter) error {
+// sysvarIsExcluded reports whether a CCU system variable never enters the
+// hub model. Mirrors the reference stack's two hard filters, applied at
+// fetch time so every plane (REST, MQTT discovery, Matter, external
+// clients) sees the same catalogue:
+//   - names carrying "OldVal"/"pcCCUID" are CCU calculation scratch values
+//     (model/hub/hub.py `_EXCLUDED`)
+//   - the fixed IDs 40/41 (alarm/service messages) are surfaced through
+//     dedicated hub singletons (const.py `IGNORE_SYSVARS_BY_ID`)
+func sysvarIsExcluded(name, id string) bool {
+	if id == "40" || id == "41" {
+		return true
+	}
+	for _, token := range []string{"OldVal", "pcCCUID"} {
+		if strings.Contains(name, token) {
+			return true
+		}
+	}
+	return false
+}
+
+func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.SysvarWriter) error {
 	var vars []sysvarEntry
 	if err := jc.Call(ctx, "SysVar.getAll", nil, &vars); err != nil {
 		return err
+	}
+	// SysVar.getAll does not carry descriptions — the reference stack reads
+	// them through a dedicated ReGa script (sv.DPInfo() per variable) and
+	// derives the extended/INTERNAL markers from the decoded text. Without
+	// this call is_extended never fires and extended variables spawn as
+	// read-only sensors instead of switch/select/number/text. Best-effort:
+	// a failed script run degrades to the (empty) getAll description.
+	descByID := make(map[string]string)
+	if runner != nil {
+		if descs, err := runner.GetSystemVariableDescriptions(ctx); err == nil {
+			for _, d := range descs {
+				if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
+					descByID[d.ID] = decoded
+				} else {
+					descByID[d.ID] = d.Description
+				}
+			}
+		}
 	}
 	// Collect the fresh name set for the stale-entry diff below.
 	freshNames := make(map[string]struct{}, len(vars))
 	for i := range vars {
 		v := &vars[i]
-		if v.Name == "" {
+		if v.Name == "" || sysvarIsExcluded(v.Name, v.ID) {
 			continue
 		}
 		freshNames[v.Name] = struct{}{}
@@ -649,7 +688,11 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 		if v.ValueList != "" {
 			valueList = strings.Split(v.ValueList, ";")
 		}
-		desc, isExtended := parseSysvarDescription(v.Description)
+		rawDesc := v.Description
+		if d, ok := descByID[v.ID]; ok && d != "" {
+			rawDesc = d
+		}
+		desc, isExtended := parseSysvarDescription(rawDesc)
 		if existing, ok := h.Sysvar(v.Name); ok {
 			// Update the existing pointer in-place so subscribers wired via
 			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
@@ -661,6 +704,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			existing.IsExtended = isExtended
 			existing.IsInternal = v.IsInternal
 			existing.Description = desc
+			if vid, err := strconv.Atoi(v.ID); err == nil {
+				existing.Vid = vid
+			}
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				existing.OnValue(pv)
 			}
@@ -670,6 +716,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub
 			sv.ValueList = valueList
 			sv.IsExtended = isExtended
 			sv.IsInternal = v.IsInternal
+			if vid, err := strconv.Atoi(v.ID); err == nil {
+				sv.Vid = vid
+			}
 			if pv, ok := parseSysvarValue(valueType, v.Value); ok {
 				sv.OnValue(pv)
 			}
