@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -595,6 +595,94 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /install-mode/interfaces:
+    get:
+      tags: [hub]
+      description: |
+        Per-interface install-mode state. One entry per install-mode data
+        point; external clients mirror the reference stack's per-interface
+        install-mode sensor and button from it.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InstallModeInterfaceEntry" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstallModeInterfaceRequest" }
+      responses:
+        "202":
+          description: Accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/update:
+    get:
+      tags: [hub]
+      description: |
+        CCU system-update info per central — the data behind the reference
+        stack's system-update entity.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SystemUpdateEntry" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /system/update/install:
+    post:
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      parameters:
+        - name: central
+          in: query
+          required: false
+          schema: { type: string }
+          description: Target central (optional for single-CCU deployments).
+      responses:
+        "202":
+          description: Accepted
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
+  /system/metrics:
+    get:
+      tags: [hub]
+      description: |
+        Hub metric samples per central as JSON — the machine-readable twin
+        of the Prometheus `/metrics` endpoint for the system-health,
+        connection-latency and last-event-age hub sensors.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HubMetricsEntry" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /interfaces:
@@ -1318,6 +1406,33 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/WeekProfileResponse" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}:
+    put:
+      tags: [devices]
+      description: |
+        Toggle one target channel's week-program participation — the write
+        half of the `schedule_enabled` map in WeekProfileResponse. External
+        clients drive their schedule-channel switch entities through it.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { name: addr, in: path, required: true, schema: { type: string } }
+        - { name: "no", in: path, required: true, schema: { type: integer } }
+        - { name: key, in: path, required: true, schema: { type: string }, description: "Schedule target channel key, e.g. `1_1`." }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChannelLockRequest" }
+      responses:
+        "202":
+          description: Accepted
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+
   /devices/{addr}/channels/{no}/schedule:
     get:
       operationId: getChannelSchedule
@@ -4068,6 +4183,77 @@ components:
         timestamp: { type: string, format: date-time }
         counter: { type: integer }
         quittable: { type: boolean }
+    InstallModeInterfaceEntry:
+      type: object
+      required: [interface, active, seconds, observed]
+      properties:
+        central:
+          type: string
+          description: CCU the interface belongs to.
+        interface:
+          type: string
+          description: Interface ID the install-mode data point controls.
+        active:
+          type: boolean
+        seconds:
+          type: integer
+          description: Remaining install-mode time (0 when inactive).
+        observed:
+          type: boolean
+          description: False until the first state fetch succeeded.
+    InstallModeInterfaceRequest:
+      type: object
+      required: [interface, active]
+      properties:
+        interface: { type: string }
+        active: { type: boolean }
+        seconds:
+          type: integer
+          minimum: 0
+          description: Install-mode duration; defaults to 60 when omitted.
+    SystemUpdateEntry:
+      type: object
+      required: [update_available, in_progress, observed]
+      properties:
+        central:
+          type: string
+          description: CCU this update info belongs to.
+        current_firmware:
+          type: string
+          description: Installed CCU firmware version.
+        available_firmware:
+          type: string
+          description: Installable CCU firmware version.
+        update_available:
+          type: boolean
+        in_progress:
+          type: boolean
+          description: True while a system update is installing.
+        observed:
+          type: boolean
+          description: False until the first update-info fetch succeeded.
+    HubMetricsEntry:
+      type: object
+      properties:
+        central:
+          type: string
+          description: CCU these metrics belong to.
+        system_health:
+          type: number
+          description: Aggregate health score in percent (0-100); omitted until observed.
+        connection_latency_ms:
+          type: number
+          description: Average CCU round-trip latency; omitted until observed.
+        last_event_age_seconds:
+          type: number
+          description: Age of the newest backend event; omitted until observed.
+    ChannelLockRequest:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          description: Include (true) / exclude (false) the channel from the week-program schedule.
     InstallModeState:
       type: object
       required: [active]

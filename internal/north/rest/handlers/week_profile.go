@@ -6,8 +6,11 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // WeekProfileResponse is the read-only metadata descriptor returned by
@@ -85,5 +88,53 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 			HasClimateSchedule: wp.Climate() != nil,
 		}
 		JSON(w, http.StatusOK, resp)
+	}
+}
+
+// ChannelLockRequest is the body of
+// PUT /devices/{addr}/channels/{no}/week_profile/channel-locks/{key}.
+type ChannelLockRequest struct {
+	// Enabled includes (true) or excludes (false) the target channel
+	// from the device's week-program schedule.
+	Enabled bool `json:"enabled"`
+}
+
+// PutWeekProfileChannelLock toggles schedule participation of one target
+// channel — the write half of the `schedule_enabled` map in
+// [WeekProfileResponse]. External clients drive their schedule-channel
+// switch entities through it.
+//
+// Route: PUT /api/v1/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}
+func PutWeekProfileChannelLock(idx DeviceIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ch, err := lookupChannel(idx, r)
+		if err != nil {
+			problem.WriteFromError(w, r, err)
+			return
+		}
+		wp := ch.WeekProfile()
+		if wp == nil {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "No week profile on channel", "no week profile on channel"))
+			return
+		}
+		key := chi.URLParam(r, "key")
+		if _, ok := wp.ScheduleEnabled()[key]; !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Unknown channel key", "no schedule target channel "+key))
+			return
+		}
+		var req ChannelLockRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if err := wp.SetScheduleEnabled(r.Context(), key, req.Enabled, hmenum.CommandPriorityHigh); err != nil {
+			problem.Write(w, http.StatusBadGateway,
+				problem.New(problem.TypeInternal, r, "Channel lock write failed", err.Error()))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
 	}
 }
