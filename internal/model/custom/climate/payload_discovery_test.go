@@ -7,7 +7,11 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // discoveryCtx is a minimal stub for payload.HADiscoveryContext used in
@@ -390,5 +394,62 @@ func TestClimateHADiscoveryPayload_TempBoundsAndUnit(t *testing.T) {
 	}
 	if v, _ := body["temperature_unit"].(string); v != "C" {
 		t.Errorf("temperature_unit = %q, want %q", v, "C")
+	}
+}
+
+// TestClimateStatePayloadCarriesMeasurements pins the aggregate-state
+// measurement fields: once the channel field DPs report, the CDP state
+// must carry current_temperature / set_temperature / current_humidity so
+// REST/WS consumers can populate a climate card from the state alone —
+// before observation the keys are omitted (nil), never zero-stamped.
+func TestClimateStatePayloadCarriesMeasurements(t *testing.T) {
+	t.Parallel()
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{
+		MinTemperature: 4.5, MaxTemperature: 30.5,
+	})
+
+	state, ok := r.climate.State().(*payload.ClimateState)
+	if !ok {
+		t.Fatal("StatePayload did not return *payload.ClimateState")
+	}
+	if state.CurrentTemperature != nil || state.SetTemperature != nil || state.CurrentHumidity != nil {
+		t.Fatal("measurement fields must be omitted before observation")
+	}
+
+	r.actualTemperature.OnEvent(21.7)
+	r.setpoint.OnEvent(15.0)
+
+	state, _ = r.climate.State().(*payload.ClimateState)
+	if state.CurrentTemperature == nil || *state.CurrentTemperature != 21.7 {
+		t.Errorf("current_temperature = %v, want 21.7", state.CurrentTemperature)
+	}
+	if state.SetTemperature == nil || *state.SetTemperature != 15.0 {
+		t.Errorf("set_temperature = %v, want 15.0", state.SetTemperature)
+	}
+}
+
+// TestClimateHumidityIntegerTyped pins the HmIP humidity quirk: the
+// HUMIDITY parameter is INTEGER-typed on HmIP thermostats, so the
+// float-only slot never resolved and current_humidity stayed absent
+// from the aggregate state (wall thermostats showed no humidity in HA).
+func TestClimateHumidityIntegerTyped(t *testing.T) {
+	t.Parallel()
+	c := &Climate{humidityInt: generic.NewIntegerSensor(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: "HmIP-BWTH:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterHumidity),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeInteger,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})}
+	if _, ok := c.Humidity(); ok {
+		t.Fatal("Humidity() must be unobserved before any event")
+	}
+	c.humidityInt.OnEvent(int32(51))
+	if v, ok := c.Humidity(); !ok || v != 51 {
+		t.Fatalf("Humidity() = (%v,%v), want (51,true)", v, ok)
 	}
 }

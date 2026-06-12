@@ -317,6 +317,19 @@ func (c *Climate) State() payload.StatePayload {
 		out.Action = string(ActivityIdle)
 	}
 
+	// Measurement fields from the channel's field DPs — observed-only
+	// (omitted until the CCU reported them), so a climate card can be
+	// populated from the aggregate state alone.
+	if v, ok := c.CurrentTemperature(); ok {
+		out.CurrentTemperature = &v
+	}
+	if v, ok := c.Setpoint(); ok {
+		out.SetTemperature = &v
+	}
+	if v, ok := c.Humidity(); ok {
+		out.CurrentHumidity = &v
+	}
+
 	// State attributes — mirror extra_state_attributes for HA-native
 	// parity. HA's MQTT Climate platform exposes them via
 	// `json_attributes_topic` + `json_attributes_template` (see

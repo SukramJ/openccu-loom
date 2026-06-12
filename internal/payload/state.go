@@ -33,10 +33,18 @@ type ColorHS struct {
 // [ClimateInfo]. The HA-Discovery json_attributes_template derives
 // the `value_state` UI label from `state_uncertain` directly.
 type ClimateState struct {
-	StateUncertain           bool           `json:"state_uncertain"`
-	HVACMode                 string         `json:"hvac_mode"`
-	PresetMode               string         `json:"preset_mode"`
-	Action                   string         `json:"action"`
+	StateUncertain bool   `json:"state_uncertain"`
+	HVACMode       string `json:"hvac_mode"`
+	PresetMode     string `json:"preset_mode"`
+	Action         string `json:"action"`
+	// CurrentTemperature / SetTemperature / CurrentHumidity mirror the
+	// channel's measurement field DPs so REST/WS consumers (external
+	// clients, SPA tiles) can populate a climate card from the CDP
+	// state alone. The MQTT plane keeps using the per-DP slot topics
+	// (ADR 0011); these fields are additive for the aggregate state.
+	CurrentTemperature       *float64       `json:"current_temperature,omitempty"`
+	SetTemperature           *float64       `json:"set_temperature,omitempty"`
+	CurrentHumidity          *float64       `json:"current_humidity,omitempty"`
 	TemperatureOffset        *string        `json:"temperature_offset,omitempty"`
 	OptimumStartStop         any            `json:"optimum_start_stop,omitempty"`
 	AvailableProfiles        []any          `json:"available_profiles,omitempty"`
