@@ -453,6 +453,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				// Week-profile metadata (read-only; full schedule data via schedule routes).
 				pr.Get("/devices/{addr}/channels/{no}/week_profile",
 					handlers.GetWeekProfile(d.Devices))
+				// Write half of the schedule_enabled map: toggle one target
+				// channel's week-program participation.
+				pr.With(op).Put("/devices/{addr}/channels/{no}/week_profile/channel-locks/{key}",
+					handlers.PutWeekProfileChannelLock(d.Devices))
 			}
 			if d.UISchema != nil {
 				pr.Get("/devices/{addr}/channels/{no}/ui-schema", handlers.UISchemaHandler(d.UISchema))
@@ -623,6 +627,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))
 				pr.With(op).Post("/service-messages/{id}/ack", handlers.AckServiceMessage(d.Hub))
+			}
+			if d.Hub != nil {
+				// Hub singletons for external clients: system-update info,
+				// hub metrics, per-interface install mode.
+				pr.Get("/system/update", handlers.GetSystemUpdate(d.Hub))
+				pr.With(admin).Post("/system/update/install", handlers.PostSystemUpdateInstall(d.Hub))
+				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
+				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
+				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub))
 			}
 			if d.InstallMode != nil {
 				pr.Get("/install-mode", handlers.GetInstallMode(d.InstallMode))
