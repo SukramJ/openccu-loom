@@ -74,10 +74,14 @@ func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, la
 // a calculated/combined data point through the same primitives as the
 // generic data-point handler (device.TranslatedDataPointLabel →
 // naming.EntityDisplayName), so REST, WS, and MQTT consumers spawn
-// entities with identical names. The OCCU catalogue carries no entries
-// for the synthetic calculated parameters (DEW_POINT, DURATION, …), so
-// the usual outcome is the title-cased fallback — exactly the name the
-// reference stack generates when its translation lookup returns None.
+// entities with identical names. The custom translation catalogue
+// carries entries for the synthetic calculated parameters (lowercase
+// keys: dew_point → "Taupunkt", duration → "Zeitdauer", …) — the same
+// catalogue the reference stack consults — so the usual outcome is the
+// localised label; the title-cased fallback only covers parameters
+// without an entry. Verified live against a de-locale daemon:
+// DEW_POINT/ENTHALPY/VAPOR_CONCENTRATION/OPERATING_VOLTAGE_LEVEL and
+// the combined DURATION all resolve to the reference labels.
 func CalculatedDPTranslatedName(ch *device.Channel, parameter string, labels ParameterLabeler) string {
 	if ch == nil {
 		return ""
