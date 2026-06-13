@@ -612,12 +612,18 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	if !ok {
 		return DiscoveryItem{}
 	}
-	uniqueID := hubAggregateUniqueID(serial10, "system_health_score")
+	// Reference parity: the canonical hub sensor is "system_health"
+	// (translation_key system_health, German "Systemzustand"). The
+	// earlier loom slug "system_health_score" diverged from the reference
+	// uid/translation. The retained STATE topic stays at
+	// `/system/health_score` (publisher contract unchanged).
+	uniqueID := hubAggregateUniqueID(serial10, "system_health")
 	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/health_score"
 	body := map[string]any{
-		"name":                        "System Health Score",
+		"name":                        "System Health",
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
+		"translation_key":             "system_health",
 		"state_topic":                 topic,
 		"unit_of_measurement":         "%",
 		"state_class":                 "measurement",
@@ -634,7 +640,7 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "health_score", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "system_health", Payload: buf, OK: true}
 }
 
 // BuildConnectionLatencyDiscovery emits a HA `sensor` (duration, ms) for
@@ -676,6 +682,49 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, i
 	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: nodeID, ObjectID: objID, Payload: buf, OK: true}
 }
 
+// ----------------------- Last-Event-Age --------------------------
+
+// BuildLastEventAgeDiscovery emits a HA `sensor` (duration, s) for the
+// age of the newest backend event — a liveness signal for the CCU
+// connection. The measurement topic is
+// `<base>/<central>/system/last_event_age`. Reference parity:
+// hub_last-event-age (translation_key last_event_age, German "Alter
+// letztes Ereignis").
+func (d *DefaultDiscoveryBuilder) BuildLastEventAgeDiscovery(centralName string) DiscoveryItem {
+	if centralName == "" {
+		return DiscoveryItem{}
+	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
+	uniqueID := hubAggregateUniqueID(serial10, "last_event_age")
+	topic := d.TopicBuilder.HubLastEventAge(centralName)
+	body := map[string]any{
+		"name":                        "Last Event Age",
+		"unique_id":                   uniqueID,
+		"object_id":                   uniqueID,
+		"translation_key":             "last_event_age",
+		"state_topic":                 topic,
+		"device_class":                "duration",
+		"unit_of_measurement":         "s",
+		"state_class":                 "measurement",
+		"entity_category":             "diagnostic",
+		"icon":                        "mdi:clock-alert-outline",
+		"suggested_display_precision": 1,
+		"enabled_by_default":          true,
+		"availability":                hubAvailability(d.TopicBuilder),
+		"availability_mode":           "all",
+		"device":                      hubDeviceBlock(centralName, d.hubFor(centralName)),
+		"origin":                      BuildOriginInfo(),
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "last_event_age", Payload: buf, OK: true}
+}
+
 // ----------------------- System Update ---------------------------
 
 // BuildHubUpdateDiscovery exposes the CCU's firmware-update state as
@@ -689,7 +738,12 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 		return DiscoveryItem{}
 	}
 	topic := naming.MQTTHubUpdate(d.BridgeBase, centralName)
-	uniqueID := hubAggregateUniqueID(serial10, "update")
+	// Reference parity: the hub firmware-update entity is "system_update"
+	// (hub_system-update). The bare "update" slug collided conceptually
+	// with per-device firmware-update entities (loom_<addr>_update) so HA
+	// rendered a "_2"-suffixed entity_id when names matched. Scope the
+	// uid/object_id to "system_update".
+	uniqueID := hubAggregateUniqueID(serial10, "system_update")
 	body := map[string]any{
 		"name":                    "System Update",
 		"unique_id":               uniqueID,
@@ -710,7 +764,7 @@ func (d *DefaultDiscoveryBuilder) BuildHubUpdateDiscovery(centralName string) Di
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentUpdate), NodeID: hubNodeID(centralName, "system"), ObjectID: "update", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentUpdate), NodeID: hubNodeID(centralName, "system"), ObjectID: "system_update", Payload: buf, OK: true}
 }
 
 // ----------------------- Bridge plumbing --------------------------

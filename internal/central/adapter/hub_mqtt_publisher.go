@@ -186,6 +186,14 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// from the reconciler and from the callback-driven push path.
 	connectivityDiscovered := make(map[string]bool)
 	latencyDiscovered := make(map[string]bool)
+	// Eagerly publish connectivity + latency discovery for every
+	// registered interface at wiring time. The reference stack creates a
+	// connectivity binary_sensor and a connection-latency sensor per
+	// interface at setup; relying on the first ConnectivityChangedEvent
+	// alone left these entities absent until a reachability change
+	// happened to fire post-boot. The state still rides the event path
+	// below; only the discovery is seeded here.
+	seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered, latencyDiscovered)
 	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
 		if e.CentralName != centralName {
 			return
@@ -219,6 +227,11 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// forwarded to the retained metric topics whenever the Metrics
 	// aggregate observes a new sample.
 	_ = b.PublishHubDiscovery(ctx, disco.BuildSystemHealthDiscovery(centralName))
+	// Last-Event-Age: a central-wide liveness sensor (seconds since the
+	// newest backend event). Reference parity (hub_last-event-age). The
+	// discovery is published once at wiring time; state updates follow the
+	// MetricLastEventAgeSecs aggregate.
+	_ = b.PublishHubDiscovery(ctx, disco.BuildLastEventAgeDiscovery(centralName))
 	if hubModel.Metrics != nil {
 		// Publish any already-observed system-health value immediately.
 		if sample, ok := hubModel.Metrics.Value(hub.MetricSystemHealth); ok {
@@ -227,6 +240,18 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricSystemHealth, func(s hub.MetricSample) {
 			if err := b.PublishHubSystemHealthScore(ctx, centralName, s.Value); err != nil {
 				p.logger.Warn("mqtt.publish_hub_health_score",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		}))
+		// Last-Event-Age state — same observe-then-subscribe pattern as
+		// system-health.
+		if sample, ok := hubModel.Metrics.Value(hub.MetricLastEventAgeSecs); ok {
+			_ = b.PublishHubLastEventAge(ctx, centralName, sample.Value)
+		}
+		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricLastEventAgeSecs, func(s hub.MetricSample) {
+			if err := b.PublishHubLastEventAge(ctx, centralName, s.Value); err != nil {
+				p.logger.Warn("mqtt.publish_hub_last_event_age",
 					slog.String("central", centralName),
 					slog.String("err", err.Error()))
 			}
@@ -269,6 +294,39 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	p.addUnsub(hubModel.Update.OnUpdate(func(info hub.UpdateInfo) {
 		publishUpdate(info)
 	}))
+}
+
+// seedConnectivityDiscovery publishes the connectivity binary_sensor +
+// connection-latency sensor discovery for every registered interface of
+// the central at wiring time. The `discovered` / `latencyDiscovered`
+// maps are shared with the live event subscription so each interface is
+// announced at most once. Reference parity: these per-interface entities
+// exist at setup, not only after the first reachability change.
+func seedConnectivityDiscovery(
+	ctx context.Context,
+	u *central.Unit,
+	centralName string,
+	disco *mqtt.DefaultDiscoveryBuilder,
+	b *mqtt.Bridge,
+	connectivityDiscovered, latencyDiscovered map[string]bool,
+) {
+	if u == nil || u.Clients == nil {
+		return
+	}
+	for _, entry := range u.Clients.List() {
+		iface := entry.InterfaceID
+		if iface == "" {
+			continue
+		}
+		if !connectivityDiscovered[iface] {
+			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, iface))
+			connectivityDiscovered[iface] = true
+		}
+		if !latencyDiscovered[iface] {
+			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName, iface))
+			latencyDiscovered[iface] = true
+		}
+	}
 }
 
 // wireOneProgram publishes discovery + the current state, subscribes

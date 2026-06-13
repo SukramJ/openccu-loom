@@ -759,8 +759,11 @@ func TestBuildSystemHealthDiscovery_HappyPath(t *testing.T) {
 		t.Errorf("entity_category=%v want diagnostic", m["entity_category"])
 	}
 	uid, _ := m["unique_id"].(string)
-	if !strings.Contains(uid, "system_health_score") {
-		t.Errorf("unique_id=%q should contain system_health_score", uid)
+	if !strings.HasSuffix(uid, "_system_health") {
+		t.Errorf("unique_id=%q should end with _system_health (reference parity)", uid)
+	}
+	if m["translation_key"] != "system_health" {
+		t.Errorf("translation_key=%v want system_health", m["translation_key"])
 	}
 }
 

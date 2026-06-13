@@ -1065,6 +1065,18 @@ func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName, i
 	return b.client.Publish(ctx, b.topics.HubConnectionLatency(centralName, iface), body, b.cfg.QoS.State, true)
 }
 
+// PublishHubLastEventAge publishes the age (seconds) of the newest
+// backend event to the retained topic
+// `<base>/<central>/system/last_event_age`. Returns nil when RawEnabled
+// is false.
+func (b *Bridge) PublishHubLastEventAge(ctx context.Context, centralName string, ageSeconds float64) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	body := []byte(strconv.FormatFloat(ageSeconds, 'f', -1, 64))
+	return b.client.Publish(ctx, b.topics.HubLastEventAge(centralName), body, b.cfg.QoS.State, true)
+}
+
 // PublishHubUpdate publishes the CCU's firmware-update state to the
 // retained topic `<base>/<central>/hub/update` as a JSON object with
 // the fields expected by HA's MQTT Update entity:
