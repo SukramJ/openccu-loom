@@ -5,6 +5,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -78,7 +79,7 @@ func (d *DefaultDiscoveryBuilder) BuildVirtualRemoteButton(ev Event) DiscoveryIt
 		},
 	}
 	body := map[string]any{
-		"name":              entityName(ev),
+		"name":              virtualRemoteButtonName(ev),
 		"unique_id":         uniqueID,
 		"command_topic":     commandTopic,
 		"payload_press":     "PRESS",
@@ -96,4 +97,40 @@ func (d *DefaultDiscoveryBuilder) BuildVirtualRemoteButton(ev Event) DiscoveryIt
 		return DiscoveryItem{}
 	}
 	return DiscoveryItem{Component: string(HAComponentButton), NodeID: nodeID, ObjectID: objectID, Payload: buf, OK: true}
+}
+
+// virtualRemoteButtonName composes the friendly_name fragment for a
+// virtual-remote press button so it is unique across channels and
+// centrals once HA prepends the device name.
+//
+// The plain parameter label ("Press Short") is identical for every VR
+// channel, so two virtual remotes that share a device/channel name (the
+// Otto-Rem and Kearney-Loc HmIP-RCV both carry operator names like
+// "Arbeitszimmer Markus …") collapse onto the same friendly_name and HA
+// disambiguates with `_2` / `_3` entity-id suffixes. Mirror the
+// reference stack's get_event_name: prefix the press-type label with the
+// operator channel name when present, otherwise with ` ch<N>` so the
+// channel number always disambiguates. The device name (which carries
+// the central identity for VR pseudo-devices) is prepended by HA.
+func virtualRemoteButtonName(ev Event) any {
+	label, omitted := naming.EntityDisplayName(ev.descLabel(), ev.descLabelOmitted(), ev.Parameter)
+	if omitted {
+		// Primary-parameter omission would leave the button nameless and
+		// collide on the device name alone — never omit for VR buttons;
+		// fall back to the title-cased parameter as the press-type label.
+		label = naming.TitleCaseParameter(ev.Parameter)
+	}
+	prefix := ""
+	if namer, ok := ev.Channel.(ChannelNamer); ok {
+		if cn := namer.ChannelName(); cn != "" && !channelNameIsBareAddressNo(cn) {
+			prefix = cn
+		}
+	}
+	if prefix == "" && ev.ChannelNo > 0 {
+		prefix = fmt.Sprintf("ch%d", ev.ChannelNo)
+	}
+	if prefix == "" {
+		return label
+	}
+	return prefix + " " + label
 }

@@ -93,7 +93,12 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 			name = cn
 		}
 	}
-	if name == "" {
+	// Reference parity (get_event_name): when the operator channel name
+	// is the bare `<base>:<channel_no>` form (no human-assigned label),
+	// HA slugifies it down to the base and two channels of the same VR
+	// collapse onto one entity_id (the `_2` / `_3` dedup suffixes). Drop
+	// it to `ch<N>` so each channel stays distinct.
+	if name == "" || channelNameIsBareAddressNo(name) {
 		name = fmt.Sprintf("ch%d", ev.ChannelNo)
 	}
 	base := d.channelBaseBody(ev, name, uniqueID)
@@ -115,6 +120,28 @@ func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID
 		return "", "", "", nil, false
 	}
 	return string(HAComponentEvent), nodeID, objectID, out, true
+}
+
+// channelNameIsBareAddressNo reports whether name is the unlabelled
+// `<base>:<channel_no>` form a CCU reports for a channel the operator
+// never renamed (e.g. "KearneyIP:2"). Mirrors the reference stack's
+// _check_channel_name_with_channel_no: exactly one ':' separator and an
+// integer trailing part. Such names slugify to the base alone in HA, so
+// sibling channels collide on the same entity_id and must instead fall
+// back to the `ch<N>` discriminator.
+func channelNameIsBareAddressNo(name string) bool {
+	idx := strings.LastIndex(name, ":")
+	if idx < 0 || strings.Count(name, ":") != 1 {
+		return false
+	}
+	suffix := name[idx+1:]
+	if suffix == "" {
+		return false
+	}
+	if _, err := strconv.Atoi(suffix); err != nil {
+		return false
+	}
+	return true
 }
 
 // toAnySlice converts []string to []any for JSON marshalling so that
