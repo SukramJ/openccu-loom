@@ -224,6 +224,17 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 				// same synthesised-event path. publishSlotState routes
 				// them to the calculated/ bucket via
 				// isCalculatedParameter.
+				//
+				// Observed calc-DPs (DEW_POINT, ENTHALPY — always
+				// computable from the channel's temperature/humidity)
+				// take the happy path through onValueChangedKind. Calc
+				// binary_sensors (SMOKE_ALARM, INTRUSION_ALARM,
+				// WINDOW_OPEN) start unobserved — they only compute a
+				// value once the underlying alarm fires — yet the
+				// reference stack registers them as HA entities at setup
+				// regardless. Mirror the unobserved-DP boot path so they
+				// reach HA discovery with an `unknown` slot state instead
+				// of silently never surfacing.
 				for _, dp := range ch.CalculatedDataPoints() {
 					pdp, ok := dp.(interface {
 						RawValue() (any, bool)
@@ -234,6 +245,7 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 					}
 					raw, observed := pdp.RawValue()
 					if !observed {
+						b.registerAndLoadUnobservedCalculatedDP(ctx, centralName, ifaceID, d, ch, channelNo, string(pdp.Parameter()))
 						continue
 					}
 					newVal, err := hmtypes.NewParamValue(raw)
@@ -467,6 +479,40 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 	// number entity for whitelisted action DPs never lands).
 	ev.Source = nil
 	_ = bridge.PublishDiscoveryOnly(ctx, ev)
+}
+
+// registerAndLoadUnobservedCalculatedDP is the calculated-DP counterpart
+// of [registerAndLoadDP]'s unobserved branch. Calc binary_sensors
+// (SMOKE_ALARM, INTRUSION_ALARM, WINDOW_OPEN) carry no value until the
+// underlying alarm fires, but the reference stack still registers them
+// as HA entities at setup. This publishes an explicit `{available:true}`
+// slot state with an `unknown` value on the calculated bucket plus the
+// per-DP HA discovery payload, so the entity exists in HA from boot and
+// a later calculator update replaces the `unknown` value with the real
+// one.
+func (b *EventBridge) registerAndLoadUnobservedCalculatedDP(
+	ctx context.Context,
+	centralName, ifaceID string,
+	d *device.Device,
+	ch *device.Channel,
+	channelNo int,
+	parameter string,
+) {
+	dpk := hmtypes.DataPointKey{
+		InterfaceID:    ifaceID,
+		ChannelAddress: ch.Address,
+		ParamsetKey:    hmenum.ParamsetKeyValues,
+		Parameter:      parameter,
+	}
+	// publishSlotState routes to the calculated/ bucket via
+	// isCalculatedParameter — NoneValue → JSON `null` value with no
+	// timestamps keeps the entity online under availability_mode: all.
+	b.publishSlotState(ctx, centralName, ifaceID, d.Address, channelNo, hmevent.DataPointValueChangedEvent{
+		Key:      dpk,
+		OldValue: hmtypes.NoneValue(),
+		NewValue: hmtypes.NoneValue(),
+	}, ch)
+	b.publishDiscoveryForUnobservedDP(ctx, centralName, ifaceID, d, ch, channelNo, parameter, hmenum.ParamsetKeyValues)
 }
 
 // Stop releases every subscription.
