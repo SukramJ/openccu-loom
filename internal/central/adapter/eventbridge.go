@@ -289,6 +289,14 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 				// button on a fresh broker, and many physical buttons
 				// have no observed value persisted between presses.
 				b.publishChannelEventDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
+
+				// Custom-DP aggregate discovery — write-only custom-DPs
+				// (HmIP-WRCD text-display) have no readable parameter, so
+				// the register-and-load path never emits their aggregate
+				// entity. Publish it directly here so they (and their
+				// companion entities, e.g. the text-display `notify`
+				// surface) reach HA from boot.
+				b.publishCustomDPDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
 			}
 			// Device-level firmware-update entity: published once per
 			// updatable device. The update entity is not a channel — it
@@ -1364,6 +1372,58 @@ func firstPressParameter(ch *device.Channel) string {
 		}
 	}
 	return ""
+}
+
+// publishCustomDPDiscoverySnapshot emits the aggregate (channel-level)
+// HA-Discovery payload for a channel's custom-DP plus its companion
+// entities. The register-and-load path only emits the aggregate as a
+// side effect of an observed VALUES parameter; write-only custom-DPs
+// (HmIP-WRCD text-display) carry no readable parameter, so without this
+// snapshot they never reach HA. Idempotent — the bridge diff-gates the
+// publish, so channels whose aggregate was already emitted by an
+// observed DP are a no-op.
+//
+// Best-effort: a broker / discovery-builder hiccup is swallowed and the
+// snapshot continues with the next channel.
+func (b *EventBridge) publishCustomDPDiscoverySnapshot(
+	ctx context.Context,
+	centralName, iface string,
+	d *device.Device,
+	ch *device.Channel,
+) {
+	if b.mqtt == nil || d == nil || ch == nil {
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	cdp := ch.CustomDataPoint()
+	if cdp == nil {
+		return
+	}
+	src, ok := cdp.(payload.Source)
+	if !ok || src == nil {
+		return
+	}
+	_, channelNo := parseChannel(ch.Address)
+	ev := mqtt.Event{
+		Central:        centralName,
+		Interface:      iface,
+		DeviceAddress:  d.Address,
+		DeviceName:     d.Name,
+		Model:          d.Model,
+		ChannelNo:      channelNo,
+		ChannelAddress: ch.Address,
+		ChannelType:    ch.Type,
+		Channel:        ch,
+		Device:         d,
+		Source:         src,
+	}
+	if err := bridge.PublishCustomDPDiscovery(ctx, ev); err != nil {
+		// Snapshot pass is best-effort.
+		_ = err
+	}
 }
 
 func (b *EventBridge) onCentralState(centralName string, e hmevent.CentralStateChangedEvent) {

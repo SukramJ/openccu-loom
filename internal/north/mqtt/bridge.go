@@ -1123,6 +1123,37 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 	return nil
 }
 
+// PublishCustomDPDiscovery publishes the aggregate (channel-level)
+// HA-Discovery payload for a channel's custom-DP plus any companion
+// entities it spawns. ev must carry the custom-DP as ev.Source.
+//
+// The regular per-DP register-and-load path only emits the aggregate as
+// a side effect of an observed VALUES parameter. Write-only custom-DPs
+// (HmIP-WRCD text-display) have no readable parameter, so that path
+// never fires and the entity never reaches HA. This snapshot helper
+// emits the aggregate directly so write-only custom-DPs surface from
+// boot. Idempotent — discovery topics are diff-gated by `b.declared`.
+//
+// Companion entities: a text-display custom-DP additionally spawns a
+// `notify` entity (reference parity — TEXT_DISPLAY maps to both `text`
+// and `notify`).
+func (b *Bridge) PublishCustomDPDiscovery(ctx context.Context, ev Event) error {
+	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
+		return nil
+	}
+	if ev.Source == nil {
+		return nil
+	}
+	component, nodeID, objectID, payload, ok := b.cfg.DiscoveryBuilder.Build(ev)
+	if ok {
+		if err := b.publishDiscovery(ctx, component, nodeID, objectID, payload); err != nil {
+			return err
+		}
+	}
+	b.publishTextDisplayNotify(ctx, ev)
+	return nil
+}
+
 // publishVirtualRemotePressButton publishes the press-button companion
 // entity for a virtual-remote PRESS_* event. Virtual remotes (HM-RCV-50 /
 // HMW-RCV-50 / HmIP-RCV-50) carry writable press parameters; the
@@ -1140,6 +1171,29 @@ func (b *Bridge) publishVirtualRemotePressButton(ctx context.Context, ev Event) 
 		return
 	}
 	item := dd.BuildVirtualRemoteButton(ev)
+	if !item.OK {
+		return
+	}
+	if err := b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload); err != nil {
+		b.incPublishErrors()
+	}
+}
+
+// publishTextDisplayNotify publishes the notify companion entity for a
+// text-display custom-DP (HmIP-WRCD). The reference stack maps a
+// TEXT_DISPLAY custom-DP onto BOTH a `text` and a `notify` entity; the
+// aggregate path produces the text entity, this publishes the notify
+// surface alongside it. Best-effort: errors are swallowed — the primary
+// (text) discovery has already succeeded.
+//
+// No-op when the configured builder is not the [DefaultDiscoveryBuilder]
+// or the event does not carry a text-display custom-DP.
+func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
+	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
+	if !ok {
+		return
+	}
+	item := dd.BuildTextDisplayNotify(ev)
 	if !item.OK {
 		return
 	}

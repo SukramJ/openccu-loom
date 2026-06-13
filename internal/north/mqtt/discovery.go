@@ -68,6 +68,7 @@ const (
 	HAComponentEvent        HAComponent = "event"
 	HAComponentUpdate       HAComponent = "update"
 	HAComponentText         HAComponent = "text"
+	HAComponentNotify       HAComponent = "notify"
 )
 
 // Origin metadata embedded in every Discovery payload (HA 2024+).
