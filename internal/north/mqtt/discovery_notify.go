@@ -27,14 +27,15 @@ func isTextDisplayEvent(ev Event) bool {
 }
 
 // BuildTextDisplayNotify emits the HA `notify` discovery payload for a
-// text-display custom-DP (HmIP-WRCD), the companion to the `text` entity
-// the aggregate path already produces.
+// text-display custom-DP (HmIP-WRCD). This is the SOLE entity the
+// reference stack creates for a TEXT_DISPLAY custom-DP.
 //
-// The reference stack maps a TEXT_DISPLAY custom-DP onto BOTH a `text`
-// entity and a `notify` entity (const.py additional_platforms =
-// NOTIFY); notify.py spawns one HmipTextDisplayNotifyEntity per
-// CustomDpTextDisplay. The notify surface lets HA automations and the
-// notify service push a message to the display.
+// The reference stack maps a TEXT_DISPLAY custom-DP onto a `notify`
+// entity only (the integration's notify.py spawns one
+// HmipTextDisplayNotifyEntity per CustomDpTextDisplay; no `text` entity
+// is registered). The notify surface lets HA automations and the notify
+// service push a message to the display. The aggregate `text` entity is
+// suppressed in [DefaultDiscoveryBuilder.aggregateChannel].
 //
 // HA's notify component publishes the raw message string to the command
 // topic. The `command_template` wraps it into the `{"id":1,"text":...}`

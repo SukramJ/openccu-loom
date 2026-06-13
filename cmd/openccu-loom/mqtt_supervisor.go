@@ -482,6 +482,7 @@ func makeMQTTSubscriberBuilder(
 			WithWeekProfileSink(wpAdapter).
 			WithCombinedDPSink(sink).
 			WithScheduleSwitchSink(sink).
+			WithInstallModeSink(sink).
 			WithCollector(collector)
 		if err := cmdSub.Start(ctx); err != nil {
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)

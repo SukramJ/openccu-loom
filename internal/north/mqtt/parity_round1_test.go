@@ -34,16 +34,17 @@ func TestHubDiscoverySkipsWithoutSerial(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu-01")
 	items := map[string]DiscoveryItem{
-		"sysvar":        db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{Name: "Foo", ValueType: hmenum.HubValueTypeLogic}),
-		"program":       db.BuildProgramDiscovery("ccu-01", "PRG_1", "Prog"),
-		"alarm":         db.BuildAlarmMessagesDiscovery("ccu-01"),
-		"service":       db.BuildServiceMessagesDiscovery("ccu-01"),
-		"inbox":         db.BuildInboxDiscovery("ccu-01"),
-		"install_mode":  db.BuildInstallModeDiscovery("ccu-01"),
-		"connectivity":  db.BuildConnectivityDiscovery("ccu-01", "HmIP-RF"),
-		"system_health": db.BuildSystemHealthDiscovery("ccu-01"),
-		"latency":       db.BuildConnectionLatencyDiscovery("ccu-01", "HmIP-RF"),
-		"system_update": db.BuildHubUpdateDiscovery("ccu-01"),
+		"sysvar":              db.BuildSysvarDiscovery("ccu-01", HubSysvarSpec{Name: "Foo", ValueType: hmenum.HubValueTypeLogic}),
+		"program":             db.BuildProgramDiscovery("ccu-01", "PRG_1", "Prog"),
+		"alarm":               db.BuildAlarmMessagesDiscovery("ccu-01"),
+		"service":             db.BuildServiceMessagesDiscovery("ccu-01"),
+		"inbox":               db.BuildInboxDiscovery("ccu-01"),
+		"install_mode_sensor": db.BuildInstallModeSensorDiscovery("ccu-01", "HmIP-RF"),
+		"install_mode_button": db.BuildInstallModeButtonDiscovery("ccu-01", "HmIP-RF"),
+		"connectivity":        db.BuildConnectivityDiscovery("ccu-01", "HmIP-RF"),
+		"system_health":       db.BuildSystemHealthDiscovery("ccu-01"),
+		"latency":             db.BuildConnectionLatencyDiscovery("ccu-01"),
+		"system_update":       db.BuildHubUpdateDiscovery("ccu-01"),
 	}
 	for kind, item := range items {
 		if item.OK {

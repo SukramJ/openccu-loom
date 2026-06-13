@@ -264,6 +264,7 @@ func TestInstallModeChangeReachesMQTT(t *testing.T) {
 	events.Publish(c.EventBus, hmevent.InstallModeChangedEvent{
 		Base:        hmevent.NewBaseAt(time.Now()),
 		CentralName: "ccu-01",
+		InterfaceID: "HmIP-RF",
 		Enabled:     true,
 		RemainingS:  60,
 	})

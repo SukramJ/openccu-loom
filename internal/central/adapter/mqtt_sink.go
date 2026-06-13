@@ -208,5 +208,27 @@ func (s *MQTTCommandSink) SetCombinedTimerSeconds(
 	return fmt.Errorf("mqtt_sink: no combined Timer on channel %s", chAddr)
 }
 
+// ActivateInstallMode implements [mqtt.InstallModeSink]. It activates
+// pairing/install mode on the named interface's install-mode data point.
+// seconds <= 0 selects the model's default pairing window (60s). Mirrors
+// the REST `POST /install-mode/interfaces` activation path so both
+// surfaces share the same backend behaviour.
+func (s *MQTTCommandSink) ActivateInstallMode(ctx context.Context, centralName, interfaceID string, seconds int) error {
+	c, ok := s.registry.Get(centralName)
+	if !ok {
+		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
+	}
+	for _, dp := range c.HubModel.InstallModeDPs() {
+		if dp == nil || dp.InterfaceID != interfaceID {
+			continue
+		}
+		if seconds <= 0 {
+			return dp.Press(ctx)
+		}
+		return dp.Enable(ctx, time.Duration(seconds)*time.Second)
+	}
+	return fmt.Errorf("mqtt_sink: no install-mode interface %q on %s", interfaceID, centralName)
+}
+
 // errNoWriter is re-exported as ErrNoWriter via devices.go.
 var _ = errors.New

@@ -530,21 +530,56 @@ func (d *DefaultDiscoveryBuilder) BuildInboxDiscovery(centralName string) Discov
 
 // ----------------------- InstallMode ------------------------------
 
-// BuildInstallModeDiscovery is the remaining-seconds counter for the
-// CCU's pairing-install mode. Surfaced as a `sensor` (not a number)
-// because the value is read-only — actual install-mode toggling
-// happens through REST.
-func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(centralName string) DiscoveryItem {
+// installModeInterfaceSuffix maps a CCU interface identifier to the
+// short suffix the reference stack uses for per-interface install-mode
+// entities: "hmip" for HmIP-RF, "bidcos" for everything else (BidCos-RF
+// and the wired families). The suffix feeds both the unique_id slot and
+// the friendly-name infix so the loom entities line up 1:1 with the
+// reference registry (`install_mode_hmip`, `install_mode_bidcos`).
+func installModeInterfaceSuffix(iface string) string {
+	if strings.EqualFold(iface, "HmIP-RF") {
+		return "hmip"
+	}
+	return "bidcos"
+}
+
+// installModeInterfaceLabel returns the human-readable interface label
+// used in the friendly name ("HmIP-RF" / "BidCos-RF"). Falls back to the
+// raw interface id for interface families with no canonical short label.
+func installModeInterfaceLabel(iface string) string {
+	switch {
+	case strings.EqualFold(iface, "HmIP-RF"):
+		return "HmIP-RF"
+	case strings.EqualFold(iface, "BidCos-RF"):
+		return "BidCos-RF"
+	default:
+		return iface
+	}
+}
+
+// BuildInstallModeSensorDiscovery is the remaining-seconds counter for
+// the CCU's pairing-install mode on one interface. The reference stack
+// renders one sensor per interface (`install_mode_hmip`,
+// `install_mode_bidcos`) rather than a single central-wide aggregate.
+// Surfaced as a `sensor` (not a number) because the value is read-only —
+// activation happens through the paired button (see
+// [DefaultDiscoveryBuilder.BuildInstallModeButtonDiscovery]).
+func (d *DefaultDiscoveryBuilder) BuildInstallModeSensorDiscovery(centralName, iface string) DiscoveryItem {
+	if iface == "" {
+		return DiscoveryItem{}
+	}
 	serial10, ok := d.hubSerial(centralName)
 	if !ok {
 		return DiscoveryItem{}
 	}
-	topic := naming.MQTTHubInstallMode(d.BridgeBase, centralName)
-	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", "", "")
+	suffix := installModeInterfaceSuffix(iface)
+	topic := naming.MQTTHubInstallModeForInterface(d.BridgeBase, centralName, iface)
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix, "")
 	body := map[string]any{
-		"name":                "Install Mode",
+		"name":                "Anlernmodus " + installModeInterfaceLabel(iface) + " Dauer",
 		"unique_id":           uniqueID,
 		"object_id":           uniqueID,
+		"translation_key":     "install_mode_" + suffix,
 		"state_topic":         topic,
 		"device_class":        "duration",
 		"unit_of_measurement": "s",
@@ -559,7 +594,47 @@ func (d *DefaultDiscoveryBuilder) BuildInstallModeDiscovery(centralName string) 
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "central"), ObjectID: "install_mode", Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "central"), ObjectID: "install_mode_" + suffix, Payload: buf, OK: true}
+}
+
+// BuildInstallModeButtonDiscovery emits the HA `button` that activates
+// install/pairing mode on one interface. The reference stack pairs each
+// per-interface remaining-seconds sensor with a button
+// (`install_mode_hmip-button`, `install_mode_bidcos-button`); HA
+// publishes the press token to the command topic and the command
+// subscriber translates it into a POST install-mode for the interface.
+func (d *DefaultDiscoveryBuilder) BuildInstallModeButtonDiscovery(centralName, iface string) DiscoveryItem {
+	if iface == "" {
+		return DiscoveryItem{}
+	}
+	serial10, ok := d.hubSerial(centralName)
+	if !ok {
+		return DiscoveryItem{}
+	}
+	suffix := installModeInterfaceSuffix(iface)
+	commandTopic := naming.MQTTHubInstallModeCommand(d.BridgeBase, centralName, iface)
+	// The reference unique_id slugifies the "<suffix>_button" parameter
+	// to "<suffix>-button"; mirror that exact shape so the loom button
+	// lines up with the reference registry (`install_mode_hmip-button`).
+	uniqueID := routingkey.CanonicalUniqueID(serial10, "install_mode", suffix+"-button", "")
+	body := map[string]any{
+		"name":              "Anlernmodus " + installModeInterfaceLabel(iface) + " aktivieren",
+		"unique_id":         uniqueID,
+		"object_id":         uniqueID,
+		"translation_key":   "install_mode_" + suffix + "_button",
+		"command_topic":     commandTopic,
+		"payload_press":     "PRESS",
+		"entity_category":   EntityCategoryConfig,
+		"availability":      hubAvailability(d.TopicBuilder),
+		"availability_mode": "all",
+		"device":            hubDeviceBlock(centralName, d.hubFor(centralName)),
+		"origin":            BuildOriginInfo(),
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{Component: string(HAComponentButton), NodeID: hubNodeID(centralName, "central"), ObjectID: "install_mode_" + suffix + "_button", Payload: buf, OK: true}
 }
 
 // ---------------------- Connectivity ------------------------------
@@ -643,26 +718,27 @@ func (d *DefaultDiscoveryBuilder) BuildSystemHealthDiscovery(centralName string)
 	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "system_health", Payload: buf, OK: true}
 }
 
-// BuildConnectionLatencyDiscovery emits a HA `sensor` (duration, ms) for
-// the per-interface round-trip latency. The measurement topic is
-// `<base>/<central>/system/latency/<iface>`. Mirrors
-// `hubDescriptionsByKind["connection_latency"]` (entity_descriptions.go:409).
-func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, iface string) DiscoveryItem {
-	if centralName == "" || iface == "" {
+// BuildConnectionLatencyDiscovery emits a single aggregated HA `sensor`
+// (duration, ms) for the CCU's round-trip latency. The reference stack
+// exposes ONE central-wide connection-latency sensor
+// (`<central>_hub_connection-latency`, translation_key connection_latency)
+// derived from the aggregated ping/pong metric — not one sensor per
+// interface. The measurement topic is `<base>/<central>/system/latency`.
+func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName string) DiscoveryItem {
+	if centralName == "" {
 		return DiscoveryItem{}
 	}
 	serial10, ok := d.hubSerial(centralName)
 	if !ok {
 		return DiscoveryItem{}
 	}
-	nodeID := hubNodeID(centralName, "latency")
-	objID := safeLower(iface)
-	uniqueID := hubAggregateUniqueID(serial10, "latency_"+objID)
-	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency/" + objID
+	uniqueID := hubAggregateUniqueID(serial10, "connection_latency")
+	topic := d.TopicBuilder.Base + "/" + safeLower(centralName) + "/system/latency"
 	body := map[string]any{
-		"name":                        "Latency " + iface,
+		"name":                        "Connection Latency",
 		"unique_id":                   uniqueID,
 		"object_id":                   uniqueID,
+		"translation_key":             "connection_latency",
 		"state_topic":                 topic,
 		"unit_of_measurement":         "ms",
 		"state_class":                 "measurement",
@@ -679,7 +755,7 @@ func (d *DefaultDiscoveryBuilder) BuildConnectionLatencyDiscovery(centralName, i
 	if err != nil {
 		return DiscoveryItem{}
 	}
-	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: nodeID, ObjectID: objID, Payload: buf, OK: true}
+	return DiscoveryItem{Component: string(HAComponentSensor), NodeID: hubNodeID(centralName, "system"), ObjectID: "connection_latency", Payload: buf, OK: true}
 }
 
 // ----------------------- Last-Event-Age --------------------------

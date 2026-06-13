@@ -127,6 +127,24 @@ func TestMQTTHubInstallMode(t *testing.T) {
 	}
 }
 
+func TestMQTTHubInstallModeForInterface(t *testing.T) {
+	t.Parallel()
+	got := MQTTHubInstallModeForInterface(testBase, testCentral, "HmIP-RF")
+	want := "openccu-loom/ccu1/hub/install_mode/HmIP-RF"
+	if got != want {
+		t.Errorf("MQTTHubInstallModeForInterface = %q, want %q", got, want)
+	}
+}
+
+func TestMQTTHubInstallModeCommand(t *testing.T) {
+	t.Parallel()
+	got := MQTTHubInstallModeCommand(testBase, testCentral, "BidCos-RF")
+	want := "openccu-loom/ccu1/hub/install_mode/BidCos-RF/set"
+	if got != want {
+		t.Errorf("MQTTHubInstallModeCommand = %q, want %q", got, want)
+	}
+}
+
 func TestMQTTHubAlarmMessages(t *testing.T) {
 	t.Parallel()
 	got := MQTTHubAlarmMessages(testBase, testCentral)

@@ -12188,41 +12188,6 @@ func TestIsCCUScheduleFalsePositive_MatchCode(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// hub_mqtt_publisher.go: pickInstallModeTopicSource — non-empty hub path
-// ---------------------------------------------------------------------------
-
-// TestPickInstallModeTopicSource_WithDP verifies that pickInstallModeTopicSource
-// returns the registered InstallMode when the hub has at least one.
-func TestPickInstallModeTopicSource_WithDP(t *testing.T) {
-	t.Parallel()
-	h := hub.NewHub("ccu-b49")
-	m := hub.NewInstallMode("HmIP-RF", nil)
-	m.OnState(true, 5*time.Minute)
-	h.PutInstallMode(m)
-
-	src := pickInstallModeTopicSource(h)
-	if src == nil {
-		t.Fatal("pickInstallModeTopicSource must return non-nil when hub has an InstallMode")
-	}
-	// The returned source is the registered InstallMode itself (not the
-	// synthetic fallback), so it should be a non-zero *hub.InstallMode.
-	if _, ok := src.(*hub.InstallMode); !ok {
-		t.Errorf("pickInstallModeTopicSource returned %T, want *hub.InstallMode", src)
-	}
-}
-
-// TestPickInstallModeTopicSource_Empty verifies the fallback synthetic
-// instance is returned when the hub has no InstallMode registered.
-func TestPickInstallModeTopicSource_Empty(t *testing.T) {
-	t.Parallel()
-	h := hub.NewHub("ccu-b49")
-	src := pickInstallModeTopicSource(h)
-	if src == nil {
-		t.Fatal("pickInstallModeTopicSource must never return nil")
-	}
-}
-
-// ---------------------------------------------------------------------------
 // shared fixture — mirrors buildUnpairFixture from device_admin_unpair_test.go
 // ---------------------------------------------------------------------------
 

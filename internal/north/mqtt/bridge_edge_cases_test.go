@@ -1903,13 +1903,12 @@ func TestBridgePublishInstallModeRawEnabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: true, CentralName: "ccu"}, mp)
-	mode := fakeAddressable{state: "gh/ccu/hub/install_mode"}
-	if err := b.PublishInstallMode(context.Background(), "ccu", mode, 30); err != nil {
+	if err := b.PublishInstallMode(context.Background(), "ccu", "HmIP-RF", 30); err != nil {
 		t.Fatalf("PublishInstallMode: %v", err)
 	}
 	found := false
 	for _, p := range mp.publications() {
-		if p.topic == "gh/ccu/hub/install_mode" && p.payload == "30" {
+		if p.topic == "gh/ccu/hub/install_mode/HmIP-RF" && p.payload == "30" {
 			found = true
 		}
 	}
@@ -2276,7 +2275,7 @@ func TestBridgePublishInstallModeRawDisabled(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
 	b := NewBridge(BridgeConfig{Base: "gh", RawEnabled: false}, mp)
-	if err := b.PublishInstallMode(context.Background(), "ccu", fakeAddressable{state: "x"}, 60); err != nil {
+	if err := b.PublishInstallMode(context.Background(), "ccu", "HmIP-RF", 60); err != nil {
 		t.Fatalf("PublishInstallMode disabled: %v", err)
 	}
 	if len(mp.publications()) != 0 {

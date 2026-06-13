@@ -169,6 +169,16 @@ func toAnySlice(ss []string) []any {
 // ADR 0010: all custom-DP types implement HADiscoveryPayloadBuilder.
 // The legacy buildX path has been removed.
 func (d *DefaultDiscoveryBuilder) aggregateChannel(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
+	// Text-display custom-DPs (HmIP-WRCD) surface ONLY as a `notify`
+	// entity in the reference stack — the TEXT_DISPLAY category maps to
+	// the notify platform alone, not to a `text` entity. The notify
+	// companion is published separately via
+	// [Bridge.publishTextDisplayNotify]; suppressing the aggregate here
+	// keeps the loom plane from emitting a surplus `text` entity (which
+	// HA would otherwise collide with the notify under a `_2` suffix).
+	if isTextDisplayEvent(ev) {
+		return "", "", "", nil, false
+	}
 	builder, ok := ev.Source.(payload.HADiscoveryPayloadBuilder)
 	if !ok || builder == nil {
 		return "", "", "", nil, false

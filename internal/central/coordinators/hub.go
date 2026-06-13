@@ -934,6 +934,7 @@ func (h *HubCoordinator) PublishInstallModeRefreshed() {
 		events.Publish(h.bus, hmevent.InstallModeChangedEvent{
 			Base:        hmevent.NewBase(),
 			CentralName: h.centralName,
+			InterfaceID: dp.InterfaceID,
 			Enabled:     dp.IsActive(),
 			RemainingS:  int(dp.Remaining().Seconds()),
 		})

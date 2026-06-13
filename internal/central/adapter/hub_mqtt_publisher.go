@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
-	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -164,36 +163,23 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 		publishSvc(msgs)
 	}))
 
-	// --- InstallMode (via EventBus) ---
-	// InstallMode state arrives as domain events; the topic-owning
-	// model object is any InstallMode instance on the hub (all of them
-	// resolve to the same canonical central-wide topic).
-	_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeDiscovery(centralName))
-	installModeTopic := pickInstallModeTopicSource(hubModel)
-	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.InstallModeChangedEvent) {
-		if e.CentralName != centralName {
-			return
-		}
-		if err := b.PublishInstallMode(ctx, centralName, installModeTopic, e.RemainingS); err != nil {
-			p.logger.Warn("mqtt.publish_install_mode",
-				slog.String("central", centralName),
-				slog.String("err", err.Error()))
-		}
-	}))
+	// --- InstallMode (per interface, via EventBus) ---
+	p.wireInstallMode(ctx, u, centralName, hubModel, disco, b)
 
 	// --- Connectivity (via EventBus) ---
 	// Per-interface reachability changes arrive as ConnectivityChangedEvent
-	// from the reconciler and from the callback-driven push path.
+	// from the reconciler and from the callback-driven push path. The
+	// connectivity binary_sensor stays per-interface (reference parity);
+	// connection-latency is aggregated central-wide and wired from the
+	// Metrics block below.
 	connectivityDiscovered := make(map[string]bool)
-	latencyDiscovered := make(map[string]bool)
-	// Eagerly publish connectivity + latency discovery for every
-	// registered interface at wiring time. The reference stack creates a
-	// connectivity binary_sensor and a connection-latency sensor per
-	// interface at setup; relying on the first ConnectivityChangedEvent
-	// alone left these entities absent until a reachability change
-	// happened to fire post-boot. The state still rides the event path
-	// below; only the discovery is seeded here.
-	seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered, latencyDiscovered)
+	// Eagerly publish connectivity discovery for every registered
+	// interface at wiring time. The reference stack creates a
+	// connectivity binary_sensor per interface at setup; relying on the
+	// first ConnectivityChangedEvent alone left these entities absent
+	// until a reachability change happened to fire post-boot. The state
+	// still rides the event path below; only the discovery is seeded here.
+	seedConnectivityDiscovery(ctx, u, centralName, disco, b, connectivityDiscovered)
 	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.ConnectivityChangedEvent) {
 		if e.CentralName != centralName {
 			return
@@ -202,23 +188,11 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, e.InterfaceID))
 			connectivityDiscovered[e.InterfaceID] = true
 		}
-		if !latencyDiscovered[e.InterfaceID] {
-			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName, e.InterfaceID))
-			latencyDiscovered[e.InterfaceID] = true
-		}
 		if err := b.PublishConnectivity(ctx, centralName, hubConnectivityTopics, e.InterfaceID, e.Reachable); err != nil {
 			p.logger.Warn("mqtt.publish_connectivity",
 				slog.String("central", centralName),
 				slog.String("interface", e.InterfaceID),
 				slog.String("err", err.Error()))
-		}
-		if e.LatencyMs > 0 {
-			if err := b.PublishHubConnectionLatency(ctx, centralName, e.InterfaceID, e.LatencyMs); err != nil {
-				p.logger.Warn("mqtt.publish_connection_latency",
-					slog.String("central", centralName),
-					slog.String("interface", e.InterfaceID),
-					slog.String("err", err.Error()))
-			}
 		}
 	}))
 
@@ -232,6 +206,11 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	// discovery is published once at wiring time; state updates follow the
 	// MetricLastEventAgeSecs aggregate.
 	_ = b.PublishHubDiscovery(ctx, disco.BuildLastEventAgeDiscovery(centralName))
+	// Connection-Latency: ONE central-wide sensor (reference parity —
+	// hub_connection-latency) fed from the aggregated ping/pong metric,
+	// not per-interface samples. Discovery once at wiring time; state
+	// follows the MetricConnectionLatMs aggregate.
+	_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName))
 	if hubModel.Metrics != nil {
 		// Publish any already-observed system-health value immediately.
 		if sample, ok := hubModel.Metrics.Value(hub.MetricSystemHealth); ok {
@@ -256,10 +235,19 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 					slog.String("err", err.Error()))
 			}
 		}))
-		// Connection latency is per-interface; the reconciler tracks it
-		// in ConnectivityChangedEvent.LatencyMs which is picked up by the
-		// per-interface discovery block above. No additional subscription
-		// needed here.
+		// Connection-Latency state — same observe-then-subscribe pattern.
+		// The aggregated ping/pong latency lives on the MetricConnectionLatMs
+		// sample; the publisher pushes it to the single central-wide topic.
+		if sample, ok := hubModel.Metrics.Value(hub.MetricConnectionLatMs); ok {
+			_ = b.PublishHubConnectionLatency(ctx, centralName, sample.Value)
+		}
+		p.addUnsub(hubModel.Metrics.OnUpdate(hub.MetricConnectionLatMs, func(s hub.MetricSample) {
+			if err := b.PublishHubConnectionLatency(ctx, centralName, s.Value); err != nil {
+				p.logger.Warn("mqtt.publish_connection_latency",
+					slog.String("central", centralName),
+					slog.String("err", err.Error()))
+			}
+		}))
 	}
 
 	// --- Inbox ---
@@ -296,19 +284,64 @@ func (p *HubMQTTPublisher) wireOneCentral(ctx context.Context, u *central.Unit) 
 	}))
 }
 
-// seedConnectivityDiscovery publishes the connectivity binary_sensor +
-// connection-latency sensor discovery for every registered interface of
-// the central at wiring time. The `discovered` / `latencyDiscovered`
-// maps are shared with the live event subscription so each interface is
-// announced at most once. Reference parity: these per-interface entities
-// exist at setup, not only after the first reachability change.
+// wireInstallMode seeds per-interface install-mode discovery (one
+// remaining-seconds sensor and one activation button per interface) and
+// subscribes to InstallModeChangedEvent so each interface's countdown
+// rides its own retained topic. The reference stack renders these
+// entities per interface (HmIP-RF, BidCos-RF) rather than as a single
+// central-wide aggregate.
+func (p *HubMQTTPublisher) wireInstallMode(
+	ctx context.Context,
+	u *central.Unit,
+	centralName string,
+	hubModel *hub.Hub,
+	disco *mqtt.DefaultDiscoveryBuilder,
+	b *mqtt.Bridge,
+) {
+	for _, dp := range hubModel.InstallModeDPs() {
+		if dp == nil || dp.InterfaceID == "" {
+			continue
+		}
+		_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeSensorDiscovery(centralName, dp.InterfaceID))
+		_ = b.PublishHubDiscovery(ctx, disco.BuildInstallModeButtonDiscovery(centralName, dp.InterfaceID))
+		// Publish the current observed countdown immediately so the
+		// retained sensor topic is seeded before the first event.
+		if _, remaining, observed := dp.InstallState(); observed {
+			if err := b.PublishInstallMode(ctx, centralName, dp.InterfaceID, int(remaining.Seconds())); err != nil {
+				p.logger.Warn("mqtt.publish_install_mode",
+					slog.String("central", centralName),
+					slog.String("interface", dp.InterfaceID),
+					slog.String("err", err.Error()))
+			}
+		}
+	}
+	p.addUnsub(events.Subscribe(u.EventBus, func(e hmevent.InstallModeChangedEvent) {
+		if e.CentralName != centralName || e.InterfaceID == "" {
+			return
+		}
+		if err := b.PublishInstallMode(ctx, centralName, e.InterfaceID, e.RemainingS); err != nil {
+			p.logger.Warn("mqtt.publish_install_mode",
+				slog.String("central", centralName),
+				slog.String("interface", e.InterfaceID),
+				slog.String("err", err.Error()))
+		}
+	}))
+}
+
+// seedConnectivityDiscovery publishes the connectivity binary_sensor
+// discovery for every registered interface of the central at wiring
+// time. The `connectivityDiscovered` map is shared with the live event
+// subscription so each interface is announced at most once. Reference
+// parity: the connectivity binary_sensor exists per interface at setup,
+// not only after the first reachability change. Connection-latency is
+// aggregated central-wide and seeded from the Metrics block instead.
 func seedConnectivityDiscovery(
 	ctx context.Context,
 	u *central.Unit,
 	centralName string,
 	disco *mqtt.DefaultDiscoveryBuilder,
 	b *mqtt.Bridge,
-	connectivityDiscovered, latencyDiscovered map[string]bool,
+	connectivityDiscovered map[string]bool,
 ) {
 	if u == nil || u.Clients == nil {
 		return
@@ -321,10 +354,6 @@ func seedConnectivityDiscovery(
 		if !connectivityDiscovered[iface] {
 			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectivityDiscovery(centralName, iface))
 			connectivityDiscovered[iface] = true
-		}
-		if !latencyDiscovered[iface] {
-			_ = b.PublishHubDiscovery(ctx, disco.BuildConnectionLatencyDiscovery(centralName, iface))
-			latencyDiscovered[iface] = true
 		}
 	}
 }
@@ -389,24 +418,6 @@ func (p *HubMQTTPublisher) wireOneSysvar(
 		w.PublishSysvar(ctx, centralName, sv, sysvarStateForMQTT(sv, next.Unwrap()))
 	}))
 }
-
-// pickInstallModeTopicSource returns an InstallMode instance that
-// satisfies the bridge's MQTTAddressable contract. The InstallMode
-// topic is central-weit (`<base>/<central>/hub/install_mode`), so
-// every instance — registered or synthetic — resolves to the same
-// topic. The fallback synthetic instance keeps the publish path
-// working even when no per-interface InstallMode has been seen yet.
-func pickInstallModeTopicSource(hubModel *hub.Hub) payload.MQTTAddressable {
-	for _, m := range hubModel.InstallModeDPs() {
-		return m
-	}
-	return hubInstallModeTopics
-}
-
-// hubInstallModeTopics is a synthetic InstallMode used purely as a
-// topic provider. Its MQTTTopics method is stateless and yields the
-// canonical central-weit `<base>/<central>/hub/install_mode`.
-var hubInstallModeTopics = hub.NewInstallMode("", nil)
 
 // hubConnectivityTopics is a shared zero-value Connectivity used
 // purely as a topic provider — its MQTTTopicsForInterface method

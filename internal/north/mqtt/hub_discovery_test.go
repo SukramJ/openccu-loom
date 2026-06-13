@@ -487,12 +487,12 @@ func TestServiceMessagesDiscovery(t *testing.T) {
 	}
 }
 
-// ─── InstallMode ─────────────────────────────────────────────────────────────
+// ─── InstallMode (per interface) ─────────────────────────────────────────────
 
-func TestInstallModeDiscovery(t *testing.T) {
+func TestInstallModeSensorDiscovery(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildInstallModeDiscovery("ccu-01")
+	item := db.BuildInstallModeSensorDiscovery("ccu-01", "HmIP-RF")
 
 	if !item.OK {
 		t.Fatal("expected OK=true")
@@ -512,6 +512,73 @@ func TestInstallModeDiscovery(t *testing.T) {
 	}
 	if m["entity_category"] != "diagnostic" {
 		t.Fatalf("entity_category: got %v want %q", m["entity_category"], "diagnostic")
+	}
+	// Reference parity: per-interface suffix in uid + translation key.
+	uid, _ := m["unique_id"].(string)
+	if !strings.HasSuffix(uid, "_install_mode_hmip") {
+		t.Fatalf("unique_id: got %q want suffix _install_mode_hmip", uid)
+	}
+	if m["translation_key"] != "install_mode_hmip" {
+		t.Fatalf("translation_key: got %v want install_mode_hmip", m["translation_key"])
+	}
+	if !strings.Contains(m["state_topic"].(string), "/hub/install_mode/HmIP-RF") {
+		t.Fatalf("state_topic: got %v want per-interface topic", m["state_topic"])
+	}
+}
+
+func TestInstallModeButtonDiscovery(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+	item := db.BuildInstallModeButtonDiscovery("ccu-01", "HmIP-RF")
+
+	if !item.OK {
+		t.Fatal("expected OK=true")
+	}
+	if item.Component != "button" {
+		t.Fatalf("Component: got %q want button", item.Component)
+	}
+	m := jsonMap(t, item)
+	// Reference parity: uid slug "<suffix>-button", translation key
+	// "<suffix>_button", entity_category config, press command topic.
+	uid, _ := m["unique_id"].(string)
+	if !strings.HasSuffix(uid, "_install_mode_hmip-button") {
+		t.Fatalf("unique_id: got %q want suffix _install_mode_hmip-button", uid)
+	}
+	if m["translation_key"] != "install_mode_hmip_button" {
+		t.Fatalf("translation_key: got %v want install_mode_hmip_button", m["translation_key"])
+	}
+	if m["entity_category"] != "config" {
+		t.Fatalf("entity_category: got %v want config", m["entity_category"])
+	}
+	if m["payload_press"] != "PRESS" {
+		t.Fatalf("payload_press: got %v want PRESS", m["payload_press"])
+	}
+	if !strings.Contains(m["command_topic"].(string), "/hub/install_mode/HmIP-RF/set") {
+		t.Fatalf("command_topic: got %v want per-interface set topic", m["command_topic"])
+	}
+}
+
+func TestInstallModeSuffixBidcos(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+	item := db.BuildInstallModeSensorDiscovery("ccu-01", "BidCos-RF")
+	if !item.OK {
+		t.Fatal("expected OK=true")
+	}
+	m := jsonMap(t, item)
+	if m["translation_key"] != "install_mode_bidcos" {
+		t.Fatalf("translation_key: got %v want install_mode_bidcos", m["translation_key"])
+	}
+}
+
+func TestInstallModeDiscoveryEmptyIface(t *testing.T) {
+	t.Parallel()
+	db := newHubBuilder()
+	if item := db.BuildInstallModeSensorDiscovery("ccu-01", ""); item.OK {
+		t.Fatal("empty interface must return OK=false (sensor)")
+	}
+	if item := db.BuildInstallModeButtonDiscovery("ccu-01", ""); item.OK {
+		t.Fatal("empty interface must return OK=false (button)")
 	}
 }
 
@@ -780,12 +847,13 @@ func TestBuildSystemHealthDiscovery_EmptyCentral_ReturnsNoOp(t *testing.T) {
 
 // ─── BuildConnectionLatencyDiscovery ────────────────────────────────────────
 
-// TestBuildConnectionLatencyDiscovery_HappyPath pins that the latency
-// sensor emits component=sensor, unit=ms, and diagnostic category.
+// TestBuildConnectionLatencyDiscovery_HappyPath pins that the aggregated
+// latency sensor emits component=sensor, unit=ms, diagnostic category,
+// the central-wide topic, and the connection_latency translation key.
 func TestBuildConnectionLatencyDiscovery_HappyPath(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildConnectionLatencyDiscovery("ccu-01", "HmIP-RF")
+	item := db.BuildConnectionLatencyDiscovery("ccu-01")
 	if !item.OK {
 		t.Fatal("BuildConnectionLatencyDiscovery returned ok=false")
 	}
@@ -799,16 +867,28 @@ func TestBuildConnectionLatencyDiscovery_HappyPath(t *testing.T) {
 	if m["entity_category"] != "diagnostic" {
 		t.Errorf("entity_category=%v want diagnostic", m["entity_category"])
 	}
+	if m["translation_key"] != "connection_latency" {
+		t.Errorf("translation_key=%v want connection_latency", m["translation_key"])
+	}
+	uid, _ := m["unique_id"].(string)
+	if !strings.HasSuffix(uid, "_connection_latency") {
+		t.Errorf("unique_id=%q want suffix _connection_latency", uid)
+	}
+	// Aggregated central-wide topic: no per-interface segment.
+	st, _ := m["state_topic"].(string)
+	if !strings.HasSuffix(st, "/system/latency") {
+		t.Errorf("state_topic=%q want central-wide /system/latency", st)
+	}
 }
 
-// TestBuildConnectionLatencyDiscovery_EmptyIface_ReturnsNoOp pins that
-// a missing interface name returns ok=false.
-func TestBuildConnectionLatencyDiscovery_EmptyIface_ReturnsNoOp(t *testing.T) {
+// TestBuildConnectionLatencyDiscovery_EmptyCentral_ReturnsNoOp pins that
+// a missing central name returns ok=false.
+func TestBuildConnectionLatencyDiscovery_EmptyCentral_ReturnsNoOp(t *testing.T) {
 	t.Parallel()
 	db := newHubBuilder()
-	item := db.BuildConnectionLatencyDiscovery("ccu-01", "")
+	item := db.BuildConnectionLatencyDiscovery("")
 	if item.OK {
-		t.Error("empty interface should produce ok=false")
+		t.Error("empty central should produce ok=false")
 	}
 }
 
