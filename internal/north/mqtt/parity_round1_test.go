@@ -163,14 +163,19 @@ func TestUsageGatePerParameterDiscovery(t *testing.T) {
 	}
 }
 
-// ─── Fix 5: virtual-remote press buttons ─────────────────────────────────────
+// ─── Fix 5: press buttons (category=button, usage=data_point) ─────────────────
 
-// fakeVirtualRemote satisfies the virtualRemoteDevice contract.
+// fakeVirtualRemote satisfies the virtualRemoteDevice contract. Retained for
+// the device descriptor; the press-button gate is now category/usage-driven,
+// not virtual-remote-specific.
 type fakeVirtualRemote struct{ vr bool }
 
 func (f fakeVirtualRemote) IsVirtualRemote() bool { return f.vr }
 
-func vrPressEvent(param string, vr bool) Event {
+// pressEvent builds a click-event Event with the given model usage. A
+// writable press the model classifies as a button carries usage=data_point;
+// an event-only press carries usage=event.
+func pressEvent(param string, usage hmenum.DataPointUsage) Event {
 	return Event{
 		Central:       "ccu",
 		Interface:     "HmIP-RF",
@@ -180,8 +185,9 @@ func vrPressEvent(param string, vr bool) Event {
 		ChannelNo:     12,
 		Parameter:     param,
 		Category:      hmenum.DataPointCategoryButton,
+		Usage:         usage,
 		Writable:      true,
-		Device:        fakeVirtualRemote{vr: vr},
+		Device:        fakeVirtualRemote{vr: true},
 		Channel: &fakeChannelInspector{params: map[string]struct{}{
 			"PRESS_SHORT": {},
 			"PRESS_LONG":  {},
@@ -189,18 +195,19 @@ func vrPressEvent(param string, vr bool) Event {
 	}
 }
 
-// TestBuildVirtualRemoteButton pins the button companion payload for a
-// virtual-remote press parameter: HA `button` component, per-DP command
-// topic, payload_press="PRESS", disabled by default (mirrors the
-// reference button factory), and the canonical press unique_id.
-func TestBuildVirtualRemoteButton(t *testing.T) {
+// TestBuildPressButton pins the button companion payload for a press
+// parameter the model marked as a button (category=button,
+// usage=data_point): HA `button` component, per-DP command topic,
+// payload_press="PRESS", disabled by default (mirrors the reference button
+// factory), and the canonical press unique_id.
+func TestBuildPressButton(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu")
 	db.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 
-	item := db.BuildVirtualRemoteButton(vrPressEvent("PRESS_SHORT", true))
+	item := db.BuildPressButton(pressEvent("PRESS_SHORT", hmenum.DataPointUsageDataPoint))
 	if !item.OK {
-		t.Fatal("expected OK=true for a virtual-remote press parameter")
+		t.Fatal("expected OK=true for a press button parameter")
 	}
 	if item.Component != string(HAComponentButton) {
 		t.Fatalf("component=%q want button", item.Component)
@@ -224,31 +231,31 @@ func TestBuildVirtualRemoteButton(t *testing.T) {
 	}
 }
 
-// TestBuildVirtualRemoteButtonSkipsPhysicalDevices pins that physical
-// devices' press parameters (pure event emitters) never get a button.
-func TestBuildVirtualRemoteButtonSkipsPhysicalDevices(t *testing.T) {
+// TestBuildPressButtonSkipsEventOnlyAndNonPress pins that an event-only press
+// (usage=event — pure event emitter) and a non-button parameter never get a
+// button companion.
+func TestBuildPressButtonSkipsEventOnlyAndNonPress(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu")
-	if item := db.BuildVirtualRemoteButton(vrPressEvent("PRESS_SHORT", false)); item.OK {
-		t.Fatal("physical-device press parameter must not produce a button")
+	if item := db.BuildPressButton(pressEvent("PRESS_SHORT", hmenum.DataPointUsageEvent)); item.OK {
+		t.Fatal("event-only press parameter must not produce a button")
 	}
-	if item := db.BuildVirtualRemoteButton(Event{Parameter: "LEVEL", Device: fakeVirtualRemote{vr: true}}); item.OK {
-		t.Fatal("non-press parameter must not produce a button")
+	if item := db.BuildPressButton(Event{Parameter: "LEVEL", Category: hmenum.DataPointCategoryNumber, Usage: hmenum.DataPointUsageDataPoint}); item.OK {
+		t.Fatal("non-button parameter must not produce a button")
 	}
 }
 
 // TestVirtualRemotePressPublishesEventAndButton pins the bridge-level
-// behaviour: a virtual-remote press event publishes BOTH the aggregated
-// keypress `event` entity and the press `button` companion — the
-// reference stack's per-channel surface (event + press_short +
-// press_long).
+// behaviour: a press event publishes BOTH the aggregated keypress `event`
+// entity and the press `button` companion — the reference stack's
+// per-channel surface (event + press_short + press_long).
 func TestVirtualRemotePressPublishesEventAndButton(t *testing.T) {
 	t.Parallel()
 	rec := &recordingPublisher{}
 	b := newDeepBridge(t, rec)
 
 	for _, param := range []string{"PRESS_SHORT", "PRESS_LONG"} {
-		if err := b.PublishState(context.Background(), vrPressEvent(param, true)); err != nil {
+		if err := b.PublishState(context.Background(), pressEvent(param, hmenum.DataPointUsageDataPoint)); err != nil {
 			t.Fatalf("PublishState(%s): %v", param, err)
 		}
 	}

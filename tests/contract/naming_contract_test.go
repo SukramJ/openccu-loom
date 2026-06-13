@@ -30,6 +30,7 @@ package contract
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
@@ -336,10 +337,11 @@ func TestNaming_PressEvent_FallsBackToChN_WhenNoChannelName(t *testing.T) {
 	}
 }
 
-// TestNaming_PressEvent_SinglePress_NotAggregated verifies that a channel
-// carrying only one PRESS_* parameter does NOT produce a BuildChannelEvent
-// payload — it falls through to the per-parameter path instead.
-func TestNaming_PressEvent_SinglePress_NotAggregated(t *testing.T) {
+// TestNaming_PressEvent_SinglePress_Aggregated verifies that a channel
+// carrying only one PRESS_* parameter still produces a channel-level
+// BuildChannelEvent payload — the reference stack materialises one event
+// entity per press channel regardless of how many press types it carries.
+func TestNaming_PressEvent_SinglePress_Aggregated(t *testing.T) {
 	t.Parallel()
 
 	ch := &namedPressChannel{
@@ -354,9 +356,15 @@ func TestNaming_PressEvent_SinglePress_NotAggregated(t *testing.T) {
 	}
 
 	db := mqtt.NewDefaultDiscoveryBuilder(mqtt.NewTopicBuilder("gh"), "ccu")
-	_, _, _, _, ok := db.BuildChannelEvent(ev)
-	if ok {
-		t.Error("BuildChannelEvent must return ok=false for a single-press channel")
+	component, _, objectID, _, ok := db.BuildChannelEvent(ev)
+	if !ok {
+		t.Fatal("BuildChannelEvent must return ok=true for a single-press channel")
+	}
+	if component != string(mqtt.HAComponentEvent) {
+		t.Errorf("component=%q want event", component)
+	}
+	if !strings.Contains(objectID, "event") {
+		t.Errorf("objectID=%q should be the channel-level event form", objectID)
 	}
 }
 

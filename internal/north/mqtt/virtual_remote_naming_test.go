@@ -31,6 +31,7 @@ func vrNamingEvent(param string, ch ChannelInspector) Event {
 		ChannelNo:     10,
 		Parameter:     param,
 		Category:      hmenum.DataPointCategoryButton,
+		Usage:         hmenum.DataPointUsageDataPoint,
 		Writable:      true,
 		Device:        fakeVirtualRemote{vr: true},
 		Channel:       ch,
@@ -39,9 +40,9 @@ func vrNamingEvent(param string, ch ChannelInspector) Event {
 
 func vrButtonName(t *testing.T, db *DefaultDiscoveryBuilder, ev Event) string {
 	t.Helper()
-	item := db.BuildVirtualRemoteButton(ev)
+	item := db.BuildPressButton(ev)
 	if !item.OK {
-		t.Fatalf("BuildVirtualRemoteButton returned OK=false for %s", ev.Parameter)
+		t.Fatalf("BuildPressButton returned OK=false for %s", ev.Parameter)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(item.Payload, &m); err != nil {

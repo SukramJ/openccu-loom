@@ -1290,10 +1290,9 @@ func datapointNameDataOf(dp any) (naming.NameData, bool) {
 }
 
 // publishChannelEventState publishes the per-channel aggregate event
-// payload when a PRESS_* parameter fires on a multi-press channel.
-// A "multi-press channel" is one that exposes 2+ PRESS_* parameters
-// detected by consulting the ChannelInspector. Single-press channels
-// (only PRESS_SHORT, or none) use the per-parameter path and are skipped.
+// payload when a PRESS_* parameter fires on a press channel — any channel
+// that exposes at least one PRESS_* parameter (detected via the
+// ChannelInspector). A channel with no press parameter is skipped.
 //
 // Best-effort: a broker error here does not affect the main value-change
 // publish that has already succeeded for the caller.
@@ -1311,7 +1310,7 @@ func (b *EventBridge) publishChannelEventState(
 		return
 	}
 	if len(mqtt.ChannelPressTypes(ch)) == 0 {
-		// Fewer than 2 PRESS_* params → single-press channel, skip.
+		// No PRESS_* parameter on the channel → not a press channel, skip.
 		return
 	}
 	bridge := b.mqtt.Bridge()
@@ -1377,16 +1376,16 @@ func (b *EventBridge) publishChannelEventDiscoverySnapshot(
 	}
 }
 
-// firstPressParameter returns the first PRESS_* parameter the channel
-// exposes (matching the canonical [mqtt.IsPressParameter] set), or an
-// empty string when the channel has none. The bridge's BuildChannelEvent
-// path uses the parameter only as a routing trigger; the channel
-// inspector then decides single- vs. multi-press shape.
+// firstPressParameter returns the first click-event parameter the channel
+// exposes (matching the canonical [mqtt.PressParameters] set), or an empty
+// string when the channel has none. The bridge's BuildChannelEvent path uses
+// the parameter only as a routing trigger; the channel inspector then
+// collects every press type into the channel-level event entity.
 func firstPressParameter(ch *device.Channel) string {
 	if ch == nil {
 		return ""
 	}
-	for _, p := range []string{"PRESS_SHORT", "PRESS_LONG", "PRESS_LONG_RELEASE", "PRESS_LONG_START"} {
+	for _, p := range mqtt.PressParameters() {
 		if ch.HasParameter(p) {
 			return p
 		}

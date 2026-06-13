@@ -75,13 +75,16 @@ func TestPublishChannelEventStateNotPressParameter(t *testing.T) {
 	}
 }
 
-// TestPublishChannelEventStateSinglePressChannel — single PRESS_SHORT only → skip.
+// TestPublishChannelEventStateSinglePressChannel — a single PRESS_SHORT
+// channel emits the same channel-level keypress event as a multi-press one
+// (the reference stack materialises one event entity per press channel
+// regardless of how many press types it carries).
 func TestPublishChannelEventStateSinglePressChannel(t *testing.T) {
 	t.Parallel()
 	eb, pub := buildBridgeEnv(t)
 	dev := device.New(device.Config{Address: "PRESDEV003", InterfaceID: "HmIP-RF", Model: "HmIP-WRC2"})
 	ch := dev.AddChannel("PRESDEV003:1", 1, "KEY", hmenum.ParamsetKeyValues)
-	// Add only PRESS_SHORT — ChannelPressTypes returns nil (<2 press params).
+	// Add only PRESS_SHORT — ChannelPressTypes returns ["press_short"] (≥1).
 	dp := generic.NewDataPoint[bool](generic.Spec{
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    "HmIP-RF",
@@ -94,10 +97,10 @@ func TestPublishChannelEventStateSinglePressChannel(t *testing.T) {
 	ch.Put(dp)
 	before := len(pub.Published())
 	eb.publishChannelEventState(context.Background(), "ccu-01", "HmIP-RF", "PRESDEV003", 1, "PRESS_SHORT", ch)
-	// No additional publishes expected (channel has only 1 press param).
+	// A channel-level event publish is expected (single press type is enough).
 	after := len(pub.Published())
-	if after != before {
-		t.Errorf("single-press channel must not emit event, got %d new publishes", after-before)
+	if after == before {
+		t.Errorf("single-press channel must emit a channel-level event")
 	}
 }
 

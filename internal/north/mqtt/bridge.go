@@ -574,7 +574,7 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 				return err
 			}
 		}
-		b.publishVirtualRemotePressButton(ctx, ev)
+		b.publishPressButton(ctx, ev)
 	}
 	return nil
 }
@@ -603,7 +603,7 @@ func (b *Bridge) PublishDiscoveryOnly(ctx context.Context, ev Event) error {
 			return err
 		}
 	}
-	b.publishVirtualRemotePressButton(ctx, ev)
+	b.publishPressButton(ctx, ev)
 	return nil
 }
 
@@ -1134,7 +1134,7 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 	if err := b.publishDiscovery(ctx, component, nodeID, objectID, payload); err != nil {
 		return err
 	}
-	b.publishVirtualRemotePressButton(ctx, ev)
+	b.publishPressButton(ctx, ev)
 	return nil
 }
 
@@ -1169,23 +1169,24 @@ func (b *Bridge) PublishCustomDPDiscovery(ctx context.Context, ev Event) error {
 	return nil
 }
 
-// publishVirtualRemotePressButton publishes the press-button companion
-// entity for a virtual-remote PRESS_* event. Virtual remotes (HM-RCV-50 /
-// HMW-RCV-50 / HmIP-RCV-50) carry writable press parameters; the
-// reference stack exposes each as a clickable HA `button` (disabled by
-// default) IN ADDITION to the per-channel keypress `event` entity that
-// every press channel gets. Best-effort: errors are swallowed — the
-// primary discovery publish has already succeeded, and the button
+// publishPressButton publishes the press-button companion entity for a
+// click-event parameter the model marked as a button (category=button,
+// usage=data_point). Writable presses — virtual-remote actions, a plain KEY
+// channel's PRESS_SHORT/PRESS_LONG, and additional_data_points-promoted
+// dimmer-input presses — are each exposed as a clickable HA `button`
+// (disabled by default) IN ADDITION to the per-channel keypress `event`
+// entity that every press channel gets. Best-effort: errors are swallowed —
+// the primary discovery publish has already succeeded, and the button
 // re-publishes on the next press / snapshot pass.
 //
 // No-op when the configured builder is not the [DefaultDiscoveryBuilder]
-// or the event is not a virtual-remote press parameter.
-func (b *Bridge) publishVirtualRemotePressButton(ctx context.Context, ev Event) {
+// or the event is not a press-button parameter.
+func (b *Bridge) publishPressButton(ctx context.Context, ev Event) {
 	dd, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
 	if !ok {
 		return
 	}
-	item := dd.BuildVirtualRemoteButton(ev)
+	item := dd.BuildPressButton(ev)
 	if !item.OK {
 		return
 	}
