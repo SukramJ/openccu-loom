@@ -55,25 +55,26 @@ func textDisplayEvent() Event {
 	}
 }
 
-// TestTextDisplayProducesTextAndNotify is the parity tripwire for the
+// TestTextDisplayProducesNotifyOnly is the parity tripwire for the
 // HmIP-WRCD display: the reference stack maps a TEXT_DISPLAY custom-DP
-// onto BOTH a `text` entity and a `notify` entity. The aggregate path
-// produces the text entity; BuildTextDisplayNotify produces the notify
-// companion.
-func TestTextDisplayProducesTextAndNotify(t *testing.T) {
+// onto a `notify` entity ONLY (no `text` entity). The aggregate path
+// must suppress the text entity; BuildTextDisplayNotify produces the
+// notify entity that is the display's sole HA surface.
+func TestTextDisplayProducesNotifyOnly(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("openccu-loom"), "ccu")
 	db.SetHubInfoFor("ccu", HubInfo{Serial: "3014F711A0001234"})
 
 	ev := textDisplayEvent()
 
-	// The aggregate path yields the text entity.
-	comp, _, _, _, ok := db.Build(ev)
-	if !ok || comp != string(HAComponentText) {
-		t.Fatalf("aggregate path must yield a text entity (ok=%v comp=%q)", ok, comp)
+	// The aggregate path must NOT yield a text entity for a text-display
+	// custom-DP — that surplus entity collides with the notify under a
+	// `_2` suffix in HA.
+	if _, _, _, _, ok := db.Build(ev); ok {
+		t.Fatal("aggregate path must suppress the text entity for a text-display custom-DP")
 	}
 
-	// The notify companion yields the notify entity.
+	// The notify entity is the sole HA surface.
 	item := db.BuildTextDisplayNotify(ev)
 	if !item.OK {
 		t.Fatal("BuildTextDisplayNotify must produce a notify entity for a text-display custom-DP")

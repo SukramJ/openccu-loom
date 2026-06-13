@@ -1146,9 +1146,9 @@ func (b *Bridge) PublishChannelEventDiscovery(ctx context.Context, ev Event) err
 // emits the aggregate directly so write-only custom-DPs surface from
 // boot. Idempotent — discovery topics are diff-gated by `b.declared`.
 //
-// Companion entities: a text-display custom-DP additionally spawns a
-// `notify` entity (reference parity — TEXT_DISPLAY maps to both `text`
-// and `notify`).
+// Companion entities: a text-display custom-DP spawns ONLY a `notify`
+// entity (reference parity — TEXT_DISPLAY maps to notify alone; the
+// aggregate `text` entity is suppressed in aggregateChannel).
 func (b *Bridge) PublishCustomDPDiscovery(ctx context.Context, ev Event) error {
 	if !b.cfg.HADiscoveryEnabled || b.cfg.DiscoveryBuilder == nil {
 		return nil
@@ -1191,12 +1191,11 @@ func (b *Bridge) publishVirtualRemotePressButton(ctx context.Context, ev Event) 
 	}
 }
 
-// publishTextDisplayNotify publishes the notify companion entity for a
+// publishTextDisplayNotify publishes the notify entity for a
 // text-display custom-DP (HmIP-WRCD). The reference stack maps a
-// TEXT_DISPLAY custom-DP onto BOTH a `text` and a `notify` entity; the
-// aggregate path produces the text entity, this publishes the notify
-// surface alongside it. Best-effort: errors are swallowed — the primary
-// (text) discovery has already succeeded.
+// TEXT_DISPLAY custom-DP onto a `notify` entity ONLY; the aggregate
+// `text` entity is suppressed in aggregateChannel, so this is the sole
+// HA surface for the display. Best-effort: errors are swallowed.
 //
 // No-op when the configured builder is not the [DefaultDiscoveryBuilder]
 // or the event does not carry a text-display custom-DP.
