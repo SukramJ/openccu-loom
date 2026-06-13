@@ -27,15 +27,29 @@ import (
 //   - has_climate_schedule: true when a ClimateProfile backend is bound;
 //     false otherwise (hint only — does not trigger a Load call)
 type WeekProfileResponse struct {
-	Address            string          `json:"address"`
-	ScheduleType       string          `json:"schedule_type"`
-	MinTemp            float64         `json:"min_temp"`
-	MaxTemp            float64         `json:"max_temp"`
-	ProfileCount       int             `json:"profile_count"`
-	CurrentProfile     string          `json:"current_profile,omitempty"`
-	AvailableProfiles  []string        `json:"available_profiles,omitempty"`
-	ScheduleEnabled    map[string]bool `json:"schedule_enabled,omitempty"`
-	HasClimateSchedule bool            `json:"has_climate_schedule"`
+	Address                 string                          `json:"address"`
+	ScheduleType            string                          `json:"schedule_type"`
+	MinTemp                 float64                         `json:"min_temp"`
+	MaxTemp                 float64                         `json:"max_temp"`
+	ProfileCount            int                             `json:"profile_count"`
+	CurrentProfile          string                          `json:"current_profile,omitempty"`
+	AvailableProfiles       []string                        `json:"available_profiles,omitempty"`
+	ScheduleEnabled         map[string]bool                 `json:"schedule_enabled,omitempty"`
+	AvailableTargetChannels map[string]TargetChannelSummary `json:"available_target_channels,omitempty"`
+	HasClimateSchedule      bool                            `json:"has_climate_schedule"`
+}
+
+// TargetChannelSummary describes the schedule-controllable target channel a
+// channel-lock key (e.g. "1_1") maps to. It lets north-bound consumers name a
+// per-channel schedule switch after the actuator channel it controls (the
+// reference stack composes "<channel name> Schedule") without re-deriving the
+// channel-group layout themselves.
+type TargetChannelSummary struct {
+	ChannelNo      int    `json:"channel_no"`
+	ChannelAddress string `json:"channel_address"`
+	Name           string `json:"name"`
+	// ChannelType is "primary" or "secondary".
+	ChannelType string `json:"channel_type"`
 }
 
 // GetWeekProfile returns the week-profile metadata descriptor for one
@@ -76,16 +90,32 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 			enabled = nil
 		}
 
+		// Surface the channel-lock key -> target channel mapping so consumers
+		// can name a per-channel schedule switch after the actuator channel.
+		var targets map[string]TargetChannelSummary
+		if registered := wp.AvailableTargetChannels(); len(registered) > 0 {
+			targets = make(map[string]TargetChannelSummary, len(registered))
+			for key, info := range registered {
+				targets[key] = TargetChannelSummary{
+					ChannelNo:      info.ChannelNo,
+					ChannelAddress: info.ChannelAddress,
+					Name:           info.Name,
+					ChannelType:    info.ChannelType,
+				}
+			}
+		}
+
 		resp := WeekProfileResponse{
-			Address:            ch.Address,
-			ScheduleType:       schedType,
-			MinTemp:            wp.MinTemp(),
-			MaxTemp:            wp.MaxTemp(),
-			ProfileCount:       wp.ProfileCount(),
-			CurrentProfile:     wp.CurrentProfile(),
-			AvailableProfiles:  wp.AvailableProfiles(),
-			ScheduleEnabled:    enabled,
-			HasClimateSchedule: wp.Climate() != nil,
+			Address:                 ch.Address,
+			ScheduleType:            schedType,
+			MinTemp:                 wp.MinTemp(),
+			MaxTemp:                 wp.MaxTemp(),
+			ProfileCount:            wp.ProfileCount(),
+			CurrentProfile:          wp.CurrentProfile(),
+			AvailableProfiles:       wp.AvailableProfiles(),
+			ScheduleEnabled:         enabled,
+			AvailableTargetChannels: targets,
+			HasClimateSchedule:      wp.Climate() != nil,
 		}
 		JSON(w, http.StatusOK, resp)
 	}
