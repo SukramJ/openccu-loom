@@ -31,6 +31,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Channel-group switch state now reaches WS subscribers.** Switching a
+  channel-group switch CDP (HMIP-PS/PSM/PSMCO — `STATE@3`/`STATE@4`/`STATE@5`)
+  left the HA switch entity snapping back to off: the daemon never delivered a
+  matching `custom_data_point.state_changed`. Two defects compounded on the
+  WS CDP-state path in `eventbridge.go`:
+  1. `customDPStatePayload` matched a `State() map[string]any` shape that no
+     shipping CDP implements (every CDP exposes the typed `payload.Source`
+     `State()`), so the push silently never fired for any CDP. It now reads the
+     canonical `payload.Source` contract and JSON-round-trips the typed state
+     into the wire map (`{is_on: true}`), identical to the `GET …/cdps`
+     snapshot.
+  2. The event used the bare parameter (`STATE`) as its name, but the cdps
+     REST/WS surface disambiguates channel-group CDPs to `PARAM@<channel>`
+     (`STATE@3`). The push now carries `custom.WireName(...)`, so the client's
+     `(address, name)` keyed CDP receives it. The reference stack re-renders
+     each custom DP on its own member events; this keeps the state topic
+     aligned with the catalogue entry.
+- **CDP invoke/get accept percent-encoded wire names.** A conformant client
+  that percent-encodes the `{name}` path segment (`STATE%403`) previously hit
+  a 502 ("data point STATE%403 not found"); the handler now URL-decodes the
+  segment via `url.PathUnescape` on both the invoke and get paths, while a
+  literal `@` keeps working.
+
 - **Connection-latency aggregated to a single hub sensor on MQTT
   discovery.** Latency previously published one `sensor` per interface
   (`latency_<central>_<iface>`); the reference stack exposes ONE

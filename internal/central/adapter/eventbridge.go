@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
+	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cdpkind"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
@@ -572,10 +574,28 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 		if ch != nil {
 			if cdp := ch.CustomDataPoint(); cdp != nil {
 				if state, ok := customDPStatePayload(cdp); ok {
+					// The wire NAME must match the identity the cdps
+					// REST/WS surface assigns (`GET …/cdps`): a profile
+					// channel group materialises the same parameter as a
+					// CDP on several channels (a switch's STATE on
+					// ch3/vch4/vch5), so the bare parameter name no longer
+					// identifies one CDP. [custom.WireName] disambiguates
+					// colliding names as `PARAM@<channel>` (e.g. `STATE@3`)
+					// and keeps unique names bare. Publishing the bare name
+					// here would mismatch the client's `(addr, name)` CDP
+					// key and the event would be silently dropped — leaving
+					// channel-group switch entities stuck on the optimistic
+					// state. The reference stack re-renders each custom DP
+					// on its own member events; using the WireName keeps the
+					// state topic aligned with the catalogue entry.
+					wireName := cdp.DataPointKey().Parameter
+					if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
+						wireName = custom.WireName(dev, cdp, channelNo)
+					}
 					b.wsHub.PublishCustomDataPointStateChangedKind(
 						envKind,
 						centralName, deviceAddr, channelNo,
-						cdp.DataPointKey().Parameter,
+						wireName,
 						cdpkind.Of(cdp),
 						state, e.Timestamp(),
 						routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
@@ -1470,22 +1490,49 @@ func inferInterface(key hmtypes.DataPointKey) string {
 	return key.InterfaceID
 }
 
-// lookupDeviceObject finds the full Device so the MQTT Event can
-// carry it as the `payload:"info"` source.
-// customDPStatePayload pulls the aggregated state map off a
-// Custom-DP via its State() method. Returns (nil, false)
-// when the DP does not implement the interface — the caller skips
+// customDPStatePayload pulls the aggregated state map off a Custom-DP.
+// Returns (nil, false) when the DP exposes no state — the caller skips
 // the CDP-state publish in that case.
+//
+// The canonical state contract every shipping Custom-DP implements is
+// [payload.Source] (ADR 0007): `State()` returns a typed struct
+// (`*payload.SwitchState{IsOn}`, `*payload.LockState`, …) that also
+// feeds the cdps REST snapshot. Those structs carry json tags
+// (`is_on`, `is_locked`, …), so we JSON round-trip the typed payload
+// into the `map[string]any` the WS `custom_data_point.state_changed`
+// event carries. This keeps the wire state identical to the REST
+// `GET …/cdps` snapshot the client seeds its catalogue from, so the
+// client's keyed `_state` dict and the pushed state agree key-for-key.
+//
+// A bare `State() map[string]any` interface (the previous shape) was
+// matched by no shipping CDP — the Source structs are typed — so the
+// CDP-state push silently never fired. Tying this to the Source
+// contract is what makes the push reach the client at all.
 func customDPStatePayload(dp device.AttachableDataPoint) (map[string]any, bool) {
-	type stater interface {
-		State() map[string]any
-	}
-	if s, ok := dp.(stater); ok {
+	// Legacy/test hook: a DP that already exposes the map shape wins
+	// without a JSON round-trip.
+	if s, ok := dp.(interface{ State() map[string]any }); ok {
 		if state := s.State(); state != nil {
 			return state, true
 		}
 	}
-	return nil, false
+	src, ok := dp.(payload.Source)
+	if !ok || src == nil {
+		return nil, false
+	}
+	typed := src.State()
+	if typed == nil {
+		return nil, false
+	}
+	raw, err := json.Marshal(typed)
+	if err != nil {
+		return nil, false
+	}
+	var state map[string]any
+	if err := json.Unmarshal(raw, &state); err != nil || state == nil {
+		return nil, false
+	}
+	return state, true
 }
 
 func lookupDeviceObject(reg *central.Registry, address string) *device.Device {
