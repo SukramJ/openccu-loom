@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
+	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -252,6 +253,15 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// emit ONE event entity with all press types. Individual PRESS_* events
 	// are suppressed — the aggregated entity is what HA receives.
 	if isPressParameter(ev.Parameter) {
+		// Event-suppression gate (IGNORE_DEVICES_FOR_DATA_POINT_EVENTS):
+		// HmIP-PS* schaltaktoren expose a KEY_TRANSCEIVER channel with
+		// PRESS_* parameters, but the reference stack never spawns a
+		// keypress event for them. Skipping both the aggregated and the
+		// per-parameter event path keeps the openccu-loom event plane in
+		// parity (no `event` entity for these models).
+		if visibility.IsParameterIgnoredForDataPointEvent(ev.Model, hmenum.Parameter(ev.Parameter)) {
+			return "", "", "", nil, false
+		}
 		if comp, nid, oid, p, agg := d.BuildChannelEvent(ev); agg {
 			return comp, nid, oid, p, true
 		}
