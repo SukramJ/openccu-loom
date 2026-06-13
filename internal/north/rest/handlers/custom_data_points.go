@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 
@@ -205,6 +206,21 @@ func lookupCustomDP(d *device.Device, name string) (device.AttachableDataPoint, 
 	return custom.FindByWireName(d, name)
 }
 
+// cdpName reads the `{name}` path parameter and URL-decodes it. Channel-
+// group wire names embed an `@` (e.g. `STATE@3`); a conformant client
+// that percent-encodes the path segment sends `STATE%403`. chi keeps the
+// raw segment, so without decoding the lookup would miss and the invoke
+// path would 502 with "data point STATE%403 not found". Falls back to the
+// raw value when the segment is not valid percent-encoding so a literal
+// `@` (which most clients send unencoded) keeps working.
+func cdpName(r *http.Request) string {
+	raw := chi.URLParam(r, "name")
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+	return raw
+}
+
 // ListCustomDataPoints returns all custom DPs of a device.
 //
 //	GET /api/v1/devices/{addr}/cdps
@@ -255,7 +271,7 @@ func GetCustomDataPoint(idx DeviceIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
 			return
 		}
-		name := chi.URLParam(r, "name")
+		name := cdpName(r)
 		dp, chNo, found := lookupCustomDP(d, name)
 		if !found {
 			problem.Write(w, http.StatusNotFound,
@@ -292,7 +308,7 @@ func InvokeCustomDataPoint(idx DeviceIndex, writer CustomDPWriter) http.HandlerF
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
 			return
 		}
-		name := chi.URLParam(r, "name")
+		name := cdpName(r)
 		operation := chi.URLParam(r, "operation")
 		if operation == "" {
 			problem.Write(w, http.StatusBadRequest,
