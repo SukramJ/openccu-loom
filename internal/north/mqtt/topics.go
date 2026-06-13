@@ -320,11 +320,12 @@ func (b *TopicBuilder) HubSystemHealthScore(centralName string) string {
 	return b.Base + "/" + strings.ToLower(centralName) + "/system/health_score"
 }
 
-// HubConnectionLatency is the retained per-interface connection-latency
-// topic (`<base>/<central>/system/latency/<iface>`). Matches the
-// state_topic in BuildConnectionLatencyDiscovery.
-func (b *TopicBuilder) HubConnectionLatency(centralName, iface string) string {
-	return b.Base + "/" + strings.ToLower(centralName) + "/system/latency/" + strings.ToLower(iface)
+// HubConnectionLatency is the retained aggregated connection-latency
+// topic (`<base>/<central>/system/latency`). Matches the state_topic in
+// BuildConnectionLatencyDiscovery — one central-wide latency sensor, not
+// per-interface.
+func (b *TopicBuilder) HubConnectionLatency(centralName string) string {
+	return b.Base + "/" + strings.ToLower(centralName) + "/system/latency"
 }
 
 // HubLastEventAge is the retained last-event-age state topic

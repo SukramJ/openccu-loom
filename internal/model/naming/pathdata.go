@@ -715,6 +715,35 @@ func MQTTHubInstallMode(base, centralName string) string {
 	return fmt.Sprintf("%s/%s/hub/install_mode", strings.Trim(base, "/"), TopicSafe(centralName))
 }
 
+// MQTTHubInstallModeForInterface is the per-interface install-mode
+// countdown state topic `<base>/<central>/hub/install_mode/<iface>`.
+// The reference stack exposes one remaining-seconds sensor per
+// interface (HmIP-RF, BidCos-RF) rather than a single central-wide
+// aggregate, so each interface carries its own retained state topic.
+func MQTTHubInstallModeForInterface(base, centralName, iface string) string {
+	return fmt.Sprintf(
+		"%s/%s/hub/install_mode/%s",
+		strings.Trim(base, "/"),
+		TopicSafe(centralName),
+		TopicSafe(iface),
+	)
+}
+
+// MQTTHubInstallModeCommand is the per-interface install-mode activation
+// command topic `<base>/<central>/hub/install_mode/<iface>/set`. The
+// reference stack pairs each per-interface remaining-seconds sensor with
+// a button that activates pairing on that interface; HA publishes
+// "PRESS" here and the command subscriber translates it into a
+// POST install-mode for the named interface.
+func MQTTHubInstallModeCommand(base, centralName, iface string) string {
+	return fmt.Sprintf(
+		"%s/%s/hub/install_mode/%s/set",
+		strings.Trim(base, "/"),
+		TopicSafe(centralName),
+		TopicSafe(iface),
+	)
+}
+
 // MQTTHubAlarmMessages is the canonical alarm-messages topic
 // `<base>/<central>/hub/alarm_messages`.
 func MQTTHubAlarmMessages(base, centralName string) string {

@@ -469,10 +469,13 @@ type SysvarChangedEvent struct {
 // Type implements Event.
 func (SysvarChangedEvent) Type() EventType { return EventTypeSysvarChanged }
 
-// InstallModeChangedEvent fires when CCU install mode toggles.
+// InstallModeChangedEvent fires when CCU install mode toggles. The
+// install-mode data points are per-interface (HmIP-RF, BidCos-RF), so
+// InterfaceID identifies which interface's countdown changed.
 type InstallModeChangedEvent struct {
 	Base
 	CentralName string
+	InterfaceID string
 	Enabled     bool
 	RemainingS  int
 }

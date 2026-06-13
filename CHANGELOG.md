@@ -8,6 +8,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Per-interface install-mode sensor + button on MQTT discovery.**
+  Install/pairing mode now surfaces as one remaining-seconds `sensor`
+  AND one activation `button` per interface (`install_mode_hmip`,
+  `install_mode_bidcos`, plus their `-button` companions) — matching the
+  reference stack — replacing the single central-wide aggregate sensor.
+  The button publishes to
+  `<base>/<central>/hub/install_mode/<iface>/set`; the command
+  subscriber translates the HA press token into an install-mode
+  activation on that interface (default 60s, or a numeric override).
+  Per-interface countdown state rides
+  `<base>/<central>/hub/install_mode/<iface>`.
+
 - **Virtual-remote press buttons on MQTT discovery.** Virtual remotes
   (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50) now expose two clickable HA
   `button` entities per channel (`press_short`, `press_long`, disabled
@@ -18,6 +30,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   existing RESET_MOTION / RESET_PRESENCE buttons actually trigger.
 
 ### Fixed
+
+- **Connection-latency aggregated to a single hub sensor on MQTT
+  discovery.** Latency previously published one `sensor` per interface
+  (`latency_<central>_<iface>`); the reference stack exposes ONE
+  central-wide `connection-latency` sensor fed from the aggregated
+  ping/pong metric. The per-interface latency discovery and state are
+  removed; a single `connection_latency` sensor now publishes on
+  `<base>/<central>/system/latency`, sourced from the
+  `connection_latency_ms` metric aggregate. Stale per-interface latency
+  discovery configs are auto-evicted by the discovery-orphan cleanup
+  pass on the next boot; the old retained per-interface state topics
+  (`…/system/latency/<iface>`) are left empty/orphaned (no HA entity
+  subscribes) and are not matched by the legacy retain-cleanup patterns.
+
+- **Text-display (HmIP-WRCD) now publishes only a `notify` entity on MQTT
+  discovery.** The aggregate path emitted a surplus `text` entity
+  alongside the `notify` companion, which HA rendered with a colliding
+  `_2` suffix. The reference stack maps a TEXT_DISPLAY custom-DP onto a
+  `notify` entity ALONE; the aggregate `text` entity is now suppressed so
+  the display surfaces as a single `notify` entity. The stale `text`
+  discovery config is auto-evicted by the discovery-orphan cleanup pass.
 
 - **Multi-central hub unique_id collision on MQTT discovery.** The hub
   publisher built its own discovery builder and never saw the

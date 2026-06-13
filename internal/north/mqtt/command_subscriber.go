@@ -76,6 +76,20 @@ type CombinedDPSink interface {
 		priority hmenum.CommandPriority) error
 }
 
+// InstallModeSink is the optional domain-facing contract for activating
+// install/pairing mode on one interface. The composition root wires this
+// to the central registry; when nil, the subscriber drops install-mode
+// button presses with a debug breadcrumb.
+//
+// `iface` selects the interface's install-mode data point; `seconds` is
+// the pairing-window duration (the implementation applies its own
+// default when zero). Mirrors the REST `POST /install-mode/interfaces`
+// shape so a single backend serves both surfaces.
+type InstallModeSink interface {
+	ActivateInstallMode(ctx context.Context,
+		centralName, interfaceID string, seconds int) error
+}
+
 // CDPInvocationSink is the domain-facing contract for Custom-DP
 // operation dispatch. The composition root wires this to
 // [adapter.MQTTCommandSink] which delegates to
@@ -130,6 +144,7 @@ type CommandSubscriber struct {
 	wpSink    WeekProfileSink        // may be nil; week-profile commands are dropped with a debug log when nil
 	cmbSink   CombinedDPSink         // may be nil; combined-DP commands are dropped with a debug log when nil
 	schedSink ScheduleSwitchSink     // may be nil; schedule-switch commands are dropped with a debug log when nil
+	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
 	logger    *slog.Logger
 }
 
@@ -177,6 +192,13 @@ func (c *CommandSubscriber) WithScheduleSwitchSink(s ScheduleSwitchSink) *Comman
 	return c
 }
 
+// WithInstallModeSink attaches the install-mode sink. Returns the
+// receiver for call-site chaining.
+func (c *CommandSubscriber) WithInstallModeSink(s InstallModeSink) *CommandSubscriber {
+	c.imSink = s
+	return c
+}
+
 // Start attaches the four subscriptions.
 func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if c.sub == nil {
@@ -211,6 +233,13 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	if err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", QoS1, c.handleProgram); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_program: %w", err)
+	}
+	// Per-interface install-mode activation button:
+	// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
+	// press token; the handler activates pairing on the named interface.
+	if err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", QoS1, c.handleInstallMode); err != nil {
+		c.incSubscribeFailures()
+		return fmt.Errorf("subscribe hub_install_mode: %w", err)
 	}
 	// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
 	// MQTT wildcards cannot span /; use +/+/+/+/+/+/+/invoke to catch all.
@@ -556,6 +585,49 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 	if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
 		c.logger.Warn("mqtt.command.program",
 			slog.String("topic", topic), slog.String("err", err.Error()))
+	}
+}
+
+// handleInstallMode activates pairing/install mode on one interface from
+// the per-interface button command topic
+// `<base>/<central>/hub/install_mode/<iface>/set`. HA's button entity
+// publishes the press token ("PRESS"); the sink applies its own default
+// pairing duration. A numeric payload is honoured as the duration in
+// seconds for tools that publish one directly.
+func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retained bool) {
+	if retained {
+		c.logger.Debug("mqtt.command.install_mode.retained_drop", slog.String("topic", topic))
+		return
+	}
+	// <base>/<central>/hub/install_mode/<iface>/set
+	parts := strings.Split(topic, "/")
+	if len(parts) != 6 || parts[2] != "hub" || parts[3] != "install_mode" || parts[5] != "set" {
+		c.logger.Warn("mqtt.command.install_mode.unknown_topic", slog.String("topic", topic))
+		return
+	}
+	centralName, iface := parts[1], parts[4]
+	if c.imSink == nil {
+		c.logger.Debug("mqtt.command.install_mode.no_sink",
+			slog.String("topic", topic),
+			slog.String("detail", "InstallModeSink not wired; ignoring install-mode press"))
+		return
+	}
+	// "PRESS" (HA button) and empty payloads request the default
+	// duration (seconds=0 → sink default); a bare integer overrides it.
+	seconds := 0
+	if raw := strings.TrimSpace(string(body)); raw != "" && !strings.EqualFold(raw, "PRESS") {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			seconds = n
+		}
+	}
+	c.incReceivedCommands()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
+		c.logger.Warn("mqtt.command.install_mode.activate",
+			slog.String("topic", topic),
+			slog.String("interface", iface),
+			slog.String("err", err.Error()))
 	}
 }
 

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/naming"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -880,18 +881,18 @@ func (b *Bridge) PublishProgram(ctx context.Context, centralName string, prog pl
 	return nil
 }
 
-// PublishInstallMode emits the install-mode countdown to the topic
-// owned by the [hub.InstallMode] aggregate.
-func (b *Bridge) PublishInstallMode(ctx context.Context, centralName string, mode pload.MQTTAddressable, seconds int) error {
-	if !b.cfg.RawEnabled {
+// PublishInstallMode emits the per-interface install-mode countdown
+// (remaining seconds) to the retained topic
+// `<base>/<central>/hub/install_mode/<iface>`. The reference stack
+// exposes one remaining-seconds sensor per interface; each carries its
+// own retained state topic.
+func (b *Bridge) PublishInstallMode(ctx context.Context, centralName, iface string, seconds int) error {
+	if !b.cfg.RawEnabled || iface == "" {
 		return nil
 	}
-	topics := mode.MQTTTopics(b.cfg.Base, b.resolvedCentral(centralName))
-	if topics.State == "" {
-		return nil
-	}
+	topic := naming.MQTTHubInstallModeForInterface(b.cfg.Base, b.resolvedCentral(centralName), iface)
 	body := fmt.Appendf(nil, "%d", seconds)
-	return b.client.Publish(ctx, topics.State, body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, topic, body, b.cfg.QoS.State, true)
 }
 
 // PublishAlarmMessages emits the active alarm-message list to the
@@ -1054,15 +1055,17 @@ func (b *Bridge) PublishHubSystemHealthScore(ctx context.Context, centralName st
 	return b.client.Publish(ctx, b.topics.HubSystemHealthScore(centralName), body, b.cfg.QoS.State, true)
 }
 
-// PublishHubConnectionLatency publishes the per-interface round-trip latency
-// (ms) to the retained topic `<base>/<central>/system/latency/<iface>`.
+// PublishHubConnectionLatency publishes the aggregated CCU round-trip
+// latency (ms) to the retained topic `<base>/<central>/system/latency`.
+// The reference stack exposes ONE central-wide connection-latency sensor
+// fed from the aggregated ping/pong metric, not per-interface samples.
 // Returns nil when RawEnabled is false.
-func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName, iface string, latencyMs float64) error {
+func (b *Bridge) PublishHubConnectionLatency(ctx context.Context, centralName string, latencyMs float64) error {
 	if !b.cfg.RawEnabled {
 		return nil
 	}
 	body := []byte(strconv.FormatFloat(latencyMs, 'f', -1, 64))
-	return b.client.Publish(ctx, b.topics.HubConnectionLatency(centralName, iface), body, b.cfg.QoS.State, true)
+	return b.client.Publish(ctx, b.topics.HubConnectionLatency(centralName), body, b.cfg.QoS.State, true)
 }
 
 // PublishHubLastEventAge publishes the age (seconds) of the newest

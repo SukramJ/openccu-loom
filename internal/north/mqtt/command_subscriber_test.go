@@ -422,3 +422,86 @@ func TestCommandSubscriberWeekProfileEmptyPayload(t *testing.T) {
 		t.Fatalf("calls=%d, want 0 (empty payload must be dropped)", wpSink.calls.Load())
 	}
 }
+
+// --- InstallMode button tests ---
+
+type fakeInstallModeSink struct {
+	calls atomic.Int32
+	last  struct {
+		centralName, iface string
+		seconds            int
+	}
+}
+
+func (f *fakeInstallModeSink) ActivateInstallMode(_ context.Context, centralName, interfaceID string, seconds int) error {
+	f.calls.Add(1)
+	f.last.centralName = centralName
+	f.last.iface = interfaceID
+	f.last.seconds = seconds
+	return nil
+}
+
+func TestCommandSubscriberInstallModePressTopic(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	imSink := &fakeInstallModeSink{}
+	sub := NewCommandSubscriber(noop, topics, sink, nil).WithInstallModeSink(imSink)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	ok := noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
+		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+	if !ok {
+		t.Fatal("subscription did not match")
+	}
+	if imSink.calls.Load() != 1 {
+		t.Fatalf("calls=%d, want 1", imSink.calls.Load())
+	}
+	if imSink.last.centralName != "ccu-01" || imSink.last.iface != "HmIP-RF" {
+		t.Fatalf("last=%+v", imSink.last)
+	}
+	// PRESS maps to the default duration (seconds=0 → sink default).
+	if imSink.last.seconds != 0 {
+		t.Fatalf("seconds=%d, want 0 (default)", imSink.last.seconds)
+	}
+}
+
+func TestCommandSubscriberInstallModeNumericDuration(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	imSink := &fakeInstallModeSink{}
+	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil).WithInstallModeSink(imSink)
+	_ = sub.Start(context.Background())
+	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
+		"openccu-loom/ccu-01/hub/install_mode/BidCos-RF/set", []byte("120"))
+	if imSink.calls.Load() != 1 || imSink.last.seconds != 120 || imSink.last.iface != "BidCos-RF" {
+		t.Fatalf("last=%+v", imSink.last)
+	}
+}
+
+func TestCommandSubscriberInstallModeMissingSink(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil) // no install-mode sink
+	_ = sub.Start(context.Background())
+	// Must not panic when the sink is unwired.
+	noop.DeliverInbound("openccu-loom/+/hub/install_mode/+/set",
+		"openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"))
+}
+
+func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	imSink := &fakeInstallModeSink{}
+	sub := NewCommandSubscriber(noop, topics, &fakeSink{}, nil).WithInstallModeSink(imSink)
+	_ = sub.Start(context.Background())
+	sub.handleInstallMode("openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"), true)
+	if imSink.calls.Load() != 0 {
+		t.Fatalf("retained press must be dropped; calls=%d", imSink.calls.Load())
+	}
+}

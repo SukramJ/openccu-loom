@@ -1090,9 +1090,9 @@ func TestWithHubInfoFluentSetsHub(t *testing.T) {
 		t.Errorf("Hub.Model=%q want RaspberryMatic", db.Hub.Model)
 	}
 	// Verify the info flows into a hub Discovery item.
-	item := db.BuildInstallModeDiscovery("ccu")
+	item := db.BuildInstallModeSensorDiscovery("ccu", "HmIP-RF")
 	if !item.OK {
-		t.Fatal("BuildInstallModeDiscovery returned OK=false")
+		t.Fatal("BuildInstallModeSensorDiscovery returned OK=false")
 	}
 	var payload map[string]any
 	_ = json.Unmarshal(item.Payload, &payload)
