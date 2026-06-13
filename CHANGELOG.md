@@ -329,6 +329,92 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the uppercase CCU token via `command_template` on write. Hub sysvar
   enum labels stay verbatim, matching the reference.
 
+- **Channel-group switch state now reaches WS subscribers.** Switching a
+  channel-group switch CDP (HMIP-PS/PSM/PSMCO — `STATE@3`/`STATE@4`/`STATE@5`)
+  left the HA switch entity snapping back to off: the daemon never delivered a
+  matching `custom_data_point.state_changed`. Two defects compounded on the
+  WS CDP-state path in `eventbridge.go`:
+  1. `customDPStatePayload` matched a `State() map[string]any` shape that no
+     shipping CDP implements (every CDP exposes the typed `payload.Source`
+     `State()`), so the push silently never fired for any CDP. It now reads the
+     canonical `payload.Source` contract and JSON-round-trips the typed state
+     into the wire map (`{is_on: true}`), identical to the `GET …/cdps`
+     snapshot.
+  2. The event used the bare parameter (`STATE`) as its name, but the cdps
+     REST/WS surface disambiguates channel-group CDPs to `PARAM@<channel>`
+     (`STATE@3`). The push now carries `custom.WireName(...)`, so the client's
+     `(address, name)` keyed CDP receives it. The reference stack re-renders
+     each custom DP on its own member events; this keeps the state topic
+     aligned with the catalogue entry.
+- **CDP invoke/get accept percent-encoded wire names.** A conformant client
+  that percent-encodes the `{name}` path segment (`STATE%403`) previously hit
+  a 502 ("data point STATE%403 not found"); the handler now URL-decodes the
+  segment via `url.PathUnescape` on both the invoke and get paths, while a
+  literal `@` keeps working.
+
+- **Connection-latency aggregated to a single hub sensor on MQTT
+  discovery.** Latency previously published one `sensor` per interface
+  (`latency_<central>_<iface>`); the reference stack exposes ONE
+  central-wide `connection-latency` sensor fed from the aggregated
+  ping/pong metric. The per-interface latency discovery and state are
+  removed; a single `connection_latency` sensor now publishes on
+  `<base>/<central>/system/latency`, sourced from the
+  `connection_latency_ms` metric aggregate. Stale per-interface latency
+  discovery configs are auto-evicted by the discovery-orphan cleanup
+  pass on the next boot; the old retained per-interface state topics
+  (`…/system/latency/<iface>`) are left empty/orphaned (no HA entity
+  subscribes) and are not matched by the legacy retain-cleanup patterns.
+
+- **Text-display (HmIP-WRCD) now publishes only a `notify` entity on MQTT
+  discovery.** The aggregate path emitted a surplus `text` entity
+  alongside the `notify` companion, which HA rendered with a colliding
+  `_2` suffix. The reference stack maps a TEXT_DISPLAY custom-DP onto a
+  `notify` entity ALONE; the aggregate `text` entity is now suppressed so
+  the display surfaces as a single `notify` entity. The stale `text`
+  discovery config is auto-evicted by the discovery-orphan cleanup pass.
+
+- **Multi-central hub unique_id collision on MQTT discovery.** The hub
+  publisher built its own discovery builder and never saw the
+  per-central HubInfo registered on the bridge, so every central's hub
+  entities (sysvars, programs, alarm/service messages, inbox,
+  install-mode, connectivity, metrics, update) collided on serial-less
+  unique_ids (`loom__alarm_messages`) and HA silently dropped all but
+  one CCU's hub plane. The publisher now shares the bridge's builder,
+  hub discovery skips publishing until the CCU serial is known (never
+  an empty slot), and the daemon re-runs the publisher after stamping
+  HubInfo post-hydration.
+
+- **Sysvar HA typing keys on the extended-sysvar marker.** Component
+  selection for sysvar discovery used writability, rendering nearly
+  every ReGa variable as a writable switch/number/select. It now
+  mirrors the reference stack: only extended sysvars (ReGa-description
+  marker) surface as switch / select / number / text; everything else
+  is a read-only sensor or binary_sensor (ALARM keeps the `problem`
+  device class).
+
+- **DataPointUsage verdict gates per-parameter MQTT discovery.**
+  `no_create` / `ignored` data points and the `ce_primary` /
+  `ce_secondary` constituents of a channel's custom-DP aggregate no
+  longer spawn duplicate generic entities next to the aggregate
+  (climate / switch / cover / light …). `ce_visible` extras (HmIP-BWTH
+  HUMIDITY, ACTUAL_TEMPERATURE) still pass.
+
+- **Action categories no longer surface as HA entities.**
+  `action_number` (ON_TIME, RAMP_TIME, DURATION_VALUE) mirrors the
+  reference stack's empty ActionNumber whitelist; plain `action`
+  parameters (COMBINED_PARAMETER, RAMP_STOP) have no HA platform there
+  either. Both stay writable through the per-DP command topics and
+  custom-DP service methods. Write-only enum parameters
+  (`action_select`) keep their select surface and are now relegated to
+  HA's Configuration section.
+
+- **ENUM tokens are lower-cased toward HA.** Enum sensor and select
+  discovery now lower-cases `options` and pipes the state through
+  `| lower` (the reference stack renders translatable lowercase tokens
+  like `closed`, `auto_mode`); selects map the chosen option back to
+  the uppercase CCU token via `command_template` on write. Hub sysvar
+  enum labels stay verbatim, matching the reference.
+
 ## [0.1.0] — Initial Release
 
 First public release of **OpenCCU-Loom**, a standalone Go daemon that
