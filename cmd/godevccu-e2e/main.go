@@ -34,6 +34,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/SukramJ/godevccu/pkg/godevccu"
@@ -55,6 +56,26 @@ type ports struct {
 	ControlPort int `json:"control_port"`
 }
 
+// resolveDevices maps the -devices flag onto godevccu's Devices config:
+// empty keeps the fixed default set, "all" loads every embedded device type
+// (nil allowlist), and a comma-separated list restricts to those types.
+func resolveDevices(flagValue string) []string {
+	switch trimmed := strings.TrimSpace(flagValue); {
+	case trimmed == "":
+		return defaultDevices
+	case strings.EqualFold(trimmed, "all"):
+		return nil
+	default:
+		out := make([]string, 0)
+		for _, name := range strings.Split(trimmed, ",") {
+			if name = strings.TrimSpace(name); name != "" {
+				out = append(out, name)
+			}
+		}
+		return out
+	}
+}
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "godevccu-e2e:", err)
@@ -69,6 +90,9 @@ func run() error {
 	controlAddr := flag.String("control-addr", "127.0.0.1:0", "control API bind address (port 0 = OS-assigned)")
 	username := flag.String("username", "Admin", "JSON-RPC username")
 	password := flag.String("password", "", "JSON-RPC password")
+	devicesFlag := flag.String("devices", "",
+		`device-type allowlist: empty = the fixed default set, "all" = every embedded type, `+
+			`or a comma-separated list (e.g. "HmIP-BDT,HmIP-SWDO")`)
 	flag.Parse()
 
 	v, err := godevccu.New(godevccu.Config{
@@ -79,7 +103,7 @@ func run() error {
 		Username:      *username,
 		Password:      *password,
 		AuthEnabled:   true,
-		Devices:       defaultDevices,
+		Devices:       resolveDevices(*devicesFlag),
 		Serial:        "GODEVCCU0001",
 		SetupDefaults: true,
 	})
