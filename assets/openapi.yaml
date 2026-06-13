@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.6.0
+  version: 1.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5320,7 +5320,25 @@ components:
         schedule_enabled:
           type: object
           additionalProperties: { type: boolean }
+        available_target_channels:
+          type: object
+          description: >-
+            Maps each channel-lock key (e.g. "1_1") to the actuator channel it
+            controls, so a per-channel schedule switch can be named after that
+            channel without re-deriving the channel-group layout.
+          additionalProperties:
+            $ref: '#/components/schemas/TargetChannelSummary'
         has_climate_schedule: { type: boolean }
+
+    TargetChannelSummary:
+      type: object
+      required: [channel_no, channel_address, name, channel_type]
+      description: Schedule-controllable target channel a channel-lock key maps to.
+      properties:
+        channel_no: { type: integer }
+        channel_address: { type: string }
+        name: { type: string }
+        channel_type: { type: string, enum: [primary, secondary] }
 
     # ---- Direct + central links ----
     Link:
