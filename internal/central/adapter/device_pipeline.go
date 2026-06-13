@@ -637,13 +637,38 @@ func (p *DevicePipeline) applyHiddenParameterMarks(interfaceID string) {
 	}
 }
 
-// applyClickEventMarks forces usage=event on every click-event
-// parameter (PRESS_SHORT, PRESS_LONG, …) of non-virtual-remote
-// devices. Mirrors the reference stack, where click parameters become event
-// data points (surfaced through keypress event groups) instead of
-// generic entities; without the mark every wall remote spawned four
-// button entities per channel in HA. Un-ignored parameters win — the
-// Usage() head returns DataPoint for them regardless of forced usage.
+// applyClickEventMarks decides the usage of click-event parameters
+// (PRESS_SHORT, PRESS_LONG, PRESS, …) on non-virtual-remote devices, mirroring
+// the reference stack's two-object model: each click parameter is BOTH a button
+// (DpButton) and a keypress event, each with its own usage. The daemon carries
+// one data point per parameter, so its single usage is mapped as:
+//
+//   - data_point — button entity AND keypress event (data_point is not a
+//     suppressed event-group usage, so the event survives);
+//   - event      — no button, keypress event only;
+//   - ignored    — neither (left in place by an earlier visibility pass).
+//
+// Button-vs-event follows the reference type resolver: a click parameter
+// becomes a button only when it is WRITABLE (its OPERATIONS bitmask carries the
+// WRITE bit — e.g. a HM-RC KEY channel's PRESS_SHORT, OPS=6). A purely
+// event-driven press (OPS=4, every KEY_TRANSCEIVER / MULTI_MODE_INPUT_TRANSMITTER
+// transmitter and the central/long-press parameters) resolves to a read-only
+// click and never spawns a button — it stays an event source only. Writable
+// presses on devices that suppress generic data points (a custom-DP profile that
+// does not allow undefined generics — e.g. a blind actuator's local KEY
+// channels) are withheld from the button surface, matching the reference base
+// usage NO_CREATE-for-button-but-EVENT-for-event — UNLESS the custom-DP pipeline
+// explicitly promoted the parameter through additional_data_points (forced
+// data_point), as the dimmer-with-inputs profiles do for their local KEY channel
+// presses; such a promotion is preserved and keeps its button.
+//
+// An existing Ignored mark (the operation-mode gate hid the parameter in the
+// current mode, or a hidden/ignored pass suppressed it) is preserved: such a
+// parameter has neither a button nor an event.
+//
+// Runs after [applyChannelOperationModeGating] and the ignored/hidden passes, so
+// it re-decides the gate's visible-parameter verdict by writability and respects
+// their suppression marks.
 func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
 	if p.unit == nil {
 		return
@@ -652,28 +677,61 @@ func (p *DevicePipeline) applyClickEventMarks(interfaceID string) {
 		if d.InterfaceID != interfaceID || d.IsVirtualRemote() {
 			continue
 		}
+		// The reference base usage withholds the generic button when the device
+		// has a bound custom-DP profile and does not allow undefined generics.
+		suppressGenericButton := len(d.CustomDataPoints()) > 0 && !d.AllowUndefinedGenericDataPoints()
 		for _, ch := range d.Channels() {
 			for _, dp := range ch.DataPoints() {
-				if !dp.Parameter().IsClickEvent() {
+				param := dp.Parameter()
+				if !param.IsClickEvent() {
 					continue
 				}
-				// Event-suppression wins: IGNORE_DEVICES_FOR_DATA_POINT_EVENTS
-				// (HmIP-PS* click parameters) means the reference stack never
-				// spawns an event at all — promoting to usage=event here would
-				// resurrect their keypress groups. Every OTHER earlier mark is
-				// deliberately overridden: the custom-DP suppression's NoCreate
-				// (in the reference stack a CDP device still fires click events,
-				// the suppression only hides the generic entity) and the
-				// channel-operation-mode gating's DataPoint (KEY channels in an
-				// active mode fire events, they don't spawn buttons).
-				if visibility.IsParameterIgnoredForDataPointEvent(d.Model, dp.Parameter()) {
+				// IGNORE_DEVICES_FOR_DATA_POINT_EVENTS (HmIP-PS* click
+				// parameters) are left untouched: the reference stack neither
+				// fires their events nor spawns their buttons, and a custom-DP
+				// suppression may already have marked them NoCreate.
+				if visibility.IsParameterIgnoredForDataPointEvent(d.Model, param) {
 					continue
 				}
-				if setter, ok := dp.(interface {
+				setter, ok := dp.(interface {
 					SetForcedUsage(hmenum.DataPointUsage)
-				}); ok {
-					setter.SetForcedUsage(hmenum.DataPointUsageEvent)
+				})
+				if !ok {
+					continue
 				}
+				forced, hasForced := hmenum.DataPointUsage(""), false
+				if reader, ok := dp.(interface {
+					ForcedUsage() (hmenum.DataPointUsage, bool)
+				}); ok {
+					forced, hasForced = reader.ForcedUsage()
+				}
+				// Preserve an Ignored verdict from the operation-mode gate (the
+				// parameter is hidden in the current mode) or a hidden/ignored
+				// pass: it has neither a button nor an event.
+				if hasForced && forced == hmenum.DataPointUsageIgnored {
+					continue
+				}
+				// A purely event-driven press (OPS without the WRITE bit) is never a
+				// button: it resolves to a read-only click and surfaces as an event
+				// source only. This also overrides the operation-mode gate's
+				// visible-parameter data_point verdict for event-only transmitters.
+				if !dp.ParameterData().Operations.IsWritable() {
+					setter.SetForcedUsage(hmenum.DataPointUsageEvent)
+					continue
+				}
+				// Writable press on a device that suppresses generic data points
+				// (custom-DP profile, no undefined generics): keep the button only
+				// when the custom-DP pipeline explicitly promoted it through
+				// additional_data_points (forced data_point); otherwise withhold the
+				// button and keep the keypress event.
+				if suppressGenericButton {
+					if hasForced && forced == hmenum.DataPointUsageDataPoint {
+						continue
+					}
+					setter.SetForcedUsage(hmenum.DataPointUsageEvent)
+					continue
+				}
+				setter.SetForcedUsage(hmenum.DataPointUsageDataPoint)
 			}
 		}
 	}

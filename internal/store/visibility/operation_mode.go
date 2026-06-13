@@ -152,7 +152,10 @@ func ApplyChannelOperationModeGating(ch *device.Channel) {
 	}
 	mode := ch.OperationMode()
 	if mode == "" {
-		// CHANNEL_OPERATION_MODE not yet observed — leave usage untouched.
+		// CHANNEL_OPERATION_MODE not yet observed — leave usage untouched. The
+		// click-event pass withholds the unknown-mode press *buttons* (see
+		// applyClickEventMarks); STATE and the event sources keep their base
+		// usage so a not-yet-read mode does not blank out real state/events.
 		return
 	}
 	for _, dp := range ch.DataPoints() {
