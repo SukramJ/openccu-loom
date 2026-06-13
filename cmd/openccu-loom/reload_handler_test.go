@@ -437,3 +437,117 @@ func TestMQTTDiffersStructurally(t *testing.T) {
 		})
 	}
 }
+
+// TestHotReloadHandler_MQTT_EnableSwap_ReseedsSnapshot pins the fix for
+// the runtime-discovery-activation bug: a supervisor Swap rebuilds the
+// MQTT bridge from scratch (empty Discovery cache + slot state), so the
+// reload handler must re-run the snapshot re-seed hook after a
+// successful enable-swap — otherwise enabling HA discovery (or any MQTT
+// edit) at runtime publishes nothing until a full daemon restart.
+func TestHotReloadHandler_MQTT_EnableSwap_ReseedsSnapshot(t *testing.T) {
+	ctx := context.Background()
+
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	startCfg := config.Default()
+	startCfg.North.MQTT.Enabled = true
+	startCfg.North.MQTT.BrokerURL = ""
+	startCfg.North.MQTT.DiscoveryEnabled = false
+	if err := sup.Start(ctx, startCfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sup.Shutdown(ctx) })
+
+	var reseeds int
+	deps := newReloadDeps()
+	deps.SetMQTTSupervisor(sup)
+	deps.SetMQTTReseed(func(context.Context) { reseeds++ })
+
+	h := hotReloadHandler(makeLogger(&bytes.Buffer{}), deps)
+
+	prev := config.Default()
+	prev.North.MQTT.Enabled = true
+	prev.North.MQTT.BrokerURL = ""
+	prev.North.MQTT.DiscoveryEnabled = false
+
+	next := config.Default()
+	next.North.MQTT.Enabled = true
+	next.North.MQTT.BrokerURL = ""
+	next.North.MQTT.DiscoveryEnabled = true
+
+	if err := h(prev, next); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
+	if reseeds != 1 {
+		t.Fatalf("reseed hook fired %d times after enable-swap, want 1", reseeds)
+	}
+}
+
+// TestHotReloadHandler_MQTT_DisableSwap_NoReseed verifies the re-seed
+// hook does NOT fire when the swap lands MQTT disabled — there is no
+// live bridge to publish onto.
+func TestHotReloadHandler_MQTT_DisableSwap_NoReseed(t *testing.T) {
+	ctx := context.Background()
+
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	startCfg := config.Default()
+	startCfg.North.MQTT.Enabled = true
+	startCfg.North.MQTT.BrokerURL = ""
+	if err := sup.Start(ctx, startCfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sup.Shutdown(ctx) })
+
+	var reseeds int
+	deps := newReloadDeps()
+	deps.SetMQTTSupervisor(sup)
+	deps.SetMQTTReseed(func(context.Context) { reseeds++ })
+
+	h := hotReloadHandler(makeLogger(&bytes.Buffer{}), deps)
+
+	prev := config.Default()
+	prev.North.MQTT.Enabled = true
+	prev.North.MQTT.BrokerURL = ""
+
+	next := config.Default()
+	next.North.MQTT.Enabled = false
+
+	if err := h(prev, next); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
+	if reseeds != 0 {
+		t.Fatalf("reseed hook fired %d times on disable-swap, want 0", reseeds)
+	}
+}
+
+// TestHotReloadHandler_MQTT_NoDiff_NoReseed verifies that with no MQTT
+// diff there is neither a swap nor a re-seed.
+func TestHotReloadHandler_MQTT_NoDiff_NoReseed(t *testing.T) {
+	ctx := context.Background()
+
+	sup := newMQTTSupervisor(slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), health.NewTracker())
+	startCfg := config.Default()
+	startCfg.North.MQTT.Enabled = true
+	startCfg.North.MQTT.BrokerURL = ""
+	if err := sup.Start(ctx, startCfg); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { sup.Shutdown(ctx) })
+
+	var reseeds int
+	deps := newReloadDeps()
+	deps.SetMQTTSupervisor(sup)
+	deps.SetMQTTReseed(func(context.Context) { reseeds++ })
+
+	h := hotReloadHandler(makeLogger(&bytes.Buffer{}), deps)
+
+	cfg := config.Default()
+	cfg.North.MQTT.Enabled = true
+	cfg.North.MQTT.BrokerURL = ""
+
+	if err := h(cfg, cfg); err != nil {
+		t.Fatalf("handler returned error: %v", err)
+	}
+	if reseeds != 0 {
+		t.Fatalf("reseed hook fired %d times with no diff, want 0", reseeds)
+	}
+}

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -23,10 +24,52 @@ import (
 type reloadDeps struct {
 	mqttSup atomic.Pointer[mqttSupervisor]
 	curCfg  atomic.Pointer[config.Config]
+	reseed  atomic.Pointer[mqttReseedHook]
+}
+
+// mqttReseedHook re-publishes the full MQTT snapshot (Discovery
+// configs + availability + per-DP slot state) for every known
+// device. It wraps [adapter.EventBridge.PublishInitialSnapshot] so
+// the reload handler can re-seed a freshly-swapped bridge without
+// importing the adapter package. Boxed in a struct because
+// [atomic.Pointer] needs a pointer element type.
+type mqttReseedHook struct {
+	fn func(context.Context)
 }
 
 // newReloadDeps returns an empty bag.
 func newReloadDeps() *reloadDeps { return &reloadDeps{} }
+
+// SetMQTTReseed installs the snapshot re-seed hook. Called once at
+// daemon boot with the EventBridge's PublishInitialSnapshot. A
+// supervisor swap rebuilds the MQTT bridge from scratch, which
+// resets the bridge's Discovery cache and slot-state to empty; the
+// reload handler invokes this hook after a successful enable-swap so
+// the new bridge re-emits the snapshot the boot path emits — without
+// it, enabling HA discovery (or any MQTT edit) at runtime publishes
+// nothing until a full daemon restart. A nil fn clears the slot.
+func (d *reloadDeps) SetMQTTReseed(fn func(context.Context)) {
+	if d == nil {
+		return
+	}
+	if fn == nil {
+		d.reseed.Store(nil)
+		return
+	}
+	d.reseed.Store(&mqttReseedHook{fn: fn})
+}
+
+// MQTTReseed returns the installed re-seed function, or nil when none
+// has been bound yet (pre-boot, MQTT-less builds, or nil deps).
+func (d *reloadDeps) MQTTReseed() func(context.Context) {
+	if d == nil {
+		return nil
+	}
+	if h := d.reseed.Load(); h != nil {
+		return h.fn
+	}
+	return nil
+}
 
 // SetMQTTSupervisor installs the MQTT supervisor. May be called
 // exactly once during daemon boot. A nil supervisor clears the

@@ -128,6 +128,23 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 				logger.Info("daemon.reload.mqtt_swapped",
 					slog.String("broker", redactBrokerURL(next.North.MQTT.BrokerURL)),
 					slog.Bool("enabled", next.North.MQTT.Enabled))
+
+				// Re-seed the snapshot. Swap rebuilt the bridge from
+				// scratch, so its Discovery cache and per-DP slot state
+				// are empty — the boot path seeds them via
+				// PublishInitialSnapshot, the runtime path must too.
+				// Without this, enabling HA discovery (or any MQTT
+				// edit) at runtime leaves the new bridge publishing
+				// nothing until a full daemon restart. Only meaningful
+				// when MQTT stays enabled; a disable-swap has no bridge.
+				if next.North.MQTT.Enabled {
+					if reseed := deps.MQTTReseed(); reseed != nil {
+						seedCtx, seedCancel := context.WithTimeout(context.Background(), 60*time.Second)
+						reseed(seedCtx)
+						seedCancel()
+						logger.Info("daemon.reload.mqtt_reseeded")
+					}
+				}
 			}
 		}
 
