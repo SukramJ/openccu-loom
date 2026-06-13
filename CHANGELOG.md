@@ -230,6 +230,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   egress interface toward *that* CCU, so each gets a reachable address;
   `callback.public_host`, when set, still overrides all centrals for NAT
   setups.
+- **Enabling HA discovery at runtime now takes effect without a daemon
+  restart.** Toggling `north.mqtt.ha_discovery` (or any MQTT setting)
+  triggered a hot MQTT swap that rebuilt the bridge from scratch — with
+  an empty Discovery cache and slot state — but nothing re-seeded it:
+  the supervisor's snapshot `OnConnect` hook fires *during* the swap's
+  bridge build, before the new bridge is installed into the shared
+  wiring, so it re-published onto the outgoing bridge. The new bridge
+  stayed empty until a full daemon restart re-ran the boot-time snapshot.
+  The reload handler now re-runs `PublishInitialSnapshot` *after* the
+  swap completes (when the shared wiring already points at the new
+  bridge), so discovery + availability + per-DP slot state are re-seeded
+  exactly as a restart would, for every successful enable-swap.
 
 - **Channel-group switch state now reaches WS subscribers.** Switching a
   channel-group switch CDP (HMIP-PS/PSM/PSMCO — `STATE@3`/`STATE@4`/`STATE@5`)

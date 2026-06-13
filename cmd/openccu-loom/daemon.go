@@ -145,6 +145,18 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	bridge.Start(ctx)
 	defer bridge.Stop()
 
+	// Expose the snapshot re-seed to the config-watcher's reload
+	// handler. A runtime MQTT swap rebuilds the bridge from scratch
+	// (empty Discovery cache + slot state); the supervisor's OnConnect
+	// hook fires during buildSwap, before the new bridge is installed
+	// into the shared Wiring, so it re-publishes onto the old bridge.
+	// The handler invokes this hook AFTER Swap returns — when the
+	// Wiring already points at the new bridge — so enabling HA
+	// discovery (or any MQTT edit) at runtime seeds the new bridge
+	// just as a full restart would. The EventBridge holds the shared
+	// Wiring, so the same call routes to whichever bridge is live.
+	deps.SetMQTTReseed(bridge.PublishInitialSnapshot)
+
 	// Wire hub entity → MQTT publisher. Only active when MQTT is
 	// configured; guards on mqttWiring == nil so the daemon degrades
 	// gracefully without a broker. Re-fires on every broker reconnect
