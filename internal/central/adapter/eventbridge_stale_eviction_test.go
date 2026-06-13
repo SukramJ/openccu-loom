@@ -190,9 +190,12 @@ func TestUnobservedDP_NoWireLoad_AvailableSlotState(t *testing.T) {
 }
 
 // TestStaleEviction_CalculatedDP_NeitherLoadNorEvict confirms that
-// calculated DPs (DEW_POINT, ENTHALPY, …) are left untouched by the
-// stale-eviction path. The calculated-DP loop skips unobserved entries
-// silently without calling LoadValue or EvictState.
+// unobserved calculated DPs (DEW_POINT, ENTHALPY, …) never trigger a
+// wire LoadValue call (no radio-budget fan-out) and are not evicted.
+// They ARE registered in HA discovery with an `unknown` (null) slot
+// state — the reference stack registers calculated entities at setup
+// regardless of observation, so calc binary_sensors that start
+// unobserved still surface in HA. No getValue radio call happens.
 func TestStaleEviction_CalculatedDP_NeitherLoadNorEvict(t *testing.T) {
 	t.Parallel()
 
@@ -241,10 +244,24 @@ func TestStaleEviction_CalculatedDP_NeitherLoadNorEvict(t *testing.T) {
 		t.Fatal("LoadValue must NOT be called for calculated DPs")
 	}
 
-	// No publish at all for the calculated DP (unobserved and no eviction).
+	// The unobserved calculated DP is registered (unknown slot state on
+	// the calculated bucket) but never evicted to an empty payload — the
+	// reference stack registers calculated entities at setup. Assert the
+	// slot state carries a null value and the available flag, never an
+	// empty eviction body.
+	registered := false
 	for _, p := range pub.Published() {
-		if strings.Contains(p.Topic, "DEW_POINT") {
-			t.Fatalf("unexpected publish for unobserved calculated DP: %+v", p)
+		if strings.HasSuffix(p.Topic, "/calculated/DEW_POINT") {
+			registered = true
+			if len(p.Payload) == 0 {
+				t.Fatalf("calculated DP slot state must not be an empty eviction body: %+v", p)
+			}
+			if !strings.Contains(string(p.Payload), `"value":null`) {
+				t.Fatalf("unobserved calculated DP must carry a null value: %s", p.Payload)
+			}
 		}
+	}
+	if !registered {
+		t.Fatal("unobserved calculated DP must be registered with an unknown slot state")
 	}
 }

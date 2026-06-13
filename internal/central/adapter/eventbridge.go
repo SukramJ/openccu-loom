@@ -224,6 +224,17 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 				// same synthesised-event path. publishSlotState routes
 				// them to the calculated/ bucket via
 				// isCalculatedParameter.
+				//
+				// Observed calc-DPs (DEW_POINT, ENTHALPY — always
+				// computable from the channel's temperature/humidity)
+				// take the happy path through onValueChangedKind. Calc
+				// binary_sensors (SMOKE_ALARM, INTRUSION_ALARM,
+				// WINDOW_OPEN) start unobserved — they only compute a
+				// value once the underlying alarm fires — yet the
+				// reference stack registers them as HA entities at setup
+				// regardless. Mirror the unobserved-DP boot path so they
+				// reach HA discovery with an `unknown` slot state instead
+				// of silently never surfacing.
 				for _, dp := range ch.CalculatedDataPoints() {
 					pdp, ok := dp.(interface {
 						RawValue() (any, bool)
@@ -234,6 +245,7 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 					}
 					raw, observed := pdp.RawValue()
 					if !observed {
+						b.registerAndLoadUnobservedCalculatedDP(ctx, centralName, ifaceID, d, ch, channelNo, string(pdp.Parameter()))
 						continue
 					}
 					newVal, err := hmtypes.NewParamValue(raw)
@@ -277,6 +289,14 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 				// button on a fresh broker, and many physical buttons
 				// have no observed value persisted between presses.
 				b.publishChannelEventDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
+
+				// Custom-DP aggregate discovery — write-only custom-DPs
+				// (HmIP-WRCD text-display) have no readable parameter, so
+				// the register-and-load path never emits their aggregate
+				// entity. Publish it directly here so they (and their
+				// companion entities, e.g. the text-display `notify`
+				// surface) reach HA from boot.
+				b.publishCustomDPDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
 			}
 			// Device-level firmware-update entity: published once per
 			// updatable device. The update entity is not a channel — it
@@ -467,6 +487,40 @@ func (b *EventBridge) publishDiscoveryForUnobservedDP(
 	// number entity for whitelisted action DPs never lands).
 	ev.Source = nil
 	_ = bridge.PublishDiscoveryOnly(ctx, ev)
+}
+
+// registerAndLoadUnobservedCalculatedDP is the calculated-DP counterpart
+// of [registerAndLoadDP]'s unobserved branch. Calc binary_sensors
+// (SMOKE_ALARM, INTRUSION_ALARM, WINDOW_OPEN) carry no value until the
+// underlying alarm fires, but the reference stack still registers them
+// as HA entities at setup. This publishes an explicit `{available:true}`
+// slot state with an `unknown` value on the calculated bucket plus the
+// per-DP HA discovery payload, so the entity exists in HA from boot and
+// a later calculator update replaces the `unknown` value with the real
+// one.
+func (b *EventBridge) registerAndLoadUnobservedCalculatedDP(
+	ctx context.Context,
+	centralName, ifaceID string,
+	d *device.Device,
+	ch *device.Channel,
+	channelNo int,
+	parameter string,
+) {
+	dpk := hmtypes.DataPointKey{
+		InterfaceID:    ifaceID,
+		ChannelAddress: ch.Address,
+		ParamsetKey:    hmenum.ParamsetKeyValues,
+		Parameter:      parameter,
+	}
+	// publishSlotState routes to the calculated/ bucket via
+	// isCalculatedParameter — NoneValue → JSON `null` value with no
+	// timestamps keeps the entity online under availability_mode: all.
+	b.publishSlotState(ctx, centralName, ifaceID, d.Address, channelNo, hmevent.DataPointValueChangedEvent{
+		Key:      dpk,
+		OldValue: hmtypes.NoneValue(),
+		NewValue: hmtypes.NoneValue(),
+	}, ch)
+	b.publishDiscoveryForUnobservedDP(ctx, centralName, ifaceID, d, ch, channelNo, parameter, hmenum.ParamsetKeyValues)
 }
 
 // Stop releases every subscription.
@@ -1318,6 +1372,58 @@ func firstPressParameter(ch *device.Channel) string {
 		}
 	}
 	return ""
+}
+
+// publishCustomDPDiscoverySnapshot emits the aggregate (channel-level)
+// HA-Discovery payload for a channel's custom-DP plus its companion
+// entities. The register-and-load path only emits the aggregate as a
+// side effect of an observed VALUES parameter; write-only custom-DPs
+// (HmIP-WRCD text-display) carry no readable parameter, so without this
+// snapshot they never reach HA. Idempotent — the bridge diff-gates the
+// publish, so channels whose aggregate was already emitted by an
+// observed DP are a no-op.
+//
+// Best-effort: a broker / discovery-builder hiccup is swallowed and the
+// snapshot continues with the next channel.
+func (b *EventBridge) publishCustomDPDiscoverySnapshot(
+	ctx context.Context,
+	centralName, iface string,
+	d *device.Device,
+	ch *device.Channel,
+) {
+	if b.mqtt == nil || d == nil || ch == nil {
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	cdp := ch.CustomDataPoint()
+	if cdp == nil {
+		return
+	}
+	src, ok := cdp.(payload.Source)
+	if !ok || src == nil {
+		return
+	}
+	_, channelNo := parseChannel(ch.Address)
+	ev := mqtt.Event{
+		Central:        centralName,
+		Interface:      iface,
+		DeviceAddress:  d.Address,
+		DeviceName:     d.Name,
+		Model:          d.Model,
+		ChannelNo:      channelNo,
+		ChannelAddress: ch.Address,
+		ChannelType:    ch.Type,
+		Channel:        ch,
+		Device:         d,
+		Source:         src,
+	}
+	if err := bridge.PublishCustomDPDiscovery(ctx, ev); err != nil {
+		// Snapshot pass is best-effort.
+		_ = err
+	}
 }
 
 func (b *EventBridge) onCentralState(centralName string, e hmevent.CentralStateChangedEvent) {

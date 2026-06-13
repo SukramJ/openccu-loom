@@ -327,6 +327,14 @@ func (b *TopicBuilder) HubConnectionLatency(centralName, iface string) string {
 	return b.Base + "/" + strings.ToLower(centralName) + "/system/latency/" + strings.ToLower(iface)
 }
 
+// HubLastEventAge is the retained last-event-age state topic
+// (`<base>/<central>/system/last_event_age`). Matches the state_topic in
+// BuildLastEventAgeDiscovery. The value is the age in seconds of the
+// newest backend event — a liveness signal for the CCU connection.
+func (b *TopicBuilder) HubLastEventAge(centralName string) string {
+	return b.Base + "/" + strings.ToLower(centralName) + "/system/last_event_age"
+}
+
 // HubUpdate is the retained firmware-update state topic
 // (`<base>/<central>/hub/update`). Matches the state_topic in
 // BuildHubUpdateDiscovery.
