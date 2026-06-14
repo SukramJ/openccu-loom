@@ -207,8 +207,16 @@ func newDimmerConstructor(ch *device.Channel, rebased custom.RebasedChannelGroup
 // newDaliConstructor builds a DRGDaliLight for the HmIP-DRG-DALI.
 // Kelvin bounds match
 func newDaliConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	// The reference CustomDpIpDrgDaliLight declares HUE+SATURATION, COLOR_TEMPERATURE
+	// and EFFECT fields, so it supports hs colour, colour temperature AND effects
+	// (has_hs_color / has_color_temperature / has_effects all resolve true).
 	return NewDRGDaliLight(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColorTemp: true}),
+		configFromChannel(ch, custom.LightCapabilities{
+			Dimmable:          true,
+			SupportsColor:     true,
+			SupportsColorTemp: true,
+			SupportsEffects:   true,
+		}),
 		2000, 6500,
 	), nil
 }
@@ -217,8 +225,11 @@ func newDaliConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) 
 // parameter). Used by IPFixedColorLight, IPSimpleFixedColorLightWired,
 // and RfDimmer_Color_Fixed.
 func newFixedColorConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	// The reference CustomDpIpFixedColorLight declares a COLOR_BEHAVIOUR effect
+	// field, so its has_effects resolves true (the effect list is the
+	// COLOR_BEHAVIOUR value list).
 	fcl := NewFixedColorLight(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true}),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
 	)
 	applyGroupLevel(fcl.Light, ch, rebased)
 	return fcl, nil
@@ -243,8 +254,10 @@ func newRGBWConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) 
 // (e.g. "Slow color change", "Campfire"). The effect list is sourced from
 // the PROGRAM VALUE_LIST at construction time.
 func newEffectLightConstructor(ch *device.Channel, rebased custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	// The reference CustomDpColorDimmerEffect carries a PROGRAM effect field, so
+	// its has_effects resolves true (the effect list is the PROGRAM value list).
 	el := NewEffectLight(
-		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true}),
+		configFromChannel(ch, custom.LightCapabilities{Dimmable: true, SupportsColor: true, SupportsEffects: true}),
 	)
 	applyGroupLevel(el.Light, ch, rebased)
 	return el, nil
