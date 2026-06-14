@@ -236,10 +236,12 @@ func (d *DefaultDiscoveryBuilder) WithSubDevices(on bool) *DefaultDiscoveryBuild
 // light, valve, siren). Per-parameter events on the same
 // channel re-emit the same payload — dedup happens in the
 // bridge's discovery cache.
-// 2. Press-event aggregator (`BuildChannelEvent`): when the channel
-// has 2+ PRESS_* parameters, all press types are collapsed into a
-// single HA `event` entity with `event_types: [...]`. Per-
-// parameter PRESS_* discovery is suppressed for these channels.
+// 2. Press-event aggregator (`BuildChannelEvent`): every press channel
+// collapses its PRESS_* parameters into ONE channel-level HA `event`
+// entity with `event_types: [...]` (a single PRESS_SHORT channel gets
+// the same channel-level entity as a four-type remote). The writable
+// presses additionally get a button companion via
+// [Bridge.publishPressButton].
 // 3. Per-parameter fallback via [resolveComponent]: uses ev.Category
 // (model-driven). Drives sensor / binary_sensor / number entities
 // that are not part of an aggregate, plus VALUES paramsets on
@@ -250,24 +252,24 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			return comp, nid, oid, p, true
 		}
 	}
-	// Press-event aggregation: when the channel has 2+ PRESS_* parameters,
-	// emit ONE event entity with all press types. Individual PRESS_* events
-	// are suppressed — the aggregated entity is what HA receives.
+	// Press-event aggregation: collapse every press channel's PRESS_*
+	// parameters into ONE channel-level event entity. Per-parameter PRESS_*
+	// discovery is suppressed — the aggregated entity is what HA receives.
 	if isPressParameter(ev.Parameter) {
 		// Event-suppression gate (IGNORE_DEVICES_FOR_DATA_POINT_EVENTS):
 		// HmIP-PS* schaltaktoren expose a KEY_TRANSCEIVER channel with
 		// PRESS_* parameters, but the reference stack never spawns a
-		// keypress event for them. Skipping both the aggregated and the
-		// per-parameter event path keeps the openccu-loom event plane in
-		// parity (no `event` entity for these models).
+		// keypress event for them. Skipping the event path keeps the
+		// openccu-loom event plane in parity (no `event` entity for these
+		// models).
 		if visibility.IsParameterIgnoredForDataPointEvent(ev.Model, hmenum.Parameter(ev.Parameter)) {
 			return "", "", "", nil, false
 		}
 		if comp, nid, oid, p, agg := d.BuildChannelEvent(ev); agg {
 			return comp, nid, oid, p, true
 		}
-		// Single-press channel (< 2 PRESS_* params) — fall through to the
-		// per-parameter path below.
+		// No channel inspector (agg=false) — fall through to the per-parameter
+		// path below.
 	}
 	// Usage gate — the model's DataPointUsage verdict (same source as
 	// the REST `DataPointSummary.usage` field) decides whether a wire DP
@@ -291,6 +293,16 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		hmenum.DataPointUsageIgnored,
 		hmenum.DataPointUsageCDPPrimary,
 		hmenum.DataPointUsageCDPSecondary:
+		return "", "", "", nil, false
+	}
+	// A click-event parameter the model typed as a button (category=button)
+	// only surfaces as a standalone button entity when its usage is
+	// data_point. An event-only press the regular press-aggregation path does
+	// not route (PRESS_LOCK / PRESS_UNLOCK / PRESS_CONT — they carry
+	// usage=event) must not fall through to a per-DP button here; its surface
+	// is the keypress event group, and a writable press additionally gets the
+	// press-button companion via [Bridge.publishPressButton].
+	if ev.Category == hmenum.DataPointCategoryButton && ev.Usage == hmenum.DataPointUsageEvent {
 		return "", "", "", nil, false
 	}
 	comp, classified := resolveComponent(ev)

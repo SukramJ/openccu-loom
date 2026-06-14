@@ -259,13 +259,13 @@ func TestChannelEventStatePayloadFormat(t *testing.T) {
 // Test 4 — per-parameter PRESS_* discovery is suppressed for multi-press channels
 // ---------------------------------------------------------------------------
 
-// TestPerParameterPressEventSuppressedForMultiPress verifies that when a
-// channel has multiple PRESS_* parameters the per-parameter Build path
-// returns a single shared aggregate entity (not one-per-parameter). The
-// proof is that ALL four PRESS_* events produce the SAME objectID — the
-// bridge's dedup cache then coalesces them into a single Discovery publish.
-// Additionally, a single-press channel (only PRESS_SHORT) must still use
-// the per-parameter path and produce a per-parameter objectID.
+// TestPerParameterPressEventSuppressedForMultiPress verifies that every
+// press channel — single- or multi-press — collapses to one shared
+// channel-level aggregate `event` entity (never one-per-parameter). The
+// proof is that ALL four PRESS_* events produce the SAME channel-level
+// objectID, and a single-press channel produces the same channel-level
+// objectID too (the reference stack materialises one event entity per
+// press channel regardless of press-type count).
 func TestPerParameterPressEventSuppressedForMultiPress(t *testing.T) {
 	t.Parallel()
 	db := NewDefaultDiscoveryBuilder(NewTopicBuilder("gh"), "ccu")
@@ -300,7 +300,7 @@ func TestPerParameterPressEventSuppressedForMultiPress(t *testing.T) {
 		}
 	}
 
-	// --- single-press: only PRESS_SHORT → per-parameter per-entity ---
+	// --- single-press: only PRESS_SHORT → same channel-level aggregate ---
 	ch1 := singlePressChannel()
 	_, _, oidSingle, _, ok := db.Build(Event{
 		Interface:     "HmIP-RF",
@@ -313,8 +313,12 @@ func TestPerParameterPressEventSuppressedForMultiPress(t *testing.T) {
 	if !ok {
 		t.Fatal("Build(PRESS_SHORT, single-press channel) returned ok=false")
 	}
-	// Per-parameter objectID must contain the parameter name (lowercased).
-	if !strings.Contains(oidSingle, "press_short") {
-		t.Errorf("single-press channel objectID=%q should contain \"press_short\"", oidSingle)
+	// A single-press channel now uses the same channel-level aggregate
+	// objectID (one event entity per press channel), not a per-parameter one.
+	if !strings.Contains(oidSingle, "event") {
+		t.Errorf("single-press channel objectID=%q should contain \"event\"", oidSingle)
+	}
+	if strings.Contains(oidSingle, "press") {
+		t.Errorf("single-press channel objectID=%q must NOT contain per-parameter press name", oidSingle)
 	}
 }

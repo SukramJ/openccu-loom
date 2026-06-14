@@ -205,17 +205,39 @@ func TestIgnoreParametersByDevicePrefixMatchEdgeCaseExact(t *testing.T) {
 	}
 }
 
-// TestUnIgnoreParametersByDevicePrefixMatchPositive verifies that a suffix-extended
-// model name still matches the un-ignore list (right-wildcard / prefix match).
-// WEEK_PROGRAM_POINTER is in ignoredParameters; HM-CC-RT-DN is in
-// unIgnoreParametersByDevice for it. A variant "HM-CC-RT-DN-Variant" must also
-// be un-ignored via prefix match.
+// TestUnIgnoreParametersByDevicePrefixMatchPositive verifies the reverse-prefix
+// un-ignore (mirroring the reference _get_parameters_for_model_prefix): a base
+// model inherits the un-ignore of a LONGER variant key. HmIP-PCBS picks up the
+// HmIP-PCBS-BAT entry's OPERATING_VOLTAGE, so it is not ignored for the base.
 func TestUnIgnoreParametersByDevicePrefixMatchPositive(t *testing.T) {
 	t.Parallel()
 	d := NewParameterDecider(nil)
-	// "HM-CC-RT-DN-Variant" starts with "HM-CC-RT-DN" → must be un-ignored.
-	if d.IsParameterIgnored("HM-CC-RT-DN-Variant", "X", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterWeekProgramPointer) {
-		t.Error("WEEK_PROGRAM_POINTER must NOT be ignored for HM-CC-RT-DN-Variant (prefix un-ignore from HM-CC-RT-DN)")
+	// "hmip-pcbs-bat" starts with "HmIP-PCBS" → the base inherits the variant's
+	// OPERATING_VOLTAGE un-ignore.
+	if d.IsParameterIgnored("HmIP-PCBS", "X", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterOperatingVoltage) {
+		t.Error("OPERATING_VOLTAGE must NOT be ignored for HmIP-PCBS (reverse-prefix un-ignore from HmIP-PCBS-BAT)")
+	}
+}
+
+// TestUnIgnoreParametersByDeviceLongerVariantDoesNotInherit verifies that a
+// LONGER variant model does NOT inherit a shorter base key's un-ignore — the
+// reverse-prefix direction of the reference stack. HM-Sec-Key-S / -O / -Generic
+// do not pick up the HM-Sec-Key entry's ERROR (the direct-CCU twin leaves it
+// hidden), and HM-Sec-Win-Generic does not pick up HM-Sec-Win's ERROR/WORKING.
+func TestUnIgnoreParametersByDeviceLongerVariantDoesNotInherit(t *testing.T) {
+	t.Parallel()
+	d := NewParameterDecider(nil)
+	for _, model := range []string{"HM-Sec-Key-S", "HM-Sec-Key-O", "HM-Sec-Key-Generic"} {
+		if !d.IsParameterIgnored(model, "X", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterError) {
+			t.Errorf("ERROR must be ignored for %s (no reverse-prefix un-ignore from HM-Sec-Key)", model)
+		}
+	}
+	if !d.IsParameterIgnored("HM-Sec-Win-Generic", "X", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterWorking) {
+		t.Error("WORKING must be ignored for HM-Sec-Win-Generic (no reverse-prefix un-ignore from HM-Sec-Win)")
+	}
+	// The exact base models keep their un-ignore.
+	if d.IsParameterIgnored("HM-Sec-Key", "X", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.ParameterError) {
+		t.Error("ERROR must NOT be ignored for HM-Sec-Key (exact un-ignore entry)")
 	}
 }
 

@@ -735,13 +735,15 @@ func (l *DRGDaliLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (compo
 // HADiscoveryPayload returns the HA Light payload for an RGBWLight —
 // extends ColorLight with colour temperature and optional effects.
 //
-// supported_color_modes follows the operating mode:
-//   - RGB / RGBW mode → ["hs"] (or ["hs", "color_temp"] for RGBW)
+// supported_color_modes follows the operating mode (HA colour modes are
+// mutually exclusive):
+//   - RGB / RGBW mode → ["hs"]
 //   - TunableWhite    → ["color_temp"]
-//   - PWM / unknown   → ["brightness"]
+//   - PWM             → ["brightness"]
+//   - unknown         → defaults to RGBW (["hs"]) via effectiveMode
 //
-// When HasColorTemperature() is true, color_temp_kelvin is added.
-// When HasEffects() is true, effect + effect_list are added.
+// When HasColorTempColorMode() is true (TUNABLE_WHITE), color_temp_kelvin is
+// added. When HasEffects() is true, effect + effect_list are added.
 func (r *RGBWLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component string, body map[string]any) {
 	if r == nil || ctx == nil {
 		return "", nil
@@ -751,23 +753,24 @@ func (r *RGBWLight) HADiscoveryPayload(ctx payload.HADiscoveryContext) (componen
 		body = map[string]any{}
 	}
 
-	// Compute supported_color_modes from the current operating mode.
-	switch r.Mode() {
-	case RGBWModeRGBW:
-		body["supported_color_modes"] = []string{"hs", "color_temp"}
+	// Compute supported_color_modes from the current operating mode. HA colour
+	// modes are mutually exclusive, so RGBW advertises hs only (its KELVIN wire
+	// field is still writable, but not as an HA colour mode). Unknown defaults
+	// to RGBW via effectiveMode, mirroring the reference fallback.
+	switch r.effectiveMode() {
+	case RGBWModeRGBW, RGBWModeRGB:
+		body["supported_color_modes"] = []string{"hs"}
 	case RGBWModeTunableWhite:
 		body["supported_color_modes"] = []string{"color_temp"}
 		// Remove hs flag set by ColorLight — not applicable in tunable white mode.
 		delete(body, "hs")
-	case RGBWModeRGB:
-		body["supported_color_modes"] = []string{"hs"}
 	default:
-		// PWM or unknown: brightness only.
+		// PWM: brightness only.
 		body["supported_color_modes"] = []string{"brightness"}
 		delete(body, "hs")
 	}
 
-	if r.HasColorTemperature() {
+	if r.HasColorTempColorMode() {
 		body["color_temp_kelvin"] = true
 		body["min_kelvin"] = r.MinKelvin
 		body["max_kelvin"] = r.MaxKelvin

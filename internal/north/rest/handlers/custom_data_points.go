@@ -239,6 +239,12 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 			if dp == nil {
 				continue
 			}
+			// Operation-mode secondary channels (e.g. HmIP-RGBW secondary
+			// colour channels in the current mode) are folded into the primary
+			// channel's aggregate and must not surface as their own entity.
+			if h, ok2 := dp.(interface{ HiddenByOperationMode() bool }); ok2 && h.HiddenByOperationMode() {
+				continue
+			}
 			cat := hmenum.DataPointCategoryUndefined
 			if cdp, ok2 := dp.(device.CategorisedDataPoint); ok2 {
 				cat = cdp.Category()

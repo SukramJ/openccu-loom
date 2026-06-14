@@ -101,7 +101,20 @@ func rfLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConf
 	}), nil
 }
 
+// hasButtonLockField reports whether the channel carries the button-lock wire
+// parameter (GLOBAL_BUTTON_LOCK, BUTTON_LOCK fallback). The reference
+// CustomDpButtonLock declares BUTTON_LOCK as a required field, so a device whose
+// model matches the button-lock profile but whose channel lacks the parameter
+// (e.g. HmIP-eTRV-C-2) materialises no lock entity.
+func hasButtonLockField(ch *device.Channel) bool {
+	return custom.SwitchField(ch, hmenum.ParameterGlobalButtonLock) != nil ||
+		custom.SwitchField(ch, hmenum.ParameterButtonLock) != nil
+}
+
 func ipButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	if !hasButtonLockField(channel) {
+		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
+	}
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),
@@ -111,6 +124,9 @@ func ipButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGro
 }
 
 func rfButtonLockConstructor(channel *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	if !hasButtonLockField(channel) {
+		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
+	}
 	return New(Config{
 		Channel:      channel,
 		Writer:       channel.Writer(),

@@ -337,53 +337,59 @@ func TestClickEventMarksPreserveEventSuppression(t *testing.T) {
 		assertForcedUsageIgnored(t, dp, "HmIP-PSM PRESS_SHORT")
 	})
 
-	t.Run("custom-DP NoCreate is overridden to event", func(t *testing.T) {
+	t.Run("configurable channel without op-mode keeps event, no button", func(t *testing.T) {
 		t.Parallel()
-		// CDP devices still fire click events in the reference stack — the
-		// custom-DP suppression only hides the generic entity. A NoCreate
-		// mark from that pass must not survive on click parameters, else
-		// the keypress groups of e.g. HmIP-BSM vanish.
-		c, _ := central.New(central.Config{Name: "ccu-vis-click-cdp"})
+		// KEY_TRANSCEIVER is a configurable channel; with CHANNEL_OPERATION_MODE
+		// unobserved the gated press parameters carry no button entity but still
+		// fire keypress events — mirroring the reference stack, where the button
+		// falls through to its no-create base usage while the click event keeps
+		// its event base usage. usage=event withholds the button (event-gate)
+		// yet stays in the keypress event group (event is not a suppressed
+		// event-group usage).
+		dp := run(t, "HmIP-WRC2")
+		u, set := dp.(interface {
+			ForcedUsage() (hmenum.DataPointUsage, bool)
+		}).ForcedUsage()
+		if !set || u != hmenum.DataPointUsageEvent {
+			t.Errorf("HmIP-WRC2 PRESS_SHORT (no op-mode): forced_usage=%v set=%v want Event", u, set)
+		}
+	})
+
+	t.Run("plain KEY channel gets a button for writable primary press", func(t *testing.T) {
+		t.Parallel()
+		// A non-configurable KEY channel is not op-mode gated: a WRITABLE press
+		// (OPS=WRITE+EVENT, e.g. a HM-PB KEY channel's PRESS_SHORT) becomes a
+		// button (usage=data_point), while a purely event-driven press
+		// (OPS=EVENT, e.g. PRESS_CONT) stays an event source only.
+		params := map[string]hmproto.ParameterData{
+			string(hmenum.ParameterPressShort): {Type: hmenum.ParameterTypeAction, Operations: hmenum.OperationsWrite | hmenum.OperationsEvent},
+			string(hmenum.ParameterPressCont):  {Type: hmenum.ParameterTypeAction, Operations: hmenum.OperationsEvent},
+		}
+		c, _ := central.New(central.Config{Name: "ccu-vis-click-key"})
 		p := NewDevicePipeline(c)
 		p.WithVisibility(visibility.NewRegistry())
-		b := backendWithParams("AABBCC03", "HmIP-BSM", "KEY_TRANSCEIVER", pressShort)
+		b := backendWithParams("AABBCC04", "HM-PB-2-WM55", "KEY", params)
 		if err := p.IngestFromBackend(
 			context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
 			b, &fakeWriter{}, nil, slog.Default(),
 		); err != nil {
 			t.Fatalf("IngestFromBackend: %v", err)
 		}
-		dev, _ := c.ModelRegistry.Get("AABBCC03")
-		dp := dev.Channel("AABBCC03:1").Parameter(hmenum.ParameterPressShort)
-		if dp == nil {
-			t.Fatal("PRESS_SHORT DP missing")
+		dev, _ := c.ModelRegistry.Get("AABBCC04")
+		short := dev.Channel("AABBCC04:1").Parameter(hmenum.ParameterPressShort)
+		cont := dev.Channel("AABBCC04:1").Parameter(hmenum.ParameterPressCont)
+		if short == nil || cont == nil {
+			t.Fatal("press DP missing")
 		}
-		// Simulate the custom-DP suppression having marked it NoCreate,
-		// then re-run the click pass (idempotent) — event must win.
-		dp.(interface {
-			SetForcedUsage(hmenum.DataPointUsage)
-		}).SetForcedUsage(hmenum.DataPointUsageNoCreate)
-		p.applyClickEventMarks("HmIP-RF")
-		u, set := dp.(interface {
+		if u, set := short.(interface {
 			ForcedUsage() (hmenum.DataPointUsage, bool)
-		}).ForcedUsage()
-		if !set || u != hmenum.DataPointUsageEvent {
-			t.Errorf("forced_usage=%v set=%v want Event (override NoCreate)", u, set)
+		}).ForcedUsage(); !set || u != hmenum.DataPointUsageDataPoint {
+			t.Errorf("PRESS_SHORT: forced_usage=%v set=%v want DataPoint (button)", u, set)
 		}
-	})
-
-	t.Run("wall remote gets usage=event", func(t *testing.T) {
-		t.Parallel()
-		dp := run(t, "HmIP-WRC2")
-		f, ok := dp.(interface {
+		if u, set := cont.(interface {
 			ForcedUsage() (hmenum.DataPointUsage, bool)
-		})
-		if !ok {
-			t.Fatal("DP does not expose ForcedUsage()")
-		}
-		u, set := f.ForcedUsage()
-		if !set || u != hmenum.DataPointUsageEvent {
-			t.Errorf("HmIP-WRC2 PRESS_SHORT: forced_usage=%v set=%v want Event", u, set)
+		}).ForcedUsage(); !set || u != hmenum.DataPointUsageEvent {
+			t.Errorf("PRESS_CONT: forced_usage=%v set=%v want Event (no button)", u, set)
 		}
 	})
 }

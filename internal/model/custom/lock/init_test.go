@@ -39,6 +39,26 @@ func makeLockChannel(t *testing.T, address string) *device.Channel {
 	return d.AddChannel(address, 1, "LOCK", hmenum.ParamsetKeyValues)
 }
 
+// makeButtonLockChannel builds a channel carrying the GLOBAL_BUTTON_LOCK wire
+// parameter the button-lock constructors require (a channel without it
+// materialises no lock, mirroring the reference required-field behaviour).
+func makeButtonLockChannel(t *testing.T, address string) *device.Channel {
+	t.Helper()
+	ch := makeLockChannel(t, address)
+	ch.Put(generic.NewSwitch(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: ch.Address,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(hmenum.ParameterGlobalButtonLock),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	}))
+	return ch
+}
+
 // --- Registration tests ---
 
 // TestIPLockConstructorIsRegistered verifies that the init() block
@@ -136,7 +156,7 @@ func TestRfLockConstructorReturnsValidDP(t *testing.T) {
 func TestIPButtonLockConstructorReturnsValidDP(t *testing.T) {
 	t.Parallel()
 
-	ch := makeLockChannel(t, "HmIP-WRC2:0")
+	ch := makeButtonLockChannel(t, "HmIP-WRC2:0")
 
 	ctor, ok := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileIPButtonLock)
 	if !ok {
@@ -212,7 +232,7 @@ func TestRfLockConstructorDataPointKeyUsesState(t *testing.T) {
 func TestIPButtonLockConstructorDataPointKeyIsSet(t *testing.T) {
 	t.Parallel()
 
-	ch := makeLockChannel(t, "HmIP-WRC2:0")
+	ch := makeButtonLockChannel(t, "HmIP-WRC2:0")
 
 	ctor, _ := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileIPButtonLock)
 	dp, err := ctor(ch, custom.RebasedChannelGroupConfig{})
@@ -231,7 +251,7 @@ func TestIPButtonLockConstructorDataPointKeyIsSet(t *testing.T) {
 func TestRFButtonLockConstructorDataPointKeyIsSet(t *testing.T) {
 	t.Parallel()
 
-	ch := makeLockChannel(t, "HM-PBI-4-FM:0")
+	ch := makeButtonLockChannel(t, "HM-PBI-4-FM:0")
 
 	ctor, _ := custom.DefaultRegistry().Constructor(hmenum.DeviceProfileRFButtonLock)
 	dp, err := ctor(ch, custom.RebasedChannelGroupConfig{})

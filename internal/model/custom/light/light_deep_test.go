@@ -471,12 +471,14 @@ func TestRGBWLightModeDispatch(t *testing.T) {
 
 	r := NewRGBWLight(Config{Channel: ch, Capabilities: custom.LightCapabilities{Dimmable: true}})
 
-	// Before any mode is observed, Mode() returns Unknown, HasColor false.
+	// Before any mode is observed, Mode() returns Unknown, but the capability
+	// predicates fall back to the RGBW default (mirroring the reference
+	// _device_operation_mode fallback), so HasColor is true.
 	if r.Mode() != RGBWModeUnknown {
 		t.Errorf("initial mode = %v, want Unknown", r.Mode())
 	}
-	if r.HasColor() {
-		t.Error("HasColor must be false before mode is set")
+	if !r.HasColor() {
+		t.Error("HasColor must default to true (RGBW) before mode is set")
 	}
 
 	// SetColor must fail in PWM mode.
@@ -541,16 +543,20 @@ func TestRGBWLightCapabilityPredicates(t *testing.T) {
 	defer unsubscribe()
 
 	for _, tc := range []struct {
-		mode          string
-		wantColor     bool
-		wantHsColor   bool
-		wantColorTemp bool
-		wantEffects   bool
+		mode string
+		// wantColorTemp is the wire/Matter capability (KELVIN field present —
+		// TUNABLE_WHITE or RGBW); wantColorTempMode is the mutually-exclusive HA
+		// colour-mode capability (TUNABLE_WHITE only).
+		wantColor         bool
+		wantHsColor       bool
+		wantColorTemp     bool
+		wantColorTempMode bool
+		wantEffects       bool
 	}{
-		{"PWM", false, false, false, false},
-		{"RGB", true, true, false, true},
-		{"RGBW", true, true, true, true},
-		{"TUNABLE_WHITE", false, false, true, true},
+		{"PWM", false, false, false, false, false},
+		{"RGB", true, true, false, false, true},
+		{"RGBW", true, true, true, false, true},
+		{"TUNABLE_WHITE", false, false, true, true, true},
 	} {
 		modeSensor.OnEvent(tc.mode)
 		if got := r.HasColor(); got != tc.wantColor {
@@ -561,6 +567,9 @@ func TestRGBWLightCapabilityPredicates(t *testing.T) {
 		}
 		if got := r.HasColorTemperature(); got != tc.wantColorTemp {
 			t.Errorf("mode=%s HasColorTemperature=%v, want %v", tc.mode, got, tc.wantColorTemp)
+		}
+		if got := r.HasColorTempColorMode(); got != tc.wantColorTempMode {
+			t.Errorf("mode=%s HasColorTempColorMode=%v, want %v", tc.mode, got, tc.wantColorTempMode)
 		}
 		if got := r.HasEffects(); got != tc.wantEffects {
 			t.Errorf("mode=%s HasEffects=%v, want %v", tc.mode, got, tc.wantEffects)

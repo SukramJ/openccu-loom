@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -307,6 +308,119 @@ func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
 		}
 		attachNonClimateWeekProfileToDevice(d, p.unit.Name())
 	}
+}
+
+// normalizeClimateWeekProfiles reconciles the slot-parameter-heuristic climate
+// week-profile attachment with the reference has_schedule gate AND the channel
+// the loom-client probes:
+//
+//   - A device that declares no schedule channel (no registered
+//     schedule_channel_no, no WEEK_PROFILE channel — e.g. ALPHA-IP-RBG) gets
+//     its spurious climate week profile detached.
+//   - A device that does declare one has its climate week profile relocated to
+//     the canonical schedule channel — the WEEK_PROFILE-suffix channel, else
+//     the climate custom-DP channel. That is exactly the channel the
+//     loom-client probes for a week profile (adapter._bootstrap_schedules), so
+//     a profile the heuristic parked on the wrong channel (HM-TC-IT on the
+//     device root, HmIP-WGTC on the climate channel instead of its
+//     SWITCH_WEEK_PROFILE channel) is no longer a 404.
+//
+// Idempotent: a profile already on the canonical channel is left untouched.
+func (p *DevicePipeline) normalizeClimateWeekProfiles(interfaceID string) {
+	if p.unit == nil {
+		return
+	}
+	reg := custom.DefaultRegistry()
+	for _, d := range p.unit.ModelRegistry.List() {
+		if d.InterfaceID != interfaceID {
+			continue
+		}
+		// Only act on a CLIMATE week profile the slot-parameter heuristic
+		// already attached. Devices with no climate profile (non-climate
+		// schedule devices handled by attachNonClimateWeekProfiles) are left
+		// untouched — attaching a climate profile here would make that pass
+		// skip them and drop their ScheduleChannelSwitches.
+		existing := existingClimateWeekProfileChannel(d)
+		if existing == nil {
+			continue
+		}
+		if !deviceHasRegisteredScheduleChannel(d, reg) {
+			existing.AttachWeekProfile(nil)
+			continue
+		}
+		// A device that also carries WEEK_PROGRAM_CHANNEL_LOCKS exposes its
+		// schedule as a non-climate DefaultWeekProfile (+ ScheduleChannelSwitches)
+		// even when it has a climate CDP (HmIP-WGTC). Detach the slot-param
+		// climate profile so attachNonClimateWeekProfiles takes over and builds
+		// the Default profile with its schedule-enable switches on the
+		// WEEK_PROGRAM_CHANNEL_LOCKS channel.
+		if findScheduleChannel(d) != nil {
+			existing.AttachWeekProfile(nil)
+			continue
+		}
+		canonical := canonicalScheduleChannel(d)
+		if canonical != nil && existing.Address != canonical.Address {
+			existing.AttachWeekProfile(nil)
+			attachWeekProfileToChannel(canonical, p.unit.Name())
+		}
+	}
+}
+
+// existingClimateWeekProfileChannel returns the channel (including the device
+// root) that currently carries a climate week profile, or nil.
+func existingClimateWeekProfileChannel(dev *device.Device) *device.Channel {
+	channels := append([]*device.Channel(nil), dev.Channels()...)
+	if root := dev.RootChannel(); root != nil {
+		channels = append(channels, root)
+	}
+	for _, ch := range channels {
+		if wp := ch.WeekProfile(); wp != nil && wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
+			return ch
+		}
+	}
+	return nil
+}
+
+// canonicalScheduleChannel returns the channel the loom-client probes for a
+// week profile: the WEEK_PROFILE-suffix channel if present, else the climate
+// custom-DP channel. Returns nil when neither exists.
+func canonicalScheduleChannel(dev *device.Device) *device.Channel {
+	for _, ch := range dev.Channels() {
+		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+			return ch
+		}
+	}
+	for _, ch := range dev.Channels() {
+		cdp := ch.CustomDataPoint()
+		if cdp == nil {
+			continue
+		}
+		if c, ok := cdp.(device.CategorisedDataPoint); ok && c.Category() == hmenum.DataPointCategoryClimate {
+			return ch
+		}
+	}
+	return nil
+}
+
+// deviceHasRegisteredScheduleChannel reports whether the device declares a
+// schedule channel — a custom profile with a non-nil ScheduleChannelNo or a
+// WEEK_PROFILE-suffix channel. Mirrors the reference has_schedule gate
+// (schedule_channel_address != None).
+func deviceHasRegisteredScheduleChannel(dev *device.Device, reg *custom.Registry) bool {
+	if dev == nil || reg == nil {
+		return false
+	}
+	for _, prof := range reg.GetConfigs(dev.Model) {
+		if prof.ScheduleChannelNo != nil {
+			return true
+		}
+	}
+	for _, ch := range dev.Channels() {
+		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+			return true
+		}
+	}
+	return false
 }
 
 // refineAttachedWeekProfiles walks every channel of every device on

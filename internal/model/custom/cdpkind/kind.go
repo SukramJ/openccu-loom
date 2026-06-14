@@ -141,7 +141,18 @@ func Capabilities(dp device.AttachableDataPoint) map[string]bool {
 	case *light.FixedColorLight:
 		return lightCaps(v.Capabilities)
 	case *light.RGBWLight:
-		return lightCaps(v.Capabilities)
+		// The HmIP-RGBW family advertises colour / colour-temp / effect support
+		// per the current DEVICE_OPERATION_MODE (RGB/RGBW → hs, TUNABLE_WHITE →
+		// colour temp, every non-PWM mode → effects), mirroring the reference
+		// CustomDpIpRGBWLight.has_* mode gating. The static profile flags only
+		// carry the mode-independent dimmable/transition pair.
+		return map[string]bool{
+			"dimmable":   v.Capabilities.Dimmable,
+			"transition": v.Capabilities.Transition,
+			"color":      v.HasColor(),
+			"color_temp": v.HasColorTempColorMode(),
+			"effects":    v.HasEffects(),
+		}
 	case *light.DRGDaliLight:
 		return lightCaps(v.Capabilities)
 	case *light.EffectLight:

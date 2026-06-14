@@ -14,44 +14,42 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// virtualRemoteDevice is the narrow read-side contract the discovery
-// builder uses to recognise the CCU's virtual-remote pseudo-devices
-// (HM-RCV-50 / HMW-RCV-50 / HmIP-RCV-50). `*device.Device` satisfies it
-// via [Device.IsVirtualRemote]; defining it locally keeps the mqtt
-// package free of the model import.
-type virtualRemoteDevice interface {
-	IsVirtualRemote() bool
+// isPressButtonEvent reports whether ev is a click-event parameter the
+// model classified as a clickable button entity: category=button AND
+// usage=data_point. The reference stack's two-object model spawns BOTH a
+// button (DpButton) and a keypress event for a writable press; the daemon
+// carries one data point and signals the button surface through this
+// category/usage pair. A writable press (a virtual-remote action, a plain
+// KEY channel's PRESS_SHORT/PRESS_LONG, or an additional_data_points-
+// promoted dimmer-input press) resolves to data_point; an event-only press
+// (every KEY_TRANSCEIVER / MULTI_MODE_INPUT_TRANSMITTER transmitter, the
+// central/long-press parameters) resolves to event and gets no button.
+//
+// The companion button is published IN ADDITION to the per-channel keypress
+// `event` entity (which the regular [Build] press path emits): pressing the
+// button from HA writes the action to the CCU, exactly as the keypress event
+// observes a physical press.
+func isPressButtonEvent(ev Event) bool {
+	return ev.Category == hmenum.DataPointCategoryButton &&
+		ev.Usage == hmenum.DataPointUsageDataPoint
 }
 
-// isVirtualRemotePressEvent reports whether ev is a PRESS_* parameter
-// on a virtual-remote channel. Virtual-remote press parameters are
-// writable fire-and-forget actions (pressing them from HA triggers the
-// CCU-side key event); on physical devices the same parameters are
-// pure event emitters and never get a button surface.
-func isVirtualRemotePressEvent(ev Event) bool {
-	if !isPressParameter(ev.Parameter) {
-		return false
-	}
-	vr, ok := ev.Device.(virtualRemoteDevice)
-	return ok && vr.IsVirtualRemote()
-}
-
-// BuildVirtualRemoteButton emits the HA `button` discovery payload for
-// one virtual-remote press parameter. The reference stack renders every
-// virtual-remote channel as TWO clickable buttons (press_short,
-// press_long — both disabled by default) NEXT TO the per-channel
-// keypress `event` entity; the regular [Build] press path only produces
-// the aggregated event entity, so the bridge publishes this companion
-// through [Bridge.publishVirtualRemotePressButton].
+// BuildPressButton emits the HA `button` discovery payload for one
+// click-event parameter the model marked as a button (category=button,
+// usage=data_point). The reference stack renders every such press as a
+// clickable button (disabled by default) NEXT TO the per-channel keypress
+// `event` entity; the regular [Build] press path only produces the event
+// entity, so the bridge publishes this companion through
+// [Bridge.publishPressButton].
 //
 // The button's command topic is the press parameter's per-DP command
 // topic; HA publishes `payload_press` ("PRESS") which the command
 // subscriber coerces to the boolean `true` an ACTION parameter expects.
 //
-// Returns the zero DiscoveryItem (OK=false) when ev is not a
-// virtual-remote press parameter.
-func (d *DefaultDiscoveryBuilder) BuildVirtualRemoteButton(ev Event) DiscoveryItem {
-	if !isVirtualRemotePressEvent(ev) {
+// Returns the zero DiscoveryItem (OK=false) when ev is not a press-button
+// parameter.
+func (d *DefaultDiscoveryBuilder) BuildPressButton(ev Event) DiscoveryItem {
+	if !isPressButtonEvent(ev) {
 		return DiscoveryItem{}
 	}
 	pd := naming.NewDataPointPathData(
@@ -79,7 +77,7 @@ func (d *DefaultDiscoveryBuilder) BuildVirtualRemoteButton(ev Event) DiscoveryIt
 		},
 	}
 	body := map[string]any{
-		"name":              virtualRemoteButtonName(ev),
+		"name":              pressButtonName(ev),
 		"unique_id":         uniqueID,
 		"command_topic":     commandTopic,
 		"payload_press":     "PRESS",
@@ -99,24 +97,22 @@ func (d *DefaultDiscoveryBuilder) BuildVirtualRemoteButton(ev Event) DiscoveryIt
 	return DiscoveryItem{Component: string(HAComponentButton), NodeID: nodeID, ObjectID: objectID, Payload: buf, OK: true}
 }
 
-// virtualRemoteButtonName composes the friendly_name fragment for a
-// virtual-remote press button so it is unique across channels and
-// centrals once HA prepends the device name.
+// pressButtonName composes the friendly_name fragment for a press button
+// so it is unique across channels and centrals once HA prepends the device
+// name.
 //
-// The plain parameter label ("Press Short") is identical for every VR
-// channel, so two virtual remotes that share a device/channel name (the
-// Otto-Rem and Kearney-Loc HmIP-RCV both carry operator names like
-// "Arbeitszimmer Markus …") collapse onto the same friendly_name and HA
-// disambiguates with `_2` / `_3` entity-id suffixes. Mirror the
-// reference stack's get_event_name: prefix the press-type label with the
-// operator channel name when present, otherwise with ` ch<N>` so the
-// channel number always disambiguates. The device name (which carries
-// the central identity for VR pseudo-devices) is prepended by HA.
-func virtualRemoteButtonName(ev Event) any {
+// The plain parameter label ("Press Short") is identical for every press
+// channel, so two devices that share a device/channel name collapse onto
+// the same friendly_name and HA disambiguates with `_2` / `_3` entity-id
+// suffixes. Mirror the reference stack's get_event_name: prefix the
+// press-type label with the operator channel name when present, otherwise
+// with ` ch<N>` so the channel number always disambiguates. The device name
+// is prepended by HA.
+func pressButtonName(ev Event) any {
 	label, omitted := naming.EntityDisplayName(ev.descLabel(), ev.descLabelOmitted(), ev.Parameter)
 	if omitted {
 		// Primary-parameter omission would leave the button nameless and
-		// collide on the device name alone — never omit for VR buttons;
+		// collide on the device name alone — never omit for press buttons;
 		// fall back to the title-cased parameter as the press-type label.
 		label = naming.TitleCaseParameter(ev.Parameter)
 	}

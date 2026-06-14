@@ -17,16 +17,23 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// pressParameters is the closed set of PRESS_* parameter names a button
-// channel can expose.
+// pressParameters is the closed set of click-event parameter names a press
+// channel can expose — the reference stack's CLICK_EVENTS set. Every channel
+// carrying at least one of these gets a single channel-level keypress `event`
+// entity whose event_types list these (lower-cased), and each WRITABLE press
+// (usage=data_point) additionally gets a press-button companion.
 var pressParameters = []string{
 	"PRESS_SHORT",
 	"PRESS_LONG",
-	"PRESS_LONG_RELEASE",
 	"PRESS_LONG_START",
+	"PRESS_LONG_RELEASE",
+	"PRESS_CONT",
+	"PRESS",
+	"PRESS_LOCK",
+	"PRESS_UNLOCK",
 }
 
-// IsPressParameter reports whether p is one of the canonical PRESS_*
+// IsPressParameter reports whether p is one of the canonical click-event
 // parameter names (case-insensitive). Exported so the EventBridge can
 // use the same check without duplicating the set.
 func IsPressParameter(p string) bool {
@@ -34,14 +41,24 @@ func IsPressParameter(p string) bool {
 	return slices.Contains(pressParameters, up)
 }
 
+// PressParameters returns a copy of the canonical click-event parameter set
+// in detection order. Exported so the EventBridge can synthesise a press
+// channel's snapshot event without duplicating the set.
+func PressParameters() []string {
+	return slices.Clone(pressParameters)
+}
+
 // isPressParameter is the package-internal alias used by Build.
 func isPressParameter(p string) bool { return IsPressParameter(p) }
 
 // ChannelPressTypes returns the lower-cased HA event_types for all
-// PRESS_* parameters present on ch. Returns nil when fewer than 2
-// press parameters are found (single-press channels use the
-// per-parameter path). The result order mirrors pressParameters.
-// Exported so the EventBridge can detect multi-press channels.
+// PRESS_* parameters present on ch. Returns nil only when the channel has
+// no press parameter at all. The reference stack emits one channel-level
+// keypress event entity per press channel regardless of how many press
+// types it carries (a single PRESS_SHORT KEY channel gets the same
+// channel-level `event` entity as a four-type remote), so a single press
+// type is enough to materialise the aggregate. The result order mirrors
+// pressParameters. Exported so the EventBridge can detect press channels.
 func ChannelPressTypes(ch ChannelInspector) []string {
 	if ch == nil {
 		return nil
@@ -52,9 +69,6 @@ func ChannelPressTypes(ch ChannelInspector) []string {
 			found = append(found, strings.ToLower(pp))
 		}
 	}
-	if len(found) < 2 {
-		return nil
-	}
 	return found
 }
 
@@ -62,16 +76,14 @@ func ChannelPressTypes(ch ChannelInspector) []string {
 func channelPressTypes(ch ChannelInspector) []string { return ChannelPressTypes(ch) }
 
 // BuildChannelEvent produces the HA-Discovery `event` payload for a
-// button channel that exposes 2 or more PRESS_* parameters. It is the
-// aggregated counterpart of the per-parameter `resolveComponent` →
-// HAComponentEvent path: instead of N separate event entities (one
-// per PRESS_* parameter), a single entity carries all event types in
-// its `event_types` list.
+// press channel: a single channel-level entity whose `event_types` list
+// carries every PRESS_* type the channel exposes (one event entity per
+// press channel, mirroring the reference stack — a single PRESS_SHORT KEY
+// channel gets the same channel-level entity as a four-type remote).
 //
 // Returns (component, nodeID, objectID, payload, true) on success.
-// Returns ("", "", "", nil, false) when ch carries fewer than 2
-// PRESS_* parameters — callers should fall through to the per-
-// parameter path in that case.
+// Returns ("", "", "", nil, false) when ch is nil or carries no PRESS_*
+// parameter — callers should fall through to the per-parameter path then.
 func (d *DefaultDiscoveryBuilder) BuildChannelEvent(ev Event) (component, nodeID, objectID string, buf []byte, ok bool) {
 	types := channelPressTypes(ev.Channel)
 	if len(types) == 0 {

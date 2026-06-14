@@ -415,24 +415,16 @@ func TestRGBWLightHASchemaJSON_RGBWMode(t *testing.T) {
 	r.recordMode("RGBW")
 	_, body := r.HADiscoveryPayload(discoveryCtx{})
 
+	// RGBW mode advertises hs colour only — HA colour modes are mutually
+	// exclusive and the reference has_color_temperature is TUNABLE_WHITE-only,
+	// so colour temperature is not offered in RGBW mode even though the wire
+	// profile carries a KELVIN field.
 	modes, _ := body["supported_color_modes"].([]string)
-	if len(modes) != 2 {
-		t.Fatalf("RGBW mode: supported_color_modes = %v, want [hs color_temp]", modes)
+	if len(modes) != 1 || modes[0] != "hs" {
+		t.Fatalf("RGBW mode: supported_color_modes = %v, want [hs]", modes)
 	}
-	hasHS, hasCT := false, false
-	for _, m := range modes {
-		if m == "hs" {
-			hasHS = true
-		}
-		if m == "color_temp" {
-			hasCT = true
-		}
-	}
-	if !hasHS || !hasCT {
-		t.Errorf("RGBW mode: supported_color_modes = %v, want both hs and color_temp", modes)
-	}
-	if v, _ := body["color_temp_kelvin"].(bool); !v {
-		t.Error("color_temp_kelvin must be true in RGBW mode")
+	if _, ok := body["color_temp_kelvin"]; ok {
+		t.Error("color_temp_kelvin must not be present in RGBW mode")
 	}
 }
 

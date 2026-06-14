@@ -152,7 +152,10 @@ func ApplyChannelOperationModeGating(ch *device.Channel) {
 	}
 	mode := ch.OperationMode()
 	if mode == "" {
-		// CHANNEL_OPERATION_MODE not yet observed — leave usage untouched.
+		// CHANNEL_OPERATION_MODE not yet observed — leave usage untouched. The
+		// click-event pass withholds the unknown-mode press *buttons* (see
+		// applyClickEventMarks); STATE and the event sources keep their base
+		// usage so a not-yet-read mode does not blank out real state/events.
 		return
 	}
 	for _, dp := range ch.DataPoints() {
@@ -365,12 +368,16 @@ func markIfInternal(dp device.ParameterDataPoint, model, channelType string, par
 	if r, ok := dp.(unIgnoredReader); ok && r.IsUnIgnored() {
 		return
 	}
-	// Preserve an explicit DataPoint promotion (custom-DP pipeline,
-	// additional_data_points). Same precedence rule as markIfHidden.
-	if r, ok := dp.(forcedUsageReader); ok {
-		if u, set := r.ForcedUsage(); set && u == hmenum.DataPointUsageDataPoint {
-			return
-		}
+	// Built-in unIgnoreParametersByDevice exemption (reverse-prefix): a base
+	// model whose key the device matches keeps its INTERNAL DP even when it was
+	// additional_data_points-promoted (HM-Sec-Win base WORKING). A longer
+	// variant that does not match (HM-Sec-Win-Generic) does NOT — mirroring the
+	// reference, where an INTERNAL parameter that is neither allowed-internal nor
+	// un-ignored is skipped at DP creation, so its additional_data_points
+	// promotion no-ops. Consulting the built-in list here (rather than blindly
+	// preserving any DataPoint promotion) is what distinguishes the two.
+	if deviceUnIgnoresByPrefix(model, dp.Parameter()) {
+		return
 	}
 	if f, ok := dp.(usageForcer); ok {
 		f.SetForcedUsage(hmenum.DataPointUsageIgnored)
