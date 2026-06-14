@@ -348,6 +348,16 @@ func (p *DevicePipeline) normalizeClimateWeekProfiles(interfaceID string) {
 			existing.AttachWeekProfile(nil)
 			continue
 		}
+		// A device that also carries WEEK_PROGRAM_CHANNEL_LOCKS exposes its
+		// schedule as a non-climate DefaultWeekProfile (+ ScheduleChannelSwitches)
+		// even when it has a climate CDP (HmIP-WGTC). Detach the slot-param
+		// climate profile so attachNonClimateWeekProfiles takes over and builds
+		// the Default profile with its schedule-enable switches on the
+		// WEEK_PROGRAM_CHANNEL_LOCKS channel.
+		if findScheduleChannel(d) != nil {
+			existing.AttachWeekProfile(nil)
+			continue
+		}
 		canonical := canonicalScheduleChannel(d)
 		if canonical != nil && existing.Address != canonical.Address {
 			existing.AttachWeekProfile(nil)
