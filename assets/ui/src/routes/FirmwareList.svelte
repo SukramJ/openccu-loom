@@ -6,6 +6,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   // Firmware overview — shows all devices that have firmware metadata,
   // grouped by update availability. Uses:
@@ -96,12 +97,13 @@
 
   async function triggerUpdate(addr: string, name: string) {
     banner = null;
-    if (
-      !confirm(
-        t("firmware.confirm_update", { name }),
-      )
-    )
-      return;
+    const ok = await confirmStore.ask({
+      title: t("firmware.confirm_update", { name }),
+      body: "",
+      confirmLabel: t("firmware.update"),
+      destructive: false,
+    });
+    if (!ok) return;
     const next = new Set(updating);
     next.add(addr);
     updating = next;
@@ -159,7 +161,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6">
   <!-- Header -->
   <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
@@ -267,7 +269,7 @@
   {:else}
     <!-- Device table -->
     <div class="overflow-hidden rounded-lg border" style="border-color: var(--ha-divider-color);">
-      <table class="w-full text-sm">
+      <table class="table-reflow w-full text-sm">
         <thead>
           <tr
             class="border-b text-left text-xs font-semibold uppercase tracking-wide"
@@ -294,7 +296,7 @@
               style="border-color: var(--ha-divider-color);"
             >
               <!-- Device name / address -->
-              <td class="px-4 py-3">
+              <td class="reflow-title px-4 py-3">
                 <a
                   href="#/devices/{encodeURIComponent(device.address)}"
                   class="font-medium hover:underline"
@@ -311,7 +313,7 @@
               </td>
 
               <!-- Model -->
-              <td class="px-4 py-3">
+              <td class="px-4 py-3" data-label={t("firmware.col.model")}>
                 <span>{device.model}</span>
                 {#if device.model_label && device.model_label !== device.model}
                   <div class="text-xs" style="color: var(--ha-secondary-text-color);">
@@ -321,7 +323,7 @@
               </td>
 
               <!-- Current version -->
-              <td class="px-4 py-3 font-mono text-xs">
+              <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.current")}>
                 {#if loadingFw}
                   <span style="color: var(--ha-secondary-text-color);">…</span>
                 {:else}
@@ -330,7 +332,7 @@
               </td>
 
               <!-- Available version -->
-              <td class="px-4 py-3 font-mono text-xs">
+              <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.available")}>
                 {#if loadingFw}
                   <span style="color: var(--ha-secondary-text-color);">…</span>
                 {:else if fw?.Available && fw.Available !== fw.Current}
@@ -352,7 +354,7 @@
                    4. Version info not yet loaded → show CCU state if present,
                       or fall back to device.update_available (the gated pending
                       flag, NOT the updatable capability) for a best-effort hint. -->
-              <td class="px-4 py-3">
+              <td class="px-4 py-3" data-label={t("firmware.col.state")}>
                 {#if loadingFw}
                   <span style="color: var(--ha-secondary-text-color);" class="text-xs">…</span>
                 {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
@@ -381,7 +383,7 @@
                    confirms available > current. This is the single source of
                    truth; device.updatable (CCU flag) may lag reality after a
                    manual flash or a stale firmware-check cache. -->
-              <td class="px-4 py-3">
+              <td class="reflow-actions px-4 py-3">
                 {#if updateAvailable && !busy && !loadingFw}
                   {@const inProgress = isInProgress(fw?.UpdateState)}
                   <Button

@@ -313,17 +313,17 @@
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="rounded-md border border-[var(--ha-divider-color)] px-3 py-1 text-sm"
+            class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => setMode("auto")}
           >Auto</button>
           <button
             type="button"
-            class="rounded-md border border-[var(--ha-divider-color)] px-3 py-1 text-sm"
+            class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => invoke("enable_boost")}
           >Boost</button>
           <button
             type="button"
-            class="rounded-md border border-[var(--ha-divider-color)] px-3 py-1 text-sm"
+            class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => setMode("heat")}
           >Manuell</button>
         </div>
@@ -360,18 +360,18 @@
               {#if isAway}
                 <button
                   type="button"
-                  class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+                  class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
                   onclick={() => invoke("disable_away")}
                 >Anwesend</button>
               {:else}
                 <button
                   type="button"
-                  class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+                  class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
                   onclick={quickAway24h}
                 >24 h abwesend</button>
                 <button
                   type="button"
-                  class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+                  class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
                   onclick={() => (awayOpen = !awayOpen)}
                 >{awayOpen ? "−" : "+"}</button>
               {/if}
@@ -386,7 +386,7 @@
                   min="1"
                   max="720"
                   bind:value={awayHours}
-                  class="h-7 w-20 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
+                  class="h-10 w-20 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
                 />
               </label>
               <label class="flex flex-col gap-1">
@@ -397,12 +397,12 @@
                   max="30"
                   step="0.5"
                   bind:value={awayTemp}
-                  class="h-7 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
+                  class="h-10 w-24 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
                 />
               </label>
               <button
                 type="button"
-                class="h-7 rounded-md bg-[var(--ha-primary-color)] px-3 text-xs font-medium text-white"
+                class="min-h-10 rounded-md bg-[var(--ha-primary-color)] px-3 text-sm font-medium text-white"
                 onclick={quickAway24h}
               >Aktivieren</button>
             </div>

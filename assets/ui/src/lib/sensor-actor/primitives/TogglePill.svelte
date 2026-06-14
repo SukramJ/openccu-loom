@@ -48,7 +48,7 @@
 
 <button
   type="button"
-  class="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+  class="inline-flex min-h-10 items-center gap-1 rounded-full border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
   class:active={displayValue}
   disabled={disabled || busy}
   onclick={toggle}

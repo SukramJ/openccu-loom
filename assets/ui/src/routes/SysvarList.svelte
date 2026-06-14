@@ -9,7 +9,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
-
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let sysvars = $state<SysvarEntry[]>([]);
   let loading = $state(true);
@@ -163,7 +163,11 @@
   }
 
   async function deleteSv(sv: SysvarEntry) {
-    const ok = confirm(t("sysvars.confirm_remove", { name: sv.name }));
+    const ok = await confirmStore.ask({
+      title: t("sysvars.confirm_remove", { name: sv.name }),
+      confirmLabel: t("common.remove"),
+      destructive: true,
+    });
     if (!ok) return;
     savingName = sv.name;
     banner = null;
@@ -224,7 +228,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("sysvars.title")}</h1>
@@ -384,7 +388,7 @@
                   <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">{sv.description}</p>
                 {/if}
               </div>
-              <div class="flex min-w-[14rem] items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 {#if sv.value_type === "BOOL"}
                   <Switch
                     checked={Boolean(currentValue(sv))}

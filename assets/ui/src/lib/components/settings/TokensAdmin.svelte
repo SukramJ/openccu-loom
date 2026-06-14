@@ -124,7 +124,7 @@
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("tokens.empty")}</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="table-reflow w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-800">
             <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.subject")}</th>
@@ -138,14 +138,14 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {#each tokens as tok (tok.fingerprint)}
             <tr>
-              <td class="py-2 pr-4">{tok.subject}</td>
-              <td class="py-2 pr-4">
+              <td class="reflow-title py-2 pr-4">{tok.subject}</td>
+              <td class="py-2 pr-4" data-label={t("tokens.col.role")}>
                 <Badge variant={roleBadgeVariant(tok.role)}>{tok.role}</Badge>
               </td>
-              <td class="py-2 pr-4 font-mono text-xs">{tok.fingerprint}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]">{fmtDate(tok.created_at)}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]">{fmtDate(tok.last_seen_at)}</td>
-              <td class="py-2">
+              <td class="py-2 pr-4 font-mono text-xs" data-label={t("tokens.col.fingerprint")}>{tok.fingerprint}</td>
+              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("tokens.col.created")}>{fmtDate(tok.created_at)}</td>
+              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("tokens.col.last_seen")}>{fmtDate(tok.last_seen_at)}</td>
+              <td class="reflow-actions py-2">
                 <Button
                   type="button"
                   variant="ghost"
@@ -167,7 +167,7 @@
 <!-- Create token modal -->
 {#if showCreate}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"
@@ -183,14 +183,14 @@
           <input
             type="text"
             bind:value={createSubject}
-            class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="h-10 rounded border border-slate-300 px-3 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
           />
         </label>
         <label class="flex flex-col gap-1 text-sm">
           <span>{t("tokens.col.role")}</span>
           <select
             bind:value={createRole}
-            class="h-9 rounded border border-slate-300 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="h-10 rounded border border-slate-300 px-2 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="viewer">viewer</option>
             <option value="operator">operator</option>
@@ -222,7 +222,7 @@
 <!-- Token reveal modal -->
 {#if revealToken}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"

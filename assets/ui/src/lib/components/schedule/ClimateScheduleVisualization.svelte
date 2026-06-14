@@ -193,7 +193,7 @@
   </header>
 
   <div class="overflow-x-auto">
-    <div class="flex min-w-[420px] gap-1 sm:min-w-[520px] sm:gap-2">
+    <div class="flex gap-1 sm:min-w-[520px] sm:gap-2">
       <div class="flex w-9 shrink-0 flex-col">
         <div class="mb-1 h-[14px]"></div>
         <div class="relative h-[280px]">
@@ -211,7 +211,7 @@
       </div>
 
       {#each dayBlocks as { day, blocks } (day)}
-        <div class="flex min-w-[44px] flex-1 flex-col sm:min-w-[56px]">
+        <div class="flex min-w-[40px] flex-1 flex-col sm:min-w-[56px]">
           <div class="mb-1 text-center text-[11px] font-semibold text-slate-700 dark:text-slate-200">
             {shortDay(day)}
           </div>

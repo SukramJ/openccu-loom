@@ -316,7 +316,7 @@
         <div class="inline-flex overflow-hidden rounded-md border border-slate-200 dark:border-slate-700">
           <button
             type="button"
-            class="px-3 py-1.5 text-sm transition {role === 'sender'
+            class="px-3 py-2 text-sm transition {role === 'sender'
               ? 'bg-brand-500 text-white'
               : 'bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-200'}"
             onclick={() => void changeRole("sender")}
@@ -325,7 +325,7 @@
           </button>
           <button
             type="button"
-            class="px-3 py-1.5 text-sm transition {role === 'receiver'
+            class="px-3 py-2 text-sm transition {role === 'receiver'
               ? 'bg-brand-500 text-white'
               : 'bg-white text-slate-700 dark:bg-slate-900 dark:text-slate-200'}"
             onclick={() => void changeRole("receiver")}

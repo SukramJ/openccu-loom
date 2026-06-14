@@ -98,10 +98,14 @@
 </script>
 
 <div class="overflow-x-auto rounded-md border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-900/40">
+  <!-- Fluid: fills the container up to its natural width, then scales
+       down to fit a phone so the whole 24h day stays visible at a glance
+       (slots remain tappable for detail) instead of forcing a sideways
+       scroll. The viewBox preserves the aspect ratio. -->
   <svg
     viewBox="0 0 {stripWidth} {stripHeight}"
-    width={stripWidth}
-    height={stripHeight}
+    width="100%"
+    style="max-width: {stripWidth}px; height: auto;"
     class="block"
     role="img"
     aria-label={t("schedule.viz.aria")}

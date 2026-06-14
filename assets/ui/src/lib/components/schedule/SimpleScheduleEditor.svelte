@@ -287,7 +287,7 @@
                 {@const active = entry.weekdays.includes(day)}
                 <button
                   type="button"
-                  class="h-7 w-9 rounded-full border text-xs font-medium transition {active
+                  class="h-9 w-9 rounded-full border text-xs font-medium transition {active
                     ? 'border-brand-500 bg-brand-500 text-white'
                     : 'border-slate-300 text-slate-600 hover:border-brand-500 dark:border-slate-700 dark:text-slate-300'}"
                   aria-pressed={active}
@@ -333,7 +333,7 @@
                     patch(idx, {
                       level: Number((e.target as HTMLInputElement).value) / 100,
                     })}
-                  class="h-2 w-32 cursor-pointer accent-brand-500"
+                  class="h-3 w-32 cursor-pointer accent-brand-500"
                 />
                 <span class="w-10 text-right font-mono">
                   {Math.round(entry.level * 100)}%
@@ -352,7 +352,7 @@
                       level_2:
                         Number((e.target as HTMLInputElement).value) / 100,
                     })}
-                  class="h-2 w-24 cursor-pointer accent-brand-500"
+                  class="h-3 w-24 cursor-pointer accent-brand-500"
                 />
                 <span class="w-10 text-right font-mono">
                   {Math.round((entry.level_2 ?? 0) * 100)}%
@@ -363,7 +363,7 @@
                    underlying level/duration/target_channels are
                    recomputed by the backend on save (port of
                    aiohomematic's _LOCK_ACTION_TO_RAW). -->
-              <label class="flex items-center gap-2 text-xs">
+              <label class="flex flex-wrap items-center gap-2 text-xs">
                 <span class="text-slate-600 dark:text-slate-400">
                   {t("schedule.lock.mode")}
                 </span>
@@ -392,7 +392,7 @@
                 </div>
               </label>
               {#if (entry.lock_mode ?? "door_lock") === "door_lock"}
-                <label class="flex items-center gap-2 text-xs">
+                <label class="flex flex-wrap items-center gap-2 text-xs">
                   <span class="text-slate-600 dark:text-slate-400">
                     {t("schedule.lock.action")}
                   </span>
@@ -423,7 +423,7 @@
                   </div>
                 </label>
               {:else}
-                <label class="flex items-center gap-2 text-xs">
+                <label class="flex flex-wrap items-center gap-2 text-xs">
                   <span class="text-slate-600 dark:text-slate-400">
                     {t("schedule.lock.permission")}
                   </span>
@@ -459,7 +459,7 @@
                     patch(idx, {
                       level: Number((e.target as HTMLInputElement).value) / 100,
                     })}
-                  class="h-2 w-32 cursor-pointer accent-brand-500"
+                  class="h-3 w-32 cursor-pointer accent-brand-500"
                 />
                 <span class="w-10 text-right font-mono">
                   {Math.round(entry.level * 100)}%
@@ -529,7 +529,7 @@
               </label>
 
               {#if astro}
-                <label class="flex items-center gap-2">
+                <label class="flex flex-wrap items-center gap-2">
                   <span class="text-slate-600 dark:text-slate-400">
                     {t("schedule.astro")}
                   </span>

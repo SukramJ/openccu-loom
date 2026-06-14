@@ -105,7 +105,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-8">
+<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
   <header class="mb-6">
     <h1 class="text-2xl font-semibold">{t("unignore.title")}</h1>
     <p class="mt-2 text-sm" style="color: var(--ha-secondary-text-color);">
@@ -142,7 +142,7 @@
           </select>
         </label>
 
-        <label class="ml-auto flex items-center gap-2 text-sm">
+        <label class="flex items-center gap-2 text-sm sm:ml-auto">
           <input
             type="checkbox"
             checked={includeMaster}

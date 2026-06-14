@@ -94,7 +94,7 @@
 {#if !expanded}
   <button
     type="button"
-    class="inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+    class="inline-flex min-h-10 items-center gap-1 rounded-full border px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
     disabled={disabled}
     onclick={open}
     aria-label={label}
@@ -106,25 +106,36 @@
   </button>
 {:else}
   <div
-    class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs"
+    class="flex w-full items-center gap-2 rounded-lg border px-2"
     style:border-color="var(--ha-primary-color)"
     style:background-color="var(--ha-card-background-color)"
   >
     <span class="text-[var(--ha-secondary-text-color)]" aria-hidden="true">{icon}</span>
     <input
       type="number"
-      class="w-16 bg-transparent text-right outline-none"
+      class="h-10 w-16 bg-transparent text-right outline-none"
       style:color="var(--ha-primary-text-color)"
       bind:value={entered}
       onkeydown={onKey}
       aria-label={label}
     />
     {#if unit}
-      <span class="text-[var(--ha-secondary-text-color)]">{unit}</span>
+      <span class="text-sm text-[var(--ha-secondary-text-color)]">{unit}</span>
+    {/if}
+    {#if min !== undefined || max !== undefined}
+      <span class="text-[10px] text-[var(--ha-secondary-text-color)]">
+        {#if min !== undefined && max !== undefined}
+          {min}–{max}
+        {:else if min !== undefined}
+          ≥ {min}
+        {:else}
+          ≤ {max}
+        {/if}
+      </span>
     {/if}
     <button
       type="button"
-      class="ml-1 rounded-full px-2 py-0.5 font-medium transition-colors"
+      class="ml-auto min-h-10 rounded-full px-3 font-medium transition-colors"
       class:phase-pending={phase === "pending"}
       class:phase-ok={phase === "ok"}
       class:phase-err={phase === "err"}
@@ -138,23 +149,12 @@
     </button>
     <button
       type="button"
-      class="rounded-full px-2 py-0.5 text-[var(--ha-secondary-text-color)] transition-colors hover:text-[var(--ha-primary-text-color)]"
+      class="min-h-10 rounded-full px-3 text-[var(--ha-secondary-text-color)] transition-colors hover:text-[var(--ha-primary-text-color)]"
       onclick={close}
       aria-label={t("sensor_actor.cancel")}
     >
       ✕
     </button>
-    {#if min !== undefined || max !== undefined}
-      <span class="ml-1 text-[10px] text-[var(--ha-secondary-text-color)]">
-        {#if min !== undefined && max !== undefined}
-          {min}–{max}
-        {:else if min !== undefined}
-          ≥ {min}
-        {:else}
-          ≤ {max}
-        {/if}
-      </span>
-    {/if}
   </div>
 {/if}
 

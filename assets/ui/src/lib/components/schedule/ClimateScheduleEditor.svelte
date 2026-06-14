@@ -351,7 +351,7 @@
         >
           <header class="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h3 class="text-sm font-semibold">{wd(day)}</h3>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <label class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
                 {t("climate.base_label")}
                 <div class="w-20">
@@ -392,49 +392,60 @@
           {:else}
             <ul class="space-y-2">
               {#each weekday.periods as period, idx (idx)}
-                <li class="flex flex-wrap items-center gap-2 text-sm">
-                  <Input
-                    type="time"
-                    value={period.start_time}
-                    onchange={(e) =>
-                      updatePeriod(day, idx, {
-                        start_time: (e.target as HTMLInputElement).value,
-                      })}
-                  />
-                  <span class="text-[var(--ha-secondary-text-color)]">→</span>
-                  <Input
-                    type="time"
-                    value={period.end_time === "24:00"
-                      ? "00:00"
-                      : period.end_time}
-                    onchange={(e) => {
-                      const v = (e.target as HTMLInputElement).value;
-                      updatePeriod(day, idx, {
-                        end_time: v === "00:00" ? "24:00" : v,
-                      });
-                    }}
-                  />
-                  <div class="w-20">
-                    <Input
-                      type="number"
-                      step="0.5"
-                      value={period.temperature}
-                      oninput={(e) => {
-                        const n = Number((e.target as HTMLInputElement).value);
-                        if (Number.isFinite(n))
-                          updatePeriod(day, idx, { temperature: n });
-                      }}
-                    />
+                <!-- Two cohesive groups (time-pair · temp+delete) so the
+                     row wraps between them on a phone instead of orphaning
+                     the → arrow. -->
+                <li class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+                  <div class="flex items-center gap-2">
+                    <div class="w-28">
+                      <Input
+                        type="time"
+                        value={period.start_time}
+                        onchange={(e) =>
+                          updatePeriod(day, idx, {
+                            start_time: (e.target as HTMLInputElement).value,
+                          })}
+                      />
+                    </div>
+                    <span class="text-[var(--ha-secondary-text-color)]">→</span>
+                    <div class="w-28">
+                      <Input
+                        type="time"
+                        value={period.end_time === "24:00"
+                          ? "00:00"
+                          : period.end_time}
+                        onchange={(e) => {
+                          const v = (e.target as HTMLInputElement).value;
+                          updatePeriod(day, idx, {
+                            end_time: v === "00:00" ? "24:00" : v,
+                          });
+                        }}
+                      />
+                    </div>
                   </div>
-                  <span class="text-[var(--ha-secondary-text-color)]">°C</span>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    onclick={() => removePeriod(day, idx)}
-                  >
-                    ×
-                  </Button>
+                  <div class="flex items-center gap-2">
+                    <div class="w-20">
+                      <Input
+                        type="number"
+                        step="0.5"
+                        value={period.temperature}
+                        oninput={(e) => {
+                          const n = Number((e.target as HTMLInputElement).value);
+                          if (Number.isFinite(n))
+                            updatePeriod(day, idx, { temperature: n });
+                        }}
+                      />
+                    </div>
+                    <span class="text-[var(--ha-secondary-text-color)]">°C</span>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      onclick={() => removePeriod(day, idx)}
+                    >
+                      ×
+                    </Button>
+                  </div>
                 </li>
               {/each}
             </ul>

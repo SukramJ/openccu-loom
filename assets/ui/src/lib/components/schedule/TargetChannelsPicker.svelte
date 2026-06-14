@@ -76,7 +76,7 @@
         {@const active = isSelected(ch)}
         <button
           type="button"
-          class="h-7 rounded-md border text-xs font-mono transition {active
+          class="h-10 rounded-md border text-xs font-mono transition {active
             ? 'border-brand-500 bg-brand-500 text-white'
             : 'border-slate-300 text-slate-600 hover:border-brand-500 dark:border-slate-700 dark:text-slate-300'}"
           aria-pressed={active}

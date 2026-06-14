@@ -187,18 +187,18 @@
       ></button>
     {/if}
 
-    <div class="{sidebarPad} transition-[padding] duration-200">
+    <div class="{sidebarPad} pt-safe pr-safe transition-[padding] duration-200">
       <header
         class="flex h-14 items-center gap-2 border-b px-4"
         style="border-color: var(--ha-divider-color);"
       >
         <button
           type="button"
-          class="-ml-1 rounded-md p-1.5 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
+          class="-ml-1 flex h-10 w-10 items-center justify-center rounded-md hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
           aria-label={t("app.menu")}
           onclick={() => (mobileNavOpen = true)}
         >
-          <Icon name="mdi:menu" size={20} />
+          <Icon name="mdi:menu" size={22} />
         </button>
         <div class="ml-auto">
           <ConnectionBadge />

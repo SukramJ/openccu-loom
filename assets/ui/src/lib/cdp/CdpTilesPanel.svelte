@@ -182,7 +182,7 @@
       <span>{error}</span>
       <button
         type="button"
-        class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+        class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
         onclick={() => load()}
       >
         Erneut versuchen
@@ -195,7 +195,7 @@
       <span>Lädt {detail.address}/cdps · seit {Math.round(elapsed / 1000)}s…</span>
       <button
         type="button"
-        class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+        class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
         onclick={() => load()}
       >
         Erneut versuchen

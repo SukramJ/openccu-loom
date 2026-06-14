@@ -36,7 +36,7 @@
 >
   <BitsSelect.Trigger
     class={cn(
-      "flex h-9 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1 text-sm shadow-sm",
+      "flex h-10 w-full items-center justify-between rounded-md border border-slate-300 bg-white px-3 py-1 text-base shadow-sm sm:text-sm",
       "focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "dark:border-slate-700 dark:bg-slate-900",
@@ -51,14 +51,14 @@
 
   <BitsSelect.Portal>
     <BitsSelect.Content
-      class="z-50 min-w-[8rem] overflow-hidden rounded-md border border-slate-200 bg-white p-1 text-sm shadow-md dark:border-slate-800 dark:bg-slate-900"
+      class="z-50 max-h-[60vh] min-w-[8rem] overflow-y-auto rounded-md border border-slate-200 bg-white p-1 text-sm shadow-md dark:border-slate-800 dark:bg-slate-900"
       sideOffset={4}
     >
       {#each options as option (option.value)}
         <BitsSelect.Item
           value={option.value}
           label={option.label}
-          class="relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 outline-none data-[highlighted]:bg-slate-100 data-[disabled]:opacity-50 dark:data-[highlighted]:bg-slate-800"
+          class="relative flex min-h-[40px] cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-base outline-none data-[highlighted]:bg-slate-100 data-[disabled]:opacity-50 sm:min-h-0 sm:text-sm dark:data-[highlighted]:bg-slate-800"
         >
           {#snippet children({ selected }: { selected: boolean })}
             <span

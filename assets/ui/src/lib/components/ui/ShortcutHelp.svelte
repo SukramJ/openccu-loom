@@ -44,7 +44,7 @@
 
 {#if open}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50"
     role="dialog"
     aria-modal="true"
     aria-label={t("shortcut.title")}
@@ -63,7 +63,7 @@
         <h2 class="text-lg font-semibold">{t("shortcut.title")}</h2>
         <button
           type="button"
-          class="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+          class="flex h-9 w-9 items-center justify-center rounded-md text-sm text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
           onclick={onClose}
           aria-label={t("common.close")}
         >

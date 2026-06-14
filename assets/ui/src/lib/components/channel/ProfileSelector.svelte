@@ -244,7 +244,7 @@
       {/if}
     </p>
     <div class="flex flex-wrap items-center gap-3">
-      <div class="min-w-[16rem] flex-1">
+      <div class="min-w-[12rem] flex-1">
         <Select
           options={variants.map((v) => ({
             value: v.key,
@@ -299,6 +299,7 @@
           </button>
         </div>
         {#if previewExpanded}
+          <div class="overflow-x-auto">
           <table class="mt-2 w-full text-left text-[11px]">
             <thead class="text-[var(--ha-secondary-text-color)]">
               <tr>
@@ -331,6 +332,7 @@
               {/each}
             </tbody>
           </table>
+          </div>
         {/if}
       </div>
     {/if}

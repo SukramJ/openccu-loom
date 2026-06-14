@@ -85,7 +85,7 @@
   onpointercancel={onPointerUp}
 >
   <div
-    class="pointer-events-none absolute top-1/2 h-12 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md ring-1 ring-black/20 dark:bg-slate-200 dark:ring-white/30"
+    class="pointer-events-none absolute top-1/2 h-12 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-md ring-1 ring-black/20 dark:bg-slate-200 dark:ring-white/30"
     style="left: {percent}%;"
   ></div>
 </div>

@@ -74,16 +74,16 @@
   });
 </script>
 
-<div class="max-w-lg">
+<div class="max-w-lg px-4 sm:px-0">
   {#if phase === "idle"}
     <!-- Step 1 -->
     <Card class="p-6">
       <h2 class="text-base font-semibold mb-4" style="color: var(--ha-primary-text-color);">
         {t("matter.pair.window_open_duration")}
       </h2>
-      <div class="flex items-center gap-3 mb-4">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
         <select
-          class="h-9 rounded-md border px-2 text-sm"
+          class="h-10 rounded-md border px-2 text-base sm:text-sm sm:h-9"
           style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
           bind:value={selectedDuration}
         >
@@ -91,7 +91,7 @@
             <option value={opt.value}>{opt.label}</option>
           {/each}
         </select>
-        <Button disabled={opening} onclick={() => void openWindow()}>
+        <Button class="w-full sm:w-auto" disabled={opening} onclick={() => void openWindow()}>
           {opening ? t("common.saving") : t("matter.pair.window_open")}
         </Button>
       </div>
@@ -142,12 +142,12 @@
         <!-- QR code -->
         {#if qrSvg()}
           <div
-            class="border rounded p-2"
+            class="border rounded p-2 max-w-full"
             style="border-color: var(--ha-divider-color);"
             aria-label={t("matter.pair.qr_caption")}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
-            {@html qrSvg()}
+            <div class="max-w-full h-auto">{@html qrSvg()}</div>
           </div>
         {/if}
 
@@ -156,7 +156,7 @@
           <p class="text-xs mb-1" style="color: var(--ha-secondary-text-color);">
             {t("matter.pair.manual_code")}
           </p>
-          <p class="text-lg font-mono font-semibold tracking-widest" style="color: var(--ha-primary-text-color);">
+          <p class="text-lg font-mono font-semibold tracking-widest whitespace-nowrap overflow-x-auto" style="color: var(--ha-primary-text-color);">
             {window.manual_code}
           </p>
         </div>

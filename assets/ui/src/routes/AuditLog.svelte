@@ -119,7 +119,7 @@
 </script>
 
 <section
-  class={embedded ? "" : "mx-auto max-w-6xl px-6 py-6"}
+  class={embedded ? "" : "mx-auto max-w-6xl px-4 sm:px-6 py-6"}
 >
   {#if !embedded}
     <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -142,7 +142,7 @@
       type="search"
       placeholder={t("common.search")}
       bind:value={searchFilter}
-      class="w-64 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+      class="w-full sm:w-64 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
     />
     <select
       bind:value={actionFilter}
@@ -219,7 +219,7 @@
               {/if}
             </button>
             {#if expanded && entry.changes && entry.changes.length > 0}
-              <table class="mt-2 w-full text-left text-xs">
+              <table class="table-reflow mt-2 w-full text-left text-xs">
                 <thead class="text-[var(--ha-secondary-text-color)]">
                   <tr>
                     <th class="py-1 pr-2">{t("audit.col.parameter")}</th>
@@ -230,11 +230,11 @@
                 <tbody>
                   {#each entry.changes as change (change.parameter)}
                     <tr class="border-t border-slate-100 dark:border-slate-800">
-                      <td class="py-1 pr-2 font-mono">{change.parameter}</td>
-                      <td class="py-1 pr-2 font-mono text-[var(--ha-secondary-text-color)]">
+                      <td class="reflow-title py-1 pr-2 font-mono">{change.parameter}</td>
+                      <td class="py-1 pr-2 font-mono text-[var(--ha-secondary-text-color)]" data-label={t("audit.col.before")}>
                         {change.before == null ? "—" : JSON.stringify(change.before)}
                       </td>
-                      <td class="py-1 font-mono">
+                      <td class="py-1 font-mono" data-label={t("audit.col.after")}>
                         {change.after == null ? "—" : JSON.stringify(change.after)}
                       </td>
                     </tr>

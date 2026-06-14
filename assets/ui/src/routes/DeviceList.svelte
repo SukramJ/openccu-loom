@@ -4,6 +4,7 @@
   import DeviceCard from "$lib/components/DeviceCard.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { api } from "$lib/api/client";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let filter = $state("");
   let availability = $state<"all" | "available" | "unavailable">("all");
@@ -20,6 +21,10 @@
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
   let bulkBanner = $state<string | null>(null);
+  // Inline "set room" editor — replaces a native prompt() so the bulk
+  // flow stays on-brand and works cleanly on touch.
+  let roomEditing = $state(false);
+  let roomDraft = $state("");
 
   function setSort(col: "name" | "address" | "model") {
     if (sortColumn === col) {
@@ -56,7 +61,12 @@
       bulkBanner = "Keine selektierten Geräte haben ein Firmware-Update verfügbar.";
       return;
     }
-    if (!confirm(`Firmware-Update für ${list.length} Gerät(e) anstoßen?`)) return;
+    const ok2 = await confirmStore.ask({
+      title: "Firmware-Update",
+      body: `Firmware-Update für ${list.length} Gerät(e) anstoßen?`,
+      confirmLabel: "Update starten",
+    });
+    if (!ok2) return;
     bulkBusy = true;
     bulkBanner = null;
     let ok = 0;
@@ -76,8 +86,7 @@
 
   async function bulkSetRoom() {
     if (selected.size === 0) return;
-    const room = prompt("Raum für ausgewählte Geräte (leer = entfernen):") ?? "";
-    if (room === null) return;
+    const room = roomDraft.trim();
     bulkBusy = true;
     bulkBanner = null;
     let ok = 0;
@@ -92,6 +101,8 @@
     }
     bulkBanner = `${ok} OK, ${fail} fehlgeschlagen.`;
     bulkBusy = false;
+    roomEditing = false;
+    roomDraft = "";
     selected = new Set();
     await deviceStore.refresh();
   }
@@ -201,7 +212,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-8">
+<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
   <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">Geräte</h1>
@@ -213,12 +224,12 @@
         {/if}
       </p>
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
       <input
         type="search"
         placeholder="Suche (Adresse, Name, Modell)"
         bind:value={filter}
-        class="w-72 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
+        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-72 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
       <select
         bind:value={availability}
@@ -283,9 +294,29 @@
       </span>
       <Button type="button" variant="outline" size="sm" onclick={selectAll}>Alle filtern</Button>
       <Button type="button" variant="outline" size="sm" onclick={clearSelection}>Auswahl leeren</Button>
-      <Button type="button" size="sm" onclick={() => void bulkSetRoom()} disabled={bulkBusy}>
-        Raum setzen
-      </Button>
+      {#if roomEditing}
+        <input
+          type="text"
+          bind:value={roomDraft}
+          placeholder="Raum (leer = entfernen)"
+          aria-label="Raum für Auswahl"
+          class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-base sm:w-48 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
+          onkeydown={(e) => {
+            if (e.key === "Enter") void bulkSetRoom();
+            else if (e.key === "Escape") roomEditing = false;
+          }}
+        />
+        <Button type="button" size="sm" onclick={() => void bulkSetRoom()} disabled={bulkBusy}>
+          Übernehmen
+        </Button>
+        <Button type="button" variant="outline" size="sm" onclick={() => (roomEditing = false)} disabled={bulkBusy}>
+          Abbrechen
+        </Button>
+      {:else}
+        <Button type="button" size="sm" onclick={() => { roomDraft = ""; roomEditing = true; }} disabled={bulkBusy}>
+          Raum setzen
+        </Button>
+      {/if}
       <Button type="button" size="sm" onclick={() => void bulkUpdateFirmware()} disabled={bulkBusy}>
         Firmware-Update
       </Button>

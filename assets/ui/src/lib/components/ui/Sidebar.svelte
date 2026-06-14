@@ -247,7 +247,7 @@
 </script>
 
 <aside
-  class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r transition-transform duration-200 md:translate-x-0 {collapsed
+  class="pt-safe pb-safe pl-safe fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r transition-transform duration-200 md:translate-x-0 {collapsed
     ? 'md:w-16'
     : 'md:w-60'} {mobileOpen ? 'translate-x-0' : '-translate-x-full'}"
   style="background-color: var(--ha-secondary-background-color); border-color: var(--ha-divider-color);"

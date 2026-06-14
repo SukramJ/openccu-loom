@@ -41,7 +41,7 @@
         autocomplete="username"
         required
         bind:value={username}
-        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
+        class="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
     </label>
 
@@ -54,7 +54,7 @@
         autocomplete="current-password"
         required
         bind:value={password}
-        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900"
+        class="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-base focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
     </label>
 
@@ -66,7 +66,7 @@
 
     <button
       type="submit"
-      class="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+      class="flex h-11 w-full items-center justify-center rounded-md bg-brand-500 px-3 text-base font-medium text-white transition hover:bg-brand-700 disabled:opacity-50 sm:text-sm"
       disabled={submitting}
     >
       {submitting ? "Anmelden…" : "Anmelden"}
@@ -81,7 +81,7 @@
     <div class="mt-3">
       <a
         href="/api/v1/auth/oidc/start"
-        class="block w-full rounded-md border border-slate-300 px-3 py-2 text-center text-sm font-medium text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200"
+        class="flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-3 text-center text-sm font-medium text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200"
       >
         Single Sign-On (OIDC)
       </a>

@@ -34,7 +34,7 @@
   const statusEnabled = $derived(matterStore.status?.enabled === true);
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-8">
+<section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
   <h1 class="text-2xl font-semibold" style="color: var(--ha-primary-text-color);">
     {t("nav.matter")}
   </h1>
@@ -82,7 +82,7 @@
 
     <!-- Tab bar -->
     <div
-      class="mt-4 flex gap-1 border-b"
+      class="mt-4 flex gap-1 border-b overflow-x-auto"
       style="border-color: var(--ha-divider-color);"
       role="tablist"
     >
@@ -92,7 +92,7 @@
           {href}
           role="tab"
           aria-selected={active}
-          class="px-4 py-2 text-sm font-medium transition border-b-2 -mb-px"
+          class="flex-1 text-center px-4 py-3 text-sm font-medium transition border-b-2 -mb-px whitespace-nowrap"
           style="color: {active ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'}; border-color: {active ? 'var(--ha-primary-color)' : 'transparent'};"
         >
           {t(`matter.tab.${tab}`)}

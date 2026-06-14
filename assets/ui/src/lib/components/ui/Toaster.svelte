@@ -19,7 +19,7 @@
 </script>
 
 <div
-  class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-full max-w-sm flex-col gap-2"
+  class="pin-b-safe pin-r-safe pointer-events-none fixed z-50 flex w-[calc(100%-2rem)] max-w-sm flex-col gap-2"
   role="region"
   aria-live="polite"
 >
@@ -37,7 +37,7 @@
         </div>
         <button
           type="button"
-          class="-mt-1 -mr-1 rounded p-1 text-lg leading-none opacity-70 hover:opacity-100"
+          class="-mt-1 -mr-1 flex h-9 w-9 items-center justify-center rounded text-lg leading-none opacity-70 hover:opacity-100"
           onclick={() => toastStore.dismiss(toast.id)}
           aria-label="dismiss"
         >

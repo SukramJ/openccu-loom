@@ -281,7 +281,7 @@
       {#each parameter.value_list as entry (entry.value)}
         {@const selected = value != null && Number(value) === entry.value}
         <label
-          class="inline-flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition {selected
+          class="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm transition {selected
             ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/30'
             : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'}"
         >
@@ -317,7 +317,7 @@
         step={sliderStep}
         value={value != null ? String(value) : numericMin ?? 0}
         disabled={interactionDisabled}
-        class="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-500 dark:bg-slate-700"
+        class="h-3 flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-500 dark:bg-slate-700"
         oninput={(e) => {
           const n = toNumber((e.target as HTMLInputElement).value);
           if (n !== null) onChange(n);
@@ -374,7 +374,7 @@
           JSON.stringify(value) === JSON.stringify(preset.value)}
         <button
           type="button"
-          class="rounded-full border px-2 py-0.5 text-[11px] transition {selected
+          class="rounded-full border px-2 py-1.5 text-[11px] transition {selected
             ? 'border-brand-500 bg-brand-50 text-brand-900 dark:bg-brand-950/40 dark:text-brand-100'
             : 'border-slate-200 text-slate-700 hover:border-brand-400 dark:border-slate-700 dark:text-slate-200'}"
           onclick={() => onChange(preset.value)}

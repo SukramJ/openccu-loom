@@ -142,7 +142,7 @@
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("users.empty")}</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="table-reflow w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left dark:border-slate-800">
             <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.subject")}</th>
@@ -155,23 +155,25 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {#each users as u (u.subject)}
             <tr>
-              <td class="py-2 pr-4 font-mono">{u.subject}</td>
-              <td class="py-2 pr-4">
-                <select
-                  value={u.role}
-                  onchange={(e) =>
-                    void changeRole(u.subject, (e.target as HTMLSelectElement).value)}
-                  class="rounded border border-slate-300 bg-white px-2 py-0.5 text-xs dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <option value="viewer">viewer</option>
-                  <option value="operator">operator</option>
-                  <option value="admin">admin</option>
-                </select>
-                <Badge variant={roleBadgeVariant(u.role)} class="ml-1">{u.role}</Badge>
+              <td class="reflow-title py-2 pr-4 font-mono">{u.subject}</td>
+              <td class="py-2 pr-4" data-label={t("users.col.role")}>
+                <span class="inline-flex items-center gap-1">
+                  <select
+                    value={u.role}
+                    onchange={(e) =>
+                      void changeRole(u.subject, (e.target as HTMLSelectElement).value)}
+                    class="min-h-[36px] rounded border border-slate-300 bg-white px-2 py-0.5 text-xs sm:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <option value="viewer">viewer</option>
+                    <option value="operator">operator</option>
+                    <option value="admin">admin</option>
+                  </select>
+                  <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
+                </span>
               </td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]">{fmtDate(u.created_at)}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]">{fmtDate(u.last_seen_at)}</td>
-              <td class="py-2">
+              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("users.col.created")}>{fmtDate(u.created_at)}</td>
+              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("users.col.last_seen")}>{fmtDate(u.last_seen_at)}</td>
+              <td class="reflow-actions py-2">
                 <div class="flex gap-1">
                   <Button
                     type="button"
@@ -207,7 +209,7 @@
 <!-- Add-user modal -->
 {#if showAdd}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"
@@ -223,7 +225,7 @@
           <input
             type="text"
             bind:value={addUsername}
-            class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="h-10 rounded border border-slate-300 px-3 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
             autocomplete="off"
           />
         </label>
@@ -232,7 +234,7 @@
           <input
             type="password"
             bind:value={addPassword}
-            class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="h-10 rounded border border-slate-300 px-3 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
             autocomplete="new-password"
           />
         </label>
@@ -240,7 +242,7 @@
           <span>{t("users.col.role")}</span>
           <select
             bind:value={addRole}
-            class="h-9 rounded border border-slate-300 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="h-10 rounded border border-slate-300 px-2 text-base sm:text-sm dark:border-slate-700 dark:bg-slate-900"
           >
             <option value="viewer">viewer</option>
             <option value="operator">operator</option>
@@ -272,7 +274,7 @@
 <!-- Change-password modal -->
 {#if pwSubject}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"

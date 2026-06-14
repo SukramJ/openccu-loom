@@ -151,7 +151,7 @@
   {#if error}
     <div class="m-3 rounded border border-[var(--ha-error-color)] p-2 text-xs text-[var(--ha-error-color)]">
       {t("sensor_actor.load_failed", { address: channelAddress })}
-      <button type="button" class="ml-2 underline" onclick={() => load()}>↻</button>
+      <button type="button" class="inline-flex min-h-10 items-center rounded px-2 underline" onclick={() => load()}>↻</button>
     </div>
   {:else if loading}
     <div class="px-3 py-3 text-xs text-[var(--ha-secondary-text-color)]">
@@ -201,7 +201,7 @@
     <!-- Controls + actions row -->
     {#if composed.controls.length + composed.actions.length > 0}
       <div
-        class="flex flex-wrap items-center gap-1.5 border-t px-3 py-2"
+        class="flex flex-wrap items-center gap-2.5 border-t px-3 py-2"
         style:border-color="var(--ha-divider-color)"
       >
         {#each composed.controls as c (c.dp.parameter)}

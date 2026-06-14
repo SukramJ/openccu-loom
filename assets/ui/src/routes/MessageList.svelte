@@ -137,7 +137,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("messages.title")}</h1>
