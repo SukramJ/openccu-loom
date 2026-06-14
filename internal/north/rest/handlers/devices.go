@@ -776,7 +776,16 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	}
 	s.Control = pd.Control
 	s.Type = string(pd.Type)
-	s.Unit = pd.Unit
+	// Surface the canonical (cleaned) unit so REST consumers see the same
+	// string as the direct-CCU twin — the reference stack applies the same
+	// _fix_unit normalisation (100% → %, LEVEL → %, …). The DataPoint's Unit()
+	// method runs that cleanup; fall back to the raw descriptor unit for DPs
+	// that do not implement it.
+	if u, ok := dp.(interface{ Unit() string }); ok {
+		s.Unit = u.Unit()
+	} else {
+		s.Unit = pd.Unit
+	}
 	if len(pd.ValueList) > 0 {
 		s.ValueList = pd.ValueList
 	}
