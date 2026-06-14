@@ -163,9 +163,11 @@ func newIPCoverConstructor(ch *device.Channel, rebased custom.RebasedChannelGrou
 // present) to the absolute channel + parameter and binds the corresponding
 // LEVEL DP onto the cover via [Cover.SetGroupLevel].
 //
-// `useGroupChannelForState=true` is the implicit default — openccu-loom has no
-// per-central config knob (yet), so any cover whose profile declares a
-// GROUP_LEVEL field follows the group channel.
+// Whether the cover follows the group channel is the per-central
+// `use_group_channel_for_cover_state` toggle (read off the device via
+// [useGroupChannelForState]); it defaults to true, so any cover whose
+// profile declares a GROUP_LEVEL field follows the group channel
+// unless the operator turns the toggle off.
 func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChannelGroupConfig) {
 	if cov == nil || ch == nil || ch.Device() == nil {
 		return
@@ -190,7 +192,7 @@ func applyGroupLevel(cov *Cover, ch *device.Channel, rebased custom.RebasedChann
 			continue
 		}
 		if dp := custom.FloatField(groupCh, param); dp != nil {
-			cov.SetGroupLevel(dp, true)
+			cov.SetGroupLevel(dp, useGroupChannelForState(ch))
 			return
 		}
 	}
@@ -326,4 +328,15 @@ func newIPGarageConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConf
 			SupportsVent: true,
 		},
 	}), nil
+}
+
+// useGroupChannelForState reads the per-central
+// use_group_channel_for_cover_state toggle off the channel's device,
+// defaulting to true when the channel or device is absent (test
+// fixtures, pre-pipeline state).
+func useGroupChannelForState(ch *device.Channel) bool {
+	if ch == nil || ch.Device() == nil {
+		return true
+	}
+	return ch.Device().UseGroupChannelForCoverState()
 }

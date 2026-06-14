@@ -503,6 +503,39 @@ centrals:
     # 0 = compiled-in default (30s). Negative = job disabled.  [default: 0]
     check_connection_interval: 0s
 
+    # Per-central behaviour toggles. All optional; omit the block to keep
+    # the defaults shown. Each mirrors an aiohomematic config knob.
+    behavior:
+      # Light turn-on: true restores the last non-zero brightness;
+      # false turns on at full (100%).  [default: true]
+      light_last_brightness: true
+      # Cover position source: true reports from the group channel when
+      # present; false from the cover's own channel.  [default: true]
+      use_group_channel_for_cover_state: true
+      # Hub scan gates: false suppresses the system-variable / program
+      # scan for this central entirely.  [default: true / true]
+      enable_sysvar_scan: true
+      enable_program_scan: true
+      # Internal hub entities: include CCU-internal sysvars / programs.
+      # [default: true / false]
+      include_internal_sysvars: true
+      include_internal_programs: false
+      # Restrict the hub scan to entities whose CCU description starts
+      # with one of these markers. Allowed: HAHM, HX, INTERNAL, MQTT.
+      # Empty = include everything that passes the internal filter.
+      sysvar_markers: []
+      program_markers: []
+      # Override the periodic sysvar-refresh cadence.
+      # 0 = compiled-in default (5m).  [default: 0]
+      sysvar_scan_interval: 0s
+      # Per-device firmware-update entities. true surfaces them (the
+      # openccu-loom default; the reference stack defaults this off).
+      # [default: true]
+      enable_device_firmware_check: true
+      # Defer creation of a newly-paired device until it is accepted from
+      # the inbox, instead of ingesting immediately.  [default: false]
+      delay_new_device_creation: false
+
     # Interfaces: short form (list of strings) or long form (list of maps).
     # HmIP-Wired is NOT a separate interface name — devices are
     # classified automatically via HmIP-RF (model prefix "hmipw-").

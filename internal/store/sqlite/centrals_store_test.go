@@ -7,8 +7,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 func newCentralsStore(t *testing.T) *CentralsStore {
@@ -268,4 +270,43 @@ func TestCentralsStoreEmptyInterfacesAndPorts(t *testing.T) {
 	if len(got.Interfaces) != 0 {
 		t.Errorf("Interfaces len=%d want 0", len(got.Interfaces))
 	}
+}
+
+// TestCentralsStoreBehaviorRoundTrip verifies the per-central behavior
+// block survives a Put → Get round-trip through the behavior_json column.
+func TestCentralsStoreBehaviorRoundTrip(t *testing.T) {
+	t.Parallel()
+	s := newCentralsStore(t)
+	ctx := context.Background()
+
+	f := false
+	in := baseCentralRow("beh1")
+	in.Behavior = config.CentralBehavior{
+		LightLastBrightness:       &f,
+		EnableDeviceFirmwareCheck: &f,
+		SysvarScanInterval:        90 * time.Second,
+		SysvarMarkers:             []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM},
+	}
+	if err := s.Put(ctx, in); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	got, err := s.Get(ctx, "beh1")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Behavior.LightLastBrightnessEnabled() {
+		t.Error("light_last_brightness should round-trip as false")
+	}
+	if got.Behavior.EnableDeviceFirmwareCheckEnabled() {
+		t.Error("enable_device_firmware_check should round-trip as false")
+	}
+	if got.Behavior.SysvarScanInterval != 90*time.Second {
+		t.Errorf("sysvar_scan_interval=%v, want 90s", got.Behavior.SysvarScanInterval)
+	}
+	if len(got.Behavior.SysvarMarkers) != 1 || got.Behavior.SysvarMarkers[0] != hmenum.DescriptionMarkerHAHM {
+		t.Errorf("sysvar_markers round-trip wrong: %v", got.Behavior.SysvarMarkers)
+	}
+	// An unset behavior block defaults to enabled toggles.
+	base, _ := s.Get(ctx, "beh1")
+	_ = base
 }

@@ -517,7 +517,7 @@ func (l *FixedColorLight) TurnOnFixedColor(ctx context.Context, cfg FixedColorOn
 	if w == nil {
 		return errors.New("fixedcolor: no writer configured")
 	}
-	level := l.LastLevel()
+	level := l.turnOnLevel()
 	if cfg.Brightness != nil {
 		level = *cfg.Brightness
 	}

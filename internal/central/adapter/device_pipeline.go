@@ -90,6 +90,17 @@ type DevicePipeline struct {
 	// channels leave this nil — they use the CONFIG_PENDING event path.
 	masterRefreshHook func(addr string, key hmenum.ParamsetKey)
 
+	// cdpLightLastBrightness / cdpUseGroupChannelForCover are the
+	// per-central custom-DP rendering toggles stamped onto each device
+	// before materialisation. Both default to true (see
+	// [NewDevicePipeline]); set via [WithCustomDPBehavior] from the
+	// central's config.
+	cdpLightLastBrightness     bool
+	cdpUseGroupChannelForCover bool
+	// cdpEnableFirmwareCheck gates the per-device firmware-update
+	// surface (default true). Set via [WithFirmwareCheck].
+	cdpEnableFirmwareCheck bool
+
 	// visibility is the optional visibility gate consulted before each
 	// data-point is stored on a channel. When nil, all parameters pass
 	// through (backwards-compatible behaviour for tests/tooling that
@@ -120,7 +131,34 @@ type DevicePipeline struct {
 
 // NewDevicePipeline constructs a pipeline bound to c.
 func NewDevicePipeline(u *central.Unit) *DevicePipeline {
-	return &DevicePipeline{unit: u}
+	return &DevicePipeline{
+		unit: u,
+		// Custom-DP rendering toggles default to true; WireCentrals
+		// overrides them per central via [WithCustomDPBehavior]. The
+		// true default keeps the historical behavior for every pipeline
+		// built without the builder (tests, tooling).
+		cdpLightLastBrightness:     true,
+		cdpUseGroupChannelForCover: true,
+		cdpEnableFirmwareCheck:     true,
+	}
+}
+
+// WithCustomDPBehavior sets the per-central custom-DP rendering toggles
+// the pipeline stamps onto each device before custom-DP
+// materialisation: light last-brightness and cover group-channel
+// state. Both default to true (see [NewDevicePipeline]).
+func (p *DevicePipeline) WithCustomDPBehavior(lightLastBrightness, useGroupChannelForCover bool) *DevicePipeline {
+	p.cdpLightLastBrightness = lightLastBrightness
+	p.cdpUseGroupChannelForCover = useGroupChannelForCover
+	return p
+}
+
+// WithFirmwareCheck gates the per-device firmware-update surface
+// (default true). When false, devices are materialised as
+// non-updatable and no firmware-update entity spawns.
+func (p *DevicePipeline) WithFirmwareCheck(enabled bool) *DevicePipeline {
+	p.cdpEnableFirmwareCheck = enabled
+	return p
 }
 
 // WithTranslations attaches an optional translation set + locale used
@@ -289,6 +327,10 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	if dd.Version != nil {
 		schemaVersion = *dd.Version
 	}
+	// The firmware-update surface (the per-device Update entity) is
+	// gated by the per-central firmware-check toggle. When disabled the
+	// device is treated as non-updatable so no update entity spawns.
+	updatable := dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable && p.cdpEnableFirmwareCheck
 	d := device.New(device.Config{
 		InterfaceID: interfaceID,
 		Interface:   iface,
@@ -310,12 +352,12 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		Firmware: device.FirmwareInfo{
 			Current:   dd.Firmware,
 			Available: dd.AvailableFirmware,
-			Updatable: dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable,
+			Updatable: updatable,
 			// The installable-update gate reads FIRMWARE_UPDATE_STATE (the
 			// HmIP update lifecycle), not FIRMWARE_STATE (firmware health).
 			UpdateState: hmenum.DeviceFirmwareState(dd.FirmwareUpdateState),
 		},
-		Updatable: dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable,
+		Updatable: updatable,
 	})
 	if p.translations != nil {
 		d.ModelLabel = p.translations.DeviceModelLabel(p.locale, d.Model, d.SubModel)
@@ -886,6 +928,9 @@ func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger 
 		if d.InterfaceID != interfaceID {
 			continue
 		}
+		// Stamp the per-central rendering toggles before materialising
+		// so the light / cover factories read the operator's choice.
+		d.SetCustomDPBehavior(p.cdpLightLastBrightness, p.cdpUseGroupChannelForCover)
 		if err := custom.CreateCustomDataPoints(d, customReg); err != nil {
 			if logger != nil {
 				logger.Warn("custom data points materialization had errors",

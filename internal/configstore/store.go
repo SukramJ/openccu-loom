@@ -347,6 +347,7 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 			TLSInsecureSkipVerify: r.TLSInsecureSkipVerify,
 			PrimaryInterface:      r.PrimaryInterface,
 			Visibility:            r.Visibility,
+			Behavior:              r.Behavior,
 		})
 	}
 	if len(out) > 0 {

@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // InterfaceSpec describes one Homematic interface attached to a central.
@@ -751,6 +753,138 @@ type CentralConfig struct {
 	// where the default 30 s cadence makes degraded-state detection
 	// unacceptably slow.
 	CheckConnectionInterval time.Duration `yaml:"check_connection_interval" json:"check_connection_interval,omitempty" cfg:"expert"`
+
+	// Behavior holds per-central custom-data-point rendering toggles
+	// (light last-brightness, cover group-channel state).
+	Behavior CentralBehavior `yaml:"behavior" json:"behavior" cfg:"expert"`
+}
+
+// CentralBehavior groups per-central custom-data-point rendering
+// toggles. Each is a *bool so the YAML/DB decoder can distinguish
+// "not set" (→ default) from an explicit value; both default to true.
+type CentralBehavior struct {
+	// LightLastBrightness controls a plain light turn-on. When true
+	// (default) the light restores the last non-zero brightness the
+	// CCU reported; when false it turns on at full (100%). Reference
+	// stack key: enable_light_last_brightness.
+	LightLastBrightness *bool `yaml:"light_last_brightness,omitempty" json:"light_last_brightness,omitempty" cfg:"expert"`
+
+	// UseGroupChannelForCoverState controls cover position reporting.
+	// When true (default) a cover that exposes a group-channel LEVEL
+	// reports its position from the group channel; when false it
+	// reports from its own channel. Reference stack key:
+	// use_group_channel_for_cover_state.
+	UseGroupChannelForCoverState *bool `yaml:"use_group_channel_for_cover_state,omitempty" json:"use_group_channel_for_cover_state,omitempty" cfg:"expert"`
+
+	// EnableSysvarScan / EnableProgramScan gate the per-central hub
+	// scan: when false the daemon never fetches system variables /
+	// programs from the CCU, so no hub entities of that kind spawn.
+	// Both default to true. Reference stack keys: enable_sysvar_scan,
+	// enable_program_scan.
+	EnableSysvarScan  *bool `yaml:"enable_sysvar_scan,omitempty" json:"enable_sysvar_scan,omitempty" cfg:"expert"`
+	EnableProgramScan *bool `yaml:"enable_program_scan,omitempty" json:"enable_program_scan,omitempty" cfg:"expert"`
+
+	// IncludeInternalSysvars (default true) / IncludeInternalPrograms
+	// (default false) control whether CCU-internal system variables /
+	// programs surface as hub entities. Reference stack keys:
+	// include_internal_sysvars, include_internal_programs.
+	IncludeInternalSysvars  *bool `yaml:"include_internal_sysvars,omitempty" json:"include_internal_sysvars,omitempty" cfg:"expert"`
+	IncludeInternalPrograms *bool `yaml:"include_internal_programs,omitempty" json:"include_internal_programs,omitempty" cfg:"expert"`
+
+	// SysvarMarkers / ProgramMarkers restrict the hub scan to entities
+	// whose CCU description carries one of the listed marker tokens
+	// (prefix match). The tokens are the closed [hmenum.DescriptionMarker]
+	// set (HAHM, HX, INTERNAL, MQTT). Empty (default) includes
+	// everything that passes the internal filter. Reference stack keys:
+	// sysvar_markers, program_markers.
+	SysvarMarkers  []hmenum.DescriptionMarker `yaml:"sysvar_markers,omitempty" json:"sysvar_markers,omitempty" cfg:"expert"`
+	ProgramMarkers []hmenum.DescriptionMarker `yaml:"program_markers,omitempty" json:"program_markers,omitempty" cfg:"expert"`
+
+	// SysvarScanInterval overrides the periodic sysvar-refresh cadence
+	// for this central. Zero uses the compiled-in default. Reference
+	// stack key: sysvar_scan_interval.
+	SysvarScanInterval time.Duration `yaml:"sysvar_scan_interval,omitempty" json:"sysvar_scan_interval,omitempty" cfg:"expert"`
+
+	// EnableDeviceFirmwareCheck (default true) gates the per-device
+	// firmware-update entity surface. Reference stack key:
+	// enable_device_firmware_check (which defaults false there; see
+	// docs/parity/by_design.md for the divergence rationale).
+	EnableDeviceFirmwareCheck *bool `yaml:"enable_device_firmware_check,omitempty" json:"enable_device_firmware_check,omitempty" cfg:"expert"`
+
+	// DelayNewDeviceCreation (default false) defers creation of a
+	// newly-paired device until its description is complete, avoiding
+	// half-formed entities during pairing. Reference stack key:
+	// delay_new_device_creation.
+	DelayNewDeviceCreation *bool `yaml:"delay_new_device_creation,omitempty" json:"delay_new_device_creation,omitempty" cfg:"expert"`
+}
+
+// LightLastBrightnessEnabled reports the resolved toggle, defaulting
+// to true when unset.
+func (b CentralBehavior) LightLastBrightnessEnabled() bool {
+	if b.LightLastBrightness == nil {
+		return true
+	}
+	return *b.LightLastBrightness
+}
+
+// UseGroupChannelForCoverStateEnabled reports the resolved toggle,
+// defaulting to true when unset.
+func (b CentralBehavior) UseGroupChannelForCoverStateEnabled() bool {
+	if b.UseGroupChannelForCoverState == nil {
+		return true
+	}
+	return *b.UseGroupChannelForCoverState
+}
+
+// EnableSysvarScanEnabled reports the resolved toggle (default true).
+func (b CentralBehavior) EnableSysvarScanEnabled() bool {
+	if b.EnableSysvarScan == nil {
+		return true
+	}
+	return *b.EnableSysvarScan
+}
+
+// EnableProgramScanEnabled reports the resolved toggle (default true).
+func (b CentralBehavior) EnableProgramScanEnabled() bool {
+	if b.EnableProgramScan == nil {
+		return true
+	}
+	return *b.EnableProgramScan
+}
+
+// IncludeInternalSysvarsEnabled reports the resolved toggle (default true).
+func (b CentralBehavior) IncludeInternalSysvarsEnabled() bool {
+	if b.IncludeInternalSysvars == nil {
+		return true
+	}
+	return *b.IncludeInternalSysvars
+}
+
+// IncludeInternalProgramsEnabled reports the resolved toggle (default false).
+func (b CentralBehavior) IncludeInternalProgramsEnabled() bool {
+	if b.IncludeInternalPrograms == nil {
+		return false
+	}
+	return *b.IncludeInternalPrograms
+}
+
+// EnableDeviceFirmwareCheckEnabled reports the resolved toggle. Default
+// true: openccu-loom surfaces per-device firmware-update entities out
+// of the box (a deliberate divergence from the reference stack's
+// false default — see docs/parity/by_design.md).
+func (b CentralBehavior) EnableDeviceFirmwareCheckEnabled() bool {
+	if b.EnableDeviceFirmwareCheck == nil {
+		return true
+	}
+	return *b.EnableDeviceFirmwareCheck
+}
+
+// DelayNewDeviceCreationEnabled reports the resolved toggle (default false).
+func (b CentralBehavior) DelayNewDeviceCreationEnabled() bool {
+	if b.DelayNewDeviceCreation == nil {
+		return false
+	}
+	return *b.DelayNewDeviceCreation
 }
 
 // VisibilityConfig configures per-central visibility overrides. Empty

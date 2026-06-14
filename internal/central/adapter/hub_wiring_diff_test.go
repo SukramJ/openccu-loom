@@ -68,7 +68,7 @@ func TestLoadProgramsDiffPassRemovesStalePrograms(t *testing.T) {
 	writer := &noopProgramWriter{}
 
 	// First load: both p1 and p2 appear.
-	if err := loadPrograms(context.Background(), jc, h, writer); err != nil {
+	if err := loadPrograms(context.Background(), jc, nil, h, writer, hubScanOptions{enableProgramScan: true, includeInternalPrograms: true}); err != nil {
 		t.Fatalf("first loadPrograms: %v", err)
 	}
 	if got := len(h.Programs()); got != 2 {
@@ -76,7 +76,7 @@ func TestLoadProgramsDiffPassRemovesStalePrograms(t *testing.T) {
 	}
 
 	// Second load: only p1 survives; p2 should be removed by the diff pass.
-	if err := loadPrograms(context.Background(), jc, h, writer); err != nil {
+	if err := loadPrograms(context.Background(), jc, nil, h, writer, hubScanOptions{enableProgramScan: true, includeInternalPrograms: true}); err != nil {
 		t.Fatalf("second loadPrograms: %v", err)
 	}
 	progs := h.Programs()

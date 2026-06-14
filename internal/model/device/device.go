@@ -145,6 +145,15 @@ type Device struct {
 	rootMu      sync.RWMutex
 	rootChannel *Channel
 
+	// behaviorMu guards the per-central custom-DP rendering toggles.
+	// They are stamped once by the device pipeline before custom-DP
+	// materialisation and read by the light / cover factories. Both
+	// default to true (see [New]) so an unstamped device — every test
+	// fixture, any pre-pipeline state — keeps the historical behavior.
+	behaviorMu                   sync.RWMutex
+	lightLastBrightness          bool
+	useGroupChannelForCoverState bool
+
 	// scheduleSwitchesMu guards scheduleChannelSwitches.
 	scheduleSwitchesMu sync.RWMutex
 	// scheduleChannelSwitches is the set of per-channel boolean DPs that control
@@ -192,6 +201,10 @@ func New(cfg Config) *Device {
 		IgnoreOnInitialLoad:          cfg.IgnoreOnInitialLoad,
 		firmware:                     newFirmware(cfg.Firmware),
 		channels:                     make(map[string]*Channel),
+		// Custom-DP rendering toggles default to true; the device
+		// pipeline overrides them per central before materialisation.
+		lightLastBrightness:          true,
+		useGroupChannelForCoverState: true,
 	}
 	d.availability = newAvailability(d)
 	if cfg.Updatable {
@@ -692,4 +705,35 @@ func (d *Device) ReloadDeviceConfig(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// SetCustomDPBehavior stamps the per-central custom-DP rendering
+// toggles onto the device. Called by the device pipeline before
+// custom-DP materialisation; the light / cover factories read the
+// values back through [Device.LightLastBrightness] and
+// [Device.UseGroupChannelForCoverState].
+func (d *Device) SetCustomDPBehavior(lightLastBrightness, useGroupChannelForCoverState bool) {
+	d.behaviorMu.Lock()
+	defer d.behaviorMu.Unlock()
+	d.lightLastBrightness = lightLastBrightness
+	d.useGroupChannelForCoverState = useGroupChannelForCoverState
+}
+
+// LightLastBrightness reports whether a plain light turn-on restores
+// the last non-zero brightness (true) or turns on at full (false).
+// Defaults to true until the pipeline stamps a per-central value.
+func (d *Device) LightLastBrightness() bool {
+	d.behaviorMu.RLock()
+	defer d.behaviorMu.RUnlock()
+	return d.lightLastBrightness
+}
+
+// UseGroupChannelForCoverState reports whether a cover with a
+// group-channel LEVEL reports its position from the group channel
+// (true) or its own channel (false). Defaults to true until the
+// pipeline stamps a per-central value.
+func (d *Device) UseGroupChannelForCoverState() bool {
+	d.behaviorMu.RLock()
+	defer d.behaviorMu.RUnlock()
+	return d.useGroupChannelForCoverState
 }
