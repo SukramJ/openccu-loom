@@ -51,8 +51,9 @@ the spec; when in doubt about *implementation*, read the code.
    side under `../` on the developer's
    machine. See §[aiohomematic as a Reference](#aiohomematic-as-a-reference)
    for the mapping and when to consult which.
-4. The project is **substantially implemented** (phases 0–10
-   structurally complete, status 2026-05-26): ~547 k Go LOC across
+4. The project is **released at 0.2.0** (phases 0–10 complete,
+   status 2026-06-14; approximate counts as of the 0.1.0 snapshot):
+   ~547 k Go LOC across
    2 099 files (817 production / 194 k LOC + 1 282 tests / 353 k LOC),
    all 8 coordinators, all
    three transports (XML-RPC, BIN-RPC, JSON-RPC), 25 REST handler
@@ -339,7 +340,7 @@ openccu-loom/
     └── bench/
 ```
 
-The tree reflects the substantially implemented 0.1.0-rc state; the
+The tree reflects the released 0.2.0 state; the
 `internal/north/ui/spa_dist/` directory is populated by `vite build`
 out of `assets/ui/` and embedded into the binary at compile time.
 
@@ -352,7 +353,8 @@ out of `assets/ui/` and embedded into the binary at compile time.
 - Go 1.26 or newer
 - Python 3.14+ (only for the profile generator script; integration
   tests run a pure-Go simulator and need no Python toolchain)
-- `golangci-lint` v1.60+
+- `golangci-lint` v2 (the repo's `.golangci.yaml` is v2-format; CI
+  installs `golangci-lint/v2` from source — a v1 binary rejects the config)
 - `gofumpt`
 - `goreleaser`
 - Docker + buildx (for multi-arch images)
@@ -1002,7 +1004,7 @@ file — left side mirrors aiohomematic, right side mirrors matter.js.
 
 ## Implementation Policy
 
-The project is at 0.1.0-rc; release history is in `CHANGELOG.md`.
+The project is at 0.2.0; release history is in `CHANGELOG.md`.
 
 ### Completion checklist (per change)
 
