@@ -510,6 +510,13 @@ func (p *DevicePipeline) IngestFromBackend(
 	// this pass INTERNAL-flagged parameters such as INSTALL_TEST surface
 	// as full data points despite Python suppressing them.
 	p.applyInternalParameterMarks(interfaceID)
+	// Force NoCreate on every parameter whose OPERATIONS bitmask carries
+	// neither EVENT nor WRITE (e.g. NEXT_TRANSMISSION, OPS=0): the reference
+	// stack's first skip branch (`_should_skip_data_point`,
+	// model/__init__.py:183-184) drops read-only/no-op parameters that carry no
+	// user-actionable state. Without this pass they surface as standalone
+	// sensors the direct-CCU twin never creates.
+	p.applyNoEventNoWriteMarks(interfaceID)
 	// Close the channel lifecycle: build event groups from all registered
 	// generic events so EventGroups() returns a populated slice and the
 	// MQTT/REST surfaces can iterate over them. Must run after every DP,
@@ -559,6 +566,23 @@ func (p *DevicePipeline) applyInternalParameterMarks(interfaceID string) {
 			continue
 		}
 		visibility.ApplyInternalParameterMarksWithDecider(d, decider)
+	}
+}
+
+// applyNoEventNoWriteMarks walks every channel of every device on interfaceID
+// and runs [visibility.ApplyNoEventNoWriteMarks], force-marking every VALUES
+// parameter whose OPERATIONS bitmask has neither EVENT nor WRITE to
+// NoCreate. Idempotent; preserves custom-DP DataPoint promotions and operator
+// un-ignore overrides.
+func (p *DevicePipeline) applyNoEventNoWriteMarks(interfaceID string) {
+	if p.unit == nil {
+		return
+	}
+	for _, d := range p.unit.ModelRegistry.List() {
+		if d.InterfaceID != interfaceID {
+			continue
+		}
+		visibility.ApplyNoEventNoWriteMarks(d)
 	}
 }
 
