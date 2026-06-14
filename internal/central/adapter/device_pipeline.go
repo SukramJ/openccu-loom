@@ -90,6 +90,14 @@ type DevicePipeline struct {
 	// channels leave this nil — they use the CONFIG_PENDING event path.
 	masterRefreshHook func(addr string, key hmenum.ParamsetKey)
 
+	// cdpLightLastBrightness / cdpUseGroupChannelForCover are the
+	// per-central custom-DP rendering toggles stamped onto each device
+	// before materialisation. Both default to true (see
+	// [NewDevicePipeline]); set via [WithCustomDPBehavior] from the
+	// central's config.
+	cdpLightLastBrightness     bool
+	cdpUseGroupChannelForCover bool
+
 	// visibility is the optional visibility gate consulted before each
 	// data-point is stored on a channel. When nil, all parameters pass
 	// through (backwards-compatible behaviour for tests/tooling that
@@ -120,7 +128,25 @@ type DevicePipeline struct {
 
 // NewDevicePipeline constructs a pipeline bound to c.
 func NewDevicePipeline(u *central.Unit) *DevicePipeline {
-	return &DevicePipeline{unit: u}
+	return &DevicePipeline{
+		unit: u,
+		// Custom-DP rendering toggles default to true; WireCentrals
+		// overrides them per central via [WithCustomDPBehavior]. The
+		// true default keeps the historical behavior for every pipeline
+		// built without the builder (tests, tooling).
+		cdpLightLastBrightness:     true,
+		cdpUseGroupChannelForCover: true,
+	}
+}
+
+// WithCustomDPBehavior sets the per-central custom-DP rendering toggles
+// the pipeline stamps onto each device before custom-DP
+// materialisation: light last-brightness and cover group-channel
+// state. Both default to true (see [NewDevicePipeline]).
+func (p *DevicePipeline) WithCustomDPBehavior(lightLastBrightness, useGroupChannelForCover bool) *DevicePipeline {
+	p.cdpLightLastBrightness = lightLastBrightness
+	p.cdpUseGroupChannelForCover = useGroupChannelForCover
+	return p
 }
 
 // WithTranslations attaches an optional translation set + locale used
@@ -886,6 +912,9 @@ func (p *DevicePipeline) materialiseCustomDataPoints(interfaceID string, logger 
 		if d.InterfaceID != interfaceID {
 			continue
 		}
+		// Stamp the per-central rendering toggles before materialising
+		// so the light / cover factories read the operator's choice.
+		d.SetCustomDPBehavior(p.cdpLightLastBrightness, p.cdpUseGroupChannelForCover)
 		if err := custom.CreateCustomDataPoints(d, customReg); err != nil {
 			if logger != nil {
 				logger.Warn("custom data points materialization had errors",

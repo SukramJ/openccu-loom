@@ -76,6 +76,13 @@ type Light struct {
 	lastLevel  float64
 	groupLevel *generic.Float // optional GROUP_LEVEL sensor (set via SetGroupLevel)
 
+	// enableLastBrightness controls a plain turn-on. When true (the
+	// default, set from the device's per-central behavior in [New]) a
+	// turn-on without an explicit level restores [LastLevel]; when
+	// false it turns on at full (1.0). Reference stack key:
+	// enable_light_last_brightness.
+	enableLastBrightness bool
+
 	// lastSentLevel holds the most recent LEVEL the daemon wrote to the CCU
 	// that has not yet been echoed back with a matching value. Survives
 	// mismatching intermediate echoes (e.g. ramp values on RF dimmers where
@@ -117,9 +124,10 @@ func New(cfg Config) *Light {
 	level := custom.FloatField(cfg.Channel, hmenum.ParameterLevel)
 	hasOnTimeUnit := cfg.Channel != nil && cfg.Channel.Parameter(hmenum.ParameterOnTimeUnit) != nil
 	l := &Light{
-		Float:         level,
-		Capabilities:  cfg.Capabilities,
-		hasOnTimeUnit: hasOnTimeUnit,
+		Float:                level,
+		Capabilities:         cfg.Capabilities,
+		hasOnTimeUnit:        hasOnTimeUnit,
+		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 	}
 	if level != nil {
 		l.unsubLevel = level.OnUpdate(func(_, next float64) {
@@ -230,6 +238,27 @@ func (l *Light) LastLevel() float64 {
 		return l.lastLevel
 	}
 	return 1.0
+}
+
+// turnOnLevel resolves the target LEVEL for a plain turn-on: the
+// restored [LastLevel] when last-brightness is enabled (default), or
+// full (1.0) when the per-central toggle is off. Reference stack key:
+// enable_light_last_brightness.
+func (l *Light) turnOnLevel() float64 {
+	if l.enableLastBrightness {
+		return l.LastLevel()
+	}
+	return 1.0
+}
+
+// deviceLightLastBrightness reads the per-central light-last-brightness
+// toggle off the channel's device, defaulting to true when the channel
+// or device is absent (test fixtures, pre-pipeline state).
+func deviceLightLastBrightness(ch *device.Channel) bool {
+	if ch == nil || ch.Device() == nil {
+		return true
+	}
+	return ch.Device().LightLastBrightness()
 }
 
 // Address returns the channel address the Light writes to.
@@ -538,7 +567,7 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 		// shutdown duration and turns off again right away.
 		if l.resetsOnTimeOnTurnOn && l.hasOnTimeUnit && l.Writer != nil {
 			notUsed := time.Duration(NotUsed * float64(time.Second))
-			b := l.LastLevel()
+			b := l.turnOnLevel()
 			onCfg := OnConfig{
 				OnTime:     &notUsed,
 				Brightness: &b,
@@ -547,7 +576,7 @@ func (l *Light) TurnOn(ctx context.Context, priority hmenum.CommandPriority) err
 			}
 			return l.TurnOnWith(ctx, onCfg, priority)
 		}
-		return l.SetLevel(ctx, l.LastLevel(), priority)
+		return l.SetLevel(ctx, l.turnOnLevel(), priority)
 	}
 	cfg := OnConfig{}
 	if on != nil {
@@ -634,14 +663,14 @@ func (l *Light) TurnOnWith(ctx context.Context, cfg OnConfig, priority hmenum.Co
 	if w == nil {
 		// No writer at all → fall back to plain SetLevel which uses
 		// the embedded *generic.Float's own writer.
-		level := l.LastLevel()
+		level := l.turnOnLevel()
 		if cfg.Brightness != nil {
 			level = *cfg.Brightness
 		}
 		return l.SetLevel(ctx, level, priority)
 	}
 
-	level := l.LastLevel()
+	level := l.turnOnLevel()
 	if cfg.Brightness != nil {
 		level = *cfg.Brightness
 	}

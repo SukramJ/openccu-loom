@@ -248,6 +248,10 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 			WithRooms(hubData.Rooms).
 			WithFunctions(hubData.Functions).
 			WithVisibility(deps.Visibility).
+			WithCustomDPBehavior(
+				cc.Behavior.LightLastBrightnessEnabled(),
+				cc.Behavior.UseGroupChannelForCoverStateEnabled(),
+			).
 			WithMasterValuesStore(deps.MasterValues, cc.Name).
 			WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name)
 

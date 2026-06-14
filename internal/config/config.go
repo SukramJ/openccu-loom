@@ -751,6 +751,46 @@ type CentralConfig struct {
 	// where the default 30 s cadence makes degraded-state detection
 	// unacceptably slow.
 	CheckConnectionInterval time.Duration `yaml:"check_connection_interval" json:"check_connection_interval,omitempty" cfg:"expert"`
+
+	// Behavior holds per-central custom-data-point rendering toggles
+	// (light last-brightness, cover group-channel state).
+	Behavior CentralBehavior `yaml:"behavior" json:"behavior" cfg:"expert"`
+}
+
+// CentralBehavior groups per-central custom-data-point rendering
+// toggles. Each is a *bool so the YAML/DB decoder can distinguish
+// "not set" (→ default) from an explicit value; both default to true.
+type CentralBehavior struct {
+	// LightLastBrightness controls a plain light turn-on. When true
+	// (default) the light restores the last non-zero brightness the
+	// CCU reported; when false it turns on at full (100%). Reference
+	// stack key: enable_light_last_brightness.
+	LightLastBrightness *bool `yaml:"light_last_brightness,omitempty" json:"light_last_brightness,omitempty" cfg:"expert"`
+
+	// UseGroupChannelForCoverState controls cover position reporting.
+	// When true (default) a cover that exposes a group-channel LEVEL
+	// reports its position from the group channel; when false it
+	// reports from its own channel. Reference stack key:
+	// use_group_channel_for_cover_state.
+	UseGroupChannelForCoverState *bool `yaml:"use_group_channel_for_cover_state,omitempty" json:"use_group_channel_for_cover_state,omitempty" cfg:"expert"`
+}
+
+// LightLastBrightnessEnabled reports the resolved toggle, defaulting
+// to true when unset.
+func (b CentralBehavior) LightLastBrightnessEnabled() bool {
+	if b.LightLastBrightness == nil {
+		return true
+	}
+	return *b.LightLastBrightness
+}
+
+// UseGroupChannelForCoverStateEnabled reports the resolved toggle,
+// defaulting to true when unset.
+func (b CentralBehavior) UseGroupChannelForCoverStateEnabled() bool {
+	if b.UseGroupChannelForCoverState == nil {
+		return true
+	}
+	return *b.UseGroupChannelForCoverState
 }
 
 // VisibilityConfig configures per-central visibility overrides. Empty
