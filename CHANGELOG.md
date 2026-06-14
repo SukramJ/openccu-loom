@@ -40,6 +40,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CentralBehavior` schema in `assets/openapi.yaml`), and the SPA central
   editor. `api_version` 1.7.0 → 1.8.0 (additive).
 
+### Changed
+
+- **SPA is smartphone-friendly.** The navigation sidebar now behaves
+  responsively: on `<md` (phones) it is an off-canvas drawer opened by a
+  header burger and dismissed by a backdrop tap or a nav-item tap, and the
+  content pane is full-width (the fixed-width left padding only applies from
+  `md` upward, where the bar is permanently docked). The mobile drawer always
+  renders the labelled (expanded) nav regardless of the desktop collapse
+  preference. The CCU edit form's field pairs collapse from two columns to a
+  single column on narrow screens.
+
 ## [0.2.0] — 2026-06-14
 
 ### Added
