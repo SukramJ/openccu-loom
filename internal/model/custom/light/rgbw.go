@@ -164,12 +164,13 @@ func (r *RGBWLight) effectiveMode() RGBWMode {
 // - RGB / RGBW mode: channels 2, 3, 4 return [RGBWUsageSecondary].
 // - TunableWhite mode: channels 3, 4 return [RGBWUsageSecondary].
 // - All other channels / modes return [RGBWUsagePrimary].
-// - Mode not yet observed → [RGBWUsageUnknown].
+//
+// Uses [effectiveMode] (RGBW fallback when unobserved), mirroring the
+// reference usage property, which reads _device_operation_mode (defaults
+// RGBW) — so secondary channels are folded away from boot rather than
+// surfacing until the mode is first observed.
 func (r *RGBWLight) Usage() RGBWUsage {
-	m := r.Mode()
-	if m == RGBWModeUnknown {
-		return RGBWUsageUnknown
-	}
+	m := r.effectiveMode()
 	no := r.channelNo
 	if (m == RGBWModeRGB || m == RGBWModeRGBW) && (no == 2 || no == 3 || no == 4) {
 		return RGBWUsageSecondary
@@ -178,6 +179,15 @@ func (r *RGBWLight) Usage() RGBWUsage {
 		return RGBWUsageSecondary
 	}
 	return RGBWUsagePrimary
+}
+
+// HiddenByOperationMode reports whether this channel is a secondary channel in
+// the current operating mode and must not surface as a standalone light entity.
+// Mirrors the NO_CREATE branch of the reference CustomDpIpRGBWLight.usage:
+// channels 2-4 (RGB/RGBW) and 3-4 (TUNABLE_WHITE) are folded into the primary
+// channel's aggregate, so north-bound adapters skip them.
+func (r *RGBWLight) HiddenByOperationMode() bool {
+	return r.Usage() == RGBWUsageSecondary
 }
 
 // Subscribe wires the channel's DEVICE_OPERATION_MODE parameter so

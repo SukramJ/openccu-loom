@@ -809,10 +809,16 @@ func TestRGBWLightHasMode(t *testing.T) {
 // TestRGBWLightUsageAllModes verifies Usage() returns the correct value for all
 // channel/mode combinations.
 func TestRGBWLightUsageAllModes(t *testing.T) {
-	// Unknown mode → RGBWUsageUnknown.
-	r := &RGBWLight{channelNo: 1}
-	if got := r.Usage(); got != RGBWUsageUnknown {
-		t.Errorf("Usage() unknown mode = %v, want RGBWUsageUnknown", got)
+	// Unknown mode defaults to RGBW (mirroring the reference
+	// _device_operation_mode fallback): channel 1 is primary, channels 2-4 are
+	// folded as secondary.
+	if got := (&RGBWLight{channelNo: 1}).Usage(); got != RGBWUsagePrimary {
+		t.Errorf("Usage() unknown mode ch1 = %v, want RGBWUsagePrimary", got)
+	}
+	for _, no := range []int{2, 3, 4} {
+		if got := (&RGBWLight{channelNo: no}).Usage(); got != RGBWUsageSecondary {
+			t.Errorf("Usage() unknown mode ch%d = %v, want RGBWUsageSecondary (RGBW default)", no, got)
+		}
 	}
 
 	// RGB mode: channels 2,3,4 → Secondary; channel 1 → Primary.

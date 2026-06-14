@@ -872,9 +872,16 @@ func (b *EventBridge) buildPublishEvent( //nolint:gocognit,gocyclo,funlen // wir
 	if ch != nil {
 		ev.Channel = ch
 		// Custom-DP propagation — discovery aggregator reads ev.Source
-		// to switch from per-parameter to channel-aggregate mode.
+		// to switch from per-parameter to channel-aggregate mode. Skip
+		// operation-mode secondary channels (e.g. HmIP-RGBW secondary colour
+		// channels in the current mode): they are folded into the primary
+		// channel's aggregate and must not surface as their own entity.
 		if cdp := ch.CustomDataPoint(); cdp != nil {
-			if src, ok := cdp.(payload.Source); ok && src != nil {
+			hidden := false
+			if h, ok := cdp.(interface{ HiddenByOperationMode() bool }); ok {
+				hidden = h.HiddenByOperationMode()
+			}
+			if src, ok := cdp.(payload.Source); ok && src != nil && !hidden {
 				ev.Source = src
 			}
 		}
@@ -1419,6 +1426,12 @@ func (b *EventBridge) publishCustomDPDiscoverySnapshot(
 	}
 	cdp := ch.CustomDataPoint()
 	if cdp == nil {
+		return
+	}
+	// Skip operation-mode secondary channels (e.g. HmIP-RGBW secondary colour
+	// channels in the current mode): folded into the primary channel's
+	// aggregate, they must not surface as their own entity.
+	if h, ok := cdp.(interface{ HiddenByOperationMode() bool }); ok && h.HiddenByOperationMode() {
 		return
 	}
 	src, ok := cdp.(payload.Source)
