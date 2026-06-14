@@ -237,12 +237,18 @@ func (d *ParameterDecider) computeIgnoredMaster(model string, channelNo int, par
 	return false
 }
 
-// deviceUnIgnoresByPrefix reports whether the model (matched by prefix,
-// case-insensitive) appears in unIgnoreParametersByDevice for parameter p.
+// deviceUnIgnoresByPrefix reports whether parameter p is un-ignored for the
+// model via unIgnoreParametersByDevice. Mirrors the reference
+// _get_parameters_for_model_prefix: an entry matches when its key STARTS WITH
+// the device model (reverse prefix), i.e. the device inherits a longer
+// variant's un-ignore (HmIP-PCBS picks up the HmIP-PCBS-BAT entry's
+// OPERATING_VOLTAGE) while a longer variant does NOT inherit a shorter base's
+// un-ignore (HM-Sec-Key-S / HM-Sec-Win-Generic do not pick up the HM-Sec-Key /
+// HM-Sec-Win entries' ERROR/WORKING — the direct-CCU twin leaves those hidden).
 func deviceUnIgnoresByPrefix(model string, p hmenum.Parameter) bool {
 	modelL := strings.ToLower(model)
 	for candidate, params := range unIgnoreParametersByDevice {
-		if !strings.HasPrefix(modelL, strings.ToLower(candidate)) {
+		if !strings.HasPrefix(strings.ToLower(candidate), modelL) {
 			continue
 		}
 		if _, ok := params[p]; ok {
