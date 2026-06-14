@@ -30,6 +30,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -307,6 +308,54 @@ func (p *DevicePipeline) attachNonClimateWeekProfiles(interfaceID string) {
 		}
 		attachNonClimateWeekProfileToDevice(d, p.unit.Name())
 	}
+}
+
+// pruneSpuriousClimateWeekProfiles detaches climate week-profile descriptors
+// the slot-parameter heuristic ([attachWeekProfileToChannel]) installed on
+// devices the reference stack gives no schedule to. The reference has_schedule
+// gate requires a registered schedule_channel_no (climate DeviceConfig) or a
+// WEEK_PROFILE-suffix channel; a device that carries P*_TEMPERATURE_* slot
+// parameters but neither (e.g. ALPHA-IP-RBG, whose climate profile omits
+// schedule_channel_no) materialises no week profile. Idempotent.
+func (p *DevicePipeline) pruneSpuriousClimateWeekProfiles(interfaceID string) {
+	if p.unit == nil {
+		return
+	}
+	reg := custom.DefaultRegistry()
+	for _, d := range p.unit.ModelRegistry.List() {
+		if d.InterfaceID != interfaceID {
+			continue
+		}
+		if deviceHasRegisteredScheduleChannel(d, reg) {
+			continue
+		}
+		for _, ch := range d.Channels() {
+			if wp := ch.WeekProfile(); wp != nil && wp.ScheduleType() == weekprofile.ScheduleTypeClimate {
+				ch.AttachWeekProfile(nil)
+			}
+		}
+	}
+}
+
+// deviceHasRegisteredScheduleChannel reports whether the device declares a
+// schedule channel — a custom profile with a non-nil ScheduleChannelNo or a
+// WEEK_PROFILE-suffix channel. Mirrors the reference has_schedule gate
+// (schedule_channel_address != None).
+func deviceHasRegisteredScheduleChannel(dev *device.Device, reg *custom.Registry) bool {
+	if dev == nil || reg == nil {
+		return false
+	}
+	for _, prof := range reg.GetConfigs(dev.Model) {
+		if prof.ScheduleChannelNo != nil {
+			return true
+		}
+	}
+	for _, ch := range dev.Channels() {
+		if strings.HasSuffix(ch.Type, "WEEK_PROFILE") {
+			return true
+		}
+	}
+	return false
 }
 
 // refineAttachedWeekProfiles walks every channel of every device on
