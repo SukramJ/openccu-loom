@@ -7,9 +7,6 @@
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
 
-  type Props = { locale: string };
-  let { locale }: Props = $props();
-
   // ── State ─────────────────────────────────────────────────────────
   let records = $state<LogRecord[]>([]);
   let lastSeq = $state(0);
@@ -528,7 +525,7 @@
         {detailRows.length} / {records.length}
       {:else}
         {aggregatedRows.length}
-        {locale === "de" ? "Gruppen" : "groups"} / {records.length}
+        {t("logs.groups")} / {records.length}
       {/if}
     </p>
   {/if}

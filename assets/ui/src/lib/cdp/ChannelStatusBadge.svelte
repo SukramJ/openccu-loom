@@ -211,14 +211,14 @@
     {#if error}
       <p class="mt-1 text-[var(--ha-error-color)]">{error}</p>
     {:else if dataPoints.length === 0}
-      <p class="mt-1 opacity-60">Keine Datenpunkte beobachtet.</p>
+      <p class="mt-1 opacity-60">{t("cdp.status.no_datapoints")}</p>
     {:else}
       <ul class="mt-1 space-y-0.5 border-t border-[var(--ha-divider-color)] pt-1">
         {#each dataPoints as dp (dp.parameter)}
           {@const isCached = dp.source === "cache"}
           {@const isStale = dp.source === "stale"}
-          {@const ageTitle = dp.value_age_seconds != null
-            ? ` · zuletzt vor ${formatAge(dp.value_age_seconds)}`
+          {@const ageFragment = dp.value_age_seconds != null
+            ? t("cdp.status.age", { ago: formatAge(dp.value_age_seconds) })
             : ""}
           <li class="flex items-center justify-between gap-2">
             <span class="truncate">{dpLabel(dp)}</span>
@@ -226,7 +226,7 @@
               class="text-[var(--ha-primary-text-color)]"
               class:opacity-40={!dp.observed}
               class:italic={isCached || isStale}
-              title={isCached ? `Aus Cache wiederhergestellt${ageTitle}` : isStale ? `Verbindung verloren${ageTitle}` : undefined}
+              title={isCached ? t("cdp.status.from_cache", { age: ageFragment }) : isStale ? t("cdp.status.stale", { age: ageFragment }) : undefined}
             >
               {#if isCached || isStale}
                 <span aria-hidden="true" class="mr-1 opacity-70">⏱</span>

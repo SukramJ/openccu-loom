@@ -282,7 +282,7 @@
           <div class="flex flex-wrap items-center gap-3">
             <Badge variant="muted">#{entry.slot_no}</Badge>
 
-            <div class="flex items-center gap-1" role="group" aria-label="weekdays">
+            <div class="flex items-center gap-1" role="group" aria-label={t("schedule.aria.weekdays")}>
               {#each weekdayKeys as day (day)}
                 {@const active = entry.weekdays.includes(day)}
                 <button
@@ -581,7 +581,7 @@
                   <div class="w-32">
                     <Input
                       type="text"
-                      placeholder="z.B. 10s, 5min"
+                      placeholder={t("schedule.duration_placeholder")}
                       value={entry.duration ?? ""}
                       oninput={(e) =>
                         patch(idx, {
@@ -600,7 +600,7 @@
                   <div class="w-32">
                     <Input
                       type="text"
-                      placeholder="z.B. 500ms, 2s"
+                      placeholder={t("schedule.ramp_placeholder")}
                       value={entry.ramp_time ?? ""}
                       oninput={(e) =>
                         patch(idx, {

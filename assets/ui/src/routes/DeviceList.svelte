@@ -5,6 +5,7 @@
   import Button from "$lib/components/ui/Button.svelte";
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { t } from "$lib/i18n";
 
   let filter = $state("");
   let availability = $state<"all" | "available" | "unavailable">("all");
@@ -58,13 +59,13 @@
       );
     });
     if (list.length === 0) {
-      bulkBanner = "Keine selektierten Geräte haben ein Firmware-Update verfügbar.";
+      bulkBanner = t("devicelist.bulk_no_updates");
       return;
     }
     const ok2 = await confirmStore.ask({
-      title: "Firmware-Update",
-      body: `Firmware-Update für ${list.length} Gerät(e) anstoßen?`,
-      confirmLabel: "Update starten",
+      title: t("firmware.title"),
+      body: t("devicelist.bulk_firmware_body", { count: list.length }),
+      confirmLabel: t("devicelist.bulk_firmware_confirm"),
     });
     if (!ok2) return;
     bulkBusy = true;
@@ -79,7 +80,7 @@
         fail++;
       }
     }
-    bulkBanner = `${ok} OK, ${fail} fehlgeschlagen.`;
+    bulkBanner = t("devicelist.bulk_result", { ok, fail });
     bulkBusy = false;
     selected = new Set();
   }
@@ -99,7 +100,7 @@
         fail++;
       }
     }
-    bulkBanner = `${ok} OK, ${fail} fehlgeschlagen.`;
+    bulkBanner = t("devicelist.bulk_result", { ok, fail });
     bulkBusy = false;
     roomEditing = false;
     roomDraft = "";
@@ -215,38 +216,38 @@
 <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
   <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-semibold tracking-tight">Geräte</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400">
         {#if deviceStore.lastLoaded}
-          Zuletzt aktualisiert {deviceStore.lastLoaded.toLocaleTimeString()}
+          {t("devicelist.last_updated", { time: deviceStore.lastLoaded.toLocaleTimeString() })}
         {:else}
-          Wird geladen…
+          {t("common.loading")}
         {/if}
       </p>
     </div>
     <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
       <input
         type="search"
-        placeholder="Suche (Adresse, Name, Modell)"
+        placeholder={t("devicelist.search_placeholder")}
         bind:value={filter}
         class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-72 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
       <select
         bind:value={availability}
         class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
-        title="Verfügbarkeit"
+        title={t("devicelist.availability")}
       >
-        <option value="all">Alle</option>
-        <option value="available">Verfügbar</option>
-        <option value="unavailable">Nicht verfügbar</option>
+        <option value="all">{t("devicelist.all")}</option>
+        <option value="available">{t("devicelist.available")}</option>
+        <option value="unavailable">{t("devicelist.unavailable")}</option>
       </select>
       {#if rooms.length > 0}
         <select
           bind:value={roomFilter}
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
-          title="Raum"
+          title={t("devicelist.room")}
         >
-          <option value="">Alle Räume</option>
+          <option value="">{t("devicelist.all_rooms")}</option>
           {#each rooms as r (r)}
             <option value={r}>{r}</option>
           {/each}
@@ -258,7 +259,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each centrals as c (c)}
             <option value={c}>{c}</option>
           {/each}
@@ -266,7 +267,7 @@
       {/if}
       <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
         <input type="checkbox" bind:checked={updateOnly} />
-        Update verfügbar
+        {t("devicelist.update_available")}
       </label>
       <Button
         type="button"
@@ -280,9 +281,9 @@
           await deviceStore.refresh();
         }}
         disabled={deviceStore.loading}
-        title="Geräteliste von der CCU neu laden"
+        title={t("devicelist.ccu_refresh_title")}
       >
-        CCU-Refresh
+        {t("devicelist.ccu_refresh")}
       </Button>
     </div>
   </header>
@@ -290,16 +291,16 @@
   {#if selected.size > 0}
     <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-brand-300 bg-brand-50 p-2 text-sm dark:border-brand-800 dark:bg-brand-950/40">
       <span class="font-medium text-brand-900 dark:text-brand-100">
-        {selected.size} {selected.size === 1 ? "Gerät" : "Geräte"} ausgewählt
+        {t("devicelist.selected", { count: selected.size })}
       </span>
-      <Button type="button" variant="outline" size="sm" onclick={selectAll}>Alle filtern</Button>
-      <Button type="button" variant="outline" size="sm" onclick={clearSelection}>Auswahl leeren</Button>
+      <Button type="button" variant="outline" size="sm" onclick={selectAll}>{t("devicelist.select_filtered")}</Button>
+      <Button type="button" variant="outline" size="sm" onclick={clearSelection}>{t("devicelist.clear_selection")}</Button>
       {#if roomEditing}
         <input
           type="text"
           bind:value={roomDraft}
-          placeholder="Raum (leer = entfernen)"
-          aria-label="Raum für Auswahl"
+          placeholder={t("devicelist.room_placeholder")}
+          aria-label={t("devicelist.room_aria")}
           class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-base sm:w-48 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
           onkeydown={(e) => {
             if (e.key === "Enter") void bulkSetRoom();
@@ -307,18 +308,18 @@
           }}
         />
         <Button type="button" size="sm" onclick={() => void bulkSetRoom()} disabled={bulkBusy}>
-          Übernehmen
+          {t("devicelist.apply")}
         </Button>
         <Button type="button" variant="outline" size="sm" onclick={() => (roomEditing = false)} disabled={bulkBusy}>
-          Abbrechen
+          {t("common.cancel")}
         </Button>
       {:else}
         <Button type="button" size="sm" onclick={() => { roomDraft = ""; roomEditing = true; }} disabled={bulkBusy}>
-          Raum setzen
+          {t("devicelist.set_room")}
         </Button>
       {/if}
       <Button type="button" size="sm" onclick={() => void bulkUpdateFirmware()} disabled={bulkBusy}>
-        Firmware-Update
+        {t("devicelist.bulk_firmware_label")}
       </Button>
       {#if bulkBanner}
         <span class="text-xs text-[var(--ha-primary-text-color)]">{bulkBanner}</span>
@@ -328,7 +329,7 @@
 
   {#if deviceStore.error}
     <div class="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-      Fehler beim Laden: {deviceStore.error}
+      {t("devicelist.load_error", { error: deviceStore.error })}
     </div>
   {/if}
 
@@ -336,11 +337,11 @@
        again flips asc/desc. The "group by interface" toggle clusters
        devices under section headers. -->
   <div class="mb-3 flex flex-wrap items-center gap-2 text-xs" style="color: var(--ha-secondary-text-color);">
-    <span>Sortieren:</span>
+    <span>{t("common.sort")}</span>
     {#each [
-      { key: "name", label: "Name" },
-      { key: "address", label: "Adresse" },
-      { key: "model", label: "Modell" },
+      { key: "name", label: t("devicelist.col.name") },
+      { key: "address", label: t("devicelist.col.address") },
+      { key: "model", label: t("devicelist.col.model") },
     ] as col (col.key)}
       <button
         type="button"
@@ -357,14 +358,14 @@
     <span class="mx-1">·</span>
     <label class="inline-flex items-center gap-1.5 cursor-pointer">
       <input type="checkbox" bind:checked={groupByInterface} />
-      Nach Interface gruppieren
+      {t("devicelist.group_by_interface")}
     </label>
   </div>
 
   {#if deviceStore.loading && deviceStore.items.length === 0}
-    <p style="color: var(--ha-secondary-text-color);">Lade Geräte…</p>
+    <p style="color: var(--ha-secondary-text-color);">{t("devices.loading")}</p>
   {:else if filtered.length === 0}
-    <p style="color: var(--ha-secondary-text-color);">Keine Geräte gefunden.</p>
+    <p style="color: var(--ha-secondary-text-color);">{t("devices.empty")}</p>
   {:else if groups}
     {#each groups as g (g.iface)}
       <section class="mb-6">
@@ -389,7 +390,7 @@
       </section>
     {/each}
     <p class="mt-4 text-sm" style="color: var(--ha-secondary-text-color);">
-      {filtered.length} / {deviceStore.items.length} Geräte
+      {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
     <ul class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -404,7 +405,7 @@
       {/each}
     </ul>
     <p class="mt-4 text-sm" style="color: var(--ha-secondary-text-color);">
-      {filtered.length} / {deviceStore.items.length} Geräte
+      {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {/if}
 </section>

@@ -30,6 +30,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     and the period / lock / astro rows regroup so they no longer overflow.
   - Device-control tiles: actuator buttons, colour chips, sliders and number
     steppers raised to ≥40–44px touch targets.
+- **Full localisation (de/en) of the SPA.** Every remaining hardcoded
+  string — DeviceList, Login, the device-control tiles (climate, cover,
+  light, siren, valve, text-display), the schedule editor, the Matter
+  screens, and assorted labels / placeholders / aria-labels — now resolves
+  through the in-app de/en catalogue (~190 new keys). Technical enums
+  (roles, CCU data types, log levels) and the language-picker names stay
+  literal by design.
+- More table→cards reflows (profile preview, Matter fabrics) and touch-
+  target fixes (text-display tile, sidebar footer icons, channel picker);
+  the keyboard-shortcut button is now hidden on touch devices
+  (`pointer-coarse`).
+- `theme-color` gained a dark-mode variant.
 
 ### Fixed
 
@@ -39,6 +51,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (device delete / rename / firmware, set-room, sysvar / token / user
   actions, daemon restart, link / import) with the app's styled confirm
   modal and inline editors.
+- Removed the ineffective dynamic import of the audit-log route (it is also
+  statically imported by the device-detail history tab), clearing the
+  build-time `INEFFECTIVE_DYNAMIC_IMPORT` warning.
 
 ## [0.3.0] — 2026-06-14
 

@@ -126,7 +126,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each centrals as c (c)}
             <option value={c}>{c}</option>
           {/each}
@@ -138,13 +138,13 @@
         onclick={() => void installModeStore.toggle()}
         disabled={installModeStore.busy}
         title={installModeStore.active
-          ? "Anlernmodus aktiv — klicken um zu beenden"
-          : "Anlernmodus starten (60 s) um neue Geräte zu koppeln"}
+          ? t("inbox.install_mode_active_title")
+          : t("inbox.install_mode_start_title")}
       >
         {#if installModeStore.active}
-          Anlernen · {installModeStore.remainingSeconds ?? "…"} s
+          {t("inbox.install_mode_pairing", { seconds: installModeStore.remainingSeconds ?? "…" })}
         {:else}
-          Anlernmodus
+          {t("inbox.install_mode")}
         {/if}
       </Button>
       <Button type="button" variant="outline" onclick={() => void load()} disabled={loading}>
@@ -155,11 +155,11 @@
 
   {#if installModeStore.active}
     <div class="mb-4 flex items-center gap-2 rounded border border-brand-300 bg-brand-50 p-3 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200">
-      <Badge variant="default">aktiv</Badge>
+      <Badge variant="default">{t("inbox.install_mode_badge")}</Badge>
       <span>
-        Anlernmodus läuft
+        {t("inbox.install_mode_running")}
         {#if installModeStore.remainingSeconds !== null}
-          · {installModeStore.remainingSeconds}&nbsp;Sekunden verbleibend
+          · {installModeStore.remainingSeconds}&nbsp;{t("inbox.install_mode_seconds_left")}
         {/if}
       </span>
     </div>

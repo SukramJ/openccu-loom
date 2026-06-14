@@ -836,7 +836,7 @@
             <tr>
               <td class="reflow-title py-2 pr-3">
                 {#if row.kind === "log"}
-                  <Badge variant="default">Debug-Log</Badge>
+                  <Badge variant="default">{t("diagnostics.recording_type.debug_log")}</Badge>
                 {:else}
                   <Badge variant="muted">RPC</Badge>
                 {/if}

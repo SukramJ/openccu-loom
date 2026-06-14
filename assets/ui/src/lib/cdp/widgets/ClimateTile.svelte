@@ -91,23 +91,25 @@
 
   // Mode label for the secondary line — RF surfaces it as the ENUM
   // value, HmIP as an integer index (read off SET_POINT_MODE).
-  const RF_MODE_DE: Record<string, string> = {
-    "AUTO-MODE": "Auto",
-    "MANU-MODE": "Manuell",
-    "PARTY-MODE": "Abwesend",
-    "BOOST-MODE": "Boost",
-  };
-  const HMIP_MODE_DE: Record<number, string> = {
-    0: "Auto",
-    1: "Manuell",
-    2: "Abwesend",
-  };
   const currentModeLabel = $derived.by(() => {
     if (isRf && typeof controlModeDP?.value === "string") {
-      return RF_MODE_DE[controlModeDP.value] ?? controlModeDP.value;
+      const RF_MODE_KEY: Record<string, string> = {
+        "AUTO-MODE": "cdp.climate.mode_auto",
+        "MANU-MODE": "cdp.climate.mode_manual",
+        "PARTY-MODE": "cdp.climate.mode_away",
+        "BOOST-MODE": "cdp.climate.mode_boost",
+      };
+      const key = RF_MODE_KEY[controlModeDP.value];
+      return key ? t(key) : controlModeDP.value;
     }
     if (isHmIP && typeof setpointModeDP?.value === "number") {
-      return HMIP_MODE_DE[setpointModeDP.value] ?? "";
+      const HMIP_MODE_KEY: Record<number, string> = {
+        0: "cdp.climate.mode_auto",
+        1: "cdp.climate.mode_manual",
+        2: "cdp.climate.mode_away",
+      };
+      const key = HMIP_MODE_KEY[setpointModeDP.value];
+      return key ? t(key) : "";
     }
     return "";
   });
@@ -123,7 +125,7 @@
     const parts: string[] = [];
     if (currentModeLabel) parts.push(currentModeLabel);
     if (isSimple) {
-      parts.push(`${setpoint.toFixed(1)} °C${isHeatOn ? " · An" : " · Aus"}`);
+      parts.push(`${setpoint.toFixed(1)} °C · ${isHeatOn ? t("cdp.climate.secondary_on") : t("cdp.climate.secondary_off")}`);
     } else if (typeof currentTemp === "number") {
       parts.push(`${currentTemp.toFixed(1)} °C → ${setpoint.toFixed(1)} °C`);
     } else {
@@ -132,12 +134,12 @@
     return parts.join(" · ");
   });
 
-  // HmIP mode options — mirror aiohomematic's _ModeHmIP (climate.py:76-81).
-  const HMIP_MODES = [
-    { value: 0, label: "Auto" },
-    { value: 1, label: "Manuell" },
-    { value: 2, label: "Abwesend" },
-  ];
+  // HmIP mode options — mirror the _ModeHmIP integer set (0=Auto, 1=Manu, 2=Away).
+  const HMIP_MODES = $derived([
+    { value: 0, label: t("cdp.climate.mode_auto") },
+    { value: 1, label: t("cdp.climate.mode_manual") },
+    { value: 2, label: t("cdp.climate.mode_away") },
+  ]);
 
   // Map HA-style mode strings (auto / heat / off / cool) for set_mode.
   // The CDP service-method dispatcher accepts those tokens directly.
@@ -150,7 +152,7 @@
     if (boostDP) {
       out.push({
         key: "boost",
-        label: "Boost",
+        label: t("cdp.climate.boost"),
         value: Boolean(boostDP.value),
         writable: boostDP.operations.write,
       });
@@ -158,7 +160,7 @@
     if (frostDP) {
       out.push({
         key: "frost",
-        label: "Frostschutz",
+        label: t("cdp.climate.frost"),
         value: Boolean(frostDP.value),
         writable: frostDP.operations.write,
       });
@@ -190,7 +192,7 @@
   );
   function profileLabel(p: string): string {
     if (p.startsWith("week_program_")) {
-      return `Wochenprogramm ${p.slice("week_program_".length)}`;
+      return t("cdp.climate.week_program", { n: p.slice("week_program_".length) });
     }
     return p
       .replace(/_/g, " ")
@@ -273,8 +275,8 @@
           value={isHeatOn}
           color={tileColor}
           disabled={!stateDP.operations.write}
-          labelOff="Aus"
-          labelOn="An"
+          labelOff={t("cdp.climate.heat_off")}
+          labelOn={t("cdp.climate.heat_on")}
           onChange={(v) => setMode(v ? "heat" : "off")}
         />
       {/if}
@@ -315,23 +317,23 @@
             type="button"
             class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => setMode("auto")}
-          >Auto</button>
+          >{t("cdp.climate.mode_auto")}</button>
           <button
             type="button"
             class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => invoke("enable_boost")}
-          >Boost</button>
+          >{t("cdp.climate.boost")}</button>
           <button
             type="button"
             class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
             onclick={() => setMode("heat")}
-          >Manuell</button>
+          >{t("cdp.climate.mode_manual")}</button>
         </div>
       {/if}
 
       {#if presetModes.length > 0}
         <label class="flex flex-col gap-1">
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">Profil</span>
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("cdp.climate.profile")}</span>
           <!-- `selected` on each <option> is the portable way to drive
                the current value of an HTML <select> in Svelte 5 without
                a two-way bind; <select value=…> alone does not propagate
@@ -354,7 +356,7 @@
         <div class="flex flex-col gap-2 rounded-md border border-[var(--ha-divider-color)] p-2">
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-medium text-[var(--ha-secondary-text-color)]">
-              Abwesenheit{isAway ? " · aktiv" : ""}
+              {isAway ? t("cdp.climate.absence_active") : t("cdp.climate.absence")}
             </span>
             <div class="flex gap-2">
               {#if isAway}
@@ -362,13 +364,13 @@
                   type="button"
                   class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
                   onclick={() => invoke("disable_away")}
-                >Anwesend</button>
+                >{t("cdp.climate.present")}</button>
               {:else}
                 <button
                   type="button"
                   class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
                   onclick={quickAway24h}
-                >24 h abwesend</button>
+                >{t("cdp.climate.away_24h")}</button>
                 <button
                   type="button"
                   class="min-h-11 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
@@ -380,7 +382,7 @@
           {#if awayOpen && !isAway}
             <div class="flex flex-wrap items-end gap-2 text-xs">
               <label class="flex flex-col gap-1">
-                <span class="text-[var(--ha-secondary-text-color)]">Dauer (h)</span>
+                <span class="text-[var(--ha-secondary-text-color)]">{t("cdp.climate.away_duration")}</span>
                 <input
                   type="number"
                   min="1"
@@ -390,7 +392,7 @@
                 />
               </label>
               <label class="flex flex-col gap-1">
-                <span class="text-[var(--ha-secondary-text-color)]">Temperatur (°C)</span>
+                <span class="text-[var(--ha-secondary-text-color)]">{t("cdp.climate.away_temperature")}</span>
                 <input
                   type="number"
                   min="4.5"
@@ -404,7 +406,7 @@
                 type="button"
                 class="min-h-10 rounded-md bg-[var(--ha-primary-color)] px-3 text-sm font-medium text-white"
                 onclick={quickAway24h}
-              >Aktivieren</button>
+              >{t("cdp.climate.activate")}</button>
             </div>
           {/if}
         </div>
@@ -413,10 +415,10 @@
       {#if tempDP || humidityDP}
         <div class="grid grid-cols-2 gap-2">
           {#if tempDP}
-            <StatReadoutFeature label="Ist-Temperatur" value={currentTemp} unit="°C" />
+            <StatReadoutFeature label={t("cdp.climate.actual_temp")} value={currentTemp} unit="°C" />
           {/if}
           {#if humidityDP}
-            <StatReadoutFeature label="Luftfeuchte" value={currentHumidity} unit="%" />
+            <StatReadoutFeature label={t("cdp.climate.humidity")} value={currentHumidity} unit="%" />
           {/if}
         </div>
       {/if}

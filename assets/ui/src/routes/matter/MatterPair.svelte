@@ -164,7 +164,7 @@
         <!-- QR payload (raw, for debugging / alternate scan) -->
         <details class="w-full">
           <summary class="text-xs cursor-pointer" style="color: var(--ha-secondary-text-color);">
-            QR payload
+            {t("matter.pair.qr_payload")}
           </summary>
           <p class="mt-1 text-xs font-mono break-all" style="color: var(--ha-secondary-text-color);">
             {window.qr_code}

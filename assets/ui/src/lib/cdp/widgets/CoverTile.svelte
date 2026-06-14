@@ -63,11 +63,11 @@
   const garageState = $derived<string>(
     typeof stateDP?.value === "string" ? stateDP.value : "",
   );
-  const STATE_DE: Record<string, string> = {
-    CLOSED: "Geschlossen",
-    OPEN: "Offen",
-    VENTILATION_POSITION: "Lüftet",
-    POSITION_UNKNOWN: "Unbekannt",
+  const STATE_KEY: Record<string, string> = {
+    CLOSED: "cdp.cover.state_closed",
+    OPEN: "cdp.cover.state_open",
+    VENTILATION_POSITION: "cdp.cover.state_ventilating",
+    POSITION_UNKNOWN: "cdp.cover.state_unknown",
   };
 
   const isOpen = $derived.by(() => {
@@ -86,11 +86,12 @@
   const secondary = $derived.by(() => {
     if (!observed) return "—";
     if (isGarage) {
-      return STATE_DE[garageState] ?? "Unbekannt";
+      const key = STATE_KEY[garageState];
+      return key ? t(key) : t("cdp.cover.state_unknown");
     }
-    const parts = [`${Math.round(level * 100)} % geöffnet`];
+    const parts = [t("cdp.cover.secondary_open", { pct: Math.round(level * 100) })];
     if (tiltDP?.observed) {
-      parts.push(`Lamellen ${Math.round(tilt * 100)} %`);
+      parts.push(t("cdp.cover.secondary_slats", { pct: Math.round(tilt * 100) }));
     }
     return parts.join(" · ");
   });
@@ -146,30 +147,30 @@
           <ControlButton
             active={garageState === "OPEN"}
             color={tileColor}
-            label="Öffnen"
+            label={t("cdp.cover.open")}
             onClick={() => invoke("open")}
-          >Öffnen</ControlButton>
+          >{t("cdp.cover.open")}</ControlButton>
           {#if hasStop}
             <ControlButton
               active={false}
               color={tileColor}
-              label="Halt"
+              label={t("cdp.cover.stop")}
               onClick={() => invoke("stop")}
-            >Halt</ControlButton>
+            >{t("cdp.cover.stop")}</ControlButton>
           {/if}
           <ControlButton
             active={garageState === "CLOSED"}
             color={tileColor}
-            label="Schließen"
+            label={t("cdp.cover.close")}
             onClick={() => invoke("close")}
-          >Schließen</ControlButton>
+          >{t("cdp.cover.close")}</ControlButton>
           {#if hasVent}
             <ControlButton
               active={garageState === "VENTILATION_POSITION"}
               color={tileColor}
-              label="Lüften"
+              label={t("cdp.cover.ventilate")}
               onClick={() => invoke("ventilate")}
-            >Lüften</ControlButton>
+            >{t("cdp.cover.ventilate")}</ControlButton>
           {/if}
         </ControlButtonGroup>
       {:else}
@@ -187,7 +188,7 @@
             value={level}
             color={tileColor}
             disabled={!levelDP.operations.write}
-            label="Position"
+            label={t("cdp.cover.position")}
             onChange={(v) => invoke("set_position", { position: v })}
           />
         {/if}
@@ -196,7 +197,7 @@
             value={tilt}
             color={tileColor}
             disabled={!tiltDP.operations.write}
-            label="Lamellen"
+            label={t("cdp.cover.slats")}
             onChange={(v) => invoke("set_tilt", { tilt: v })}
           />
         {/if}

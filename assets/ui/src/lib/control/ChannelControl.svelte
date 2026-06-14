@@ -116,7 +116,7 @@
   <div
     class="rounded-xl border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] p-3 text-sm text-[var(--ha-secondary-text-color)]"
   >
-    Lädt…
+    {t("common.loading")}
   </div>
 {:else if error}
   <div

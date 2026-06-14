@@ -7,6 +7,7 @@
 <script lang="ts">
   import ControlButtonGroup from "../controls/ControlButtonGroup.svelte";
   import ControlButton from "../controls/ControlButton.svelte";
+  import { t } from "$lib/i18n";
 
   type Props = {
     color: string;
@@ -36,21 +37,21 @@
     active={isLocked}
     {color}
     disabled={!canLock || isLocked}
-    label="Verriegeln"
+    label={t("lock.lock")}
     onClick={onLock}
   >
-    🔒 Zu
+    🔒 {t("lock.locked")}
   </ControlButton>
   <ControlButton
     active={!isLocked}
     {color}
     disabled={!canUnlock || !isLocked}
-    label="Entriegeln"
+    label={t("lock.unlock")}
     onClick={onUnlock}
   >
-    🔓 Auf
+    🔓 {t("lock.unlocked")}
   </ControlButton>
   {#if canOpenDoor}
-    <ControlButton {color} label="Tür öffnen" onClick={onOpen}>🚪</ControlButton>
+    <ControlButton {color} label={t("lock.open_door")} onClick={onOpen}>🚪</ControlButton>
   {/if}
 </ControlButtonGroup>

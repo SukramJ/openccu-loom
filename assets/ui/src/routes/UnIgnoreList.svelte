@@ -156,7 +156,7 @@
         <Input
           bind:value={searchText}
           placeholder={t("unignore.search_placeholder")}
-          aria-label="search"
+          aria-label={t("unignore.search_placeholder")}
         />
 
         <ul
@@ -198,7 +198,7 @@
         <Input
           bind:value={customPattern}
           placeholder={t("unignore.add_pattern_placeholder")}
-          aria-label="add-pattern"
+          aria-label={t("unignore.add_pattern_placeholder")}
         />
         <Button onclick={addCustom} disabled={!customPattern.trim()}>
           {t("unignore.add_pattern")}

@@ -248,7 +248,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each centrals as c (c)}
             <option value={c}>{c}</option>
           {/each}
@@ -274,7 +274,7 @@
               bind:value={createCentral}
               class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
             >
-              <option value="">— wählen —</option>
+              <option value="">{t("common.select_placeholder")}</option>
               {#each centrals as c (c)}
                 <option value={c}>{c}</option>
               {/each}
@@ -305,11 +305,11 @@
         {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Min</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
               <Input bind:value={createForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Max</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
               <Input bind:value={createForm.max} />
             </label>
           </div>
@@ -317,7 +317,7 @@
         {#if createForm.value_type === "ENUM"}
           <label class="text-sm md:col-span-2">
             <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.values")}</span>
-            <Input bind:value={createForm.value_list} placeholder="aus;an;blink" />
+            <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
           </label>
         {/if}
       </div>
@@ -501,11 +501,11 @@
         {#if editing.value_type === "INTEGER" || editing.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Min</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
               <Input bind:value={editForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Max</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
               <Input bind:value={editForm.max} />
             </label>
           </div>

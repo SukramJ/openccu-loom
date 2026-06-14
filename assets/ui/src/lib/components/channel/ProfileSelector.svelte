@@ -300,7 +300,7 @@
         </div>
         {#if previewExpanded}
           <div class="overflow-x-auto">
-          <table class="mt-2 w-full text-left text-[11px]">
+          <table class="table-reflow mt-2 w-full text-left text-[11px]">
             <thead class="text-[var(--ha-secondary-text-color)]">
               <tr>
                 <th class="py-1 pr-2">{t("profile.col.parameter")}</th>
@@ -312,14 +312,14 @@
             <tbody>
               {#each preview as entry (entry.name)}
                 <tr class="border-t border-slate-100 dark:border-slate-800">
-                  <td class="py-1 pr-2 font-mono">{entry.name}</td>
-                  <td class="py-1 pr-2 font-mono text-[var(--ha-secondary-text-color)]">
+                  <td class="reflow-title py-1 pr-2 font-mono">{entry.name}</td>
+                  <td class="py-1 pr-2 font-mono text-[var(--ha-secondary-text-color)]" data-label={t("profile.col.current")}>
                     {entry.current ?? "—"}
                   </td>
-                  <td class="py-1 pr-2 font-mono">
+                  <td class="py-1 pr-2 font-mono" data-label={t("profile.col.next")}>
                     {entry.next ?? entry.detail ?? "—"}
                   </td>
-                  <td class="py-1">
+                  <td class="py-1" data-label={t("profile.col.status")}>
                     {#if entry.bucket === "matches"}
                       <span class="text-emerald-700 dark:text-emerald-300">✓</span>
                     {:else if entry.bucket === "change"}

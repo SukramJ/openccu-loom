@@ -15,6 +15,7 @@
   import NumericInputFeature from "../features/NumericInputFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -43,8 +44,8 @@
   const computedSecondary = $derived.by(() => {
     if (secondary) return secondary;
     if (!observed) return "—";
-    const pct = `${Math.round(level * 100)} % geöffnet`;
-    if (tiltDP?.observed) return `${pct} · Lamellen ${Math.round(tilt * 100)} %`;
+    const pct = `${Math.round(level * 100)} % ${t("blind.pct_open")}`;
+    if (tiltDP?.observed) return `${pct} · ${t("blind.label.slats")} ${Math.round(tilt * 100)} %`;
     return pct;
   });
 </script>
@@ -73,7 +74,7 @@
         value={level}
         color={tileColor}
         disabled={!writable}
-        label="Position"
+        label={t("blind.label.position")}
         onChange={(v) => onSetSlot("LEVEL", v)}
       />
     {/if}
@@ -82,7 +83,7 @@
         value={tilt}
         color={tileColor}
         disabled={!tiltWritable}
-        label="Lamellen"
+        label={t("blind.label.slats")}
         onChange={(v) => onSetSlot(tiltSlot, v)}
       />
     {/if}

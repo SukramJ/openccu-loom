@@ -301,10 +301,10 @@
         <thead>
           <tr style="border-bottom: 1px solid var(--ha-divider-color); background-color: var(--ha-secondary-background-color);">
             <th class="px-3 py-2 text-left w-10">
-              <span class="sr-only">Select</span>
+              <span class="sr-only">{t("matter.expose.col_select")}</span>
             </th>
             <th class="px-3 py-2 text-left w-8">
-              <span class="sr-only">State</span>
+              <span class="sr-only">{t("matter.expose.col_state")}</span>
             </th>
             <th class="px-3 py-2 text-left">{t("matter.expose.col_name")}</th>
             <th class="px-3 py-2 text-left hidden md:table-cell">{t("matter.expose.col_channel")}</th>
@@ -334,7 +334,7 @@
                     disabled={!bulkable}
                     onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
                     class="cursor-pointer h-5 w-5"
-                    aria-label="Select row"
+                    aria-label={t("matter.expose.select_row")}
                   />
                 </label>
               </td>
@@ -391,7 +391,7 @@
   <aside
     class="fixed right-0 top-0 h-full w-full max-w-sm z-50 flex flex-col border-l overflow-y-auto"
     style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color);"
-    aria-label="Exposure detail"
+    aria-label={t("matter.expose.drawer_aria")}
   >
     <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--ha-divider-color);">
       <h2 class="text-base font-semibold" style="color: var(--ha-primary-text-color);">
@@ -408,7 +408,7 @@
       <!-- Friendly name -->
       <div>
         <label for="drawer-friendly-name" class="block text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
-          Friendly name
+          {t("matter.expose.friendly_name")}
         </label>
         <input
           id="drawer-friendly-name"
@@ -459,7 +459,7 @@
       <!-- Mappability state -->
       <div>
         <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
-          State
+          {t("matter.expose.drawer_state")}
         </p>
         <p class="text-sm">
           {mappabilityIcon(item.mappable)}
@@ -477,7 +477,7 @@
       </div>
       <!-- Source -->
       <div>
-        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Source</p>
+        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_source")}</p>
         {#if item.parameter_label}
           <p class="text-sm" style="color: var(--ha-primary-text-color);">{item.parameter_label}</p>
           <p class="text-xs font-mono" style="color: var(--ha-secondary-text-color);">{item.dp_kind}: {item.dp_key}</p>
@@ -491,7 +491,7 @@
       <!-- Device type -->
       {#if item.device_type_label || item.device_type}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Matter device type</p>
+          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_device_type")}</p>
           <p class="text-sm" style="color: var(--ha-primary-text-color);">
             {item.device_type_label || `0x${item.device_type.toString(16).toUpperCase().padStart(4, "0")}`}
           </p>
@@ -500,7 +500,7 @@
       <!-- Clusters -->
       {#if item.clusters.length > 0}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Clusters</p>
+          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_clusters")}</p>
           <p class="text-sm font-mono" style="color: var(--ha-primary-text-color);">
             {item.clusters.map((c) => `0x${c.toString(16).toUpperCase().padStart(4, "0")}`).join(" · ")}
           </p>

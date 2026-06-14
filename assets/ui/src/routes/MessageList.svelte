@@ -155,7 +155,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each (tab === "alarm" ? alarmCentrals : serviceCentrals) as c (c)}
             <option value={c}>{c}</option>
           {/each}
@@ -274,7 +274,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each serviceCentrals as c (c)}
             <option value={c}>{c}</option>
           {/each}

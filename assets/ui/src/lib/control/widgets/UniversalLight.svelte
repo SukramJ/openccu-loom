@@ -27,6 +27,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -103,7 +104,7 @@
         value={level}
         color={tileColor}
         disabled={!writable}
-        label="Helligkeit"
+        label={t("light.brightness")}
         onChange={(v) => onSetSlot("LEVEL", v)}
       />
     {/if}
@@ -112,47 +113,47 @@
         <ControlButton
           active={mode === "color"}
           color={tileColor}
-          label="Farbe"
+          label={t("light.mode.color")}
           onClick={() => (mode = "color")}
-        >Farbe</ControlButton>
+        >{t("light.mode.color")}</ControlButton>
         <ControlButton
           active={mode === "temp"}
           color={tileColor}
-          label="Weiß"
+          label={t("light.mode.white")}
           onClick={() => (mode = "temp")}
-        >Weiß</ControlButton>
+        >{t("light.mode.white")}</ControlButton>
       </ControlButtonGroup>
     {/if}
     {#if mode === "color" && hasColor}
       <div class="flex flex-col gap-1">
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">Farbton</span>
+        <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("light.hue")}</span>
         <ControlHueSlider
           value={hue}
           min={0}
           max={360}
           disabled={!(hueDP?.operations.write)}
-          label="Farbton"
+          label={t("light.hue")}
           onChange={(v) => onSetSlot("HUE", v)}
         />
       </div>
       <div class="flex flex-col gap-1">
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">Sättigung</span>
+        <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("light.saturation")}</span>
         <ControlSaturationSlider
           value={saturation}
           {hue}
           disabled={!(satDP?.operations.write)}
-          label="Sättigung"
+          label={t("light.saturation")}
           onChange={(v) => onSetSlot("SATURATION", v)}
         />
       </div>
     {/if}
     {#if mode === "temp" && hasCT}
       <div class="flex flex-col gap-1">
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">Farbtemperatur</span>
+        <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("light.color_temp")}</span>
         <ControlColorTempSlider
           value={kelvin}
           disabled={!(ctDP?.operations.write)}
-          label="Farbtemperatur"
+          label={t("light.color_temp")}
           onChange={(v) => onSetSlot("COLOR_TEMPERATURE", v)}
         />
       </div>
@@ -162,7 +163,7 @@
         value={effectDP.value as string | number | undefined}
         options={effectOptions}
         disabled={!(effectDP.operations.write)}
-        label="Effekt"
+        label={t("light.effect")}
         onChange={(v) => onSetSlot("EFFECT", v)}
       />
     {/if}

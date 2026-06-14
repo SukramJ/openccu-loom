@@ -1,6 +1,7 @@
 <script lang="ts">
   import { authStore } from "$lib/stores/auth.svelte";
   import BrandMark from "$lib/components/ui/BrandMark.svelte";
+  import { t } from "$lib/i18n";
 
   let username = $state("");
   let password = $state("");
@@ -34,7 +35,7 @@
 
     <label class="mb-3 block">
       <span class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-        Benutzername
+        {t("login.username")}
       </span>
       <input
         type="text"
@@ -47,7 +48,7 @@
 
     <label class="mb-4 block">
       <span class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-        Passwort
+        {t("login.password")}
       </span>
       <input
         type="password"
@@ -69,7 +70,7 @@
       class="flex h-11 w-full items-center justify-center rounded-md bg-brand-500 px-3 text-base font-medium text-white transition hover:bg-brand-700 disabled:opacity-50 sm:text-sm"
       disabled={submitting}
     >
-      {submitting ? "Anmelden…" : "Anmelden"}
+      {submitting ? t("login.submitting") : t("login.submit")}
     </button>
 
     <!-- Single Sign-On button: bounces the browser to the REST OIDC
@@ -83,7 +84,7 @@
         href="/api/v1/auth/oidc/start"
         class="flex min-h-11 w-full items-center justify-center rounded-md border border-slate-300 px-3 text-center text-sm font-medium text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-slate-700 dark:text-slate-200"
       >
-        Single Sign-On (OIDC)
+        {t("login.sso")}
       </a>
     </div>
   </form>

@@ -2,6 +2,7 @@
   import { Select as BitsSelect } from "bits-ui";
   import { Check, ChevronDown } from "@lucide/svelte";
   import { cn } from "$lib/utils";
+  import { t } from "$lib/i18n";
 
   type Option = { value: string; label: string };
 
@@ -17,7 +18,7 @@
   let {
     options,
     value = $bindable(""),
-    placeholder = "Auswählen…",
+    placeholder = t("select.placeholder"),
     disabled = false,
     onValueChange,
     class: className,

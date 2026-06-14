@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { t } from "$lib/i18n";
 
   // Lightweight breadcrumb. Each entry is either a hash href or a
   // terminal label (the current page). Mirrors
@@ -22,7 +23,7 @@
 {#if items.length > 0}
   <nav
     class="flex flex-wrap items-center gap-1 text-sm {className}"
-    aria-label="Breadcrumb"
+    aria-label={t("ui.breadcrumb")}
     style="color: var(--ha-secondary-text-color);"
   >
     {#each items as crumb, i (i)}

@@ -63,7 +63,7 @@
     <span
       class="rounded-full px-1.5 text-[10px] font-mono tabular-nums"
       style="background-color: var(--ha-secondary-background-color); color: var(--ha-secondary-text-color);"
-      title="Events seit Verbindungsaufbau"
+      title={t("ui.events_since_connect")}
     >
       {diag.received}
     </span>

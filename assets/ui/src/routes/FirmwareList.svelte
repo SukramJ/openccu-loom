@@ -239,7 +239,7 @@
         style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
         title="CCU"
       >
-        <option value="">Alle CCUs</option>
+        <option value="">{t("common.all_ccus")}</option>
         {#each centrals as c (c)}
           <option value={c}>{c}</option>
         {/each}

@@ -63,11 +63,11 @@
     if (!observed) return "—";
     if (isActive) {
       const parts: string[] = [];
-      if (activeAcoustic) parts.push("Akustisch");
-      if (activeOptical) parts.push("Optisch");
-      return parts.length > 0 ? parts.join(" + ") : "Alarm aktiv";
+      if (activeAcoustic) parts.push(t("cdp.siren.state_acoustic"));
+      if (activeOptical) parts.push(t("cdp.siren.state_optical"));
+      return parts.length > 0 ? parts.join(" + ") : t("cdp.siren.state_active");
     }
-    return "Ruhe";
+    return t("cdp.siren.state_quiet");
   });
 
   async function load() {
@@ -122,22 +122,22 @@
         <ControlButton
           active={!isActive}
           color={tileColor}
-          label="Aus"
+          label={t("cdp.siren.off")}
           onClick={() => invoke("turn_off")}
-        >Aus</ControlButton>
+        >{t("cdp.siren.off")}</ControlButton>
         <ControlButton
           active={isActive}
           color={tileColor}
-          label="Test"
+          label={t("cdp.siren.test")}
           onClick={() => invoke("turn_on")}
-        >Test</ControlButton>
+        >{t("cdp.siren.test")}</ControlButton>
       </ControlButtonGroup>
       {#if caps.acoustic || caps.optical || caps.volume_set || caps.duration}
         <div class="flex flex-wrap gap-2 text-xs text-[var(--ha-secondary-text-color)]">
-          {#if caps.acoustic}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">Akustik</span>{/if}
-          {#if caps.optical}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">Optik</span>{/if}
-          {#if caps.volume_set}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">Lautstärke</span>{/if}
-          {#if caps.duration}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">Dauer</span>{/if}
+          {#if caps.acoustic}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">{t("cdp.siren.acoustic")}</span>{/if}
+          {#if caps.optical}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">{t("cdp.siren.optical")}</span>{/if}
+          {#if caps.volume_set}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">{t("cdp.siren.volume")}</span>{/if}
+          {#if caps.duration}<span class="rounded bg-[var(--ha-divider-color)] px-2 py-0.5">{t("cdp.siren.duration")}</span>{/if}
         </div>
       {/if}
     {/snippet}

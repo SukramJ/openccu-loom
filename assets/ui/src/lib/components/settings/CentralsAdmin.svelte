@@ -326,7 +326,7 @@
 <div class="space-y-4">
   <div class="flex items-center justify-between gap-2">
     <h3 class="text-sm font-semibold text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
-      CCUs
+      {t("settings.tab.ccus")}
     </h3>
     <Button type="button" variant="outline" size="sm" onclick={openAdd}>
       {t("centrals.add")}
