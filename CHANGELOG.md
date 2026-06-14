@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Added
+
+- **Per-central behaviour toggles (`centrals[].behavior`).** Nine operator
+  toggles mirroring the reference stack's config knobs, all per-central and
+  runtime-editable:
+  - `light_last_brightness` (default true) — restore last brightness on a
+    plain light turn-on, or turn on at full.
+  - `use_group_channel_for_cover_state` (default true) — report cover
+    position from the group channel or the cover's own channel.
+  - `enable_sysvar_scan` / `enable_program_scan` (default true) — gate the
+    hub system-variable / program scan entirely.
+  - `include_internal_sysvars` (default true) / `include_internal_programs`
+    (default false) — daemon-side filter for CCU-internal hub entities, so
+    MQTT and REST agree.
+  - `sysvar_markers` / `program_markers` (default empty) — restrict the hub
+    scan to entities whose CCU description starts with one of the
+    `DescriptionMarker` tokens (HAHM, HX, INTERNAL, MQTT); program
+    descriptions are now fetched via ReGa when program markers are set.
+  - `sysvar_scan_interval` (default 0 = 5 min) — override the periodic
+    sysvar-refresh cadence.
+  - `enable_device_firmware_check` (default true) — gate the per-device
+    firmware-update entity surface. Defaults true (a deliberate divergence
+    from the reference stack's false default; see `docs/parity/by_design.md`)
+    so 0.2.0's firmware-update entities are preserved on upgrade.
+  - `delay_new_device_creation` (default false) — defer ingest of a
+    newly-paired device until it is accepted from the inbox.
+
 ## [0.2.0] — 2026-06-14
 
 ### Added

@@ -3011,3 +3011,18 @@ These were filed as re-audit findings V2-03 (deferred) and the un_ignore
 adversarial-review Issues 1–3 (2026-05-31). The matrix for concrete-channel
 entries was verified faithful; only the wildcard/empty-channel and
 required-parameter edges diverge.
+
+## Per-central behavior toggles — `enable_device_firmware_check` default
+
+The reference stack defaults `enable_device_firmware_check` to **false** —
+firmware-update entities are off until the operator opts in. OpenCCU-Loom
+defaults it to **true**: the 0.2.0 release shipped per-device firmware-update
+entities unconditionally, and flipping the new toggle's default to the
+reference value would silently remove those entities from every existing
+deployment on upgrade. The toggle still lets operators turn the surface off
+(`behavior.enable_device_firmware_check: false`); only the default diverges,
+preserving the shipped behaviour. The other eight behavior toggles
+(`light_last_brightness`, `use_group_channel_for_cover_state`,
+`enable_sysvar_scan`, `enable_program_scan`, `include_internal_sysvars`,
+`include_internal_programs`, `sysvar_markers`/`program_markers`,
+`delay_new_device_creation`) match the reference defaults.

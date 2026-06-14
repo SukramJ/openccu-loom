@@ -97,6 +97,9 @@ type DevicePipeline struct {
 	// central's config.
 	cdpLightLastBrightness     bool
 	cdpUseGroupChannelForCover bool
+	// cdpEnableFirmwareCheck gates the per-device firmware-update
+	// surface (default true). Set via [WithFirmwareCheck].
+	cdpEnableFirmwareCheck bool
 
 	// visibility is the optional visibility gate consulted before each
 	// data-point is stored on a channel. When nil, all parameters pass
@@ -136,6 +139,7 @@ func NewDevicePipeline(u *central.Unit) *DevicePipeline {
 		// built without the builder (tests, tooling).
 		cdpLightLastBrightness:     true,
 		cdpUseGroupChannelForCover: true,
+		cdpEnableFirmwareCheck:     true,
 	}
 }
 
@@ -146,6 +150,14 @@ func NewDevicePipeline(u *central.Unit) *DevicePipeline {
 func (p *DevicePipeline) WithCustomDPBehavior(lightLastBrightness, useGroupChannelForCover bool) *DevicePipeline {
 	p.cdpLightLastBrightness = lightLastBrightness
 	p.cdpUseGroupChannelForCover = useGroupChannelForCover
+	return p
+}
+
+// WithFirmwareCheck gates the per-device firmware-update surface
+// (default true). When false, devices are materialised as
+// non-updatable and no firmware-update entity spawns.
+func (p *DevicePipeline) WithFirmwareCheck(enabled bool) *DevicePipeline {
+	p.cdpEnableFirmwareCheck = enabled
 	return p
 }
 
@@ -315,6 +327,10 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 	if dd.Version != nil {
 		schemaVersion = *dd.Version
 	}
+	// The firmware-update surface (the per-device Update entity) is
+	// gated by the per-central firmware-check toggle. When disabled the
+	// device is treated as non-updatable so no update entity spawns.
+	updatable := dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable && p.cdpEnableFirmwareCheck
 	d := device.New(device.Config{
 		InterfaceID: interfaceID,
 		Interface:   iface,
@@ -336,12 +352,12 @@ func (p *DevicePipeline) ensureDevice(dd *hmproto.DeviceDescription, interfaceID
 		Firmware: device.FirmwareInfo{
 			Current:   dd.Firmware,
 			Available: dd.AvailableFirmware,
-			Updatable: dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable,
+			Updatable: updatable,
 			// The installable-update gate reads FIRMWARE_UPDATE_STATE (the
 			// HmIP update lifecycle), not FIRMWARE_STATE (firmware health).
 			UpdateState: hmenum.DeviceFirmwareState(dd.FirmwareUpdateState),
 		},
-		Updatable: dd.FirmwareUpdatable != nil && *dd.FirmwareUpdatable,
+		Updatable: updatable,
 	})
 	if p.translations != nil {
 		d.ModelLabel = p.translations.DeviceModelLabel(p.locale, d.Model, d.SubModel)

@@ -805,9 +805,10 @@ type CentralBehavior struct {
 	// stack key: sysvar_scan_interval.
 	SysvarScanInterval time.Duration `yaml:"sysvar_scan_interval,omitempty" json:"sysvar_scan_interval,omitempty" cfg:"expert"`
 
-	// EnableDeviceFirmwareCheck (default false) gates the periodic
-	// device firmware-update check and the firmware-update entity
-	// surface. Reference stack key: enable_device_firmware_check.
+	// EnableDeviceFirmwareCheck (default true) gates the per-device
+	// firmware-update entity surface. Reference stack key:
+	// enable_device_firmware_check (which defaults false there; see
+	// docs/parity/by_design.md for the divergence rationale).
 	EnableDeviceFirmwareCheck *bool `yaml:"enable_device_firmware_check,omitempty" json:"enable_device_firmware_check,omitempty" cfg:"expert"`
 
 	// DelayNewDeviceCreation (default false) defers creation of a
@@ -867,10 +868,13 @@ func (b CentralBehavior) IncludeInternalProgramsEnabled() bool {
 	return *b.IncludeInternalPrograms
 }
 
-// EnableDeviceFirmwareCheckEnabled reports the resolved toggle (default false).
+// EnableDeviceFirmwareCheckEnabled reports the resolved toggle. Default
+// true: openccu-loom surfaces per-device firmware-update entities out
+// of the box (a deliberate divergence from the reference stack's
+// false default — see docs/parity/by_design.md).
 func (b CentralBehavior) EnableDeviceFirmwareCheckEnabled() bool {
 	if b.EnableDeviceFirmwareCheck == nil {
-		return false
+		return true
 	}
 	return *b.EnableDeviceFirmwareCheck
 }

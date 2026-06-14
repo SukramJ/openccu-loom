@@ -52,6 +52,12 @@ type CallbackHandlers struct {
 	// ReplaceDevice, ReaddedDevice). When nil, those callbacks degrade to
 	// cache-invalidation only.
 	writer *clientpkg.ValueWriter
+
+	// delayNewDeviceCreation defers immediate ingest of newly-paired
+	// devices: when true, NewDevices only stores the descriptions for
+	// the operator inbox / manual-accept flow instead of creating the
+	// entities right away. Set per-central via [SetDelayNewDeviceCreation].
+	delayNewDeviceCreation bool
 }
 
 // NewCallbackHandlers wires the adapter for c.
@@ -68,6 +74,14 @@ func NewCallbackHandlers(u *central.Unit, logger *slog.Logger) *CallbackHandlers
 // fetches.
 func (h *CallbackHandlers) SetWriter(w *clientpkg.ValueWriter) {
 	h.writer = w
+}
+
+// SetDelayNewDeviceCreation toggles deferred ingest of newly-paired
+// devices for this central. When true, NewDevices stores the
+// descriptions for the manual-accept flow but does not create the
+// entities immediately.
+func (h *CallbackHandlers) SetDelayNewDeviceCreation(delay bool) {
+	h.delayNewDeviceCreation = delay
 }
 
 // incidentRecorder returns the incident recorder wired to the central's
@@ -395,6 +409,14 @@ func (h *CallbackHandlers) NewDevices(ctx context.Context, interfaceID string, d
 	}
 	// Store for deferred manual acceptance (operator inbox flow).
 	h.unit.Devices.StoreDelayedDeviceDescriptions(iface, descriptions)
+	if h.delayNewDeviceCreation {
+		// Defer entity creation: the operator accepts the device from
+		// the inbox once its description is complete.
+		h.logger.Info("callback.new_devices.deferred",
+			slog.String("interface", interfaceID),
+			slog.Int("count", len(descriptions)))
+		return nil
+	}
 	// Immediately ingest so the device is reachable via the REST / MQTT
 	// surfaces without requiring a daemon restart or reconnect.
 	h.unit.Devices.HandleNewDevices(ctx, iface, descriptions)

@@ -162,6 +162,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		if writer != nil {
 			handlers.SetWriter(writer)
 		}
+		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
 		binrpcCallbackServer.Register(initID, handlers)
 		callbackURL = "binary://" + binrpcCallbackAddr
 		closerSrv := binrpcCallbackServer

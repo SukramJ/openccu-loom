@@ -25,12 +25,18 @@ import (
 func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger) {
 	for _, u := range reg.List() {
 		jobs := central.StandardJobs{}
-		// Apply per-central overrides from the configuration. Currently
-		// only check_connection_interval is overridable; zero means "use
-		// the compiled-in default".
+		// Apply per-central overrides from the configuration. Zero means
+		// "use the compiled-in default".
 		for i := range cfg.Centrals {
-			if cfg.Centrals[i].Name == u.Name() && cfg.Centrals[i].CheckConnectionInterval > 0 {
-				jobs.CheckConnectionInterval = cfg.Centrals[i].CheckConnectionInterval
+			cc := &cfg.Centrals[i]
+			if cc.Name != u.Name() {
+				continue
+			}
+			if cc.CheckConnectionInterval > 0 {
+				jobs.CheckConnectionInterval = cc.CheckConnectionInterval
+			}
+			if cc.Behavior.SysvarScanInterval > 0 {
+				jobs.SysvarRefreshInterval = cc.Behavior.SysvarScanInterval
 			}
 		}
 		if u.Hub != nil {

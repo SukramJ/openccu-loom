@@ -33,24 +33,28 @@ stamp each `device.Device` before `materialiseCustomDataPoints` →
 - [x] **Wiring** — `DevicePipeline.WithCustomDPBehavior(...)` (default true), set from `cc.Behavior` in `WireCentrals`; `materialiseCustomDataPoints` stamps each device.
 - [x] **Light** — `Light.enableLastBrightness` from `cfg.Channel.Device()`; `turnOnLevel()` branches all turn-on sites (full 1.0 when disabled).
 - [x] **Cover** — `applyGroupLevel` reads `ch.Device().UseGroupChannelForCoverState()`.
-- [ ] **Tests** (test-first): config defaults/round-trip; device accessors; light enabled→LastLevel / disabled→full; cover enabled→group / disabled→own; pipeline stamping.
+- [x] **Tests** (test-first): config defaults/round-trip; device accessors; light enabled→LastLevel / disabled→full; cover enabled→group / disabled→own; pipeline stamping.
 
 ### Part 2 — hub scan + filtering toggles
 
-- [ ] **`enable_sysvar_scan` / `enable_program_scan`** (default true) — per-central gate that suppresses the sysvar / program hub scan entirely.
-- [ ] **`include_internal_sysvars` (true) / `include_internal_programs` (false)** — daemon-side filter so MQTT/REST agree (today internal filtering is client-side only).
-- [ ] **`sysvar_markers` / `program_markers`** — marker (ReGa-description-prefix) filtering. Needs the `description` field surfaced on Sysvar/Program summaries (the known hub-parity gap) before the marker match can run daemon-side.
-- [ ] **`sysvar_scan_interval`** — per-central cadence override for the periodic sysvar refresh.
+- [x] **`enable_sysvar_scan` / `enable_program_scan`** (default true) — per-central gate that suppresses the sysvar / program hub scan entirely.
+- [x] **`include_internal_sysvars` (true) / `include_internal_programs` (false)** — daemon-side filter so MQTT/REST agree (today internal filtering is client-side only).
+- [x] **`sysvar_markers` / `program_markers`** — marker (ReGa-description-prefix) filtering. Needs the `description` field surfaced on Sysvar/Program summaries (the known hub-parity gap) before the marker match can run daemon-side.
+- [x] **`sysvar_scan_interval`** — per-central cadence override for the periodic sysvar refresh.
 
 ### Part 3 — device-lifecycle toggles
 
-- [ ] **`enable_device_firmware_check`** (default false) — gate the firmware-update check / update-entity surface.
-- [ ] **`delay_new_device_creation`** (default false) — defer creation of newly-paired devices until their description is complete.
+- [x] **`enable_device_firmware_check`** (default **true** — deliberate divergence from the reference's false, to preserve 0.2.0's firmware-update entities; see `docs/parity/by_design.md`) — gate the firmware-update entity surface.
+- [x] **`delay_new_device_creation`** (default false) — defer creation of newly-paired devices until their description is complete.
 
 ### Wrap-up
 
-- [ ] **Docs** — document every new key in `example.config.full.yaml`.
-- [ ] **CHANGELOG** — entry under `[0.3.0] → ### Added` (0.2.0 is tagged; post-tag changes belong to 0.3.0).
-- [ ] `make lint` + `make test` green.
+- [x] **Docs** — document every new key in `example.config.full.yaml`.
+- [x] **CHANGELOG** — entry under `[0.3.0] → ### Added` (0.2.0 is tagged; post-tag changes belong to 0.3.0).
+- [x] `make lint` + `make test` green.
 
-Defaults mirror aiohomematic (`const.py`): `enable_program_scan`/`enable_sysvar_scan`/`include_internal_sysvars` = true, `include_internal_programs`/`enable_device_firmware_check`/`delay_new_device_creation` = false, markers = empty.
+Defaults mirror aiohomematic (`const.py`) except `enable_device_firmware_check`
+(true here vs false there — see by_design.md): `enable_program_scan` /
+`enable_sysvar_scan` / `include_internal_sysvars` / `light_last_brightness` /
+`use_group_channel_for_cover_state` = true, `include_internal_programs` /
+`delay_new_device_creation` = false, markers = empty.

@@ -252,6 +252,7 @@ func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
 				cc.Behavior.LightLastBrightnessEnabled(),
 				cc.Behavior.UseGroupChannelForCoverStateEnabled(),
 			).
+			WithFirmwareCheck(cc.Behavior.EnableDeviceFirmwareCheckEnabled()).
 			WithMasterValuesStore(deps.MasterValues, cc.Name).
 			WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name)
 
@@ -415,6 +416,7 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 		if deps.Writer != nil {
 			handlers.SetWriter(deps.Writer)
 		}
+		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
 		deps.CallbackServer.Register(cc.Name, handlers)
 		callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
 		centralName := cc.Name
