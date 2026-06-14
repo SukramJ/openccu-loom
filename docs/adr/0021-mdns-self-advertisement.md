@@ -30,6 +30,19 @@ One service is published:
   - `tls=0` — TLS-in-front flag; `0` until the daemon grows a TLS
     listener (or a documented reverse-proxy pattern surfaces the
     flag separately)
+  - `instance=<resolved instance name>` — the friendly label a
+    discovering client shows in its daemon picker (the SRV instance
+    label carries the same value; the explicit key is robust across
+    resolvers that do not surface the label conveniently)
+  - `centrals=<count>` — number of CCUs this daemon serves, a cheap
+    pre-auth hint for the picker. The CCU names/serials themselves are
+    deliberately NOT advertised (volatile, only known post-connect,
+    and TXT is size-limited); a client reads them from
+    `GET /api/v1/system/ccu` after it authenticates. The intended
+    discovery flow: browse `_openccu-loom._tcp` → pick a daemon
+    (label `instance`, host/IP from A/AAAA, port from SRV) → enter a
+    token → `GET /system/ccu` → pick the CCU by name/serial — no
+    manual host or instance entry.
 
 The implementation lives in `internal/north/discovery/mdns/` —
 deliberately a separate package from `internal/north/matter/mdns/`

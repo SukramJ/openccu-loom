@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"sync"
 	"time"
 
@@ -2286,19 +2287,10 @@ func (a *paseSessionCloserAdapter) ClosePaseSessions(_ context.Context) error {
 // buildRateLimitConfig projects the YAML config into the middleware
 // shape, returning nil when rate limiting is disabled so the router
 // skips the middleware wiring entirely.
-func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, logger *slog.Logger) (discoverymdns.Advertiser, error) {
-	port, ok := splitListenPort(cfg.North.REST.Listen)
+func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, centralCount int, logger *slog.Logger) (discoverymdns.Advertiser, error) {
+	svc, ok := mdnsServiceFor(cfg, centralCount)
 	if !ok {
 		return nil, nil
-	}
-	svc := discoverymdns.Service{
-		InstanceName: cfg.North.Discovery.MDNS.InstanceName,
-		Port:         port,
-		TXT: []string{
-			"path=/api/v1",
-			"api_version=" + handlers.APIVersion,
-			"tls=0",
-		},
 	}
 	adv := discoverymdns.NewMulticast(svc)
 	if err := adv.Start(ctx); err != nil {
@@ -2306,8 +2298,38 @@ func startMDNSAdvertiser(ctx context.Context, cfg *config.Config, logger *slog.L
 	}
 	logger.Info("discovery.mdns.started",
 		slog.String("service_type", discoverymdns.ServiceType),
-		slog.Int("port", port))
+		slog.Int("port", svc.Port))
 	return adv, nil
+}
+
+// mdnsServiceFor builds the mDNS service advertised for client
+// auto-discovery from the daemon config. Returns ok=false when the
+// REST listen address carries no usable port (mDNS is then skipped).
+//
+// The TXT bundle gives a discovering client everything it needs to
+// reach and label the daemon before authenticating: the API mount
+// path, the wire-contract version (mirrors GET /info), whether the
+// daemon's own listener is TLS (always 0 — TLS is terminated upstream
+// by a reverse proxy / HA ingress), the friendly instance label, and
+// a cheap pre-auth hint of how many CCUs this daemon serves. The CCU
+// names/serials themselves are NOT in TXT (volatile, size-limited);
+// the client reads them from GET /api/v1/system/ccu after auth.
+func mdnsServiceFor(cfg *config.Config, centralCount int) (discoverymdns.Service, bool) {
+	port, ok := splitListenPort(cfg.North.REST.Listen)
+	if !ok {
+		return discoverymdns.Service{}, false
+	}
+	return discoverymdns.Service{
+		InstanceName: cfg.North.Discovery.MDNS.InstanceName,
+		Port:         port,
+		TXT: []string{
+			"path=/api/v1",
+			"api_version=" + handlers.APIVersion,
+			"tls=0",
+			"instance=" + cfg.North.Discovery.MDNS.ResolveInstanceName(),
+			"centrals=" + strconv.Itoa(centralCount),
+		},
+	}, true
 }
 
 // matterWiring carries the Matter REST/WS-facing adapters produced by

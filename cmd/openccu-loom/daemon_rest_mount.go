@@ -233,7 +233,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	servers.add("rest", rest.NewServer(cfg.North.REST.Listen, topHandler, logger))
 
 	if cfg.North.Discovery.MDNS.IsEnabled() {
-		if adv, err := startMDNSAdvertiser(ctx, cfg, logger); err != nil {
+		if adv, err := startMDNSAdvertiser(ctx, cfg, len(d.reg.Names()), logger); err != nil {
 			logger.Warn("discovery.mdns.start_failed", slog.String("err", err.Error()))
 		} else if adv != nil {
 			teardown = func() {

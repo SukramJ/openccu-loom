@@ -50,6 +50,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   renders the labelled (expanded) nav regardless of the desktop collapse
   preference. The CCU edit form's field pairs collapse from two columns to a
   single column on narrow screens.
+- **mDNS advertisement enriched for client auto-discovery.** The
+  `_openccu-loom._tcp` TXT bundle now also carries `instance=<label>`
+  (the friendly daemon name for a client's daemon picker) and
+  `centrals=<count>` (a pre-auth hint of how many CCUs the daemon
+  serves). Host/IP and port already come from the A/AAAA + SRV
+  records; CCU names/serials are read from `GET /api/v1/system/ccu`
+  after auth (not advertised in TXT). Lets `homematicip_local` /
+  `openccu-loom-client` discover and select a daemon without manual
+  host/instance entry. See ADR 0021.
 
 ## [0.2.0] — 2026-06-14
 
