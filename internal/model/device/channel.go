@@ -379,6 +379,29 @@ func (c *Channel) MasterParameter(p hmenum.Parameter) ParameterDataPoint {
 	return c.masterPoints[p]
 }
 
+// HasMasterParameter reports whether the channel exposes a MASTER-paramset data
+// point with the given parameter name. Satisfies the calculated-data-point
+// relevance probe (e.g. OperatingVoltageLevel's LOW_BAT_LIMIT requirement).
+func (c *Channel) HasMasterParameter(name string) bool {
+	return c.MasterParameter(hmenum.Parameter(name)) != nil
+}
+
+// HasDeviceMasterParameter reports whether the device-root channel exposes a
+// MASTER-paramset data point with the given parameter name. Mirrors the
+// reference channel.device.get_generic_data_point(channel_address=device.address,
+// paramset_key=MASTER, …) lookup used by OperatingVoltageLevel's BATTERY_STATE
+// branch.
+func (c *Channel) HasDeviceMasterParameter(name string) bool {
+	if c.device == nil {
+		return false
+	}
+	root := c.device.RootChannel()
+	if root == nil {
+		return false
+	}
+	return root.MasterParameter(hmenum.Parameter(name)) != nil
+}
+
 // MasterDataPoints returns a stable snapshot of the MASTER-paramset
 // data points.
 func (c *Channel) MasterDataPoints() []ParameterDataPoint {
