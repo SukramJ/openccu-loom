@@ -77,6 +77,11 @@ type ProgramSummary struct {
 	LastExecuted string `json:"last_executed,omitempty"`
 	// IsInternal is true for Tmp_*-programs created internally by the CCU.
 	IsInternal bool `json:"is_internal,omitempty"`
+	// EnabledDefault is true when the program matched a configured description
+	// marker (so clients enable its entity by default); false when no markers
+	// are configured (entry included but disabled by default). Mirrors the
+	// reference stack's marker-driven enabled-by-default resolution.
+	EnabledDefault bool `json:"enabled_default,omitempty"`
 }
 
 // SysvarSummary is one entry in `GET /api/v1/sysvars`.
@@ -108,6 +113,11 @@ type SysvarSummary struct {
 	// exclusions (40 = alarm messages, 41 = service messages — both are
 	// surfaced through dedicated hub singletons instead).
 	Vid int `json:"vid,omitempty"`
+	// EnabledDefault is true when the variable matched a configured description
+	// marker (so clients enable its entity by default); false when no markers
+	// are configured (entry included but disabled by default). Mirrors the
+	// reference stack's marker-driven enabled-by-default resolution.
+	EnabledDefault bool `json:"enabled_default,omitempty"`
 }
 
 // SysvarSetRequest is the body of `PUT /sysvars/{name}`.
@@ -208,6 +218,7 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 				}
 				// M-4: propagate IsInternal so north-bound can filter Tmp_*-programs.
 				e.IsInternal = p.IsInternal
+				e.EnabledDefault = p.EnabledByDefault()
 				out = append(out, e)
 			}
 		}
@@ -522,16 +533,17 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 func toSysvarSummary(s *hub.Sysvar) SysvarSummary {
 	v, ok := s.Value()
 	sum := SysvarSummary{
-		Central:     s.Central(),
-		Name:        s.Name,
-		Description: s.Description,
-		Unit:        s.Unit,
-		ValueType:   string(s.ValueType),
-		Observed:    ok,
-		ValueList:   s.ValueList,
-		IsInternal:  s.IsInternal,
-		IsExtended:  s.IsExtended,
-		Vid:         s.Vid,
+		Central:        s.Central(),
+		Name:           s.Name,
+		Description:    s.Description,
+		Unit:           s.Unit,
+		ValueType:      string(s.ValueType),
+		Observed:       ok,
+		ValueList:      s.ValueList,
+		IsInternal:     s.IsInternal,
+		IsExtended:     s.IsExtended,
+		Vid:            s.Vid,
+		EnabledDefault: s.EnabledByDefault(),
 	}
 	if ok {
 		sum.Value = v.Unwrap()

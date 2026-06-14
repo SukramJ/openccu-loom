@@ -129,8 +129,56 @@ func TestLoadSysvarsInternalAndMarkerFilter(t *testing.T) {
 	if got := len(h.Sysvars()); got != 1 {
 		t.Fatalf("marker filter should keep 1 sysvar, got %d", got)
 	}
-	if _, ok := h.Sysvar("Normal"); !ok {
+	sv, ok := h.Sysvar("Normal")
+	if !ok {
 		t.Fatal("HAHM-marked sysvar should survive the marker filter")
+	}
+	// A configured marker matched → enabled by default.
+	if !sv.EnabledByDefault() {
+		t.Fatal("marker-matched sysvar should be enabled by default")
+	}
+}
+
+func TestLoadSysvarsNoMarkersDisabledByDefault(t *testing.T) {
+	t.Parallel()
+	// Without markers every sysvar is included but disabled by default.
+	srv := hubScanServer(t)
+	defer srv.Close()
+	h := hub.NewHub("c")
+	if err := loadSysvars(context.Background(), newScanClient(t, srv), nil, h, nil,
+		hubScanOptions{enableSysvarScan: true, includeInternalSysvars: true}); err != nil {
+		t.Fatalf("loadSysvars: %v", err)
+	}
+	if len(h.Sysvars()) == 0 {
+		t.Fatal("expected sysvars without a marker filter")
+	}
+	for _, sv := range h.Sysvars() {
+		if sv.EnabledByDefault() {
+			t.Errorf("sysvar %q should be disabled by default without markers", sv.Name)
+		}
+	}
+}
+
+func TestHubEnabledDefault(t *testing.T) {
+	t.Parallel()
+	hahm := []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}
+	internal := []hmenum.DescriptionMarker{hmenum.DescriptionMarkerInternal}
+	for _, tc := range []struct {
+		name       string
+		isInternal bool
+		desc       string
+		markers    []hmenum.DescriptionMarker
+		want       bool
+	}{
+		{"no markers", false, "HAHM x", nil, false},
+		{"non-internal match", false, "HAHM x", hahm, true},
+		{"non-internal no match", false, "plain", hahm, false},
+		{"internal with INTERNAL marker", true, "x", internal, true},
+		{"internal without INTERNAL marker", true, "HAHM x", hahm, false},
+	} {
+		if got := hubEnabledDefault(tc.isInternal, tc.desc, tc.markers); got != tc.want {
+			t.Errorf("%s: hubEnabledDefault = %v, want %v", tc.name, got, tc.want)
+		}
 	}
 }
 

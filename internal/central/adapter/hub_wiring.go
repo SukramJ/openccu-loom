@@ -614,6 +614,27 @@ func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 	return false
 }
 
+// hubEnabledDefault resolves the enabled-by-default flag for a sysvar or
+// program that has passed the inclusion filter. It mirrors the reference
+// stack: an entry is enabled by default only when a marker is configured
+// and it matched (internal entries require the INTERNAL marker). With no
+// markers configured every included entry is disabled by default, so the
+// operator opts in per entity.
+func hubEnabledDefault(isInternal bool, desc string, markers []hmenum.DescriptionMarker) bool {
+	if len(markers) == 0 {
+		return false
+	}
+	if isInternal {
+		for _, m := range markers {
+			if m == hmenum.DescriptionMarkerInternal {
+				return true
+			}
+		}
+		return false
+	}
+	return markerMatch(desc, markers)
+}
+
 // programDescriptions fetches per-program CCU descriptions via ReGa for
 // marker filtering. Program.getAll omits descriptions, so the call is
 // only made when program markers are configured (it costs an extra
@@ -666,9 +687,11 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, 
 			// OnUpdate (e.g. MQTT publisher) remain valid across periodic
 			// refreshes. Only create a new Program when the ID is genuinely new.
 			existing.UpdateMetadata(p.Name, p.IsInternal, writer)
+			existing.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
 			existing.OnActive(p.IsActive)
 		} else {
 			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, desc, p.IsInternal, writer)
+			prog.EnabledDefault = hubEnabledDefault(p.IsInternal, desc, opts.programMarkers)
 			prog.OnActive(p.IsActive)
 			h.PutProgram(prog)
 		}
@@ -807,6 +830,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 			existing.IsExtended = isExtended
 			existing.IsInternal = v.IsInternal
 			existing.Description = desc
+			existing.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
 			if vid, err := strconv.Atoi(v.ID); err == nil {
 				existing.Vid = vid
 			}
@@ -819,6 +843,7 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 			sv.ValueList = valueList
 			sv.IsExtended = isExtended
 			sv.IsInternal = v.IsInternal
+			sv.EnabledDefault = hubEnabledDefault(v.IsInternal, rawDesc, opts.sysvarMarkers)
 			if vid, err := strconv.Atoi(v.ID); err == nil {
 				sv.Vid = vid
 			}
