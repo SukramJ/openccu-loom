@@ -57,6 +57,11 @@
     onLocaleToggle: () => void;
     onLogout: () => void;
     onShortcutHelp: () => void;
+    // Mobile off-canvas drawer state, owned by App.svelte. On <md the
+    // sidebar is hidden off-screen and slides in as an overlay when
+    // mobileOpen is true; onMobileClose closes it (backdrop tap / nav).
+    mobileOpen: boolean;
+    onMobileClose: () => void;
   };
 
   let {
@@ -66,11 +71,21 @@
     onLocaleToggle,
     onLogout,
     onShortcutHelp,
+    mobileOpen,
+    onMobileClose,
   }: Props = $props();
 
   // Persist + reactively read the collapsed state. Burger toggles
   // it; the main App.svelte adapts its left padding accordingly.
   const collapsed = $derived(prefs.navCollapsed);
+
+  // Whether the nav renders in its expanded (labelled) form. Always
+  // expanded while the mobile drawer is open — the icon-only collapsed
+  // form is a desktop space-saver and must not blank the labels in the
+  // mobile overlay (which is always full-width). On <md the drawer is
+  // either off-screen (content irrelevant) or open (expanded); on >=md
+  // it follows the persisted collapse preference.
+  const expanded = $derived(mobileOpen || !collapsed);
 
   function toggle() {
     setNavCollapsed(!collapsed);
@@ -232,8 +247,10 @@
 </script>
 
 <aside
-  class="fixed inset-y-0 left-0 z-30 flex flex-col border-r transition-all duration-200"
-  style="background-color: var(--ha-secondary-background-color); border-color: var(--ha-divider-color); width: {collapsed ? '64px' : '240px'};"
+  class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r transition-transform duration-200 md:translate-x-0 {collapsed
+    ? 'md:w-16'
+    : 'md:w-60'} {mobileOpen ? 'translate-x-0' : '-translate-x-full'}"
+  style="background-color: var(--ha-secondary-background-color); border-color: var(--ha-divider-color);"
   aria-label={t("app.menu")}
 >
   <div
@@ -249,14 +266,14 @@
     >
       <Icon name="mdi:menu" size={18} />
     </button>
-    {#if !collapsed}
+    {#if expanded}
       <BrandMark mode="wordmark" height={26} href="#/devices" />
     {/if}
   </div>
 
   <nav class="flex-1 overflow-y-auto py-2">
     {#each clusters as cluster (cluster.label)}
-      {#if !collapsed}
+      {#if expanded}
         <h3
           class="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wide"
           style="color: var(--ha-disabled-text-color);"
@@ -271,10 +288,11 @@
           <li>
             <a
               href={item.href}
+              onclick={onMobileClose}
               class="relative flex items-center gap-3 px-3 py-2 text-sm font-medium transition"
               style="color: {active ? 'var(--ha-primary-color)' : 'var(--ha-primary-text-color)'}; background-color: {active ? 'rgb(0 0 0 / 0.04)' : 'transparent'};"
               aria-current={active ? "page" : undefined}
-              title={collapsed
+              title={!expanded
                 ? showInstallDot
                   ? `${item.label} · Anlernmodus aktiv`
                   : item.label
@@ -290,7 +308,7 @@
                   ></span>
                 {/if}
               </span>
-              {#if !collapsed}
+              {#if expanded}
                 <span class="flex-1">{item.label}</span>
                 {#if showInstallDot}
                   <span class="text-[10px] font-semibold uppercase tracking-wide" style="color: var(--ha-primary-color);">
@@ -309,7 +327,7 @@
     class="border-t p-2"
     style="border-color: var(--ha-divider-color);"
   >
-    {#if !collapsed && identitySubject}
+    {#if expanded && identitySubject}
       <p class="mb-2 truncate px-1 text-xs" style="color: var(--ha-secondary-text-color);">
         {identitySubject}
       </p>

@@ -32,6 +32,7 @@
   import ConnectionBadge from "$lib/components/ui/ConnectionBadge.svelte";
   import ConfirmDialog from "$lib/components/ui/ConfirmDialog.svelte";
   import Sidebar from "$lib/components/ui/Sidebar.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
   import { dirty } from "$lib/stores/dirty.svelte";
   import { t } from "$lib/i18n";
 
@@ -89,6 +90,9 @@
   const locale = $derived(prefs.locale);
 
   let helpOpen = $state(false);
+  // Mobile off-canvas nav drawer (<md only). Opened by the header
+  // burger, closed by the backdrop tap or a nav-item tap.
+  let mobileNavOpen = $state(false);
 
   type Route =
     | { kind: "list" }
@@ -134,7 +138,10 @@
     };
   });
 
-  const sidebarPad = $derived(prefs.navCollapsed ? "pl-[64px]" : "pl-[240px]");
+  // Reserve the sidebar's width only from md upward, where the bar is
+  // permanently docked. On <md the bar is an overlay, so the content
+  // pane is full-width (no left padding).
+  const sidebarPad = $derived(prefs.navCollapsed ? "md:pl-[64px]" : "md:pl-[240px]");
 
   // Sidebar activeKind treats "firmware" and "matter" as their own leaf.
   const activeKindForSidebar = $derived(
@@ -167,14 +174,35 @@
       onLocaleToggle={() => setLocale(locale === "de" ? "en" : "de")}
       onLogout={() => void onLogout()}
       onShortcutHelp={() => (helpOpen = true)}
+      mobileOpen={mobileNavOpen}
+      onMobileClose={() => (mobileNavOpen = false)}
     />
+
+    {#if mobileNavOpen}
+      <button
+        type="button"
+        class="fixed inset-0 z-20 bg-black/40 md:hidden"
+        aria-label={t("app.close_menu")}
+        onclick={() => (mobileNavOpen = false)}
+      ></button>
+    {/if}
 
     <div class="{sidebarPad} transition-[padding] duration-200">
       <header
-        class="flex h-14 items-center justify-end gap-2 border-b px-4"
+        class="flex h-14 items-center gap-2 border-b px-4"
         style="border-color: var(--ha-divider-color);"
       >
-        <ConnectionBadge />
+        <button
+          type="button"
+          class="-ml-1 rounded-md p-1.5 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
+          aria-label={t("app.menu")}
+          onclick={() => (mobileNavOpen = true)}
+        >
+          <Icon name="mdi:menu" size={20} />
+        </button>
+        <div class="ml-auto">
+          <ConnectionBadge />
+        </div>
       </header>
       <main>
         {#if route.kind === "list"}

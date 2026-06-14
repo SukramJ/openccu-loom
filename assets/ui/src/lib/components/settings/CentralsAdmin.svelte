@@ -406,7 +406,7 @@
       </h2>
 
       <div class="space-y-4 text-sm">
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.name")} *</span>
             <input
@@ -570,7 +570,7 @@
           {/if}
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.username")}</span>
             <input
