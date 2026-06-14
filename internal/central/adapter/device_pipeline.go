@@ -428,12 +428,15 @@ func (p *DevicePipeline) IngestFromBackend(
 	// that point. Refinement runs once VALUES is hydrated, so by the
 	// time MQTT-Discovery / REST consumers query the descriptor it
 	// reflects the device's real bounds.
-	// Drop climate week profiles the slot-parameter heuristic over-attached
-	// to devices that declare no schedule channel (no registered
-	// schedule_channel_no, no WEEK_PROFILE channel) — e.g. ALPHA-IP-RBG. Runs
-	// after custom-DP materialisation so the profile registry is authoritative,
-	// and before refinement so a pruned profile is not bound to backend IO.
-	p.pruneSpuriousClimateWeekProfiles(interfaceID)
+	// Reconcile the slot-parameter-heuristic climate week-profile attachment
+	// with the reference has_schedule gate and the channel the loom-client
+	// probes: detach profiles on devices that declare no schedule channel
+	// (ALPHA-IP-RBG) and relocate the rest onto the canonical schedule channel
+	// (WEEK_PROFILE channel, else the climate custom-DP channel — HM-TC-IT,
+	// HmIP-WGTC). Runs after custom-DP materialisation so the registry +
+	// custom-DP channels are authoritative, and before refinement so a pruned
+	// profile is never bound to backend IO.
+	p.normalizeClimateWeekProfiles(interfaceID)
 	p.refineAttachedWeekProfiles(interfaceID, logger)
 	// Non-climate schedule devices: detect WEEK_PROGRAM_CHANNEL_LOCKS
 	// channels and install a Default-type ProfileDataPoint + per-channel
