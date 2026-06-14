@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.8.0
+  version: 1.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4096,6 +4096,12 @@ components:
             True for CCU-internal helper programs (prgEnergyCounter_…,
             Tmp_…). Clients skip these for HA entities, mirroring
             aiohomematic's DEFAULT_INCLUDE_INTERNAL_PROGRAMS=false.
+        enabled_default:
+          type: boolean
+          description: |
+            True when the program matched a configured description marker, so
+            clients enable its entity by default. Absent/false when no markers
+            are configured: the entry is included but disabled by default.
     SysvarSummary:
       type: object
       required: [name, value_type, observed]
@@ -4137,6 +4143,12 @@ components:
             renames; clients use it to apply fixed-ID exclusions
             (40 = alarm messages, 41 = service messages — both are
             surfaced through dedicated hub singletons instead).
+        enabled_default:
+          type: boolean
+          description: |
+            True when the variable matched a configured description marker, so
+            clients enable its entity by default. Absent/false when no markers
+            are configured: the entry is included but disabled by default.
     SysvarSetRequest:
       type: object
       required: [value]
