@@ -35,6 +35,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `delay_new_device_creation` (default false) — defer ingest of a
     newly-paired device until it is accepted from the inbox.
 
+  The block is editable end-to-end: YAML, the SQLite-backed central store
+  (`behavior_json`), the REST V2 central API (documented on the
+  `CentralBehavior` schema in `assets/openapi.yaml`), and the SPA central
+  editor. `api_version` 1.7.0 → 1.8.0 (additive).
+
 ## [0.2.0] — 2026-06-14
 
 ### Added

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.7.0
+  version: 1.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5210,6 +5210,8 @@ components:
           description: Per-interface port overrides; keys are interface name strings.
         visibility:
           $ref: "#/components/schemas/VisibilityConfig"
+        behavior:
+          $ref: "#/components/schemas/CentralBehavior"
         enabled:
           type: boolean
           description: Whether the daemon should connect to this CCU at startup.
@@ -5219,6 +5221,50 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    CentralBehavior:
+      type: object
+      description: |
+        Per-central behaviour toggles. Every field is optional; an
+        omitted field means the daemon default shown below. Mirrors the
+        reference stack's per-central config knobs.
+      properties:
+        light_last_brightness:
+          type: boolean
+          description: "Restore last non-zero brightness on a plain light turn-on (default true); false turns on at full."
+        use_group_channel_for_cover_state:
+          type: boolean
+          description: "Report cover position from the group channel when present (default true)."
+        enable_sysvar_scan:
+          type: boolean
+          description: "Scan system variables into the hub layer (default true)."
+        enable_program_scan:
+          type: boolean
+          description: "Scan programs into the hub layer (default true)."
+        include_internal_sysvars:
+          type: boolean
+          description: "Include CCU-internal system variables (default true)."
+        include_internal_programs:
+          type: boolean
+          description: "Include CCU-internal programs (default false)."
+        sysvar_markers:
+          type: array
+          items: { type: string, enum: [HAHM, HX, INTERNAL, MQTT] }
+          description: "Restrict the sysvar scan to entities whose CCU description starts with one of these markers. Empty includes everything that passes the internal filter."
+        program_markers:
+          type: array
+          items: { type: string, enum: [HAHM, HX, INTERNAL, MQTT] }
+          description: "Program-scan equivalent of sysvar_markers."
+        sysvar_scan_interval:
+          type: integer
+          format: int64
+          description: "Periodic sysvar-refresh cadence as a Go time.Duration (nanoseconds). 0 = compiled-in default (5m)."
+        enable_device_firmware_check:
+          type: boolean
+          description: "Surface per-device firmware-update entities (default true — a deliberate divergence from the reference stack's false default)."
+        delay_new_device_creation:
+          type: boolean
+          description: "Defer ingest of a newly-paired device to the inbox/manual-accept flow (default false)."
 
     # ---- Schedules / week profiles ----
     ScheduleChannelRef:
