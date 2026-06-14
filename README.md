@@ -52,8 +52,16 @@ wire side into the standard-protocol side.
 
 ## Status
 
-**0.1.0.** The daemon ships with all four north-bound bridges
-working end-to-end against a real CCU and the `godevccu` simulator:
+**0.2.0.** All four north-bound bridges work end-to-end against a real
+CCU and the `godevccu` simulator. 0.2.0 builds on the 0.1.0 baseline
+with deeper Home Assistant parity (MQTT discovery for the hub layer —
+system variables, programs, per-interface install-mode and
+virtual-remote buttons — usage-gated per-parameter discovery, and
+per-device firmware-update entities), a versioned external-client
+contract (`schema_digest` + `api_version` on `GET /api/v1/info`, see
+[ADR 0028](./docs/adr/0028-contract-digest-and-version-guard.md)),
+Home Assistant and CCU/RaspberryMatic add-on packaging, and a round
+of multi-CCU connection-reliability fixes.
 
 - MQTT (HA Discovery + raw plane), REST + WebSocket, Svelte SPA + HTMX
   bootstrap, and a native-Go Matter bridge with PASE/CASE, IM
@@ -69,7 +77,7 @@ working end-to-end against a real CCU and the `godevccu` simulator:
 
 Canonical references:
 
-- [`SPECIFICATION.md`](./SPECIFICATION.md) — complete 0.1.0 specification
+- [`SPECIFICATION.md`](./SPECIFICATION.md) — complete specification
 - [`CHANGELOG.md`](./CHANGELOG.md) — release history
 - [`docs/user-guide.md`](./docs/user-guide.md) — operator install + config walkthrough
 - [`docs/SECURITY.md`](./docs/SECURITY.md) — threat model + audit checklist
