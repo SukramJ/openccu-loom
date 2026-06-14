@@ -1,7 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { CentralRow, InterfaceSpec } from "$lib/api/client";
+  import type {
+    CentralBehavior,
+    CentralRow,
+    DescriptionMarker,
+    InterfaceSpec,
+  } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
@@ -49,6 +54,85 @@
     }));
   }
 
+  // Per-central behaviour toggles. The form always holds resolved
+  // values (defaulting); buildBehavior emits the explicit object.
+  type BehaviorForm = {
+    lightLastBrightness: boolean;
+    useGroupChannelForCoverState: boolean;
+    enableSysvarScan: boolean;
+    enableProgramScan: boolean;
+    includeInternalSysvars: boolean;
+    includeInternalPrograms: boolean;
+    enableDeviceFirmwareCheck: boolean;
+    delayNewDeviceCreation: boolean;
+    sysvarMarkers: DescriptionMarker[];
+    programMarkers: DescriptionMarker[];
+    // 0 = daemon default (5m). Shown to the operator in seconds.
+    sysvarScanIntervalSec: number;
+  };
+
+  const ALL_MARKERS: DescriptionMarker[] = ["HAHM", "HX", "INTERNAL", "MQTT"];
+  const NS_PER_SEC = 1_000_000_000;
+
+  function freshBehaviorForm(): BehaviorForm {
+    return {
+      lightLastBrightness: true,
+      useGroupChannelForCoverState: true,
+      enableSysvarScan: true,
+      enableProgramScan: true,
+      includeInternalSysvars: true,
+      includeInternalPrograms: false,
+      enableDeviceFirmwareCheck: true,
+      delayNewDeviceCreation: false,
+      sysvarMarkers: [],
+      programMarkers: [],
+      sysvarScanIntervalSec: 0,
+    };
+  }
+
+  function behaviorFromRow(b: CentralBehavior | undefined): BehaviorForm {
+    const d = freshBehaviorForm();
+    if (!b) return d;
+    return {
+      lightLastBrightness: b.light_last_brightness ?? d.lightLastBrightness,
+      useGroupChannelForCoverState:
+        b.use_group_channel_for_cover_state ?? d.useGroupChannelForCoverState,
+      enableSysvarScan: b.enable_sysvar_scan ?? d.enableSysvarScan,
+      enableProgramScan: b.enable_program_scan ?? d.enableProgramScan,
+      includeInternalSysvars: b.include_internal_sysvars ?? d.includeInternalSysvars,
+      includeInternalPrograms: b.include_internal_programs ?? d.includeInternalPrograms,
+      enableDeviceFirmwareCheck:
+        b.enable_device_firmware_check ?? d.enableDeviceFirmwareCheck,
+      delayNewDeviceCreation: b.delay_new_device_creation ?? d.delayNewDeviceCreation,
+      sysvarMarkers: b.sysvar_markers ?? [],
+      programMarkers: b.program_markers ?? [],
+      sysvarScanIntervalSec: b.sysvar_scan_interval
+        ? Math.round(b.sysvar_scan_interval / NS_PER_SEC)
+        : 0,
+    };
+  }
+
+  function buildBehavior(b: BehaviorForm): CentralBehavior {
+    return {
+      light_last_brightness: b.lightLastBrightness,
+      use_group_channel_for_cover_state: b.useGroupChannelForCoverState,
+      enable_sysvar_scan: b.enableSysvarScan,
+      enable_program_scan: b.enableProgramScan,
+      include_internal_sysvars: b.includeInternalSysvars,
+      include_internal_programs: b.includeInternalPrograms,
+      enable_device_firmware_check: b.enableDeviceFirmwareCheck,
+      delay_new_device_creation: b.delayNewDeviceCreation,
+      sysvar_markers: b.sysvarMarkers,
+      program_markers: b.programMarkers,
+      sysvar_scan_interval:
+        b.sysvarScanIntervalSec > 0 ? b.sysvarScanIntervalSec * NS_PER_SEC : undefined,
+    };
+  }
+
+  function toggleMarker(list: DescriptionMarker[], m: DescriptionMarker): DescriptionMarker[] {
+    return list.includes(m) ? list.filter((x) => x !== m) : [...list, m];
+  }
+
   let centrals = $state<CentralRow[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
@@ -77,6 +161,8 @@
   let fPasswordEnv = $state("");
   let fPrimaryInterface = $state("");
   let fInterfaces = $state<InterfaceFormRow[]>(freshInterfaceForm());
+  let fBehavior = $state<BehaviorForm>(freshBehaviorForm());
+  let showBehavior = $state(false);
 
   // Derived: the catalogue names whose checkbox is currently
   // checked. Drives the "Primary interface" dropdown so operators
@@ -111,6 +197,8 @@
     fPasswordEnv = "";
     fPrimaryInterface = "HmIP-RF";
     fInterfaces = freshInterfaceForm();
+    fBehavior = freshBehaviorForm();
+    showBehavior = false;
     modalError = null;
     showModal = true;
   }
@@ -126,6 +214,8 @@
     fPassword = row.password_plain ?? "";
     fPasswordEnv = row.password_env ?? "";
     fPrimaryInterface = row.primary_interface ?? "";
+    fBehavior = behaviorFromRow(row.behavior);
+    showBehavior = false;
     // Re-build per-interface form rows by aligning the incoming
     // row.interfaces against the catalogue. Catalogue order wins;
     // unknown interface names from the server are appended below
@@ -176,6 +266,7 @@
       password_env: fPasswordEnv || undefined,
       primary_interface: fPrimaryInterface || undefined,
       interfaces: buildInterfaces(),
+      behavior: buildBehavior(fBehavior),
     };
   }
 
@@ -386,6 +477,98 @@
             {/each}
           </select>
         </label>
+
+        <!-- Per-central behaviour toggles (CentralConfig.Behavior). -->
+        <div class="rounded border border-slate-200 dark:border-slate-700">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium"
+            onclick={() => (showBehavior = !showBehavior)}
+          >
+            <span>{t("centrals.behavior.title")}</span>
+            <span class="text-slate-400">{showBehavior ? "−" : "+"}</span>
+          </button>
+          {#if showBehavior}
+            <div class="flex flex-col gap-2 border-t border-slate-200 px-3 py-3 text-sm dark:border-slate-700">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.lightLastBrightness} />
+                <span>{t("centrals.behavior.light_last_brightness")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.useGroupChannelForCoverState} />
+                <span>{t("centrals.behavior.use_group_channel_for_cover_state")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.enableSysvarScan} />
+                <span>{t("centrals.behavior.enable_sysvar_scan")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.enableProgramScan} />
+                <span>{t("centrals.behavior.enable_program_scan")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.includeInternalSysvars} />
+                <span>{t("centrals.behavior.include_internal_sysvars")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.includeInternalPrograms} />
+                <span>{t("centrals.behavior.include_internal_programs")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.enableDeviceFirmwareCheck} />
+                <span>{t("centrals.behavior.enable_device_firmware_check")}</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={fBehavior.delayNewDeviceCreation} />
+                <span>{t("centrals.behavior.delay_new_device_creation")}</span>
+              </label>
+
+              <label class="flex flex-col gap-1">
+                <span>{t("centrals.behavior.sysvar_scan_interval")}</span>
+                <input
+                  type="number"
+                  min="0"
+                  bind:value={fBehavior.sysvarScanIntervalSec}
+                  class="h-9 w-32 rounded border border-slate-300 px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+                />
+              </label>
+
+              <div class="flex flex-col gap-1">
+                <span>{t("centrals.behavior.sysvar_markers")}</span>
+                <div class="flex flex-wrap gap-3">
+                  {#each ALL_MARKERS as m (m)}
+                    <label class="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={fBehavior.sysvarMarkers.includes(m)}
+                        onchange={() =>
+                          (fBehavior.sysvarMarkers = toggleMarker(fBehavior.sysvarMarkers, m))}
+                      />
+                      <span>{m}</span>
+                    </label>
+                  {/each}
+                </div>
+              </div>
+
+              <div class="flex flex-col gap-1">
+                <span>{t("centrals.behavior.program_markers")}</span>
+                <div class="flex flex-wrap gap-3">
+                  {#each ALL_MARKERS as m (m)}
+                    <label class="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={fBehavior.programMarkers.includes(m)}
+                        onchange={() =>
+                          (fBehavior.programMarkers = toggleMarker(fBehavior.programMarkers, m))}
+                      />
+                      <span>{m}</span>
+                    </label>
+                  {/each}
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
 
         <div class="grid grid-cols-2 gap-3">
           <label class="flex flex-col gap-1">

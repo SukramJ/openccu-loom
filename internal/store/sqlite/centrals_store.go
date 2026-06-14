@@ -67,6 +67,7 @@ type CentralRow struct {
 	Interfaces            []config.InterfaceSpec  `json:"interfaces"`
 	Ports                 map[string]int          `json:"ports,omitempty"`
 	Visibility            config.VisibilityConfig `json:"visibility,omitzero"`
+	Behavior              config.CentralBehavior  `json:"behavior,omitzero"`
 	Enabled               bool                    `json:"enabled"`
 	CreatedAt             time.Time               `json:"created_at,omitzero"`
 	UpdatedAt             time.Time               `json:"updated_at,omitzero"`
@@ -99,6 +100,10 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: marshal visibility: %w", err)
 	}
+	behJSON, err := json.Marshal(r.Behavior)
+	if err != nil {
+		return fmt.Errorf("sqlite: centrals: marshal behavior: %w", err)
+	}
 	sealedPlain, err := s.sealPlain(r.PasswordPlain)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals: seal password: %w", err)
@@ -108,8 +113,8 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		`INSERT INTO centrals
 		 (name, host, port, json_rpc_port, username, password_env, password_plain,
 		  tls, tls_insecure_skip_verify, primary_interface, interfaces_json,
-		  ports_json, visibility_json, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		  ports_json, visibility_json, behavior_json, enabled, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
 		   host=excluded.host, port=excluded.port, json_rpc_port=excluded.json_rpc_port,
 		   username=excluded.username, password_env=excluded.password_env,
@@ -117,11 +122,11 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   tls_insecure_skip_verify=excluded.tls_insecure_skip_verify,
 		   primary_interface=excluded.primary_interface,
 		   interfaces_json=excluded.interfaces_json, ports_json=excluded.ports_json,
-		   visibility_json=excluded.visibility_json, enabled=excluded.enabled,
-		   updated_at=excluded.updated_at`,
+		   visibility_json=excluded.visibility_json, behavior_json=excluded.behavior_json,
+		   enabled=excluded.enabled, updated_at=excluded.updated_at`,
 		r.Name, r.Host, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
 		boolInt(r.TLS), boolInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
-		string(ifJSON), string(portsJSON), string(visJSON), boolInt(r.Enabled),
+		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolInt(r.Enabled),
 		now, now)
 	if err != nil {
 		return fmt.Errorf("sqlite: centrals upsert: %w", err)
@@ -171,7 +176,7 @@ func (s *CentralsStore) List(ctx context.Context) ([]CentralRow, error) {
 
 const selectCentralsSQL = `SELECT name, host, port, json_rpc_port, username, password_env,
 		    password_plain, tls, tls_insecure_skip_verify, primary_interface,
-		    interfaces_json, ports_json, visibility_json, enabled,
+		    interfaces_json, ports_json, visibility_json, behavior_json, enabled,
 		    created_at, updated_at FROM centrals`
 
 // scannable is implemented by both *sql.Row and *sql.Rows so the
@@ -182,12 +187,12 @@ type scannable interface {
 
 func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	var (
-		ifJSON, portsJSON, visJSON string
-		tls, insec, enabled        int
+		ifJSON, portsJSON, visJSON, behJSON string
+		tls, insec, enabled                 int
 	)
 	err := row.Scan(&r.Name, &r.Host, &r.Port, &r.JSONRPCPort, &r.Username,
 		&r.PasswordEnv, &r.PasswordPlain, &tls, &insec, &r.PrimaryInterface,
-		&ifJSON, &portsJSON, &visJSON, &enabled, &r.CreatedAt, &r.UpdatedAt)
+		&ifJSON, &portsJSON, &visJSON, &behJSON, &enabled, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrCentralNotFound
 	}
@@ -208,6 +213,9 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 	}
 	if err := json.Unmarshal([]byte(visJSON), &r.Visibility); err != nil {
 		return fmt.Errorf("sqlite: centrals: parse visibility: %w", err)
+	}
+	if err := json.Unmarshal([]byte(behJSON), &r.Behavior); err != nil {
+		return fmt.Errorf("sqlite: centrals: parse behavior: %w", err)
 	}
 	return nil
 }

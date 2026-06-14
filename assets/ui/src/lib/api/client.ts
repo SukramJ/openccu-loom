@@ -1095,9 +1095,31 @@ export type CentralRow = {
   interfaces: InterfaceSpec[];
   ports?: Record<string, number>;
   visibility?: VisibilityConfig;
+  behavior?: CentralBehavior;
   enabled: boolean;
   created_at?: string;
   updated_at?: string;
+};
+
+/**
+ * Per-central behaviour toggles (CentralConfig.Behavior). All fields
+ * optional; an omitted field means "daemon default". `sysvar_scan_interval`
+ * is a Go time.Duration on the wire — i.e. **nanoseconds** as a number.
+ */
+export type DescriptionMarker = "HAHM" | "HX" | "INTERNAL" | "MQTT";
+
+export type CentralBehavior = {
+  light_last_brightness?: boolean;
+  use_group_channel_for_cover_state?: boolean;
+  enable_sysvar_scan?: boolean;
+  enable_program_scan?: boolean;
+  include_internal_sysvars?: boolean;
+  include_internal_programs?: boolean;
+  sysvar_markers?: DescriptionMarker[];
+  program_markers?: DescriptionMarker[];
+  sysvar_scan_interval?: number; // nanoseconds (Go time.Duration)
+  enable_device_firmware_check?: boolean;
+  delay_new_device_creation?: boolean;
 };
 
 export { ApiError };
