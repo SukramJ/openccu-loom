@@ -581,8 +581,8 @@ type hubScanOptions struct {
 	enableProgramScan       bool
 	includeInternalSysvars  bool
 	includeInternalPrograms bool
-	sysvarMarkers           []string
-	programMarkers          []string
+	sysvarMarkers           []hmenum.DescriptionMarker
+	programMarkers          []hmenum.DescriptionMarker
 }
 
 // hubScanOptionsFromConfig resolves the hub-scan toggles for a central.
@@ -601,13 +601,13 @@ func hubScanOptionsFromConfig(cc config.CentralConfig) hubScanOptions {
 // (prefix match on the trimmed description). An empty marker list
 // matches everything. Mirrors the reference stack's
 // description-marker hub filter.
-func markerMatch(desc string, markers []string) bool {
+func markerMatch(desc string, markers []hmenum.DescriptionMarker) bool {
 	if len(markers) == 0 {
 		return true
 	}
 	d := strings.TrimSpace(desc)
 	for _, m := range markers {
-		if m != "" && strings.HasPrefix(d, m) {
+		if m != "" && strings.HasPrefix(d, string(m)) {
 			return true
 		}
 	}
@@ -619,7 +619,7 @@ func markerMatch(desc string, markers []string) bool {
 // only made when program markers are configured (it costs an extra
 // ReGa round-trip); otherwise an empty map is returned and descriptions
 // stay blank.
-func programDescriptions(ctx context.Context, runner *rega.Runner, markers []string) map[string]string {
+func programDescriptions(ctx context.Context, runner *rega.Runner, markers []hmenum.DescriptionMarker) map[string]string {
 	out := make(map[string]string)
 	if runner == nil || len(markers) == 0 {
 		return out
@@ -698,24 +698,29 @@ type sysvarEntry struct {
 	Description string          `json:"description"`
 }
 
-// sysvarDescriptionMarker is the CCU-side marker string that indicates a
+// sysvarDescriptionMarker is the CCU-side marker that indicates a
 // sysvar was created by an extended integration. Its presence in the
 // description field sets IsExtended on the resulting Sysvar.
-const sysvarDescriptionMarker = "HAHM"
+const sysvarDescriptionMarker = hmenum.DescriptionMarkerHAHM
 
 // parseSysvarDescription strips the known marker tokens from the raw CCU
 // description and returns the cleaned string plus whether the HAHM marker
 // was present.
 func parseSysvarDescription(raw string) (cleaned string, isExtended bool) {
-	markers := []string{"HAHM", "HX", "INTERNAL", "MQTT"}
+	markers := []hmenum.DescriptionMarker{
+		hmenum.DescriptionMarkerHAHM,
+		hmenum.DescriptionMarkerHX,
+		hmenum.DescriptionMarkerInternal,
+		hmenum.DescriptionMarkerMQTT,
+	}
 	isExtended = false
 	out := raw
 	for _, m := range markers {
-		if strings.Contains(out, m) {
+		if strings.Contains(out, string(m)) {
 			if m == sysvarDescriptionMarker {
 				isExtended = true
 			}
-			out = strings.ReplaceAll(out, m, "")
+			out = strings.ReplaceAll(out, string(m), "")
 		}
 	}
 	return strings.TrimSpace(out), isExtended

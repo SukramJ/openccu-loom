@@ -12,6 +12,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // hubScanServer serves one internal and one normal program + sysvar.
@@ -118,7 +119,7 @@ func TestLoadSysvarsInternalAndMarkerFilter(t *testing.T) {
 		hubScanOptions{
 			enableSysvarScan:       true,
 			includeInternalSysvars: true,
-			sysvarMarkers:          []string{"HAHM"},
+			sysvarMarkers:          []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM},
 		})
 	if err != nil {
 		t.Fatalf("loadSysvars: %v", err)
@@ -137,15 +138,15 @@ func TestMarkerMatch(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		desc    string
-		markers []string
+		markers []hmenum.DescriptionMarker
 		want    bool
 	}{
-		{"anything", nil, true},                    // empty markers → match all
-		{"HAHM kitchen", []string{"HAHM"}, true},   // prefix match
-		{"  HAHM kitchen", []string{"HAHM"}, true}, // leading space trimmed
-		{"kitchen HAHM", []string{"HAHM"}, false},  // not a prefix
-		{"plain", []string{"HAHM", "MQTT"}, false}, // no marker
-		{"MQTT light", []string{"HAHM", "MQTT"}, true},
+		{"anything", nil, true}, // empty markers → match all
+		{"HAHM kitchen", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                         // prefix match
+		{"  HAHM kitchen", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, true},                       // leading space trimmed
+		{"kitchen HAHM", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM}, false},                        // not a prefix
+		{"plain", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM, hmenum.DescriptionMarkerMQTT}, false}, // no marker
+		{"MQTT light", []hmenum.DescriptionMarker{hmenum.DescriptionMarkerHAHM, hmenum.DescriptionMarkerMQTT}, true},
 	} {
 		if got := markerMatch(tc.desc, tc.markers); got != tc.want {
 			t.Errorf("markerMatch(%q, %v) = %v, want %v", tc.desc, tc.markers, got, tc.want)

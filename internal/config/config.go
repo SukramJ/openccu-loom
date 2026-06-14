@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // InterfaceSpec describes one Homematic interface attached to a central.
@@ -791,11 +793,12 @@ type CentralBehavior struct {
 
 	// SysvarMarkers / ProgramMarkers restrict the hub scan to entities
 	// whose CCU description carries one of the listed marker tokens
-	// (prefix match). Empty (default) includes everything that passes
-	// the internal filter. Reference stack keys: sysvar_markers,
-	// program_markers.
-	SysvarMarkers  []string `yaml:"sysvar_markers,omitempty" json:"sysvar_markers,omitempty" cfg:"expert"`
-	ProgramMarkers []string `yaml:"program_markers,omitempty" json:"program_markers,omitempty" cfg:"expert"`
+	// (prefix match). The tokens are the closed [hmenum.DescriptionMarker]
+	// set (HAHM, HX, INTERNAL, MQTT). Empty (default) includes
+	// everything that passes the internal filter. Reference stack keys:
+	// sysvar_markers, program_markers.
+	SysvarMarkers  []hmenum.DescriptionMarker `yaml:"sysvar_markers,omitempty" json:"sysvar_markers,omitempty" cfg:"expert"`
+	ProgramMarkers []hmenum.DescriptionMarker `yaml:"program_markers,omitempty" json:"program_markers,omitempty" cfg:"expert"`
 
 	// SysvarScanInterval overrides the periodic sysvar-refresh cadence
 	// for this central. Zero uses the compiled-in default. Reference
