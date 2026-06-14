@@ -6,7 +6,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.2.0] — 2026-06-13
+## [0.2.0] — 2026-06-14
 
 ### Added
 
@@ -122,6 +122,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   repository is scanned recursively for `config.{yaml,yml,json}`, and the
   old names matched that glob (the Supervisor would have tried to parse them
   as add-ons). Update any local references; the file contents are unchanged.
+- **Dependency refresh.** `golang.org/x/tools` → v0.46.0 (and transitive
+  `golang.org/x/mod` → v0.37.0); SPA `tailwindcss` / `@tailwindcss/vite`
+  → 4.3.1 and `@lucide/svelte` → 1.18.0; docs `pymdown-extensions`
+  floor → 10.21.3.
 
 ### Fixed
 
