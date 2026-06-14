@@ -159,7 +159,8 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		unit.Hub.InitHub() //nolint:contextcheck // InitHub has no ctx parameter by design; it clears stale in-memory state synchronously
 	}
 
-	if err := loadPrograms(ctx, jc, unit.HubModel, writer); err != nil {
+	scanOpts := hubScanOptionsFromConfig(cc)
+	if err := loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 		logger.Warn("hub.programs.load",
 			slog.String("central", cc.Name),
 			slog.String("err", err.Error()))
@@ -168,7 +169,7 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 			slog.String("central", cc.Name),
 			slog.Int("count", len(unit.HubModel.Programs())))
 	}
-	if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer); err != nil {
+	if err := loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts); err != nil {
 		logger.Warn("hub.sysvars.load",
 			slog.String("central", cc.Name),
 			slog.String("err", err.Error()))
@@ -253,10 +254,10 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	if unit.Hub != nil {
 		unit.Hub.SetRefreshHooks(coordinators.RefreshHooks{
 			Programs: func(ctx context.Context) error {
-				return loadPrograms(ctx, jc, unit.HubModel, writer)
+				return loadPrograms(ctx, jc, runner, unit.HubModel, writer, scanOpts)
 			},
 			Sysvars: func(ctx context.Context) error {
-				return loadSysvars(ctx, jc, runner, unit.HubModel, writer)
+				return loadSysvars(ctx, jc, runner, unit.HubModel, writer, scanOpts)
 			},
 			Inbox: func(ctx context.Context) error {
 				return loadInbox(ctx, runner, unit)
@@ -573,15 +574,90 @@ type programEntry struct {
 	LastExecuteTime json.RawMessage `json:"lastExecuteTime"`
 }
 
-func loadPrograms(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hub.ProgramWriter) error {
+// hubScanOptions carries the per-central hub-scan toggles resolved
+// from [config.CentralBehavior] into the load functions.
+type hubScanOptions struct {
+	enableSysvarScan        bool
+	enableProgramScan       bool
+	includeInternalSysvars  bool
+	includeInternalPrograms bool
+	sysvarMarkers           []string
+	programMarkers          []string
+}
+
+// hubScanOptionsFromConfig resolves the hub-scan toggles for a central.
+func hubScanOptionsFromConfig(cc config.CentralConfig) hubScanOptions {
+	return hubScanOptions{
+		enableSysvarScan:        cc.Behavior.EnableSysvarScanEnabled(),
+		enableProgramScan:       cc.Behavior.EnableProgramScanEnabled(),
+		includeInternalSysvars:  cc.Behavior.IncludeInternalSysvarsEnabled(),
+		includeInternalPrograms: cc.Behavior.IncludeInternalProgramsEnabled(),
+		sysvarMarkers:           cc.Behavior.SysvarMarkers,
+		programMarkers:          cc.Behavior.ProgramMarkers,
+	}
+}
+
+// markerMatch reports whether desc carries one of the marker tokens
+// (prefix match on the trimmed description). An empty marker list
+// matches everything. Mirrors the reference stack's
+// description-marker hub filter.
+func markerMatch(desc string, markers []string) bool {
+	if len(markers) == 0 {
+		return true
+	}
+	d := strings.TrimSpace(desc)
+	for _, m := range markers {
+		if m != "" && strings.HasPrefix(d, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// programDescriptions fetches per-program CCU descriptions via ReGa for
+// marker filtering. Program.getAll omits descriptions, so the call is
+// only made when program markers are configured (it costs an extra
+// ReGa round-trip); otherwise an empty map is returned and descriptions
+// stay blank.
+func programDescriptions(ctx context.Context, runner *rega.Runner, markers []string) map[string]string {
+	out := make(map[string]string)
+	if runner == nil || len(markers) == 0 {
+		return out
+	}
+	descs, err := runner.GetProgramDescriptions(ctx)
+	if err != nil {
+		return out
+	}
+	for _, d := range descs {
+		if decoded, derr := url.QueryUnescape(d.Description); derr == nil {
+			out[d.ID] = decoded
+		} else {
+			out[d.ID] = d.Description
+		}
+	}
+	return out
+}
+
+func loadPrograms(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.ProgramWriter, opts hubScanOptions) error {
+	if !opts.enableProgramScan {
+		return nil
+	}
 	var programs []programEntry
 	if err := jc.Call(ctx, "Program.getAll", nil, &programs); err != nil {
 		return err
 	}
+	descByID := programDescriptions(ctx, runner, opts.programMarkers)
 	// Collect the fresh ID set for the stale-entry diff below.
 	freshIDs := make(map[string]struct{}, len(programs))
 	for _, p := range programs {
 		if p.ID == "" {
+			continue
+		}
+		if p.IsInternal && !opts.includeInternalPrograms {
+			continue
+		}
+		desc := descByID[p.ID]
+		if !markerMatch(desc, opts.programMarkers) {
 			continue
 		}
 		freshIDs[p.ID] = struct{}{}
@@ -592,12 +668,13 @@ func loadPrograms(ctx context.Context, jc *jsonrpc.Client, h *hub.Hub, writer hu
 			existing.UpdateMetadata(p.Name, p.IsInternal, writer)
 			existing.OnActive(p.IsActive)
 		} else {
-			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, "", p.IsInternal, writer)
+			prog := hub.NewProgram(h.CentralName, p.ID, p.Name, desc, p.IsInternal, writer)
 			prog.OnActive(p.IsActive)
 			h.PutProgram(prog)
 		}
 	}
-	// Remove programs that are no longer present on the CCU.
+	// Remove programs that are no longer present on the CCU or no longer
+	// pass the internal / marker filters.
 	for _, existing := range h.Programs() {
 		if _, ok := freshIDs[existing.ID]; !ok {
 			h.RemoveProgram(existing.ID)
@@ -664,7 +741,10 @@ func sysvarIsExcluded(name, id string) bool {
 	return false
 }
 
-func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.SysvarWriter) error {
+func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h *hub.Hub, writer hub.SysvarWriter, opts hubScanOptions) error {
+	if !opts.enableSysvarScan {
+		return nil
+	}
 	var vars []sysvarEntry
 	if err := jc.Call(ctx, "SysVar.getAll", nil, &vars); err != nil {
 		return err
@@ -694,7 +774,9 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if v.Name == "" || sysvarIsExcluded(v.Name, v.ID) {
 			continue
 		}
-		freshNames[v.Name] = struct{}{}
+		if v.IsInternal && !opts.includeInternalSysvars {
+			continue
+		}
 		valueType := inferSysvarType(v.Type, v.Value)
 		var valueList []string
 		if v.ValueList != "" {
@@ -704,6 +786,10 @@ func loadSysvars(ctx context.Context, jc *jsonrpc.Client, runner *rega.Runner, h
 		if d, ok := descByID[v.ID]; ok && d != "" {
 			rawDesc = d
 		}
+		if !markerMatch(rawDesc, opts.sysvarMarkers) {
+			continue
+		}
+		freshNames[v.Name] = struct{}{}
 		desc, isExtended := parseSysvarDescription(rawDesc)
 		if existing, ok := h.Sysvar(v.Name); ok {
 			// Update the existing pointer in-place so subscribers wired via
