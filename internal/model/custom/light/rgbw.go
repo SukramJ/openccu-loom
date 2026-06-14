@@ -144,6 +144,18 @@ func (r *RGBWLight) HasMode() bool {
 	return r.hasMode
 }
 
+// effectiveMode returns the operating mode used for capability and usage
+// decisions, defaulting to RGBW when DEVICE_OPERATION_MODE has not been
+// observed yet. Mirrors the reference CustomDpIpRGBWLight._device_operation_mode,
+// which falls back to RGBW on an unset/unexpected value so the light advertises
+// its richest surface from boot rather than collapsing to brightness-only.
+func (r *RGBWLight) effectiveMode() RGBWMode {
+	if m := r.Mode(); m != RGBWModeUnknown {
+		return m
+	}
+	return RGBWModeRGBW
+}
+
 // Usage returns the [RGBWUsage] discriminator that north-bound adapters
 // (MQTT discovery, REST) should use to decide whether to expose this
 // Channel as an entity. It mirrors
@@ -220,7 +232,7 @@ func (r *RGBWLight) recordMode(s string) {
 
 // HasColor reports whether the current mode honours HUE / SATURATION.
 func (r *RGBWLight) HasColor() bool {
-	m := r.Mode()
+	m := r.effectiveMode()
 	return m == RGBWModeRGB || m == RGBWModeRGBW
 }
 
@@ -245,16 +257,29 @@ func (r *RGBWLight) CurrentHsColor() (hue int32, sat float64, ok bool) {
 	return r.Color()
 }
 
-// HasColorTemperature reports whether the current mode honours KELVIN.
+// HasColorTemperature reports whether the current mode honours the KELVIN
+// wire field — TUNABLE_WHITE or RGBW. This is the wire/Matter capability:
+// the RGBW mode's relevant data points include COLOR_TEMPERATURE, so a
+// Matter MoveToColorTemperature and the colour-temp state both apply there.
+// For the mutually-exclusive HA colour-mode capability use
+// [HasColorTempColorMode] instead.
 func (r *RGBWLight) HasColorTemperature() bool {
-	m := r.Mode()
+	m := r.effectiveMode()
 	return m == RGBWModeTunableWhite || m == RGBWModeRGBW
+}
+
+// HasColorTempColorMode reports whether the light advertises colour
+// temperature as its HA colour mode. Mirrors the reference
+// CustomDpIpRGBWLight.has_color_temperature: only TUNABLE_WHITE — HA colour
+// modes are mutually exclusive, so RGBW mode advertises hs colour even though
+// the wire profile also carries a KELVIN field.
+func (r *RGBWLight) HasColorTempColorMode() bool {
+	return r.effectiveMode() == RGBWModeTunableWhite
 }
 
 // HasEffects reports whether the current mode honours EFFECT.
 func (r *RGBWLight) HasEffects() bool {
-	m := r.Mode()
-	return m != RGBWModePWM && len(r.effects) > 0
+	return r.effectiveMode() != RGBWModePWM && len(r.effects) > 0
 }
 
 // Kelvin returns the last observed colour temperature.

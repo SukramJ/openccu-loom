@@ -146,21 +146,28 @@ func TestCapabilities_Light(t *testing.T) {
 	checks := []struct {
 		name string
 		dp   device.AttachableDataPoint
+		want map[string]bool
 	}{
-		{"ColorLight", colorBase},
-		{"ColorTempLight", colorTempBase},
-		{"FixedColorLight", fixedBase},
-		{"RGBWLight", &light.RGBWLight{ColorLight: colorBase}},
-		{"DRGDaliLight", &light.DRGDaliLight{ColorTempLight: colorTempBase}},
-		{"EffectLight", &light.EffectLight{ColorLight: colorBase}},
-		{"SoundPlayerLED", &light.SoundPlayerLED{FixedColorLight: fixedBase}},
-		{"BareLight", base},
+		{"ColorLight", colorBase, want},
+		{"ColorTempLight", colorTempBase, want},
+		{"FixedColorLight", fixedBase, want},
+		// The RGBW family derives colour / colour-temp / effects from the
+		// current DEVICE_OPERATION_MODE, not the static struct flags. With no
+		// mode observed it defaults to RGBW (hs colour, no colour temp) and,
+		// with no EFFECT data point bound, reports no effects.
+		{"RGBWLight", &light.RGBWLight{ColorLight: colorBase}, map[string]bool{
+			"dimmable": true, "transition": true, "color": true, "color_temp": false, "effects": false,
+		}},
+		{"DRGDaliLight", &light.DRGDaliLight{ColorTempLight: colorTempBase}, want},
+		{"EffectLight", &light.EffectLight{ColorLight: colorBase}, want},
+		{"SoundPlayerLED", &light.SoundPlayerLED{FixedColorLight: fixedBase}, want},
+		{"BareLight", base, want},
 	}
 	for _, tc := range checks {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := Capabilities(tc.dp)
-			assertCapsEqual(t, got, want)
+			assertCapsEqual(t, got, tc.want)
 		})
 	}
 }
