@@ -15,10 +15,16 @@ import (
 )
 
 type fakeSink struct {
-	setValues  atomic.Int32
-	setSysvars atomic.Int32
-	triggers   atomic.Int32
-	lastVal    struct {
+	setValues    atomic.Int32
+	setSysvars   atomic.Int32
+	triggers     atomic.Int32
+	masterParams atomic.Int32
+	lastVal      struct {
+		centralName, iface, chanAddr string
+		param                        string
+		value                        any
+	}
+	lastMaster struct {
 		centralName, iface, chanAddr string
 		param                        string
 		value                        any
@@ -39,6 +45,18 @@ func (f *fakeSink) SetValue(_ context.Context, centralName, iface, chanAddr stri
 	f.lastVal.chanAddr = chanAddr
 	f.lastVal.param = string(param)
 	f.lastVal.value = v
+	return nil
+}
+
+func (f *fakeSink) SetMasterParam(_ context.Context, centralName, iface, chanAddr string,
+	param hmenum.Parameter, v any, _ hmenum.CommandPriority,
+) error {
+	f.masterParams.Add(1)
+	f.lastMaster.centralName = centralName
+	f.lastMaster.iface = iface
+	f.lastMaster.chanAddr = chanAddr
+	f.lastMaster.param = string(param)
+	f.lastMaster.value = v
 	return nil
 }
 
@@ -503,5 +521,91 @@ func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
 	sub.handleInstallMode("openccu-loom/ccu-01/hub/install_mode/HmIP-RF/set", []byte("PRESS"), true)
 	if imSink.calls.Load() != 0 {
 		t.Fatalf("retained press must be dropped; calls=%d", imSink.calls.Load())
+	}
+}
+
+// --- MASTER bucket routing tests ---
+
+// TestCommandSubscriberMasterBucketRoutes verifies that a message on the
+// 8-segment canonical topic with bucket=master is delivered to
+// SetMasterParam (not SetValue) with the correct field extraction.
+func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	sub := NewCommandSubscriber(noop, topics, sink, nil)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	ok := noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
+		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/master/SHORT_ON_TIME/set", []byte("0.5"))
+	if !ok {
+		t.Fatal("subscription did not match")
+	}
+	if sink.masterParams.Load() != 1 {
+		t.Fatalf("SetMasterParam calls=%d, want 1", sink.masterParams.Load())
+	}
+	if sink.setValues.Load() != 0 {
+		t.Fatalf("SetValue must not be called for master bucket; got %d calls", sink.setValues.Load())
+	}
+	m := sink.lastMaster
+	if m.centralName != "ccu-01" {
+		t.Errorf("central: got %q want %q", m.centralName, "ccu-01")
+	}
+	if m.iface != "HmIP-RF" {
+		t.Errorf("iface: got %q want %q", m.iface, "HmIP-RF")
+	}
+	if m.chanAddr != "0001ABCD:1" {
+		t.Errorf("chanAddr: got %q want %q", m.chanAddr, "0001ABCD:1")
+	}
+	if m.param != "SHORT_ON_TIME" {
+		t.Errorf("param: got %q want %q", m.param, "SHORT_ON_TIME")
+	}
+	if m.value != 0.5 {
+		t.Errorf("value: got %v want 0.5", m.value)
+	}
+}
+
+// TestCommandSubscriberCalculatedBucketDropped verifies that a message on
+// the 8-segment topic with bucket=calculated is silently dropped (calculated
+// parameters are read-only).
+func TestCommandSubscriberCalculatedBucketDropped(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	sub := NewCommandSubscriber(noop, topics, sink, nil)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
+		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/calculated/SOME_PARAM/set", []byte("true"))
+	if sink.masterParams.Load() != 0 {
+		t.Fatalf("SetMasterParam must not be called for calculated bucket; got %d calls", sink.masterParams.Load())
+	}
+	if sink.setValues.Load() != 0 {
+		t.Fatalf("SetValue must not be called for calculated bucket; got %d calls", sink.setValues.Load())
+	}
+}
+
+// TestCommandSubscriberValuesBucketStillRoutes confirms that the existing
+// values-bucket path is unaffected by the master-bucket routing addition.
+func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
+	t.Parallel()
+	noop := NewNoopClient()
+	topics := NewTopicBuilder("openccu-loom")
+	sink := &fakeSink{}
+	sub := NewCommandSubscriber(noop, topics, sink, nil)
+	if err := sub.Start(context.Background()); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
+		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/values/STATE/set", []byte("true"))
+	if sink.setValues.Load() != 1 {
+		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
+	}
+	if sink.masterParams.Load() != 0 {
+		t.Fatalf("SetMasterParam must not be called for values bucket; got %d calls", sink.masterParams.Load())
 	}
 }

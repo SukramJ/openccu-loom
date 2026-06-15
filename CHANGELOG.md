@@ -71,6 +71,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **MQTT MASTER-paramset writes.** The documented
+  `<base>/<central>/<iface>/<addr>/<ch>/master/<param>/set` topic now writes the
+  MASTER paramset via the same `Channel.Set` path as the REST paramset endpoint.
+  Previously the `master` bucket was silently dropped. The `calculated` bucket
+  remains read-only and is dropped with a debug log.
 - **CCU system-update panel** (Settings → System). Shows each CCU's firmware
   state (installed → available) and, for admins, an **Install** button that
   triggers the CCU's own firmware update (`POST /system/update/install`) with

@@ -7,10 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/combined"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -47,6 +49,52 @@ func (s *MQTTCommandSink) SetValue(
 		return ErrNoWriter
 	}
 	return s.writer.SetValue(ctx, centralName, interfaceID, channelAddress, parameter, value, priority)
+}
+
+// SetMasterParam implements [mqtt.CommandSink]. It resolves the channel
+// in the central's model registry and writes a single MASTER-paramset
+// parameter via [device.Channel.Set] with [hmenum.ParamsetKeyMaster].
+//
+// This is the canonical single-MASTER-param write path — the same
+// Channel.Set route that PutParamset uses for batch MASTER writes —
+// so MQTT and REST share identical wire behaviour.
+//
+// channelAddress is the full "<device>:<channel>" form as extracted
+// from the MQTT topic (e.g. "0001ABCD:1"). Returns a descriptive
+// error when the central, device, channel, or parameter cannot be
+// resolved.
+func (s *MQTTCommandSink) SetMasterParam(
+	ctx context.Context, centralName, interfaceID, channelAddress string,
+	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
+) error {
+	_ = interfaceID // resolution is via model registry keyed on device address
+	c, ok := s.registry.Get(centralName)
+	if !ok {
+		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
+	}
+	deviceAddress := channelAddress
+	if i := strings.LastIndexByte(channelAddress, ':'); i > 0 {
+		deviceAddress = channelAddress[:i]
+	}
+	dev, ok := c.ModelRegistry.Get(deviceAddress)
+	if !ok || dev == nil {
+		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
+	}
+	ch := dev.Channel(channelAddress)
+	if ch == nil {
+		return fmt.Errorf("mqtt_sink: unknown channel %s on %s", channelAddress, centralName)
+	}
+	if ch.MasterParameter(parameter) == nil {
+		return fmt.Errorf("mqtt_sink: parameter %q not in MASTER paramset of %s", parameter, channelAddress)
+	}
+	pv, err := hmtypes.NewParamValue(value)
+	if err != nil {
+		return fmt.Errorf("mqtt_sink: value normalisation for %q: %w", parameter, err)
+	}
+	return ch.Set(ctx, hmenum.ParamsetKeyMaster, parameter, pv, device.SetOptions{
+		Optimistic: true,
+		Priority:   priority,
+	})
 }
 
 // SetSysvar looks up the named sysvar on the target central and

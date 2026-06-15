@@ -1176,6 +1176,10 @@ func (e *errSink) SetValue(_ context.Context, _, _, _ string, _ hmenum.Parameter
 	return errors.New("setvalue error")
 }
 
+func (e *errSink) SetMasterParam(_ context.Context, _, _, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority) error {
+	return errors.New("setmasterparam error")
+}
+
 func (e *errSink) SetSysvar(_ context.Context, _, _ string, _ any) error {
 	e.sysvars.Add(1)
 	return errors.New("setsysvar error")
