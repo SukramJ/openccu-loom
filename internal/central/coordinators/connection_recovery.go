@@ -1214,14 +1214,35 @@ func (c *ConnectionRecoveryCoordinator) RefreshHubDataAfterRecovery() RecoverySt
 		if r == nil {
 			return nil
 		}
-		// SystemUpdate must run first so firmware state is current before
-		// user-visible hub data (sysvars, programs) is reloaded.
-		if err := r.RefreshSystemUpdate(ctx); err != nil {
-			return err
-		}
-		if err := r.RefreshSysvars(ctx); err != nil {
-			return err
-		}
-		return r.RefreshPrograms(ctx)
+		// Hub metadata (firmware/system-update state, sysvars, programs)
+		// travels over ReGa — the CCU's JSON-RPC web port — which can be slow
+		// or intermittently dropped (an overloaded CCU, or a firewall/IPS
+		// eating bursty HTTP). The device data itself already arrived over
+		// XML-RPC during the earlier reconnect stage. So this reload is
+		// best-effort: a transient ReGa failure is logged and skipped rather
+		// than failing the whole recovery — otherwise the interface never
+		// reaches the ready state and its already-enumerated devices stay
+		// hidden until a manual restart. Each refresh is reattempted by the
+		// scheduler's periodic hub jobs, so a miss is self-healing. Mirrors
+		// the boot-time best-effort load (runInitialSystemUpdateLoad).
+		// SystemUpdate runs first so the firmware state is current before
+		// sysvars/programs are reloaded.
+		c.bestEffortHubRefresh(ctx, "system_update", r.RefreshSystemUpdate)
+		c.bestEffortHubRefresh(ctx, "sysvars", r.RefreshSysvars)
+		c.bestEffortHubRefresh(ctx, "programs", r.RefreshPrograms)
+		return nil
+	}
+}
+
+// bestEffortHubRefresh runs one post-recovery hub refresh and downgrades a
+// failure to a WARN instead of failing the recovery stage. See
+// [ConnectionRecoveryCoordinator.RefreshHubDataAfterRecovery] for why
+// post-recovery hub metadata reloads are non-blocking.
+func (c *ConnectionRecoveryCoordinator) bestEffortHubRefresh(ctx context.Context, op string, fn func(context.Context) error) {
+	if err := fn(ctx); err != nil {
+		c.log().Warn("recovery.hub_refresh.best_effort_failed",
+			slog.String("central", c.centralName),
+			slog.String("op", op),
+			slog.String("err", err.Error()))
 	}
 }

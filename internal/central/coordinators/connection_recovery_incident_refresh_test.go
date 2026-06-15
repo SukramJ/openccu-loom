@@ -134,42 +134,67 @@ func TestRefreshHubDataAfterRecoveryDelegates(t *testing.T) {
 	}
 }
 
-// TestRefreshHubDataAfterRecoveryPropagatesErrorSystemUpdate verifies that a
-// SystemUpdate failure stops the pipeline before Sysvars/Programs are called.
-func TestRefreshHubDataAfterRecoveryPropagatesErrorSystemUpdate(t *testing.T) {
+// TestRefreshHubDataAfterRecoverySystemUpdateBestEffort verifies that a
+// SystemUpdate (ReGa) failure is best-effort: the step still returns nil and
+// continues on to Sysvars + Programs, so a transient hub-metadata failure
+// cannot block the interface from reaching the ready state.
+func TestRefreshHubDataAfterRecoverySystemUpdateBestEffort(t *testing.T) {
 	bus := events.NewBus()
 	c := NewConnectionRecoveryCoordinator("main", bus)
-	sentinel := errors.New("system update rpc failed")
-	fr := &fakeHubRefresher{failSystemUpdate: sentinel}
+	fr := &fakeHubRefresher{failSystemUpdate: errors.New("system update rpc failed")}
 	c.SetHubRefresher(fr)
 
 	step := c.RefreshHubDataAfterRecovery()
-	err := step(context.Background())
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("expected sentinel error, got %v", err)
+	if err := step(context.Background()); err != nil {
+		t.Fatalf("hub refresh must be best-effort, got error: %v", err)
 	}
-	if fr.sysvarCalled || fr.programCalled {
-		t.Fatal("Sysvars/Programs must not be called when SystemUpdate fails")
+	if !fr.systemUpdateCalled || !fr.sysvarCalled || !fr.programCalled {
+		t.Fatalf("a SystemUpdate failure must not stop the remaining refreshes: "+
+			"system_update=%v sysvars=%v programs=%v",
+			fr.systemUpdateCalled, fr.sysvarCalled, fr.programCalled)
 	}
 }
 
-// TestRefreshHubDataAfterRecoveryPropagatesError verifies that errors
-// from RefreshSysvars are surfaced and RefreshPrograms is not called
-// (fail-fast).
-func TestRefreshHubDataAfterRecoveryPropagatesError(t *testing.T) {
+// TestRefreshHubDataAfterRecoveryContinuesOnSysvarError verifies that a
+// Sysvars failure is best-effort too: the step returns nil and still reloads
+// Programs. Every hub refresh is independent and self-heals on the periodic
+// hub jobs.
+func TestRefreshHubDataAfterRecoveryContinuesOnSysvarError(t *testing.T) {
 	bus := events.NewBus()
 	c := NewConnectionRecoveryCoordinator("main", bus)
-	sentinel := errors.New("sysvar rpc failed")
-	fr := &fakeHubRefresher{failSysvar: sentinel}
+	fr := &fakeHubRefresher{failSysvar: errors.New("sysvar rpc failed")}
 	c.SetHubRefresher(fr)
 
 	step := c.RefreshHubDataAfterRecovery()
-	err := step(context.Background())
-	if !errors.Is(err, sentinel) {
-		t.Fatalf("expected sentinel error, got %v", err)
+	if err := step(context.Background()); err != nil {
+		t.Fatalf("hub refresh must be best-effort, got error: %v", err)
 	}
-	if fr.programCalled {
-		t.Fatal("RefreshPrograms must not be called when RefreshSysvars fails")
+	if !fr.programCalled {
+		t.Fatal("RefreshPrograms must still run after a Sysvars failure")
+	}
+}
+
+// TestRefreshHubDataAfterRecoverySucceedsDespiteHubFailure is the regression
+// test for the original symptom: when the post-recovery hub refresh hits a
+// ReGa failure (all three calls fail here), the recovery pipeline must still
+// reach RecoveryResultSuccess so the interface's already-enumerated devices
+// become visible instead of staying hidden behind a failed data-loading stage.
+func TestRefreshHubDataAfterRecoverySucceedsDespiteHubFailure(t *testing.T) {
+	bus := events.NewBus()
+	c := NewConnectionRecoveryCoordinator("main", bus)
+	fr := &fakeHubRefresher{
+		failSystemUpdate: errors.New("rega get_system_update_info timeout"),
+		failSysvar:       errors.New("rega sysvar timeout"),
+		failProgram:      errors.New("rega program timeout"),
+	}
+	c.SetHubRefresher(fr)
+
+	pipeline := []Pipeline{
+		{Stage: hmenum.RecoveryStageReconnecting, Run: func(_ context.Context) error { return nil }},
+		{Stage: hmenum.RecoveryStageDataLoading, Run: c.RefreshHubDataAfterRecovery()},
+	}
+	if result := c.Run(context.Background(), "HmIP-RF", pipeline); result != hmenum.RecoveryResultSuccess {
+		t.Fatalf("recovery must succeed despite hub-refresh failures, got %v", result)
 	}
 }
 
