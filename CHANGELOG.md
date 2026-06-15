@@ -25,6 +25,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Bounded change-history and values-cache growth.** The `audit_log` table had
+  no retention and grew without bound; rows older than 90 days are now purged
+  opportunistically (every 256 inserts), no scheduler required. Removing a
+  device now also evicts its rows from the persistent values cache — previously
+  an unpaired device left its cached rows behind indefinitely.
 - **REST upstream failures no longer report `code: internal`.** 35 handler
   paths that return HTTP 502 for a failed CCU/upstream call tagged the
   problem+json body with `code: internal` (which signals a daemon bug). They
