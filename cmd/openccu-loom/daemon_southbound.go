@@ -308,8 +308,9 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// daemon logs and proceeds.
 	if d.mqttWiring != nil {
 		if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
-			n, cleanupErr := mqttBridge.RunRetainCleanupOnce(cleanupCtx, 2*time.Second)
+			cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
+			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
+			n, cleanupErr := mqttBridge.RunRetainCleanupOnce(cleanupCtx, cleanupWindow)
 			cleanupCancel()
 			if cleanupErr != nil {
 				logger.Warn("mqtt.retain_cleanup", slog.String("err", cleanupErr.Error()))
@@ -323,6 +324,12 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// point through the EventBridge so the broker carries retained
 	// state (and HA Discovery configs) for every device immediately
 	// after start, not just after the first CCU-driven change.
+	//
+	// Ordering guarantee: PublishInitialSnapshot is fully synchronous —
+	// it iterates all centrals/devices/DPs and calls publishDiscovery
+	// inline without spawning goroutines. Bridge.declared is completely
+	// populated before this call returns, so the orphan-cleanup pass
+	// below sees the full set of currently-owned discovery topics.
 	d.bridge.PublishInitialSnapshot(ctx)
 
 	// Orphan HA-Discovery cleanup — after the initial snapshot has
@@ -339,8 +346,9 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// just skips.
 	if d.mqttWiring != nil {
 		if mqttBridge := d.mqttWiring.Bridge(); mqttBridge != nil {
-			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, 10*time.Second)
-			n, cleanupErr := mqttBridge.RunDiscoveryOrphanCleanupOnce(cleanupCtx, 2*time.Second)
+			cleanupWindow := cfg.North.MQTT.EffectiveRetainCleanupWindow()
+			cleanupCtx, cleanupCancel := context.WithTimeout(ctx, cleanupWindow+8*time.Second)
+			n, cleanupErr := mqttBridge.RunDiscoveryOrphanCleanupOnce(cleanupCtx, cleanupWindow)
 			cleanupCancel()
 			if cleanupErr != nil {
 				logger.Warn("mqtt.discovery_orphan_cleanup", slog.String("err", cleanupErr.Error()))

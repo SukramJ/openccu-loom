@@ -1217,6 +1217,36 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 	}
 }
 
+// PruneDeclaredForDevice removes every entry from the declared map whose
+// HA-Discovery topic belongs to the given device address. Called when the
+// daemon processes a device-removed callback so that subsequent snapshot
+// passes do not re-emit discovery configs for a device that no longer exists
+// in the model, and so the dedup gate does not suppress the orphan-cleanup
+// pass from evicting the topic on the broker.
+//
+// The discovery topic shape is
+// `homeassistant/<component>/<node_id>/<object_id>/config`
+// where node_id is `<central>_<lower(address)>`. We match on `_<lower(addr)>/`
+// which is unambiguous for the node_id segment — addresses are formatted as
+// hex strings (e.g. `000c9709aef157`) and can only collide if two devices
+// share the same address string, which the CCU prevents.
+func (b *Bridge) PruneDeclaredForDevice(deviceAddress string) int {
+	if deviceAddress == "" {
+		return 0
+	}
+	needle := "_" + strings.ToLower(deviceAddress) + "/"
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var pruned int
+	for topic := range b.declared {
+		if strings.Contains(topic, needle) {
+			delete(b.declared, topic)
+			pruned++
+		}
+	}
+	return pruned
+}
+
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {
 	topic := b.topics.DiscoveryConfig(component, nodeID, objectID)
 	b.mu.Lock()

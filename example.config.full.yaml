@@ -253,6 +253,14 @@ north:
     # [default: false]
     sub_devices_enabled: false
 
+    # Broker snapshot window for retain cleanup and discovery-orphan cleanup.
+    # The daemon subscribes to the relevant topic prefix and waits this many
+    # milliseconds for the broker to deliver all retained messages before
+    # processing the eviction list. Useful on high-latency brokers or when the
+    # retained-message store is very large.
+    # Valid range: 500–30000. Zero falls back to the default.  [default: 2000]
+    retain_cleanup_window_ms: 2000
+
 
   # =============================================================================
   # NORTH — Matter bridge

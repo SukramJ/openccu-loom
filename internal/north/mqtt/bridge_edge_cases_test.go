@@ -3053,6 +3053,65 @@ func (r *rejectAllVisibility) VisibleForChannel(_, _ string, _ int, _ hmenum.Par
 	return false
 }
 
+// TestPruneDeclaredForDeviceRemovesMatchingTopics verifies that
+// PruneDeclaredForDevice deletes only the declared entries whose topic
+// contains the expected node_id fragment and leaves unrelated entries
+// intact.
+func TestPruneDeclaredForDeviceRemovesMatchingTopics(t *testing.T) {
+	t.Parallel()
+
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{
+		Base:               "loom",
+		HADiscoveryEnabled: true,
+	}, mp)
+
+	// Seed the declared map with three topics: two belonging to address
+	// "AABBCCDD1122" and one belonging to an unrelated address.
+	addr := "AABBCCDD1122"
+	b.mu.Lock()
+	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
+	b.declared["homeassistant/sensor/ccu01_aabbccdd1122/ch2_temp/config"] = []byte(`{}`)
+	b.declared["homeassistant/switch/ccu01_other000000aa/ch1_state/config"] = []byte(`{}`)
+	b.mu.Unlock()
+
+	pruned := b.PruneDeclaredForDevice(addr)
+	if pruned != 2 {
+		t.Fatalf("PruneDeclaredForDevice(%q) = %d pruned, want 2", addr, pruned)
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, ok := b.declared["homeassistant/switch/ccu01_other000000aa/ch1_state/config"]; !ok {
+		t.Fatal("unrelated device entry was incorrectly pruned")
+	}
+	if _, ok := b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"]; ok {
+		t.Fatal("device entry should have been pruned but still present")
+	}
+}
+
+// TestPruneDeclaredForDeviceEmptyAddressIsNoop ensures an empty address
+// produces no modifications.
+func TestPruneDeclaredForDeviceEmptyAddressIsNoop(t *testing.T) {
+	t.Parallel()
+
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom"}, mp)
+	b.mu.Lock()
+	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
+	b.mu.Unlock()
+
+	pruned := b.PruneDeclaredForDevice("")
+	if pruned != 0 {
+		t.Fatalf("empty address should prune 0, got %d", pruned)
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.declared) != 1 {
+		t.Fatalf("declared should still have 1 entry, got %d", len(b.declared))
+	}
+}
+
 func TestBridgePublishDiscoveryOnlyVisibilityGated(t *testing.T) {
 	t.Parallel()
 	mp := &mockPublisher{}
