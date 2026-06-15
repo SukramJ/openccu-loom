@@ -339,6 +339,58 @@ func TestWSSchemaCategoriesAreFromKnownSet(t *testing.T) {
 	t.Logf("TestWSSchemaCategoriesAreFromKnownSet: all %d commands use known categories", len(schema.Commands))
 }
 
+// ── Test: WS command catalogue vs. router registration parity ───────
+
+// TestWSCommandCatalogParity verifies that every non-broadcast entry
+// in assets/wsapi.json (the client-callable commands) has a matching
+// handler registered in the WS router source files. Broadcast events
+// (kind == "broadcast") are server-push channels, not commands — they
+// are emitted via hub.Publish rather than router.Register, so they
+// are correctly excluded from this check.
+//
+// The discriminator is the "kind" field: absent or empty means
+// "command"; "broadcast" marks a server-push event. The command set
+// is compared against the set of names extracted from router.Register
+// calls via AST walking of the ws package source files.
+func TestWSCommandCatalogParity(t *testing.T) {
+	t.Parallel()
+
+	schema := loadWSSchema(t)
+	registered := extractRegisteredWSCommands(t)
+
+	registeredSet := make(map[string]bool, len(registered))
+	for _, name := range registered {
+		registeredSet[name] = true
+	}
+
+	var missing []string
+	for _, cmd := range schema.Commands {
+		if cmd.Kind == "broadcast" {
+			// Server-push event — not dispatched through the command router.
+			continue
+		}
+		if !registeredSet[cmd.Name] {
+			missing = append(missing, cmd.Name)
+		}
+	}
+	sort.Strings(missing)
+
+	if len(missing) > 0 {
+		t.Errorf("WS catalogue commands with no matching router.Register call "+
+			"(add a handler or mark kind:broadcast if server-push):\n  %s",
+			strings.Join(missing, "\n  "))
+	}
+
+	commandCount := 0
+	for _, cmd := range schema.Commands {
+		if cmd.Kind != "broadcast" {
+			commandCount++
+		}
+	}
+	t.Logf("TestWSCommandCatalogParity: %d catalogue commands, %d registered — all covered",
+		commandCount, len(registered))
+}
+
 // ── Test 5: args/result use the documented type vocabulary ──────────
 
 // TestWSSchemaArgsResultUseTypedVocabulary asserts that any `args` or

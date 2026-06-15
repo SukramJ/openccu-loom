@@ -187,7 +187,7 @@ func (s *MasterValuesStore) DeleteDevice(
 	_, err := s.db.ExecContext(ctx, `
         DELETE FROM master_values
          WHERE central_name = ? AND interface_id = ?
-           AND (channel_address = ? OR channel_address LIKE ? || '%')
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')
     `, centralName, interfaceID, deviceAddress, prefix)
 	if err != nil {
 		return fmt.Errorf("master_values.DeleteDevice: %w", err)

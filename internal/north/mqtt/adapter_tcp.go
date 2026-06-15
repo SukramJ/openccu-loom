@@ -37,6 +37,14 @@ type TCPConfig struct {
 	Logger       *slog.Logger
 }
 
+// subscriberEntry stores the handler and the QoS level a filter was
+// originally subscribed at. The QoS is replayed on reconnect so every
+// filter is restored at the same delivery guarantee the caller requested.
+type subscriberEntry struct {
+	handler MessageHandler
+	qos     QoS
+}
+
 // TCPClient is a pure-Go MQTT 3.1.1 client used by the Bridge's
 // Lifecycle.
 //
@@ -58,7 +66,7 @@ type TCPClient struct {
 	acks  map[uint16]chan struct{}
 
 	subMu       sync.RWMutex
-	subscribers map[string]MessageHandler
+	subscribers map[string]subscriberEntry
 
 	sendMu sync.Mutex // serialises frame writes
 
@@ -109,7 +117,7 @@ func NewTCPClient(cfg TCPConfig) *TCPClient {
 		cfg:         cfg,
 		logger:      cfg.Logger,
 		acks:        make(map[uint16]chan struct{}),
-		subscribers: make(map[string]MessageHandler),
+		subscribers: make(map[string]subscriberEntry),
 		stop:        make(chan struct{}),
 	}
 }
@@ -200,16 +208,20 @@ func (c *TCPClient) Connect(ctx context.Context) error { //nolint:funlen // sing
 	// `set_temperature` / `set_mode` / `set_profile` commands
 	// arrive at the broker but are never delivered to the daemon.
 	c.subMu.RLock()
-	filters := make([]string, 0, len(c.subscribers))
-	for f := range c.subscribers {
-		filters = append(filters, f)
+	type filterQoS struct {
+		filter string
+		qos    QoS
+	}
+	subs := make([]filterQoS, 0, len(c.subscribers))
+	for f, entry := range c.subscribers {
+		subs = append(subs, filterQoS{filter: f, qos: entry.qos})
 	}
 	c.subMu.RUnlock()
-	for _, f := range filters {
-		pkt := &protocol.SubscribePacket{PacketID: c.nextPacketID(), TopicFilter: f, QoS: byte(QoS1)}
+	for _, s := range subs {
+		pkt := &protocol.SubscribePacket{PacketID: c.nextPacketID(), TopicFilter: s.filter, QoS: byte(s.qos)}
 		if err := c.writeFrame(pkt); err != nil {
 			c.logger.Warn("mqtt.tcp.resubscribe",
-				slog.String("filter", f),
+				slog.String("filter", s.filter),
 				slog.String("err", err.Error()))
 		}
 	}
@@ -294,7 +306,7 @@ func (c *TCPClient) Subscribe(ctx context.Context, filter string, qos QoS, handl
 		return err
 	}
 	c.subMu.Lock()
-	c.subscribers[filter] = handler
+	c.subscribers[filter] = subscriberEntry{handler: handler, qos: qos}
 	c.subMu.Unlock()
 	_ = ctx
 	return nil
@@ -508,9 +520,9 @@ func (c *TCPClient) handleConnectionLost() {
 func (c *TCPClient) dispatch(ib *protocol.InboundPublish) {
 	c.subMu.RLock()
 	var handler MessageHandler
-	for filter, h := range c.subscribers {
+	for filter, entry := range c.subscribers {
 		if topicMatches(filter, ib.Topic) {
-			handler = h
+			handler = entry.handler
 			break
 		}
 	}

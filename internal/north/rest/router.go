@@ -21,6 +21,28 @@ import (
 )
 
 // Deps bundles every collaborator the REST router needs.
+//
+// Nil-field semantics — three distinct behaviours depending on the field:
+//
+//  1. Nil → route not mounted (HTTP 404 from the chi.NotFound handler).
+//     The route is entirely absent from the mux tree, so clients get a
+//     clean 404 rather than a method-specific error. Examples:
+//     Devices (omits all /devices/* routes), Links (omits /devices/{addr}/links),
+//     Backup (omits all /backups routes).
+//
+//  2. Nil → 503 service_unready. The route IS mounted but the handler
+//     inspects the field internally and writes a 503 Problem+JSON body.
+//     Used where the OpenAPI spec documents the endpoint as always-present
+//     but optionally wired. Examples: MatterStatusReader (GET /matter/status),
+//     ConfigExport (GET and POST /config/export|import),
+//     SystemStatus (GET /system/status).
+//
+//  3. Nil → silent no-op / fallback. The field modifies cross-cutting
+//     behaviour rather than gating a route. A nil value activates a safe
+//     default so existing callers keep working. Examples:
+//     DataPointVis (nil means "expose everything"),
+//     ConfigChannelMeta (nil causes the export handler to omit model/channel_type),
+//     MatterAuditRecorder (nil silently skips the audit append).
 type Deps struct {
 	Logger      *slog.Logger
 	StartedAt   time.Time

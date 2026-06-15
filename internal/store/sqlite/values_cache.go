@@ -425,7 +425,7 @@ func (s *ValuesCacheStore) DeleteDevice(
         DELETE FROM values_cache
          WHERE central_name = ?
            AND interface_id = ?
-           AND (channel_address = ? OR channel_address LIKE ? || '%')
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')
     `, centralName, interfaceID, deviceAddress, prefix)
 	if err != nil {
 		return fmt.Errorf("values_cache.DeleteDevice: %w", err)
