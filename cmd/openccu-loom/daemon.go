@@ -23,6 +23,7 @@ import (
 	_ "github.com/SukramJ/openccu-loom/internal/model/custom/builtins"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 func daemonServe(ctx context.Context, cfg *config.Config, stdout, stderr io.Writer) error {
@@ -65,6 +66,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	sqCentrals := ov.sqCentrals
 	sqSections := ov.sqSections
 	configStore := ov.configStore
+
+	// Start the periodic WAL checkpoint for the audit/config DB. Keeps the
+	// WAL file bounded on embedded and busy targets without blocking readers.
+	// Guard on auditDB != nil — the checkpoint loop is a no-op when the DB
+	// was not opened (in-memory-only audit path). The stop function defers
+	// the final shutdown checkpoint via StartWALCheckpointLoop's closer.
+	if auditDB != nil {
+		defer sqlitestore.StartWALCheckpointLoop(auditDB, 0, logger)() //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
+	}
 
 	// --- central registry --------------------------------------
 	bootstrap := &central.Bootstrap{Logger: logger}
