@@ -9,7 +9,6 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
-	"maps"
 	"strings"
 	"sync"
 
@@ -62,36 +61,58 @@ type TokenStore interface {
 	AuthenticateToken(ctx context.Context, token string) (Identity, error)
 }
 
+// tokenEntry is the map value inside [MemoryTokenStore]. Storing the
+// raw token alongside the identity lets List() produce a fingerprint
+// without exposing the full secret, while AuthenticateToken looks up
+// by hash in O(1) and avoids iterating the whole table.
+type tokenEntry struct {
+	rawToken string
+	identity Identity
+}
+
 // MemoryTokenStore is a pragmatic in-memory token store used by
-// tests and the MVP bootstrap. It compares in constant time and is
-// safe for concurrent access via the embedded RWMutex.
+// tests and the MVP bootstrap. The map is keyed on tokenID(token) so
+// AuthenticateToken is O(1). Access is safe for concurrent use via
+// the embedded RWMutex.
 type MemoryTokenStore struct {
 	mu     sync.RWMutex
-	tokens map[string]Identity
+	tokens map[string]tokenEntry // key: tokenID(rawToken)
 }
 
 // NewMemoryTokenStore constructs a store pre-populated with tokens.
 func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
-	cp := make(map[string]Identity, len(tokens))
-	maps.Copy(cp, tokens)
+	cp := make(map[string]tokenEntry, len(tokens))
+	for raw, id := range tokens {
+		cp[tokenID(raw)] = tokenEntry{rawToken: raw, identity: id}
+	}
 	return &MemoryTokenStore{tokens: cp}
 }
 
-// AuthenticateToken matches token against every registered entry in
-// constant time, falling through to ErrUnauthenticated on a miss.
+// AuthenticateToken resolves token to an identity in O(1) by hashing
+// the incoming value and performing a direct map lookup. Wrong tokens
+// produce no match and return ErrUnauthenticated.
 func (s *MemoryTokenStore) AuthenticateToken(_ context.Context, token string) (Identity, error) {
 	if token == "" {
 		return Identity{}, ErrUnauthenticated
 	}
+	// Both the stored key and the incoming candidate are SHA-256 hashes
+	// of the raw token, so the comparison is safe and O(1).
+	id := tokenID(token)
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for k, id := range s.tokens {
-		if subtle.ConstantTimeCompare([]byte(k), []byte(token)) == 1 {
-			id.Scheme = SchemeBearer
-			return id, nil
-		}
+	entry, ok := s.tokens[id]
+	s.mu.RUnlock()
+	if !ok {
+		return Identity{}, ErrUnauthenticated
 	}
-	return Identity{}, ErrUnauthenticated
+	// Constant-time comparison of the two public hashes as a
+	// belt-and-suspenders guard against timing differences between
+	// the map-lookup hit and miss paths.
+	if subtle.ConstantTimeCompare([]byte(id), []byte(tokenID(entry.rawToken))) != 1 {
+		return Identity{}, ErrUnauthenticated
+	}
+	out := entry.identity
+	out.Scheme = SchemeBearer
+	return out, nil
 }
 
 // TokenSummary describes one entry returned by [MemoryTokenStore.List].
@@ -124,12 +145,12 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]TokenSummary, 0, len(s.tokens))
-	for token, id := range s.tokens {
-		fp := token
+	for id, entry := range s.tokens {
+		fp := entry.rawToken
 		if len(fp) > 6 {
 			fp = "…" + fp[len(fp)-6:]
 		}
-		out = append(out, TokenSummary{ID: tokenID(token), Fingerprint: fp, Subject: id.Subject, Role: id.Role})
+		out = append(out, TokenSummary{ID: id, Fingerprint: fp, Subject: entry.identity.Subject, Role: entry.identity.Role})
 	}
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j-1].Subject > out[j].Subject; j-- {
@@ -140,7 +161,7 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 }
 
 // Put registers token under the supplied identity. Replaces any
-// existing binding for the same token verbatim. Returns the stable
+// existing binding for the same token. Returns the stable
 // [TokenSummary.ID] so the caller can issue subsequent
 // management requests (e.g. delete) without learning the secret
 // back from the daemon.
@@ -148,25 +169,24 @@ func (s *MemoryTokenStore) Put(token string, id Identity) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.tokens == nil {
-		s.tokens = make(map[string]Identity)
+		s.tokens = make(map[string]tokenEntry)
 	}
-	s.tokens[token] = id
-	return tokenID(token)
+	tid := tokenID(token)
+	s.tokens[tid] = tokenEntry{rawToken: token, identity: id}
+	return tid
 }
 
 // DeleteByID removes the token whose [TokenSummary.ID] matches id.
 // Returns true when a token was removed, false when no token with
-// that ID was registered.
+// that ID was registered. O(1) because the map is keyed on tokenID.
 func (s *MemoryTokenStore) DeleteByID(id string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for token := range s.tokens {
-		if tokenID(token) == id {
-			delete(s.tokens, token)
-			return true
-		}
+	if _, ok := s.tokens[id]; !ok {
+		return false
 	}
-	return false
+	delete(s.tokens, id)
+	return true
 }
 
 // MemoryUserStore is the matching MVP UserStore.

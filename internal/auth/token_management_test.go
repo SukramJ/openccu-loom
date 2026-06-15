@@ -3,7 +3,10 @@
 
 package auth
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestMemoryTokenStore_PutAndDeleteByID_RoundTrip(t *testing.T) {
 	t.Parallel()
@@ -56,6 +59,45 @@ func TestMemoryTokenStore_PutOnNilMap_BootstrapsLazily(t *testing.T) {
 	id := store.Put("tok-1234567890", Identity{Subject: "x", Role: RoleViewer})
 	if id == "" {
 		t.Fatal("Put must bootstrap nil map and return id")
+	}
+}
+
+// TestMemoryTokenStore_TwoTokensNoCollision verifies that two distinct
+// tokens each authenticate only for their own identity, and neither
+// matches when the wrong token is presented.
+func TestMemoryTokenStore_TwoTokensNoCollision(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryTokenStore(nil)
+	store.Put("token-alice-unique-abcdef", Identity{Subject: "alice", Role: RoleAdmin})
+	store.Put("token-bob-unique-xyzabc", Identity{Subject: "bob", Role: RoleViewer})
+
+	id, err := store.AuthenticateToken(context.Background(), "token-alice-unique-abcdef")
+	if err != nil {
+		t.Fatalf("alice token should authenticate: %v", err)
+	}
+	if id.Subject != "alice" {
+		t.Errorf("subject = %q, want alice", id.Subject)
+	}
+
+	id, err = store.AuthenticateToken(context.Background(), "token-bob-unique-xyzabc")
+	if err != nil {
+		t.Fatalf("bob token should authenticate: %v", err)
+	}
+	if id.Subject != "bob" {
+		t.Errorf("subject = %q, want bob", id.Subject)
+	}
+}
+
+// TestMemoryTokenStore_WrongTokenRejected verifies that an unregistered
+// token produces ErrUnauthenticated rather than matching any entry.
+func TestMemoryTokenStore_WrongTokenRejected(t *testing.T) {
+	t.Parallel()
+	store := NewMemoryTokenStore(nil)
+	store.Put("registered-token-abcdef", Identity{Subject: "alice", Role: RoleAdmin})
+
+	_, err := store.AuthenticateToken(context.Background(), "wrong-token-xxxxxx")
+	if err == nil {
+		t.Fatal("wrong token must return ErrUnauthenticated")
 	}
 }
 

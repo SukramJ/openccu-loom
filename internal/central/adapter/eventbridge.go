@@ -1743,11 +1743,11 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch.
-		go func() { //nolint:gosec,contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load; see #20
+		SafeGo("eventbridge.climate_schedule_load", func() { //nolint:contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load; see #20
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_, _ = cp.Load(loadCtx)
-		}()
+		})
 	}
 
 	// Wire live updates: when the profile pointer changes (via CCU push
@@ -1880,11 +1880,12 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	// the channel's refresher; on success it publishes through the
 	// Profile's OnChange, which we subscribe to below for re-publishing.
 	if sp := wp.Simple(); sp != nil {
-		go func(p *weekprofile.DefaultProfile) { //nolint:gosec,contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load; see #20
+		capturedSP := sp
+		SafeGo("eventbridge.simple_schedule_load", func() { //nolint:contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load; see #20
 			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			_, _ = p.Load(loadCtx)
-		}(sp)
+			_, _ = capturedSP.Load(loadCtx)
+		})
 		// Re-publish the Zeitplan attrs whenever the Simple schedule
 		// changes (Load + Save both fire OnChange). Captured locals
 		// avoid the loop-closure pitfall.
