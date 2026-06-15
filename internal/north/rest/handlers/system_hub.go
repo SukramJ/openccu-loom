@@ -73,7 +73,7 @@ func PostSystemUpdateInstall(idx HubIndex) http.HandlerFunc {
 		}
 		if err := h.Update.Install(r.Context()); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "System update failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "System update failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -224,7 +224,7 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 				}
 				if err != nil {
 					problem.Write(w, http.StatusBadGateway,
-						problem.New(problem.TypeInternal, r, "Install mode write failed", err.Error()))
+						problem.New(problem.TypeUpstreamUnavailable, r, "Install mode write failed", err.Error()))
 					return
 				}
 				w.WriteHeader(http.StatusAccepted)

@@ -349,5 +349,5 @@ func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	problem.Write(w, http.StatusBadGateway,
-		problem.New(problem.TypeInternal, r, "Schedule request failed", err.Error()))
+		problem.New(problem.TypeUpstreamUnavailable, r, "Schedule request failed", err.Error()))
 }

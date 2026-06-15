@@ -48,7 +48,7 @@ func GetParamset(svc ParamsetService) http.HandlerFunc {
 		values, err := svc.GetParamset(r.Context(), addr, key)
 		if err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Paramset read failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Paramset read failed", err.Error()))
 			return
 		}
 		JSON(w, http.StatusOK, values)
@@ -83,7 +83,7 @@ func PutParamset(svc ParamsetService) http.HandlerFunc {
 				return
 			}
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Paramset write failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Paramset write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -108,7 +108,7 @@ func GetLinkParamset(svc ParamsetService) http.HandlerFunc {
 		values, err := svc.GetLinkParamset(r.Context(), addr, peer)
 		if err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Link paramset read failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Link paramset read failed", err.Error()))
 			return
 		}
 		JSON(w, http.StatusOK, values)
@@ -143,7 +143,7 @@ func PutLinkParamset(svc ParamsetService) http.HandlerFunc {
 				return
 			}
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Link paramset write failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Link paramset write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

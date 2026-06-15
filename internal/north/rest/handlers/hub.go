@@ -263,7 +263,7 @@ func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 		}
 		if err := p.SetEnabled(r.Context(), req.Active); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Set enabled failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Set enabled failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -310,7 +310,7 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 		if err := h.CreateSysvarRemote(r.Context(),
 			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.ValueList); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Sysvar create failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar create failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -372,7 +372,7 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 			r.Context(), name, unit, vmin, vmax, desc, valueList,
 		); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Sysvar update failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar update failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -397,7 +397,7 @@ func DeleteSysvar(idx HubIndex) http.HandlerFunc {
 		name := chi.URLParam(r, "name")
 		if err := h.DeleteSysvarRemote(r.Context(), name); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Sysvar delete failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar delete failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -427,7 +427,7 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 		}
 		if err := p.Execute(r.Context()); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Execute failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Execute failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -523,7 +523,7 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 		}
 		if err := s.Set(r.Context(), v); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Sysvar write failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -688,7 +688,7 @@ func AckAlarmMessage(idx HubIndex) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		if err := h.Messages.Acknowledge(r.Context(), id); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Acknowledge failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Acknowledge failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -713,7 +713,7 @@ func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		if err := h.ServiceMessages.Acknowledge(r.Context(), id); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Acknowledge failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Acknowledge failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -756,7 +756,7 @@ func PostInstallMode(ctrl InstallModeController) http.HandlerFunc {
 		}
 		if err := ctrl.SetInstallMode(r.Context(), req.Active, time.Duration(req.Seconds)*time.Second); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Install mode write failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Install mode write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -822,7 +822,7 @@ func ReconnectInterface(idx InterfaceIndex) http.HandlerFunc {
 		}
 		if err := idx.Reconnect(r.Context(), chi.URLParam(r, "id")); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Reconnect failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Reconnect failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

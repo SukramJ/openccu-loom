@@ -357,7 +357,7 @@ func InvokeCustomDataPoint(idx DeviceIndex, writer CustomDPWriter) http.HandlerF
 				slog.String("operation", operation),
 				slog.String("error", err.Error()))
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Operation failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Operation failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
