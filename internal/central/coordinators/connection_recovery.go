@@ -178,6 +178,17 @@ type ConnectionRecoveryCoordinator struct {
 	// rather than letting it linger until the next ticker tick. Guarded
 	// by subMu alongside stopped.
 	stopCh chan struct{}
+	// recoveryWG tracks every goroutine the coordinator spawns (the
+	// per-interface recovery runs and the heartbeat loop) so Stop can
+	// drain them before returning. Add is performed under subMu together
+	// with the stopped check so a trigger racing Stop either registers
+	// before Stop's Wait or is skipped.
+	recoveryWG sync.WaitGroup
+	// runCtx is the context recovery runs execute under; runCancel cancels
+	// it in Stop so an in-flight pipeline aborts promptly instead of
+	// running to completion on a detached background context.
+	runCtx    context.Context
+	runCancel context.CancelFunc
 
 	// incidentLog is the per-coordinator incident ring buffer.
 	// Guarded by mu.
@@ -250,8 +261,11 @@ func NewConnectionRecoveryCoordinator(centralName string, bus *events.Bus) *Conn
 //
 // loom:reachable:reason="called by NewConnectionRecoveryCoordinator (the standard production entry point); also used directly in integration tests that need a bounded attempt count"
 func NewConnectionRecoveryCoordinatorWithLimit(centralName string, bus *events.Bus, maxAttempts int) *ConnectionRecoveryCoordinator {
+	runCtx, runCancel := context.WithCancel(context.Background())
 	return &ConnectionRecoveryCoordinator{
 		centralName:       centralName,
+		runCtx:            runCtx,
+		runCancel:         runCancel,
 		bus:               bus,
 		maxAttempts:       maxAttempts,
 		recorder:          observability.NoopRecorder{},
@@ -428,10 +442,24 @@ func (c *ConnectionRecoveryCoordinator) triggerRecovery(interfaceID string) {
 		return
 	}
 
+	// Register the run under subMu with a final stopped check so a Stop
+	// racing this trigger either waits for it (Add happens before Stop's
+	// Wait) or skips it here.
+	c.subMu.Lock()
+	if c.stopped {
+		c.subMu.Unlock()
+		return
+	}
+	c.recoveryWG.Add(1)
+	c.subMu.Unlock()
+
 	c.log().Info("recovery.trigger",
 		slog.String("central", c.centralName),
 		slog.String("interface", interfaceID))
-	go c.Run(context.Background(), interfaceID, pipeline)
+	go func() {
+		defer c.recoveryWG.Done()
+		c.Run(c.runCtx, interfaceID, pipeline)
+	}()
 }
 
 // Subscribe registers the coordinator as a listener for connection-loss and
@@ -530,25 +558,40 @@ func (c *ConnectionRecoveryCoordinator) Subscribe() {
 	c.unsubscribers = append(c.unsubscribers, unsub1, unsub2, unsub3, unsub4, unsub5)
 	c.subMu.Unlock()
 
-	go c.heartbeatLoop()
+	c.recoveryWG.Add(1)
+	go func() {
+		defer c.recoveryWG.Done()
+		c.heartbeatLoop()
+	}()
 }
 
 // Stop releases all subscriptions registered by [Subscribe]. After Stop
 // returns, no further event-driven recoveries will be triggered. Idempotent.
 func (c *ConnectionRecoveryCoordinator) Stop() {
 	c.subMu.Lock()
-	defer c.subMu.Unlock()
 	if c.stopped {
+		c.subMu.Unlock()
 		return
 	}
 	c.stopped = true
 	if c.stopCh != nil {
 		close(c.stopCh)
 	}
-	for _, unsub := range c.unsubscribers {
+	unsubs := c.unsubscribers
+	c.unsubscribers = nil
+	c.subMu.Unlock()
+
+	// Cancel any in-flight recovery run, drop subscriptions, then wait for
+	// every spawned goroutine (recovery runs + heartbeat loop) to finish.
+	// subMu is released first so a draining goroutine that needs it cannot
+	// deadlock against Wait.
+	if c.runCancel != nil {
+		c.runCancel()
+	}
+	for _, unsub := range unsubs {
 		unsub()
 	}
-	c.unsubscribers = nil
+	c.recoveryWG.Wait()
 }
 
 // heartbeatLoop runs in the background after Subscribe and periodically

@@ -25,6 +25,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Clean shutdown of recovery and MQTT-command work.** The connection-recovery
+  coordinator spawned its per-interface recovery runs on a detached background
+  context with no tracking, so `Stop()` could return while a multi-minute
+  recovery pipeline was still running against the central; the runs now execute
+  under a cancellable context tracked by a `WaitGroup`, and `Stop()` cancels and
+  drains them. MQTT command handlers built their per-command context from
+  `context.Background()`; they now derive it from the daemon-lifetime context
+  (wired so it survives a broker hot-swap), so an in-flight CCU write is
+  cancelled on shutdown instead of lingering to its ack timeout.
 - **Bounded change-history and values-cache growth.** The `audit_log` table had
   no retention and grew without bound; rows older than 90 days are now purged
   opportunistically (every 256 inserts), no scheduler required. Removing a

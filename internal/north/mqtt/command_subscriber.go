@@ -146,6 +146,12 @@ type CommandSubscriber struct {
 	schedSink ScheduleSwitchSink     // may be nil; schedule-switch commands are dropped with a debug log when nil
 	imSink    InstallModeSink        // may be nil; install-mode button presses are dropped with a debug log when nil
 	logger    *slog.Logger
+	// lifecycleCtx is the daemon-lifetime context wired via
+	// WithLifecycleContext; command handlers derive each per-command
+	// context from it so an in-flight CCU write is cancelled when the
+	// daemon shuts down instead of running on a detached background
+	// context. Defaults to context.Background() until wired.
+	lifecycleCtx context.Context
 }
 
 // NewCommandSubscriber constructs the subscriber.
@@ -153,7 +159,7 @@ func NewCommandSubscriber(sub Subscriber, topics *TopicBuilder, sink CommandSink
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &CommandSubscriber{sub: sub, topics: topics, sink: sink, logger: logger}
+	return &CommandSubscriber{sub: sub, topics: topics, sink: sink, logger: logger, lifecycleCtx: context.Background()}
 }
 
 // WithCollector attaches the metrics collector so the subscriber can
@@ -196,6 +202,19 @@ func (c *CommandSubscriber) WithScheduleSwitchSink(s ScheduleSwitchSink) *Comman
 // receiver for call-site chaining.
 func (c *CommandSubscriber) WithInstallModeSink(s InstallModeSink) *CommandSubscriber {
 	c.imSink = s
+	return c
+}
+
+// WithLifecycleContext sets the daemon-lifetime context that command handlers
+// derive each per-command context from. Wiring this — rather than reusing
+// Start's ctx, which on a hot-reload broker swap is request-scoped and dies
+// when the reload returns — ensures in-flight CCU writes cancel on daemon
+// shutdown yet survive a broker swap. A nil ctx is ignored. Returns the
+// receiver for call-site chaining.
+func (c *CommandSubscriber) WithLifecycleContext(ctx context.Context) *CommandSubscriber {
+	if ctx != nil {
+		c.lifecycleCtx = ctx
+	}
 	return c
 }
 
@@ -330,7 +349,7 @@ func (c *CommandSubscriber) handleScheduleSwitch(topic string, body []byte, reta
 			slog.String("detail", "ScheduleSwitchSink not wired"))
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.schedSink.SetScheduleSwitch(ctx, centralName, iface, deviceAddr, channel, key, enabled, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.schedule.set",
@@ -373,7 +392,7 @@ func (c *CommandSubscriber) handleWeekProfile(topic string, body []byte, retaine
 			slog.String("detail", "WeekProfileSink not wired; ignoring active-profile command"))
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.wpSink.SetActiveProfile(ctx, centralName, iface, deviceAddr, channel, profile, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.wp.set_active_profile",
@@ -419,7 +438,7 @@ func (c *CommandSubscriber) handleCombinedDP(topic string, body []byte, retained
 			slog.String("detail", "CombinedDPSink not wired; ignoring combined-DP write"))
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.cmbSink.SetCombinedTimerSeconds(ctx, centralName, iface, deviceAddr, channel, kind, seconds, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.combined.set",
@@ -467,7 +486,7 @@ func (c *CommandSubscriber) handleServiceMethod(topic string, raw []byte, retain
 			slog.String("err", err.Error()))
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.cdpSink.InvokeChannelService(ctx, centralName, iface, deviceAddr, channel, method, params, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.svc.invoke",
@@ -537,7 +556,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	value := parseCommandPayload(body)
 	channelAddress := fmt.Sprintf("%s:%d", device, channel)
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
 		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
@@ -560,7 +579,7 @@ func (c *CommandSubscriber) handleSysvar(topic string, body []byte, retained boo
 	centralName, name := parts[1], parts[4]
 	value := parseCommandPayload(body)
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.sink.SetSysvar(ctx, centralName, name, value); err != nil {
 		c.logger.Warn("mqtt.command.setsysvar",
@@ -580,7 +599,7 @@ func (c *CommandSubscriber) handleProgram(topic string, _ []byte, retained bool)
 	}
 	centralName, id := parts[1], parts[4]
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.sink.TriggerProgram(ctx, centralName, id); err != nil {
 		c.logger.Warn("mqtt.command.program",
@@ -621,7 +640,7 @@ func (c *CommandSubscriber) handleInstallMode(topic string, body []byte, retaine
 		}
 	}
 	c.incReceivedCommands()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.imSink.ActivateInstallMode(ctx, centralName, iface, seconds); err != nil {
 		c.logger.Warn("mqtt.command.install_mode.activate",
@@ -662,7 +681,7 @@ func (c *CommandSubscriber) handleCDPInvoke(topic string, raw []byte, retained b
 	}
 
 	priority := parseMQTTPriority(body.Priority)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if err := c.cdpSink.InvokeCustomDP(ctx, centralName, deviceAddr, name, operation, body.Params, priority); err != nil {
 		c.logger.Warn("mqtt.command.cdp.invoke",
