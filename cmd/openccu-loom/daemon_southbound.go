@@ -133,6 +133,10 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	if stopFlusher := adapter.WireValuesCacheFlusher(reg, d.valuesCacheStore, flushInterval, logger); stopFlusher != nil { //nolint:contextcheck // WireValuesCacheFlusher has no ctx parameter; it creates its own daemon-lifetime context internally
 		teardowns = append(teardowns, stopFlusher)
 	}
+	// Evict a device's persisted cache rows when it is removed, so an
+	// unpaired device does not leave orphaned values_cache rows behind.
+	//nolint:contextcheck // WireValuesCacheEviction has no ctx parameter; its handlers bound each DELETE with their own timeout context
+	teardowns = append(teardowns, adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger))
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many
 	// rows survived the last restart, how many got cast-rejected,

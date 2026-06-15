@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
@@ -19,10 +20,42 @@ import (
 // Writes are append-only; the SPA filters / paginates the read side.
 type AuditStore struct {
 	db *sql.DB
+	// appendsSincePurge counts Append calls since the last retention
+	// purge; every auditPurgeEveryNAppends inserts triggers a Purge so
+	// the change-history table stays bounded without a separate
+	// scheduler job.
+	appendsSincePurge atomic.Int64
 }
+
+const (
+	// auditRetentionDays is how long audit rows are kept before the
+	// opportunistic purge drops them.
+	auditRetentionDays = 90
+	// auditPurgeEveryNAppends is how many inserts pass between purges.
+	// The table can therefore exceed the retention window by at most
+	// this many rows before it is trimmed again.
+	auditPurgeEveryNAppends = 256
+)
 
 // NewAuditStore returns a store backed by db.
 func NewAuditStore(db *sql.DB) *AuditStore { return &AuditStore{db: db} }
+
+// Purge deletes audit rows older than retainDays and returns the number
+// removed. Retention is enforced with SQLite's own clock
+// (datetime('now', …)) so the store needs no injected wall clock.
+func (s *AuditStore) Purge(ctx context.Context, retainDays int) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM audit_log WHERE timestamp < datetime('now', ?)`,
+		fmt.Sprintf("-%d days", retainDays))
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: purge audit: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
 
 // Append inserts one audit entry. The caller is expected to have
 // stamped Entry.Timestamp; if zero, the SQL default (CURRENT_TIMESTAMP)
@@ -72,6 +105,13 @@ VALUES (
 	)
 	if err != nil {
 		return fmt.Errorf("sqlite: append audit entry: %w", err)
+	}
+	// Opportunistic retention: every auditPurgeEveryNAppends inserts,
+	// drop rows past the retention window. Best-effort — a purge failure
+	// must not fail the append that just succeeded.
+	if s.appendsSincePurge.Add(1) >= auditPurgeEveryNAppends {
+		s.appendsSincePurge.Store(0)
+		_, _ = s.Purge(ctx, auditRetentionDays)
 	}
 	return nil
 }
