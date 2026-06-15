@@ -54,6 +54,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Removed the ineffective dynamic import of the audit-log route (it is also
   statically imported by the device-detail history tab), clearing the
   build-time `INEFFECTIVE_DYNAMIC_IMPORT` warning.
+- Post-recovery hub-metadata reload (system-update, sysvars, programs — all
+  over ReGa) is now **best-effort**: a transient ReGa failure (an overloaded
+  CCU, or a firewall/IPS dropping bursty HTTP) no longer fails the whole
+  `data_loading` recovery stage, so an interface's already-enumerated devices
+  stay visible instead of vanishing until a manual restart. Each refresh is
+  reattempted by the periodic hub jobs, so a miss self-heals.
 
 ## [0.3.0] — 2026-06-14
 
