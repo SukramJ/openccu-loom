@@ -71,7 +71,7 @@
         <ControlButton
           active={!isActive}
           color={tileColor}
-          label={t("quick.off")}
+          label="{title} — {t('quick.off')}"
           onClick={() => onSetSlot(dominantSlot.key, 0)}
         >
           {t("quick.off")}
@@ -79,7 +79,7 @@
         <ControlButton
           active={isActive}
           color={tileColor}
-          label={t("control.test")}
+          label="{title} — {t('control.test')}"
           onClick={() => onSetSlot(dominantSlot.key, 1)}
         >
           {t("control.test")}

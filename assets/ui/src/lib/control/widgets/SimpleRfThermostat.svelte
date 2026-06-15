@@ -73,6 +73,7 @@
         disabled={!stateDP.operations.write}
         labelOff={t("quick.off")}
         labelOn={t("quick.on")}
+        {title}
         onChange={(v) => onSetSlot("STATE", v)}
       />
     {/if}

@@ -59,6 +59,7 @@
       value={isOn}
       color={tileColor}
       disabled={!writable}
+      {title}
       onChange={(next) => onSetSlot("LEVEL", next ? 1 : 0)}
     />
     <NumericInputFeature
