@@ -9,6 +9,13 @@ import type { EventEnvelope } from "$lib/api/types";
 let stream: EventStream | null = null;
 const handlers = new Set<(ev: EventEnvelope) => void>();
 
+// Reactive connection state — updated via onStateChange so components
+// receive transitions without polling. Starts "closed" because no
+// stream has been opened yet (the pump is lazy).
+const connectionState = $state<{
+  current: "connecting" | "open" | "closed";
+}>({ current: "closed" });
+
 // Diagnostic counters — kept reactive so the ConnectionBadge can
 // display a "received N events since open" hint. Helps debug live-
 // update plumbing without resorting to browser-devtools poking.
@@ -20,6 +27,12 @@ const counters = $state<{ received: number; lastType: string }>({
 function ensure(): EventStream {
   if (stream) return stream;
   stream = connectEvents();
+  stream.onStateChange((s) => {
+    connectionState.current = s;
+  });
+  // Sync the initial state emitted during connect() before this
+  // onStateChange registration could fire.
+  connectionState.current = stream.state();
   stream.onMessage((ev) => {
     counters.received += 1;
     counters.lastType = ev.type ?? "";
@@ -38,17 +51,18 @@ export function subscribe(
     if (handlers.size === 0) {
       stream?.close();
       stream = null;
+      connectionState.current = "closed";
     }
   };
 }
 
-// Mirror the WS pump's readyState. Takes a `tick` argument so callers
-// (Svelte components) can re-trigger derivation without us needing to
-// own a reactive state ourselves — the websocket abstraction does not
-// emit state-change events, so polling is the simplest route.
-export function status(_tick?: number): "connecting" | "open" | "closed" {
-  void _tick;
-  return stream?.state() ?? "closed";
+/**
+ * Reactive connection state of the WS pump. Returns a getter so
+ * Svelte's reactivity graph tracks reads inside `$derived` blocks.
+ * Components call `wsState()` (no arguments needed — no tick polling).
+ */
+export function status(): "connecting" | "open" | "closed" {
+  return connectionState.current;
 }
 
 /**

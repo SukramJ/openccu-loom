@@ -10,26 +10,17 @@
   // Tiny dot in the topbar that mirrors the WebSocket pump's
   // current state. Subscribes to the shared multiplexer so the WS
   // is kept open while at least one consumer is active anyway —
-  // we just piggyback on the readyState updates.
-
-  let tick: number = $state(0);
+  // we just piggyback on the state transitions pushed by onStateChange.
 
   onMount(() => {
-    // Force re-evaluation every 2s so the badge picks up state
-    // changes the WS layer doesn't push by itself (the mock
-    // event-bus has no "status changed" event yet).
-    const id = setInterval(() => {
-      tick = Date.now();
-    }, 2000);
     // Keep the pump alive while the badge is mounted.
     const unsub = subscribe(() => {});
-    return () => {
-      clearInterval(id);
-      unsub();
-    };
+    return unsub;
   });
 
-  const wsState: "connecting" | "open" | "closed" = $derived(wsStatus(tick));
+  // wsStatus() reads the reactive $state inside events.svelte.ts;
+  // Svelte's $derived tracks it and re-runs whenever the state changes.
+  const wsState: "connecting" | "open" | "closed" = $derived(wsStatus());
 
   const label = $derived(
     wsState === "open"
