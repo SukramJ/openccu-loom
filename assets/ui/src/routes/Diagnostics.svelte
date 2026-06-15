@@ -14,9 +14,8 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
-
-  type Props = { locale: string };
-  let { locale }: Props = $props();
+  import { prefs } from "$lib/stores/preferences.svelte";
+  // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   let health = $state<HealthSnapshot | null>(null);
   let interfaces = $state<InterfaceInfo[]>([]);
@@ -323,7 +322,7 @@
   function formatDate(iso: string | undefined): string {
     if (!iso) return "";
     try {
-      return new Date(iso).toLocaleString(locale === "de" ? "de-DE" : "en-US");
+      return new Date(iso).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
     } catch {
       return iso;
     }
@@ -332,7 +331,7 @@
   function formatTimeOnly(iso: string | undefined): string {
     if (!iso) return "";
     try {
-      return new Date(iso).toLocaleTimeString(locale === "de" ? "de-DE" : "en-US");
+      return new Date(iso).toLocaleTimeString(prefs.locale === "de" ? "de-DE" : "en-US");
     } catch {
       return iso;
     }

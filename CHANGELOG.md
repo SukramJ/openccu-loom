@@ -61,6 +61,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Device list no longer truncates at 200 devices.** The SPA's device store
+  now fetches all pages on refresh: it reads the `total` field from the first
+  `GET /devices` response and issues additional requests (page size 200, capped
+  at 100 pages) until every device is loaded. Installations with more than 200
+  devices previously saw a silently incomplete list.
+
 - **Clean shutdown of recovery and MQTT-command work.** The connection-recovery
   coordinator spawned its per-interface recovery runs on a detached background
   context with no tracking, so `Stop()` could return while a multi-minute

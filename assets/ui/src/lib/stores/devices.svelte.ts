@@ -24,8 +24,32 @@ function createDeviceStore() {
     loading = true;
     error = null;
     try {
-      const page = await api.listDevices(1, 200);
-      items = page.items;
+      // Fetch all devices across multiple pages. The REST endpoint supports
+      // pagination via `page`/`per_page`; the `total` field in the response
+      // body tells us how many items exist in total. A safety cap of 100
+      // pages prevents unbounded loops on unexpected server behaviour.
+      const PER_PAGE = 200;
+      const MAX_PAGES = 100;
+
+      const first = await api.listDevices(1, PER_PAGE);
+      const all: typeof first.items = [...first.items];
+      const total = first.total;
+
+      if (total > PER_PAGE) {
+        const pages = Math.min(Math.ceil(total / PER_PAGE), MAX_PAGES);
+        if (pages > MAX_PAGES) {
+          console.warn(
+            `[deviceStore] installation has ${total} devices — capped at ${MAX_PAGES * PER_PAGE} (${MAX_PAGES} pages).`,
+          );
+        }
+        for (let p = 2; p <= pages; p++) {
+          const next = await api.listDevices(p, PER_PAGE);
+          all.push(...next.items);
+          if (all.length >= total) break;
+        }
+      }
+
+      items = all;
       lastLoaded = new Date();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {

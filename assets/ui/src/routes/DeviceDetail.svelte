@@ -677,7 +677,7 @@
           <ScheduleTab address={detail.address} />
         {/if}
       {:else if topTab === "history"}
-        <AuditLog {locale} deviceFilter={detail.address} embedded />
+        <AuditLog deviceFilter={detail.address} embedded />
       {/if}
     {:else}
       <Card class="p-4">
