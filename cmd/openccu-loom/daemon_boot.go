@@ -37,6 +37,12 @@ type auditOverlay struct {
 	sqCentrals  *sqlitestore.CentralsStore
 	sqSections  *sqlitestore.ConfigSectionStore
 	configStore *configstore.Store
+
+	// secretsAvailable reports whether the at-rest secret cipher resolved a
+	// master key. When false the daemon stores config secrets in plaintext
+	// (ADR 0027 resilient fallback); the daemon surfaces this on /health and
+	// as a metric. Only meaningful when db != nil.
+	secretsAvailable bool
 }
 
 // wireAuditOverlay opens the SQLite-backed audit / config store BEFORE the
@@ -82,6 +88,7 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 				slog.String("effect", "config secrets stored in plaintext"))
 			cipher = &secret.Cipher{}
 		}
+		ov.secretsAvailable = cipher.Available()
 		ov.sqCentrals.SetCipher(cipher)
 		ov.sqSections.SetSecretTransform(func(section string, value []byte, seal bool) ([]byte, error) {
 			return configstore.TransformSectionJSON(cipher, configstore.Section(section), value, seal)

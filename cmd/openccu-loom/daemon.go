@@ -115,6 +115,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	defer sharedInfraTeardown()
 	metricsReg := si.metricsReg
 	healthTracker := si.healthTracker
+	// Surface whether config secrets are encrypted at rest — only meaningful
+	// when the SQLite store that holds them is in use.
+	if ov.db != nil {
+		recordSecretHealth(healthTracker, metricsReg, ov.secretsAvailable)
+	}
 	catalogs := si.catalogs
 	visReg := si.visReg
 	visFilter := si.visFilter
