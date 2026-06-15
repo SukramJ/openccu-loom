@@ -68,6 +68,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `data_loading` recovery stage, so an interface's already-enumerated devices
   stay visible instead of vanishing until a manual restart. Each refresh is
   reattempted by the periodic hub jobs, so a miss self-heals.
+- **CCU system-update progress is now monitored** — parity with aiohomematic
+  `install()` / `_monitor_update_progress`. Triggering a CCU update via
+  `POST /system/update/install` now snapshots the firmware version and spawns
+  a bounded monitor (poll every 30 s, up to 30 min) that clears the
+  `in_progress` flag once the CCU finishes installing and reboots. Previously
+  `in_progress` was set on trigger but never auto-cleared (the ported
+  `MonitorProgress` was unwired), so the status — and the new system-update
+  panel — stayed stuck on "installing".
 
 ## [0.3.0] — 2026-06-14
 

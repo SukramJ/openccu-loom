@@ -33,7 +33,7 @@ func TestUpdateMonitorProgressToleratesPollErrors(t *testing.T) {
 		return "3.77.0", nil // version changed on second call
 	}
 
-	u.MonitorProgress(context.Background(), pollFn, 10)
+	u.MonitorProgress(context.Background(), pollFn, 0, 10)
 
 	if u.InProgress() {
 		t.Fatal("InProgress must be false after version change")
@@ -50,9 +50,11 @@ func TestUpdateMonitorProgressToleratesPollErrors(t *testing.T) {
 	}
 }
 
-// TestUpdateInstallSetsVersionBeforeUpdate verifies that Install does not
-// automatically snapshot the version — the caller must call
-// SetVersionBeforeUpdate before Install, and InProgress is set afterwards.
+// TestUpdateInstallSetsVersionBeforeUpdate verifies the basic Install flow:
+// the firmware updater is triggered and InProgress is set. With no observed
+// info, a caller-provided version snapshot is preserved (Install only
+// auto-snapshots when current firmware info is available — see
+// TestUpdateInstallAutoSnapshotsAndLaunchesMonitor).
 func TestUpdateInstallSetsVersionBeforeUpdate(t *testing.T) {
 	t.Parallel()
 	u := NewUpdate()
@@ -73,6 +75,54 @@ func TestUpdateInstallSetsVersionBeforeUpdate(t *testing.T) {
 	v, ok := u.VersionBeforeUpdate()
 	if !ok || v != "3.55.0" {
 		t.Errorf("VersionBeforeUpdate()=(%q,%v), want (3.55.0,true)", v, ok)
+	}
+}
+
+// TestUpdateInstallAutoSnapshotsAndLaunchesMonitor verifies the install()
+// behaviour (model/hub/update.py:127): Install snapshots the current firmware
+// observed info and launches the wired install monitor.
+func TestUpdateInstallAutoSnapshotsAndLaunchesMonitor(t *testing.T) {
+	t.Parallel()
+	u := NewUpdate()
+	u.OnInfo(UpdateInfo{CurrentFirmware: "3.55.0", AvailableFirmware: "3.77.0", UpdateAvailable: true})
+	u.FirmwareUpdater = &stubFirmwareUpdaterWithFn{}
+
+	launched := false
+	u.SetInstallMonitor(func() { launched = true })
+
+	if err := u.Install(context.Background()); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if v, ok := u.VersionBeforeUpdate(); !ok || v != "3.55.0" {
+		t.Errorf("VersionBeforeUpdate()=(%q,%v), want (3.55.0,true) — Install must auto-snapshot", v, ok)
+	}
+	if !launched {
+		t.Fatal("Install must launch the wired install monitor")
+	}
+	if !u.InProgress() {
+		t.Fatal("InProgress must be true after Install")
+	}
+}
+
+// TestUpdateMonitorProgressClearsOnTimeout verifies the finally-semantics: when
+// the version never changes within maxPoll, MonitorProgress still clears the
+// in-progress flag and resets the version baseline on exit.
+func TestUpdateMonitorProgressClearsOnTimeout(t *testing.T) {
+	t.Parallel()
+	u := NewUpdate()
+	u.SetVersionBeforeUpdate("3.55.0")
+	u.SetInProgress(true)
+
+	pollFn := func(_ context.Context) (string, error) {
+		return "3.55.0", nil // version never changes
+	}
+	u.MonitorProgress(context.Background(), pollFn, 0, 3)
+
+	if u.InProgress() {
+		t.Fatal("InProgress must be false after the monitor deadline")
+	}
+	if _, ok := u.VersionBeforeUpdate(); ok {
+		t.Fatal("version baseline must be reset after monitoring")
 	}
 }
 
