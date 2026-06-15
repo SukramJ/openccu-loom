@@ -6,6 +6,7 @@
 <script lang="ts">
   import ControlButtonGroup from "../controls/ControlButtonGroup.svelte";
   import ControlButton from "../controls/ControlButton.svelte";
+  import { t } from "$lib/i18n";
 
   type Props = {
     value: boolean;
@@ -20,10 +21,13 @@
     value,
     color,
     disabled = false,
-    labelOff = "Aus",
-    labelOn = "An",
+    labelOff,
+    labelOn,
     onChange,
   }: Props = $props();
+
+  const offLabel = $derived(labelOff ?? t("quick.off"));
+  const onLabel = $derived(labelOn ?? t("quick.on"));
 </script>
 
 <ControlButtonGroup>
@@ -31,18 +35,18 @@
     active={!value}
     {color}
     {disabled}
-    label={labelOff}
+    label={offLabel}
     onClick={() => onChange(false)}
   >
-    {labelOff}
+    {offLabel}
   </ControlButton>
   <ControlButton
     active={value}
     {color}
     {disabled}
-    label={labelOn}
+    label={onLabel}
     onClick={() => onChange(true)}
   >
-    {labelOn}
+    {onLabel}
   </ControlButton>
 </ControlButtonGroup>

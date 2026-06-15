@@ -11,6 +11,7 @@
   import ControlTileIcon from "../tile/ControlTileIcon.svelte";
   import ControlTileInfo from "../tile/ControlTileInfo.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -35,9 +36,12 @@
     slot = "STATE",
     glyphActive = "●",
     glyphIdle = "○",
-    labelActive = "Aktiv",
-    labelIdle = "Ruhe",
+    labelActive,
+    labelIdle,
   }: Props = $props();
+
+  const activeLabel = $derived(labelActive ?? t("control.active"));
+  const idleLabel = $derived(labelIdle ?? t("control.idle"));
 
   const dp = $derived(resolved.slots[slot]);
   const isActive = $derived(Boolean(dp?.value));
@@ -45,7 +49,7 @@
   const tileColor = $derived(resolveTileColor(resolved.family, isActive, observed));
 
   const computedSecondary = $derived(
-    secondary ?? (observed ? (isActive ? labelActive : labelIdle) : "—"),
+    secondary ?? (observed ? (isActive ? activeLabel : idleLabel) : "—"),
   );
 </script>
 

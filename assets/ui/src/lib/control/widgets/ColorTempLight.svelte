@@ -12,6 +12,7 @@
   import ControlColorTempSlider from "../controls/ControlColorTempSlider.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -50,7 +51,7 @@
       <ControlColorTempSlider
         value={kelvin}
         disabled={!writable}
-        label="Farbtemperatur"
+        label={t("control.color_temp")}
         onChange={(v) => onSetSlot(ctDP === resolved.slots.COLOR_TEMPERATURE ? "COLOR_TEMPERATURE" : "COLORTEMPERATURE", v)}
       />
     {/if}

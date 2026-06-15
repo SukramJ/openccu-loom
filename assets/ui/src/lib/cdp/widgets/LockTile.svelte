@@ -49,9 +49,9 @@
   );
 
   const secondary = $derived.by(() => {
-    if (uncertainDP?.value) return "Status unbekannt";
+    if (uncertainDP?.value) return t("control.status_unknown");
     if (!observed) return "—";
-    return isLocked ? "Verriegelt" : "Entriegelt";
+    return isLocked ? t("control.locked") : t("control.unlocked");
   });
 
   async function load() {

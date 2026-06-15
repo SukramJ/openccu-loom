@@ -10,6 +10,7 @@
   import LockCommandsFeature from "../features/LockCommandsFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -35,9 +36,9 @@
 
   const computedSecondary = $derived.by(() => {
     if (secondary) return secondary;
-    if (uncertainDP?.value) return "Status unbekannt";
+    if (uncertainDP?.value) return t("control.status_unknown");
     if (!observed) return "—";
-    return isLocked ? "Verriegelt" : "Entriegelt";
+    return isLocked ? t("control.locked") : t("control.unlocked");
   });
 </script>
 

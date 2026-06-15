@@ -12,6 +12,7 @@
   import StatReadoutFeature from "../features/StatReadoutFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -49,11 +50,11 @@
   {#snippet features()}
     <div class="grid grid-cols-2 gap-2">
       {#if powerDP}
-        <StatReadoutFeature label="Leistung" value={powerDP.value} unit="W" />
+        <StatReadoutFeature label={t("control.power")} value={powerDP.value} unit="W" />
       {/if}
       {#if energyDP}
         <StatReadoutFeature
-          label="Energie"
+          label={t("control.energy")}
           value={energyDP.value}
           unit="Wh"
           format={(v) =>
@@ -61,11 +62,11 @@
         />
       {/if}
       {#if voltageDP}
-        <StatReadoutFeature label="Spannung" value={voltageDP.value} unit="V" />
+        <StatReadoutFeature label={t("control.voltage")} value={voltageDP.value} unit="V" />
       {/if}
       {#if currentDP}
         <StatReadoutFeature
-          label="Strom"
+          label={t("control.current")}
           value={currentDP.value}
           unit="mA"
           format={(v) =>
@@ -73,7 +74,7 @@
         />
       {/if}
       {#if frequencyDP}
-        <StatReadoutFeature label="Frequenz" value={frequencyDP.value} unit="Hz" />
+        <StatReadoutFeature label={t("control.frequency")} value={frequencyDP.value} unit="Hz" />
       {/if}
     </div>
   {/snippet}

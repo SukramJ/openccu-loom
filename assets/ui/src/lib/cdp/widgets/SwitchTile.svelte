@@ -46,7 +46,7 @@
   );
 
   const secondary = $derived(
-    !observed ? "—" : isOn ? "An" : "Aus",
+    !observed ? "—" : isOn ? t("quick.on") : t("quick.off"),
   );
 
   async function load() {

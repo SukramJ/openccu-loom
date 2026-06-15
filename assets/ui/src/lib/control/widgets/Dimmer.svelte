@@ -18,6 +18,7 @@
   import NumericInputFeature from "../features/NumericInputFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -64,7 +65,7 @@
       value={level}
       color={tileColor}
       disabled={!writable}
-      label="Helligkeit"
+      label={t("control.brightness")}
       onChange={(v) => onSetSlot("LEVEL", v)}
     />
   {/snippet}

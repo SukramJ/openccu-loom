@@ -10,6 +10,7 @@
   import ToggleFeature from "../features/ToggleFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -27,7 +28,7 @@
   const tileColor = $derived(resolveTileColor(resolved.family, isOn, observed));
 
   const computedSecondary = $derived(
-    secondary ?? (observed ? (isOn ? "An" : "Aus") : "—"),
+    secondary ?? (observed ? (isOn ? t("quick.on") : t("quick.off")) : "—"),
   );
 </script>
 

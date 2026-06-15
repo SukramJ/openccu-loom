@@ -20,6 +20,7 @@
   import ControlEnumSelect from "../controls/ControlEnumSelect.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -75,7 +76,7 @@
         value={level}
         color={tileColor}
         disabled={!writable}
-        label="Helligkeit"
+        label={t("control.brightness")}
         onChange={(v) => onSetSlot("LEVEL", v)}
       />
     {/if}
@@ -84,7 +85,7 @@
         value={colorDP.value as string | number | undefined}
         options={colorOptions}
         disabled={!(colorDP.operations.write)}
-        label="Farbe"
+        label={t("control.color")}
         onChange={(v) => onSetSlot("COLOR", v)}
       />
     {/if}
@@ -93,7 +94,7 @@
         value={effectDP.value as string | number | undefined}
         options={effectOptions}
         disabled={!(effectDP.operations.write)}
-        label="Effekt"
+        label={t("control.effect")}
         onChange={(v) => onSetSlot("COLOR_BEHAVIOUR", v)}
       />
     {/if}

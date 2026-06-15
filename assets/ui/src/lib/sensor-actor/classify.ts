@@ -14,6 +14,7 @@
 //   action_with_value — write only, value-typed (number / float / string)
 
 import type { DataPointSummary } from "$lib/api/types";
+import { t } from "$lib/i18n";
 
 export type DPRole =
   | "primary"
@@ -107,8 +108,8 @@ export function formatPrimaryValue(
   const enumLabel = enumValueLabel(dp);
   if (enumLabel !== undefined) return enumLabel;
   if (typeof v === "boolean") {
-    if (v) return labels?.trueLabel ?? "An";
-    return labels?.falseLabel ?? "Aus";
+    if (v) return labels?.trueLabel ?? t("quick.on");
+    return labels?.falseLabel ?? t("quick.off");
   }
   if (typeof v === "number") {
     const num = formatNumber(v, dp);

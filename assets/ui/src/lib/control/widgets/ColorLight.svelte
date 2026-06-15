@@ -12,6 +12,7 @@
   import ControlTileInfo from "../tile/ControlTileInfo.svelte";
   import ControlHueSlider from "../controls/ControlHueSlider.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -35,7 +36,7 @@
   const hueDeg = $derived(observed ? Math.round((hue / 199) * 360) : 0);
 
   const computedSecondary = $derived(
-    secondary ?? (observed ? `Farbton ${hue}` : "—"),
+    secondary ?? (observed ? `${t("control.hue")} ${hue}` : "—"),
   );
 </script>
 
@@ -53,7 +54,7 @@
       <ControlHueSlider
         value={hue}
         disabled={!writable}
-        label="Farbton"
+        label={t("control.hue")}
         onChange={(v) => onSetSlot("COLOR", v)}
       />
     {/if}
