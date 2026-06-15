@@ -60,59 +60,59 @@
     </ControlTileIcon>
   {/snippet}
   {#snippet info()}
-    <ControlTileInfo primary={displayTitle} secondary={`Zeile ${rowId}`} />
+    <ControlTileInfo primary={displayTitle} secondary={t("cdp.textdisplay.row", { row: rowId })} />
   {/snippet}
   {#snippet features()}
     <div class="flex flex-col gap-2">
       <label class="flex items-center gap-2 text-xs text-[var(--ha-secondary-text-color)]">
-        Zeile
+        {t("cdp.textdisplay.row_label")}
         <input
           type="number"
           min="1"
           max="10"
           bind:value={rowId}
-          class="h-8 w-16 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-sm text-[var(--ha-primary-text-color)]"
+          class="h-10 w-16 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-base text-[var(--ha-primary-text-color)] sm:text-sm"
         />
       </label>
       <textarea
         rows="2"
         bind:value={text}
-        placeholder="Text…"
+        placeholder={t("cdp.textdisplay.text_placeholder")}
         class="rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 py-1 text-sm text-[var(--ha-primary-text-color)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
       ></textarea>
       <div class="flex items-center justify-between gap-2">
         <button
           type="button"
-          class="text-xs text-[var(--ha-secondary-text-color)] underline"
+          class="min-h-10 inline-flex items-center text-xs text-[var(--ha-secondary-text-color)] underline"
           onclick={() => (advanced = !advanced)}
         >
-          {advanced ? "Weniger" : "Erweitert"}
+          {advanced ? t("cdp.textdisplay.less") : t("cdp.textdisplay.advanced")}
         </button>
         <button
           type="button"
           disabled={busy || !text}
-          class="rounded-md bg-[var(--ha-primary-color)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          class="min-h-10 rounded-md bg-[var(--ha-primary-color)] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           onclick={write}
         >
-          {busy ? "Sendet…" : "Schreiben"}
+          {busy ? t("cdp.textdisplay.sending") : t("cdp.textdisplay.write")}
         </button>
       </div>
       {#if advanced}
         <div class="flex flex-col gap-2 text-xs">
           <label class="flex items-center gap-2 text-[var(--ha-secondary-text-color)]">
-            Icon
+            {t("cdp.textdisplay.icon_label")}
             <input
               bind:value={iconValue}
-              placeholder="z.B. 0"
-              class="h-7 flex-1 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
+              placeholder={t("cdp.textdisplay.icon_placeholder")}
+              class="h-10 flex-1 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-base text-[var(--ha-primary-text-color)] sm:text-sm"
             />
           </label>
           <label class="flex items-center gap-2 text-[var(--ha-secondary-text-color)]">
-            Farbe
+            {t("cdp.textdisplay.color_label")}
             <input
               bind:value={color}
-              placeholder="Index 0–N"
-              class="h-7 flex-1 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-[var(--ha-primary-text-color)]"
+              placeholder={t("cdp.textdisplay.color_placeholder")}
+              class="h-10 flex-1 rounded-md border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-2 text-base text-[var(--ha-primary-text-color)] sm:text-sm"
             />
           </label>
         </div>

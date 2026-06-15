@@ -34,13 +34,15 @@
   class:ring-brand-300={selected}
 >
   {#if onToggleSelect}
-    <input
-      type="checkbox"
-      class="mt-1 h-4 w-4 cursor-pointer accent-brand-500"
-      checked={selected}
-      onchange={(e) => onToggleSelect((e.target as HTMLInputElement).checked)}
-      aria-label={t("device.list.select_aria")}
-    />
+    <label class="flex min-h-10 min-w-10 flex-shrink-0 items-center justify-center">
+      <input
+        type="checkbox"
+        class="h-4 w-4 cursor-pointer accent-brand-500"
+        checked={selected}
+        onchange={(e) => onToggleSelect((e.target as HTMLInputElement).checked)}
+        aria-label={t("device.list.select_aria")}
+      />
+    </label>
   {/if}
   <a
     href="#/devices/{encodeURIComponent(device.address)}"
@@ -104,7 +106,7 @@
             <span style={tone(Boolean(maintenance.LOW_BAT), true)}>
               <Icon
                 name="mdi:battery-alert"
-                size={14}
+                size={16}
                 aria-label={t("device.maintenance.low_bat")}
                 title={t("device.maintenance.low_bat")}
               />
@@ -114,7 +116,7 @@
             <span style="color: var(--ha-warning-color);">
               <Icon
                 name="mdi:alert-triangle"
-                size={14}
+                size={16}
                 aria-label={t("device.maintenance.duty_cycle")}
                 title={t("device.maintenance.duty_cycle")}
               />
@@ -124,7 +126,7 @@
             <span style="color: var(--ha-info-color);">
               <Icon
                 name="mdi:information-outline"
-                size={14}
+                size={16}
                 aria-label={t("device.maintenance.config_pending")}
                 title={t("device.maintenance.config_pending")}
               />

@@ -9,7 +9,7 @@
   import Select from "$lib/components/ui/Select.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
-
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let sysvars = $state<SysvarEntry[]>([]);
   let loading = $state(true);
@@ -163,7 +163,11 @@
   }
 
   async function deleteSv(sv: SysvarEntry) {
-    const ok = confirm(t("sysvars.confirm_remove", { name: sv.name }));
+    const ok = await confirmStore.ask({
+      title: t("sysvars.confirm_remove", { name: sv.name }),
+      confirmLabel: t("common.remove"),
+      destructive: true,
+    });
     if (!ok) return;
     savingName = sv.name;
     banner = null;
@@ -224,7 +228,7 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("sysvars.title")}</h1>
@@ -244,7 +248,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
           title="CCU"
         >
-          <option value="">Alle CCUs</option>
+          <option value="">{t("common.all_ccus")}</option>
           {#each centrals as c (c)}
             <option value={c}>{c}</option>
           {/each}
@@ -270,7 +274,7 @@
               bind:value={createCentral}
               class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
             >
-              <option value="">— wählen —</option>
+              <option value="">{t("common.select_placeholder")}</option>
               {#each centrals as c (c)}
                 <option value={c}>{c}</option>
               {/each}
@@ -301,11 +305,11 @@
         {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Min</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
               <Input bind:value={createForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Max</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
               <Input bind:value={createForm.max} />
             </label>
           </div>
@@ -313,7 +317,7 @@
         {#if createForm.value_type === "ENUM"}
           <label class="text-sm md:col-span-2">
             <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.values")}</span>
-            <Input bind:value={createForm.value_list} placeholder="aus;an;blink" />
+            <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
           </label>
         {/if}
       </div>
@@ -384,7 +388,7 @@
                   <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">{sv.description}</p>
                 {/if}
               </div>
-              <div class="flex min-w-[14rem] items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 {#if sv.value_type === "BOOL"}
                   <Switch
                     checked={Boolean(currentValue(sv))}
@@ -497,11 +501,11 @@
         {#if editing.value_type === "INTEGER" || editing.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Min</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
               <Input bind:value={editForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">Max</span>
+              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
               <Input bind:value={editForm.max} />
             </label>
           </div>

@@ -68,35 +68,35 @@
   {:else if matterStore.fabricsError}
     <p class="text-sm" style="color: var(--ha-error-color, #ef4444);">{matterStore.fabricsError}</p>
   {:else if matterStore.fabrics.length === 0}
-    <p class="text-sm" style="color: var(--ha-secondary-text-color);">No fabrics paired yet.</p>
+    <p class="text-sm" style="color: var(--ha-secondary-text-color);">{t("matter.fabrics.empty")}</p>
   {:else}
     <div class="rounded-lg border overflow-x-auto" style="border-color: var(--ha-divider-color);">
-      <table class="w-full text-sm">
+      <table class="table-reflow w-full text-sm">
         <thead>
           <tr style="border-bottom: 1px solid var(--ha-divider-color); background-color: var(--ha-secondary-background-color);">
-            <th class="px-3 py-2 text-left">Vendor</th>
-            <th class="px-3 py-2 text-left">Label</th>
-            <th class="px-3 py-2 text-left hidden md:table-cell">Fabric #</th>
-            <th class="px-3 py-2 text-left hidden lg:table-cell">Node ID</th>
-            <th class="px-3 py-2 text-left"></th>
+            <th class="px-3 py-3 text-left">{t("matter.fabrics.col_vendor")}</th>
+            <th class="px-3 py-3 text-left">{t("matter.fabrics.col_label")}</th>
+            <th class="px-3 py-3 text-left hidden md:table-cell">{t("matter.fabrics.col_fabric")}</th>
+            <th class="px-3 py-3 text-left hidden lg:table-cell">{t("matter.fabrics.col_node_id")}</th>
+            <th class="px-3 py-3 text-left"></th>
           </tr>
         </thead>
         <tbody>
           {#each matterStore.fabrics as fabric (fabric.fabric_index)}
             <tr style="border-bottom: 1px solid var(--ha-divider-color);">
-              <td class="px-3 py-2" style="color: var(--ha-primary-text-color);">
+              <td class="reflow-title px-3 py-3" style="color: var(--ha-primary-text-color);">
                 {vendorName(fabric.vendor_id)}
               </td>
-              <td class="px-3 py-2" style="color: {fabric.label ? 'var(--ha-primary-text-color)' : 'var(--ha-secondary-text-color)'};">
+              <td class="px-3 py-3" data-label={t("matter.fabrics.col_label")} style="color: {fabric.label ? 'var(--ha-primary-text-color)' : 'var(--ha-secondary-text-color)'};">
                 {fabric.label || t("matter.fabric.label_unknown")}
               </td>
-              <td class="px-3 py-2 hidden md:table-cell" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-3 hidden md:table-cell" data-label={t("matter.fabrics.col_fabric")} style="color: var(--ha-secondary-text-color);">
                 {fabric.fabric_index}
               </td>
-              <td class="px-3 py-2 hidden lg:table-cell font-mono text-xs" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-3 hidden lg:table-cell font-mono text-xs" data-label={t("matter.fabrics.col_node_id")} style="color: var(--ha-secondary-text-color);">
                 0x{fabric.node_id}
               </td>
-              <td class="px-3 py-2 text-right">
+              <td class="reflow-actions px-3 py-3 text-right">
                 <Button
                   size="sm"
                   variant="destructive"
@@ -139,10 +139,10 @@
       <div class="mt-4 space-y-2">
         <p class="text-sm font-medium" style="color: var(--ha-primary-text-color);">
           {t("matter.pair.manual_code")}:
-          <span class="font-mono">{shareWindow.manual_code}</span>
+          <span class="font-mono break-all">{shareWindow.manual_code}</span>
         </p>
         <p class="text-xs" style="color: var(--ha-secondary-text-color);">
-          QR payload: <span class="font-mono">{shareWindow.qr_code}</span>
+          {t("matter.pair.qr_payload")}: <span class="font-mono break-all">{shareWindow.qr_code}</span>
         </p>
       </div>
     {/if}

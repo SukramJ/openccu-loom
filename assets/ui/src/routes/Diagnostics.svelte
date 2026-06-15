@@ -383,13 +383,13 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6 space-y-6">
+<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6 space-y-6">
   <header class="flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("diagnostics.title")}</h1>
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.subtitle")}</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       {#if banner}
         <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
       {/if}
@@ -656,7 +656,7 @@
           <input
             type="text"
             bind:value={newLevelPath}
-            class="w-64 rounded border border-slate-300 px-2 py-1 text-sm font-mono dark:border-slate-700 dark:bg-slate-900"
+            class="w-full sm:w-64 rounded border border-slate-300 px-2 py-1 text-sm font-mono dark:border-slate-700 dark:bg-slate-900"
           />
         </label>
         <label class="flex flex-col text-xs">
@@ -821,7 +821,7 @@
     {#if unifiedList.length === 0}
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.recordings.empty")}</p>
     {:else}
-      <table class="w-full text-sm">
+      <table class="table-reflow w-full text-sm">
         <thead>
           <tr class="border-b border-slate-200 text-left text-xs text-[var(--ha-secondary-text-color)] dark:border-slate-800">
             <th class="pb-1 pr-3 font-medium">{t("diagnostics.recordings.col_type")}</th>
@@ -834,22 +834,22 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {#each unifiedList as row (row.kind + ":" + row.id)}
             <tr>
-              <td class="py-2 pr-3">
+              <td class="reflow-title py-2 pr-3">
                 {#if row.kind === "log"}
-                  <Badge variant="default">Debug-Log</Badge>
+                  <Badge variant="default">{t("diagnostics.recording_type.debug_log")}</Badge>
                 {:else}
                   <Badge variant="muted">RPC</Badge>
                 {/if}
               </td>
-              <td class="py-2 pr-3 font-mono text-xs">{row.ccu}</td>
-              <td class="py-2 pr-3">
+              <td class="py-2 pr-3 font-mono text-xs" data-label={t("diagnostics.recordings.col_scope")}>{row.ccu}</td>
+              <td class="py-2 pr-3" data-label={t("diagnostics.recordings.col_start")}>
                 <Badge variant={row.statusVariantKey}>{row.status}</Badge>
                 {#if row.startedAt}
                   <span class="ml-1 text-xs text-[var(--ha-secondary-text-color)]">{formatDate(row.startedAt)}</span>
                 {/if}
               </td>
-              <td class="py-2 pr-3 tabular-nums text-xs">{row.sizeLabel}</td>
-              <td class="py-2">
+              <td class="py-2 pr-3 tabular-nums text-xs" data-label={t("diagnostics.recordings.col_size")}>{row.sizeLabel}</td>
+              <td class="reflow-actions py-2">
                 {#if row.canStop}
                   <Button
                     type="button"

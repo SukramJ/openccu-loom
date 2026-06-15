@@ -104,7 +104,7 @@
       {#if cdp.supported_operations?.includes("turn_on_for")}
         <button
           type="button"
-          class="rounded-md border border-[var(--ha-divider-color)] px-3 py-1.5 text-sm text-[var(--ha-primary-text-color)] hover:bg-[var(--ha-divider-color)]"
+          class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm text-[var(--ha-primary-text-color)] hover:bg-[var(--ha-divider-color)]"
           onclick={() => invoke("turn_on_for", { seconds: 30 })}
         >
           30 s an

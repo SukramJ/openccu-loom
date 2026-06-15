@@ -8,6 +8,53 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0]
 
+### Changed
+
+- **Responsive / iPhone pass across the config UI (Svelte SPA).** Every
+  route and the heavy editor components were reworked so the content — not
+  just the app shell — is usable on a phone:
+  - Shared foundations: `viewport-fit=cover` + safe-area-inset helpers so
+    the notch / home indicator never clip the sidebar, header, toasts or
+    dialogs; a reusable table→cards reflow (`table-reflow` + `data-label`,
+    table on desktop, stacked cards on phones); touch-sized primitives
+    (`Button` / `Input` / `Select` / `Switch`), with `text-base sm:text-sm`
+    on inputs to suppress iOS Safari focus auto-zoom.
+  - Wide data tables (audit log, backups, firmware, users, API tokens,
+    diagnostics recordings) reflow to cards below `sm`.
+  - Non-wrapping toolbars and fixed-width inputs (device-list filter bar,
+    device-detail rename, logs / inbox / sysvars / section editor, Matter
+    exposures) now wrap or go full-width on phones.
+  - Settings: the fixed vertical tab sidebar becomes a horizontal scroll
+    strip on phones.
+  - Schedule editors: the fixed-width timeline visualisations are now fluid,
+    and the period / lock / astro rows regroup so they no longer overflow.
+  - Device-control tiles: actuator buttons, colour chips, sliders and number
+    steppers raised to ≥40–44px touch targets.
+- **Full localisation (de/en) of the SPA.** Every remaining hardcoded
+  string — DeviceList, Login, the device-control tiles (climate, cover,
+  light, siren, valve, text-display), the schedule editor, the Matter
+  screens, and assorted labels / placeholders / aria-labels — now resolves
+  through the in-app de/en catalogue (~190 new keys). Technical enums
+  (roles, CCU data types, log levels) and the language-picker names stay
+  literal by design.
+- More table→cards reflows (profile preview, Matter fabrics) and touch-
+  target fixes (text-display tile, sidebar footer icons, channel picker);
+  the keyboard-shortcut button is now hidden on touch devices
+  (`pointer-coarse`).
+- `theme-color` gained a dark-mode variant.
+
+### Fixed
+
+- Toast container no longer overflows the right edge on narrow (≤390px)
+  viewports.
+- Replaced the remaining native `confirm()` / `prompt()` dialogs in the SPA
+  (device delete / rename / firmware, set-room, sysvar / token / user
+  actions, daemon restart, link / import) with the app's styled confirm
+  modal and inline editors.
+- Removed the ineffective dynamic import of the audit-log route (it is also
+  statically imported by the device-detail history tab), clearing the
+  build-time `INEFFECTIVE_DYNAMIC_IMPORT` warning.
+
 ## [0.3.0] — 2026-06-14
 
 ### Added

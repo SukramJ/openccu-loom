@@ -78,7 +78,7 @@
 
 {#if visible}
   <div
-    class="fixed bottom-4 right-4 z-40 max-w-xs rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm shadow-lg dark:border-amber-700 dark:bg-amber-950"
+    class="pin-b-safe pin-r-safe fixed z-40 w-[calc(100%-2rem)] max-w-xs rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm shadow-lg dark:border-amber-700 dark:bg-amber-950"
     role="status"
     aria-live="polite"
   >
@@ -91,7 +91,7 @@
     <div class="mt-2 flex justify-end gap-2">
       <button
         type="button"
-        class="rounded border border-amber-400 px-2 py-0.5 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-900/40"
+        class="inline-flex min-h-[36px] items-center rounded border border-amber-400 px-3 text-xs text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-100 dark:hover:bg-amber-900/40"
         onclick={() => {
           dismissed = true;
           touch();

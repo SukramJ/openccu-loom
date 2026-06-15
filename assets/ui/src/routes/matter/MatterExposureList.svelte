@@ -209,37 +209,43 @@
 
 <div>
   <!-- Toolbar -->
-  <div class="flex flex-wrap items-center gap-2 mb-3">
-    <Input
-      placeholder={t("matter.expose.search_placeholder")}
-      bind:value={searchText}
-      class="w-64"
-    />
-    <select
-      class="h-9 rounded-md border px-2 text-sm"
-      style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
-      bind:value={filterKind}
-      aria-label={t("matter.expose.filter_kind")}
-    >
-      {#each kindOptions as k}
-        <option value={k}>
-          {k === "all" ? t("matter.expose.filter_kind") : t(`matter.expose.kind.${k}`)}
-        </option>
-      {/each}
-    </select>
-    {#if selectedKeys.size > 0}
-      <Button size="sm" onclick={() => void bulkSet(true)}>{t("matter.expose.bulk_expose")}</Button>
-      <Button size="sm" variant="outline" onclick={() => void bulkSet(false)}>{t("matter.expose.bulk_hide")}</Button>
-      <Button size="sm" variant="ghost" onclick={clearSelection}>{t("common.cancel")}</Button>
-    {:else}
-      <Button size="sm" variant="ghost" onclick={selectAll}>{t("matter.expose.select_all")}</Button>
-    {/if}
-    {#if matterStore.hasDirty}
-      <div class="ml-auto flex gap-2">
-        <Button size="sm" onclick={saveChanges}>{t("matter.expose.save")}</Button>
-        <Button size="sm" variant="outline" onclick={() => matterStore.discardDirty()}>{t("matter.expose.discard")}</Button>
-      </div>
-    {/if}
+  <div class="flex flex-col gap-2 mb-3">
+    <!-- Row 1: search + kind filter -->
+    <div class="flex flex-wrap items-center gap-2">
+      <Input
+        placeholder={t("matter.expose.search_placeholder")}
+        bind:value={searchText}
+        class="w-full sm:w-64"
+      />
+      <select
+        class="h-10 rounded-md border px-2 text-base sm:text-sm sm:h-9"
+        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+        bind:value={filterKind}
+        aria-label={t("matter.expose.filter_kind")}
+      >
+        {#each kindOptions as k}
+          <option value={k}>
+            {k === "all" ? t("matter.expose.filter_kind") : t(`matter.expose.kind.${k}`)}
+          </option>
+        {/each}
+      </select>
+    </div>
+    <!-- Row 2: bulk actions + save/discard -->
+    <div class="flex flex-wrap items-center gap-2">
+      {#if selectedKeys.size > 0}
+        <Button size="sm" onclick={() => void bulkSet(true)}>{t("matter.expose.bulk_expose")}</Button>
+        <Button size="sm" variant="outline" onclick={() => void bulkSet(false)}>{t("matter.expose.bulk_hide")}</Button>
+        <Button size="sm" variant="ghost" onclick={clearSelection}>{t("common.cancel")}</Button>
+      {:else}
+        <Button size="sm" variant="ghost" onclick={selectAll}>{t("matter.expose.select_all")}</Button>
+      {/if}
+      {#if matterStore.hasDirty}
+        <div class="ml-auto flex gap-2">
+          <Button size="sm" onclick={saveChanges}>{t("matter.expose.save")}</Button>
+          <Button size="sm" variant="outline" onclick={() => matterStore.discardDirty()}>{t("matter.expose.discard")}</Button>
+        </div>
+      {/if}
+    </div>
   </div>
 
   <!-- Class chip filter -->
@@ -295,10 +301,10 @@
         <thead>
           <tr style="border-bottom: 1px solid var(--ha-divider-color); background-color: var(--ha-secondary-background-color);">
             <th class="px-3 py-2 text-left w-10">
-              <span class="sr-only">Select</span>
+              <span class="sr-only">{t("matter.expose.col_select")}</span>
             </th>
             <th class="px-3 py-2 text-left w-8">
-              <span class="sr-only">State</span>
+              <span class="sr-only">{t("matter.expose.col_state")}</span>
             </th>
             <th class="px-3 py-2 text-left">{t("matter.expose.col_name")}</th>
             <th class="px-3 py-2 text-left hidden md:table-cell">{t("matter.expose.col_channel")}</th>
@@ -320,15 +326,17 @@
               onkeydown={(e) => { if (e.key === "Enter") openDrawer(item); }}
               tabindex="0"
             >
-              <td class="px-3 py-2">
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={!bulkable}
-                  onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
-                  class="cursor-pointer"
-                  aria-label="Select row"
-                />
+              <td class="p-0">
+                <label class="flex items-center justify-center p-2">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    disabled={!bulkable}
+                    onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
+                    class="cursor-pointer h-5 w-5"
+                    aria-label={t("matter.expose.select_row")}
+                  />
+                </label>
               </td>
               <td class="px-3 py-2">
                 <span style="color: {stateColor(item)}; font-size: 1rem;">
@@ -383,7 +391,7 @@
   <aside
     class="fixed right-0 top-0 h-full w-full max-w-sm z-50 flex flex-col border-l overflow-y-auto"
     style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color);"
-    aria-label="Exposure detail"
+    aria-label={t("matter.expose.drawer_aria")}
   >
     <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--ha-divider-color);">
       <h2 class="text-base font-semibold" style="color: var(--ha-primary-text-color);">
@@ -391,7 +399,7 @@
       </h2>
       <button
         type="button"
-        class="rounded-md p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="rounded-md p-2 hover:bg-slate-100 dark:hover:bg-slate-800"
         onclick={closeDrawer}
         aria-label={t("common.close")}
       >✕</button>
@@ -400,13 +408,13 @@
       <!-- Friendly name -->
       <div>
         <label for="drawer-friendly-name" class="block text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
-          Friendly name
+          {t("matter.expose.friendly_name")}
         </label>
         <input
           id="drawer-friendly-name"
           type="text"
           bind:value={drawerFriendlyName}
-          class="w-full rounded-md border px-2 py-1 text-sm"
+          class="w-full rounded-md border px-2 h-10 text-base sm:text-sm"
           style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
           placeholder={item.display_name}
         />
@@ -451,7 +459,7 @@
       <!-- Mappability state -->
       <div>
         <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
-          State
+          {t("matter.expose.drawer_state")}
         </p>
         <p class="text-sm">
           {mappabilityIcon(item.mappable)}
@@ -469,7 +477,7 @@
       </div>
       <!-- Source -->
       <div>
-        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Source</p>
+        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_source")}</p>
         {#if item.parameter_label}
           <p class="text-sm" style="color: var(--ha-primary-text-color);">{item.parameter_label}</p>
           <p class="text-xs font-mono" style="color: var(--ha-secondary-text-color);">{item.dp_kind}: {item.dp_key}</p>
@@ -483,7 +491,7 @@
       <!-- Device type -->
       {#if item.device_type_label || item.device_type}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Matter device type</p>
+          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_device_type")}</p>
           <p class="text-sm" style="color: var(--ha-primary-text-color);">
             {item.device_type_label || `0x${item.device_type.toString(16).toUpperCase().padStart(4, "0")}`}
           </p>
@@ -492,7 +500,7 @@
       <!-- Clusters -->
       {#if item.clusters.length > 0}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">Clusters</p>
+          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_clusters")}</p>
           <p class="text-sm font-mono" style="color: var(--ha-primary-text-color);">
             {item.clusters.map((c) => `0x${c.toString(16).toUpperCase().padStart(4, "0")}`).join(" · ")}
           </p>

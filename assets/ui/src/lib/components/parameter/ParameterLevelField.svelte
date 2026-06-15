@@ -130,7 +130,7 @@
         step="1"
         value={percent}
         disabled={!writable || isLastValue}
-        class="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-500 dark:bg-slate-700"
+        class="h-3 flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-500 dark:bg-slate-700"
         oninput={(e) => setPercent(Number((e.target as HTMLInputElement).value))}
       />
       <div class="w-20">

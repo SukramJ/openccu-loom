@@ -97,13 +97,13 @@
   );
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6">
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("backup.title")}</h1>
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("backup.subtitle")}</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       {#if banner}
         <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
       {/if}
@@ -132,7 +132,7 @@
     </Card>
   {:else}
     <Card class="overflow-hidden p-0">
-      <table class="w-full text-left text-sm">
+      <table class="table-reflow w-full text-left text-sm">
         <thead
           class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900"
         >
@@ -147,13 +147,13 @@
         <tbody>
           {#each sortedBackups as entry (entry.id)}
             <tr class="border-b border-slate-100 last:border-0 dark:border-slate-800">
-              <td class="px-4 py-2">{formatDate(entry.created_at)}</td>
-              <td class="px-4 py-2">
+              <td class="reflow-title px-4 py-2">{formatDate(entry.created_at)}</td>
+              <td class="px-4 py-2" data-label={t("backup.col.central")}>
                 <Badge variant="muted">{entry.central}</Badge>
               </td>
-              <td class="px-4 py-2 font-mono text-xs">{formatBytes(entry.bytes)}</td>
-              <td class="px-4 py-2 font-mono text-xs text-[var(--ha-secondary-text-color)]">{entry.id}</td>
-              <td class="px-4 py-2 text-right">
+              <td class="px-4 py-2 font-mono text-xs" data-label={t("backup.col.size")}>{formatBytes(entry.bytes)}</td>
+              <td class="px-4 py-2 font-mono text-xs text-[var(--ha-secondary-text-color)]" data-label={t("backup.col.id")}>{entry.id}</td>
+              <td class="reflow-actions px-4 py-2">
                 <div class="flex items-center justify-end gap-2">
                   <a
                     class="text-brand-700 hover:text-brand-800"

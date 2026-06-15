@@ -28,7 +28,7 @@
 {#if pending}
   {@const opts = pending.options}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"
@@ -51,11 +51,12 @@
           {opts.body}
         </p>
       {/if}
-      <div class="flex justify-end gap-2">
+      <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button
           type="button"
           variant="outline"
-          size="sm"
+          size="md"
+          class="w-full sm:w-auto"
           onclick={() => confirmStore.resolve(false)}
         >
           {opts.cancelLabel ?? t("common.cancel")}
@@ -63,7 +64,8 @@
         <Button
           type="button"
           variant={opts.destructive ? "destructive" : "default"}
-          size="sm"
+          size="md"
+          class="w-full sm:w-auto"
           onclick={() => confirmStore.resolve(true)}
         >
           {opts.confirmLabel ?? t("common.ok")}

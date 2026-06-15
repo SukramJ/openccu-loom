@@ -18,13 +18,16 @@
   import Inbox from "./routes/Inbox.svelte";
   import FirmwareList from "./routes/FirmwareList.svelte";
   import UnIgnoreList from "./routes/UnIgnoreList.svelte";
+  // Imported statically (not code-split): DeviceDetail's history tab
+  // already pulls AuditLog into the main chunk, so a dynamic import here
+  // would be ineffective (and warns at build time).
+  import AuditLog from "./routes/AuditLog.svelte";
   // Matter is the heaviest route subtree and is opt-in (the bridge
   // defaults to off), so it is code-split via dynamic import — most
   // installs never load its JS. See the {#await} in the router below.
   const loadMatter = () => import("./routes/matter/Matter.svelte");
-  // Admin / diagnostic routes are infrequently visited and not part of
-  // the core device-control surface, so they are code-split too.
-  const loadAuditLog = () => import("./routes/AuditLog.svelte");
+  // Diagnostics + Logs are infrequently visited and not part of the core
+  // device-control surface, so they are code-split.
   const loadDiagnostics = () => import("./routes/Diagnostics.svelte");
   const loadLogs = () => import("./routes/Logs.svelte");
   import Toaster from "$lib/components/ui/Toaster.svelte";
@@ -187,18 +190,18 @@
       ></button>
     {/if}
 
-    <div class="{sidebarPad} transition-[padding] duration-200">
+    <div class="{sidebarPad} pt-safe pr-safe transition-[padding] duration-200">
       <header
         class="flex h-14 items-center gap-2 border-b px-4"
         style="border-color: var(--ha-divider-color);"
       >
         <button
           type="button"
-          class="-ml-1 rounded-md p-1.5 hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
+          class="-ml-1 flex h-10 w-10 items-center justify-center rounded-md hover:bg-slate-100 md:hidden dark:hover:bg-slate-800"
           aria-label={t("app.menu")}
           onclick={() => (mobileNavOpen = true)}
         >
-          <Icon name="mdi:menu" size={20} />
+          <Icon name="mdi:menu" size={22} />
         </button>
         <div class="ml-auto">
           <ConnectionBadge />
@@ -222,9 +225,7 @@
         {:else if route.kind === "messages"}
           <MessageList {locale} />
         {:else if route.kind === "audit"}
-          {#await loadAuditLog() then { default: AuditLog }}
-            <AuditLog {locale} />
-          {/await}
+          <AuditLog {locale} />
         {:else if route.kind === "diagnostics"}
           {#await loadDiagnostics() then { default: Diagnostics }}
             <Diagnostics {locale} />
@@ -232,7 +233,7 @@
         {:else if route.kind === "logs"}
           {#if authStore.identity?.role === "admin"}
             {#await loadLogs() then { default: Logs }}
-              <Logs {locale} />
+              <Logs />
             {/await}
           {:else}
             <section class="mx-auto max-w-6xl px-6 py-8">
@@ -253,9 +254,9 @@
           <UnIgnoreList />
         {:else}
           <section class="mx-auto max-w-6xl px-6 py-8">
-            <h1 class="text-2xl font-semibold">Nicht gefunden</h1>
+            <h1 class="text-2xl font-semibold">{t("app.not_found")}</h1>
             <p class="mt-2" style="color: var(--ha-secondary-text-color);">
-              Unbekannter Pfad <code>{path}</code>.
+              {t("app.unknown_path")} <code>{path}</code>.
             </p>
           </section>
         {/if}

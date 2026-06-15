@@ -23,6 +23,7 @@
     type ChangeStackState,
   } from "$lib/channel/change-stack";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { subscribe } from "$lib/stores/events.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import type { DataPointChangedEvent } from "$lib/api/types";
@@ -467,54 +468,53 @@
     toastStore.success(t("channel.snapshot_downloaded"));
   }
 
-  function onImportFile(file: File) {
-    file
-      .text()
-      .then((text) => {
-        const parsed = JSON.parse(text) as {
-          openccu_loom_export?: number;
-          channel?: { address?: string };
-          paramset?: string;
-          values?: Record<string, unknown>;
-        };
-        if (!parsed || parsed.openccu_loom_export !== 1 || !parsed.values) {
-          throw new Error(t("channel.import_invalid_file"));
+  async function onImportFile(file: File) {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as {
+        openccu_loom_export?: number;
+        channel?: { address?: string };
+        paramset?: string;
+        values?: Record<string, unknown>;
+      };
+      if (!parsed || parsed.openccu_loom_export !== 1 || !parsed.values) {
+        throw new Error(t("channel.import_invalid_file"));
+      }
+      if (parsed.channel?.address && parsed.channel.address !== channelAddress) {
+        const ok = await confirmStore.ask({
+          title: t("channel.import"),
+          body: t("channel.import_cross_channel_confirm", {
+            snapshot: parsed.channel.address,
+            current: channelAddress,
+          }),
+          confirmLabel: t("channel.import"),
+        });
+        if (!ok) {
+          return;
         }
-        if (parsed.channel?.address && parsed.channel.address !== channelAddress) {
-          if (
-            !confirm(
-              t("channel.import_cross_channel_confirm", {
-                snapshot: parsed.channel.address,
-                current: channelAddress,
-              }),
-            )
-          ) {
-            return;
-          }
-        }
-        if (parsed.paramset && parsed.paramset !== paramset) {
-          toastStore.warn(
-            t("channel.import_paramset_mismatch", {
-              snapshot: parsed.paramset,
-              current: paramset,
-            }),
-          );
-        }
-        // Treat the import as one undo entry. Locked fields are
-        // cleared because an import is the user's own choice, not a
-        // profile constraint.
-        const entry = entryFromPatch(parsed.values, values, "import");
-        stack = pushEntry(stack, entry);
-        values = { ...values, ...parsed.values };
-        lockedParams = new Set();
-        toastStore.success(t("channel.import_staged"));
-      })
-      .catch((err) => {
-        toastStore.error(
-          t("channel.import_failed"),
-          err instanceof Error ? err.message : String(err),
+      }
+      if (parsed.paramset && parsed.paramset !== paramset) {
+        toastStore.warn(
+          t("channel.import_paramset_mismatch", {
+            snapshot: parsed.paramset,
+            current: paramset,
+          }),
         );
-      });
+      }
+      // Treat the import as one undo entry. Locked fields are
+      // cleared because an import is the user's own choice, not a
+      // profile constraint.
+      const entry = entryFromPatch(parsed.values, values, "import");
+      stack = pushEntry(stack, entry);
+      values = { ...values, ...parsed.values };
+      lockedParams = new Set();
+      toastStore.success(t("channel.import_staged"));
+    } catch (err) {
+      toastStore.error(
+        t("channel.import_failed"),
+        err instanceof Error ? err.message : String(err),
+      );
+    }
   }
 
   function pickImport() {
@@ -597,7 +597,7 @@
           {schema.channel.address} · {t("channel.kanal", { n: schema.channel.number })}
         </p>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         {#if banner}
           <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
         {/if}

@@ -7,6 +7,7 @@
   import AddLinkForm from "./AddLinkForm.svelte";
   import LinkConfigPanel from "./LinkConfigPanel.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
 
   type Props = {
@@ -127,12 +128,15 @@
   });
 
   async function onDelete(link: Link) {
-    const ok = confirm(
-      t("links.confirm_delete", {
+    const ok = await confirmStore.ask({
+      title: t("common.delete"),
+      body: t("links.confirm_delete", {
         sender: link.sender_address,
         receiver: link.receiver_address,
       }),
-    );
+      confirmLabel: t("common.delete"),
+      destructive: true,
+    });
     if (!ok) return;
     banner = null;
     try {
@@ -247,7 +251,7 @@
             type="search"
             bind:value={search}
             placeholder={t("common.search")}
-            class="w-56 rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm dark:border-slate-700 dark:bg-slate-900"
+            class="w-full rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm sm:w-56 dark:border-slate-700 dark:bg-slate-900"
           />
           <span class="text-[var(--ha-secondary-text-color)]">{t("common.sort")}</span>
           {#each [
@@ -314,7 +318,7 @@
                 </p>
               {/if}
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex flex-shrink-0 items-center gap-2">
               <Button
                 type="button"
                 variant="outline"

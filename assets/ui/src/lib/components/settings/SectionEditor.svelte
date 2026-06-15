@@ -508,7 +508,7 @@
         </p>
       {/if}
     </div>
-    <div class="flex min-w-0 flex-col items-end gap-1">
+    <div class="flex w-full min-w-0 flex-col items-stretch gap-1 sm:w-auto sm:items-end">
       <SourceBadge source={sources[f.path] ?? (v ? "db" : "default")} />
       <input
         type="password"
@@ -517,7 +517,7 @@
         disabled={fromEnv}
         autocomplete="new-password"
         placeholder={fromEnv ? "•••• (env)" : ""}
-        class="h-8 w-60 rounded border border-slate-300 bg-white px-2 text-sm disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900"
+        class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-base disabled:opacity-50 sm:w-60 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
       />
     </div>
   </div>
@@ -540,7 +540,7 @@
         <p class="mt-0.5 text-xs text-[var(--ha-secondary-text-color)]">{help}</p>
       {/if}
     </div>
-    <div class="flex min-w-0 flex-col items-end gap-1">
+    <div class="flex w-full min-w-0 flex-col items-stretch gap-1 sm:w-auto sm:items-end">
       <SourceBadge source={sources[f.path] ?? "default"} />
       {#if f.go_type === "bool" || f.go_type === "*bool"}
         <input
@@ -558,7 +558,7 @@
             working = setIn(working, rel, raw === "" ? 0 : Number(raw));
           }}
           placeholder={defaultPlaceholder(f)}
-          class="h-8 w-36 rounded border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-base sm:w-36 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
         />
       {:else if f.go_type === "string"}
         <input
@@ -566,7 +566,7 @@
           value={String(v ?? "")}
           oninput={(e) => (working = setIn(working, rel, (e.target as HTMLInputElement).value))}
           placeholder={defaultPlaceholder(f)}
-          class="h-8 w-60 rounded border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-base sm:w-60 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
         />
       {:else if f.go_type === "time.Duration"}
         <input
@@ -574,7 +574,7 @@
           value={formatDuration(Number(v ?? 0))}
           oninput={(e) => onDurationInput(rel, (e.target as HTMLInputElement).value)}
           placeholder={defaultPlaceholder(f) || "e.g. 60s, 5m, 250ms"}
-          class="h-8 w-36 rounded border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+          class="h-9 w-full rounded border border-slate-300 bg-white px-2 text-base sm:w-36 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
           class:border-red-500={!!jsonErrors[rel]}
         />
         {#if jsonErrors[rel]}
@@ -586,7 +586,7 @@
           oninput={(e) => onTextareaInput(rel, (e.target as HTMLTextAreaElement).value, f.go_type)}
           rows={3}
           placeholder={defaultPlaceholder(f)}
-          class="w-60 rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs dark:border-slate-700 dark:bg-slate-900"
+          class="w-full rounded border border-slate-300 bg-white px-2 py-1 font-mono text-xs sm:w-60 dark:border-slate-700 dark:bg-slate-900"
           class:border-red-500={!!jsonErrors[rel]}
         ></textarea>
         {#if jsonErrors[rel]}

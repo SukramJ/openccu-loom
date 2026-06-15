@@ -58,8 +58,8 @@
 
   const secondary = $derived.by(() => {
     if (!observed) return "—";
-    if (isModulating) return `${Math.round(level * 100)} % offen`;
-    return isOn ? "Geöffnet" : "Geschlossen";
+    if (isModulating) return t("cdp.valve.secondary_open", { pct: Math.round(level * 100) });
+    return isOn ? t("cdp.valve.state_open") : t("cdp.valve.state_closed");
   });
 
   async function load() {
@@ -112,22 +112,22 @@
         <ControlButton
           active={!isOn}
           color={tileColor}
-          label="Zu"
+          label={t("cdp.valve.close")}
           onClick={() => invoke("close")}
-        >Zu</ControlButton>
+        >{t("cdp.valve.close")}</ControlButton>
         <ControlButton
           active={isOn}
           color={tileColor}
-          label="Auf"
+          label={t("cdp.valve.open")}
           onClick={() => invoke("open")}
-        >Auf</ControlButton>
+        >{t("cdp.valve.open")}</ControlButton>
         {#if !isModulating}
           <ControlButton
             active={false}
             color={tileColor}
-            label="10 min"
+            label={t("cdp.valve.open_10min")}
             onClick={() => invoke("open", { duration: 600 })}
-          >10 min</ControlButton>
+          >{t("cdp.valve.open_10min")}</ControlButton>
         {/if}
       </ControlButtonGroup>
       {#if isModulating && levelDP}
@@ -135,7 +135,7 @@
           value={level}
           color={tileColor}
           disabled={!levelDP.operations.write}
-          label="Öffnung"
+          label={t("cdp.valve.opening")}
           onChange={(v) => invoke("set_level", { level: v })}
         />
       {/if}

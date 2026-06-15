@@ -247,7 +247,7 @@
 </script>
 
 <aside
-  class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r transition-transform duration-200 md:translate-x-0 {collapsed
+  class="pt-safe pb-safe pl-safe fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r transition-transform duration-200 md:translate-x-0 {collapsed
     ? 'md:w-16'
     : 'md:w-60'} {mobileOpen ? 'translate-x-0' : '-translate-x-full'}"
   style="background-color: var(--ha-secondary-background-color); border-color: var(--ha-divider-color);"
@@ -335,7 +335,7 @@
     <div class="flex flex-wrap items-center gap-1">
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
         title={t("app.switch_language")}
         aria-label={t("app.switch_language")}
         onclick={onLocaleToggle}
@@ -344,7 +344,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
         title={t("app.theme.toggle")}
         aria-label={t("app.theme.toggle")}
         onclick={cycleTheme}
@@ -353,7 +353,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 pointer-coarse:hidden dark:hover:bg-slate-800"
         title={t("shortcut.title")}
         aria-label={t("shortcut.title")}
         aria-keyshortcuts="?"
@@ -363,7 +363,7 @@
       </button>
       <button
         type="button"
-        class="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800"
+        class="inline-flex items-center justify-center rounded-md p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800"
         title={t("nav.logout")}
         aria-label={t("nav.logout")}
         onclick={onLogout}

@@ -182,28 +182,28 @@
       <span>{error}</span>
       <button
         type="button"
-        class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+        class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
         onclick={() => load()}
       >
-        Erneut versuchen
+        {t("cdp.retry")}
       </button>
     </div>
   </div>
 {:else if loading && elapsed > 5000}
   <div class="mb-3 rounded-md border border-[var(--ha-warning-color)] bg-[var(--ha-card-background-color)] p-2 text-xs text-[var(--ha-secondary-text-color)]">
     <div class="flex items-center justify-between gap-3">
-      <span>Lädt {detail.address}/cdps · seit {Math.round(elapsed / 1000)}s…</span>
+      <span>{t("cdp.panel.loading", { addr: detail.address, n: Math.round(elapsed / 1000) })}</span>
       <button
         type="button"
-        class="rounded-md border border-[var(--ha-divider-color)] px-2 py-1 text-xs"
+        class="min-h-10 rounded-md border border-[var(--ha-divider-color)] px-3 py-2 text-sm"
         onclick={() => load()}
       >
-        Erneut versuchen
+        {t("cdp.retry")}
       </button>
     </div>
     {#if elapsed > 8000}
       <p class="mt-2">
-        Server antwortet nicht. Prüfe ob der Daemon läuft (Browser-Network-Tab: <code>/api/v1/devices/{detail.address}/cdps</code>).
+        {@html t("cdp.panel.server_unresponsive", { addr: detail.address })}
       </p>
     {/if}
   </div>
@@ -256,7 +256,7 @@
       class="mb-4 rounded-lg border border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] p-3"
     >
       <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--ha-secondary-text-color)]">
-        Allgemein
+        {t("cdp.panel.general")}
       </h3>
       {#if ungroupedCdps.length > 0 || ungroupedActorOrphans.length > 0}
         {@render tileGrid(ungroupedCdps, ungroupedActorOrphans)}
@@ -286,7 +286,7 @@
         ></span>
         <span>{group.name}</span>
         <span class="ml-auto text-[var(--ha-secondary-text-color)]">
-          Gruppe {group.groupNo}
+          {t("cdp.panel.group", { n: group.groupNo })}
         </span>
       </header>
       <div class="p-3">
@@ -324,6 +324,6 @@
 
 {#if !loading && !error && renderable.length === 0 && orphanChannels.length === 0}
   <p class="text-sm text-[var(--ha-secondary-text-color)]">
-    Keine Bedienelemente für dieses Gerät.
+    {t("cdp.panel.no_controls")}
   </p>
 {/if}

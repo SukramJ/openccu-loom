@@ -7,9 +7,6 @@
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
 
-  type Props = { locale: string };
-  let { locale }: Props = $props();
-
   // ── State ─────────────────────────────────────────────────────────
   let records = $state<LogRecord[]>([]);
   let lastSeq = $state(0);
@@ -264,7 +261,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <!-- Header -->
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
@@ -352,7 +349,7 @@
       type="search"
       placeholder={t("logs.filter_placeholder")}
       bind:value={filterText}
-      class="w-56 rounded border px-2 py-1 text-xs"
+      class="w-full rounded border px-2 py-1 text-xs sm:w-56"
       style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
     />
 
@@ -366,38 +363,38 @@
       {following ? t("logs.live") : t("logs.paused")}
     </span>
 
-    <!-- Download -->
-    <div class="ml-auto flex items-center gap-1">
-      <span class="text-xs" style="color: var(--ha-secondary-text-color);"
-        >{t("logs.download")}:</span
-      >
-      <select
-        bind:value={downloadLimit}
-        class="rounded border px-1 py-1 text-xs"
-        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
-      >
-        {#each [100, 200, 500, 1000, 2000, 5000] as n (n)}
-          <option value={n}>{t("logs.download_last", { count: n })}</option>
-        {/each}
-      </select>
+    <!-- Download + diagnostics: grouped so they wrap together on small screens -->
+    <div class="ml-auto flex flex-wrap items-center gap-2">
+      <div class="flex items-center gap-1">
+        <span class="text-xs" style="color: var(--ha-secondary-text-color);"
+          >{t("logs.download")}:</span
+        >
+        <select
+          bind:value={downloadLimit}
+          class="rounded border px-1 py-1 text-xs"
+          style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+        >
+          {#each [100, 200, 500, 1000, 2000, 5000] as n (n)}
+            <option value={n}>{t("logs.download_last", { count: n })}</option>
+          {/each}
+        </select>
+        <a
+          href={api.logsDownloadUrl({ limit: downloadLimit, minLevel: defaultLevel })}
+          download
+          class="rounded border px-2 py-1 text-xs font-medium transition hover:opacity-80"
+          style="border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+        >
+          ↓
+        </a>
+      </div>
       <a
-        href={api.logsDownloadUrl({ limit: downloadLimit, minLevel: defaultLevel })}
-        download
-        class="rounded border px-2 py-1 text-xs font-medium transition hover:opacity-80"
-        style="border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+        href="#/diagnostics"
+        class="text-xs"
+        style="color: var(--ha-primary-color);"
       >
-        ↓
+        ↪ {t("diagnostics.capture")}…
       </a>
     </div>
-
-    <!-- Shortcut to diagnostics -->
-    <a
-      href="#/diagnostics"
-      class="text-xs"
-      style="color: var(--ha-primary-color);"
-    >
-      ↪ {t("diagnostics.capture")}…
-    </a>
   </div>
 
   <!-- Error state -->
@@ -433,7 +430,7 @@
                 class="flex w-full flex-wrap items-baseline gap-2 text-left"
                 onclick={() => r.attrs && toggleSeq(r.seq)}
               >
-                <span class="w-28 shrink-0 text-[var(--ha-secondary-text-color)]">
+                <span class="w-20 shrink-0 text-[var(--ha-secondary-text-color)] sm:w-28">
                   {formatTime(r.time)}
                 </span>
                 <Badge variant={levelVariant(r.level)}>
@@ -471,7 +468,7 @@
                 class="flex w-full flex-wrap items-baseline gap-2 text-left"
                 onclick={() => toggleGroup(row.key)}
               >
-                <span class="w-28 shrink-0 text-[var(--ha-secondary-text-color)]">
+                <span class="w-20 shrink-0 text-[var(--ha-secondary-text-color)] sm:w-28">
                   {formatTime(row.last.time)}
                 </span>
                 <Badge variant={levelVariant(row.last.level)}>
@@ -528,7 +525,7 @@
         {detailRows.length} / {records.length}
       {:else}
         {aggregatedRows.length}
-        {locale === "de" ? "Gruppen" : "groups"} / {records.length}
+        {t("logs.groups")} / {records.length}
       {/if}
     </p>
   {/if}

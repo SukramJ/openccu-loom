@@ -19,6 +19,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -38,13 +39,13 @@
   );
 
   // CCU DOOR_STATE labels: CLOSED / OPEN / VENTILATION_POSITION /
-  // POSITION_UNKNOWN. Map to German for the secondary line.
-  const STATE_DE: Record<string, string> = {
-    CLOSED: "Geschlossen",
-    OPEN: "Offen",
-    VENTILATION_POSITION: "Lüftet",
-    POSITION_UNKNOWN: "Unbekannt",
-  };
+  // POSITION_UNKNOWN. Map to localised labels for the secondary line.
+  const STATE_LABEL = $derived<Record<string, string>>({
+    CLOSED: t("garage.state.closed"),
+    OPEN: t("garage.state.open"),
+    VENTILATION_POSITION: t("garage.state.ventilating"),
+    POSITION_UNKNOWN: t("garage.state.unknown"),
+  });
   const isOpen = $derived(stateLabel === "OPEN" || stateLabel === "VENTILATION_POSITION");
   const observed = $derived(stateDP?.observed ?? false);
 
@@ -53,19 +54,19 @@
   );
 
   const computedSecondary = $derived(
-    secondary ?? (observed && stateLabel in STATE_DE ? STATE_DE[stateLabel] : "—"),
+    secondary ?? (observed && stateLabel in STATE_LABEL ? STATE_LABEL[stateLabel] : "—"),
   );
 
   // DOOR_COMMAND value_list is ["NOP","OPEN","STOP","CLOSE","PARTIAL_OPEN"].
   // NOP is a sentinel (CCU echoes it after a command completes) — never
   // surfaced as a button. The remaining four map onto open/stop/close/vent.
   const COMMANDS = ["OPEN", "STOP", "CLOSE", "PARTIAL_OPEN"] as const;
-  const COMMAND_LABELS: Record<(typeof COMMANDS)[number], string> = {
-    OPEN: "Öffnen",
-    STOP: "Halt",
-    CLOSE: "Schließen",
-    PARTIAL_OPEN: "Lüften",
-  };
+  const COMMAND_LABELS = $derived<Record<(typeof COMMANDS)[number], string>>({
+    OPEN: t("garage.cmd.open"),
+    STOP: t("garage.cmd.stop"),
+    CLOSE: t("garage.cmd.close"),
+    PARTIAL_OPEN: t("garage.cmd.vent"),
+  });
   const availableCommands = $derived<readonly (typeof COMMANDS)[number][]>(
     cmdDP?.value_list
       ? COMMANDS.filter((c) => (cmdDP.value_list as string[]).includes(c))

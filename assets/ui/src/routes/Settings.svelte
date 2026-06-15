@@ -12,6 +12,7 @@
   import { prefs, setLocale, setExpertMode } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   // Schema loaded once; passed down to all SectionEditors.
   let schemaFields = $state<ConfigSchemaField[]>([]);
@@ -117,7 +118,13 @@
   }
 
   async function requestRestart() {
-    if (!confirm(t("settings.restart_confirm"))) return;
+    const ok = await confirmStore.ask({
+      title: t("settings.restart_daemon"),
+      body: t("settings.restart_confirm"),
+      confirmLabel: t("settings.restart_daemon"),
+      destructive: true,
+    });
+    if (!ok) return;
     restartRequesting = true;
     restartBanner = null;
     try {
@@ -197,16 +204,16 @@
     </Card>
   {/if}
 
-  <div class="flex gap-0 rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-    <!-- Vertical tab sidebar -->
+  <div class="flex flex-col gap-0 rounded-lg border border-slate-200 bg-white shadow-sm md:flex-row dark:border-slate-800 dark:bg-slate-900">
+    <!-- Tab nav: a horizontal scroll strip on phones, vertical sidebar on md+. -->
     <nav
-      class="flex min-w-[10rem] flex-col gap-0.5 border-r border-slate-200 p-2 dark:border-slate-800"
+      class="flex flex-row gap-1 overflow-x-auto border-b border-slate-200 p-2 md:min-w-[10rem] md:flex-col md:gap-0.5 md:border-r md:border-b-0 dark:border-slate-800"
       aria-label={t("settings.title")}
     >
       {#each visibleTabs as tab (tab.id)}
         <button
           type="button"
-          class="rounded-md px-3 py-2 text-left text-sm transition
+          class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition md:w-full
             {activeTab === tab.id
               ? 'bg-brand-50 font-medium text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
               : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
@@ -279,7 +286,7 @@
               <p class="text-sm text-[var(--ha-secondary-text-color)]">
                 {t("settings.mqtt.reload_description")}
               </p>
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
                 <Button onclick={() => void reloadMQTT()} disabled={mqttReloading}>
                   {mqttReloading
                     ? t("settings.mqtt.reload_running")

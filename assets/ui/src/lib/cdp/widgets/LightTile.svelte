@@ -169,7 +169,7 @@
           value={level}
           color={tileColor}
           disabled={!levelDP.operations.write}
-          label="Helligkeit"
+          label={t("cdp.light.brightness")}
           onChange={(v) => invoke("set_brightness", { level: v })}
         />
       {/if}
@@ -178,47 +178,47 @@
           <ControlButton
             active={mode === "color"}
             color={tileColor}
-            label="Farbe"
+            label={t("cdp.light.color")}
             onClick={() => (mode = "color")}
-          >Farbe</ControlButton>
+          >{t("cdp.light.color")}</ControlButton>
           <ControlButton
             active={mode === "temp"}
             color={tileColor}
-            label="Weiß"
+            label={t("cdp.light.white")}
             onClick={() => (mode = "temp")}
-          >Weiß</ControlButton>
+          >{t("cdp.light.white")}</ControlButton>
         </ControlButtonGroup>
       {/if}
       {#if mode === "color" && hasHsvColor && hueDP && satDP}
         <div class="flex flex-col gap-1">
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">Farbton</span>
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("cdp.light.hue")}</span>
           <ControlHueSlider
             value={hue}
             min={0}
             max={360}
             disabled={!hueDP.operations.write}
-            label="Farbton"
+            label={t("cdp.light.hue")}
             onChange={(v) => invoke("set_color", { hue: v, saturation })}
           />
         </div>
         <div class="flex flex-col gap-1">
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">Sättigung</span>
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("cdp.light.saturation")}</span>
           <ControlSaturationSlider
             value={saturation}
             {hue}
             disabled={!satDP.operations.write}
-            label="Sättigung"
+            label={t("cdp.light.saturation")}
             onChange={(v) => invoke("set_color", { hue, saturation: v })}
           />
         </div>
       {/if}
       {#if mode === "temp" && hasColorTemp && ctDP}
         <div class="flex flex-col gap-1">
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">Farbtemperatur</span>
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{t("cdp.light.color_temp")}</span>
           <ControlColorTempSlider
             value={kelvin}
             disabled={!ctDP.operations.write}
-            label="Farbtemperatur"
+            label={t("cdp.light.color_temp")}
             onChange={(v) => invoke("set_color_temperature", { kelvin: v })}
           />
         </div>
@@ -228,7 +228,7 @@
           value={colorDP.value as string | number | undefined}
           options={colorOptions}
           disabled={!colorDP.operations.write}
-          label="Farbe"
+          label={t("cdp.light.color")}
           onChange={(v) => invoke("set_color", { color: v })}
         />
       {/if}
@@ -237,7 +237,7 @@
           value={effectDP.value as string | number | undefined}
           options={effectOptions}
           disabled={!effectDP.operations.write}
-          label="Effekt"
+          label={t("cdp.light.effect")}
           onChange={(v) => invoke("set_effect", { effect: v })}
         />
       {/if}

@@ -7,6 +7,7 @@
 <script lang="ts">
   import ControlButtonGroup from "../controls/ControlButtonGroup.svelte";
   import ControlButton from "../controls/ControlButton.svelte";
+  import { t } from "$lib/i18n";
 
   type Props = {
     color: string;
@@ -23,13 +24,13 @@
 </script>
 
 <ControlButtonGroup>
-  <ControlButton {color} disabled={!canOpen} label="Öffnen" onClick={onOpen}>
+  <ControlButton {color} disabled={!canOpen} label={t("cover.open")} onClick={onOpen}>
     <span aria-hidden="true">▲</span>
   </ControlButton>
-  <ControlButton {color} disabled={!canStop} label="Stopp" onClick={onStop}>
+  <ControlButton {color} disabled={!canStop} label={t("cover.stop")} onClick={onStop}>
     <span aria-hidden="true">■</span>
   </ControlButton>
-  <ControlButton {color} disabled={!canClose} label="Schließen" onClick={onClose}>
+  <ControlButton {color} disabled={!canClose} label={t("cover.close")} onClick={onClose}>
     <span aria-hidden="true">▼</span>
   </ControlButton>
 </ControlButtonGroup>

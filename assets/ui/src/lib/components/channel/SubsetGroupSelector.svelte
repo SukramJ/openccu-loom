@@ -54,7 +54,7 @@
     {/if}
   </p>
   <div class="flex flex-wrap items-center gap-3">
-    <div class="min-w-[16rem] flex-1">
+    <div class="min-w-[12rem] flex-1">
       <Select
         {options}
         value={selected}
@@ -69,7 +69,7 @@
       {t("profile.apply")}
     </Button>
   </div>
-  <p class="mt-1 text-[10px] font-mono text-[var(--ha-secondary-text-color)]">
+  <p class="mt-1 break-words text-[10px] font-mono text-[var(--ha-secondary-text-color)]">
     {group.member_params.join(", ")}
   </p>
 </div>

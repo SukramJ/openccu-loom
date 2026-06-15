@@ -26,6 +26,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -66,24 +67,24 @@
   // HmIP CONTROL_MODE is an INTEGER without VALUE_LIST on the wire
   // (the CCU just ships the raw enum index). The label map mirrors
   // aiohomematic's `_ModeHmIP` (climate.py:76-81).
-  const HMIP_MODES = [
-    { value: 0, label: "Auto" },
-    { value: 1, label: "Manuell" },
-    { value: 2, label: "Abwesend" },
-  ];
+  const HMIP_MODES = $derived([
+    { value: 0, label: t("climate.mode.auto") },
+    { value: 1, label: t("climate.mode.manual") },
+    { value: 2, label: t("climate.mode.away") },
+  ]);
 
   // RF CONTROL_MODE ships a VALUE_LIST when present —
   // ["AUTO-MODE","MANU-MODE","PARTY-MODE","BOOST-MODE"]. Display the
   // current mode as a status string; the user changes the mode via
   // the action buttons below.
-  const RF_MODE_DE: Record<string, string> = {
-    "AUTO-MODE": "Auto",
-    "MANU-MODE": "Manuell",
-    "PARTY-MODE": "Abwesend",
-    "BOOST-MODE": "Boost",
-  };
+  const RF_MODE_LABEL = $derived<Record<string, string>>({
+    "AUTO-MODE": t("climate.mode.auto"),
+    "MANU-MODE": t("climate.mode.manual"),
+    "PARTY-MODE": t("climate.mode.away"),
+    "BOOST-MODE": t("climate.mode.boost"),
+  });
   const currentRfModeLabel = $derived<string>(
-    typeof modeValue === "string" ? (RF_MODE_DE[modeValue] ?? modeValue) : "",
+    typeof modeValue === "string" ? (RF_MODE_LABEL[modeValue] ?? modeValue) : "",
   );
 
   const tileColor = $derived(
@@ -107,7 +108,7 @@
     if (boostDP) {
       out.push({
         key: "BOOST_MODE",
-        label: "Boost",
+        label: t("climate.preset.boost"),
         value: Boolean(boostDP.value),
         writable: boostDP.operations.write,
       });
@@ -115,7 +116,7 @@
     if (frostDP) {
       out.push({
         key: "FROST_PROTECTION",
-        label: "Frostschutz",
+        label: t("climate.preset.frost"),
         value: Boolean(frostDP.value),
         writable: frostDP.operations.write,
       });
@@ -160,33 +161,33 @@
           <ControlButton
             active={modeValue === "AUTO-MODE"}
             color={tileColor}
-            label="Auto"
+            label={t("climate.mode.auto")}
             onClick={() => onSetSlot("AUTO", true)}
-          >Auto</ControlButton>
+          >{t("climate.mode.auto")}</ControlButton>
         {/if}
         {#if boostAction}
           <ControlButton
             active={modeValue === "BOOST-MODE"}
             color={tileColor}
-            label="Boost"
+            label={t("climate.mode.boost")}
             onClick={() => onSetSlot("BOOST", true)}
-          >Boost</ControlButton>
+          >{t("climate.mode.boost")}</ControlButton>
         {/if}
         {#if comfortAction}
           <ControlButton
             active={false}
             color={tileColor}
-            label="Komfort"
+            label={t("climate.preset.comfort")}
             onClick={() => onSetSlot("COMFORT", true)}
-          >Komfort</ControlButton>
+          >{t("climate.preset.comfort")}</ControlButton>
         {/if}
         {#if loweringAction}
           <ControlButton
             active={false}
             color={tileColor}
-            label="Absenken"
+            label={t("climate.preset.lowering")}
             onClick={() => onSetSlot("LOWERING", true)}
-          >Absenken</ControlButton>
+          >{t("climate.preset.lowering")}</ControlButton>
         {/if}
       </ControlButtonGroup>
     {/if}
@@ -202,19 +203,19 @@
     {#if tempDP || humidityDP || valveDP || windowDP || heatCoolDP}
       <div class="grid grid-cols-2 gap-2">
         {#if tempDP}
-          <StatReadoutFeature label="Ist-Temperatur" value={currentTemp} unit="°C" />
+          <StatReadoutFeature label={t("climate.stat.current_temp")} value={currentTemp} unit="°C" />
         {/if}
         {#if humidityDP}
-          <StatReadoutFeature label="Luftfeuchte" value={currentHumidity} unit="%" />
+          <StatReadoutFeature label={t("climate.stat.humidity")} value={currentHumidity} unit="%" />
         {/if}
         {#if valveDP}
-          <StatReadoutFeature label="Ventil" value={valveDP.value} />
+          <StatReadoutFeature label={t("climate.stat.valve")} value={valveDP.value} />
         {/if}
         {#if windowDP}
-          <StatReadoutFeature label="Fenster" value={windowDP.value} />
+          <StatReadoutFeature label={t("climate.stat.window")} value={windowDP.value} />
         {/if}
         {#if heatCoolDP}
-          <StatReadoutFeature label="Heiz./Kühl." value={heatCoolDP.value} />
+          <StatReadoutFeature label={t("climate.stat.heat_cool")} value={heatCoolDP.value} />
         {/if}
       </div>
     {/if}

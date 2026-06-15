@@ -326,7 +326,7 @@
 <div class="space-y-4">
   <div class="flex items-center justify-between gap-2">
     <h3 class="text-sm font-semibold text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
-      CCUs
+      {t("settings.tab.ccus")}
     </h3>
     <Button type="button" variant="outline" size="sm" onclick={openAdd}>
       {t("centrals.add")}
@@ -392,7 +392,7 @@
 <!-- Add / Edit modal -->
 {#if showModal}
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="modal-safe-pad fixed inset-0 z-50 flex items-center justify-center"
     style="background-color: rgb(0 0 0 / 0.45);"
     role="dialog"
     aria-modal="true"
@@ -400,7 +400,7 @@
     onkeydown={(e) => { if (e.key === "Escape") showModal = false; }}
     tabindex="-1"
   >
-    <div class="w-full max-w-2xl rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
+    <div class="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
       <h2 class="mb-4 text-base font-semibold">
         {isEdit ? t("centrals.edit_title") : t("centrals.add_title")}
       </h2>

@@ -307,7 +307,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   {#if error}
     <Card class="mb-4 p-3">
       <p class="text-sm" style="color: var(--ha-error-color);">
@@ -337,8 +337,8 @@
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0 flex-1">
           {#if renaming}
-            <div class="flex items-center gap-2">
-              <div class="w-64">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="w-full sm:w-64">
                 <Input
                   type="text"
                   bind:value={renameValue}
@@ -461,7 +461,7 @@
           </div>
         </div>
         {#if !renaming}
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <Button
               type="button"
               variant="outline"
@@ -508,7 +508,7 @@
       <nav
         class="mb-4 flex gap-0 border-b"
         style="border-color: var(--ha-divider-color);"
-        aria-label="Top tabs"
+        aria-label={t("device.aria.top_tabs")}
       >
         {#each topTabs as tab (tab.key)}
           <button
@@ -534,7 +534,7 @@
         </div>
       {:else if topTab === "configure"}
         <!-- Sub-tab strip: Geräte-Konfiguration / Kanäle / Verknüpfungen / Zeitplan -->
-        <nav class="mb-4 flex flex-wrap gap-2" aria-label="Configure sub-tabs">
+        <nav class="mb-4 flex flex-wrap gap-2" aria-label={t("device.aria.configure_sub_tabs")}>
           {#each configSubs as sub (sub.key)}
             <button
               type="button"
@@ -596,7 +596,7 @@
           <nav
             class="mb-4 flex flex-wrap gap-1 border-b"
             style="border-color: var(--ha-divider-color);"
-            aria-label="Channels"
+            aria-label={t("device.subtab.channels")}
           >
             {#each userChannels as ch (ch.address)}
               {@const isVirt = isVirtualChannel(ch.number)}

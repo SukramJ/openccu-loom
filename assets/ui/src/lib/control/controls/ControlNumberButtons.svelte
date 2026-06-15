@@ -8,6 +8,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import ControlButton from "./ControlButton.svelte";
+  import { t } from "$lib/i18n";
 
   type Props = {
     value: number;
@@ -49,7 +50,7 @@
     <ControlButton
       {color}
       {disabled}
-      label="Verringern"
+      label={t("control.number.decrement")}
       onClick={() => onChange(quantize(value - step))}
     >
       <span aria-hidden="true" class="text-lg leading-none">−</span>
@@ -62,7 +63,7 @@
     <ControlButton
       {color}
       {disabled}
-      label="Erhöhen"
+      label={t("control.number.increment")}
       onClick={() => onChange(quantize(value + step))}
     >
       <span aria-hidden="true" class="text-lg leading-none">+</span>
