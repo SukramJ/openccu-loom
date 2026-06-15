@@ -74,6 +74,7 @@ func TestCoordinatorSetIsStable(t *testing.T) {
 		"doc.go":                 {},
 		"event.go":               {},
 		"hub.go":                 {},
+		"hub_refresh.go":         {},
 		"link.go":                {},
 		"reconciler.go":          {},
 		"recovery_stages.go":     {},
