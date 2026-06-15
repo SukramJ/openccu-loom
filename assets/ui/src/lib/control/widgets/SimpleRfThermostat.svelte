@@ -20,6 +20,7 @@
   import TargetTemperatureFeature from "../features/TargetTemperatureFeature.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -51,7 +52,7 @@
   );
 
   const computedSecondary = $derived(
-    secondary ?? (observed ? `${setpoint.toFixed(1)} °C${isOn ? " · An" : " · Aus"}` : "—"),
+    secondary ?? (observed ? `${setpoint.toFixed(1)} °C${isOn ? ` · ${t("quick.on")}` : ` · ${t("quick.off")}`}` : "—"),
   );
 </script>
 
@@ -70,8 +71,8 @@
         value={isOn}
         color={tileColor}
         disabled={!stateDP.operations.write}
-        labelOff="Aus"
-        labelOn="An"
+        labelOff={t("quick.off")}
+        labelOn={t("quick.on")}
         onChange={(v) => onSetSlot("STATE", v)}
       />
     {/if}

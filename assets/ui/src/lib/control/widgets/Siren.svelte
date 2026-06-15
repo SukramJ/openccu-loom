@@ -17,6 +17,7 @@
   import ControlButton from "../controls/ControlButton.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { resolveTileColor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     resolved: ResolvedChannel;
@@ -49,7 +50,7 @@
   );
 
   const computedSecondary = $derived(
-    secondary ?? (isActive ? "Alarm aktiv" : "Ruhe"),
+    secondary ?? (isActive ? t("control.alarm_active") : t("control.idle")),
   );
 </script>
 
@@ -70,18 +71,18 @@
         <ControlButton
           active={!isActive}
           color={tileColor}
-          label="Aus"
+          label={t("quick.off")}
           onClick={() => onSetSlot(dominantSlot.key, 0)}
         >
-          Aus
+          {t("quick.off")}
         </ControlButton>
         <ControlButton
           active={isActive}
           color={tileColor}
-          label="Test"
+          label={t("control.test")}
           onClick={() => onSetSlot(dominantSlot.key, 1)}
         >
-          Test
+          {t("control.test")}
         </ControlButton>
       </ControlButtonGroup>
     {/if}

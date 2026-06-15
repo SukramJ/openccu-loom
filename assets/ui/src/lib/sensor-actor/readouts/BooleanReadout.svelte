@@ -8,6 +8,7 @@
   import { dpLabel } from "../classify";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
+  import { t } from "$lib/i18n";
 
   type Props = {
     dp: DataPointSummary;
@@ -29,7 +30,7 @@
         return prettify(dp.value_list[idx]);
       }
     }
-    if (typeof v === "boolean") return v ? "An" : "Aus";
+    if (typeof v === "boolean") return v ? t("quick.on") : t("quick.off");
     return String(v);
   }
 
