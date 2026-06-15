@@ -85,6 +85,10 @@ north:
     #                       # endpoints. Default: true. Set to false only for
     #                       # pure API-token deployments without browser sessions.
     # csrf_secure: true     # set Secure flag on CSRF cookie (requires HTTPS)
+    # tracing:
+    #   otlp_endpoint: ""   # OTLP/HTTP collector base URL, e.g. http://collector:4318.
+    #                       # When non-empty, finished spans are batched and POSTed to
+    #                       # <otlp_endpoint>/v1/traces. Empty (default) disables export.
     auth:
       # First admin — seed only. Once any user exists in the
       # SQLite users table, this block is ignored. After

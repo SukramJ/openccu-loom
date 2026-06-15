@@ -20,6 +20,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
+	"github.com/SukramJ/openccu-loom/internal/observability"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
 )
@@ -134,6 +135,19 @@ func wireSharedInfrastructure(
 	deps.SetCurrentConfig(cfg)
 	si.mqttWiring = si.mqttSup.Wiring()
 
+	// OTLP span exporter — wired when north.rest.tracing.otlp_endpoint is
+	// set. Disabled by default; a non-empty endpoint enables best-effort
+	// OTLP/HTTP trace export with no new dependencies (standard library only).
+	var otlpExp *observability.OTLPHTTPExporter
+	if ep := cfg.North.REST.Tracing.OTLPEndpoint; ep != "" {
+		otlpExp = observability.NewOTLPHTTPExporter(observability.OTLPHTTPConfig{ //nolint:contextcheck // exporter owns its background goroutine lifecycle; ctx is not propagated into the HTTP flush path by design
+			Endpoint: ep,
+			Logger:   logger.With(slog.String("component", "otlp")),
+		})
+		observability.SetSpanExporter(otlpExp)
+		logger.Info("otlp.trace.enabled", slog.String("endpoint", ep))
+	}
+
 	teardown = func() { //nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
 		// LIFO order, mirroring the original inline defers: the MQTT
 		// supervisor was deferred last (runs first), then the three
@@ -143,6 +157,12 @@ func wireSharedInfrastructure(
 			defer cancel()
 			si.mqttSup.Shutdown(shutCtx)
 		}()
+		if otlpExp != nil {
+			shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = otlpExp.Shutdown(shutCtx)
+			observability.SetSpanExporter(nil)
+		}
 		_ = si.valuesCacheStore.Close()
 		_ = si.masterValuesStore.Close()
 		_ = si.visibilityStore.Close()
