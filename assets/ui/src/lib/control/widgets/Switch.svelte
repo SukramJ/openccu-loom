@@ -47,6 +47,7 @@
         value={isOn}
         color={tileColor}
         disabled={!writable}
+        {title}
         onChange={(v) => onSetSlot("STATE", v)}
       />
     {/if}

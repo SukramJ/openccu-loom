@@ -162,6 +162,7 @@
       <ToggleFeature
         value={isOn}
         color={tileColor}
+        title={displayTitle}
         onChange={(next) => invoke(next ? "turn_on" : "turn_off")}
       />
       {#if isDimmable && levelDP}

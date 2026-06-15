@@ -99,6 +99,7 @@
         value={isOn}
         color={tileColor}
         disabled={!(stateDP?.operations.write ?? true)}
+        title={displayTitle}
         onChange={(next) => invoke(next ? "turn_on" : "turn_off")}
       />
       {#if cdp.supported_operations?.includes("turn_on_for")}

@@ -277,6 +277,7 @@
           disabled={!stateDP.operations.write}
           labelOff={t("cdp.climate.heat_off")}
           labelOn={t("cdp.climate.heat_on")}
+          title={displayTitle}
           onChange={(v) => setMode(v ? "heat" : "off")}
         />
       {/if}

@@ -14,6 +14,8 @@
     disabled?: boolean;
     labelOff?: string;
     labelOn?: string;
+    /** Device or channel name included in the aria-label for screen readers. */
+    title?: string;
     onChange: (next: boolean) => void;
   };
 
@@ -23,11 +25,22 @@
     disabled = false,
     labelOff,
     labelOn,
+    title,
     onChange,
   }: Props = $props();
 
   const offLabel = $derived(labelOff ?? t("quick.off"));
   const onLabel = $derived(labelOn ?? t("quick.on"));
+
+  // aria-label: "Kitchen lamp — Off" / "Kitchen lamp — On"
+  // When no title is available fall back to label-only so the button
+  // is still announced correctly by screen readers.
+  const offAriaLabel = $derived(
+    title ? `${title} — ${offLabel}` : offLabel,
+  );
+  const onAriaLabel = $derived(
+    title ? `${title} — ${onLabel}` : onLabel,
+  );
 </script>
 
 <ControlButtonGroup>
@@ -35,7 +48,7 @@
     active={!value}
     {color}
     {disabled}
-    label={offLabel}
+    label={offAriaLabel}
     onClick={() => onChange(false)}
   >
     {offLabel}
@@ -44,7 +57,7 @@
     active={value}
     {color}
     {disabled}
-    label={onLabel}
+    label={onAriaLabel}
     onClick={() => onChange(true)}
   >
     {onLabel}
