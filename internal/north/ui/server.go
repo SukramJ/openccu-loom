@@ -60,6 +60,7 @@ func NewRouter(d Deps) *chi.Mux {
 		d.Lang = "en"
 	}
 	tpl := mustParseTemplates(d.Catalogs, d.Lang)
+	loginRL := newLoginRateLimiter(loginRateBurst)
 
 	r := chi.NewRouter()
 	if d.AuthResolve != nil {
@@ -82,7 +83,7 @@ func NewRouter(d Deps) *chi.Mux {
 		pr.Get("/health", handleHealth(d, tpl))
 		pr.Get("/about", handleAbout(d, tpl))
 		pr.Get("/login", handleLogin(d, tpl))
-		pr.Post("/login", handleLoginPost(d, d.Auth))
+		pr.Post("/login", loginRL.guard(handleLoginPost(d, d.Auth)))
 		pr.Post("/logout", handleLogoutPost(d, d.Auth))
 		// Mount the multi-step wizard when SQLite deps are wired; fall back to
 		// the legacy single-step handler otherwise (test fixtures, in-process simulator).

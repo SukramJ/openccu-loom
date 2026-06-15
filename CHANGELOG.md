@@ -16,6 +16,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   being held verbatim; `MemoryUserStore` verifies hashed records with bcrypt
   and still accepts legacy plaintext records through a constant-time fallback.
   Operators may seed a pre-computed bcrypt hash and it is used as-is.
+- **Brute-force speed-bump on the HTMX login.** The pre-auth `POST /login`
+  form is now rate-limited per client IP (burst 5, ~1 request/second refill)
+  on the UI listener — a surface the per-identity REST limiter cannot cover
+  (it keys on a resolved identity and runs on the REST listener). Throttled
+  requests receive a `Retry-After` header and the generic login error, so the
+  limiter neither slows a legitimate operator nor reveals its presence.
 
 ### Added
 
