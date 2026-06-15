@@ -48,10 +48,15 @@ jobs:
           "$RUNNER_TEMP/refstack/bin/python" -m pip install --upgrade pip wheel
           # aiohomematic + pydevccu are published on PyPI; openccu-data ships
           # the metadata extracts as a package from its repo (pyproject.toml).
-          # When a release pins a specific reference version, pin it here too
-          # (aiohomematic==X) so the snapshot is compared against the exact
-          # version the Go port embeds — `main`/latest is the best-effort match.
-          "$RUNNER_TEMP/refstack/bin/python" -m pip install aiohomematic pydevccu
+          # aiohomematic is PINNED to the version the repo's reference data was
+          # generated with (the committed wire snapshots in
+          # tests/contract/wire_snapshots/aiohomematic_reference/ are stamped
+          # 2026.5.7) — the drift baselines in model_snapshot_drift_check.py are
+          # calibrated against that version. Installing PyPI-latest instead made
+          # the generic-data-point bucket drift 760 vs baseline 70 (pure
+          # version skew). Bump this pin in lockstep when the baseline is
+          # recalibrated against a newer aiohomematic release.
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "aiohomematic==2026.5.7" pydevccu
           "$RUNNER_TEMP/refstack/bin/python" -m pip install "git+https://github.com/SukramJ/openccu-data@main"
           # Make the venv's python the `python3` the Makefile targets invoke,
           # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
