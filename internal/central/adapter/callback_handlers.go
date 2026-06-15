@@ -147,7 +147,7 @@ func (h *CallbackHandlers) noteCallbackAndRoutePong(
 		return false
 	}
 	if h.unit != nil && h.unit.Events != nil {
-		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, value)
+		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, ParamValueFromWire(value))
 	}
 	return true
 }
@@ -294,7 +294,7 @@ func (h *CallbackHandlers) Event(ctx context.Context, interfaceID, channelAddres
 	// and no broker topic is ever published; PONG events would also never
 	// reach the ping-pong tracker.
 	if h.unit.Events != nil {
-		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, value)
+		h.unit.Events.HandleRawEventNormalized(ctx, interfaceID, channelAddress, parameter, ParamValueFromWire(value))
 	}
 	return nil
 }

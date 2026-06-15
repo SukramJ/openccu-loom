@@ -13,9 +13,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
-	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // newTestInterfaceClient builds a minimal InterfaceClient for unit tests.
@@ -171,7 +171,7 @@ func TestWirePingPongBusPONGCorrelation(t *testing.T) {
 	deliver := func(callerID string) {
 		c.Events.HandleRawEventNormalized(
 			context.Background(), ifaceID, "CENTRAL", "PONG",
-			xmlrpc.StringValue(callerID),
+			hmtypes.StringValue(callerID),
 		)
 	}
 
