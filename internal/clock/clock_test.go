@@ -4,6 +4,7 @@
 package clock
 
 import (
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -139,8 +140,14 @@ func TestFakeSleepUnblocksOnAdvance(t *testing.T) {
 		c.Sleep(100 * time.Millisecond)
 		close(done)
 	}()
-	// Give the goroutine time to register the timer.
-	time.Sleep(10 * time.Millisecond)
+	// Wait until the sleeper has actually registered its timer before
+	// advancing. A fixed real-time sleep races goroutine startup — on a
+	// loaded runner the Advance can fire before Sleep inserts its timer,
+	// leaving the timer permanently un-fired (observed as a macOS CI flake).
+	// PendingCount becomes 1 the moment Sleep's NewTimer inserts the timer.
+	for c.PendingCount() == 0 {
+		runtime.Gosched()
+	}
 	c.Advance(150 * time.Millisecond)
 	select {
 	case <-done:
