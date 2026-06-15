@@ -230,7 +230,9 @@ func TestBINRPCServerSystemListMethodsReturnsExpectedMethods(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- srv.Serve(ctx) }()
-	t.Cleanup(func() { cancel(); _ = srv.Close(); <-done })
+	// Stop via ctx cancel, wait for Serve to return, THEN Close — calling
+	// Close while the Serve goroutine is still unwinding races its wg.Wait.
+	t.Cleanup(func() { cancel(); <-done; _ = srv.Close() })
 
 	client, err := binrpc.NewClient(binrpc.Config{
 		Addr:      srv.Addr().String(),
@@ -293,9 +295,12 @@ func TestBINRPCServerLifecycleStartStop(t *testing.T) {
 	}
 	_ = conn.Close()
 
-	// Stop the server.
+	// Stop the server via ctx cancel — the production shutdown path (the
+	// daemon serves on callbackCtx and cancels it on teardown; it never
+	// calls Close on a live Serve). Wait for Serve to fully return BEFORE
+	// calling Close: invoking Close() while the Serve goroutine is still
+	// unwinding races its wg.Wait, which the race detector flags.
 	cancel()
-	_ = srv.Close()
 	select {
 	case err := <-done:
 		if err != nil {
@@ -303,6 +308,10 @@ func TestBINRPCServerLifecycleStartStop(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timeout waiting for BIN-RPC server to stop")
+	}
+	// Close is idempotent and safe to call after Serve has returned.
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close after shutdown returned error: %v", err)
 	}
 }
 
