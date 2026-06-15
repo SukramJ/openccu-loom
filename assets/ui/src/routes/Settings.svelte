@@ -8,6 +8,7 @@
   import UsersAdmin from "$lib/components/settings/UsersAdmin.svelte";
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
   import CentralsAdmin from "$lib/components/settings/CentralsAdmin.svelte";
+  import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { prefs, setLocale, setExpertMode } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
@@ -424,6 +425,9 @@
 
       {:else if activeTab === "system"}
         <div class="space-y-3">
+          <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
+            <SystemUpdatePanel />
+          </div>
           <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
             <div class="mb-2 flex items-center justify-between gap-2">
               <div>

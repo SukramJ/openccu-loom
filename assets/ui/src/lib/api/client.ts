@@ -698,6 +698,14 @@ export const api = {
       method: "POST",
     });
   },
+  // --- CCU system (firmware) update ----------------------------
+  getSystemUpdate() {
+    return request<SystemUpdateEntry[]>(`/system/update`);
+  },
+  installSystemUpdate(central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/system/update/install${qs}`, { method: "POST" });
+  },
   // --- Messages: ack / clear -----------------------------------
   ackAlarm(id: string, central: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
@@ -1013,6 +1021,17 @@ export const api = {
       method: "DELETE",
     });
   },
+};
+
+// SystemUpdateEntry mirrors the Go SystemUpdateEntry (GET /system/update):
+// the CCU's firmware-update state, one entry per central.
+export type SystemUpdateEntry = {
+  central?: string;
+  current_firmware?: string;
+  available_firmware?: string;
+  update_available: boolean;
+  in_progress: boolean;
+  observed: boolean;
 };
 
 export type DaemonInfo = {
