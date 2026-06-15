@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0]
 
+### Security
+
+- **In-memory user passwords are bcrypt-hashed.** Users seeded from the YAML
+  `auth.users` map and via the HTMX first-run setup page are now hashed with
+  bcrypt (cost 12, matching the SQLite user store) before storage instead of
+  being held verbatim; `MemoryUserStore` verifies hashed records with bcrypt
+  and still accepts legacy plaintext records through a constant-time fallback.
+  Operators may seed a pre-computed bcrypt hash and it is used as-is.
+
 ### Added
 
 - **CCU system-update panel** (Settings → System). Shows each CCU's firmware

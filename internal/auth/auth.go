@@ -12,6 +12,8 @@ import (
 	"maps"
 	"strings"
 	"sync"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Scheme identifies how a request authenticated.
@@ -187,13 +189,50 @@ func (s *MemoryUserStore) Put(username, password string, role Role) {
 	s.users[strings.ToLower(username)] = userRecord{password: password, role: role}
 }
 
-// AuthenticateBasic checks credentials in constant time.
+// bcryptCost matches the persistent SQLite user store
+// (internal/store/sqlite/users.go) so password-hash strength is uniform
+// across the in-memory and persistent stores.
+const bcryptCost = 12
+
+// looksLikeBcryptHash reports whether s is a bcrypt hash string — a 60-byte
+// value with a $2a$/$2b$/$2y$ prefix. Used to decide whether a stored record
+// is already hashed (verify with bcrypt) or a legacy plaintext value (verify
+// with a constant-time equality check), and to keep HashPassword idempotent.
+func looksLikeBcryptHash(s string) bool {
+	return len(s) == 60 &&
+		(strings.HasPrefix(s, "$2a$") || strings.HasPrefix(s, "$2b$") || strings.HasPrefix(s, "$2y$"))
+}
+
+// HashPassword returns a bcrypt hash of password. A value that is already a
+// bcrypt hash is returned unchanged, so operators may seed pre-hashed
+// credentials. Call this when seeding the in-memory [MemoryUserStore] (the
+// YAML `auth.users` map, the HTMX setup bootstrap) so a plaintext password is
+// never held at rest.
+func HashPassword(password string) (string, error) {
+	if looksLikeBcryptHash(password) {
+		return password, nil
+	}
+	h, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return "", err
+	}
+	return string(h), nil
+}
+
+// AuthenticateBasic checks credentials in constant time. Records stored as a
+// bcrypt hash are verified with bcrypt.CompareHashAndPassword; legacy plaintext
+// records (test fixtures, or a value seeded before [HashPassword] wiring) fall
+// back to a constant-time equality check. Both comparison paths are timing-safe.
 func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, password string) (Identity, error) {
 	rec, ok := s.users[strings.ToLower(username)]
 	if !ok {
 		return Identity{}, ErrUnauthenticated
 	}
-	if subtle.ConstantTimeCompare([]byte(rec.password), []byte(password)) != 1 {
+	if looksLikeBcryptHash(rec.password) {
+		if bcrypt.CompareHashAndPassword([]byte(rec.password), []byte(password)) != nil {
+			return Identity{}, ErrUnauthenticated
+		}
+	} else if subtle.ConstantTimeCompare([]byte(rec.password), []byte(password)) != 1 {
 		return Identity{}, ErrUnauthenticated
 	}
 	return Identity{Subject: username, Scheme: SchemeBasic, Role: rec.role}, nil

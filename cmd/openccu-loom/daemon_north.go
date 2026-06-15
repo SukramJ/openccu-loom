@@ -95,7 +95,13 @@ type authStores struct {
 func buildAuthStores(cfg *config.Config, wsHub *ws.Hub) authStores {
 	users := auth.NewMemoryUserStore()
 	for name, pass := range cfg.North.REST.Auth.Users {
-		users.Put(name, pass, auth.RoleAdmin)
+		hashed, err := auth.HashPassword(pass)
+		if err != nil {
+			slog.Warn("auth: skipping YAML-seeded user with unhashable password",
+				slog.String("user", name), slog.Any("error", err))
+			continue
+		}
+		users.Put(name, hashed, auth.RoleAdmin)
 	}
 	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
 	wsHub.SetTokenStore(tokens)
