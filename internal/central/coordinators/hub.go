@@ -40,34 +40,10 @@ type HubCoordinator struct {
 	mu      sync.RWMutex
 	sysvars map[string]SysvarSnapshot
 
-	// Periodic-refresh hooks wired by the hub-side adapter once the
-	// JSON-RPC session is up. The background scheduler calls the
-	// matching Refresh* method which delegates here.
-	programsRefresh        func(ctx context.Context) error
-	sysvarsRefresh         func(ctx context.Context) error
-	inboxRefresh           func(ctx context.Context) error
-	serviceMessagesRefresh func(ctx context.Context) error
-	alarmMessagesRefresh   func(ctx context.Context) error
-	systemUpdateRefresh    func(ctx context.Context) error
-	installModeRefresh     func(ctx context.Context) error
-	metricsRefresh         func(ctx context.Context) error
-	connectivityRefresh    func(ctx context.Context) error
-
-	// Per-refresh-type mutexes serialise concurrent calls to each
-	// Refresh* method. The scheduler and manual WS-triggered refreshes
-	// may fire simultaneously; without serialisation both calls issue
-	// duplicate JSON-RPCs to the CCU and race on the hub model's state.
-	// One mutex per refresh type mirrors the per-fetch semaphore pattern
-	// used in the Python reference (one asyncio.Semaphore per fetch kind).
-	semaPrograms        sync.Mutex
-	semaSysvars         sync.Mutex
-	semaInbox           sync.Mutex
-	semaServiceMessages sync.Mutex
-	semaAlarmMessages   sync.Mutex
-	semaSystemUpdate    sync.Mutex
-	semaInstallMode     sync.Mutex
-	semaMetrics         sync.Mutex
-	semaConnectivity    sync.Mutex
+	// refresh holds the nine per-type periodic-refresh slots. Each slot
+	// owns its hook and its per-type serialisation semaphore; see
+	// hub_refresh.go for the slot type and hubRefreshSet.
+	refresh hubRefreshSet
 
 	// programExecutor is the south-bound hook for ExecuteProgram.
 	// Nil = no-op. Wired via SetProgramExecutor.
@@ -185,35 +161,15 @@ func (h *HubCoordinator) NotifyProgramExecuted(_ context.Context, programID stri
 // scheduler invokes. Each hook is optional; nil keeps the previously
 // configured handler.
 func (h *HubCoordinator) SetRefreshHooks(hooks RefreshHooks) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if hooks.Programs != nil {
-		h.programsRefresh = hooks.Programs
-	}
-	if hooks.Sysvars != nil {
-		h.sysvarsRefresh = hooks.Sysvars
-	}
-	if hooks.Inbox != nil {
-		h.inboxRefresh = hooks.Inbox
-	}
-	if hooks.ServiceMessages != nil {
-		h.serviceMessagesRefresh = hooks.ServiceMessages
-	}
-	if hooks.AlarmMessages != nil {
-		h.alarmMessagesRefresh = hooks.AlarmMessages
-	}
-	if hooks.SystemUpdate != nil {
-		h.systemUpdateRefresh = hooks.SystemUpdate
-	}
-	if hooks.InstallMode != nil {
-		h.installModeRefresh = hooks.InstallMode
-	}
-	if hooks.Metrics != nil {
-		h.metricsRefresh = hooks.Metrics
-	}
-	if hooks.Connectivity != nil {
-		h.connectivityRefresh = hooks.Connectivity
-	}
+	h.refresh.programs.set(hooks.Programs)
+	h.refresh.sysvars.set(hooks.Sysvars)
+	h.refresh.inbox.set(hooks.Inbox)
+	h.refresh.serviceMessages.set(hooks.ServiceMessages)
+	h.refresh.alarmMessages.set(hooks.AlarmMessages)
+	h.refresh.systemUpdate.set(hooks.SystemUpdate)
+	h.refresh.installMode.set(hooks.InstallMode)
+	h.refresh.metrics.set(hooks.Metrics)
+	h.refresh.connectivity.set(hooks.Connectivity)
 }
 
 // RefreshHooks bundles the optional periodic-refresh callbacks.
@@ -237,82 +193,42 @@ type RefreshHooks struct {
 	Connectivity func(ctx context.Context) error
 }
 
-// runRefresh is the shared body for all Refresh* methods: pull the
-// hook under the read lock, run it through observability.Instrument,
-// and surface the (possibly wrapped) error.
-func (h *HubCoordinator) runRefresh(ctx context.Context, op string, fn func(ctx context.Context) error) error {
-	if fn == nil {
-		return nil
-	}
-	return observability.Instrument(ctx, h.recorder, "hub_coordinator."+op, observability.ScopeCoordinator, fn)
-}
-
 // RefreshPrograms invokes the program-refresh hook (if any) and
 // returns the call result. Used by the background scheduler.
 // Concurrent callers are serialised so only one JSON-RPC fetch runs at
 // a time for this refresh type.
 func (h *HubCoordinator) RefreshPrograms(ctx context.Context) error {
-	h.semaPrograms.Lock()
-	defer h.semaPrograms.Unlock()
-	h.mu.RLock()
-	fn := h.programsRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_programs", fn)
+	return h.refresh.programs.run(ctx, h.recorder, "refresh_programs")
 }
 
 // RefreshSysvars invokes the sysvar-refresh hook. Concurrent callers
 // are serialised per fetch type.
 func (h *HubCoordinator) RefreshSysvars(ctx context.Context) error {
-	h.semaSysvars.Lock()
-	defer h.semaSysvars.Unlock()
-	h.mu.RLock()
-	fn := h.sysvarsRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_sysvars", fn)
+	return h.refresh.sysvars.run(ctx, h.recorder, "refresh_sysvars")
 }
 
 // RefreshInbox invokes the inbox-refresh hook. Concurrent callers are
 // serialised per fetch type.
 func (h *HubCoordinator) RefreshInbox(ctx context.Context) error {
-	h.semaInbox.Lock()
-	defer h.semaInbox.Unlock()
-	h.mu.RLock()
-	fn := h.inboxRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_inbox", fn)
+	return h.refresh.inbox.run(ctx, h.recorder, "refresh_inbox")
 }
 
 // RefreshServiceMessages invokes the service-messages refresh hook.
 // Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshServiceMessages(ctx context.Context) error {
-	h.semaServiceMessages.Lock()
-	defer h.semaServiceMessages.Unlock()
-	h.mu.RLock()
-	fn := h.serviceMessagesRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_service_messages", fn)
+	return h.refresh.serviceMessages.run(ctx, h.recorder, "refresh_service_messages")
 }
 
 // RefreshAlarmMessages invokes the alarm-messages refresh hook.
 // Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshAlarmMessages(ctx context.Context) error {
-	h.semaAlarmMessages.Lock()
-	defer h.semaAlarmMessages.Unlock()
-	h.mu.RLock()
-	fn := h.alarmMessagesRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_alarm_messages", fn)
+	return h.refresh.alarmMessages.run(ctx, h.recorder, "refresh_alarm_messages")
 }
 
 // RefreshSystemUpdate invokes the system-update refresh hook.
 // Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshSystemUpdate(ctx context.Context) error {
-	h.semaSystemUpdate.Lock()
-	defer h.semaSystemUpdate.Unlock()
-	h.mu.RLock()
-	fn := h.systemUpdateRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_system_update", fn)
+	return h.refresh.systemUpdate.run(ctx, h.recorder, "refresh_system_update")
 }
 
 // RefreshInstallMode invokes the install-mode refresh hook (if any). The hook
@@ -320,24 +236,14 @@ func (h *HubCoordinator) RefreshSystemUpdate(ctx context.Context) error {
 // registered interface and call [PublishInstallModeRefreshed] when done.
 // Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshInstallMode(ctx context.Context) error {
-	h.semaInstallMode.Lock()
-	defer h.semaInstallMode.Unlock()
-	h.mu.RLock()
-	fn := h.installModeRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_install_mode", fn)
+	return h.refresh.installMode.run(ctx, h.recorder, "refresh_install_mode")
 }
 
 // RefreshConnectivity invokes the connectivity refresh hook (if any). The hook
 // probes the CCU's interface-reachability state and updates the per-interface
 // connectivity data points. Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshConnectivity(ctx context.Context) error {
-	h.semaConnectivity.Lock()
-	defer h.semaConnectivity.Unlock()
-	h.mu.RLock()
-	fn := h.connectivityRefresh
-	h.mu.RUnlock()
-	return h.runRefresh(ctx, "refresh_connectivity", fn)
+	return h.refresh.connectivity.run(ctx, h.recorder, "refresh_connectivity")
 }
 
 // ServiceMessageSuppressor is the south-bound contract for suppressing or
@@ -855,71 +761,21 @@ func (h *HubCoordinator) InitHub() {
 	// intentionally ignored — a failed first load does not prevent the
 	// coordinator from entering operational state; the background scheduler
 	// will retry on the next tick.
-	_ = h.runRefresh(ctx, "init_programs", h.getPrograms())
-	_ = h.runRefresh(ctx, "init_sysvars", h.getSysvars())
-	_ = h.runRefresh(ctx, "init_inbox", h.getInbox())
-	_ = h.runRefresh(ctx, "init_service_messages", h.getServiceMessages())
-	_ = h.runRefresh(ctx, "init_alarm_messages", h.getAlarmMessages())
-	_ = h.runRefresh(ctx, "init_install_mode", h.getInstallMode())
-	_ = h.runRefresh(ctx, "init_metrics", h.getMetrics())
-	_ = h.runRefresh(ctx, "init_connectivity", h.getConnectivity())
-}
-
-func (h *HubCoordinator) getPrograms() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.programsRefresh
-}
-
-func (h *HubCoordinator) getSysvars() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.sysvarsRefresh
-}
-
-func (h *HubCoordinator) getInbox() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.inboxRefresh
-}
-
-func (h *HubCoordinator) getServiceMessages() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.serviceMessagesRefresh
-}
-
-func (h *HubCoordinator) getAlarmMessages() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.alarmMessagesRefresh
-}
-
-func (h *HubCoordinator) getInstallMode() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.installModeRefresh
-}
-
-func (h *HubCoordinator) getMetrics() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.metricsRefresh
-}
-
-func (h *HubCoordinator) getConnectivity() func(ctx context.Context) error {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	return h.connectivityRefresh
+	_ = h.refresh.programs.run(ctx, h.recorder, "init_programs")
+	_ = h.refresh.sysvars.run(ctx, h.recorder, "init_sysvars")
+	_ = h.refresh.inbox.run(ctx, h.recorder, "init_inbox")
+	_ = h.refresh.serviceMessages.run(ctx, h.recorder, "init_service_messages")
+	_ = h.refresh.alarmMessages.run(ctx, h.recorder, "init_alarm_messages")
+	_ = h.refresh.installMode.run(ctx, h.recorder, "init_install_mode")
+	_ = h.refresh.metrics.run(ctx, h.recorder, "init_metrics")
+	_ = h.refresh.connectivity.run(ctx, h.recorder, "init_connectivity")
 }
 
 // RefreshMetrics invokes the metrics-refresh hook (if any). Used by the
 // background scheduler to keep CCU performance metrics up to date.
 // Concurrent callers are serialised per fetch type.
 func (h *HubCoordinator) RefreshMetrics(ctx context.Context) error {
-	h.semaMetrics.Lock()
-	defer h.semaMetrics.Unlock()
-	return h.runRefresh(ctx, "refresh_metrics", h.getMetrics())
+	return h.refresh.metrics.run(ctx, h.recorder, "refresh_metrics")
 }
 
 // PublishInstallModeRefreshed fires an [hmevent.InstallModeChangedEvent] for
