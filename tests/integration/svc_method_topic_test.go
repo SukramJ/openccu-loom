@@ -187,6 +187,10 @@ type recordingSink struct{}
 func (recordingSink) SetValue(context.Context, string, string, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
 	return errors.New("not used in service-method test")
 }
+
+func (recordingSink) SetMasterValue(context.Context, string, string, string, hmenum.Parameter, any, hmenum.CommandPriority) error {
+	return errors.New("not used in service-method test")
+}
 func (recordingSink) SetSysvar(context.Context, string, string, any) error { return nil }
 func (recordingSink) TriggerProgram(context.Context, string, string) error { return nil }
 

@@ -51,7 +51,7 @@ func (s *MQTTCommandSink) SetValue(
 	return s.writer.SetValue(ctx, centralName, interfaceID, channelAddress, parameter, value, priority)
 }
 
-// SetMasterParam implements [mqtt.CommandSink]. It resolves the channel
+// SetMasterValue implements [mqtt.CommandSink]. It resolves the channel
 // in the central's model registry and writes a single MASTER-paramset
 // parameter via [device.Channel.Set] with [hmenum.ParamsetKeyMaster].
 //
@@ -63,7 +63,7 @@ func (s *MQTTCommandSink) SetValue(
 // from the MQTT topic (e.g. "0001ABCD:1"). Returns a descriptive
 // error when the central, device, channel, or parameter cannot be
 // resolved.
-func (s *MQTTCommandSink) SetMasterParam(
+func (s *MQTTCommandSink) SetMasterValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
 ) error {

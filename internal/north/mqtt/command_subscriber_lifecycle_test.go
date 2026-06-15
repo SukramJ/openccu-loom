@@ -31,7 +31,7 @@ func (s *ctxCapturingSink) SetValue(ctx context.Context, _, _, _ string,
 	return nil
 }
 
-func (s *ctxCapturingSink) SetMasterParam(ctx context.Context, _, _, _ string,
+func (s *ctxCapturingSink) SetMasterValue(ctx context.Context, _, _, _ string,
 	_ hmenum.Parameter, _ any, _ hmenum.CommandPriority,
 ) error {
 	s.mu.Lock()

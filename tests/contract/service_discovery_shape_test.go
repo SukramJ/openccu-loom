@@ -56,7 +56,7 @@ func (f *contractFakeSink) SetValue(_ context.Context, central, iface, chanAddr 
 	return nil
 }
 
-func (f *contractFakeSink) SetMasterParam(_ context.Context, _, _, _ string,
+func (f *contractFakeSink) SetMasterValue(_ context.Context, _, _, _ string,
 	_ hmenum.Parameter, _ any, _ hmenum.CommandPriority,
 ) error {
 	return nil
