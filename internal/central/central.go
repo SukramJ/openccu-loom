@@ -152,29 +152,14 @@ type Unit struct {
 	// DeviceCreatedEvent subscription installed by [WireDevicesCreatedGate].
 	devicesCreatedUnsub func()
 
-	// onStopHooksMu guards onStopHooks.
-	onStopHooksMu sync.Mutex
-	// onStopHooks is an ordered list of teardown functions called after
-	// the state machine transitions to STOPPED. Callers register hooks via
-	// [AddOnStopHook] to perform coordinator- or registry-level cleanup
-	// that cannot be expressed inside the central itself (e.g. removing
-	// the unit from the CentralRegistry, clearing per-central health
-	// tracker entries).
-	onStopHooks []func()
-}
-
-// AddOnStopHook registers fn to be called after the central has transitioned
-// to STOPPED during [Stop]. Hooks run in registration order. Use this to
-// attach registry-level teardown (e.g. CentralRegistry.Unregister, health
-// tracker deregistration) that cannot be expressed inside the central itself.
-// Thread-safe; hooks may be registered at any time before Stop is called.
-func (u *Unit) AddOnStopHook(fn func()) {
-	if fn == nil {
-		return
-	}
-	u.onStopHooksMu.Lock()
-	u.onStopHooks = append(u.onStopHooks, fn)
-	u.onStopHooksMu.Unlock()
+	// stopHooksMu guards stopHooks.
+	stopHooksMu sync.Mutex
+	// stopHooks holds teardown functions grouped by shutdown tier (see
+	// [StopTier]). Stop fires the tiers in order so an adapter can run its
+	// teardown while the coordinators it depends on are still live.
+	// Callers register via [AddStopHook] (tier-aware) or [AddOnStopHook]
+	// (back-compat, External tier).
+	stopHooks [stopTierCount][]func()
 }
 
 // SetAggregator attaches a metrics aggregator to the central. Called
@@ -498,26 +483,34 @@ func (u *Unit) Start(ctx context.Context) error {
 // to STOPPED. Safe to call multiple times — a second call returns
 // immediately when the state machine is already stopped.
 //
-// Teardown order (mirrors central_unit.py stop()):
-//  1. Save files (best-effort)
-//  2. Scheduler
-//  3. ConnectionRecovery coordinator
-//  4. Client coordinator (stops all InterfaceClients)
-//  5. Hub JSON-RPC logout (optional hook)
-//  6. Hub coordinator clear
-//  7. Cache coordinator unsubscribe + ClearOnStop
-//  8. Event coordinator clear
-//  9. Event-bus external-subscription clear
+// Teardown order (mirrors central_unit.py stop()). External hooks fire in
+// three ordered tiers interleaved with the internal steps — see [StopTier]:
+//   - [StopTierNorthbound] fires first (before step 1), everything still live.
+//     1. Save files (best-effort)
+//     2. Scheduler
+//     3. ConnectionRecovery coordinator
+//     4. Client coordinator (stops all InterfaceClients)
+//     5. Hub JSON-RPC logout (optional hook)
+//     6. Hub coordinator clear
+//   - [StopTierCoordinator] fires here (clients down, EventBus still live).
+//     7. Cache coordinator unsubscribe + ClearOnStop
+//     8. Event coordinator clear
+//     9. Event-bus external-subscription clear
 //
 // 10. Event-bus full subscription clear
 // 11. Recorder-persistence teardown
 // 12. Transition to STOPPED
+//   - [StopTierExternal] fires last (post-STOPPED, no coordinator dependency).
 func (u *Unit) Stop() {
 	if u.StateMachine.State() == hmenum.CentralStateStopped {
 		return
 	}
 
 	ctx := context.Background()
+
+	// StopTierNorthbound: external north-bound adapters detach while every
+	// coordinator is still live (final availability=offline, command flush).
+	u.fireStopTier(StopTierNorthbound)
 
 	// 1. Persist cached state. Errors are logged but do not abort teardown.
 	u.services.mu.RLock()
@@ -565,6 +558,10 @@ func (u *Unit) Stop() {
 		u.Hub.Clear()
 	}
 
+	// StopTierCoordinator: south-bound clients are down but the EventBus is
+	// still addressable — for bus-bridging adapters' teardown.
+	u.fireStopTier(StopTierCoordinator)
+
 	// 7. Cache coordinator: unsubscribe bus hooks + clear in-memory caches.
 	if u.Cache != nil {
 		u.Cache.UnsubscribeAll()
@@ -593,13 +590,9 @@ func (u *Unit) Stop() {
 	// 12. Transition.
 	_ = u.StateMachine.TransitionTo(hmenum.CentralStateStopped, hmenum.FailureReasonNone)
 
-	// 13. Post-stop hooks (registry unregister, tracker cleanup, etc.).
-	u.onStopHooksMu.Lock()
-	hooks := u.onStopHooks
-	u.onStopHooksMu.Unlock()
-	for _, fn := range hooks {
-		fn()
-	}
+	// StopTierExternal: pure external cleanup after STOPPED (registry
+	// unregister, tracker cleanup). Back-compat AddOnStopHook lands here.
+	u.fireStopTier(StopTierExternal)
 }
 
 // SetHubLogoutFn wires the hub JSON-RPC logout hook called during [Stop].
