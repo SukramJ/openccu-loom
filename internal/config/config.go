@@ -537,6 +537,14 @@ type NorthMatterCASE struct {
 	FabricID uint64 `yaml:"fabric_id" json:"fabric_id" cfg:"expert"`
 }
 
+// TracingConfig controls span export to an external collector.
+// Export is disabled by default (empty OTLPEndpoint).
+type TracingConfig struct {
+	// OTLPEndpoint, when non-empty, enables OTLP/HTTP trace export to
+	// <endpoint>/v1/traces. Empty (default) disables export.
+	OTLPEndpoint string `yaml:"otlp_endpoint" json:"otlp_endpoint" cfg:"expert"`
+}
+
 // NorthREST configures the REST+WS server.
 type NorthREST struct {
 	Listen string   `yaml:"listen" json:"listen" cfg:"basic"`
@@ -581,6 +589,9 @@ type NorthREST struct {
 	// CSRFSecure sets the Secure flag on the CSRF cookie. Enable when
 	// the daemon is behind an HTTPS/TLS terminator.
 	CSRFSecure bool `yaml:"csrf_secure" json:"csrf_secure" cfg:"basic"`
+	// Tracing configures span export to an external OTLP collector.
+	// Disabled by default (empty OTLPEndpoint).
+	Tracing TracingConfig `yaml:"tracing" json:"tracing" cfg:"expert"`
 }
 
 // NorthRESTWS tunes the WebSocket subsystem.

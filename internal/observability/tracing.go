@@ -16,6 +16,33 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/clock"
 )
 
+// SpanExporter receives finished spans. Implementations MUST NOT block —
+// Span.End is on the hot path; buffer and return immediately.
+type SpanExporter interface {
+	ExportSpan(*Span)
+	Shutdown(ctx context.Context) error
+}
+
+// spanExporter holds the process-wide exporter. nil means export is
+// disabled (the default). Stored as *SpanExporter so atomic.Pointer
+// can distinguish "unset" (nil pointer) from "exporter is nil interface".
+var spanExporter atomic.Pointer[SpanExporter]
+
+// SetSpanExporter installs (or, when nil, removes) the process-wide span
+// exporter. Returns the previous exporter. Default is nil (export disabled).
+// The call is safe for concurrent use; the swap is atomic.
+func SetSpanExporter(e SpanExporter) SpanExporter {
+	var p *SpanExporter
+	if e != nil {
+		p = &e
+	}
+	prev := spanExporter.Swap(p)
+	if prev == nil {
+		return nil
+	}
+	return *prev
+}
+
 // tracingClock is the time source used by [StartSpan], [Span.End], and
 // [Span.AddEvent]. Defaults to the real wall clock; tests inject a
 // [clock.Fake] via [SetClock] for deterministic span timestamps.
@@ -113,6 +140,31 @@ func (s *Span) Attributes() map[string]any {
 	return out
 }
 
+// SpanEvent is a single timestamped event recorded on a span.
+type SpanEvent struct {
+	At         time.Time
+	Name       string
+	Attributes map[string]any
+}
+
+// Events returns a copy of all events recorded on the span. The
+// returned slice and each entry's Attributes map are independent copies
+// so callers may hold them past the span's lifetime.
+func (s *Span) Events() []SpanEvent {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.events) == 0 {
+		return nil
+	}
+	out := make([]SpanEvent, len(s.events))
+	for i, e := range s.events {
+		attrs := make(map[string]any, len(e.Attributes))
+		maps.Copy(attrs, e.Attributes)
+		out[i] = SpanEvent{At: e.At, Name: e.Name, Attributes: attrs}
+	}
+	return out
+}
+
 // AddEvent records a timestamped event within the span.
 func (s *Span) AddEvent(name string, attrs map[string]any) {
 	s.mu.Lock()
@@ -120,12 +172,19 @@ func (s *Span) AddEvent(name string, attrs map[string]any) {
 	s.events = append(s.events, spanEvent{At: now(), Name: name, Attributes: attrs})
 }
 
-// End marks the span as finished.
+// End marks the span as finished. If a SpanExporter is registered via
+// SetSpanExporter, the finished span is handed to it after the lock is
+// released. The exporter call is non-blocking by contract (implementations
+// buffer and return immediately), so End remains safe on the hot path.
 func (s *Span) End() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.EndedAt.IsZero() {
 		s.EndedAt = now()
+	}
+	s.mu.Unlock()
+
+	if p := spanExporter.Load(); p != nil {
+		(*p).ExportSpan(s)
 	}
 }
 
