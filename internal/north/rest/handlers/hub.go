@@ -6,6 +6,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -62,6 +63,40 @@ func resolveHubForMutation(idx HubIndex, centralName string) *hub.Hub {
 		return h
 	}
 	return nil
+}
+
+// resolveHubForRead picks the hub for a read-only request that identifies the
+// resource by name. When `centralName` is supplied it is used directly.
+// When absent and the named resource exists on exactly one central, that
+// central is returned — the caller passes a resourceOnHub predicate that
+// performs the membership test. Only genuine ambiguity (resource on >1
+// central) causes nil to be returned.
+func resolveHubForRead(idx HubIndex, centralName string, resourceOnHub func(*hub.Hub) bool) *hub.Hub {
+	if idx == nil {
+		return nil
+	}
+	if centralName != "" {
+		return idx.HubFor(centralName)
+	}
+	hubs := idx.Hubs()
+	if len(hubs) == 1 {
+		return hubs[0].Hub
+	}
+	if len(hubs) == 0 {
+		return idx.Hub()
+	}
+	// Multiple centrals: find the one hub on which the resource exists.
+	var found *hub.Hub
+	for _, nh := range hubs {
+		if nh.Hub != nil && resourceOnHub(nh.Hub) {
+			if found != nil {
+				// Ambiguous: name appears on more than one central.
+				return nil
+			}
+			found = nh.Hub
+		}
+	}
+	return found
 }
 
 // ProgramSummary is one entry in `GET /api/v1/programs`.
@@ -186,9 +221,38 @@ type InstallModeController interface {
 	SetInstallMode(ctx context.Context, on bool, duration time.Duration) error
 }
 
+// applyHubPagination slices items according to optional `page` / `per_page`
+// query parameters and writes X-Total-Count with the full pre-slice count.
+// When neither parameter is present the full slice is returned unchanged,
+// preserving backward compatibility for callers that do not paginate.
+func applyHubPagination[T any](w http.ResponseWriter, r *http.Request, items []T) []T {
+	q := r.URL.Query()
+	pageStr := q.Get("page")
+	perPageStr := q.Get("per_page")
+	total := len(items)
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
+	if pageStr == "" && perPageStr == "" {
+		return items
+	}
+	page, perPage := parsePagination(r)
+	start := (page - 1) * perPage
+	end := start + perPage
+	if start > total {
+		start = total
+	}
+	if end > total {
+		end = total
+	}
+	return items[start:end]
+}
+
 // --- Program handlers ---
 
 // ListPrograms renders the program catalogue aggregated across all centrals.
+// Optional `page` / `per_page` query parameters paginate the result; when
+// absent every program is returned. The response body is always a flat JSON
+// array so existing clients are unaffected; X-Total-Count carries the full
+// count.
 func ListPrograms(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
@@ -225,6 +289,7 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 		if out == nil {
 			out = []ProgramSummary{}
 		}
+		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
 }
@@ -437,8 +502,12 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 // --- Sysvar handlers ---
 
 // ListSysvars renders every registered sysvar aggregated across all centrals.
+// Optional `page` / `per_page` query parameters paginate the result; when
+// absent every sysvar is returned. The response body is always a flat JSON
+// array so existing clients are unaffected; X-Total-Count carries the full
+// count.
 func ListSysvars(idx HubIndex) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
 			JSON(w, http.StatusOK, []SysvarSummary{})
 			return
@@ -457,12 +526,15 @@ func ListSysvars(idx HubIndex) http.HandlerFunc {
 		if out == nil {
 			out = []SysvarSummary{}
 		}
+		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
 }
 
-// GetSysvar returns a single sysvar, routing to the central named by
-// the `?central=` query parameter.
+// GetSysvar returns a single sysvar. When `?central=` is supplied the request
+// is routed to that central. When absent, the sysvar name is looked up across
+// all centrals; if exactly one central owns it that central is used. Ambiguity
+// (same name on multiple centrals) requires the caller to supply `?central=`.
 func GetSysvar(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
@@ -470,13 +542,16 @@ func GetSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
 			return
 		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
+		name := chi.URLParam(r, "name")
+		h := resolveHubForRead(idx, r.URL.Query().Get("central"), func(hh *hub.Hub) bool {
+			_, ok := hh.Sysvar(name)
+			return ok
+		})
 		if h == nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
 			return
 		}
-		name := chi.URLParam(r, "name")
 		s, ok := h.Sysvar(name)
 		if !ok {
 			problem.Write(w, http.StatusNotFound,
@@ -595,8 +670,12 @@ func ListInbox(idx HubIndex) http.HandlerFunc {
 // --- Alarm / service messages ---
 
 // ListAlarmMessages renders the current alarm set aggregated across all centrals.
+// Optional `page` / `per_page` query parameters paginate the result; when
+// absent every alarm is returned. The response body is always a flat JSON
+// array so existing clients are unaffected; X-Total-Count carries the full
+// count.
 func ListAlarmMessages(idx HubIndex) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
 			JSON(w, http.StatusOK, []AlarmMessageDTO{})
 			return
@@ -628,13 +707,18 @@ func ListAlarmMessages(idx HubIndex) http.HandlerFunc {
 		if out == nil {
 			out = []AlarmMessageDTO{}
 		}
+		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
 }
 
 // ListServiceMessages renders the current service message set aggregated across all centrals.
+// Optional `page` / `per_page` query parameters paginate the result; when
+// absent every message is returned. The response body is always a flat JSON
+// array so existing clients are unaffected; X-Total-Count carries the full
+// count.
 func ListServiceMessages(idx HubIndex) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		if idx == nil {
 			JSON(w, http.StatusOK, []ServiceMessageDTO{})
 			return
@@ -666,6 +750,7 @@ func ListServiceMessages(idx HubIndex) http.HandlerFunc {
 		if out == nil {
 			out = []ServiceMessageDTO{}
 		}
+		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
 	}
 }

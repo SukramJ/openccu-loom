@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"os"
 	"sync"
@@ -72,7 +71,7 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 			return
 		}
 		var cfg diagnostics.StartupCaptureConfig
-		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		if err := DecodeJSON(r, &cfg); err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 			return

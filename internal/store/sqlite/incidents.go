@@ -208,42 +208,29 @@ func (s *IncidentStore) PurgeOld(ctx context.Context, centralName string, maxAge
 }
 
 // EnforcePerTypeCap removes the oldest incidents that exceed maxPerType
-// for each incident type for central.
+// for each incident type for central. A single DELETE with a window function
+// replaces the previous N+1 query pattern.
 func (s *IncidentStore) EnforcePerTypeCap(ctx context.Context, centralName string, maxPerType int) error {
 	if maxPerType <= 0 {
 		maxPerType = DefaultMaxPerType
 	}
-	// Find all distinct types for central with more than maxPerType rows.
-	const typesQ = `
-SELECT DISTINCT type FROM incidents WHERE central_name = ?`
-	rows, err := s.db.QueryContext(ctx, typesQ, centralName)
-	if err != nil {
-		return fmt.Errorf("sqlite: enforce per-type cap (types): %w", err)
-	}
-	var types []string
-	for rows.Next() {
-		var t string
-		if err := rows.Scan(&t); err != nil {
-			_ = rows.Close()
-			return fmt.Errorf("sqlite: scan type: %w", err)
-		}
-		types = append(types, t)
-	}
-	_ = rows.Close()
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("sqlite: iterate types: %w", err)
-	}
-
-	for _, t := range types {
-		// Delete oldest rows beyond the cap.
-		const delQ = `
-DELETE FROM incidents WHERE central_name = ? AND type = ? AND id NOT IN (
-    SELECT id FROM incidents WHERE central_name = ? AND type = ?
-    ORDER BY last_seen DESC LIMIT ?
-)`
-		if _, err := s.db.ExecContext(ctx, delQ, centralName, t, centralName, t, maxPerType); err != nil {
-			return fmt.Errorf("sqlite: enforce per-type cap (delete): %w", err)
-		}
+	// ROW_NUMBER() OVER (PARTITION BY type ORDER BY last_seen DESC) assigns
+	// rank 1 to the most-recent row per type; rows ranked > maxPerType are
+	// deleted in one statement regardless of how many distinct types exist.
+	const q = `
+DELETE FROM incidents
+WHERE central_name = ?
+  AND id IN (
+      SELECT id FROM (
+          SELECT id,
+                 ROW_NUMBER() OVER (PARTITION BY type ORDER BY last_seen DESC) AS rn
+          FROM incidents
+          WHERE central_name = ?
+      )
+      WHERE rn > ?
+  )`
+	if _, err := s.db.ExecContext(ctx, q, centralName, centralName, maxPerType); err != nil {
+		return fmt.Errorf("sqlite: enforce per-type cap: %w", err)
 	}
 	return nil
 }

@@ -385,9 +385,16 @@ paths:
   /programs:
     get:
       tags: [hub]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of programs before pagination.
           content:
             application/json:
               schema:
@@ -423,9 +430,16 @@ paths:
   /sysvars:
     get:
       tags: [hub]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of sysvars before pagination.
           content:
             application/json:
               schema:
@@ -548,9 +562,16 @@ paths:
   /alarm-messages:
     get:
       tags: [messages]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of alarm messages before pagination.
           content:
             application/json:
               schema:
@@ -560,9 +581,16 @@ paths:
   /service-messages:
     get:
       tags: [messages]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of service messages before pagination.
           content:
             application/json:
               schema:
