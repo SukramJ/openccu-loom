@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"time"
@@ -97,7 +96,7 @@ func PutLogLevel(svc LogLevelsService, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		var req LogLevelPutRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 			return

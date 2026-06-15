@@ -8,6 +8,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0]
 
+### Changed
+
+- **Optional pagination on hub list endpoints.** `GET /programs`,
+  `GET /sysvars`, `GET /alarm-messages`, and `GET /service-messages` now
+  accept optional `page` / `per_page` query parameters (same semantics as
+  `GET /devices`). The response body remains a flat JSON array in all cases
+  so existing clients are unaffected; a new `X-Total-Count` response header
+  carries the unfiltered item count for cursor-less pagination. The OpenAPI
+  spec is updated with the optional parameters and the header.
+- **Stricter JSON decoding for four diagnostic/visibility endpoints.**
+  `POST /diagnostics/capture`, `PUT /system/startup-capture`,
+  `PUT /diagnostics/log-levels/{path}`, and `PUT /visibility/unignore` now
+  reject unknown fields in their request bodies (previously silently ignored).
+  The shared `DecodeJSON` helper (which already enabled `DisallowUnknownFields`)
+  is used at all four sites.
+
+### Fixed
+
+- **`GET /sysvars/{name}` no longer requires `?central=` on single-CCU
+  deployments.** The handler now uses name-based lookup: when `?central=` is
+  absent it scans all centrals and routes to the unique owner; only genuine
+  ambiguity (same name on >1 central) requires the explicit parameter.
+
 ### Security
 
 - **In-memory user passwords are bcrypt-hashed.** Users seeded from the YAML

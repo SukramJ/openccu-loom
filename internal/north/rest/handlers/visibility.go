@@ -5,7 +5,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -141,7 +140,7 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 			return
 		}
 		var req UnIgnoreUpdateRequestDTO
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil {
 			problem.Write(w, http.StatusBadRequest, problem.New(problem.TypeBadRequest, r, "Bad request", "decode request body: "+err.Error()))
 			return
 		}

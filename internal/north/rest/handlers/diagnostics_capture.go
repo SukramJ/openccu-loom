@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -44,7 +43,7 @@ func StartCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 		}
 		var req CaptureStartRequest
 		if r.ContentLength > 0 {
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err := DecodeJSON(r, &req); err != nil {
 				problem.Write(w, http.StatusBadRequest,
 					problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 				return

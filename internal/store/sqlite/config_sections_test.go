@@ -192,3 +192,68 @@ func TestConfigSectionStoreVersionAccumulates(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigSectionStorePutStampsSchemaVersion verifies that Put
+// stamps the current ConfigSectionSchemaVersion on each write and
+// that Get reads it back correctly.
+func TestConfigSectionStorePutStampsSchemaVersion(t *testing.T) {
+	t.Parallel()
+	s := newConfigSectionStore(t)
+	ctx := context.Background()
+
+	row, err := s.Put(ctx, "north.mqtt", []byte(`{"broker":"test"}`), "admin")
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if row.SchemaVersion != ConfigSectionSchemaVersion {
+		t.Errorf("Put SchemaVersion=%d want %d", row.SchemaVersion, ConfigSectionSchemaVersion)
+	}
+
+	got, err := s.Get(ctx, "north.mqtt")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SchemaVersion != ConfigSectionSchemaVersion {
+		t.Errorf("Get SchemaVersion=%d want %d", got.SchemaVersion, ConfigSectionSchemaVersion)
+	}
+}
+
+// TestConfigSectionStoreWipeOutdatedSections verifies that WipeOutdatedSections
+// removes rows whose schema_version does not match the current version while
+// leaving current-version rows intact.
+func TestConfigSectionStoreWipeOutdatedSections(t *testing.T) {
+	t.Parallel()
+	db := openTestDB(t, "sections_wipe.db")
+	s := NewConfigSectionStore(db)
+	ctx := context.Background()
+
+	// Insert a current-schema section via Put (stamps ConfigSectionSchemaVersion).
+	if _, err := s.Put(ctx, "north.mqtt", []byte(`{"broker":"good"}`), "admin"); err != nil {
+		t.Fatalf("Put current: %v", err)
+	}
+
+	// Back-door: insert a stale row with schema_version=0 directly.
+	_, err := db.ExecContext(ctx,
+		`INSERT INTO config_sections (section, value_json, version, schema_version, updated_at, updated_by)
+		 VALUES ('stale.section', '{}', 1, 0, CURRENT_TIMESTAMP, 'test')`)
+	if err != nil {
+		t.Fatalf("insert stale: %v", err)
+	}
+
+	n, err := s.WipeOutdatedSections(ctx)
+	if err != nil {
+		t.Fatalf("WipeOutdatedSections: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("wiped %d rows want 1", n)
+	}
+
+	// The current-schema row must still exist.
+	if _, err := s.Get(ctx, "north.mqtt"); err != nil {
+		t.Errorf("current row removed unexpectedly: %v", err)
+	}
+	// The stale row must be gone.
+	if _, err := s.Get(ctx, "stale.section"); !errors.Is(err, ErrSectionNotFound) {
+		t.Errorf("stale row still present: %v", err)
+	}
+}

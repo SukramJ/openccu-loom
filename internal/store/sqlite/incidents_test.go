@@ -5,6 +5,7 @@ package sqlite
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -881,5 +882,60 @@ func TestIncidentJournalExcerptInRecent(t *testing.T) {
 	}
 	if recent[0].JournalExcerpt != excerpt {
 		t.Errorf("JournalExcerpt=%q want %q", recent[0].JournalExcerpt, excerpt)
+	}
+}
+
+// TestEnforcePerTypeCap_TwoTypesInOneCall verifies that EnforcePerTypeCap
+// correctly limits each type independently when multiple types exist in a
+// single call — the CTE-based rewrite replaces the old N+1 loop.
+func TestEnforcePerTypeCap_TwoTypesInOneCall(t *testing.T) {
+	t.Parallel()
+	s := NewIncidentStore(openTestDB(t, "inc_cap_two_types.db"))
+	ctx := context.Background()
+
+	const maxCap = 2
+	typesUnderTest := []hmenum.IncidentType{
+		hmenum.IncidentTypeConnectionLost,
+		hmenum.IncidentTypeAuthFailure,
+	}
+
+	// Insert maxCap+1 rows for each type so each type has one row to trim.
+	for _, incType := range typesUnderTest {
+		for i := range maxCap + 1 {
+			inc := Incident{
+				CentralName: "ccu1",
+				Type:        incType,
+				Severity:    hmenum.IncidentSeverityWarning,
+				Message:     fmt.Sprintf("msg-%d", i),
+			}
+			if _, err := s.Record(ctx, inc); err != nil {
+				t.Fatalf("Record type=%s i=%d: %v", incType, i, err)
+			}
+		}
+	}
+
+	if err := s.EnforcePerTypeCap(ctx, "ccu1", maxCap); err != nil {
+		t.Fatalf("EnforcePerTypeCap: %v", err)
+	}
+
+	// Each type must have exactly maxCap rows after enforcement.
+	for _, incType := range typesUnderTest {
+		rows, err := s.GetIncidentsByType(ctx, "ccu1", incType)
+		if err != nil {
+			t.Fatalf("GetIncidentsByType %s: %v", incType, err)
+		}
+		if len(rows) != maxCap {
+			t.Errorf("type=%s: got %d rows want %d", incType, len(rows), maxCap)
+		}
+	}
+
+	// Total count must be maxCap * len(types).
+	total, err := s.IncidentCount(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("IncidentCount: %v", err)
+	}
+	want := maxCap * len(typesUnderTest)
+	if total != want {
+		t.Errorf("total=%d want %d", total, want)
 	}
 }

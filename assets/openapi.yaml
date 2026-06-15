@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.9.0
+  version: 1.10.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -385,9 +385,16 @@ paths:
   /programs:
     get:
       tags: [hub]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of programs before pagination.
           content:
             application/json:
               schema:
@@ -423,9 +430,16 @@ paths:
   /sysvars:
     get:
       tags: [hub]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of sysvars before pagination.
           content:
             application/json:
               schema:
@@ -548,9 +562,16 @@ paths:
   /alarm-messages:
     get:
       tags: [messages]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of alarm messages before pagination.
           content:
             application/json:
               schema:
@@ -560,9 +581,16 @@ paths:
   /service-messages:
     get:
       tags: [messages]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: OK
+          headers:
+            X-Total-Count:
+              schema: { type: integer }
+              description: Total number of service messages before pagination.
           content:
             application/json:
               schema:

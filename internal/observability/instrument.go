@@ -90,9 +90,10 @@ func (r LogRecorder) IncCounter(name string, scope Scope, delta uint64) {
 //
 // Panics propagate after recording the latency tagged as failure.
 //
-// This is the Go-Pendant des.
-// Anwendungsstellen werden in P0-1 nachgezogen (siehe
-// ).
+// Call sites are responsible for choosing a meaningful name and scope so that
+// the emitted metrics are grouped correctly in dashboards. Convention:
+// name follows "subsystem.operation" (e.g. "client.set_value"); scope
+// selects the observability bucket (ScopeBackend, ScopeService, etc.).
 func Instrument(ctx context.Context, rec Recorder, name string, scope Scope, fn func(ctx context.Context) error) (err error) {
 	if rec == nil {
 		rec = NoopRecorder{}

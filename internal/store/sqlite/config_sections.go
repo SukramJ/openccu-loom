@@ -11,6 +11,15 @@ import (
 	"time"
 )
 
+// ConfigSectionSchemaVersion identifies the on-disk format of stored config
+// sections. Bump this whenever the serialisation shape changes so that rows
+// written by an older daemon are treated as stale and dropped on boot (the
+// operator re-saves via the SPA). Version history:
+//
+//	0: pre-versioning (rows written before migration 020 default to 0)
+//	1: initial versioned schema
+const ConfigSectionSchemaVersion = 1
+
 // ConfigSectionStore persists typed JSON snapshots of runtime
 // config sections (north.mqtt, north.matter, callback, etc.). Each
 // section is one row; the SPA's section-aware editor maps 1:1.
@@ -44,11 +53,12 @@ func (s *ConfigSectionStore) applyTransform(section string, raw []byte, seal boo
 
 // SectionRow is one section snapshot.
 type SectionRow struct {
-	Section   string
-	ValueJSON []byte
-	Version   int
-	UpdatedAt time.Time
-	UpdatedBy string
+	Section       string
+	ValueJSON     []byte
+	Version       int
+	SchemaVersion int
+	UpdatedAt     time.Time
+	UpdatedBy     string
 }
 
 // ErrSectionNotFound is returned for missing sections.
@@ -60,9 +70,9 @@ func (s *ConfigSectionStore) Get(ctx context.Context, section string) (SectionRo
 	var r SectionRow
 	var raw string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT section, value_json, version, updated_at, updated_by
+		`SELECT section, value_json, version, schema_version, updated_at, updated_by
 		 FROM config_sections WHERE section = ?`, section).
-		Scan(&r.Section, &raw, &r.Version, &r.UpdatedAt, &r.UpdatedBy)
+		Scan(&r.Section, &raw, &r.Version, &r.SchemaVersion, &r.UpdatedAt, &r.UpdatedBy)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SectionRow{}, ErrSectionNotFound
 	}
@@ -107,12 +117,12 @@ func (s *ConfigSectionStore) Put(ctx context.Context, section string, valueJSON 
 	}
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO config_sections (section, value_json, version, updated_at, updated_by)
-		 VALUES (?, ?, ?, ?, ?)
+		`INSERT INTO config_sections (section, value_json, version, schema_version, updated_at, updated_by)
+		 VALUES (?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(section) DO UPDATE SET value_json=excluded.value_json,
-		     version=excluded.version, updated_at=excluded.updated_at,
-		     updated_by=excluded.updated_by`,
-		section, string(stored), version, now, updatedBy)
+		     version=excluded.version, schema_version=excluded.schema_version,
+		     updated_at=excluded.updated_at, updated_by=excluded.updated_by`,
+		section, string(stored), version, ConfigSectionSchemaVersion, now, updatedBy)
 	if err != nil {
 		return SectionRow{}, fmt.Errorf("sqlite: config_sections put: exec: %w", err)
 	}
@@ -120,11 +130,12 @@ func (s *ConfigSectionStore) Put(ctx context.Context, section string, valueJSON 
 		return SectionRow{}, fmt.Errorf("sqlite: config_sections put: commit: %w", err)
 	}
 	return SectionRow{
-		Section:   section,
-		ValueJSON: valueJSON,
-		Version:   version,
-		UpdatedAt: now,
-		UpdatedBy: updatedBy,
+		Section:       section,
+		ValueJSON:     valueJSON,
+		Version:       version,
+		SchemaVersion: ConfigSectionSchemaVersion,
+		UpdatedAt:     now,
+		UpdatedBy:     updatedBy,
 	}, nil
 }
 
@@ -144,7 +155,7 @@ func (s *ConfigSectionStore) Delete(ctx context.Context, section string) error {
 // List returns every section row sorted by name.
 func (s *ConfigSectionStore) List(ctx context.Context) ([]SectionRow, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT section, value_json, version, updated_at, updated_by
+		`SELECT section, value_json, version, schema_version, updated_at, updated_by
 		 FROM config_sections ORDER BY section`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: config_sections list: %w", err)
@@ -154,7 +165,7 @@ func (s *ConfigSectionStore) List(ctx context.Context) ([]SectionRow, error) {
 	for rows.Next() {
 		var r SectionRow
 		var raw string
-		if err := rows.Scan(&r.Section, &raw, &r.Version, &r.UpdatedAt, &r.UpdatedBy); err != nil {
+		if err := rows.Scan(&r.Section, &raw, &r.Version, &r.SchemaVersion, &r.UpdatedAt, &r.UpdatedBy); err != nil {
 			return nil, fmt.Errorf("sqlite: config_sections list scan: %w", err)
 		}
 		opened, terr := s.applyTransform(r.Section, []byte(raw), false)
@@ -165,4 +176,19 @@ func (s *ConfigSectionStore) List(ctx context.Context) ([]SectionRow, error) {
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// WipeOutdatedSections removes every config_sections row whose
+// schema_version differs from [ConfigSectionSchemaVersion]. Called on
+// boot before the config-load path so stale rows are never used. The
+// operator re-saves affected sections via the SPA on next start; until
+// then the daemon falls back to compiled-in defaults.
+func (s *ConfigSectionStore) WipeOutdatedSections(ctx context.Context) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM config_sections WHERE schema_version != ?`,
+		ConfigSectionSchemaVersion)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: config_sections wipe outdated: %w", err)
+	}
+	return res.RowsAffected()
 }

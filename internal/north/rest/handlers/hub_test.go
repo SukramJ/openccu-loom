@@ -1291,6 +1291,92 @@ func TestListPrograms_WithObservedActive(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// resolveHubForRead / GetSysvar — single-central-unambiguous routing
+// ---------------------------------------------------------------------------
+
+// multiHubIndex is a test double that holds exactly two centrals.
+type multiHubIndex struct {
+	hubs []NamedHub
+}
+
+func (m *multiHubIndex) Hub() *hub.Hub {
+	if len(m.hubs) > 0 {
+		return m.hubs[0].Hub
+	}
+	return nil
+}
+
+func (m *multiHubIndex) Hubs() []NamedHub { return m.hubs }
+
+func (m *multiHubIndex) HubFor(centralName string) *hub.Hub {
+	for _, nh := range m.hubs {
+		if nh.Central == centralName {
+			return nh.Hub
+		}
+	}
+	return nil
+}
+
+// TestGetSysvar_SingleCentralUnambiguous verifies that GetSysvar resolves
+// the correct hub without ?central= when exactly one central owns the sysvar.
+func TestGetSysvar_SingleCentralUnambiguous(t *testing.T) {
+	t.Parallel()
+
+	h1 := hub.NewHub("ccu-alpha")
+	sv := hub.NewSysvar("ccu-alpha", "TempOut", "", hmenum.HubValueTypeFloat, nil)
+	h1.PutSysvar(sv)
+
+	h2 := hub.NewHub("ccu-beta")
+	// ccu-beta does NOT have TempOut.
+
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars/TempOut", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"name": "TempOut"}))
+	w := httptest.NewRecorder()
+	GetSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 when sysvar exists on exactly one central, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body SysvarSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Name != "TempOut" {
+		t.Errorf("Name=%q want TempOut", body.Name)
+	}
+}
+
+// TestGetSysvar_AmbiguousRequiresCentral verifies that GetSysvar returns 400
+// when the same sysvar name exists on two centrals and no ?central= is given.
+func TestGetSysvar_AmbiguousRequiresCentral(t *testing.T) {
+	t.Parallel()
+
+	h1 := hub.NewHub("ccu-alpha")
+	h1.PutSysvar(hub.NewSysvar("ccu-alpha", "Alarm", "", hmenum.HubValueTypeLogic, nil))
+	h2 := hub.NewHub("ccu-beta")
+	h2.PutSysvar(hub.NewSysvar("ccu-beta", "Alarm", "", hmenum.HubValueTypeLogic, nil))
+
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: h1},
+		{Central: "ccu-beta", Hub: h2},
+	}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/sysvars/Alarm", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"name": "Alarm"}))
+	w := httptest.NewRecorder()
+	GetSysvar(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for ambiguous sysvar, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// ---------------------------------------------------------------------------
 // PutSysvar — unsupported value type (422)
 // ---------------------------------------------------------------------------
 
