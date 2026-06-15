@@ -8,6 +8,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0]
 
+### Added
+
+- **CCU system-update panel** (Settings → System). Shows each CCU's firmware
+  state (installed → available) and, for admins, an **Install** button that
+  triggers the CCU's own firmware update (`POST /system/update/install`) with
+  a reboot confirmation and live progress polling. The REST/WS API already
+  supported this; it is now reachable from the web UI.
+
 ### Changed
 
 - **Responsive / iPhone pass across the config UI (Svelte SPA).** Every

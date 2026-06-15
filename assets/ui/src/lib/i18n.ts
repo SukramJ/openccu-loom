@@ -1398,6 +1398,18 @@ const EN: Catalog = {
   "schedule.aria.weekdays": "Weekdays",
   "schedule.duration_placeholder": "e.g. 10s, 5min",
   "schedule.ramp_placeholder": "e.g. 500ms, 2s",
+  "ccu_update.admin_only": "Only administrators can install CCU updates.",
+  "ccu_update.available": "Update available",
+  "ccu_update.confirm_body": "{central} will download and install its firmware update and reboot — the connection drops briefly. Continue?",
+  "ccu_update.confirm_title": "Install CCU update?",
+  "ccu_update.empty": "No CCU update info available yet.",
+  "ccu_update.in_progress": "Installing…",
+  "ccu_update.install": "Install update",
+  "ccu_update.installing": "Triggering…",
+  "ccu_update.not_observed": "Update status not yet fetched.",
+  "ccu_update.subtitle": "Trigger the CCU's own firmware update. The CCU reboots during the install.",
+  "ccu_update.title": "CCU system update",
+  "ccu_update.triggered": "CCU update triggered for {central} — it will reboot.",
 };
 
 const DE: Catalog = {
@@ -2778,6 +2790,18 @@ const DE: Catalog = {
   "schedule.aria.weekdays": "Wochentage",
   "schedule.duration_placeholder": "z.B. 10s, 5min",
   "schedule.ramp_placeholder": "z.B. 500ms, 2s",
+  "ccu_update.admin_only": "Nur Administratoren können CCU-Updates installieren.",
+  "ccu_update.available": "Update verfügbar",
+  "ccu_update.confirm_body": "{central} lädt und installiert sein Firmware-Update und startet neu — die Verbindung bricht kurz ab. Fortfahren?",
+  "ccu_update.confirm_title": "CCU-Update installieren?",
+  "ccu_update.empty": "Noch keine CCU-Update-Informationen verfügbar.",
+  "ccu_update.in_progress": "Wird installiert…",
+  "ccu_update.install": "Update installieren",
+  "ccu_update.installing": "Wird gestartet…",
+  "ccu_update.not_observed": "Update-Status noch nicht abgerufen.",
+  "ccu_update.subtitle": "Stößt das Firmware-Update der CCU an. Die CCU startet während der Installation neu.",
+  "ccu_update.title": "CCU-System-Update",
+  "ccu_update.triggered": "CCU-Update für {central} angestoßen — sie startet neu.",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };
