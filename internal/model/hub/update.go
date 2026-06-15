@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
 )
@@ -39,6 +40,11 @@ type Update struct {
 	versionBeforeUpdate string
 	hasVersionBefore    bool
 	callbacks           []func(UpdateInfo)
+	// installMonitor, when wired via [SetInstallMonitor], is launched by
+	// [Install] after a successful trigger to watch the firmware version and
+	// clear inProgress once the update completes. Mirrors install()
+	// spawning _monitor_update_progress (model/hub/update.py:127,175).
+	installMonitor func()
 }
 
 // NewUpdate returns an empty tracker.
@@ -58,19 +64,29 @@ func (u *Update) InProgress() bool {
 	return u.inProgress
 }
 
-// Install triggers the firmware update via the wired [FirmwareUpdater].
-// Sets the in-progress flag immediately; the flag is NOT cleared
-// automatically by this method — callers must call [SetInProgress](false)
-// once the CCU update is done (e.g. from a progress-monitor goroutine).
+// Install triggers the firmware update via the wired [FirmwareUpdater], then
+// launches the wired install monitor (see [SetInstallMonitor]) to clear the
+// in-progress flag once the CCU finishes installing and reboots. Mirrors
+// HmUpdate.install (model/hub/update.py:127): snapshot the
+// current version, trigger, flag in-progress, spawn the progress monitor.
+// With no monitor wired the flag must be cleared by the caller.
 func (u *Update) Install(ctx context.Context) error {
 	fw := u.firmwareUpdater()
 	if fw == nil {
 		return ErrNoFirmwareUpdater
 	}
+	// Snapshot the current version so the monitor can detect the post-reboot
+	// version change.
+	if info, ok := u.UpdateInfo(); ok && info.CurrentFirmware != "" {
+		u.SetVersionBeforeUpdate(info.CurrentFirmware)
+	}
 	if err := fw.TriggerFirmwareUpdate(ctx); err != nil {
 		return err
 	}
 	u.SetInProgress(true)
+	if m := u.installMonitorFn(); m != nil {
+		m()
+	}
 	return nil
 }
 
@@ -88,6 +104,22 @@ func (u *Update) firmwareUpdater() FirmwareUpdater {
 	u.mu.RLock()
 	defer u.mu.RUnlock()
 	return u.FirmwareUpdater
+}
+
+// SetInstallMonitor wires the progress monitor that [Install] launches after
+// a successful trigger. The closure should start a bounded, detached
+// goroutine (typically wrapping [Update.MonitorProgress]) that clears the
+// in-progress flag once the CCU update completes. Nil disables monitoring.
+func (u *Update) SetInstallMonitor(fn func()) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.installMonitor = fn
+}
+
+func (u *Update) installMonitorFn() func() {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.installMonitor
 }
 
 // SetInProgress sets the in-progress flag and fires update callbacks.
@@ -175,38 +207,57 @@ func (u *Update) SetVersionBeforeUpdate(version string) {
 	u.mu.Unlock()
 }
 
-// MonitorProgress polls the CCU for version changes after an install call and
-// clears the in-progress flag once the version changes or the deadline
-// passes. The caller supplies a pollFn that fetches the current firmware
-// version from the CCU; polling stops when ctx is cancelled, the version
-// changes, or maxPoll iterations are exhausted.
-func (u *Update) MonitorProgress(ctx context.Context, pollFn func(ctx context.Context) (string, error), maxPoll int) {
+// clearVersionBeforeUpdate resets the "before" snapshot once monitoring is
+// done, mirroring `_version_before_update = None` (model/hub/update.py).
+func (u *Update) clearVersionBeforeUpdate() {
+	u.mu.Lock()
+	u.versionBeforeUpdate = ""
+	u.hasVersionBefore = false
+	u.mu.Unlock()
+}
+
+// MonitorProgress watches the CCU firmware version after an install and
+// clears the in-progress flag once the version changes, the deadline
+// (interval × maxPoll) passes, or ctx is cancelled. It waits `interval`
+// before each poll and tolerates poll errors — the CCU is unreachable while
+// it reboots, so polling continues until the deadline. The caller supplies a
+// pollFn that fetches the current firmware version from the CCU. Mirrors
+// _monitor_update_progress (model/hub/update.py:175-222):
+// sleep-first, break on version change, always clear in-progress on exit.
+func (u *Update) MonitorProgress(ctx context.Context, pollFn func(ctx context.Context) (string, error), interval time.Duration, maxPoll int) {
+	// Always clear the flag + baseline on exit (mirrors the Python `finally`).
+	defer func() {
+		u.SetInProgress(false)
+		u.clearVersionBeforeUpdate()
+	}()
 	before, hasBefore := u.VersionBeforeUpdate()
 	for range maxPoll {
+		// Explicit pre-check so an already-cancelled ctx returns before the
+		// (interruptible) inter-poll wait, deterministically skipping the poll.
 		if ctx.Err() != nil {
 			return
 		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(interval):
+		}
 		current, err := pollFn(ctx)
 		if err != nil {
-			continue
+			continue // CCU may be mid-reboot; keep polling until the deadline
 		}
-		if hasBefore && current != before {
-			// Version changed — update finished.
+		if !hasBefore {
+			return // no baseline → stop after the first successful poll
+		}
+		if current != before {
+			// Version changed — update finished; publish the new version.
 			info, _ := u.UpdateInfo()
 			info.CurrentFirmware = current
 			info.UpdateAvailable = false
 			u.OnInfo(info)
-			u.SetInProgress(false)
-			return
-		}
-		if !hasBefore {
-			// No baseline recorded — stop after first successful poll.
-			u.SetInProgress(false)
 			return
 		}
 	}
-	// Max polls reached without version change — clear flag anyway.
-	u.SetInProgress(false)
 }
 
 // EnabledByDefault reports that the firmware-update entity is always included

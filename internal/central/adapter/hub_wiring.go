@@ -100,6 +100,14 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// recovery can re-apply these without racing a concurrent hub write.
 	unit.HubModel.SetMutator(writer)
 	unit.HubModel.Update.SetFirmwareUpdater(writer)
+	// Post-install progress monitor: after a triggered CCU system update, watch
+	// the firmware version and clear the in-progress flag once it changes.
+	// See launchSystemUpdateProgressMonitor.
+	{
+		upd := unit.HubModel.Update
+		//nolint:contextcheck // detached monitor owns its own context lifecycle (must outlive WireHub), like runInitialSystemUpdateLoad
+		upd.SetInstallMonitor(func() { launchSystemUpdateProgressMonitor(upd, runner) })
+	}
 
 	// Wire the JSON-RPC executor so HubCoordinator.ExecuteProgram
 	// delegates to the same session used for every other hub operation.
@@ -985,6 +993,15 @@ type systemUpdateRefresher interface {
 // without keeping a goroutine alive forever.
 const initialSystemUpdateTimeout = 2 * time.Minute
 
+// systemUpdateProgressCheckInterval + systemUpdateProgressMaxPolls mirror
+// schedule_timer_config.system_update_progress_check_interval and
+// _timeout (const.py:224,227 = 30 s / 1800 s): after a triggered CCU system
+// update, poll the firmware version every 30 s for up to 30 min, then give up.
+const (
+	systemUpdateProgressCheckInterval = 30 * time.Second
+	systemUpdateProgressMaxPolls      = 60 // 30 s × 60 = 30 min
+)
+
 // runInitialSystemUpdateLoad performs the one-shot boot-time
 // system-update fetch through the coordinator's refresh hook (which
 // serialises against the scheduler's hub.system_update_refresh job).
@@ -1008,6 +1025,28 @@ func runInitialSystemUpdateLoad(h systemUpdateRefresher, centralName string, log
 		logger.Info("hub.system_update.ok",
 			slog.String("central", centralName))
 	}
+}
+
+// launchSystemUpdateProgressMonitor spawns the detached, deadline-bounded
+// goroutine that watches the CCU firmware version after a triggered system
+// update and clears the in-progress flag once the version changes. Detached on
+// purpose — it must outlive WireHub — and self-bounded by the 30 min deadline.
+// As a root function (no inherited context) it owns the context lifecycle.
+// Mirrors install() spawning _monitor_update_progress
+// (model/hub/update.py:127,175; const.py:224,227 = 30 s / 30 min).
+func launchSystemUpdateProgressMonitor(upd *hub.Update, r *rega.Runner) {
+	ctx, cancel := context.WithTimeout(context.Background(),
+		systemUpdateProgressCheckInterval*time.Duration(systemUpdateProgressMaxPolls)+time.Minute)
+	go func() {
+		defer cancel()
+		upd.MonitorProgress(ctx, func(ctx context.Context) (string, error) {
+			info, err := r.GetSystemUpdateInfo(ctx)
+			if err != nil {
+				return "", err
+			}
+			return info.CurrentFirmware, nil
+		}, systemUpdateProgressCheckInterval, systemUpdateProgressMaxPolls)
+	}()
 }
 
 // loadSystemUpdate fetches the CCU's firmware-update state via the ReGa

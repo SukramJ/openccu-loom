@@ -60,7 +60,7 @@ func TestUpdateMonitorProgressClearsInProgressOnVersionChange(t *testing.T) {
 		return "3.55", nil
 	}
 
-	u.MonitorProgress(context.Background(), pollFn, 10)
+	u.MonitorProgress(context.Background(), pollFn, 0, 10)
 
 	if u.InProgress() {
 		t.Fatal("InProgress must be false after version change")
@@ -83,7 +83,7 @@ func TestUpdateMonitorProgressClearsAfterMaxPoll(t *testing.T) {
 
 	// always return same version → no change detected
 	pollFn := func(_ context.Context) (string, error) { return "3.55", nil }
-	u.MonitorProgress(context.Background(), pollFn, 3)
+	u.MonitorProgress(context.Background(), pollFn, 0, 3)
 
 	if u.InProgress() {
 		t.Fatal("InProgress must be false after maxPoll exhausted")
@@ -104,9 +104,10 @@ func TestUpdateMonitorProgressCancelledByContext(t *testing.T) {
 		t.Error("pollFn must not be called after context cancel")
 		return "", errors.New("unexpected call")
 	}
-	u.MonitorProgress(ctx, pollFn, 5)
-	// InProgress state unchanged since we exited immediately
-	// (no assertion on InProgress — cancel exits before any state change)
+	u.MonitorProgress(ctx, pollFn, 0, 5)
+	// The key assertion is that pollFn is never called (a cancelled ctx
+	// returns before the poll). MonitorProgress's defer clears InProgress on
+	// every exit (mirrors the Python finally), so it is not asserted here.
 }
 
 // ─── AlarmMessages surface ───────────────────
