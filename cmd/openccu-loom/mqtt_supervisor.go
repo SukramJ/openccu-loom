@@ -459,6 +459,7 @@ func (a *mqttReloadAdapter) Reload(ctx context.Context) (time.Duration, error) {
 // schedulesDomain, collector) live for the daemon's lifetime, so the
 // closure is safe to retain across multiple stack generations.
 func makeMQTTSubscriberBuilder(
+	lifecycleCtx context.Context,
 	reg *central.Registry,
 	valueWriter *clientpkg.ValueWriter,
 	schedulesDomain *adapter.SchedulesDomain,
@@ -483,7 +484,11 @@ func makeMQTTSubscriberBuilder(
 			WithCombinedDPSink(sink).
 			WithScheduleSwitchSink(sink).
 			WithInstallModeSink(sink).
-			WithCollector(collector)
+			WithCollector(collector).
+			// Capture the daemon-lifetime ctx (not the per-Start/Swap ctx,
+			// which on a reload-triggered swap is request-scoped) so command
+			// handlers cancel on shutdown but survive a broker swap.
+			WithLifecycleContext(lifecycleCtx)
 		if err := cmdSub.Start(ctx); err != nil {
 			return nil, fmt.Errorf("command_subscriber.Start: %w", err)
 		}
