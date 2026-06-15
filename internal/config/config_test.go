@@ -641,6 +641,54 @@ north:
 	}
 }
 
+// TestRetainCleanupWindowDefault verifies that zero / unset falls back to
+// the 2 s default and that the result satisfies the clamping bounds.
+func TestRetainCleanupWindowDefault(t *testing.T) {
+	t.Parallel()
+	m := NorthMQTT{}
+	got := m.EffectiveRetainCleanupWindow()
+	const want = 2000 * 1e6 // 2 s in nanoseconds
+	if int64(got) != want {
+		t.Fatalf("default window = %v, want 2s", got)
+	}
+}
+
+// TestRetainCleanupWindowClampLow verifies that values below 500 ms are raised
+// to 500 ms.
+func TestRetainCleanupWindowClampLow(t *testing.T) {
+	t.Parallel()
+	m := NorthMQTT{RetainCleanupWindowMs: 100}
+	got := m.EffectiveRetainCleanupWindow()
+	const want = 500 * 1e6 // 500 ms in nanoseconds
+	if int64(got) != want {
+		t.Fatalf("clamped low window = %v, want 500ms", got)
+	}
+}
+
+// TestRetainCleanupWindowClampHigh verifies that values above 30 000 ms are
+// lowered to 30 000 ms.
+func TestRetainCleanupWindowClampHigh(t *testing.T) {
+	t.Parallel()
+	m := NorthMQTT{RetainCleanupWindowMs: 999999}
+	got := m.EffectiveRetainCleanupWindow()
+	const want = 30000 * 1e6 // 30 s in nanoseconds
+	if int64(got) != want {
+		t.Fatalf("clamped high window = %v, want 30s", got)
+	}
+}
+
+// TestRetainCleanupWindowCustom verifies that a valid in-range value is
+// preserved unchanged.
+func TestRetainCleanupWindowCustom(t *testing.T) {
+	t.Parallel()
+	m := NorthMQTT{RetainCleanupWindowMs: 5000}
+	got := m.EffectiveRetainCleanupWindow()
+	const want = 5000 * 1e6 // 5 s in nanoseconds
+	if int64(got) != want {
+		t.Fatalf("custom window = %v, want 5s", got)
+	}
+}
+
 func TestMDNSInstanceNameOverride(t *testing.T) {
 	t.Parallel()
 	buf := []byte(minimalCentralYAML + `

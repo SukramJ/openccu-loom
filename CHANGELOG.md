@@ -107,6 +107,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Configurable MQTT retain-cleanup window (`north.mqtt.retain_cleanup_window_ms`).**
+  The snapshot window used by `RunRetainCleanupOnce` and
+  `RunDiscoveryOrphanCleanupOnce` was hard-coded at 2 seconds. Operators on
+  high-latency brokers or large retained-message stores can now raise this value
+  (valid range: 500–30 000 ms). Zero or absent falls back to the existing 2 s
+  default so behaviour is unchanged for deployments that do not set the key.
+
+### Fixed
+
+- **Panic-safe circuit-breaker state listeners.** State-change callbacks fired
+  with a bare `go cb(from, to)` in `refreshLocked`; a panicking listener
+  silently killed its goroutine. Callbacks are now wrapped in a
+  `safeFire` helper that `recover()`s and logs the panic at error level, so the
+  breaker continues transitioning normally and remaining listeners still run.
+- **Bounded self-reload concurrency in callback handlers.** A coerce-failure
+  flood from the CCU could spawn an unbounded number of concurrent
+  `LoadValue` goroutines against the radio. Self-reloads are now gated by a
+  buffered semaphore (capacity 16); excess reloads are dropped with a debug log
+  instead of queueing unbounded work.
+- **Bridge declared-map pruned on device removal.** When the CCU sends a
+  `deleteDevices` callback the MQTT bridge now removes the corresponding entries
+  from its internal declared map, so the orphan-cleanup dedup gate does not
+  suppress subsequent evictions of those topics.
+
 - **Responsive / iPhone pass across the config UI (Svelte SPA).** Every
   route and the heavy editor components were reworked so the content — not
   just the app shell — is usable on a phone:

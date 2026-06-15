@@ -679,6 +679,41 @@ type NorthMQTT struct {
 	// and `device.via_device = "<topic_base>_<addr>"`, so HA renders
 	// the parent + N children hierarchy.
 	SubDevicesEnabled bool `yaml:"sub_devices_enabled" json:"sub_devices_enabled" cfg:"basic"`
+
+	// RetainCleanupWindowMs is the broker snapshot window (in milliseconds)
+	// used by RunRetainCleanupOnce and RunDiscoveryOrphanCleanupOnce.
+	// The daemon subscribes to the legacy/discovery topic prefix and waits
+	// this long for the broker to deliver all retained messages before
+	// processing the eviction list.
+	//
+	// Valid range: 500–30000 ms. Zero falls back to the default (2000 ms).
+	// Raising the value helps on high-latency brokers or large retained-message
+	// stores; lowering it shortens boot time at the risk of missing some
+	// retained messages.  [default: 2000]
+	RetainCleanupWindowMs int `yaml:"retain_cleanup_window_ms" json:"retain_cleanup_window_ms,omitempty" cfg:"expert"`
+}
+
+// EffectiveRetainCleanupWindow returns the broker snapshot window for retain
+// cleanup as a [time.Duration], applying the default (2 s) when the field is
+// zero and clamping the value to the [500 ms, 30 s] range so mis-configured
+// values never produce absurdly short or indefinitely long boot stalls.
+func (m NorthMQTT) EffectiveRetainCleanupWindow() time.Duration {
+	const (
+		defaultMs = 2000
+		minMs     = 500
+		maxMs     = 30000
+	)
+	ms := m.RetainCleanupWindowMs
+	if ms <= 0 {
+		ms = defaultMs
+	}
+	if ms < minMs {
+		ms = minMs
+	}
+	if ms > maxMs {
+		ms = maxMs
+	}
+	return time.Duration(ms) * time.Millisecond
 }
 
 // AuthConfig collects auth-related switches.

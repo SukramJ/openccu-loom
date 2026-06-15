@@ -58,7 +58,22 @@ type CallbackHandlers struct {
 	// the operator inbox / manual-accept flow instead of creating the
 	// entities right away. Set per-central via [SetDelayNewDeviceCreation].
 	delayNewDeviceCreation bool
+
+	// selfReloadSem is a non-blocking semaphore (buffered channel) that
+	// caps the number of concurrent self-reload goroutines at
+	// selfReloadConcurrency. A value-flood from the CCU can otherwise
+	// spawn many simultaneous direct LoadValue calls against the CCU,
+	// exceeding the CCU's duty-cycle budget. When the semaphore is full
+	// the incoming reload is dropped with a debug log — the
+	// UnobservedSweep or the next CCU push will fill in the gap.
+	selfReloadSem chan struct{}
 }
+
+// selfReloadConcurrency is the maximum number of concurrent self-reload
+// goroutines per CallbackHandlers instance. Chosen large enough to absorb
+// short burst events from the CCU (e.g. an initialisation wave) without
+// queuing unbounded work against the CCU radio.
+const selfReloadConcurrency = 16
 
 // NewCallbackHandlers wires the adapter for c.
 func NewCallbackHandlers(u *central.Unit, logger *slog.Logger) *CallbackHandlers {
@@ -66,7 +81,13 @@ func NewCallbackHandlers(u *central.Unit, logger *slog.Logger) *CallbackHandlers
 		logger = slog.Default()
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	return &CallbackHandlers{unit: u, logger: logger, ctx: ctx, cancel: cancel}
+	return &CallbackHandlers{
+		unit:          u,
+		logger:        logger,
+		ctx:           ctx,
+		cancel:        cancel,
+		selfReloadSem: make(chan struct{}, selfReloadConcurrency),
+	}
 }
 
 // SetWriter wires the south-bound ValueWriter so UpdateDevice, ReplaceDevice,
@@ -360,11 +381,26 @@ func (h *CallbackHandlers) dispatchCombined(interfaceID, channelAddress, paramet
 // [h.ctx] cancellation is honoured so a daemon shutdown aborts in-flight
 // fetches promptly.
 //
+// Concurrency is bounded by [selfReloadSem]: at most [selfReloadConcurrency]
+// goroutines may run simultaneously. A non-blocking try-acquire is used; if
+// the semaphore is full the reload is dropped with a debug log. The
+// UnobservedSweep reconciler or the next CCU push will fill in the gap.
+//
 // The reload is best-effort: a load failure leaves the DP in its previous
-// (possibly empty) state, no further retries. The reconciler's
-// [UnobservedSweep] eventually picks up persistently unobserved DPs anyway.
+// (possibly empty) state, no further retries.
 func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, parameter string) {
 	if d == nil || d.ValueLoader() == nil {
+		return
+	}
+	// Non-blocking acquire: if the semaphore is full, drop this reload
+	// and debug-log so the operator can see pressure without blocking.
+	select {
+	case h.selfReloadSem <- struct{}{}:
+	default:
+		h.logger.Debug("callback.event.self_reload_dropped",
+			slog.String("channel", channelAddress),
+			slog.String("parameter", parameter),
+			slog.Int("cap", selfReloadConcurrency))
 		return
 	}
 	dpk := hmtypes.DataPointKey{
@@ -374,6 +410,7 @@ func (h *CallbackHandlers) scheduleSelfReload(d *device.Device, channelAddress, 
 		Parameter:      parameter,
 	}
 	h.wg.Go(func() { //nolint:contextcheck // background reload uses h.ctx, not the caller's ctx which may be short-lived
+		defer func() { <-h.selfReloadSem }()
 		ctx, cancel := context.WithTimeout(h.ctx, 5*time.Second)
 		defer cancel()
 		if _, _, err := d.LoadValue(ctx, dpk, hmenum.CallSourceManualOrScheduled, true); err != nil {

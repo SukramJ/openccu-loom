@@ -117,6 +117,15 @@ func (b *EventBridge) Start(ctx context.Context) {
 			b.onSourceChanged(ctx, u.Name(), e)
 		})
 		b.unsubs = append(b.unsubs, unsubSrc)
+
+		// Prune the MQTT bridge's declared map when a device is removed so
+		// the dedup gate does not suppress subsequent orphan-cleanup evictions
+		// of the same topics, and so snapshot passes do not re-emit discovery
+		// configs for a device that no longer exists in the model.
+		unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+			b.onDeviceRemoved(e)
+		})
+		b.unsubs = append(b.unsubs, unsubRemoved)
 	}
 }
 
@@ -148,6 +157,21 @@ func (b *EventBridge) onSourceChanged(ctx context.Context, centralName string, e
 		OldValue: hmtypes.NoneValue(),
 		NewValue: newVal,
 	})
+}
+
+// onDeviceRemoved prunes the MQTT bridge's declared map when a device is
+// removed so the dedup gate cannot suppress orphan-cleanup evictions of the
+// removed device's discovery topics. Called from the DeviceRemovedEvent
+// subscription wired in Start.
+func (b *EventBridge) onDeviceRemoved(e hmevent.DeviceRemovedEvent) {
+	if b == nil || b.mqtt == nil {
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	bridge.PruneDeclaredForDevice(e.Address)
 }
 
 // PublishInitialSnapshot walks every registered central's device

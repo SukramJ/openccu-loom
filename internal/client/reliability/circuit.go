@@ -6,6 +6,8 @@ package reliability
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +16,23 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmreliability"
 )
+
+// safeFire invokes cb(from, to) in a goroutine that recovers from panics.
+// A panicking state-change listener must not silently kill the dispatcher
+// goroutine, so we recover, log the panic, and continue normal operation.
+func safeFire(cb func(from, to hmenum.CircuitState), from, to hmenum.CircuitState) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Default().Error("circuit.state_listener_panic",
+					slog.String("from", from.String()),
+					slog.String("to", to.String()),
+					slog.String("panic", fmt.Sprintf("%v", r)))
+			}
+		}()
+		cb(from, to)
+	}()
+}
 
 // CircuitConfig configures a [CircuitBreaker].
 type CircuitConfig struct {
@@ -345,11 +364,13 @@ func (c *CircuitBreaker) refreshLocked() hmenum.CircuitState {
 	if c.cfg.Clock().Sub(c.openedAt) >= c.cfg.ResetTimeout {
 		from := c.state
 		c.state = hmenum.CircuitStateHalfOpen
-		// Snapshot listeners under lock and fire async to avoid
-		// running user code while holding c.mu.
+		// Snapshot listeners under lock and fire asynchronously to avoid
+		// running user code while holding c.mu. Each goroutine is wrapped
+		// with panic recovery so a misbehaving listener cannot kill the
+		// dispatcher goroutine silently.
 		listeners := c.snapshotListenersLocked()
 		for _, cb := range listeners {
-			go cb(from, c.state)
+			safeFire(cb, from, c.state)
 		}
 	}
 	return c.state
