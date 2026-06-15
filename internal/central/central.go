@@ -136,31 +136,11 @@ type Unit struct {
 	systemInfoMu sync.RWMutex
 	systemInfo   SystemInfo
 
-	// serviceMu guards the wired service-method hooks below. The
-	// hooks are populated by the hub-wiring adapter once the
-	// JSON-RPC session is up; Unit.Service* methods delegate
-	// through them to the actual transport.
-	serviceMu        sync.RWMutex
-	acceptInboxFn    func(ctx context.Context, address string) error
-	createBackupFn   func(ctx context.Context) ([]byte, error)
-	setInstallModeFn func(ctx context.Context, on bool, seconds int) error
-	// setInstallModeForInterfaceFn is the extended hook that accepts an
-	// interfaceID and deviceAddress. When nil, [SetInstallModeForInterface]
-	// falls back to [setInstallModeFn].
-	setInstallModeForInterfaceFn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error
-	renameDeviceFn               func(ctx context.Context, address, name string) error
-	// loadAndRefreshForInterfaceFn is the extended hook that scopes the
-	// reload to a single interface + paramset. When nil,
-	// [LoadAndRefreshDataPointDataForInterface] falls back to [loadAndRefreshFn].
-	loadAndRefreshForInterfaceFn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error
-	loadAndRefreshFn             func(ctx context.Context) error
-	saveFilesFn                  func(ctx context.Context) error
-	validateConfigFn             func(ctx context.Context) (SystemInfo, error)
-	// hubLogoutFn is the optional hook that performs the hub-side JSON-RPC
-	// logout during Stop(). When nil the step is skipped (e.g. in tests
-	// or when the hub session was never established). Wire it via
-	// [SetHubLogoutFn] from the hub-wiring adapter after Login succeeds.
-	hubLogoutFn func(ctx context.Context) error
+	// services bundles the runtime service-dispatch closures populated by
+	// the hub-wiring adapter once the JSON-RPC session is up; Unit.Service*
+	// methods delegate through them to the actual transport.
+	// See [serviceBundle] in service_bundle.go.
+	services serviceBundle
 
 	// devicesCreatedMu guards devicesCreated below.
 	devicesCreatedMu sync.RWMutex
@@ -540,9 +520,9 @@ func (u *Unit) Stop() {
 	ctx := context.Background()
 
 	// 1. Persist cached state. Errors are logged but do not abort teardown.
-	u.serviceMu.RLock()
-	saveFn := u.saveFilesFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	saveFn := u.services.saveFilesFn
+	u.services.mu.RUnlock()
 	if saveFn != nil {
 		if err := saveFn(ctx); err != nil && u.logger != nil {
 			u.logger.Warn("stop: save_files failed", "error", err)
@@ -569,9 +549,9 @@ func (u *Unit) Stop() {
 
 	// 5. Hub JSON-RPC logout (optional). A bounded timeout guards against a
 	// stale connection blocking the entire shutdown sequence.
-	u.serviceMu.RLock()
-	logoutFn := u.hubLogoutFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	logoutFn := u.services.hubLogoutFn
+	u.services.mu.RUnlock()
 	if logoutFn != nil {
 		logoutCtx, logoutCancel := context.WithTimeout(ctx, 5*time.Second)
 		defer logoutCancel()
@@ -628,9 +608,9 @@ func (u *Unit) Stop() {
 // is called with a background context — the CCU session may already be
 // degraded at this point so errors are logged and ignored.
 func (u *Unit) SetHubLogoutFn(fn func(ctx context.Context) error) {
-	u.serviceMu.Lock()
-	u.hubLogoutFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.hubLogoutFn = fn
+	u.services.mu.Unlock()
 }
 
 // SystemInformation returns the cached CCU-side metadata. The hub- wiring
@@ -774,9 +754,9 @@ func (u *Unit) RemoveDevice(address string) bool {
 //
 // Returns an error when no handler is wired yet (e.g. before Start).
 func (u *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
-	u.serviceMu.RLock()
-	fn := u.acceptInboxFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.acceptInboxFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return errors.New("central: AcceptDeviceInbox not wired")
 	}
@@ -786,17 +766,17 @@ func (u *Unit) AcceptDeviceInbox(ctx context.Context, address string) error {
 // SetAcceptInboxFn wires the inbox-accept handler. Pass nil to
 // detach.
 func (u *Unit) SetAcceptInboxFn(fn func(ctx context.Context, address string) error) {
-	u.serviceMu.Lock()
-	u.acceptInboxFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.acceptInboxFn = fn
+	u.services.mu.Unlock()
 }
 
 // CreateBackup triggers a backup on the CCU and returns the downloaded
 // archive blob.
 func (u *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
-	u.serviceMu.RLock()
-	fn := u.createBackupFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.createBackupFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return nil, errors.New("central: CreateBackup not wired")
 	}
@@ -805,17 +785,17 @@ func (u *Unit) CreateBackup(ctx context.Context) ([]byte, error) {
 
 // SetCreateBackupFn wires the backup-and-download handler.
 func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
-	u.serviceMu.Lock()
-	u.createBackupFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.createBackupFn = fn
+	u.services.mu.Unlock()
 }
 
 // SetInstallMode toggles the CCU's "install mode" (a.k.a. learning
 // mode). When enabled the CCU briefly accepts new device pairings.
 func (u *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
-	u.serviceMu.RLock()
-	fn := u.setInstallModeFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.setInstallModeFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return errors.New("central: SetInstallMode not wired")
 	}
@@ -824,27 +804,27 @@ func (u *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
 
 // SetSetInstallModeFn wires the install-mode handler.
 func (u *Unit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
-	u.serviceMu.Lock()
-	u.setInstallModeFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.setInstallModeFn = fn
+	u.services.mu.Unlock()
 }
 
 // SetInstallModeForInterfaceFn wires the per-interface install-mode handler.
 // When wired, [SetInstallModeForInterface] uses this instead of the plain handler
 // so interfaceID and deviceAddress are actually forwarded to the backend.
 func (u *Unit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
-	u.serviceMu.Lock()
-	u.setInstallModeForInterfaceFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.setInstallModeForInterfaceFn = fn
+	u.services.mu.Unlock()
 }
 
 // SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
 // When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
 // the plain handler so interfaceID and paramset are actually forwarded.
 func (u *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, interfaceID string, paramset hmenum.ParamsetKey, directCall bool) error) {
-	u.serviceMu.Lock()
-	u.loadAndRefreshForInterfaceFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.loadAndRefreshForInterfaceFn = fn
+	u.services.mu.Unlock()
 }
 
 // InitInstallMode is a convenience for `SetInstallMode(ctx, true,
@@ -863,9 +843,9 @@ func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
 	if address == "" {
 		return errors.New("central: RenameDevice: empty address")
 	}
-	u.serviceMu.RLock()
-	fn := u.renameDeviceFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.renameDeviceFn
+	u.services.mu.RUnlock()
 	// In-memory rename — always applied so the UI reflects the change
 	// even when no persistent backend is wired (e.g. tests).
 	if u.ModelRegistry != nil {
@@ -882,9 +862,9 @@ func (u *Unit) RenameDevice(ctx context.Context, address, name string) error {
 // SetRenameDeviceFn wires the persistent-rename handler. Pass nil to
 // detach.
 func (u *Unit) SetRenameDeviceFn(fn func(ctx context.Context, address, name string) error) {
-	u.serviceMu.Lock()
-	u.renameDeviceFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.renameDeviceFn = fn
+	u.services.mu.Unlock()
 }
 
 // RenameDeviceWithChannels renames a device and, when includeChannels
@@ -908,9 +888,9 @@ func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 	if !ok || dev == nil {
 		return nil
 	}
-	u.serviceMu.RLock()
-	fn := u.renameDeviceFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.renameDeviceFn
+	u.services.mu.RUnlock()
 	var firstErr error
 	for _, ch := range dev.Channels() {
 		chName := name + ":" + strconv.Itoa(ch.Number)
@@ -928,9 +908,9 @@ func (u *Unit) RenameDeviceWithChannels(ctx context.Context, address, name strin
 // point, seeds the data-cache and re-publishes value-changed events for any
 // cache miss.
 func (u *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
-	u.serviceMu.RLock()
-	fn := u.loadAndRefreshFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.loadAndRefreshFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return errors.New("central: LoadAndRefreshDataPointData not wired")
 	}
@@ -939,18 +919,18 @@ func (u *Unit) LoadAndRefreshDataPointData(ctx context.Context) error {
 
 // SetLoadAndRefreshFn wires the data-point reload handler.
 func (u *Unit) SetLoadAndRefreshFn(fn func(ctx context.Context) error) {
-	u.serviceMu.Lock()
-	u.loadAndRefreshFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.loadAndRefreshFn = fn
+	u.services.mu.Unlock()
 }
 
 // SaveFiles persists the in-memory descriptors and paramsets to the
 // configured store. Implementation is delegated through the `SaveFilesFn`
 // hook; for the SQLite backend the hook batches DB writes.
 func (u *Unit) SaveFiles(ctx context.Context) error {
-	u.serviceMu.RLock()
-	fn := u.saveFilesFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.saveFilesFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return errors.New("central: SaveFiles not wired")
 	}
@@ -959,17 +939,17 @@ func (u *Unit) SaveFiles(ctx context.Context) error {
 
 // SetSaveFilesFn wires the persistence handler.
 func (u *Unit) SetSaveFilesFn(fn func(ctx context.Context) error) {
-	u.serviceMu.Lock()
-	u.saveFilesFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.saveFilesFn = fn
+	u.services.mu.Unlock()
 }
 
 // ValidateConfigAndGetSystemInformation runs a config-validation pass against
 // the configured hub backend and returns the discovered SystemInfo.
 func (u *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (SystemInfo, error) {
-	u.serviceMu.RLock()
-	fn := u.validateConfigFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.validateConfigFn
+	u.services.mu.RUnlock()
 	if fn == nil {
 		return SystemInfo{}, errors.New("central: ValidateConfig not wired")
 	}
@@ -978,9 +958,9 @@ func (u *Unit) ValidateConfigAndGetSystemInformation(ctx context.Context) (Syste
 
 // SetValidateConfigFn wires the config-validation handler.
 func (u *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, error)) {
-	u.serviceMu.Lock()
-	u.validateConfigFn = fn
-	u.serviceMu.Unlock()
+	u.services.mu.Lock()
+	u.services.validateConfigFn = fn
+	u.services.mu.Unlock()
 }
 
 // ServiceWiringStatus reports, for each service-method hook on the
@@ -996,16 +976,16 @@ func (u *Unit) SetValidateConfigFn(fn func(ctx context.Context) (SystemInfo, err
 // already returns a clean "not wired" error when invoked early, so
 // this map is purely informational.
 func (u *Unit) ServiceWiringStatus() map[string]bool {
-	u.serviceMu.RLock()
-	defer u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	defer u.services.mu.RUnlock()
 	return map[string]bool{
-		"accept_inbox":     u.acceptInboxFn != nil,
-		"create_backup":    u.createBackupFn != nil,
-		"set_install_mode": u.setInstallModeFn != nil,
-		"rename_device":    u.renameDeviceFn != nil,
-		"load_and_refresh": u.loadAndRefreshFn != nil,
-		"save_files":       u.saveFilesFn != nil,
-		"validate_config":  u.validateConfigFn != nil,
+		"accept_inbox":     u.services.acceptInboxFn != nil,
+		"create_backup":    u.services.createBackupFn != nil,
+		"set_install_mode": u.services.setInstallModeFn != nil,
+		"rename_device":    u.services.renameDeviceFn != nil,
+		"load_and_refresh": u.services.loadAndRefreshFn != nil,
+		"save_files":       u.services.saveFilesFn != nil,
+		"validate_config":  u.services.validateConfigFn != nil,
 	}
 }
 
@@ -1201,9 +1181,9 @@ func (u *Unit) LoadAndRefreshDataPointDataForInterface(
 	paramset hmenum.ParamsetKey,
 	directCall bool,
 ) error {
-	u.serviceMu.RLock()
-	fn := u.loadAndRefreshForInterfaceFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.loadAndRefreshForInterfaceFn
+	u.services.mu.RUnlock()
 	if fn != nil {
 		return fn(ctx, interfaceID, paramset, directCall)
 	}
@@ -1222,9 +1202,9 @@ func (u *Unit) SetInstallModeForInterface(
 	deviceAddress string,
 	seconds int,
 ) error {
-	u.serviceMu.RLock()
-	fn := u.setInstallModeForInterfaceFn
-	u.serviceMu.RUnlock()
+	u.services.mu.RLock()
+	fn := u.services.setInstallModeForInterfaceFn
+	u.services.mu.RUnlock()
 	if fn != nil {
 		return fn(ctx, interfaceID, mode, deviceAddress, seconds)
 	}

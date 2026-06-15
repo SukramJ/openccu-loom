@@ -14,6 +14,11 @@ import { apiBase } from "./base";
  */
 export type EventStream = {
   onMessage(handler: (ev: EventEnvelope) => void): () => void;
+  /** Register a callback that fires whenever the socket transitions between
+   * connecting / open / closed. Returns an unsubscribe function. */
+  onStateChange(
+    handler: (s: "connecting" | "open" | "closed") => void,
+  ): () => void;
   close(): void;
   readonly state: () => "connecting" | "open" | "closed";
 };
@@ -112,6 +117,9 @@ export function connectEvents(): EventStream {
   let closed = false;
   let attempt = 0;
   const handlers = new Set<(ev: EventEnvelope) => void>();
+  const stateHandlers = new Set<
+    (s: "connecting" | "open" | "closed") => void
+  >();
   let current: "connecting" | "open" | "closed" = "connecting";
 
   const url = buildURL();
@@ -121,13 +129,19 @@ export function connectEvents(): EventStream {
     return `${proto}//${location.host}${apiBase()}/events`;
   }
 
+  function setState(next: "connecting" | "open" | "closed") {
+    if (current === next) return;
+    current = next;
+    for (const h of stateHandlers) h(current);
+  }
+
   function connect() {
     if (closed) return;
-    current = "connecting";
+    setState("connecting");
     socket = new WebSocket(url);
     socket.addEventListener("open", () => {
       attempt = 0;
-      current = "open";
+      setState("open");
       // Subscribe broadly. The hub uses topic-based fan-out — without
       // an explicit subscription the server would drop every event on
       // the floor for this client. The SPA wants the full firehose
@@ -154,7 +168,7 @@ export function connectEvents(): EventStream {
       for (const h of handlers) h(env);
     });
     socket.addEventListener("close", () => {
-      current = "closed";
+      setState("closed");
       if (closed) return;
       // Exponential backoff capped at 15 s.
       const delay = Math.min(15000, 500 * 2 ** Math.min(attempt, 5));
@@ -172,6 +186,10 @@ export function connectEvents(): EventStream {
     onMessage(handler) {
       handlers.add(handler);
       return () => handlers.delete(handler);
+    },
+    onStateChange(handler) {
+      stateHandlers.add(handler);
+      return () => stateHandlers.delete(handler);
     },
     close() {
       closed = true;

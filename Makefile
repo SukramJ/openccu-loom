@@ -142,6 +142,10 @@ ui-build: ## build the Svelte SPA into internal/north/ui/spa_dist/
 ui-check: ## type-check the Svelte SPA
 	cd $(UI_DIR) && npm run check
 
+.PHONY: ui-types
+ui-types: ## regenerate src/lib/api/types.generated.ts from assets/openapi.yaml
+	cd $(UI_DIR) && npm run gen:types
+
 .PHONY: build
 build: ## build the daemon binary into ./bin/ (embeds current spa_dist/)
 	mkdir -p $(BIN_DIR)
@@ -499,6 +503,7 @@ generate-schema-digest: ## regenerate the contract digest constant from the sche
 generate: ## run all code generators
 	$(GO) generate ./...
 	$(MAKE) export-schemas
+	$(MAKE) ui-types
 	@if [ -x script/generate_profiles.py ]; then \
 		./script/generate_profiles.py; \
 	else \

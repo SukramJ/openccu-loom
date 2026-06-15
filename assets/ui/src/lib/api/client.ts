@@ -561,7 +561,7 @@ export const api = {
   incidents() {
     return request<Incident[] | null>(`/incidents`).then((v) => v ?? []);
   },
-  // --- Diagnostics (Wave 3) ------------------------------------
+  // --- Diagnostics --------------------------------------------
   diagnostics(anonymize: boolean = true) {
     const q = anonymize ? "?anonymize=1" : "?anonymize=0";
     return request<DiagnosticsEnvelope>(`/diagnostics${q}`);
@@ -674,7 +674,7 @@ export const api = {
     const q = qs.toString() ? `?${qs.toString()}` : "";
     return `${apiBase()}/diagnostics/logs/stream${q}`;
   },
-  // --- System admin (Wave 6r) ---------------------------------
+  // --- System admin -------------------------------------------
   getStartupCapture() {
     return request<{
       enabled: boolean;
@@ -916,7 +916,7 @@ export const api = {
       body: JSON.stringify(req),
     });
   },
-  // --- Wave-C live-edit ---------------------------------------
+  // --- Live config edit ---------------------------------------
   // GET /config/schema returns the typed field schema + the
   // section list the SPA renders as tabs.
   getConfigSchema() {
@@ -1044,7 +1044,7 @@ export type DaemonInfo = {
   capabilities: string[];
 };
 
-// --- Wave-C type definitions for the live-edit surface ---------
+// --- Type definitions for the live-edit config surface ---------
 
 export type ConfigSchemaField = {
   path: string;

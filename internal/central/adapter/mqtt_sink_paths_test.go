@@ -3,17 +3,22 @@
 
 // mqtt_sink_paths_test.go covers additional nil-guard and error branches in
 // MQTTCommandSink: SetSysvar unknown-sysvar, TriggerProgram unknown-program,
-// InvokeChannelService device/channel/cdp not found paths.
+// InvokeChannelService device/channel/cdp not found paths, and
+// SetMasterParam resolution + write paths.
 
 package adapter
 
 import (
 	"context"
+	"encoding/json"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -171,5 +176,177 @@ func TestMQTTCommandSinkInvokeChannelServiceNoInvoker(t *testing.T) {
 	err = s.InvokeChannelService(context.Background(), "ccu-icsnoinv", "HmIP-RF", "ICSDEV003", 1, "method", nil, hmenum.CommandPriorityLow)
 	if err == nil {
 		t.Error("InvokeChannelService with non-invoker custom DP must return error")
+	}
+}
+
+// ============================================================
+// SetMasterParam — channel writer records the write
+// ============================================================
+
+// sinkChannelWriter is a minimal device.ChannelWriter that records
+// SetValue calls so SetMasterParam tests can assert the write reached
+// the wire layer.
+type sinkChannelWriter struct {
+	mu    sync.Mutex
+	param hmenum.Parameter
+	value any
+	calls int
+}
+
+func (w *sinkChannelWriter) SetValue(
+	_ context.Context, _ string, p hmenum.Parameter, v any, _ hmenum.CommandPriority,
+) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.param = p
+	w.value = v
+	w.calls++
+	return nil
+}
+
+func (w *sinkChannelWriter) PutParamset(
+	_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority,
+) error {
+	return nil
+}
+
+func (w *sinkChannelWriter) snapshot() (p hmenum.Parameter, v any, calls int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.param, w.value, w.calls
+}
+
+func TestMQTTCommandSinkSetMasterParamWritesValue(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-mp"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+
+	const chAddr = "MPDEV001:1"
+	const paramName = "SHORT_ON_TIME"
+
+	cw := &sinkChannelWriter{}
+	d := device.New(device.Config{
+		Address:     "MPDEV001",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	})
+	ch := d.AddChannel(chAddr, 1, "SWITCH", hmenum.ParamsetKeyValues)
+	// Wire a MASTER data point and the channel writer.
+	masterDP := generic.NewFloat(generic.Spec{
+		Key: hmtypes.DataPointKey{
+			ChannelAddress: chAddr,
+			ParamsetKey:    hmenum.ParamsetKeyMaster,
+			Parameter:      paramName,
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeFloat,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+			Min:        json.RawMessage("0.0"),
+			Max:        json.RawMessage("100.0"),
+		},
+		Writer: cw,
+	})
+	ch.PutMaster(masterDP)
+	ch.SetWriter(cw)
+	c.ModelRegistry.Put(d)
+
+	s := NewMQTTCommandSink(reg, nil)
+	if err := s.SetMasterParam(
+		context.Background(), "ccu-mp", "HmIP-RF", chAddr,
+		hmenum.Parameter(paramName), 0.5, hmenum.CommandPriorityHigh,
+	); err != nil {
+		t.Fatalf("SetMasterParam: %v", err)
+	}
+
+	p, v, calls := cw.snapshot()
+	if calls != 1 {
+		t.Fatalf("expected 1 SetValue call, got %d", calls)
+	}
+	if p != hmenum.Parameter(paramName) {
+		t.Errorf("param: got %q want %q", p, paramName)
+	}
+	if v != 0.5 {
+		t.Errorf("value: got %v want 0.5", v)
+	}
+}
+
+func TestMQTTCommandSinkSetMasterParamUnknownCentral(t *testing.T) {
+	t.Parallel()
+	s := NewMQTTCommandSink(central.NewRegistry(), nil)
+	err := s.SetMasterParam(context.Background(), "no-such-central", "HmIP-RF", "DEV:1",
+		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error for unknown central")
+	}
+}
+
+func TestMQTTCommandSinkSetMasterParamUnknownDevice(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-mpdev"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	s := NewMQTTCommandSink(reg, nil)
+	err = s.SetMasterParam(context.Background(), "ccu-mpdev", "HmIP-RF", "NODEV:1",
+		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error for unknown device")
+	}
+}
+
+func TestMQTTCommandSinkSetMasterParamUnknownChannel(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-mpch"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	d := device.New(device.Config{
+		Address:     "MPDEV002",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	})
+	_ = d.AddChannel("MPDEV002:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+	s := NewMQTTCommandSink(reg, nil)
+	// Channel :99 does not exist.
+	err = s.SetMasterParam(context.Background(), "ccu-mpch", "HmIP-RF", "MPDEV002:99",
+		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error for unknown channel")
+	}
+}
+
+func TestMQTTCommandSinkSetMasterParamUnknownParam(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-mpparam"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	d := device.New(device.Config{
+		Address:     "MPDEV003",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	})
+	_ = d.AddChannel("MPDEV003:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+	s := NewMQTTCommandSink(reg, nil)
+	// Channel exists but has no MASTER DP named NO_SUCH_PARAM.
+	err = s.SetMasterParam(context.Background(), "ccu-mpparam", "HmIP-RF", "MPDEV003:1",
+		hmenum.Parameter("NO_SUCH_PARAM"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error for parameter not in MASTER paramset")
 	}
 }

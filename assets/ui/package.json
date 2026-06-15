@@ -12,7 +12,8 @@
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "gen:types": "openapi-typescript ../openapi.yaml -o src/lib/api/types.generated.ts"
   },
   "devDependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -20,6 +21,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@tsconfig/svelte": "^5.0.4",
     "@types/qrcode": "^1.5.6",
+    "openapi-typescript": "^7.8.0",
     "opentype.js": "^2.0.0",
     "svelte": "^5.56.2",
     "svelte-check": "^4.0.0",
@@ -29,6 +31,7 @@
     "vitest": "^4.1.7"
   },
   "dependencies": {
+    "@internationalized/date": "^3.12.2",
     "@lucide/svelte": "^1.9.0",
     "bits-ui": "^2.0.0",
     "clsx": "^2.1.1",

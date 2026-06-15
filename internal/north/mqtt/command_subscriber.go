@@ -22,6 +22,8 @@ import (
 type CommandSink interface {
 	SetValue(ctx context.Context, centralName, interfaceID, channelAddress string,
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
+	SetMasterParam(ctx context.Context, centralName, interfaceID, channelAddress string,
+		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
 	SetSysvar(ctx context.Context, centralName, name string, payload any) error
 	TriggerProgram(ctx context.Context, centralName, id string) error
 }
@@ -511,33 +513,35 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	//      <base>/<central>/<iface>/<addr>/<channel>/<bucket>/<param>/set
 	//      (8 segments; `<bucket>` is `values`/`master`/`calculated`).
 	//
-	//   2. Legacy bucket-less shape (still produced by some
-	// Hand-built tools and
+	//   2. Legacy bucket-less shape (still produced by some hand-built
+	//      tools and the legacy alias mirror on the raw plane):
 	//      <base>/<central>/<iface>/<addr>/<channel>/<param>/set
 	//      (7 segments).
 	//
-	// Both write VALUES paramset — MASTER edits flow through the
-	// REST paramset endpoint, not the MQTT command bus. The
-	// 8-segment form happens to carry the bucket but the subscriber
-	// only honours `values`; other buckets are silently ignored
-	// here (the caller's discovery would not emit a master/
-	// command_topic in the first place).
+	// The 7-segment (legacy) form always routes to VALUES. In the 8-segment
+	// form `values` routes to SetValue, `master` routes to SetMasterParam,
+	// and `calculated` is read-only and is dropped with a debug log.
 	parts := strings.Split(topic, "/")
 	if parts[len(parts)-1] != "set" {
 		c.logger.Warn("mqtt.command.unknown_topic", slog.String("topic", topic))
 		return
 	}
 	var centralName, iface, device, channelStr, parameter string
+	isMaster := false
 	switch len(parts) {
 	case 7:
 		centralName, iface, device, channelStr, parameter = parts[1], parts[2], parts[3], parts[4], parts[5]
 	case 8:
 		bucket := parts[5]
-		if bucket != "values" {
-			// Master / calculated buckets are not write-capable
-			// from the MQTT command bus; drop silently with a debug
-			// breadcrumb so operators see the topic if they're
-			// pointing the wrong tool at it.
+		switch bucket {
+		case "values":
+			// Default VALUES write — no special flag needed.
+		case "master":
+			isMaster = true
+		default:
+			// `calculated` and any unknown bucket are read-only; drop
+			// with a debug breadcrumb so operators can diagnose
+			// mis-directed writes.
 			c.logger.Debug("mqtt.command.unsupported_bucket",
 				slog.String("topic", topic),
 				slog.String("bucket", bucket))
@@ -558,6 +562,15 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	c.incReceivedCommands()
 	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
+	if isMaster {
+		if err := c.sink.SetMasterParam(ctx, centralName, iface, channelAddress,
+			hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
+			c.logger.Warn("mqtt.command.setmasterparam",
+				slog.String("topic", topic),
+				slog.String("err", err.Error()))
+		}
+		return
+	}
 	if err := c.sink.SetValue(ctx, centralName, iface, channelAddress,
 		hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
 		c.logger.Warn("mqtt.command.setvalue",

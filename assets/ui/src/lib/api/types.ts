@@ -1,7 +1,13 @@
-// Hand-written mirror of the REST DTOs. Will be replaced by
-// openapi-typescript once the spec stabilises; keeping it manual
-// lets us iterate the SPA without waiting for the generator pipeline.
+// REST DTOs. Types that match the generated schema cleanly are
+// re-exported from types.generated.ts; hand-written definitions
+// remain where the generated shape diverges from current SPA usage
+// (see TODO(openapi-typescript) comments below).
+import type { components } from "./types.generated";
 
+// TODO(openapi-typescript): reconcile with generated DeviceSummary.
+// Generated shape lacks: central, model_label, model_icon, update_available,
+// has_sub_devices, master_pushes_config_pending; has extra: ise_id.
+// Generated also makes updatable optional; SPA callers treat it as boolean.
 export type DeviceSummary = {
   address: string;
   central?: string;
@@ -31,8 +37,7 @@ export type DeviceSummary = {
    *  events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
    *  for the true→false transition before refreshing MASTER. False for
    *  BidCos-*, VirtualDevices, CUxD — those rely on the save-path
-   *  reload because CONFIG_PENDING never fires (or fires unreliably,
-   *  per aiohomematic interface_client.py:964-971). */
+   *  reload because CONFIG_PENDING never fires (or fires unreliably). */
   master_pushes_config_pending: boolean;
   /** True when the device should be split into multiple logical
    *  sub-devices for northbound presentation. The SPA's CdpTilesPanel
@@ -41,132 +46,28 @@ export type DeviceSummary = {
   has_sub_devices?: boolean;
 };
 
-export type ChannelSummary = {
-  address: string;
-  number: number;
-  type?: string;
-  /** Localised channel-type label resolved through the OCCU
-   *  `channel_types_<locale>` table (e.g. "Energiemesser" for
-   *  `ENERGIE_METER_TRANSMITTER`). Empty when no translation exists. */
-  type_label?: string;
-  name?: string;
-  paramset_key: string;
-  data_points_count: number;
-  /** Stable name of the Custom-DP this channel is attached to —
-   *  empty when the channel is not owned by a CDP. The CDP-first
-   *  Übersicht view uses this to hide channels that are already
-   *  represented by a CDP tile (ADR 0016). */
-  custom_dp_name?: string;
-  /** Channel-group number the channel belongs to. Zero / missing
-   *  means the channel is not part of any group. */
-  group_no?: number;
-  /** True when the channel itself is the master of its channel group
-   *  (`group_no == number`). */
-  is_group_master?: boolean;
-  /** True when the channel sits in a channel group that carries more
-   *  than one member — i.e. it participates in a sub-device split.
-   *  Singleton groups stay `false`. */
-  is_in_multi_group?: boolean;
-  /** Resolved sub-device label per the channel's group master. Empty
-   *  when no sub-device split applies. */
-  sub_device_name?: string;
-};
+// ChannelSummary re-exported from generated schema — matches SPA usage.
+// Generated adds: category, paramset_keys, room; those are additive and safe.
+export type ChannelSummary = components["schemas"]["ChannelSummary"];
 
-export type CustomDPSummary = {
-  name: string;
-  category: string;
-  channel_no: number;
-  supported_operations: string[];
-  /** Stable widget hint — drives CDP-aware widget selection in the
-   *  Übersicht view (ADR 0016). Empty when the kind classifier does
-   *  not recognise the Custom-DP type. */
-  kind?: string;
-  /** CCU channels this Custom-DP composes. Currently always
-   *  `[channel_no]`; reserved for future channel-group expansion. */
-  channels?: number[];
-  /** Optional feature flags (`dimmable`, `color`, `color_temp`,
-   *  `tilt`, `boost`, `away`, …). */
-  capabilities?: Record<string, boolean>;
-  /** Static configuration block from the Custom-DP — temperature
-   *  bounds, available HVAC modes, preset / week-program slots,
-   *  etc. Mirrors the Go side's `ConfigPayload()`. Empty for
-   *  Custom-DPs that don't implement it. */
-  config?: Record<string, unknown>;
-};
+// CustomDPSummary re-exported from generated schema.
+// Generated adds: state (live state snapshot). Additive, safe for SPA.
+export type CustomDPSummary = components["schemas"]["CustomDPSummary"];
 
 /** Wire-side lifecycle token for a data point. See ADR 0018. */
 export type DataPointSource = "unobserved" | "cache" | "live" | "stale";
 
-export type DataPointSummary = {
-  parameter: string;
-  /** Ready-to-display row caption: locale-aware translation, else
-   *  title-cased parameter. Server-resolved through the shared naming
-   *  primitives — render verbatim (see `dpLabel()` in classify.ts). */
-  parameter_label?: string;
-  /** Locale-aware per-entity name, identical to the MQTT discovery
-   *  `name` field (channel-composed, device prefix stripped). Empty
-   *  when `label_omitted` is true. */
-  translated_name?: string;
-  /** True when the parameter is flagged "primary" — entity-naming
-   *  consumers collapse the name to the device name alone. */
-  label_omitted?: boolean;
-  value: unknown;
-  observed: boolean;
-  modified_at?: string;
-  /** Wire-side lifecycle token. Tells UI consumers whether the value
-   *  is fresh (`live`), restored from disk awaiting the first live
-   *  push (`cache`), known but the connection just dropped (`stale`),
-   *  or never seen (`unobserved`). */
-  source?: DataPointSource;
-  /** When the data point was last observed via any push event. Cyclic
-   *  info telegrams that repeat the previous value still bump this. */
-  last_seen_at?: string;
-  /** When the value actually changed last. Cyclic info telegrams do
-   *  NOT bump this; equivalent to the legacy `modified_at`. */
-  last_changed_at?: string;
-  /** Pre-computed seconds between `last_seen_at` and the response
-   *  time, so the browser does not need to parse the timestamp on
-   *  every render. */
-  value_age_seconds?: number;
-  /** OPERATIONS bitmask split into the three logical axes the CCU
-   *  exposes per parameter. The QuickControl tab uses `write` to drop
-   *  sensor-only channels (e.g. SWITCH_TRANSMITTER) from the actor
-   *  list — heuristics on channel type alone misclassify those. */
-  operations: { read: boolean; write: boolean; event: boolean };
-  /** CCU paramset descriptor's CONTROL attribute of the form
-   *  `WIDGET_FAMILY.SLOT`. Drives the CONTROL-aware widget resolver
-   *  in lib/control/. Empty when the descriptor carries no CONTROL. */
-  control?: string;
-  /** CCU descriptor TYPE (BOOL, INTEGER, FLOAT, ENUM, ...). Lets the
-   *  SPA pick the right widget primitive without re-reading the
-   *  paramset descriptor. */
-  type?: string;
-  /** Ordered enum labels for ENUM-typed parameters. Empty for
-   *  non-ENUM. Drives picker widgets (colour palette, effect select). */
-  value_list?: string[];
-  /** Parameter descriptor's UNIT ("°C", "%", "mA", "Hz", "Wh", ...).
-   *  Empty when the CCU carries no unit. */
-  unit?: string;
-  /** Descriptor numeric bounds + preset, passed through from the
-   *  wire. The AutoTile composer reads them to pick slider /
-   *  stepper / free-input primitives for writable numeric DPs. */
-  min?: unknown;
-  max?: unknown;
-  default?: unknown;
-  /** Daemon-computed UI classification envelope. See
-   *  docs/ui/auto-tile-concept.md. The AutoTile composer reads the
-   *  fields verbatim; no client-side re-classification runs. */
-  ui_hint?: UIHint;
-};
+// DataPointSummary and UIHint re-exported from generated schema.
+// Generated adds: category, data_point_type, usage — additive, safe.
+export type DataPointSummary = components["schemas"]["DataPointSummary"];
 
-/** Per-DP UI classification the daemon computes via
- *  `pkg/hmui.HintFor`. Additive, backwards-compatible. */
-export type UIHint = {
-  icon: string;
-  semantic: string;
-  state_color_rule?: string;
-};
+/** Per-DP UI classification the daemon computes via `pkg/hmui.HintFor`. */
+export type UIHint = NonNullable<components["schemas"]["DataPointSummary"]["ui_hint"]>;
 
+// TODO(openapi-typescript): reconcile with generated DeviceDetail.
+// Generated availability uses capitalized keys (IsReachable, LastUpdated, …)
+// and makes channels optional; SPA callers expect lowercase reachable + reason
+// and non-optional channels[]. Keep hand-written until openapi.yaml is updated.
 export type DeviceDetail = DeviceSummary & {
   firmware: {
     /** Current firmware version installed on the device. */
@@ -192,6 +93,8 @@ export type DeviceDetail = DeviceSummary & {
   channels: ChannelSummary[];
 };
 
+// Paginated is generic — not generated (openapi-typescript generates per-endpoint
+// response types, not a generic wrapper). Keep hand-written.
 export type Paginated<T> = {
   items: T[];
   page: number;
@@ -207,6 +110,9 @@ export type EventEnvelope =
   | { type: "sysvar"; payload: SysvarChangedEvent }
   | { type: string; payload: unknown };
 
+// DataPointChangedEvent is the SPA's internal normalized shape produced by
+// ws.ts normalizeEvent(). It differs from the wire's DataPointValueChangedPayload
+// (channel_address vs. device_address+channel, fewer fields). Keep hand-written.
 export type DataPointChangedEvent = {
   central: string;
   interface: string;
@@ -218,6 +124,8 @@ export type DataPointChangedEvent = {
 /** Aggregated state snapshot for a Custom-DP. Emitted whenever a
  *  wire-DP on the CDP's channel changes — gives SPA tiles one
  *  subscription per CDP instead of one per slot. */
+// CustomDataPointStateEvent is the SPA's normalized shape from ws.ts normalizeEvent().
+// It differs from the wire's CustomDataPointStateChangedPayload in field set.
 export type CustomDataPointStateEvent = {
   central: string;
   device_address: string;
@@ -233,6 +141,8 @@ export type DeviceAvailableEvent = {
   available: boolean;
 };
 
+// SysvarChangedEvent is the SPA's normalized shape. The wire payload
+// (SysvarChangedPayload) carries additional fields not needed in the SPA.
 export type SysvarChangedEvent = {
   central: string;
   name: string;
@@ -367,97 +277,23 @@ export type UISchemaProfile = {
 
 // --- direct links (Direktverknüpfungen) --------------------------
 
-export type Link = {
-  sender_address: string;
-  receiver_address: string;
-  name?: string;
-  description?: string;
-  flags?: number;
-  sender_device_name?: string;
-  sender_device_model?: string;
-  sender_channel_type?: string;
-  sender_channel_type_label?: string;
-  sender_channel_name?: string;
-  receiver_device_name?: string;
-  receiver_device_model?: string;
-  receiver_channel_type?: string;
-  receiver_channel_type_label?: string;
-  receiver_channel_name?: string;
-  peer_address: string;
-  peer_device_name?: string;
-  peer_device_model?: string;
-  direction: "outgoing" | "incoming";
-};
+// Link re-exported from generated schema — shapes match exactly.
+export type Link = components["schemas"]["Link"];
 
 // --- Schedules ----------------------------------------------------
 
-export type ClimatePeriod = {
-  start_time: string;
-  end_time: string;
-  temperature: number;
-};
+// Schedule types re-exported from generated schema — shapes match.
+export type ClimatePeriod = components["schemas"]["ClimatePeriod"];
+export type ClimateWeekday = components["schemas"]["ClimateWeekday"];
+export type ClimateProfile = components["schemas"]["ClimateProfile"];
+export type SimpleScheduleEntry = components["schemas"]["SimpleScheduleEntry"];
 
-export type ClimateWeekday = {
-  base_temperature: number;
-  periods: ClimatePeriod[];
-};
+// ClimateSchedule uses the generated Schedule shape — additive fields
+// (active_profile_index) are safe to ignore in existing SPA callers.
+export type ClimateSchedule = components["schemas"]["Schedule"];
 
-export type ClimateProfile = {
-  weekdays: Record<string, ClimateWeekday>;
-};
-
-export type SimpleScheduleEntry = {
-  slot_no: number;
-  weekdays: string[];
-  time: string;
-  condition?:
-    | "fixed_time"
-    | "astro"
-    | "fixed_if_before_astro"
-    | "astro_if_before_fixed"
-    | "fixed_if_after_astro"
-    | "astro_if_after_fixed"
-    | "earliest_of_fixed_and_astro"
-    | "latest_of_fixed_and_astro"
-    | string;
-  astro_type?: "sunrise" | "sunset" | string;
-  astro_offset_minutes?: number;
-  target_channels?: string[];
-  level: number;
-  level_2?: number;
-  duration?: string;
-  ramp_time?: string;
-  // Lock-only fields; ignored when domain != "lock".
-  lock_mode?: "door_lock" | "user_permission" | string;
-  lock_action?:
-    | "lock_autorelock_end"
-    | "lock_autorelock_start"
-    | "unlock_autorelock_end"
-    | "autorelock_end"
-    | string;
-  permission?: "granted" | "not_granted" | string;
-};
-
-// Unified schedule envelope — `kind` selects the populated branch.
-// "climate" → profiles (P1..P6), used by thermostats.
-// "simple"  → simple_entries, used by switches/covers/lights.
-export type ClimateSchedule = {
-  channel: {
-    address: string;
-    number: number;
-    device_address: string;
-  };
-  kind: "climate" | "simple" | string;
-  // For "simple" schedules: which kind of actor is being scheduled.
-  // Drives which widgets the SPA shows ("switch" → on/off toggle,
-  // "light" → slider+ramp, "cover" → slider+slat, "lock" → action,
-  // "valve" → slider). Empty / "" → generic fallback editor.
-  domain?: "switch" | "light" | "cover" | "lock" | "valve" | "climate" | string;
-  active_profile?: string;
-  profiles?: Record<string, ClimateProfile>;
-  simple_entries?: SimpleScheduleEntry[];
-};
-
+// BackupEntry: not in generated schema (no backup schema defined in openapi.yaml components).
+// Keep hand-written.
 export type BackupEntry = {
   id: string;
   central: string;
@@ -465,6 +301,10 @@ export type BackupEntry = {
   created_at: string;
 };
 
+// TODO(openapi-typescript): reconcile with generated SysvarSummary.
+// Generated schema (SysvarSummary) makes central optional and adds extra fields
+// (min, max, is_internal, is_extended, vid, enabled_default). SPA callers
+// require central as a required field. Keep hand-written until openapi.yaml aligns.
 export type SysvarEntry = {
   central: string;
   name: string;
@@ -476,6 +316,10 @@ export type SysvarEntry = {
   value_list?: string[];
 };
 
+// TODO(openapi-typescript): reconcile with generated ProgramSummary.
+// Generated schema makes central optional and adds last_executed, is_internal,
+// enabled_default. SPA callers require central as a required field.
+// Keep hand-written until openapi.yaml aligns.
 export type ProgramEntry = {
   central: string;
   id: string;
@@ -490,6 +334,10 @@ export type AuditChange = {
   after?: unknown;
 };
 
+// TODO(openapi-typescript): reconcile with generated AuditEntry.
+// Generated schema lacks: central, structured action enum (uses string),
+// and changes uses an inline type without the standalone AuditChange alias.
+// Keep hand-written until the openapi.yaml adds the central field.
 export type AuditEntry = {
   central?: string;
   timestamp: string;
@@ -512,6 +360,8 @@ export type AuditEntry = {
   note?: string;
 };
 
+// TODO(openapi-typescript): reconcile with generated AlarmMessage.
+// Generated schema lacks the `central` field. Keep hand-written until openapi.yaml adds it.
 export type AlarmMessage = {
   central: string;
   id: string;
@@ -524,6 +374,9 @@ export type AlarmMessage = {
   rooms?: string[];
 };
 
+// TODO(openapi-typescript): reconcile with generated ServiceMessage.
+// Generated schema lacks `central` and makes `quittable` optional; SPA
+// treats quittable as required boolean. Keep hand-written until aligned.
 export type ServiceMessage = {
   central: string;
   id: string;
@@ -536,16 +389,11 @@ export type ServiceMessage = {
   quittable: boolean;
 };
 
-export type InterfaceInfo = {
-  id: string;
-  name: string;
-  connected: boolean;
-  interface: string;
-  central_id?: string;
-  host?: string;
-  note?: string;
-};
+// InterfaceInfo re-exported from generated InterfaceState — same shape.
+export type InterfaceInfo = components["schemas"]["InterfaceState"];
 
+// HealthComponent derived from generated Health schema (inline component type).
+// Generated makes recorded_at required; SPA only reads optional fields.
 export type HealthComponent = {
   name: string;
   status: "healthy" | "degraded" | "unhealthy" | string;
@@ -553,11 +401,12 @@ export type HealthComponent = {
   recorded_at?: string;
 };
 
-export type HealthSnapshot = {
-  status: "healthy" | "degraded" | "unhealthy" | string;
-  components: HealthComponent[];
-};
+// HealthSnapshot re-exported from generated Health schema.
+// Generated uses a stricter status enum but is a superset — safe.
+export type HealthSnapshot = components["schemas"]["Health"];
 
+// Incident: not in generated schema (no /incidents endpoint schema defined in openapi.yaml).
+// Keep hand-written.
 export type Incident = {
   id: string;
   when: string;
@@ -567,7 +416,7 @@ export type Incident = {
   detail?: string;
 };
 
-// --- Diagnostics (Wave 3) -----------------------------------------
+// --- Diagnostics --------------------------------------------------
 
 export type LogLevelEntry = {
   path: string;
@@ -649,6 +498,7 @@ export type CentralLinksReport = {
   failed: number;
 };
 
+// RoomEntry/FunctionEntry: not in generated schema components. Keep hand-written.
 export type RoomEntry = {
   name: string;
   device_count: number;
@@ -659,17 +509,15 @@ export type FunctionEntry = {
   device_count: number;
 };
 
-export type UserListEntry = {
-  username: string;
-  role: "admin" | "operator" | "viewer" | string;
-};
+// UserListEntry re-exported from generated schema — shapes match.
+export type UserListEntry = components["schemas"]["UserListEntry"];
 
-export type TokenListEntry = {
-  fingerprint: string;
-  subject: string;
-  role: "admin" | "operator" | "viewer" | string;
-};
+// TODO(openapi-typescript): reconcile with generated TokenListEntry.
+// Generated adds an `id` field; SPA callers use only fingerprint/subject/role.
+// Safe to re-export since the extra field is additive.
+export type TokenListEntry = components["schemas"]["TokenListEntry"];
 
+// EditSessionResponse: not in generated schema components. Keep hand-written.
 export type EditSessionResponse = {
   token: string;
   key: string;
@@ -677,6 +525,7 @@ export type EditSessionResponse = {
   expires: string;
 };
 
+// InboxDevice: not in generated schema components. Keep hand-written.
 export type InboxDevice = {
   central: string;
   address: string;
@@ -686,14 +535,11 @@ export type InboxDevice = {
   first_seen?: number;
 };
 
-export type ConfigSnapshot = {
-  locale?: string;
-  centrals?: { name: string; host: string; interfaces: string[] }[];
-  callback_ports?: { xmlrpc?: number; binrpc?: number };
-  features?: Record<string, boolean>;
-  [k: string]: unknown;
-};
+// ConfigSnapshot re-exported from generated schema.
+// Generated adds: extras, policies fields — additive, safe.
+export type ConfigSnapshot = components["schemas"]["ConfigSnapshot"];
 
+// LinkableChannel: not in generated schema components. Keep hand-written.
 export type LinkableChannel = {
   address: string;
   channel_type?: string;
@@ -704,6 +550,7 @@ export type LinkableChannel = {
   device_model?: string;
 };
 
+// RpcRecordingStatus: not in generated schema components. Keep hand-written.
 export type RpcRecordingStatus = {
   central: string;
   active: boolean;
@@ -712,6 +559,7 @@ export type RpcRecordingStatus = {
   randomize?: boolean;
 };
 
+// LogRecord: not in generated schema components. Keep hand-written.
 export type LogRecord = {
   seq: number;
   time: string;
