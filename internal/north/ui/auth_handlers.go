@@ -98,7 +98,12 @@ func handleSetupPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 			http.Redirect(w, r, "/setup?error=1", http.StatusSeeOther)
 			return
 		}
-		ad.Users.Put(user, pass, auth.RoleAdmin)
+		hashed, err := auth.HashPassword(pass)
+		if err != nil {
+			http.Redirect(w, r, "/setup?error=1", http.StatusSeeOther)
+			return
+		}
+		ad.Users.Put(user, hashed, auth.RoleAdmin)
 		slog.InfoContext(r.Context(), "auth.setup.admin_created",
 			slog.String("subject", user),
 			slog.String("remote", r.RemoteAddr))
