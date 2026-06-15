@@ -22,6 +22,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -33,6 +35,7 @@ const (
 	schemaDir       = "internal/north/matter/schema"
 	clustersFile    = "internal/north/matter/schema/clusters.go"
 	devicetypesFile = "internal/north/matter/schema/devicetypes.go"
+	provenanceFile  = "internal/north/matter/schema/schema_provenance_gen.go"
 )
 
 // snapshotCluster mirrors the cluster shape in matter-schema-snapshot.json.
@@ -88,6 +91,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Compute the SHA-256 of the raw snapshot bytes so the generated
+	// provenance file lets tests detect when someone hand-edits a generated
+	// constant without re-running the generator.
+	sum := sha256.Sum256(raw)
+	snapshotSHA256 := hex.EncodeToString(sum[:])
+
 	if err := writeClustersFile(snap.Clusters); err != nil {
 		fmt.Fprintf(os.Stderr, "write %s: %v\n", clustersFile, err)
 		os.Exit(1)
@@ -99,6 +108,12 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("wrote %s (%d device types)\n", devicetypesFile, len(snap.DeviceTypes))
+
+	if err := writeProvenanceFile(snapshotSHA256); err != nil {
+		fmt.Fprintf(os.Stderr, "write %s: %v\n", provenanceFile, err)
+		os.Exit(1)
+	}
+	fmt.Printf("wrote %s (SHA-256 %s)\n", provenanceFile, snapshotSHA256)
 }
 
 const fileHeaderTpl = `// SPDX-License-Identifier: MIT
@@ -160,6 +175,18 @@ func writeDeviceTypesFile(dts []snapshotDeviceType) error {
 	buf.WriteString("}\n")
 
 	return writeIfChanged(devicetypesFile, buf.Bytes())
+}
+
+func writeProvenanceFile(sha256hex string) error {
+	var buf bytes.Buffer
+	buf.WriteString(fileHeaderTpl)
+	buf.WriteString("// SchemaSnapshotSHA256 is the SHA-256 hex digest of\n")
+	buf.WriteString("// docs/parity/matter/matter-schema-snapshot.json at generation time.\n")
+	buf.WriteString("// The TestMatterSchemaSnapshotHashMatchesEmbedded test recomputes the\n")
+	buf.WriteString("// hash at test time and fails when they diverge — catching hand-edits\n")
+	buf.WriteString("// to generated constants that did not go through the generator.\n")
+	fmt.Fprintf(&buf, "const SchemaSnapshotSHA256 = %q\n", sha256hex)
+	return writeIfChanged(provenanceFile, buf.Bytes())
 }
 
 // writeIfChanged writes content to path only when the file content differs,
