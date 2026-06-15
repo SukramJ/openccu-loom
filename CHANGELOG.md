@@ -28,6 +28,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   unbounded. The command router now throttles each identity (burst 60, ~20/s
   refill, idle-evicted bucket map); a throttled command returns
   `code: rate_limited`.
+- **Plaintext-secret fallback is now visible on `/health` and as a metric.**
+  When no master key can be resolved the daemon stores config secrets in
+  plaintext (the ADR 0027 resilient fallback) — previously surfaced only as a
+  single boot warning. It now reports a degraded `config.secrets` component on
+  `/health` (which collapses to "degraded", not a 503, so liveness stays green)
+  and a `config_secrets_plaintext` gauge (1 = plaintext, 0 = encrypted) so an
+  operator dashboard catches it without scraping logs.
 
 ### Fixed
 
