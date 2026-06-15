@@ -162,7 +162,7 @@ func PutWeekProfileChannelLock(idx DeviceIndex) http.HandlerFunc {
 		}
 		if err := wp.SetScheduleEnabled(r.Context(), key, req.Enabled, hmenum.CommandPriorityHigh); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Channel lock write failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Channel lock write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

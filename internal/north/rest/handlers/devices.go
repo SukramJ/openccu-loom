@@ -280,7 +280,7 @@ func RefreshDevices(svc RefreshDevicesService) http.HandlerFunc {
 		}
 		if err := svc.RefreshDevices(r.Context()); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Refresh failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Refresh failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -679,7 +679,7 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 				return
 			}
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Set failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Set failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

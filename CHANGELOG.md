@@ -25,6 +25,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **REST upstream failures no longer report `code: internal`.** 35 handler
+  paths that return HTTP 502 for a failed CCU/upstream call tagged the
+  problem+json body with `code: internal` (which signals a daemon bug). They
+  now use `code: upstream_unavailable`, so API/SPA clients switching on `code`
+  can distinguish a transient upstream outage from an internal error. The 502
+  status and the specific error titles are unchanged.
 - **Retry-cancellation metric no longer double-counts.** `CancelledRetries`
   was incremented twice per cancelled chain — once at the cancelling call site
   (supersede / `CancelKey` / `CancelDevice` / `CancelInterface`) and again when

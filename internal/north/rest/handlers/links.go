@@ -124,7 +124,7 @@ func AddLink(svc LinksService) http.HandlerFunc {
 		}
 		if err := svc.AddLink(r.Context(), req.SenderAddress, req.ReceiverAddress, req.Name, req.Description); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Add link failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Add link failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -148,7 +148,7 @@ func RemoveLink(svc LinksService) http.HandlerFunc {
 		}
 		if err := svc.RemoveLink(r.Context(), sender, receiver); err != nil {
 			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeInternal, r, "Remove link failed", err.Error()))
+				problem.New(problem.TypeUpstreamUnavailable, r, "Remove link failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
