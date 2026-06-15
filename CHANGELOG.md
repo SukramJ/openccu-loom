@@ -22,6 +22,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (it keys on a resolved identity and runs on the REST listener). Throttled
   requests receive a `Retry-After` header and the generic login error, so the
   limiter neither slows a legitimate operator nor reveals its presence.
+- **Per-identity rate limit on the WebSocket command channel.** Once a WS
+  connection is upgraded the REST per-request limiter no longer applies, so a
+  single authenticated session could fan out paramset writes / ReGa executions
+  unbounded. The command router now throttles each identity (burst 60, ~20/s
+  refill, idle-evicted bucket map); a throttled command returns
+  `code: rate_limited`.
 
 ### Fixed
 
