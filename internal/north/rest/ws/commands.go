@@ -53,6 +53,9 @@ const (
 	// for the name) and from CommandErrorInternal (which signals a
 	// handler bug).
 	CommandErrorNotImplemented = "not_implemented"
+	// CommandErrorRateLimited is returned when a connection exceeds the
+	// per-identity command rate. Clients should back off and retry.
+	CommandErrorRateLimited = "rate_limited"
 )
 
 // Router routes inbound `call` frames to a registered handler by
@@ -79,13 +82,21 @@ type Router struct {
 	// connects, so no synchronisation is needed.
 	logger      *slog.Logger
 	centralName string
+
+	// limiter throttles the command channel per auth identity. Set once
+	// by NewRouter; the same lock-free hot-path read rule as the boundary
+	// fields applies (the limiter has its own internal lock).
+	limiter *commandRateLimiter
 }
 
 // NewRouter returns an empty router with no boundary wiring (no
 // logger, empty central name). Tests typically use this; production
 // composes via [SetBoundary] after construction.
 func NewRouter() *Router {
-	return &Router{handlers: make(map[string]CommandHandler)}
+	return &Router{
+		handlers: make(map[string]CommandHandler),
+		limiter:  newCommandRateLimiter(commandRatePerSec, commandRateBurst),
+	}
 }
 
 // SetBoundary installs the cross-cutting boundary that every future
@@ -150,6 +161,12 @@ func (r *Router) Commands() []string {
 func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMessage) Result {
 	start := time.Now()
 	ctx = r.enrichContext(ctx, command, start)
+
+	if r.limiter != nil && !r.limiter.allow(commandRateKey(ctx)) {
+		res := Result{Error: NewCommandError(CommandErrorRateLimited, "command rate limit exceeded")}
+		r.logOutcome(ctx, command, res, time.Since(start))
+		return res
+	}
 
 	r.mu.RLock()
 	fn, ok := r.handlers[command]
