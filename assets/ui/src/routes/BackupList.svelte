@@ -6,9 +6,9 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
-
-  type Props = { locale: string };
-  let { locale }: Props = $props();
+  import { prefs } from "$lib/stores/preferences.svelte";
+  // `t()` reads prefs.locale reactively; for date formatting we read it
+  // directly here — no need to thread it as a prop for display-only use.
 
   let backups = $state<BackupEntry[]>([]);
   let loading = $state(true);
@@ -84,7 +84,7 @@
 
   function formatDate(iso: string): string {
     try {
-      return new Date(iso).toLocaleString(locale === "de" ? "de-DE" : "en-US");
+      return new Date(iso).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
     } catch {
       return iso;
     }

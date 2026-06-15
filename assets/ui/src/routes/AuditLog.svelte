@@ -6,9 +6,10 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   type Props = {
-    locale: string;
     /** When set, only entries that match this device address are
      *  displayed. Used by the device-detail "Verlauf" tab to scope
      *  the global change history to one device. */
@@ -17,7 +18,7 @@
      *  already provides one) and tightens the outer padding. */
     embedded?: boolean;
   };
-  let { locale, deviceFilter, embedded = false }: Props = $props();
+  let { deviceFilter, embedded = false }: Props = $props();
 
   let entries = $state<AuditEntry[]>([]);
   let loading = $state(true);
@@ -55,7 +56,7 @@
 
   function formatTs(iso: string): string {
     try {
-      return new Date(iso).toLocaleString(locale === "de" ? "de-DE" : "en-US");
+      return new Date(iso).toLocaleString(prefs.locale === "de" ? "de-DE" : "en-US");
     } catch {
       return iso;
     }

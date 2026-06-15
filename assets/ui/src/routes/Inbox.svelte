@@ -7,14 +7,13 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { t } from "$lib/i18n";
+  import { prefs } from "$lib/stores/preferences.svelte";
+  // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   // Inbox of pending pairing candidates. The CCU populates the list
   // through its system-variable feed; this view lets the operator
   // accept devices into the running registry. Mirrors the
   // "Posteingang" panel of the CCU WebUI.
-
-  type Props = { locale: string };
-  let { locale }: Props = $props();
 
   let entries = $state<InboxDevice[]>([]);
   let loading = $state(true);
@@ -101,7 +100,7 @@
     if (!secs) return "";
     try {
       return new Date(secs * 1000).toLocaleString(
-        locale === "de" ? "de-DE" : "en-US",
+        prefs.locale === "de" ? "de-DE" : "en-US",
       );
     } catch {
       return String(secs);

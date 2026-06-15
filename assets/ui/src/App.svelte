@@ -217,18 +217,18 @@
             {locale}
           />
         {:else if route.kind === "backups"}
-          <BackupList {locale} />
+          <BackupList />
         {:else if route.kind === "sysvars"}
           <SysvarList />
         {:else if route.kind === "programs"}
           <ProgramList />
         {:else if route.kind === "messages"}
-          <MessageList {locale} />
+          <MessageList />
         {:else if route.kind === "audit"}
-          <AuditLog {locale} />
+          <AuditLog />
         {:else if route.kind === "diagnostics"}
           {#await loadDiagnostics() then { default: Diagnostics }}
-            <Diagnostics {locale} />
+            <Diagnostics />
           {/await}
         {:else if route.kind === "logs"}
           {#if authStore.identity?.role === "admin"}
@@ -243,7 +243,7 @@
         {:else if route.kind === "settings"}
           <Settings />
         {:else if route.kind === "inbox"}
-          <Inbox {locale} />
+          <Inbox />
         {:else if route.kind === "firmware"}
           <FirmwareList />
         {:else if route.kind === "matter"}

@@ -13,6 +13,23 @@
 // Keys missing from the active locale fall back to the English
 // string; a missing key in BOTH dictionaries returns the key
 // itself so usability stays acceptable during migration.
+//
+// --- Two valid patterns for locale access in components ---
+//
+// Pattern A — display-only text (the common case):
+//   Call `t(key)` directly; it reads `prefs.locale` reactively.
+//   For JS date formatting read `prefs.locale` directly from this module.
+//   Do NOT thread a `locale` prop just for rendering strings.
+//
+// Pattern B — server-side label resolution (the narrow exception):
+//   Certain REST calls send `?locale=...` so the daemon can resolve
+//   CCU-side labels in the right language (e.g. `api.uiSchema`,
+//   `api.listLinks`, `api.linkableChannels`). Components that make
+//   these calls DO need a `locale` prop so the caller can pass the
+//   current value reactively. Keep the prop at the ChannelPanel,
+//   DeviceLinks, LinkConfigPanel level where it feeds an API call,
+//   and let App.svelte derive it from `prefs.locale` once for the
+//   whole tree.
 
 import { prefs } from "./stores/preferences.svelte";
 
