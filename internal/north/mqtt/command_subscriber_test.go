@@ -18,7 +18,7 @@ type fakeSink struct {
 	setValues    atomic.Int32
 	setSysvars   atomic.Int32
 	triggers     atomic.Int32
-	masterParams atomic.Int32
+	masterValues atomic.Int32
 	lastVal      struct {
 		centralName, iface, chanAddr string
 		param                        string
@@ -48,10 +48,10 @@ func (f *fakeSink) SetValue(_ context.Context, centralName, iface, chanAddr stri
 	return nil
 }
 
-func (f *fakeSink) SetMasterParam(_ context.Context, centralName, iface, chanAddr string,
+func (f *fakeSink) SetMasterValue(_ context.Context, centralName, iface, chanAddr string,
 	param hmenum.Parameter, v any, _ hmenum.CommandPriority,
 ) error {
-	f.masterParams.Add(1)
+	f.masterValues.Add(1)
 	f.lastMaster.centralName = centralName
 	f.lastMaster.iface = iface
 	f.lastMaster.chanAddr = chanAddr
@@ -528,7 +528,7 @@ func TestCommandSubscriberInstallModeRetainedDrop(t *testing.T) {
 
 // TestCommandSubscriberMasterBucketRoutes verifies that a message on the
 // 8-segment canonical topic with bucket=master is delivered to
-// SetMasterParam (not SetValue) with the correct field extraction.
+// SetMasterValue (not SetValue) with the correct field extraction.
 func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	t.Parallel()
 	noop := NewNoopClient()
@@ -543,8 +543,8 @@ func TestCommandSubscriberMasterBucketRoutes(t *testing.T) {
 	if !ok {
 		t.Fatal("subscription did not match")
 	}
-	if sink.masterParams.Load() != 1 {
-		t.Fatalf("SetMasterParam calls=%d, want 1", sink.masterParams.Load())
+	if sink.masterValues.Load() != 1 {
+		t.Fatalf("SetMasterValue calls=%d, want 1", sink.masterValues.Load())
 	}
 	if sink.setValues.Load() != 0 {
 		t.Fatalf("SetValue must not be called for master bucket; got %d calls", sink.setValues.Load())
@@ -581,8 +581,8 @@ func TestCommandSubscriberCalculatedBucketDropped(t *testing.T) {
 	}
 	noop.DeliverInbound("openccu-loom/+/+/+/+/+/+/set",
 		"openccu-loom/ccu-01/HmIP-RF/0001ABCD/1/calculated/SOME_PARAM/set", []byte("true"))
-	if sink.masterParams.Load() != 0 {
-		t.Fatalf("SetMasterParam must not be called for calculated bucket; got %d calls", sink.masterParams.Load())
+	if sink.masterValues.Load() != 0 {
+		t.Fatalf("SetMasterValue must not be called for calculated bucket; got %d calls", sink.masterValues.Load())
 	}
 	if sink.setValues.Load() != 0 {
 		t.Fatalf("SetValue must not be called for calculated bucket; got %d calls", sink.setValues.Load())
@@ -605,7 +605,7 @@ func TestCommandSubscriberValuesBucketStillRoutes(t *testing.T) {
 	if sink.setValues.Load() != 1 {
 		t.Fatalf("SetValue calls=%d, want 1", sink.setValues.Load())
 	}
-	if sink.masterParams.Load() != 0 {
-		t.Fatalf("SetMasterParam must not be called for values bucket; got %d calls", sink.masterParams.Load())
+	if sink.masterValues.Load() != 0 {
+		t.Fatalf("SetMasterValue must not be called for values bucket; got %d calls", sink.masterValues.Load())
 	}
 }

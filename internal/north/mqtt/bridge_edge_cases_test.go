@@ -1176,7 +1176,7 @@ func (e *errSink) SetValue(_ context.Context, _, _, _ string, _ hmenum.Parameter
 	return errors.New("setvalue error")
 }
 
-func (e *errSink) SetMasterParam(_ context.Context, _, _, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority) error {
+func (e *errSink) SetMasterValue(_ context.Context, _, _, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority) error {
 	return errors.New("setmasterparam error")
 }
 

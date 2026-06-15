@@ -22,7 +22,7 @@ import (
 type CommandSink interface {
 	SetValue(ctx context.Context, centralName, interfaceID, channelAddress string,
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
-	SetMasterParam(ctx context.Context, centralName, interfaceID, channelAddress string,
+	SetMasterValue(ctx context.Context, centralName, interfaceID, channelAddress string,
 		parameter hmenum.Parameter, value any, priority hmenum.CommandPriority) error
 	SetSysvar(ctx context.Context, centralName, name string, payload any) error
 	TriggerProgram(ctx context.Context, centralName, id string) error
@@ -519,7 +519,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	//      (7 segments).
 	//
 	// The 7-segment (legacy) form always routes to VALUES. In the 8-segment
-	// form `values` routes to SetValue, `master` routes to SetMasterParam,
+	// form `values` routes to SetValue, `master` routes to SetMasterValue,
 	// and `calculated` is read-only and is dropped with a debug log.
 	parts := strings.Split(topic, "/")
 	if parts[len(parts)-1] != "set" {
@@ -563,7 +563,7 @@ func (c *CommandSubscriber) handleDataPoint(topic string, body []byte, retained 
 	ctx, cancel := context.WithCancel(c.lifecycleCtx)
 	defer cancel()
 	if isMaster {
-		if err := c.sink.SetMasterParam(ctx, centralName, iface, channelAddress,
+		if err := c.sink.SetMasterValue(ctx, centralName, iface, channelAddress,
 			hmenum.Parameter(parameter), value, hmenum.CommandPriorityHigh); err != nil {
 			c.logger.Warn("mqtt.command.setmasterparam",
 				slog.String("topic", topic),

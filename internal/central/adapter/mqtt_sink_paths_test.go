@@ -4,7 +4,7 @@
 // mqtt_sink_paths_test.go covers additional nil-guard and error branches in
 // MQTTCommandSink: SetSysvar unknown-sysvar, TriggerProgram unknown-program,
 // InvokeChannelService device/channel/cdp not found paths, and
-// SetMasterParam resolution + write paths.
+// SetMasterValue resolution + write paths.
 
 package adapter
 
@@ -180,11 +180,11 @@ func TestMQTTCommandSinkInvokeChannelServiceNoInvoker(t *testing.T) {
 }
 
 // ============================================================
-// SetMasterParam — channel writer records the write
+// SetMasterValue — channel writer records the write
 // ============================================================
 
 // sinkChannelWriter is a minimal device.ChannelWriter that records
-// SetValue calls so SetMasterParam tests can assert the write reached
+// SetValue calls so SetMasterValue tests can assert the write reached
 // the wire layer.
 type sinkChannelWriter struct {
 	mu    sync.Mutex
@@ -216,7 +216,7 @@ func (w *sinkChannelWriter) snapshot() (p hmenum.Parameter, v any, calls int) {
 	return w.param, w.value, w.calls
 }
 
-func TestMQTTCommandSinkSetMasterParamWritesValue(t *testing.T) {
+func TestMQTTCommandSinkSetMasterValueWritesValue(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-mp"})
 	if err != nil {
@@ -256,11 +256,11 @@ func TestMQTTCommandSinkSetMasterParamWritesValue(t *testing.T) {
 	c.ModelRegistry.Put(d)
 
 	s := NewMQTTCommandSink(reg, nil)
-	if err := s.SetMasterParam(
+	if err := s.SetMasterValue(
 		context.Background(), "ccu-mp", "HmIP-RF", chAddr,
 		hmenum.Parameter(paramName), 0.5, hmenum.CommandPriorityHigh,
 	); err != nil {
-		t.Fatalf("SetMasterParam: %v", err)
+		t.Fatalf("SetMasterValue: %v", err)
 	}
 
 	p, v, calls := cw.snapshot()
@@ -275,17 +275,17 @@ func TestMQTTCommandSinkSetMasterParamWritesValue(t *testing.T) {
 	}
 }
 
-func TestMQTTCommandSinkSetMasterParamUnknownCentral(t *testing.T) {
+func TestMQTTCommandSinkSetMasterValueUnknownCentral(t *testing.T) {
 	t.Parallel()
 	s := NewMQTTCommandSink(central.NewRegistry(), nil)
-	err := s.SetMasterParam(context.Background(), "no-such-central", "HmIP-RF", "DEV:1",
+	err := s.SetMasterValue(context.Background(), "no-such-central", "HmIP-RF", "DEV:1",
 		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("expected error for unknown central")
 	}
 }
 
-func TestMQTTCommandSinkSetMasterParamUnknownDevice(t *testing.T) {
+func TestMQTTCommandSinkSetMasterValueUnknownDevice(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-mpdev"})
 	if err != nil {
@@ -294,14 +294,14 @@ func TestMQTTCommandSinkSetMasterParamUnknownDevice(t *testing.T) {
 	reg := central.NewRegistry()
 	_ = reg.Register(c)
 	s := NewMQTTCommandSink(reg, nil)
-	err = s.SetMasterParam(context.Background(), "ccu-mpdev", "HmIP-RF", "NODEV:1",
+	err = s.SetMasterValue(context.Background(), "ccu-mpdev", "HmIP-RF", "NODEV:1",
 		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("expected error for unknown device")
 	}
 }
 
-func TestMQTTCommandSinkSetMasterParamUnknownChannel(t *testing.T) {
+func TestMQTTCommandSinkSetMasterValueUnknownChannel(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-mpch"})
 	if err != nil {
@@ -319,14 +319,14 @@ func TestMQTTCommandSinkSetMasterParamUnknownChannel(t *testing.T) {
 	c.ModelRegistry.Put(d)
 	s := NewMQTTCommandSink(reg, nil)
 	// Channel :99 does not exist.
-	err = s.SetMasterParam(context.Background(), "ccu-mpch", "HmIP-RF", "MPDEV002:99",
+	err = s.SetMasterValue(context.Background(), "ccu-mpch", "HmIP-RF", "MPDEV002:99",
 		hmenum.Parameter("FOO"), true, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("expected error for unknown channel")
 	}
 }
 
-func TestMQTTCommandSinkSetMasterParamUnknownParam(t *testing.T) {
+func TestMQTTCommandSinkSetMasterValueUnknownParam(t *testing.T) {
 	t.Parallel()
 	c, err := central.New(central.Config{Name: "ccu-mpparam"})
 	if err != nil {
@@ -344,7 +344,7 @@ func TestMQTTCommandSinkSetMasterParamUnknownParam(t *testing.T) {
 	c.ModelRegistry.Put(d)
 	s := NewMQTTCommandSink(reg, nil)
 	// Channel exists but has no MASTER DP named NO_SUCH_PARAM.
-	err = s.SetMasterParam(context.Background(), "ccu-mpparam", "HmIP-RF", "MPDEV003:1",
+	err = s.SetMasterValue(context.Background(), "ccu-mpparam", "HmIP-RF", "MPDEV003:1",
 		hmenum.Parameter("NO_SUCH_PARAM"), true, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("expected error for parameter not in MASTER paramset")
