@@ -1,0 +1,72 @@
+# Cross-stack model-snapshot parity gate.
+#
+# Runs the four-step cross-stack snapshot pipeline that CLAUDE.md
+# documents as the release gate but that `integration.yml` currently
+# skips ("the aiohomematic + pydevccu + openccu_data Python stack is not
+# provisioned on the runner"). This workflow provisions that stack from
+# the public sibling packages and runs all four steps.
+#
+# Scheduled nightly + manual dispatch only — NOT on pull requests — so a
+# provisioning hiccup or a reference-version bump never blocks a PR
+# merge; a regression surfaces as a failing nightly run instead.
+#
+# See docs/adr/0038-cross-stack-ci-gate.md.
+name: cross-stack-parity
+
+on:
+  schedule:
+    - cron: "37 3 * * *" # nightly, offset from the other nightly jobs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26.4"
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  snapshot-parity:
+    name: cross-stack model snapshot (openccu-loom vs aiohomematic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: provision Python reference stack (aiohomematic + pydevccu + openccu-data)
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/refstack"
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install --upgrade pip wheel
+          # aiohomematic + pydevccu are published on PyPI; openccu-data ships
+          # the metadata extracts as a package from its repo (pyproject.toml).
+          # When a release pins a specific reference version, pin it here too
+          # (aiohomematic==X) so the snapshot is compared against the exact
+          # version the Go port embeds — `main`/latest is the best-effort match.
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install aiohomematic pydevccu
+          "$RUNNER_TEMP/refstack/bin/python" -m pip install "git+https://github.com/SukramJ/openccu-data@main"
+          # Make the venv's python the `python3` the Makefile targets invoke,
+          # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
+          echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"
+
+      - name: "step 1/4 — datasource diff (pydevccu vs godevccu wire data)"
+        run: make datasource-diff
+
+      - name: "step 2/4 — openccu-loom model snapshot (against godevccu, ~80k DPs)"
+        run: make snapshot-go
+
+      - name: "step 3/4 — aiohomematic model snapshot (against pydevccu, ~8k DPs)"
+        env:
+          AIOHOMEMATIC_VENV_PYTHON: ${{ runner.temp }}/refstack/bin/python
+        run: make snapshot-py
+
+      - name: "step 4/4 — cross-stack drift gate (exit 0 = intersection parity within baseline)"
+        run: make snapshot-diff
