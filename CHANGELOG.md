@@ -23,6 +23,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   requests receive a `Retry-After` header and the generic login error, so the
   limiter neither slows a legitimate operator nor reveals its presence.
 
+### Fixed
+
+- **Retry-cancellation metric no longer double-counts.** `CancelledRetries`
+  was incremented twice per cancelled chain — once at the cancelling call site
+  (supersede / `CancelKey` / `CancelDevice` / `CancelInterface`) and again when
+  the chain observed its closed cancel channel. It is now counted once, so the
+  metric matches the number of chains actually cancelled.
+- **Circuit-recovery waiter no longer drops other waiters.** The retrier's
+  recovery waiter wired its wake-up hook with the breaker's *replace* setter
+  instead of the *append* one, so a second waiter on the same breaker silently
+  evicted the first (leaving its blocked retries unwoken until their deadline).
+  It now appends, matching the documented "piggy-back, never replace" intent.
+
 ### Added
 
 - **CCU system-update panel** (Settings → System). Shows each CCU's firmware

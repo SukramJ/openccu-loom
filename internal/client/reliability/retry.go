@@ -347,9 +347,10 @@ func shouldWaitForRecovery(err error) bool {
 
 // NewCircuitRecoveryWaiter constructs a [RecoveryWaiter] that short-circuits
 // the retrier's backoff sleep as soon as the supplied CircuitBreaker
-// transitions out of OPEN. Wires through [CircuitBreaker.OnStateChange] so
-// existing observers (incident recorder, event bus) keep firing — the waiter
-// only piggy-backs on the same callback.
+// transitions out of OPEN. Wires through [CircuitBreaker.AddOnStateChange] so
+// existing observers (incident recorder, event bus) keep firing, and multiple
+// waiters on one breaker each keep their own hook — the waiter only
+// piggy-backs, it never replaces another listener.
 //
 // Pass the same CircuitBreaker the retrier is wrapped under (typically inside
 // [Client.Call]) so the waiter actually reacts to the right circuit.
@@ -400,7 +401,7 @@ func (w *circuitRecoveryWaiter) ensureHook() {
 	if already {
 		return
 	}
-	w.cb.OnStateChange(func(_, to hmenum.CircuitState) {
+	w.cb.AddOnStateChange(func(_, to hmenum.CircuitState) {
 		if to == hmenum.CircuitStateOpen {
 			return
 		}
@@ -520,9 +521,9 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 	for attempt := 1; attempt <= r.cfg.MaxAttempts; attempt++ {
 		select {
 		case <-cancel:
-			r.mu.Lock()
-			r.metrics.CancelledRetries++
-			r.mu.Unlock()
+			// The cancelling caller (supersede in DoForKey / CancelKey /
+			// CancelDevice / CancelInterface) already counted this
+			// cancellation; counting again here double-counts CancelledRetries.
 			return ErrRetrySuperseded
 		default:
 		}
@@ -577,9 +578,8 @@ func (r *Retrier) DoForKey(ctx context.Context, key hmtypes.DataPointKey, fn fun
 			return err
 		case <-cancel:
 			timer.Stop()
-			r.mu.Lock()
-			r.metrics.CancelledRetries++
-			r.mu.Unlock()
+			// Counted by the cancelling caller, not here (see the loop-top
+			// <-cancel case above) — avoids double-counting CancelledRetries.
 			return ErrRetrySuperseded
 		case <-timer.C():
 		}
