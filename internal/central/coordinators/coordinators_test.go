@@ -11,7 +11,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
-	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -48,13 +47,13 @@ func TestEventCoordinatorConfigPendingFiresHookOnTrueToFalse(t *testing.T) {
 
 	// Initial value: CONFIG_PENDING = true (no hook yet — first
 	// observation establishes the baseline).
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", xmlrpc.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", hmtypes.BoolValue(true))
 	if hits.Load() != 0 {
 		t.Fatalf("first event must not fire hook, got %d", hits.Load())
 	}
 
 	// Transition to false → hook must fire.
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 	if hits.Load() != 1 {
 		t.Fatalf("True→False must fire hook once, got %d", hits.Load())
 	}
@@ -63,14 +62,14 @@ func TestEventCoordinatorConfigPendingFiresHookOnTrueToFalse(t *testing.T) {
 	}
 
 	// False → False must NOT fire again.
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "ABC0001:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 	if hits.Load() != 1 {
 		t.Fatalf("repeated false must not re-fire hook, got %d", hits.Load())
 	}
 
 	// New True → False cycle on a different device fires again.
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEF0002:0", "CONFIG_PENDING", xmlrpc.BoolValue(true))
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEF0002:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEF0002:0", "CONFIG_PENDING", hmtypes.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEF0002:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 	if hits.Load() != 2 {
 		t.Fatalf("second device True→False must fire hook, got %d", hits.Load())
 	}
@@ -87,17 +86,17 @@ func TestEventCoordinatorPublishesOnChange(t *testing.T) {
 		_ = e
 	})
 	ec := NewEventCoordinator(bus, NewCacheCoordinator(), nil)
-	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", xmlrpc.DoubleValue(0.5))
+	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", hmtypes.FloatValue(0.5))
 	if n.Load() != 1 {
 		t.Fatalf("first event not published, n=%d", n.Load())
 	}
 	// Same value → no second event.
-	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", xmlrpc.DoubleValue(0.5))
+	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", hmtypes.FloatValue(0.5))
 	if n.Load() != 1 {
 		t.Fatalf("no-change should not publish, n=%d", n.Load())
 	}
 	// Different value → new event.
-	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", xmlrpc.DoubleValue(0.75))
+	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", hmtypes.FloatValue(0.75))
 	if n.Load() != 2 {
 		t.Fatalf("change not published, n=%d", n.Load())
 	}
@@ -144,7 +143,7 @@ func TestEventCoordinatorTracksLastEventPerInterface(t *testing.T) {
 	}
 
 	before := time.Now()
-	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", xmlrpc.DoubleValue(0.5))
+	ec.HandleRawEvent(context.Background(), "iface", "A:1", "LEVEL", hmtypes.FloatValue(0.5))
 	stamp, observed := ec.LastEventMonotonicForInterface("iface")
 	if !observed {
 		t.Fatalf("interface should be observed after first event")

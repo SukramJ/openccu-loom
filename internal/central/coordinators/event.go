@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -141,14 +140,15 @@ func (c *EventCoordinator) MarkEvent(interfaceID string, at time.Time) {
 	c.mu.Unlock()
 }
 
-// HandleRawEvent processes a single event callback. It converts the
-// raw wire value into a [hmtypes.ParamValue], updates the cache, and
-// publishes [hmevent.DataPointValueChangedEvent] if the value actually
-// changed.
+// HandleRawEvent processes a single event callback. It updates the cache
+// with the supplied domain value and publishes
+// [hmevent.DataPointValueChangedEvent] if the value actually changed.
+// Wire-to-domain conversion (xmlrpc.Value → hmtypes.ParamValue) is the
+// caller's responsibility; the adapter layer holds the xmlrpc import.
 func (c *EventCoordinator) HandleRawEvent(
 	_ context.Context,
 	interfaceID, channelAddress, parameter string,
-	raw xmlrpc.Value,
+	value hmtypes.ParamValue,
 ) {
 	key := hmtypes.DataPointKey{
 		InterfaceID:    interfaceID,
@@ -157,7 +157,7 @@ func (c *EventCoordinator) HandleRawEvent(
 		Parameter:      parameter,
 	}
 	c.MarkEvent(interfaceID, time.Time{})
-	newVal := paramValueFromWire(raw)
+	newVal := value
 
 	old, hadOld := c.cache.Get(key)
 	c.cache.Set(key, newVal, "ccu_event")
@@ -364,7 +364,7 @@ func (c *EventCoordinator) EmitDevicesDelayedEvent(interfaceID string, deviceAdd
 func (c *EventCoordinator) HandleRawEventNormalized(
 	ctx context.Context,
 	interfaceID, channelAddress, parameter string,
-	raw xmlrpc.Value,
+	value hmtypes.ParamValue,
 ) {
 	// PONG routing — divert to the ping-pong tracker.
 	if parameter == "PONG" {
@@ -381,15 +381,15 @@ func (c *EventCoordinator) HandleRawEventNormalized(
 			// (e.g. "Otto-HmIP-RF#...") on our interface — those must not be
 			// correlated. Mirrors the reference v_interface_id == interface_id
 			// guard.
-			if callerID, err := xmlrpc.AsString(raw); err == nil {
-				pp(interfaceID, callerID)
+			if value.Kind == hmtypes.ValueKindString {
+				pp(interfaceID, value.String)
 			}
 		}
 		c.MarkEvent(interfaceID, time.Time{})
 		return
 	}
 
-	c.HandleRawEvent(ctx, interfaceID, channelAddress, parameter, raw)
+	c.HandleRawEvent(ctx, interfaceID, channelAddress, parameter, value)
 }
 
 // SetPingPongTracker wires an optional hook that is called when a PONG
@@ -486,32 +486,4 @@ func splitDeviceAddress(channelAddress string) string {
 		}
 	}
 	return channelAddress
-}
-
-// paramValueFromWire collapses the typed XML-RPC value into a
-// [hmtypes.ParamValue] so downstream consumers don't have to handle
-// the sum type.
-func paramValueFromWire(v xmlrpc.Value) hmtypes.ParamValue {
-	switch x := v.(type) {
-	case nil, xmlrpc.NilValue:
-		return hmtypes.NoneValue()
-	case xmlrpc.BoolValue:
-		return hmtypes.BoolValue(bool(x))
-	case xmlrpc.IntValue:
-		return hmtypes.IntValue(int(x))
-	case xmlrpc.DoubleValue:
-		return hmtypes.FloatValue(float64(x))
-	case xmlrpc.StringValue:
-		return hmtypes.StringValue(string(x))
-	case xmlrpc.ArrayValue:
-		out := make([]string, 0, len(x))
-		for _, e := range x {
-			if s, ok := e.(xmlrpc.StringValue); ok {
-				out = append(out, string(s))
-			}
-		}
-		return hmtypes.ListValue(out)
-	default:
-		return hmtypes.NoneValue()
-	}
 }

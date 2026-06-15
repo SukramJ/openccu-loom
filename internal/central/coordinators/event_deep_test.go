@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -139,7 +138,7 @@ func TestHandleRawEventStoresValueInCache(t *testing.T) {
 		ParamsetKey:    hmenum.ParamsetKeyValues,
 		Parameter:      "LEVEL",
 	}
-	ec.HandleRawEvent(context.Background(), key.InterfaceID, key.ChannelAddress, key.Parameter, xmlrpc.DoubleValue(0.42))
+	ec.HandleRawEvent(context.Background(), key.InterfaceID, key.ChannelAddress, key.Parameter, hmtypes.FloatValue(0.42))
 
 	entry, ok := cache.Get(key)
 	if !ok {
@@ -166,7 +165,7 @@ func TestHandleRawEventFirstObservationOldValueIsNone(t *testing.T) {
 		received = append(received, e)
 	})
 
-	ec.HandleRawEvent(context.Background(), "iface", "A:1", "STATE", xmlrpc.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "iface", "A:1", "STATE", hmtypes.BoolValue(true))
 
 	if len(received) != 1 {
 		t.Fatalf("expected 1 event, got %d", len(received))
@@ -192,7 +191,7 @@ func TestHandleRawEventNilWireValueMapsToNone(t *testing.T) {
 		received = append(received, e)
 	})
 
-	ec.HandleRawEvent(context.Background(), "iface", "B:1", "PARAM", xmlrpc.NilValue{})
+	ec.HandleRawEvent(context.Background(), "iface", "B:1", "PARAM", hmtypes.NoneValue())
 
 	key := hmtypes.DataPointKey{
 		InterfaceID:    "iface",
@@ -226,9 +225,9 @@ func TestHandleRawEventConfigPendingFalseToTrueNoHook(t *testing.T) {
 	ec.SetOnConfigSettled(func(_, _ string) { hookFired.Add(1) })
 
 	// Establish baseline: false (device already settled).
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEV:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEV:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 	// Transition false→true (write in progress — must NOT fire hook).
-	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEV:0", "CONFIG_PENDING", xmlrpc.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "HmIP-RF", "DEV:0", "CONFIG_PENDING", hmtypes.BoolValue(true))
 
 	if hookFired.Load() != 0 {
 		t.Fatalf("false→true must not fire hook, fired %d time(s)", hookFired.Load())
@@ -245,9 +244,9 @@ func TestHandleRawEventConfigPendingFalseTrueFalseFiresOnce(t *testing.T) {
 	var hookFired atomic.Int32
 	ec.SetOnConfigSettled(func(_, _ string) { hookFired.Add(1) })
 
-	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
-	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", xmlrpc.BoolValue(true))
-	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", hmtypes.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "iface", "X:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 
 	if hookFired.Load() != 1 {
 		t.Fatalf("expected hook to fire exactly once, fired %d time(s)", hookFired.Load())
@@ -267,8 +266,8 @@ func TestSetOnConfigSettledNilIsSafe(t *testing.T) {
 	ec.SetOnConfigSettled(nil) // detach
 
 	// Trigger the transition — must not panic.
-	ec.HandleRawEvent(context.Background(), "iface", "A:0", "CONFIG_PENDING", xmlrpc.BoolValue(true))
-	ec.HandleRawEvent(context.Background(), "iface", "A:0", "CONFIG_PENDING", xmlrpc.BoolValue(false))
+	ec.HandleRawEvent(context.Background(), "iface", "A:0", "CONFIG_PENDING", hmtypes.BoolValue(true))
+	ec.HandleRawEvent(context.Background(), "iface", "A:0", "CONFIG_PENDING", hmtypes.BoolValue(false))
 	// No assertion beyond "didn't panic".
 }
 
@@ -295,9 +294,9 @@ func TestHandleRawEventConcurrentNoRace(t *testing.T) {
 			for i := range eventsPerGoroutine {
 				// Alternate value types to exercise different branches.
 				if (g+i)%2 == 0 {
-					ec.HandleRawEvent(ctx, iface, addr, "LEVEL", xmlrpc.DoubleValue(float64(i)/100.0))
+					ec.HandleRawEvent(ctx, iface, addr, "LEVEL", hmtypes.FloatValue(float64(i)/100.0))
 				} else {
-					ec.HandleRawEvent(ctx, iface, addr, "LEVEL", xmlrpc.DoubleValue(float64(i+1)/100.0))
+					ec.HandleRawEvent(ctx, iface, addr, "LEVEL", hmtypes.FloatValue(float64(i+1)/100.0))
 				}
 			}
 		}()
@@ -358,53 +357,19 @@ func TestSplitDeviceAddress(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 16. paramValueFromWire — unknown / unhandled type maps to NoneValue.
-// ---------------------------------------------------------------------------
-
-func TestParamValueFromWireUnknownType(t *testing.T) {
-	t.Parallel()
-	// xmlrpc.DateTimeValue is a defined type but not handled in the switch —
-	// the default branch returns NoneValue.
-	v := paramValueFromWire(xmlrpc.DateTimeValue(time.Now()))
-	if v.Kind != hmtypes.ValueKindNone {
-		t.Fatalf("unknown wire type should map to NoneValue, got Kind=%v", v.Kind)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 17. paramValueFromWire — ArrayValue with mixed types: only strings extracted.
-// ---------------------------------------------------------------------------
-
-func TestParamValueFromWireArrayValue(t *testing.T) {
-	t.Parallel()
-	arr := xmlrpc.ArrayValue{
-		xmlrpc.StringValue("a"),
-		xmlrpc.IntValue(42), // non-string; must be silently skipped
-		xmlrpc.StringValue("b"),
-	}
-	v := paramValueFromWire(arr)
-	if v.Kind != hmtypes.ValueKindList {
-		t.Fatalf("ArrayValue should map to ListValue, got Kind=%v", v.Kind)
-	}
-	if len(v.List) != 2 || v.List[0] != "a" || v.List[1] != "b" {
-		t.Fatalf("list=%v; want [a b]", v.List)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// 18. HandleRawEvent updates the per-interface timestamp even for duplicates.
+// 16. HandleRawEvent updates the per-interface timestamp even for duplicates.
 // ---------------------------------------------------------------------------
 
 func TestHandleRawEventUpdatesStampOnDuplicate(t *testing.T) {
 	t.Parallel()
 	ec, _, _ := newTestEC(t)
 
-	ec.HandleRawEvent(context.Background(), "iface", "C:1", "TEMP", xmlrpc.DoubleValue(21.0))
+	ec.HandleRawEvent(context.Background(), "iface", "C:1", "TEMP", hmtypes.FloatValue(21.0))
 	t1, _ := ec.LastEventMonotonicForInterface("iface")
 
 	// Small sleep so time.Now() advances.
 	time.Sleep(time.Millisecond)
-	ec.HandleRawEvent(context.Background(), "iface", "C:1", "TEMP", xmlrpc.DoubleValue(21.0)) // duplicate
+	ec.HandleRawEvent(context.Background(), "iface", "C:1", "TEMP", hmtypes.FloatValue(21.0)) // duplicate
 	t2, _ := ec.LastEventMonotonicForInterface("iface")
 
 	// The stamp must be refreshed even though no event was emitted.
@@ -432,7 +397,7 @@ func TestHandleRawEventNormalizedPONGForwardsCallerID(t *testing.T) {
 	ec.HandleRawEventNormalized(
 		context.Background(),
 		ifaceID, "", "PONG",
-		xmlrpc.StringValue(callerID),
+		hmtypes.StringValue(callerID),
 	)
 
 	if gotIfID != ifaceID {
@@ -463,7 +428,7 @@ func TestHandleRawEventNormalizedPONGForwardsBareCallerID(t *testing.T) {
 	ec.HandleRawEventNormalized(
 		context.Background(),
 		"HmIP-RF", "", "PONG",
-		xmlrpc.StringValue("HmIP-RF"), // no '#'
+		hmtypes.StringValue("HmIP-RF"), // no '#'
 	)
 
 	if !called || gotCallerID != "HmIP-RF" {
@@ -488,7 +453,7 @@ func TestHandleRawEventNormalizedPONGNotDispatchedAsDataPoint(t *testing.T) {
 	ec.HandleRawEventNormalized(
 		context.Background(),
 		"HmIP-RF", "ADDR:1", "PONG",
-		xmlrpc.StringValue("HmIP-RF#99"),
+		hmtypes.StringValue("HmIP-RF#99"),
 	)
 
 	if n := fired.Load(); n != 0 {

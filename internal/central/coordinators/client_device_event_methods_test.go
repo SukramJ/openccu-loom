@@ -10,7 +10,6 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/central/registry"
-	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -288,7 +287,7 @@ func TestHandleRawEventNormalizedStatusKeepsOwnName(t *testing.T) {
 	})
 
 	ec.HandleRawEventNormalized(context.Background(), "iface1", "ADDR001:0", "LEVEL_STATUS",
-		xmlrpc.IntValue(0))
+		hmtypes.IntValue(0))
 
 	time.Sleep(50 * time.Millisecond)
 	if receivedParam != "LEVEL_STATUS" {
@@ -308,7 +307,7 @@ func TestHandleRawEventNormalizedNoSuffixPassthrough(t *testing.T) {
 	})
 
 	ec.HandleRawEventNormalized(context.Background(), "iface1", "ADDR001:0", "LEVEL",
-		xmlrpc.DoubleValue(0.5))
+		hmtypes.FloatValue(0.5))
 
 	time.Sleep(50 * time.Millisecond)
 	if receivedParam != "LEVEL" {
@@ -333,7 +332,7 @@ func TestHandleRawEventNormalizedPONGRoutesToTracker(t *testing.T) {
 
 	// A tracking PONG carries the echoed caller_id "<interfaceID>#<token>".
 	ec.HandleRawEventNormalized(context.Background(), "iface1", "ADDR001:0", "PONG",
-		xmlrpc.StringValue("iface1#7"))
+		hmtypes.StringValue("iface1#7"))
 
 	select {
 	case id := <-pongCalled:

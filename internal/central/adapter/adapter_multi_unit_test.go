@@ -9030,12 +9030,12 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceFound(t *testing.T) {
 	// Fire CONFIG_PENDING true first to set "old" cache value.
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPFound1DEV33:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(true))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(true))
 
 	// Fire CONFIG_PENDING false — triggers onConfigSettled → closure executes.
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPFound1DEV33:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(false))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(false))
 
 	// Give the goroutine time to run.
 	time.Sleep(30 * time.Millisecond)
@@ -9055,10 +9055,10 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceNotFound(t *testing.T) {
 	// Fire CONFIG_PENDING true then false for a device that is NOT in the registry.
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "UNKNOWN_DEVICE:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(true))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(true))
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "UNKNOWN_DEVICE:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(false))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(false))
 
 	time.Sleep(20 * time.Millisecond)
 }
@@ -9084,10 +9084,10 @@ func TestWireConfigPendingHook_ClosureBidCosIgnored(t *testing.T) {
 	// Fire CONFIG_PENDING true then false for BidCos-RF → hook ignores it.
 	c.Events.HandleRawEvent(context.Background(),
 		"BidCos-RF", "WCPBidCos1DEV33:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(true))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(true))
 	c.Events.HandleRawEvent(context.Background(),
 		"BidCos-RF", "WCPBidCos1DEV33:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(false))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(false))
 
 	time.Sleep(20 * time.Millisecond)
 }
@@ -9245,10 +9245,10 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceFoundLoggerPath(t *testing.T) {
 	// Fire CONFIG_PENDING true then false to trigger the onConfigSettled closure.
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPLogger1DEV34:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(true))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(true))
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPLogger1DEV34:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(false))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(false))
 
 	// Give the background goroutine time to complete.
 	time.Sleep(40 * time.Millisecond)
@@ -9300,10 +9300,10 @@ func TestWireConfigPendingHook_ClosureWeekProfileLoadError(t *testing.T) {
 	// Fire CONFIG_PENDING true then false to trigger the onConfigSettled closure.
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPWPLoad1DEV34:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(true))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(true))
 	c.Events.HandleRawEvent(context.Background(),
 		"HmIP-RF", "WCPWPLoad1DEV34:0",
-		string(hmenum.ParameterConfigPending), xmlrpc.BoolValue(false))
+		string(hmenum.ParameterConfigPending), hmtypes.BoolValue(false))
 
 	// Give the background goroutine time to complete.
 	time.Sleep(40 * time.Millisecond)
