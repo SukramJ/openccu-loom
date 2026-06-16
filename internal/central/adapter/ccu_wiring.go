@@ -1064,6 +1064,31 @@ func ensureConnectedClientState(ic *client.InterfaceClient, logger *slog.Logger)
 	}
 }
 
+// interfacePortOverride resolves an operator-configured port override for
+// iface, in precedence order: the per-interface [config.InterfaceSpec.Port]
+// (what the Config UI's CCUs tab writes), the legacy `ports` map, then the
+// central-wide `port`. Returns 0 when no override is set, so the caller falls
+// back to the interface's detection default.
+//
+// The per-interface InterfaceSpec.Port must win: the SPA persists the port a
+// user enters in the interface row into Interfaces[].Port, and without this
+// lookup the override was stored but never applied (the daemon kept connecting
+// on the detection-default port).
+func interfacePortOverride(cc config.CentralConfig, iface hmenum.Interface) int {
+	for _, s := range cc.Interfaces {
+		if s.Name == string(iface) && s.Port > 0 {
+			return s.Port
+		}
+	}
+	if p, ok := cc.Ports[string(iface)]; ok && p > 0 {
+		return p
+	}
+	if cc.Port > 0 {
+		return cc.Port
+	}
+	return 0
+}
+
 // interfaceURL composes the XML-RPC endpoint for (central, interface)
 // using the SPECIFICATION §7.2 detection ports. CUxD is BIN-RPC only
 // and therefore rejected here — callers that want CUxD must wire the
@@ -1088,10 +1113,8 @@ func interfaceURL(cc config.CentralConfig, iface hmenum.Interface) (string, erro
 	// Per-interface override takes precedence over the central-wide
 	// fallback so operators can pin, e.g., HmIP-RF to a non-standard
 	// port without disturbing other interfaces.
-	if p, ok := cc.Ports[string(iface)]; ok && p > 0 {
-		port = p
-	} else if cc.Port > 0 {
-		port = cc.Port
+	if ov := interfacePortOverride(cc, iface); ov > 0 {
+		port = ov
 	}
 	// Path mirrors the CCU's XML-RPC routing: /RPC2 is the default
 	// endpoint, /groups is the VirtualDevices variant. POSTing to the
