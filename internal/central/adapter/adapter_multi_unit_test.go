@@ -7460,6 +7460,60 @@ func TestInterfaceURL_CentralPortFallback(t *testing.T) {
 	}
 }
 
+// TestInterfaceURL_InterfaceSpecPortOverride pins the fix for the
+// Config-UI bug: a per-interface port override entered in the CCUs tab is
+// stored in Interfaces[].Port (not the legacy Ports map), so the wiring must
+// honour it. Before the fix the override was silently ignored and the daemon
+// kept connecting on the detection-default port.
+func TestInterfaceURL_InterfaceSpecPortOverride(t *testing.T) {
+	t.Parallel()
+	cc := config.CentralConfig{
+		Host:       "192.168.1.1",
+		Interfaces: []config.InterfaceSpec{{Name: string(hmenum.InterfaceHmIPRF), Port: 32010}},
+	}
+	u, err := interfaceURL(cc, hmenum.InterfaceHmIPRF)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(u, ":32010/") {
+		t.Errorf("interfaceURL = %q, want it to apply the Interfaces[].Port override :32010", u)
+	}
+}
+
+// TestInterfacePortOverride_Precedence locks the override precedence:
+// Interfaces[].Port (Config-UI) > Ports map > central-wide Port > none.
+func TestInterfacePortOverride_Precedence(t *testing.T) {
+	t.Parallel()
+	hmip := string(hmenum.InterfaceHmIPRF)
+	cases := []struct {
+		name string
+		cc   config.CentralConfig
+		want int
+	}{
+		{"interface spec wins over ports+port", config.CentralConfig{
+			Interfaces: []config.InterfaceSpec{{Name: hmip, Port: 32010}},
+			Ports:      map[string]int{hmip: 40000}, Port: 50000,
+		}, 32010},
+		{"ports wins over central port", config.CentralConfig{
+			Ports: map[string]int{hmip: 40000}, Port: 50000,
+		}, 40000},
+		{"central port as last resort", config.CentralConfig{Port: 50000}, 50000},
+		{"none set", config.CentralConfig{}, 0},
+		{"zero interface port falls through to ports", config.CentralConfig{
+			Interfaces: []config.InterfaceSpec{{Name: hmip, Port: 0}},
+			Ports:      map[string]int{hmip: 40000},
+		}, 40000},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := interfacePortOverride(tc.cc, hmenum.InterfaceHmIPRF); got != tc.want {
+				t.Errorf("interfacePortOverride = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // enrichLinkParameter — pure function operating on a struct pointer
 // ---------------------------------------------------------------------------

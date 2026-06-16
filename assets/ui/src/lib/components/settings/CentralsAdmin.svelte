@@ -159,6 +159,10 @@
   // SPA mirrors that by treating env as an override.
   let fPassword = $state("");
   let fPasswordEnv = $state("");
+  // JSON-RPC (ReGa/hub) port override. Empty = use the CCU default
+  // derived from the TLS toggle (443 with TLS, 80 without). Stored in
+  // CentralRow.json_rpc_port.
+  let fJsonRpcPort = $state("");
   let fPrimaryInterface = $state("");
   let fInterfaces = $state<InterfaceFormRow[]>(freshInterfaceForm());
   let fBehavior = $state<BehaviorForm>(freshBehaviorForm());
@@ -195,6 +199,7 @@
     fUsername = "";
     fPassword = "";
     fPasswordEnv = "";
+    fJsonRpcPort = "";
     fPrimaryInterface = "HmIP-RF";
     fInterfaces = freshInterfaceForm();
     fBehavior = freshBehaviorForm();
@@ -213,6 +218,7 @@
     fUsername = row.username ?? "";
     fPassword = row.password_plain ?? "";
     fPasswordEnv = row.password_env ?? "";
+    fJsonRpcPort = row.json_rpc_port ? String(row.json_rpc_port) : "";
     fPrimaryInterface = row.primary_interface ?? "";
     fBehavior = behaviorFromRow(row.behavior);
     showBehavior = false;
@@ -255,10 +261,17 @@
   }
 
   function buildRow(): CentralRow {
+    const jsonRpcTrimmed = fJsonRpcPort.trim();
+    let jsonRpcPort: number | undefined;
+    if (jsonRpcTrimmed !== "") {
+      const n = Number.parseInt(jsonRpcTrimmed, 10);
+      if (Number.isFinite(n) && n > 0) jsonRpcPort = n;
+    }
     return {
       name: fName,
       host: fHost,
       enabled: fEnabled,
+      json_rpc_port: jsonRpcPort,
       tls: fTls || undefined,
       tls_insecure_skip_verify: fTlsInsecure || undefined,
       username: fUsername || undefined,
@@ -423,6 +436,20 @@
               bind:value={fHost}
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
             />
+          </label>
+          <label class="flex flex-col gap-1">
+            <span>{t("centrals.field.json_rpc_port")}</span>
+            <input
+              type="number"
+              min="1"
+              max="65535"
+              bind:value={fJsonRpcPort}
+              placeholder={fTls ? "443" : "80"}
+              class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
+            />
+            <span class="text-xs text-[var(--ha-secondary-text-color)]"
+              >{t("centrals.field.json_rpc_port_hint")}</span
+            >
           </label>
         </div>
 

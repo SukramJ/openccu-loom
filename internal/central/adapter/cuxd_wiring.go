@@ -47,8 +47,8 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 ) (func(), error) {
 	iface := hmenum.InterfaceCUxD
 	port := hmenum.DefaultBINRPCPort
-	if p, ok := cc.Ports[string(iface)]; ok && p > 0 {
-		port = p
+	if ov := interfacePortOverride(cc, iface); ov > 0 {
+		port = ov
 	}
 	addr := fmt.Sprintf("%s:%d", cc.Host, port)
 	// wireID is the canonical host-independent id used for all internal
