@@ -46,9 +46,9 @@ import sys
 # actually resolve to these keys.
 _BASELINES: dict[str, tuple[str, int]] = {
     "generic_data_points.drifted": ("OPENCCU_LOOM_DRIFT_GENERIC", 10),
-    "channel_fields": ("OPENCCU_LOOM_DRIFT_CHANNEL", 40),
-    "custom_data_points.only_py": ("OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY", 160),
-    "calculated_data_points.drifted": ("OPENCCU_LOOM_DRIFT_CALC", 10),
+    "channel_fields": ("OPENCCU_LOOM_DRIFT_CHANNEL", 0),
+    "custom_data_points.only_py": ("OPENCCU_LOOM_DRIFT_CUSTOM_ONLY_PY", 0),
+    "calculated_data_points.drifted": ("OPENCCU_LOOM_DRIFT_CALC", 0),
 }
 
 
