@@ -76,16 +76,21 @@ func Open(ctx context.Context, dsn string) (*sql.DB, error) {
 	return db, nil
 }
 
-// migrateMu serialises [Migrate] calls. pressly/goose v3.27 reads
-// package-level state (`goose.TableName()`, dialect registry) inside
-// the migration path that is not safe for concurrent calls against
-// distinct databases. Production opens a single DB at boot so the
-// cost is zero; tests that call Open from multiple goroutines (race
-// detector enabled) would otherwise flag a real (if benign) race
-// inside goose.
+// migrateMu serialises [Migrate] calls. The goose v3 legacy API writes
+// two package-level globals that are explicitly documented "not safe for
+// concurrent use": the dialect store (written by [goose.SetDialect]) and
+// the base filesystem (written by [goose.SetBaseFS]). Both are read on
+// every [goose.UpContext] call before the per-database lock inside goose
+// takes effect. A per-store or per-DB mutex would not protect these
+// package-level writes when two goroutines concurrently open distinct
+// databases, so the mutex must be package-level here to cover all callers
+// in this package.
 //
-// The lock is held only across the goose calls; the caller's
-// connection-pool config + sqlite-busy-timeout handle in-DB
+// Production opens a single database at daemon boot, so the lock is
+// uncontended in normal operation. Tests that open databases concurrently
+// (race detector enabled) are the only callers that pay a serialisation
+// cost. The lock is held only across the goose calls; the caller's
+// connection-pool config and the sqlite busy_timeout handle in-database
 // concurrency separately.
 var migrateMu sync.Mutex
 

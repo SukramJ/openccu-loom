@@ -1,4 +1,6 @@
 -- +goose Up
+-- +goose StatementBegin
+
 -- matter_diagnostics persists the GeneralDiagnostics counters that
 -- need to survive daemon restarts: RebootCount + accumulated
 -- TotalOperationalHours from prior process lifetimes. The cluster
@@ -22,5 +24,9 @@ CREATE TABLE matter_diagnostics (
 INSERT INTO matter_diagnostics (id, reboot_count, base_operational_hours, updated_at)
     VALUES (1, 0, 0, CAST(strftime('%s','now') AS INTEGER));
 
+-- +goose StatementEnd
+
 -- +goose Down
-DROP TABLE matter_diagnostics;
+-- +goose StatementBegin
+DROP TABLE IF EXISTS matter_diagnostics;
+-- +goose StatementEnd
