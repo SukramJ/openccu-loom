@@ -440,9 +440,9 @@
           <label class="flex flex-col gap-1">
             <span>{t("centrals.field.json_rpc_port")}</span>
             <input
-              type="number"
-              min="1"
-              max="65535"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
               bind:value={fJsonRpcPort}
               placeholder={fTls ? "443" : "80"}
               class="h-9 rounded border border-slate-300 px-3 text-sm dark:border-slate-700 dark:bg-slate-900"
@@ -475,9 +475,9 @@
                   {t("centrals.field.port")}
                 </span>
                 <input
-                  type="number"
-                  min="1"
-                  max="65535"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
                   bind:value={fInterfaces[i].portOverride}
                   disabled={!fInterfaces[i].checked}
                   placeholder={String(slot.defaultPort)}
