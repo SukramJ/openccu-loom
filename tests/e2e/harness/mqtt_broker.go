@@ -50,11 +50,7 @@ type MQTTHandler func(topic string, payload []byte, retain bool)
 func startMQTTBroker(t *testing.T) MQTTBroker {
 	t.Helper()
 
-	rp := pickFreePort(t)
-	// The mochi-mqtt listener does its own bind, so we release the
-	// reserved socket immediately — mochi takes over on srv.Serve().
-	rp.Release(t)
-	port := rp.Port()
+	port := pickFreePort(t)
 	srv := mqtt.New(&mqtt.Options{
 		// InlineClient enables in-process Subscribe/Publish so tests
 		// can observe and inject without a separate MQTT client lib.

@@ -11,61 +11,34 @@ import (
 	"testing"
 )
 
-// reservedPort holds an OS-assigned ephemeral TCP port open until
-// Release is called. Callers should call Release as close as possible
-// to the moment the daemon is started so the listening socket is freed
-// only at the last moment before the daemon tries to bind.
+// pickFreePort asks the OS for an ephemeral TCP port, closes the
+// listener, and returns the port number. There is an unavoidable
+// TOCTOU race window between Close and the daemon's Listen on the
+// returned port: another process may grab the port in between. In
+// practice the window is short and ports are rarely recycled at
+// exactly that instant, so the approach is acceptable for tests.
 //
-// Full elimination of the TOCTOU window would require the daemon to
-// accept ":0" for callback / bin-RPC ports and expose a readback path
-// (e.g. a ready-file or a structured startup log line) that the
-// harness can parse. The REST and UI servers already support ":0" (see
-// internal/north/rest/server.go) and emit a "rest.listen" JSON log
-// line with the effective address, but the harness has no readback
-// path wired from that log into a known-before-start REST base URL
-// (needed to drive waitForHealth). The callback and bin-RPC servers
-// expose their effective ports only via the CCU re-advertisement path,
-// which is not observable from the test process.
-//
-// TODO: add a structured startup signal (e.g. a "--ready-file" flag
-// that the daemon writes once all listeners are bound) so the harness
-// can use ":0" for all ports and read back the effective addresses
-// without any TOCTOU window.
-type reservedPort struct {
-	ln   net.Listener
-	port int
-}
-
-// Port returns the reserved port number.
-func (r *reservedPort) Port() int { return r.port }
-
-// Release closes the underlying listener, freeing the port for the
-// daemon to bind. It should be called as late as possible — ideally
-// immediately before exec.Cmd.Start().
-func (r *reservedPort) Release(t *testing.T) {
-	t.Helper()
-	if r.ln == nil {
-		return
-	}
-	if err := r.ln.Close(); err != nil {
-		t.Fatalf("reservedPort.Release: %v", err)
-	}
-	r.ln = nil
-}
-
-// pickFreePort asks the OS for an ephemeral TCP port and keeps the
-// listener open (via [reservedPort]) until the caller explicitly
-// releases it. This minimises the TOCTOU window: the port is held by
-// the test process right up until the daemon is exec'd. Callers must
-// call Release immediately before starting the daemon.
-func pickFreePort(t *testing.T) *reservedPort {
+// Eliminating the window entirely would require ":0" binding in the
+// daemon and reading the effective port back from the process after
+// start. The REST and UI servers support ":0" (see
+// internal/north/rest/server.go), but the harness has no readback
+// path for those ports (no status endpoint or structured log line
+// exposing them). The callback and bin-RPC servers expose their
+// effective ports only via the CCU re-advertisement path, which is
+// not observable from the test process. Until a structured startup
+// signal (e.g. a ready-file or a startup-port JSON line) is added to
+// the daemon, pickFreePort remains the least-bad option.
+func pickFreePort(t *testing.T) int {
 	t.Helper()
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("pickFreePort: listen: %v", err)
 	}
 	port := l.Addr().(*net.TCPAddr).Port
-	return &reservedPort{ln: l, port: port}
+	if err := l.Close(); err != nil {
+		t.Fatalf("pickFreePort: close: %v", err)
+	}
+	return port
 }
 
 // loopbackAddr returns "127.0.0.1:<port>".

@@ -145,26 +145,23 @@ func Start(t *testing.T, opts Options) *Harness {
 		}
 	}
 
-	// Reserve the four daemon-side ports. We keep each listener open
-	// until just before exec so the OS cannot hand the same port to
-	// another process in the gap. The listeners are released in a
-	// single batch immediately before cmd.Start(); the TOCTOU window
-	// shrinks to the kernel fork+exec latency of the daemon binary.
-	restRP := pickFreePort(t)
-	uiRP := pickFreePort(t)
-	callbackRP := pickFreePort(t)
-	binRP := pickFreePort(t)
-	h.restAddr = loopbackAddr(restRP.Port())
-	h.uiAddr = loopbackAddr(uiRP.Port())
-	h.callbackPort = callbackRP.Port()
-	h.binPort = binRP.Port()
+	// Pre-allocate the four daemon-side ports. Pre-allocation has a
+	// small TOCTOU window between Close and the daemon's Listen; if
+	// it bites, the daemon fails to bind and the test fails loudly,
+	// which is preferable to silent flake.
+	restPort := pickFreePort(t)
+	uiPort := pickFreePort(t)
+	h.callbackPort = pickFreePort(t)
+	h.binPort = pickFreePort(t)
+	h.restAddr = loopbackAddr(restPort)
+	h.uiAddr = loopbackAddr(uiPort)
 
 	h.dataDir = t.TempDir()
 	h.cfgPath = filepath.Join(h.dataDir, "config.yaml")
 	cfgYAML := buildConfigYAML(configInputs{
 		DataDir:                 h.dataDir,
-		RESTListen:              ":" + itoa(restRP.Port()),
-		UIListen:                ":" + itoa(uiRP.Port()),
+		RESTListen:              ":" + itoa(restPort),
+		UIListen:                ":" + itoa(uiPort),
 		CallbackPort:            h.callbackPort,
 		BinPort:                 h.binPort,
 		AuthMode:                opts.AuthMode,
@@ -187,13 +184,6 @@ func Start(t *testing.T, opts Options) *Harness {
 		// New process group so SIGTERM addresses children too.
 		h.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	}
-	// Release all four reserved ports immediately before exec so the
-	// daemon can bind them. The window between Release and the daemon's
-	// Listen calls is at most the kernel fork+exec latency.
-	restRP.Release(t)
-	uiRP.Release(t)
-	callbackRP.Release(t)
-	binRP.Release(t)
 	if err := h.cmd.Start(); err != nil {
 		cancel()
 		t.Fatalf("start openccu-loom: %v", err)
