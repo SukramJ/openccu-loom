@@ -11,7 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -28,7 +28,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	dev *device.Device,
 	ch *device.Channel,
 	peer, locale string,
-) (*handlers.UISchema, error) {
+) (*hmapi.UISchema, error) {
 	if peer == "" {
 		return nil, errors.New("ui-schema: LINK paramset requires peer query parameter")
 	}
@@ -37,7 +37,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	}
 	c := a.findCentralFor(dev.Address)
 	if c == nil {
-		return nil, handlers.ErrUISchemaNotFound
+		return nil, hmapi.ErrUISchemaNotFound
 	}
 	backend, ok := a.writer.Backend(c.Name(), dev.InterfaceID)
 	if !ok {
@@ -55,8 +55,8 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 	}
 
 	channelType := a.channelTypeOf(dev, ch)
-	schema := &handlers.UISchema{
-		Channel: handlers.UISchemaChannel{
+	schema := &hmapi.UISchema{
+		Channel: hmapi.UISchemaChannel{
 			Address:  ch.Address,
 			Number:   ch.Number,
 			Type:     channelType,
@@ -68,13 +68,13 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 
 	// LINK parameters are almost never translated verbatim, so we
 	// relax the require-translation filter that MASTER applies.
-	params := make([]handlers.UISchemaParameter, 0, len(desc))
+	params := make([]hmapi.UISchemaParameter, 0, len(desc))
 	for name := range desc {
 		pd := desc[name]
 		if !paramShouldRender(name, pd) {
 			continue
 		}
-		entry := handlers.UISchemaParameter{
+		entry := hmapi.UISchemaParameter{
 			Name:       name,
 			Label:      a.parameterLabel(locale, channelType, name),
 			Help:       a.parameterHelp(locale, name),
@@ -84,8 +84,8 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 			Max:        cloneRaw(pd.Max),
 			Default:    cloneRaw(pd.Default),
 			Control:    pd.Control,
-			Operations: handlers.UISchemaParameterOps{Read: pd.IsReadable(), Write: pd.IsWritable(), Event: pd.IsEvent()},
-			Flags:      handlers.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
+			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: pd.IsWritable(), Event: pd.IsEvent()},
+			Flags:      hmapi.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
 		}
 		if entry.Label == "" {
 			entry.Label = humanizeRaw(name)
@@ -137,7 +137,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 				profileRaw = raw
 				exposedSender = ""
 			}
-			schema.Profile = &handlers.UISchemaProfile{
+			schema.Profile = &hmapi.UISchemaProfile{
 				ReceiverType:    channelType,
 				SenderType:      exposedSender,
 				ActiveProfileID: matchActiveProfile(defs, values),
@@ -152,7 +152,7 @@ func (a *UISchemaAdapter) buildLinkSchema( //nolint:funlen // single-purpose lin
 // classification to p and fills the Link* fields of the schema
 // parameter. Port of the enrich_link_metadata branch in
 // 's FormBuilder.
-func enrichLinkParameter(p *handlers.UISchemaParameter, locale string) {
+func enrichLinkParameter(p *hmapi.UISchemaParameter, locale string) {
 	meta := ClassifyLinkParameter(p.Name)
 	p.Category = string(meta.Category)
 	p.KeypressGroup = string(meta.KeypressGroup)
@@ -164,7 +164,7 @@ func enrichLinkParameter(p *handlers.UISchemaParameter, locale string) {
 	if meta.TimeSelectorType != "" {
 		p.TimeSelectorType = string(meta.TimeSelectorType)
 		for _, lp := range GetTimePresets(meta.TimeSelectorType, locale) {
-			p.TimePresets = append(p.TimePresets, handlers.UISchemaTimePreset{
+			p.TimePresets = append(p.TimePresets, hmapi.UISchemaTimePreset{
 				Base:   lp.Base,
 				Factor: lp.Factor,
 				Label:  lp.Label,
@@ -192,7 +192,7 @@ func enrichLinkParameter(p *handlers.UISchemaParameter, locale string) {
 // buildKeypressGroups emits up to three groups (short, long, common)
 // populated from the classification's GroupID assignment. Empty
 // groups are omitted so the SPA does not render stub headings.
-func buildKeypressGroups(locale string, params []handlers.UISchemaParameter) []handlers.UISchemaGroup {
+func buildKeypressGroups(locale string, params []hmapi.UISchemaParameter) []hmapi.UISchemaGroup {
 	order := []struct {
 		id string
 		en string
@@ -215,7 +215,7 @@ func buildKeypressGroups(locale string, params []handlers.UISchemaParameter) []h
 	if !hit {
 		return nil
 	}
-	out := make([]handlers.UISchemaGroup, 0, len(order))
+	out := make([]hmapi.UISchemaGroup, 0, len(order))
 	for _, g := range order {
 		if len(members[g.id]) == 0 {
 			continue
@@ -224,7 +224,7 @@ func buildKeypressGroups(locale string, params []handlers.UISchemaParameter) []h
 		if locale == "de" {
 			label = g.de
 		}
-		out = append(out, handlers.UISchemaGroup{ID: g.id, Label: label, Parameters: members[g.id]})
+		out = append(out, hmapi.UISchemaGroup{ID: g.id, Label: label, Parameters: members[g.id]})
 	}
 	return out
 }

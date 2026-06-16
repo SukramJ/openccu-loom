@@ -4,42 +4,24 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// CentralLinksService is the facade `/devices/{addr}/central-links` depends
-// on. The implementation lives in central/adapter and routes the request to
-// the per-CCU client backend.
-type CentralLinksService interface {
-	CreateCentralLinks(ctx context.Context, deviceAddress string) (CentralLinksReport, error)
-	RemoveCentralLinks(ctx context.Context, deviceAddress string) (CentralLinksReport, error)
-	CentralLinksStatus(deviceAddress string) (CentralLinksStatus, error)
-}
+// CentralLinksService is an alias for the canonical interface in pkg/interfaces.
+type CentralLinksService = interfaces.CentralLinksService
 
-// CentralLinksReport summarises one create/remove call. Touched is the
-// number of channels for which the CCU accepted the report-value-usage
-// call, Skipped the count of channels without press events (so they
-// were left alone), Failed the count of channels where the CCU
-// returned an error.
-type CentralLinksReport struct {
-	Touched int `json:"touched"`
-	Skipped int `json:"skipped"`
-	Failed  int `json:"failed"`
-}
+// CentralLinksReport is an alias for the canonical DTO in pkg/hmapi.
+type CentralLinksReport = hmapi.CentralLinksReport
 
-// CentralLinksStatus describes whether the device is eligible for
-// central click-event routing.
-type CentralLinksStatus struct {
-	Supported        bool   `json:"supported"`
-	Reason           string `json:"reason,omitempty"`
-	EligibleChannels int    `json:"eligible_channels,omitempty"`
-}
+// CentralLinksStatus is an alias for the canonical DTO in pkg/hmapi.
+type CentralLinksStatus = hmapi.CentralLinksStatus
 
 // GetCentralLinksStatus serves GET /devices/{addr}/central-links.
 func GetCentralLinksStatus(svc CentralLinksService) http.HandlerFunc {
@@ -93,11 +75,8 @@ func DeleteCentralLinks(svc CentralLinksService) http.HandlerFunc {
 	}
 }
 
-// ErrCentralLinksUnsupported is returned by adapters when the device
-// is on an interface that has no concept of central event routing
-// (CUxD, virtual devices, …). Surfaced as 422 to make the SPA show
-// "not applicable on this device" instead of a generic upstream error.
-var ErrCentralLinksUnsupported = errors.New("central-links: device interface does not support central links")
+// ErrCentralLinksUnsupported is an alias for the sentinel in pkg/hmapi.
+var ErrCentralLinksUnsupported = hmapi.ErrCentralLinksUnsupported
 
 func centralLinksError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, ErrCentralLinksUnsupported) {

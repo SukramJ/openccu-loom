@@ -6,10 +6,10 @@ package adapter
 import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/restapi"
 )
 
-// HubAdapter satisfies handlers.HubIndex by projecting every
+// HubAdapter satisfies restapi.HubIndex by projecting every
 // registered Unit's hub onto one aggregated hub view.
 type HubAdapter struct {
 	registry *central.Registry
@@ -35,17 +35,17 @@ func (a *HubAdapter) Hub() *hub.Hub {
 
 // Hubs returns every registered central's hub in stable name order,
 // skipping centrals whose HubModel is nil.
-func (a *HubAdapter) Hubs() []handlers.NamedHub {
+func (a *HubAdapter) Hubs() []restapi.NamedHub {
 	if a.registry == nil {
 		return nil
 	}
 	list := a.registry.List()
-	out := make([]handlers.NamedHub, 0, len(list))
+	out := make([]restapi.NamedHub, 0, len(list))
 	for _, c := range list {
 		if c == nil || c.HubModel == nil {
 			continue
 		}
-		out = append(out, handlers.NamedHub{Central: c.Name(), Hub: c.HubModel})
+		out = append(out, restapi.NamedHub{Central: c.Name(), Hub: c.HubModel})
 	}
 	return out
 }

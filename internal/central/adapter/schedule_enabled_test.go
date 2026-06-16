@@ -12,7 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -552,8 +552,8 @@ func TestApplyScheduleEnabledToModelNilRegistry(t *testing.T) {
 
 func TestMapToScheduleAndBack(t *testing.T) {
 	t.Parallel()
-	schedule := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	schedule := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {},
 		},
 	}

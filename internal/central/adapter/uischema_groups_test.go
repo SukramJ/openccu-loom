@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ============================================================
@@ -68,10 +68,10 @@ func TestOtherGroupLabelUnknownFallsBackToEn(t *testing.T) {
 // buildGroups / semanticGroups tests
 // ============================================================
 
-func buildTestParams(names ...string) []handlers.UISchemaParameter {
-	out := make([]handlers.UISchemaParameter, len(names))
+func buildTestParams(names ...string) []hmapi.UISchemaParameter {
+	out := make([]hmapi.UISchemaParameter, len(names))
 	for i, n := range names {
-		out[i] = handlers.UISchemaParameter{Name: n}
+		out[i] = hmapi.UISchemaParameter{Name: n}
 	}
 	return out
 }

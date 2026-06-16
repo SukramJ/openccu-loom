@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ import (
 // ---------------------------------------------------------------------------
 
 type stubBackupStorage struct {
-	entries []handlers.BackupEntry
+	entries []hmapi.BackupEntry
 	content map[string]string // id → raw content
 	openErr error
 	saveErr error
@@ -31,7 +31,7 @@ type stubBackupStorage struct {
 	mu      sync.Mutex
 }
 
-func (s *stubBackupStorage) List(_ context.Context) ([]handlers.BackupEntry, error) {
+func (s *stubBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, error) {
 	return s.entries, nil
 }
 
@@ -319,7 +319,7 @@ func TestBackupAdapterListDelegatesToStorage(t *testing.T) {
 	reg := newRegistryForBackupTest(t)
 	a := NewBackupAdapter(reg)
 
-	want := []handlers.BackupEntry{
+	want := []hmapi.BackupEntry{
 		{ID: "bk1", Bytes: 100},
 		{ID: "bk2", Bytes: 200},
 	}

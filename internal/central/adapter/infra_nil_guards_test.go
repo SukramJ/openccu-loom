@@ -14,7 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -352,7 +352,7 @@ func TestParamsetsDomainSetVisibilityGateNil(t *testing.T) {
 
 func TestApplyLockEncodingDoorLock(t *testing.T) {
 	t.Parallel()
-	e := applyLockEncoding(handlers.SimpleScheduleEntry{
+	e := applyLockEncoding(hmapi.SimpleScheduleEntry{
 		LockMode:   "door_lock",
 		LockAction: "lock_autorelock_end",
 	})
@@ -369,7 +369,7 @@ func TestApplyLockEncodingDoorLock(t *testing.T) {
 
 func TestApplyLockEncodingDoorLockUnknownAction(t *testing.T) {
 	t.Parallel()
-	original := handlers.SimpleScheduleEntry{
+	original := hmapi.SimpleScheduleEntry{
 		LockMode:   "door_lock",
 		LockAction: "unknown_action",
 		Level:      0.0,
@@ -383,7 +383,7 @@ func TestApplyLockEncodingDoorLockUnknownAction(t *testing.T) {
 
 func TestApplyLockEncodingUserPermissionGranted(t *testing.T) {
 	t.Parallel()
-	e := applyLockEncoding(handlers.SimpleScheduleEntry{
+	e := applyLockEncoding(hmapi.SimpleScheduleEntry{
 		LockMode:   "user_permission",
 		Permission: "granted",
 	})
@@ -400,7 +400,7 @@ func TestApplyLockEncodingUserPermissionGranted(t *testing.T) {
 
 func TestApplyLockEncodingUserPermissionNotGranted(t *testing.T) {
 	t.Parallel()
-	e := applyLockEncoding(handlers.SimpleScheduleEntry{
+	e := applyLockEncoding(hmapi.SimpleScheduleEntry{
 		LockMode:   "user_permission",
 		Permission: "not_granted",
 	})
@@ -412,7 +412,7 @@ func TestApplyLockEncodingUserPermissionNotGranted(t *testing.T) {
 func TestApplyLockEncodingUserPermissionExistingChannels(t *testing.T) {
 	t.Parallel()
 	// When TargetChannels already set, preserve them.
-	e := applyLockEncoding(handlers.SimpleScheduleEntry{
+	e := applyLockEncoding(hmapi.SimpleScheduleEntry{
 		LockMode:       "user_permission",
 		Permission:     "granted",
 		TargetChannels: []string{"3_2"},
@@ -425,7 +425,7 @@ func TestApplyLockEncodingUserPermissionExistingChannels(t *testing.T) {
 func TestApplyLockEncodingUnknownMode(t *testing.T) {
 	t.Parallel()
 	// Unknown lock_mode: passthrough.
-	e := applyLockEncoding(handlers.SimpleScheduleEntry{LockMode: "other_mode"})
+	e := applyLockEncoding(hmapi.SimpleScheduleEntry{LockMode: "other_mode"})
 	if e.LockMode != "other_mode" {
 		t.Errorf("unknown mode mutated to %q", e.LockMode)
 	}

@@ -11,41 +11,15 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// RPCRecorderService is the facade the RPC-session-recording endpoints depend
-// on. It activates/deactivates the per-central [session.Recorder] (which
-// captures XML/JSON-RPC call→response pairs for deterministic golden replay)
-// and exports the recorded trace.
-// *adapter.RPCRecorderAdapter satisfies it.
-type RPCRecorderService interface {
-	// Start activates the recorder on the named centrals (empty = all),
-	// bounded by durationSeconds (0 = open, clamped to a safety cap) and
-	// optionally anonymising the exported trace, returning the status.
-	Start(centrals []string, durationSeconds int, randomize bool) []RPCRecordingStatus
-	// Stop deactivates the recorder on the named centrals (empty = all).
-	Stop(centrals []string) []RPCRecordingStatus
-	// Status returns the current recorder status for every central.
-	Status() []RPCRecordingStatus
-	// Export serialises a central's recorded trace. format selects the shape
-	// ("golden" = ordered replay slice, else the keyed map). Returns false
-	// when the central is unknown.
-	Export(centralName, format string) (any, bool)
-}
+// RPCRecorderService is an alias for the canonical interface in pkg/interfaces.
+type RPCRecorderService = interfaces.RPCRecorderService
 
-// RPCRecordingStatus is one central's recorder status.
-type RPCRecordingStatus struct {
-	Central string `json:"central"`
-	Active  bool   `json:"active"`
-	// Entries is the number of distinct recorded call slots
-	// (rpc_type + method + params).
-	Entries int `json:"entries"`
-	// EndsAt is the auto-stop deadline (RFC3339) while recording; empty when
-	// idle.
-	EndsAt string `json:"ends_at,omitempty"`
-	// Randomize reports whether this recording's export is anonymised.
-	Randomize bool `json:"randomize,omitempty"`
-}
+// RPCRecordingStatus is an alias for the canonical DTO in pkg/hmapi.
+type RPCRecordingStatus = hmapi.RPCRecordingStatus
 
 // RPCRecordingStartRequest is the body of `POST /diagnostics/rpc-recording`.
 type RPCRecordingStartRequest struct {

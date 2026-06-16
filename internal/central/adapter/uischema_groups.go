@@ -7,7 +7,7 @@ import (
 	"regexp"
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // groupPattern bundles one heuristic group the fallback grouper uses
@@ -89,8 +89,8 @@ var otherGroupLabels = map[string]string{
 func (a *UISchemaAdapter) buildGroups(
 	locale string,
 	meta *ccudata.SenderTypeMetadata,
-	params []handlers.UISchemaParameter,
-) []handlers.UISchemaGroup {
+	params []hmapi.UISchemaParameter,
+) []hmapi.UISchemaGroup {
 	names := make([]string, 0, len(params))
 	for i := range params {
 		names = append(names, params[i].Name)
@@ -110,8 +110,8 @@ func (a *UISchemaAdapter) semanticGroups(
 	locale string,
 	meta *ccudata.SenderTypeMetadata,
 	available map[string]struct{},
-) []handlers.UISchemaGroup {
-	out := make([]handlers.UISchemaGroup, 0, len(meta.ParameterGroups)+1)
+) []hmapi.UISchemaGroup {
+	out := make([]hmapi.UISchemaGroup, 0, len(meta.ParameterGroups)+1)
 	assigned := make(map[string]struct{})
 	for _, g := range meta.ParameterGroups {
 		params := filterAvailable(g.Parameters, available)
@@ -121,14 +121,14 @@ func (a *UISchemaAdapter) semanticGroups(
 		for _, p := range params {
 			assigned[p] = struct{}{}
 		}
-		out = append(out, handlers.UISchemaGroup{
+		out = append(out, hmapi.UISchemaGroup{
 			ID:         g.ID,
 			Label:      a.groupLabelWithFallback(locale, g.LabelKey, g.Label),
 			Parameters: params,
 		})
 	}
 	if remaining := difference(available, assigned); len(remaining) > 0 {
-		out = append(out, handlers.UISchemaGroup{
+		out = append(out, hmapi.UISchemaGroup{
 			ID:         "other",
 			Label:      otherGroupLabel(locale),
 			Parameters: remaining,
@@ -141,7 +141,7 @@ func (a *UISchemaAdapter) orderedSingleGroup(
 	locale string,
 	meta *ccudata.SenderTypeMetadata,
 	available map[string]struct{},
-) []handlers.UISchemaGroup {
+) []hmapi.UISchemaGroup {
 	ordered := filterAvailable(meta.ParameterOrder, available)
 	rest := difference(available, stringSet(ordered))
 	all := make([]string, 0, len(ordered)+len(rest))
@@ -157,10 +157,10 @@ func (a *UISchemaAdapter) orderedSingleGroup(
 	case "de":
 		label = "Einstellungen"
 	}
-	return []handlers.UISchemaGroup{{ID: "all", Label: label, Parameters: all}}
+	return []hmapi.UISchemaGroup{{ID: "all", Label: label, Parameters: all}}
 }
 
-func (a *UISchemaAdapter) patternGroups(locale string, names []string) []handlers.UISchemaGroup {
+func (a *UISchemaAdapter) patternGroups(locale string, names []string) []hmapi.UISchemaGroup {
 	matched := make(map[string][]string, len(fallbackGroupPatterns))
 	used := make(map[string]struct{})
 	for _, name := range names {
@@ -172,12 +172,12 @@ func (a *UISchemaAdapter) patternGroups(locale string, names []string) []handler
 			}
 		}
 	}
-	out := make([]handlers.UISchemaGroup, 0, len(fallbackGroupPatterns)+1)
+	out := make([]hmapi.UISchemaGroup, 0, len(fallbackGroupPatterns)+1)
 	for _, g := range fallbackGroupPatterns {
 		if len(matched[g.id]) == 0 {
 			continue
 		}
-		out = append(out, handlers.UISchemaGroup{
+		out = append(out, hmapi.UISchemaGroup{
 			ID:         g.id,
 			Label:      groupLabelForLocale(locale, g.labelEn, g.labelDe),
 			Parameters: matched[g.id],
@@ -190,7 +190,7 @@ func (a *UISchemaAdapter) patternGroups(locale string, names []string) []handler
 		}
 	}
 	if len(other) > 0 {
-		out = append(out, handlers.UISchemaGroup{
+		out = append(out, hmapi.UISchemaGroup{
 			ID:         "other",
 			Label:      otherGroupLabel(locale),
 			Parameters: other,

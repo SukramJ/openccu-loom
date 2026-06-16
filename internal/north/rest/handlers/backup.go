@@ -4,34 +4,20 @@
 package handlers
 
 import (
-	"context"
-	"io"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// BackupEntry is one entry in the backup list.
-type BackupEntry struct {
-	ID        string    `json:"id"`
-	Central   string    `json:"central"`
-	Bytes     int64     `json:"bytes"`
-	CreatedAt time.Time `json:"created_at"`
-}
+// BackupEntry is an alias for the canonical DTO in pkg/hmapi.
+type BackupEntry = hmapi.BackupEntry
 
-// BackupService is the facade the backup endpoints need.
-type BackupService interface {
-	TriggerBackup(ctx context.Context) (string, error) // returns job id
-	List(ctx context.Context) ([]BackupEntry, error)
-	Stream(ctx context.Context, id string, w io.Writer) error
-	// Restore reinstalls a previously taken backup on the CCU. The
-	// returned id is the (re-used) backup id so the caller can poll
-	// for completion via the same job-tracking endpoints.
-	Restore(ctx context.Context, id string) (string, error)
-}
+// BackupService is an alias for the canonical interface in pkg/interfaces.
+type BackupService = interfaces.BackupService
 
 // TriggerBackup kicks off a CCU backup and returns `202 Accepted`
 // with the job id.

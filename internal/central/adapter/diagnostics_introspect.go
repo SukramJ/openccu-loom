@@ -10,14 +10,14 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // IntrospectAdapter exposes read-only live daemon internals — per-interface
 // reliability state and a typed event-bus tap — to the REST diagnostics
 // layer. It performs no writes and never contacts a CCU. Satisfies
-// [handlers.DiagnosticsIntrospectService].
+// [interfaces.DiagnosticsIntrospectService].
 type IntrospectAdapter struct{ registry *central.Registry }
 
 // NewIntrospectAdapter wires the adapter to the central registry.
@@ -26,8 +26,8 @@ func NewIntrospectAdapter(reg *central.Registry) *IntrospectAdapter {
 }
 
 // ReliabilitySnapshot returns per-(central, interface) reliability state.
-func (a *IntrospectAdapter) ReliabilitySnapshot(centralName string) []handlers.ReliabilityState {
-	out := make([]handlers.ReliabilityState, 0)
+func (a *IntrospectAdapter) ReliabilitySnapshot(centralName string) []hmapi.ReliabilityState {
+	out := make([]hmapi.ReliabilityState, 0)
 	for _, u := range a.registry.List() {
 		if centralName != "" && u.Name() != centralName {
 			continue
@@ -39,7 +39,7 @@ func (a *IntrospectAdapter) ReliabilitySnapshot(centralName string) []handlers.R
 			if e == nil || e.Client == nil {
 				continue
 			}
-			out = append(out, handlers.ReliabilityState{
+			out = append(out, hmapi.ReliabilityState{
 				Central:      u.Name(),
 				Interface:    e.InterfaceID,
 				CircuitState: e.Client.MetricsCircuitState(),
@@ -66,7 +66,7 @@ func (a *IntrospectAdapter) ResolveCentral(centralName string) (string, bool) {
 
 // TapEventBus subscribes to the central's event bus and forwards each
 // curated event (subject to the type filter) to emit until ctx is done.
-func (a *IntrospectAdapter) TapEventBus(ctx context.Context, centralName string, types []string, emit func(handlers.DiagnosticsEvent)) {
+func (a *IntrospectAdapter) TapEventBus(ctx context.Context, centralName string, types []string, emit func(hmapi.DiagnosticsEvent)) {
 	u, ok := a.registry.Get(centralName)
 	if !ok || u.EventBus == nil {
 		return
@@ -79,7 +79,7 @@ func (a *IntrospectAdapter) TapEventBus(ctx context.Context, centralName string,
 // subscribeCuratedEvents subscribes to a curated set of high-value event
 // types on bus and forwards each (subject to typeFilter) via emit. The
 // returned func unsubscribes every handler.
-func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(handlers.DiagnosticsEvent)) func() {
+func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmapi.DiagnosticsEvent)) func() {
 	want := func(name string) bool {
 		if len(typeFilter) == 0 {
 			return true
@@ -95,7 +95,7 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hand
 		if !want(name) {
 			return
 		}
-		emit(handlers.DiagnosticsEvent{TS: time.Now().UTC().Format(time.RFC3339Nano), Type: name, Event: e})
+		emit(hmapi.DiagnosticsEvent{TS: time.Now().UTC().Format(time.RFC3339Nano), Type: name, Event: e})
 	}
 
 	unsubs := make([]func(), 0, 11)

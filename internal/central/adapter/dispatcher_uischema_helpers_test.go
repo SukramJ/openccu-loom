@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ============================================================
@@ -270,7 +270,7 @@ func TestBuildSubsetGroupsActiveOptionDetection(t *testing.T) {
 		{ID: 1, NameKey: "opt_off", MemberParams: []string{"STATE"}, Values: map[string]any{"STATE": false}},
 		{ID: 2, NameKey: "opt_on", MemberParams: []string{"STATE"}, Values: map[string]any{"STATE": true}},
 	}
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "STATE", Value: true, Observed: true},
 	}
 	groups := a.buildSubsetGroups("en", subsets, params)

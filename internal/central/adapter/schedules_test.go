@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -65,7 +65,7 @@ func TestParseClimateScheduleSimple(t *testing.T) {
 	if len(monday.Periods) != 2 {
 		t.Fatalf("expected 2 periods, got %d: %+v", len(monday.Periods), monday.Periods)
 	}
-	want := []handlers.ClimatePeriod{
+	want := []hmapi.ClimatePeriod{
 		{StartTime: "00:00", EndTime: "06:00", Temperature: 18.0},
 		{StartTime: "22:00", EndTime: "24:00", Temperature: 18.0},
 	}
@@ -85,13 +85,13 @@ func TestParseClimateScheduleMissingRaisesSentinel(t *testing.T) {
 func TestSerializeClimateScheduleRoundTrip(t *testing.T) {
 	t.Parallel()
 	// 18°C base with two heated stretches (morning + evening).
-	schedule := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	schedule := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "06:00", EndTime: "08:00", Temperature: 21.0},
 							{StartTime: "17:00", EndTime: "22:00", Temperature: 21.0},
 						},
@@ -121,10 +121,10 @@ func TestSerializeClimateScheduleEmitsThirteenSlots(t *testing.T) {
 	// A weekday with no periods still yields 13 slots (all ending at
 	// 24:00 with the base temperature) so the CCU's fixed paramset
 	// shape is satisfied.
-	schedule := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	schedule := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {BaseTemperature: 19.0, Periods: nil},
 				},
 			},
@@ -149,13 +149,13 @@ func TestSerializeClimateScheduleEmitsThirteenSlots(t *testing.T) {
 
 func TestSerializeClimateScheduleRejectsOverlap(t *testing.T) {
 	t.Parallel()
-	schedule := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	schedule := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "06:00", EndTime: "10:00", Temperature: 21.0},
 							{StartTime: "09:00", EndTime: "11:00", Temperature: 22.0},
 						},
@@ -213,7 +213,7 @@ func TestParseSimpleScheduleActiveSlots(t *testing.T) {
 
 func TestSerializeSimpleScheduleZeroesUnusedSlots(t *testing.T) {
 	t.Parallel()
-	raw, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{
+	raw, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:   1,
 			Weekdays: []string{"MONDAY", "WEDNESDAY"},
@@ -242,7 +242,7 @@ func TestSerializeSimpleScheduleZeroesUnusedSlots(t *testing.T) {
 
 func TestSerializeSimpleScheduleRoundTrip(t *testing.T) {
 	t.Parallel()
-	in := []handlers.SimpleScheduleEntry{
+	in := []hmapi.SimpleScheduleEntry{
 		{SlotNo: 1, Weekdays: []string{"MONDAY", "TUESDAY"}, Time: "06:30", Level: 1, Condition: "fixed_time"},
 		{SlotNo: 2, Weekdays: []string{"SATURDAY", "SUNDAY"}, Time: "08:00", Level: 0.5, Condition: "fixed_time"},
 	}
@@ -258,7 +258,7 @@ func TestSerializeSimpleScheduleRoundTrip(t *testing.T) {
 
 func TestSerializeSimpleScheduleAstroAndDuration(t *testing.T) {
 	t.Parallel()
-	in := []handlers.SimpleScheduleEntry{
+	in := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:             1,
 			Weekdays:           []string{"MONDAY"},
@@ -424,8 +424,8 @@ func TestDetectScheduleDomainNoMatchingChannel(t *testing.T) {
 // ============================================================
 
 // baseEntry creates a minimal valid SimpleScheduleEntry for slot 1.
-func baseEntry(slot int) handlers.SimpleScheduleEntry {
-	return handlers.SimpleScheduleEntry{
+func baseEntry(slot int) hmapi.SimpleScheduleEntry {
+	return hmapi.SimpleScheduleEntry{
 		SlotNo:   slot,
 		Weekdays: []string{"MONDAY"},
 		Time:     "08:00",
@@ -436,7 +436,7 @@ func baseEntry(slot int) handlers.SimpleScheduleEntry {
 func TestSerializeSimpleScheduleSlotOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(0) // slot 0 is out of range
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("slot 0 must error")
 	}
@@ -445,7 +445,7 @@ func TestSerializeSimpleScheduleSlotOutOfRange(t *testing.T) {
 func TestSerializeSimpleScheduleSlotTooHigh(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(25) // max is 24
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("slot 25 must error")
 	}
@@ -455,7 +455,7 @@ func TestSerializeSimpleScheduleDuplicateSlot(t *testing.T) {
 	t.Parallel()
 	e1 := baseEntry(1)
 	e2 := baseEntry(1)
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e1, e2})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e1, e2})
 	if err == nil {
 		t.Error("duplicate slot must error")
 	}
@@ -465,7 +465,7 @@ func TestSerializeSimpleScheduleNoWeekday(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Weekdays = nil // empty weekday list
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("no weekday must error")
 	}
@@ -475,7 +475,7 @@ func TestSerializeSimpleScheduleInvalidTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Time = "not-a-time"
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("invalid time must error")
 	}
@@ -485,7 +485,7 @@ func TestSerializeSimpleScheduleUnknownCondition(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Condition = "NOT_A_REAL_CONDITION_X99"
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("unknown condition must error")
 	}
@@ -495,7 +495,7 @@ func TestSerializeSimpleScheduleUnknownAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "moonrise" // not sunrise or sunset
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("unknown astro_type must error")
 	}
@@ -505,7 +505,7 @@ func TestSerializeSimpleScheduleAstroOffsetOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = 800 // > 720
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("astro offset > 720 must error")
 	}
@@ -515,7 +515,7 @@ func TestSerializeSimpleScheduleAstroOffsetNegativeOutOfRange(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroOffsetMinutes = -800 // < -720
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("astro offset < -720 must error")
 	}
@@ -525,7 +525,7 @@ func TestSerializeSimpleScheduleSunsetAstroType(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.AstroType = "sunset"
-	out, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err != nil {
 		t.Fatalf("sunset astro_type: %v", err)
 	}
@@ -539,7 +539,7 @@ func TestSerializeSimpleScheduleLevel2NonNil(t *testing.T) {
 	e := baseEntry(1)
 	level2 := 0.75
 	e.Level2 = &level2
-	out, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err != nil {
 		t.Fatalf("Level2 non-nil: %v", err)
 	}
@@ -552,7 +552,7 @@ func TestSerializeSimpleScheduleInvalidDuration(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.Duration = "not-a-duration"
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("invalid duration must error")
 	}
@@ -562,7 +562,7 @@ func TestSerializeSimpleScheduleInvalidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "not-a-ramp"
-	_, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	_, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err == nil {
 		t.Error("invalid ramp_time must error")
 	}
@@ -572,7 +572,7 @@ func TestSerializeSimpleScheduleValidRampTime(t *testing.T) {
 	t.Parallel()
 	e := baseEntry(1)
 	e.RampTime = "10s"
-	out, err := serializeSimpleSchedule([]handlers.SimpleScheduleEntry{e})
+	out, err := serializeSimpleSchedule([]hmapi.SimpleScheduleEntry{e})
 	if err != nil {
 		t.Fatalf("valid ramp_time: %v", err)
 	}
@@ -661,7 +661,7 @@ func TestTimeBaseFactorRoundTripPermanent(t *testing.T) {
 // downstream serializeSimpleSchedule failed with "invalid duration".
 func TestSerializeSimpleScheduleLockAutorelockEnd(t *testing.T) {
 	t.Parallel()
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:     1,
 			Weekdays:   []string{"MONDAY"},
@@ -743,7 +743,7 @@ func TestParseSimpleScheduleEmitsValidDuration(t *testing.T) {
 // that rejects DURATION_FACTOR=0.
 func TestSerializeSimpleScheduleSwitchEmptyDuration(t *testing.T) {
 	t.Parallel()
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:   2,
 			Weekdays: []string{"TUESDAY"},
@@ -778,7 +778,7 @@ func TestSerializeSimpleScheduleSwitchEmptyDuration(t *testing.T) {
 // the caller DID set a duration, DURATION_BASE/FACTOR must be emitted.
 func TestSerializeSimpleScheduleSwitchWithDuration(t *testing.T) {
 	t.Parallel()
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:   1,
 			Weekdays: []string{"MONDAY"},

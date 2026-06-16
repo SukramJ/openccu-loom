@@ -7,46 +7,21 @@ import (
 	"net/http"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// ConfigSnapshot is whatever the domain layer publishes as a
-// sanitized view of the effective configuration. Fields are
-// deliberately omitempty so the daemon can grow the shape without
-// breaking clients.
-type ConfigSnapshot struct {
-	Locale        string            `json:"locale,omitempty"`
-	Centrals      []ConfigCentral   `json:"centrals,omitempty"`
-	CallbackPorts ConfigPorts       `json:"callback_ports,omitzero"`
-	Features      map[string]bool   `json:"features,omitempty"`
-	Extras        map[string]string `json:"extras,omitempty"`
-	// Policies surfaces static daemon-side behaviour switches that
-	// external clients (HA in particular) ask about: which hub
-	// content gets surfaced, whether invisible devices show up,
-	// etc. The current MVP exposes a fixed policy set; future
-	// revisions may add operator-configurable knobs without
-	// breaking the wire shape. Keys are stable; values are the
-	// current effective setting. See `/config` description in
-	// openapi.yaml for the enumerated keys.
-	Policies map[string]bool `json:"policies,omitempty"`
-}
+// ConfigSnapshot is an alias for the canonical DTO in pkg/hmapi.
+type ConfigSnapshot = hmapi.ConfigSnapshot
 
-// ConfigCentral describes one configured CCU.
-type ConfigCentral struct {
-	Name       string   `json:"name"`
-	Host       string   `json:"host"`
-	Interfaces []string `json:"interfaces"`
-}
+// ConfigCentral is an alias for the canonical DTO in pkg/hmapi.
+type ConfigCentral = hmapi.ConfigCentral
 
-// ConfigPorts surfaces the effective callback server ports.
-type ConfigPorts struct {
-	XMLRPC int `json:"xmlrpc,omitempty"`
-	BINRPC int `json:"binrpc,omitempty"`
-}
+// ConfigPorts is an alias for the canonical DTO in pkg/hmapi.
+type ConfigPorts = hmapi.ConfigPorts
 
-// ConfigReader is the facade `GET /api/v1/config` depends on.
-type ConfigReader interface {
-	SanitizedConfig() ConfigSnapshot
-}
+// ConfigReader is an alias for the canonical interface in pkg/interfaces.
+type ConfigReader = interfaces.ConfigReader
 
 // Config returns a handler rendering the sanitized daemon config.
 // A nil reader degrades to 503 so the SPA can render a clear status

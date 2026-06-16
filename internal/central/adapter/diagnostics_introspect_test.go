@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central/events"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
@@ -69,8 +69,8 @@ func TestIntrospectAdapter_TapEventBus_DeliversDataPointValueChanged(t *testing.
 	reg, unit := buildRecorderRegistry(t, "ccuA")
 	a := NewIntrospectAdapter(reg)
 
-	ch := make(chan handlers.DiagnosticsEvent, 8)
-	emit := func(e handlers.DiagnosticsEvent) { ch <- e }
+	ch := make(chan hmapi.DiagnosticsEvent, 8)
+	emit := func(e hmapi.DiagnosticsEvent) { ch <- e }
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -113,8 +113,8 @@ func TestIntrospectAdapter_TapEventBus_TypeFilterExcludes(t *testing.T) {
 	reg, unit := buildRecorderRegistry(t, "ccuB")
 	a := NewIntrospectAdapter(reg)
 
-	ch := make(chan handlers.DiagnosticsEvent, 8)
-	emit := func(e handlers.DiagnosticsEvent) { ch <- e }
+	ch := make(chan hmapi.DiagnosticsEvent, 8)
+	emit := func(e hmapi.DiagnosticsEvent) { ch <- e }
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

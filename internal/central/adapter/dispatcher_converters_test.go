@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -184,7 +184,7 @@ func TestToInt32Unsupported(t *testing.T) {
 func TestParamTimeMissing(t *testing.T) {
 	t.Parallel()
 	_, err := paramTime(map[string]any{}, "when")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing param, got %v", err)
 	}
 }
@@ -192,7 +192,7 @@ func TestParamTimeMissing(t *testing.T) {
 func TestParamTimeNonString(t *testing.T) {
 	t.Parallel()
 	_, err := paramTime(map[string]any{"when": 42}, "when")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for non-string, got %v", err)
 	}
 }
@@ -224,7 +224,7 @@ func TestParamTimeRelative(t *testing.T) {
 func TestParamTimeInvalidFormat(t *testing.T) {
 	t.Parallel()
 	_, err := paramTime(map[string]any{"when": "not-a-time"}, "when")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for invalid format, got %v", err)
 	}
 }
@@ -339,7 +339,7 @@ func TestDispatchLight_SetLevelNoPayload(t *testing.T) {
 	disp, _ := buildDispatcher(t, "LSET006", "LEVEL", l)
 
 	err := disp.InvokeCustomDP(context.Background(), "LSET006", "LEVEL", "set_level", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for empty set_level, got %v", err)
 	}
 }
@@ -392,7 +392,7 @@ func TestDispatchSiren_TurnOnBadDuration(t *testing.T) {
 
 	params := map[string]any{"duration": "not-a-duration"}
 	err := disp.InvokeCustomDP(context.Background(), "SRN004", "STATE", "turn_on", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad duration, got %v", err)
 	}
 }
@@ -405,7 +405,7 @@ func TestDispatchSiren_TurnOnBadAcoustic(t *testing.T) {
 
 	params := map[string]any{"acoustic": struct{}{}}
 	err := disp.InvokeCustomDP(context.Background(), "SRN005", "STATE", "turn_on", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad acoustic, got %v", err)
 	}
 }
@@ -418,7 +418,7 @@ func TestDispatchSiren_TurnOnBadOptical(t *testing.T) {
 
 	params := map[string]any{"optical": struct{}{}}
 	err := disp.InvokeCustomDP(context.Background(), "SRN006", "STATE", "turn_on", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad optical, got %v", err)
 	}
 }
@@ -430,7 +430,7 @@ func TestDispatchSiren_UnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "SRN007", "STATE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "SRN007", "STATE", "invalid_op", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -478,7 +478,7 @@ func TestDispatchTextDisplay_WriteMissingID(t *testing.T) {
 
 	params := map[string]any{"text": "hello"}
 	err := disp.InvokeCustomDP(context.Background(), "TXT003", "STATE", "write", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing id, got %v", err)
 	}
 }
@@ -502,7 +502,7 @@ func TestDispatchTextDisplay_ClearMissingID(t *testing.T) {
 	disp, _ := buildDispatcher(t, "TXT005", "STATE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "TXT005", "STATE", "clear", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing id, got %v", err)
 	}
 }
@@ -514,7 +514,7 @@ func TestDispatchTextDisplay_UnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "TXT006", "STATE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "TXT006", "STATE", "blink", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -530,7 +530,7 @@ func TestDispatchTextDisplay_WriteWithBadSoundOptions(t *testing.T) {
 		"sound": 99, // not a string → ErrBadParam
 	}
 	err := disp.InvokeCustomDP(context.Background(), "TXT007", "STATE", "write", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad sound, got %v", err)
 	}
 }
@@ -546,7 +546,7 @@ func TestDispatchTextDisplay_WriteWithBadTextType(t *testing.T) {
 		"text": 42, // not a string
 	}
 	err := disp.InvokeCustomDP(context.Background(), "TXT008", "STATE", "write", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad text type, got %v", err)
 	}
 }

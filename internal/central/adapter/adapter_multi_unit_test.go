@@ -37,9 +37,9 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -686,7 +686,7 @@ func buildUISchemaBoost11Fixture(t *testing.T) (*UISchemaAdapter, *central.Regis
 func TestUISchemaAdapter_UISchema_DeviceNotFound_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "UNKNOWN",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -700,7 +700,7 @@ func TestUISchemaAdapter_UISchema_DeviceNotFound_ReturnsErr(t *testing.T) {
 func TestUISchemaAdapter_UISchema_ValuesParamset_HappyPath(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -717,7 +717,7 @@ func TestUISchemaAdapter_UISchema_ValuesParamset_HappyPath(t *testing.T) {
 func TestUISchemaAdapter_UISchema_MasterParamset_HappyPath(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "MASTER",
@@ -734,7 +734,7 @@ func TestUISchemaAdapter_UISchema_MasterParamset_HappyPath(t *testing.T) {
 func TestUISchemaAdapter_UISchema_InvalidParamset_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "INVALID_KEY",
@@ -749,7 +749,7 @@ func TestUISchemaAdapter_UISchema_ChannelNotFound_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
 	// Channel 99 doesn't exist.
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  99,
 		Paramset: "VALUES",
@@ -764,7 +764,7 @@ func TestUISchemaAdapter_UISchema_LinkParamset_NilWriter_ReturnsErr(t *testing.T
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
 	// LINK paramset goes through buildLinkSchema which requires writer.
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "LINK",
@@ -780,7 +780,7 @@ func TestUISchemaAdapter_UISchema_ExpertMode_HappyPath(t *testing.T) {
 	t.Parallel()
 	a, _ := buildUISchemaBoost11Fixture(t)
 	// Expert=true exercises the expert parameter path.
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -870,7 +870,7 @@ func TestLinkClientAdapter_GetLinks_IncomingLink_Direction(t *testing.T) {
 func TestUISchemaAdapter_UISchema_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	a := NewUISchemaAdapter(nil, nil, nil, nil, nil)
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "DEV050",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -1036,9 +1036,9 @@ func TestScheduleToMap_NilDTO(t *testing.T) {
 
 func TestScheduleToMap_ValidDTO(t *testing.T) {
 	t.Parallel()
-	dto := &handlers.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Kind: "climate",
-		Channel: handlers.ScheduleChannelRef{
+		Channel: hmapi.ScheduleChannelRef{
 			Address: "DEV:1",
 			Number:  1,
 			Device:  "DEV",
@@ -1078,7 +1078,7 @@ func TestMapToSchedule_EmptyMap(t *testing.T) {
 
 func TestMapToSchedule_RoundTrip(t *testing.T) {
 	t.Parallel()
-	orig := &handlers.ClimateSchedule{Kind: "climate", ActiveProfile: "P2"}
+	orig := &hmapi.ClimateSchedule{Kind: "climate", ActiveProfile: "P2"}
 	m, err := scheduleToMap(orig)
 	if err != nil {
 		t.Fatalf("scheduleToMap: %v", err)
@@ -1306,7 +1306,7 @@ func TestLinkProfilesAdapter_NilRegistry_ResolveChannelType(t *testing.T) {
 
 func TestEnrichLinkParameter_UnknownParameter(t *testing.T) {
 	t.Parallel()
-	p := &handlers.UISchemaParameter{Name: "UNKNOWN_PARAM", Type: "FLOAT"}
+	p := &hmapi.UISchemaParameter{Name: "UNKNOWN_PARAM", Type: "FLOAT"}
 	enrichLinkParameter(p, "en")
 	// Should not panic; category may be empty for unknown params — no panic is the primary goal.
 	_ = p.Category
@@ -1315,7 +1315,7 @@ func TestEnrichLinkParameter_UnknownParameter(t *testing.T) {
 func TestEnrichLinkParameter_OnTimeName(t *testing.T) {
 	t.Parallel()
 	// SHORT_ON_TIME is a known link parameter that has a time selector type.
-	p := &handlers.UISchemaParameter{
+	p := &hmapi.UISchemaParameter{
 		Name: "SHORT_ON_TIME",
 		Type: "INTEGER",
 	}
@@ -1326,7 +1326,7 @@ func TestEnrichLinkParameter_OnTimeName(t *testing.T) {
 
 func TestEnrichLinkParameter_LongOnTime(t *testing.T) {
 	t.Parallel()
-	p := &handlers.UISchemaParameter{
+	p := &hmapi.UISchemaParameter{
 		Name: "LONG_ON_TIME",
 		Type: "INTEGER",
 	}
@@ -1335,7 +1335,7 @@ func TestEnrichLinkParameter_LongOnTime(t *testing.T) {
 
 func TestBuildKeypressGroups_NoGroupID(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "P1", GroupID: ""},
 		{Name: "P2", GroupID: ""},
 	}
@@ -1347,7 +1347,7 @@ func TestBuildKeypressGroups_NoGroupID(t *testing.T) {
 
 func TestBuildKeypressGroups_WithGroupIDs(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "P1", GroupID: "keypress.short"},
 		{Name: "P2", GroupID: "keypress.long"},
 		{Name: "P3", GroupID: "keypress.common"},
@@ -1364,7 +1364,7 @@ func TestBuildKeypressGroups_WithGroupIDs(t *testing.T) {
 
 func TestBuildKeypressGroups_OnlyShort(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "P1", GroupID: "keypress.short"},
 	}
 	groups := buildKeypressGroups("en", params)
@@ -2017,7 +2017,7 @@ func TestDispatchColorLight_SetColorTemperature_UnknownOp(t *testing.T) {
 
 	err := disp.InvokeCustomDP(context.Background(), "CLGT010", "LEVEL",
 		"set_color_temperature", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -2031,7 +2031,7 @@ func TestDispatchColorLight_SetEffect_UnknownOp(t *testing.T) {
 
 	err := disp.InvokeCustomDP(context.Background(), "CLGT011", "LEVEL",
 		"set_effect", map[string]any{"effect": "rainbow"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -2077,7 +2077,7 @@ func TestDispatchColorTempLight_SetColorTemperature_MissingKelvin(t *testing.T) 
 
 	err := disp.InvokeCustomDP(context.Background(), "CTLG010", "LEVEL",
 		"set_color_temperature", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing kelvin, got %v", err)
 	}
 }
@@ -2123,7 +2123,7 @@ func TestDispatchFixedColorLight_SetColor_MissingHue(t *testing.T) {
 
 	err := disp.InvokeCustomDP(context.Background(), "FCLG011", "LEVEL",
 		"set_color", map[string]any{"saturation": 1.0}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing hue, got %v", err)
 	}
 }
@@ -2197,7 +2197,7 @@ func TestDispatchModulatingValve_UnknownOp(t *testing.T) {
 
 	err := disp.InvokeCustomDP(context.Background(), "MOD011", "LEVEL",
 		"fly_the_valve", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -2291,20 +2291,20 @@ func TestInterfacesAdapter_Reconnect_UnknownInterface(t *testing.T) {
 func TestEnrichLinkParameter_ShortOnTimeBase(t *testing.T) {
 	t.Parallel()
 	// SHORT_ON_TIME_BASE is a time-selector parameter.
-	p := &handlers.UISchemaParameter{Name: "SHORT_ON_TIME_BASE", Type: "INTEGER"}
+	p := &hmapi.UISchemaParameter{Name: "SHORT_ON_TIME_BASE", Type: "INTEGER"}
 	enrichLinkParameter(p, "en")
 	// May or may not have a time selector type based on classifier — no panic is the goal.
 }
 
 func TestEnrichLinkParameter_ShortOnTimeFactor(t *testing.T) {
 	t.Parallel()
-	p := &handlers.UISchemaParameter{Name: "SHORT_ON_TIME_FACTOR", Type: "INTEGER"}
+	p := &hmapi.UISchemaParameter{Name: "SHORT_ON_TIME_FACTOR", Type: "INTEGER"}
 	enrichLinkParameter(p, "de")
 }
 
 func TestEnrichLinkParameter_LevelOnEvent(t *testing.T) {
 	t.Parallel()
-	p := &handlers.UISchemaParameter{Name: "SHORT_JT_ON", Type: "INTEGER"}
+	p := &hmapi.UISchemaParameter{Name: "SHORT_JT_ON", Type: "INTEGER"}
 	enrichLinkParameter(p, "en")
 }
 
@@ -2315,7 +2315,7 @@ func TestEnrichLinkParameter_HasLastValueWithHighMax(t *testing.T) {
 		importJSONB = append(importJSONB, '1', '.', '1', '0')
 		return importJSONB
 	}
-	p := &handlers.UISchemaParameter{
+	p := &hmapi.UISchemaParameter{
 		Name:             "SHORT_LEVEL",
 		Type:             "FLOAT",
 		DisplayAsPercent: true,
@@ -2818,7 +2818,7 @@ func TestDispatchLight_SetLevel_BadValue(t *testing.T) {
 	// "not_a_number" cannot be parsed by toFloat64 → paramFloat error branch (line 275-277).
 	err := disp.InvokeCustomDP(context.Background(), "LGT_B17_01", "LEVEL",
 		"set_level", map[string]any{"level": "not_a_number"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -2837,7 +2837,7 @@ func TestDispatchEffectLight_SetEffect_MissingIndex(t *testing.T) {
 	// No "label" and no "index" → paramInt32 error (line 371-373).
 	err := disp.InvokeCustomDP(context.Background(), "EFF_B17_01", "LEVEL",
 		"set_effect", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing index, got %v", err)
 	}
 }
@@ -2851,7 +2851,7 @@ func TestDispatchEffectLight_SetColor_MissingHue(t *testing.T) {
 	// No "hue" → paramInt32 error (line 377-379).
 	err := disp.InvokeCustomDP(context.Background(), "EFF_B17_02", "LEVEL",
 		"set_color", map[string]any{"saturation": 1.0}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing hue, got %v", err)
 	}
 }
@@ -2865,7 +2865,7 @@ func TestDispatchEffectLight_SetColor_BadSaturation(t *testing.T) {
 	// "saturation" is a non-numeric string → toFloat64 fails → paramFloat error (line 381-383).
 	err := disp.InvokeCustomDP(context.Background(), "EFF_B17_03", "LEVEL",
 		"set_color", map[string]any{"hue": int32(120), "saturation": "bad"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad saturation, got %v", err)
 	}
 }
@@ -2898,7 +2898,7 @@ func TestDispatchRGBWLight_SetColor_MissingHue(t *testing.T) {
 	// No "hue" → paramInt32 error (line 398-400).
 	err := disp.InvokeCustomDP(context.Background(), "RGBW_B17_01", "LEVEL",
 		"set_color", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing hue, got %v", err)
 	}
 }
@@ -2912,7 +2912,7 @@ func TestDispatchRGBWLight_SetColor_BadSaturation(t *testing.T) {
 	// "saturation" is non-numeric → toFloat64 fails → paramFloat error (line 402-404).
 	err := disp.InvokeCustomDP(context.Background(), "RGBW_B17_02", "LEVEL",
 		"set_color", map[string]any{"hue": int32(180), "saturation": "bad"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad saturation, got %v", err)
 	}
 }
@@ -2926,7 +2926,7 @@ func TestDispatchRGBWLight_SetColorTemperature_MissingKelvin(t *testing.T) {
 	// No "kelvin" → paramInt32 error (line 408-410).
 	err := disp.InvokeCustomDP(context.Background(), "RGBW_B17_03", "LEVEL",
 		"set_color_temperature", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing kelvin, got %v", err)
 	}
 }
@@ -2940,7 +2940,7 @@ func TestDispatchRGBWLight_SetEffect_MissingIndex(t *testing.T) {
 	// No "label" and no "index" → paramInt32 error (line 426-428).
 	err := disp.InvokeCustomDP(context.Background(), "RGBW_B17_04", "LEVEL",
 		"set_effect", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing index, got %v", err)
 	}
 }
@@ -2971,7 +2971,7 @@ func TestDispatchClimate_SetTemperature_BadValue(t *testing.T) {
 	// "temperature" is a non-numeric string → paramFloat toFloat64 error (line 443-445).
 	err := disp.InvokeCustomDP(context.Background(), "CLM_B17_01", "SET_POINT_TEMPERATURE",
 		"set_temperature", map[string]any{"temperature": "bad"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -2985,7 +2985,7 @@ func TestDispatchClimate_SetMode_MissingMode(t *testing.T) {
 	// No "mode" key → paramString error (line 453-455).
 	err := disp.InvokeCustomDP(context.Background(), "CLM_B17_02", "SET_POINT_TEMPERATURE",
 		"set_mode", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing mode, got %v", err)
 	}
 }
@@ -2999,7 +2999,7 @@ func TestDispatchClimate_SetProfile_MissingProfile(t *testing.T) {
 	// No "profile" key → paramString error (line 459-461).
 	err := disp.InvokeCustomDP(context.Background(), "CLM_B17_03", "SET_POINT_TEMPERATURE",
 		"set_profile", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing profile, got %v", err)
 	}
 }
@@ -3013,7 +3013,7 @@ func TestDispatchClimate_EnableAway_MissingUntil(t *testing.T) {
 	// No "until" key → paramTime error (line 466-468).
 	err := disp.InvokeCustomDP(context.Background(), "CLM_B17_04", "SET_POINT_TEMPERATURE",
 		"enable_away", map[string]any{}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing until, got %v", err)
 	}
 }
@@ -3030,7 +3030,7 @@ func TestDispatchClimate_EnableAway_BadTemperature(t *testing.T) {
 			"until":       "2026-12-01T12:00:00Z",
 			"temperature": "not_a_number",
 		}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad temperature, got %v", err)
 	}
 }
@@ -3048,7 +3048,7 @@ func TestDispatchCover_SetPosition_BadValue(t *testing.T) {
 	// "position" is a non-numeric string → paramFloat toFloat64 error (line 495-497).
 	err := disp.InvokeCustomDP(context.Background(), "CVR_B17_01", "LEVEL",
 		"set_position", map[string]any{"position": "bad"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -3062,7 +3062,7 @@ func TestDispatchCover_DefaultUnknownOp(t *testing.T) {
 	// A truly unknown op → default case (line 503-504).
 	err := disp.InvokeCustomDP(context.Background(), "CVR_B17_02", "LEVEL",
 		"fly_the_cover_b17", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -3080,7 +3080,7 @@ func TestDispatchBlind_SetTilt_BadValue(t *testing.T) {
 	// "tilt" is a non-numeric string → paramFloat toFloat64 error (line 514-516).
 	err := disp.InvokeCustomDP(context.Background(), "BLD_B17_01", "LEVEL",
 		"set_tilt", map[string]any{"tilt": "bad"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad tilt, got %v", err)
 	}
 }
@@ -3098,7 +3098,7 @@ func TestDispatchIrrigation_Open_BadDuration(t *testing.T) {
 	// duration is a struct (not string/number) → anyToDuration toFloat64 error (line 618-620).
 	err := disp.InvokeCustomDP(context.Background(), "IRR_B17_01", "STATE",
 		"open", map[string]any{"duration": struct{}{}}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad duration, got %v", err)
 	}
 }
@@ -3112,7 +3112,7 @@ func TestDispatchIrrigation_UnknownOp(t *testing.T) {
 	// default case (line 628-629).
 	err := disp.InvokeCustomDP(context.Background(), "IRR_B17_02", "STATE",
 		"completely_unknown_op_b17", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -3130,7 +3130,7 @@ func TestDispatchLight_SetBrightness_BadValue(t *testing.T) {
 	// "brightness" is a map — toFloat64 fails (paramFloat error line 746-748).
 	err := disp.InvokeCustomDP(context.Background(), "LGT_B17_02", "LEVEL",
 		"set_brightness", map[string]any{"brightness": map[string]any{"nested": true}}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad brightness, got %v", err)
 	}
 }
@@ -3148,7 +3148,7 @@ func TestDispatchSiren_TurnOn_BadDuration(t *testing.T) {
 	// duration is a struct — anyToDuration fails → paramDuration error (line 808-810).
 	err := disp.InvokeCustomDP(context.Background(), "SRN_B17_01", "STATE",
 		"turn_on", map[string]any{"duration": struct{}{}}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad duration, got %v", err)
 	}
 }
@@ -3167,7 +3167,7 @@ func TestDispatchSwitch_TurnOnFor_BadDuration(t *testing.T) {
 	// duration is a struct — anyToDuration toFloat64 error → paramDuration error (line 808-810).
 	err := disp.InvokeCustomDP(context.Background(), "SW_B17_01", "STATE",
 		"turn_on_for", map[string]any{"duration": struct{}{}}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad duration, got %v", err)
 	}
 }
@@ -3185,7 +3185,7 @@ func TestDispatchSiren_TurnOn_BadAcoustic(t *testing.T) {
 	// acoustic is a struct — toInt32 fails → ErrBadParam.
 	err := disp.InvokeCustomDP(context.Background(), "SRN_B17_02", "STATE",
 		"turn_on", map[string]any{"acoustic": struct{}{}}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad acoustic, got %v", err)
 	}
 }
@@ -4339,7 +4339,7 @@ func TestBuildParameters_ValueList(t *testing.T) {
 	t.Parallel()
 	fix := newUISFixture(t, "ccu-b22-vl1")
 	a := &UISchemaAdapter{registry: fix.reg}
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "B22DEV01",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -4376,7 +4376,7 @@ func TestBuildParameters_ObservedValueAndModifiedAt(t *testing.T) {
 	fix.dp.OnWireValue(float64(21.5))
 
 	a := &UISchemaAdapter{registry: fix.reg}
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "B22DEV01",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -4446,7 +4446,7 @@ func TestBuildParameters_RequireTranslation_Skipped(t *testing.T) {
 	// No translations wired → parameterLabel returns "" for unknown param.
 	// With expert=false (default), requireTranslation=true, label="" → skip.
 	a := &UISchemaAdapter{registry: reg}
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "RT1DEV01B22",
 		Channel:  1,
 		Paramset: "MASTER",
@@ -4533,7 +4533,7 @@ func TestUISchema_WithEasymode(t *testing.T) {
 	}
 
 	a := NewUISchemaAdapter(reg, nil, nil, em, nil)
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "EM1DEV01B22",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -4590,7 +4590,7 @@ func TestBuildParameters_WithMetaPresets(t *testing.T) {
 	}
 
 	a := NewUISchemaAdapter(fix.reg, nil, nil, em, nil)
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "B22DEV01",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -5036,7 +5036,7 @@ func TestBuildLinkSchema_EmptyPeer(t *testing.T) {
 	// lookupChannel won't find the device because it's registered under
 	// "LINK01B24", but with channelNo=1 it finds nothing (address mismatch).
 	// Let's call buildLinkSchema directly instead.
-	req := handlers.UISchemaRequest{Address: "LINK01B24", Channel: 1, Paramset: "LINK", Peer: ""}
+	req := hmapi.UISchemaRequest{Address: "LINK01B24", Channel: 1, Paramset: "LINK", Peer: ""}
 	_, err := a.UISchema(context.Background(), req)
 	if err == nil {
 		t.Error("expected error for empty peer")
@@ -5069,7 +5069,7 @@ func TestBuildLinkSchema_NoWriter(t *testing.T) {
 
 	// No writer wired → buildLinkSchema returns error.
 	a := NewUISchemaAdapter(reg, nil, nil, nil, nil)
-	req := handlers.UISchemaRequest{Address: "LNW01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
+	req := hmapi.UISchemaRequest{Address: "LNW01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
 	_, err = a.UISchema(context.Background(), req)
 	if err == nil {
 		t.Error("expected error for nil writer")
@@ -5119,7 +5119,7 @@ func TestBuildLinkSchema_CentralNotFound(t *testing.T) {
 	// No backend registered → writer.Backend returns (nil, false) → error.
 	w := client.NewValueWriter()
 	a := NewUISchemaAdapter(reg, w, nil, nil, nil)
-	req := handlers.UISchemaRequest{Address: "LCNF02B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
+	req := hmapi.UISchemaRequest{Address: "LCNF02B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
 	_, err = a.UISchema(context.Background(), req)
 	if err == nil {
 		t.Error("expected error for no backend")
@@ -5157,7 +5157,7 @@ func TestBuildLinkSchema_DescriptionError(t *testing.T) {
 	w.Register("ccu-b24-lde", "HmIP-RF", b)
 
 	a := NewUISchemaAdapter(reg, w, nil, nil, nil)
-	req := handlers.UISchemaRequest{Address: "LDE01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
+	req := hmapi.UISchemaRequest{Address: "LDE01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
 	_, err = a.UISchema(context.Background(), req)
 	if err == nil {
 		t.Error("expected error from GetLinkParamsetDescription failure")
@@ -5229,7 +5229,7 @@ func TestBuildLinkSchema_HappyPath(t *testing.T) {
 	w.Register("ccu-b24-lhp", "HmIP-RF", b)
 
 	a := NewUISchemaAdapter(reg, w, nil, nil, nil)
-	req := handlers.UISchemaRequest{Address: "LHP01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
+	req := hmapi.UISchemaRequest{Address: "LHP01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
 	schema, err := a.UISchema(context.Background(), req)
 	if err != nil {
 		t.Fatalf("UISchema: %v", err)
@@ -5300,7 +5300,7 @@ func TestBuildLinkSchema_GetLinkParamsetError_ValuesFallback(t *testing.T) {
 	w.Register("ccu-b24-lvf", "HmIP-RF", b)
 
 	a := NewUISchemaAdapter(reg, w, nil, nil, nil)
-	req := handlers.UISchemaRequest{Address: "LVF01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
+	req := hmapi.UISchemaRequest{Address: "LVF01B24", Channel: 1, Paramset: "LINK", Peer: "PEER:1"}
 	// Must not error — GetLinkParamset failure falls back to empty values.
 	schema, err := a.UISchema(context.Background(), req)
 	if err != nil {
@@ -5691,7 +5691,7 @@ func TestPutClimateScheduleAuto_FindChannelFails(t *testing.T) {
 	reg := central.NewRegistry()
 	w := client.NewValueWriter()
 	s := NewSchedulesDomain(reg, w)
-	err := s.PutClimateScheduleAuto(context.Background(), "NODEV", &handlers.ClimateSchedule{})
+	err := s.PutClimateScheduleAuto(context.Background(), "NODEV", &hmapi.ClimateSchedule{})
 	if err == nil {
 		t.Error("expected error from PutClimateScheduleAuto with no device")
 	}
@@ -5838,10 +5838,10 @@ func TestPutClimateScheduleAuto_Success(t *testing.T) {
 	s := NewSchedulesDomain(reg, w)
 	// Provide a schedule that has no slots → PutClimateSchedule tries
 	// to detect domain (returns "switch") and writes an empty paramset.
-	sched := &handlers.ClimateSchedule{
+	sched := &hmapi.ClimateSchedule{
 		Kind:          "simple",
 		Domain:        "switch",
-		SimpleEntries: []handlers.SimpleScheduleEntry{},
+		SimpleEntries: []hmapi.SimpleScheduleEntry{},
 	}
 	err = s.PutClimateScheduleAuto(context.Background(), "PCA1DEV01B25", sched)
 	// Any error (e.g. "no schedule params") is still OK for coverage — the key
@@ -7358,7 +7358,7 @@ func TestSetActiveProfile_ResolveError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// PutClimateSchedule — basic DTO round-trip (exercises handlers.ClimateSchedule)
+// PutClimateSchedule — basic DTO round-trip (exercises hmapi.ClimateSchedule)
 // ---------------------------------------------------------------------------
 
 // TestPutClimateSchedule_ResolveError tests the path where resolve fails
@@ -7366,7 +7366,7 @@ func TestSetActiveProfile_ResolveError(t *testing.T) {
 func TestPutClimateSchedule_ResolveError(t *testing.T) {
 	t.Parallel()
 	s := buildSchedulesDomainNoBackend(t, "ccu-b29-pcs1", "PCS1DEV01B29")
-	dto := &handlers.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Kind: "climate",
 	}
 	err := s.PutClimateSchedule(context.Background(), "PCS1DEV01B29", 1, dto)
@@ -7520,7 +7520,7 @@ func TestInterfacePortOverride_Precedence(t *testing.T) {
 
 func TestEnrichLinkParameter_UnknownParam_NoGroupID(t *testing.T) {
 	t.Parallel()
-	p := &handlers.UISchemaParameter{Name: "UNKNOWN_PARAM"}
+	p := &hmapi.UISchemaParameter{Name: "UNKNOWN_PARAM"}
 	enrichLinkParameter(p, "en")
 	// Should not panic; GroupID, Category etc. may be empty for unknown params.
 	_ = p.Category
@@ -7529,7 +7529,7 @@ func TestEnrichLinkParameter_UnknownParam_NoGroupID(t *testing.T) {
 func TestEnrichLinkParameter_ShortPress_SetsGroupID(t *testing.T) {
 	t.Parallel()
 	// SHORT_COND_VALUE is a known short-press keypress parameter.
-	p := &handlers.UISchemaParameter{Name: "SHORT_COND_VALUE"}
+	p := &hmapi.UISchemaParameter{Name: "SHORT_COND_VALUE"}
 	enrichLinkParameter(p, "en")
 	if p.GroupID != "keypress.short" {
 		t.Errorf("expected keypress.short, got %q", p.GroupID)
@@ -7542,7 +7542,7 @@ func TestEnrichLinkParameter_ShortPress_SetsGroupID(t *testing.T) {
 func TestEnrichLinkParameter_LongPress_SetsGroupID(t *testing.T) {
 	t.Parallel()
 	// LONG_COND_VALUE is a known long-press keypress parameter.
-	p := &handlers.UISchemaParameter{Name: "LONG_COND_VALUE"}
+	p := &hmapi.UISchemaParameter{Name: "LONG_COND_VALUE"}
 	enrichLinkParameter(p, "en")
 	if p.GroupID != "keypress.long" {
 		t.Errorf("expected keypress.long, got %q", p.GroupID)
@@ -7661,7 +7661,7 @@ func TestSchedulesDomain_GetClimateScheduleAuto_NilRegistry_ReturnsErr(t *testin
 func TestSchedulesDomain_PutClimateScheduleAuto_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	sd := &SchedulesDomain{registry: nil}
-	err := sd.PutClimateScheduleAuto(context.Background(), "DEV001", &handlers.ClimateSchedule{Kind: "climate"})
+	err := sd.PutClimateScheduleAuto(context.Background(), "DEV001", &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutClimateScheduleAuto")
 	}
@@ -7679,7 +7679,7 @@ func TestSchedulesDomain_SetActiveProfileAuto_NilRegistry_ReturnsErr(t *testing.
 func TestSchedulesDomain_PutClimateSchedule_NilRegistry_ReturnsErr(t *testing.T) {
 	t.Parallel()
 	sd := &SchedulesDomain{registry: nil}
-	err := sd.PutClimateSchedule(context.Background(), "DEV001", 1, &handlers.ClimateSchedule{Kind: "climate"})
+	err := sd.PutClimateSchedule(context.Background(), "DEV001", 1, &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for nil registry in PutClimateSchedule")
 	}
@@ -8241,9 +8241,9 @@ func TestParseTimeBaseFactor_NoMatchingBase(t *testing.T) {
 // line 1367 — period with a start time that minutesFromTime returns -1 for.
 func TestExpandWeekday_InvalidTime(t *testing.T) {
 	t.Parallel()
-	wd := handlers.ClimateWeekday{
+	wd := hmapi.ClimateWeekday{
 		BaseTemperature: 18.0,
-		Periods: []handlers.ClimatePeriod{
+		Periods: []hmapi.ClimatePeriod{
 			{StartTime: "99:99", EndTime: "10:00", Temperature: 22.0},
 		},
 	}
@@ -8257,9 +8257,9 @@ func TestExpandWeekday_InvalidTime(t *testing.T) {
 // starttime" error at line 1370.
 func TestExpandWeekday_EndNotAfterStart(t *testing.T) {
 	t.Parallel()
-	wd := handlers.ClimateWeekday{
+	wd := hmapi.ClimateWeekday{
 		BaseTemperature: 18.0,
-		Periods: []handlers.ClimatePeriod{
+		Periods: []hmapi.ClimatePeriod{
 			{StartTime: "10:00", EndTime: "09:00", Temperature: 22.0},
 		},
 	}
@@ -8273,9 +8273,9 @@ func TestExpandWeekday_EndNotAfterStart(t *testing.T) {
 // error at line 1373.
 func TestExpandWeekday_OverlappingPeriods(t *testing.T) {
 	t.Parallel()
-	wd := handlers.ClimateWeekday{
+	wd := hmapi.ClimateWeekday{
 		BaseTemperature: 18.0,
-		Periods: []handlers.ClimatePeriod{
+		Periods: []hmapi.ClimatePeriod{
 			{StartTime: "06:00", EndTime: "10:00", Temperature: 22.0},
 			{StartTime: "08:00", EndTime: "12:00", Temperature: 24.0}, // overlaps previous
 		},
@@ -8290,10 +8290,10 @@ func TestExpandWeekday_OverlappingPeriods(t *testing.T) {
 // at line 1402: >13 stretches.
 func TestExpandWeekday_TooManyPeriods(t *testing.T) {
 	t.Parallel()
-	periods := make([]handlers.ClimatePeriod, 14)
+	periods := make([]hmapi.ClimatePeriod, 14)
 	start := 0
 	for i := range periods {
-		periods[i] = handlers.ClimatePeriod{
+		periods[i] = hmapi.ClimatePeriod{
 			StartTime:   fmt.Sprintf("%02d:%02d", (start/60)%24, start%60),
 			EndTime:     fmt.Sprintf("%02d:%02d", ((start+60)/60)%24, (start+60)%60),
 			Temperature: float64(20 + i%3),
@@ -8301,7 +8301,7 @@ func TestExpandWeekday_TooManyPeriods(t *testing.T) {
 		start += 60
 	}
 	// 14 periods each 1 hour = 14 stretches > 13 → error
-	wd := handlers.ClimateWeekday{
+	wd := hmapi.ClimateWeekday{
 		BaseTemperature: 18.0,
 		Periods:         periods,
 	}
@@ -8324,14 +8324,14 @@ func TestPutClimateSchedule_SerializeError(t *testing.T) {
 	// A ClimateSchedule with an invalid period in a profile triggers
 	// serializeClimateSchedule → expandWeekday error → PutClimateSchedule
 	// returns err (line 1029).
-	dto := &handlers.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Kind: "climate",
-		Profiles: map[string]handlers.ClimateProfile{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "10:00", EndTime: "09:00", Temperature: 22.0},
 						},
 					},
@@ -8351,7 +8351,7 @@ func TestPutClimateSchedule_UnknownKind(t *testing.T) {
 	t.Parallel()
 	reg, w := buildScheduleEnv(t, "ccu-b31-pcs-unkind", "PCSUnkind1DEV31", climateScheduleValues())
 	s := NewSchedulesDomain(reg, w)
-	dto := &handlers.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Kind: "invalid_kind",
 	}
 	err := s.PutClimateSchedule(context.Background(), "PCSUnkind1DEV31", 1, dto)
@@ -8368,9 +8368,9 @@ func TestPutClimateSchedule_EmptyPayload(t *testing.T) {
 	s := NewSchedulesDomain(reg, w)
 	// An empty ClimateSchedule (no profiles) → serializeClimateSchedule
 	// returns empty map → "empty payload" error.
-	dto := &handlers.ClimateSchedule{
+	dto := &hmapi.ClimateSchedule{
 		Kind:     "climate",
-		Profiles: map[string]handlers.ClimateProfile{},
+		Profiles: map[string]hmapi.ClimateProfile{},
 	}
 	err := s.PutClimateSchedule(context.Background(), "PCSEmpty1DEV31", 1, dto)
 	if err == nil {
@@ -9565,7 +9565,7 @@ func TestSynthesiseMasterProfile_EmptyLabelKeyFallback(t *testing.T) {
 	_ = ch
 
 	// Call synthesiseMasterProfile directly (same package).
-	var params []handlers.UISchemaParameter
+	var params []hmapi.UISchemaParameter
 	result := a.synthesiseMasterProfile("en", "CLIMATECONTROL_RECEIVER", mp, params)
 	if result == nil {
 		t.Fatal("expected non-nil UISchemaProfile from synthesiseMasterProfile")
@@ -9919,7 +9919,7 @@ func TestApplyOrder_CaseOkjAndDefault(t *testing.T) {
 		ParameterOrder: []string{"B"},
 	}
 	// Three params: "A" (not in rank), "B" (in rank), "C" (not in rank).
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "C"},
 		{Name: "A"},
 		{Name: "B"},
@@ -10856,8 +10856,8 @@ func TestLinkableChannels_InterfaceMismatchContinue(t *testing.T) {
 	}
 }
 
-// Compile-time check: handlers.LinkableChannel slice is valid.
-var _ []handlers.LinkableChannel
+// Compile-time check: hmapi.LinkableChannel slice is valid.
+var _ []hmapi.LinkableChannel
 
 // ---------------------------------------------------------------------------
 // week_profile_filter.go: logger != nil && refined > 0 → logger.Debug
@@ -12987,7 +12987,7 @@ func TestSchedulesDomain_PutClimateSchedule_NilPayload_ReturnsErr(t *testing.T) 
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
 	// "UNKNOWN" device causes resolve to fail with "not found".
-	err := sd.PutClimateSchedule(context.Background(), "UNKNOWN", 1, &handlers.ClimateSchedule{Kind: "climate"})
+	err := sd.PutClimateSchedule(context.Background(), "UNKNOWN", 1, &hmapi.ClimateSchedule{Kind: "climate"})
 	if err == nil {
 		t.Error("expected error for unknown device in PutClimateSchedule")
 	}
@@ -13008,7 +13008,7 @@ func TestSchedulesDomain_PutClimateSchedule_UnknownKind_ReturnsErr(t *testing.T)
 	t.Parallel()
 	f := buildBoost7Fixture(t)
 	sd := newSchedulesDomainForTest(t, f.reg, f.writer)
-	err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, &handlers.ClimateSchedule{Kind: "badkind"})
+	err := sd.PutClimateSchedule(context.Background(), "DEV002", 1, &hmapi.ClimateSchedule{Kind: "badkind"})
 	if err == nil {
 		t.Error("expected error for unknown kind in PutClimateSchedule")
 	}
@@ -13430,14 +13430,14 @@ func TestSchedulesDomain_PutClimateSchedule_ClimateKind_HappyPath(t *testing.T) 
 	t.Parallel()
 	f := buildBoost8Fixture(t, nil, nil)
 	sd := NewSchedulesDomain(f.reg, f.writer)
-	sched := &handlers.ClimateSchedule{
+	sched := &hmapi.ClimateSchedule{
 		Kind: "climate",
-		Profiles: map[string]handlers.ClimateProfile{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "06:00", EndTime: "22:00", Temperature: 21.0},
 						},
 					},
@@ -13459,10 +13459,10 @@ func TestSchedulesDomain_PutClimateSchedule_SimpleKind_HappyPath(t *testing.T) {
 	t.Parallel()
 	f := buildBoost8Fixture(t, nil, nil)
 	sd := NewSchedulesDomain(f.reg, f.writer)
-	sched := &handlers.ClimateSchedule{
+	sched := &hmapi.ClimateSchedule{
 		Kind:   "simple",
 		Domain: "heating",
-		SimpleEntries: []handlers.SimpleScheduleEntry{
+		SimpleEntries: []hmapi.SimpleScheduleEntry{
 			{
 				SlotNo:   1,
 				Weekdays: []string{"MONDAY"},
@@ -13487,9 +13487,9 @@ func TestSchedulesDomain_PutClimateSchedule_EmptyKind_TreatedAsClimate(t *testin
 	sd := NewSchedulesDomain(f.reg, f.writer)
 	// Empty Kind triggers the "climate","" branch in the switch.
 	// An empty Profiles map → serializeClimateSchedule returns empty map → "empty payload" error.
-	sched := &handlers.ClimateSchedule{
+	sched := &hmapi.ClimateSchedule{
 		Kind:     "",
-		Profiles: map[string]handlers.ClimateProfile{},
+		Profiles: map[string]hmapi.ClimateProfile{},
 	}
 	err := sd.PutClimateSchedule(context.Background(), "DEV003", 1, sched)
 	if err == nil {
@@ -13506,14 +13506,14 @@ func TestSchedulesDomain_PutClimateSchedule_BackendPutError(t *testing.T) {
 	f := buildBoost8Fixture(t, nil, nil)
 	f.fake.putErr = errors.New("put failed")
 	sd := NewSchedulesDomain(f.reg, f.writer)
-	sched := &handlers.ClimateSchedule{
+	sched := &hmapi.ClimateSchedule{
 		Kind: "climate",
-		Profiles: map[string]handlers.ClimateProfile{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "06:00", EndTime: "22:00", Temperature: 21.0},
 						},
 					},
@@ -14395,7 +14395,7 @@ func TestSynthesiseMasterProfile_WithProfiles_ReturnsSchema(t *testing.T) {
 			},
 		},
 	}
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "SETPOINT", Value: 20.0, Observed: true},
 	}
 	got := a.synthesiseMasterProfile("en", "THERMOSTAT", mp, params)
@@ -14664,8 +14664,8 @@ func TestXMLRPCValueToGoUnknownType(t *testing.T) {
 
 func TestSerializeClimateScheduleInvalidProfileID(t *testing.T) {
 	t.Parallel()
-	sched := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	sched := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P9": {}, // invalid — max is P6
 		},
 	}
@@ -14677,10 +14677,10 @@ func TestSerializeClimateScheduleInvalidProfileID(t *testing.T) {
 
 func TestSerializeClimateScheduleInvalidWeekday(t *testing.T) {
 	t.Parallel()
-	sched := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	sched := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"FUNDAY": {}, // invalid weekday
 				},
 			},
@@ -14976,7 +14976,7 @@ func TestBuildKeypressGroupsEmpty(t *testing.T) {
 
 func TestBuildKeypressGroupsNoGroupIDs(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "PARAM1"},
 		{Name: "PARAM2"},
 	}
@@ -14988,7 +14988,7 @@ func TestBuildKeypressGroupsNoGroupIDs(t *testing.T) {
 
 func TestBuildKeypressGroupsWithShortGroup(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "SHORT_PARAM", GroupID: "keypress.short"},
 	}
 	groups := buildKeypressGroups("en", params)
@@ -15005,7 +15005,7 @@ func TestBuildKeypressGroupsWithShortGroup(t *testing.T) {
 
 func TestBuildKeypressGroupsGermanLabel(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "LONG_PARAM", GroupID: "keypress.long"},
 	}
 	groups := buildKeypressGroups("de", params)
@@ -15019,7 +15019,7 @@ func TestBuildKeypressGroupsGermanLabel(t *testing.T) {
 
 func TestBuildKeypressGroupsAllThree(t *testing.T) {
 	t.Parallel()
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "C", GroupID: "keypress.common"},
 		{Name: "S", GroupID: "keypress.short"},
 		{Name: "L", GroupID: "keypress.long"},

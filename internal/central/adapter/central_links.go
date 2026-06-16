@@ -11,11 +11,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// CentralLinksDomain implements handlers.CentralLinksService. The CCU uses
+// CentralLinksDomain implements interfaces.CentralLinksService. The CCU uses
 // the per-channel counter to decide whether to forward the PRESS_SHORT /
 // PRESS_LONG events to the central — refCounter > 0 switches the flow on,
 // refCounter = 0 turns it off.
@@ -45,22 +45,22 @@ const reportValueUsageValueID = "PRESS_SHORT"
 // channel of the device. Returns the count of channels touched and
 // the count of channels that were skipped (no press events / wrong
 // interface).
-func (c *CentralLinksDomain) CreateCentralLinks(ctx context.Context, deviceAddress string) (handlers.CentralLinksReport, error) {
+func (c *CentralLinksDomain) CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error) {
 	return c.runReport(ctx, deviceAddress, 1)
 }
 
 // RemoveCentralLinks tears the central click-event routing down for
 // every eligible channel.
-func (c *CentralLinksDomain) RemoveCentralLinks(ctx context.Context, deviceAddress string) (handlers.CentralLinksReport, error) {
+func (c *CentralLinksDomain) RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error) {
 	return c.runReport(ctx, deviceAddress, 0)
 }
 
 // CentralLinksStatus reports per-device whether central links are
 // applicable / created. The SPA uses it to decide whether to render
 // the buttons and what label to show.
-func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (handlers.CentralLinksStatus, error) {
+func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error) {
 	if c.registry == nil {
-		return handlers.CentralLinksStatus{}, ErrNoCentralLinkBackend
+		return hmapi.CentralLinksStatus{}, ErrNoCentralLinkBackend
 	}
 	for _, u := range c.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -68,7 +68,7 @@ func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (handlers.
 			continue
 		}
 		if !isCentralLinkInterface(dev.Interface) {
-			return handlers.CentralLinksStatus{
+			return hmapi.CentralLinksStatus{
 				Supported: false,
 				Reason:    "interface_unsupported",
 			}, nil
@@ -79,17 +79,17 @@ func (c *CentralLinksDomain) CentralLinksStatus(deviceAddress string) (handlers.
 				eligible++
 			}
 		}
-		return handlers.CentralLinksStatus{
+		return hmapi.CentralLinksStatus{
 			Supported:        true,
 			EligibleChannels: eligible,
 		}, nil
 	}
-	return handlers.CentralLinksStatus{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
+	return hmapi.CentralLinksStatus{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
 }
 
-func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string, refCounter int) (handlers.CentralLinksReport, error) {
+func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string, refCounter int) (hmapi.CentralLinksReport, error) {
 	if c.registry == nil || c.writer == nil {
-		return handlers.CentralLinksReport{}, ErrNoCentralLinkBackend
+		return hmapi.CentralLinksReport{}, ErrNoCentralLinkBackend
 	}
 	for _, u := range c.registry.List() {
 		dev, ok := u.ModelRegistry.Get(deviceAddress)
@@ -97,17 +97,17 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 			continue
 		}
 		if !isCentralLinkInterface(dev.Interface) {
-			return handlers.CentralLinksReport{}, handlers.ErrCentralLinksUnsupported
+			return hmapi.CentralLinksReport{}, hmapi.ErrCentralLinksUnsupported
 		}
 		backend, ok := c.writer.Backend(u.Name(), dev.InterfaceID)
 		if !ok {
-			return handlers.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, u.Name(), dev.InterfaceID)
+			return hmapi.CentralLinksReport{}, fmt.Errorf("%w: %s/%s", ErrNoCentralLinkBackend, u.Name(), dev.InterfaceID)
 		}
 		caller, ok := backend.(centralLinkBackend)
 		if !ok {
-			return handlers.CentralLinksReport{}, handlers.ErrCentralLinksUnsupported
+			return hmapi.CentralLinksReport{}, hmapi.ErrCentralLinksUnsupported
 		}
-		report := handlers.CentralLinksReport{}
+		report := hmapi.CentralLinksReport{}
 		var firstErr error
 		for _, ch := range dev.Channels() {
 			if !channelHasPressEvents(ch) {
@@ -128,7 +128,7 @@ func (c *CentralLinksDomain) runReport(ctx context.Context, deviceAddress string
 		}
 		return report, nil
 	}
-	return handlers.CentralLinksReport{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
+	return hmapi.CentralLinksReport{}, fmt.Errorf("%w: device %s", ErrNoCentralLinkBackend, deviceAddress)
 }
 
 // centralLinkBackend is the slim slice of backends.Operations the

@@ -27,11 +27,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom/textdisplay"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/valve"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// CustomDPDispatcher implements [handlers.CustomDPWriter]. It resolves
+// CustomDPDispatcher implements [interfaces.CustomDPWriter]. It resolves
 // the target device and custom DP from the central registry, type-asserts
 // to the concrete model type, parses the operation params, and invokes
 // the matching method. Audit entries are emitted on every successful
@@ -72,7 +72,7 @@ func (d *CustomDPDispatcher) SetAuditRecorder(rec audit.Recorder) *CustomDPDispa
 	return d
 }
 
-// InvokeCustomDP implements [handlers.CustomDPWriter].
+// InvokeCustomDP implements [interfaces.CustomDPWriter].
 //
 // Resolution order:
 //  1. Walk the central registry to find the device by address.
@@ -82,9 +82,9 @@ func (d *CustomDPDispatcher) SetAuditRecorder(rec audit.Recorder) *CustomDPDispa
 //     per-category helper.
 //  4. On success emit an audit entry tagged with source.
 //
-// Returns [handlers.ErrUnknownOperation] when the operation string is
+// Returns [hmapi.ErrUnknownOperation] when the operation string is
 // not in the dispatch table for the DP category, and
-// [handlers.ErrBadParam] when a required parameter is absent or has the
+// [hmapi.ErrBadParam] when a required parameter is absent or has the
 // wrong type. Device/DP not-found returns a plain error (maps to 502 in
 // the handler layer — the device should be present if the caller
 // constructed a valid URL from the list endpoint).
@@ -288,12 +288,12 @@ func (d *CustomDPDispatcher) dispatchLight(
 			}
 			return l.SetLevel(ctx, level, prio)
 		}
-		return fmt.Errorf("%w: set_level needs state, brightness, or level", handlers.ErrBadParam)
+		return fmt.Errorf("%w: set_level needs state, brightness, or level", hmapi.ErrBadParam)
 	case "set_color", "set_color_temperature", "set_effect":
 		// Valid for the category but not for plain Light.
-		return fmt.Errorf("%w: operation %q not supported by plain Light", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: operation %q not supported by plain Light", hmapi.ErrUnknownOperation, op)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -312,7 +312,7 @@ func (d *CustomDPDispatcher) dispatchColorLight(
 		}
 		return l.SetColor(ctx, hue, sat, prio)
 	case "set_color_temperature", "set_effect":
-		return fmt.Errorf("%w: operation %q not supported by ColorLight", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: operation %q not supported by ColorLight", hmapi.ErrUnknownOperation, op)
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
@@ -329,7 +329,7 @@ func (d *CustomDPDispatcher) dispatchColorTempLight(
 		}
 		return l.SetKelvin(ctx, kelvin, prio)
 	case "set_color", "set_effect":
-		return fmt.Errorf("%w: operation %q not supported by ColorTempLight", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: operation %q not supported by ColorTempLight", hmapi.ErrUnknownOperation, op)
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
@@ -344,7 +344,7 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 		if slotRaw, ok := p["slot"]; ok {
 			slot, err := toInt32(slotRaw)
 			if err != nil {
-				return fmt.Errorf("%w: slot: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: slot: %w", hmapi.ErrBadParam, err)
 			}
 			return l.SetColor(ctx, light.FixedColor(slot), prio)
 		}
@@ -359,7 +359,7 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 		fc := light.HSToFixedColor(hue, sat)
 		return l.SetColor(ctx, fc, prio)
 	case "set_color_temperature", "set_effect":
-		return fmt.Errorf("%w: operation %q not supported by FixedColorLight", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: operation %q not supported by FixedColorLight", hmapi.ErrUnknownOperation, op)
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
@@ -374,7 +374,7 @@ func (d *CustomDPDispatcher) dispatchEffectLight(
 		if labelRaw, ok := p["label"]; ok {
 			label, ok2 := labelRaw.(string)
 			if !ok2 {
-				return fmt.Errorf("%w: label must be a string", handlers.ErrBadParam)
+				return fmt.Errorf("%w: label must be a string", hmapi.ErrBadParam)
 			}
 			return l.SetEffectByLabel(ctx, label, prio)
 		}
@@ -394,7 +394,7 @@ func (d *CustomDPDispatcher) dispatchEffectLight(
 		}
 		return l.SetColor(ctx, hue, sat, prio)
 	case "set_color_temperature":
-		return fmt.Errorf("%w: operation %q not supported by EffectLight", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: operation %q not supported by EffectLight", hmapi.ErrUnknownOperation, op)
 	default:
 		return d.dispatchLight(ctx, l.Light, op, p, prio)
 	}
@@ -424,10 +424,10 @@ func (d *CustomDPDispatcher) dispatchRGBWLight(
 		if labelRaw, ok := p["label"]; ok {
 			label, ok2 := labelRaw.(string)
 			if !ok2 {
-				return fmt.Errorf("%w: label must be a string", handlers.ErrBadParam)
+				return fmt.Errorf("%w: label must be a string", hmapi.ErrBadParam)
 			}
 			if err := l.SetEffect(ctx, label, prio); err != nil {
-				return fmt.Errorf("%w: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: %w", hmapi.ErrBadParam, err)
 			}
 			return nil
 		}
@@ -439,7 +439,7 @@ func (d *CustomDPDispatcher) dispatchRGBWLight(
 		}
 		effects := l.Effects()
 		if idx < 0 || int(idx) >= len(effects) {
-			return fmt.Errorf("%w: effect index %d out of range", handlers.ErrBadParam, idx)
+			return fmt.Errorf("%w: effect index %d out of range", hmapi.ErrBadParam, idx)
 		}
 		return l.SetEffect(ctx, effects[idx], prio)
 	default:
@@ -491,7 +491,7 @@ func (d *CustomDPDispatcher) dispatchClimate(
 	case "disable_away":
 		return c.DisableAway(ctx, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -514,9 +514,9 @@ func (d *CustomDPDispatcher) dispatchCover(
 	case "stop":
 		return c.Stop(ctx, prio)
 	case "set_tilt":
-		return fmt.Errorf("%w: set_tilt requires a Blind, not a plain Cover", handlers.ErrUnknownOperation)
+		return fmt.Errorf("%w: set_tilt requires a Blind, not a plain Cover", hmapi.ErrUnknownOperation)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -537,7 +537,7 @@ func (d *CustomDPDispatcher) dispatchGarage(
 	case "ventilate":
 		return g.Vent(ctx, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -570,7 +570,7 @@ func (d *CustomDPDispatcher) dispatchBlind(
 	case "stop_tilt":
 		return b.StopTilt(ctx, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -587,7 +587,7 @@ func (d *CustomDPDispatcher) dispatchLock(
 	case "open":
 		return l.Open(ctx, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -602,21 +602,21 @@ func (d *CustomDPDispatcher) dispatchSiren(
 		if durRaw, ok := p["duration"]; ok {
 			dur, err := anyToDuration(durRaw)
 			if err != nil {
-				return fmt.Errorf("%w: duration: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
 			}
 			cfg.Duration = dur
 		}
 		if acoustic, ok := p["acoustic"]; ok {
 			v, err := toString(acoustic)
 			if err != nil {
-				return fmt.Errorf("%w: acoustic: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: acoustic: %w", hmapi.ErrBadParam, err)
 			}
 			cfg.AcousticSelection = &v
 		}
 		if optical, ok := p["optical"]; ok {
 			v, err := toString(optical)
 			if err != nil {
-				return fmt.Errorf("%w: optical: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: optical: %w", hmapi.ErrBadParam, err)
 			}
 			cfg.OpticalSelection = &v
 		}
@@ -624,7 +624,7 @@ func (d *CustomDPDispatcher) dispatchSiren(
 	case "turn_off":
 		return s.TurnOff(ctx, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -655,7 +655,7 @@ func (d *CustomDPDispatcher) dispatchTextDisplay(
 		}
 		return t.Clear(ctx, id, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -670,7 +670,7 @@ func (d *CustomDPDispatcher) dispatchIrrigation(
 		if _, ok := p["duration"]; ok {
 			dur2, err := anyToDuration(p["duration"])
 			if err != nil {
-				return fmt.Errorf("%w: duration: %w", handlers.ErrBadParam, err)
+				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
 			}
 			dur = dur2
 		}
@@ -678,9 +678,9 @@ func (d *CustomDPDispatcher) dispatchIrrigation(
 	case "close":
 		return v.Close(ctx, prio)
 	case "set_level":
-		return fmt.Errorf("%w: set_level not supported by Irrigation valve", handlers.ErrUnknownOperation)
+		return fmt.Errorf("%w: set_level not supported by Irrigation valve", hmapi.ErrUnknownOperation)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -699,7 +699,7 @@ func (d *CustomDPDispatcher) dispatchModulatingValve(
 	case "close":
 		return v.SetLevel(ctx, 0.0, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -723,7 +723,7 @@ func (d *CustomDPDispatcher) dispatchSwitch(
 		on, _ := s.IsOn()
 		return s.Set(ctx, !on, prio)
 	default:
-		return fmt.Errorf("%w: %s", handlers.ErrUnknownOperation, op)
+		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
 }
 
@@ -776,19 +776,19 @@ type textDisplayCarrier interface {
 // paramFloat extracts a float64 from params[key]. When hi > 0, the
 // value is validated within [0, hi]. When hi == 0, no bounds check
 // is applied (useful for temperature which has an arbitrary range).
-// Returns [handlers.ErrBadParam] wrapped with a useful message when
+// Returns [hmapi.ErrBadParam] wrapped with a useful message when
 // the key is absent or the value is the wrong type.
 func paramFloat(params map[string]any, key string, hi float64) (float64, error) {
 	v, ok := params[key]
 	if !ok {
-		return 0, fmt.Errorf("%w: missing required param %q", handlers.ErrBadParam, key)
+		return 0, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
 	}
 	f, err := toFloat64(v)
 	if err != nil {
-		return 0, fmt.Errorf("%w: param %q: %w", handlers.ErrBadParam, key, err)
+		return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, key, err)
 	}
 	if hi > 0 && (f < 0 || f > hi) {
-		return 0, fmt.Errorf("%w: param %q: value %v out of range [0, %v]", handlers.ErrBadParam, key, f, hi)
+		return 0, fmt.Errorf("%w: param %q: value %v out of range [0, %v]", hmapi.ErrBadParam, key, f, hi)
 	}
 	return f, nil
 }
@@ -797,11 +797,11 @@ func paramFloat(params map[string]any, key string, hi float64) (float64, error) 
 func paramInt32(params map[string]any, key string) (int32, error) {
 	v, ok := params[key]
 	if !ok {
-		return 0, fmt.Errorf("%w: missing required param %q", handlers.ErrBadParam, key)
+		return 0, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
 	}
 	n, err := toInt32(v)
 	if err != nil {
-		return 0, fmt.Errorf("%w: param %q: %w", handlers.ErrBadParam, key, err)
+		return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, key, err)
 	}
 	return n, nil
 }
@@ -810,11 +810,11 @@ func paramInt32(params map[string]any, key string) (int32, error) {
 func paramString(params map[string]any, key string) (string, error) {
 	v, ok := params[key]
 	if !ok {
-		return "", fmt.Errorf("%w: missing required param %q", handlers.ErrBadParam, key)
+		return "", fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
 	}
 	s, ok2 := v.(string)
 	if !ok2 {
-		return "", fmt.Errorf("%w: param %q must be a string, got %T", handlers.ErrBadParam, key, v)
+		return "", fmt.Errorf("%w: param %q must be a string, got %T", hmapi.ErrBadParam, key, v)
 	}
 	return s, nil
 }
@@ -843,11 +843,11 @@ func paramStringOptional(params map[string]any, key string) (string, bool) { //n
 func paramDuration(params map[string]any, key string) (time.Duration, error) {
 	v, ok := params[key]
 	if !ok {
-		return 0, fmt.Errorf("%w: missing required param %q", handlers.ErrBadParam, key)
+		return 0, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
 	}
 	dur, err := anyToDuration(v)
 	if err != nil {
-		return 0, fmt.Errorf("%w: param %q: %w", handlers.ErrBadParam, key, err)
+		return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, key, err)
 	}
 	return dur, nil
 }
@@ -858,11 +858,11 @@ func paramDuration(params map[string]any, key string) (time.Duration, error) {
 func paramTime(params map[string]any, key string) (time.Time, error) {
 	v, ok := params[key]
 	if !ok {
-		return time.Time{}, fmt.Errorf("%w: missing required param %q", handlers.ErrBadParam, key)
+		return time.Time{}, fmt.Errorf("%w: missing required param %q", hmapi.ErrBadParam, key)
 	}
 	s, ok2 := v.(string)
 	if !ok2 {
-		return time.Time{}, fmt.Errorf("%w: param %q must be a string, got %T", handlers.ErrBadParam, key, v)
+		return time.Time{}, fmt.Errorf("%w: param %q must be a string, got %T", hmapi.ErrBadParam, key, v)
 	}
 	// Try RFC3339 first.
 	if t, err := time.Parse(time.RFC3339, s); err == nil {
@@ -874,7 +874,7 @@ func paramTime(params map[string]any, key string) (time.Time, error) {
 			return time.Now().Add(dur), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("%w: param %q: cannot parse %q as RFC3339 or +<duration>", handlers.ErrBadParam, key, s)
+	return time.Time{}, fmt.Errorf("%w: param %q: cannot parse %q as RFC3339 or +<duration>", hmapi.ErrBadParam, key, s)
 }
 
 // anyToDuration converts a raw JSON value to a [time.Duration].
@@ -970,35 +970,35 @@ func extractRow(p map[string]any) (textdisplay.Row, error) {
 	if v, ok := p["text"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return textdisplay.Row{}, fmt.Errorf("%w: param \"text\" must be a string", handlers.ErrBadParam)
+			return textdisplay.Row{}, fmt.Errorf("%w: param \"text\" must be a string", hmapi.ErrBadParam)
 		}
 		row.Text = s
 	}
 	if v, ok := p["icon"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return textdisplay.Row{}, fmt.Errorf("%w: param \"icon\" must be a string", handlers.ErrBadParam)
+			return textdisplay.Row{}, fmt.Errorf("%w: param \"icon\" must be a string", hmapi.ErrBadParam)
 		}
 		row.Icon = s
 	}
 	if v, ok := p["alignment"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return textdisplay.Row{}, fmt.Errorf("%w: param \"alignment\" must be a string label", handlers.ErrBadParam)
+			return textdisplay.Row{}, fmt.Errorf("%w: param \"alignment\" must be a string label", hmapi.ErrBadParam)
 		}
 		row.Alignment = &s
 	}
 	if v, ok := p["text_color"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return textdisplay.Row{}, fmt.Errorf("%w: param \"text_color\" must be a string label", handlers.ErrBadParam)
+			return textdisplay.Row{}, fmt.Errorf("%w: param \"text_color\" must be a string label", hmapi.ErrBadParam)
 		}
 		row.TextColor = &s
 	}
 	if v, ok := p["background_color"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return textdisplay.Row{}, fmt.Errorf("%w: param \"background_color\" must be a string label", handlers.ErrBadParam)
+			return textdisplay.Row{}, fmt.Errorf("%w: param \"background_color\" must be a string label", hmapi.ErrBadParam)
 		}
 		row.BackgroundColor = &s
 	}
@@ -1011,21 +1011,21 @@ func extractSoundOptions(p map[string]any) (textdisplay.SoundOptions, error) {
 	if v, ok := p["sound"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return opts, fmt.Errorf("%w: param \"sound\" must be a string", handlers.ErrBadParam)
+			return opts, fmt.Errorf("%w: param \"sound\" must be a string", hmapi.ErrBadParam)
 		}
 		opts.Sound = s
 	}
 	if v, ok := p["repetitions"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return opts, fmt.Errorf("%w: param \"repetitions\" must be a string", handlers.ErrBadParam)
+			return opts, fmt.Errorf("%w: param \"repetitions\" must be a string", hmapi.ErrBadParam)
 		}
 		opts.Repetitions = s
 	}
 	if v, ok := p["interval"]; ok {
 		s, ok2 := v.(string)
 		if !ok2 {
-			return opts, fmt.Errorf("%w: param \"interval\" must be a string", handlers.ErrBadParam)
+			return opts, fmt.Errorf("%w: param \"interval\" must be a string", hmapi.ErrBadParam)
 		}
 		opts.Interval = s
 	}

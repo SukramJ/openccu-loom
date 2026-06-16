@@ -8,13 +8,11 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/restapi"
 )
 
-// HealthReader is the narrow facade `GET /api/v1/health` needs.
-type HealthReader interface {
-	Overall() health.Status
-	Snapshot() []health.Component
-}
+// HealthReader is an alias for the canonical interface in internal/restapi.
+type HealthReader = restapi.HealthReader
 
 // HealthComponent is one entry in the response.
 type HealthComponent struct {

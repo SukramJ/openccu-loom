@@ -17,7 +17,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -54,12 +54,12 @@ func NewUISchemaAdapter(
 	return &UISchemaAdapter{registry: r, writer: w, translations: t, easymode: e, profiles: p}
 }
 
-// UISchema implements [handlers.UISchemaService].
-func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaRequest) (*handlers.UISchema, error) { //nolint:funlen // single-purpose UI schema assembly with many paramset branches
+// UISchema implements [interfaces.UISchemaService].
+func (a *UISchemaAdapter) UISchema(ctx context.Context, req hmapi.UISchemaRequest) (*hmapi.UISchema, error) { //nolint:funlen // single-purpose UI schema assembly with many paramset branches
 	address, channelNo, paramset, peer, locale := req.Address, req.Channel, req.Paramset, req.Peer, req.Locale
 	dev, ch := a.lookupChannel(address, channelNo)
 	if dev == nil || ch == nil {
-		return nil, handlers.ErrUISchemaNotFound
+		return nil, hmapi.ErrUISchemaNotFound
 	}
 
 	paramsetKey, err := normalizeParamsetKey(paramset)
@@ -71,8 +71,8 @@ func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaReq
 	}
 
 	channelType := a.channelTypeOf(dev, ch)
-	schema := &handlers.UISchema{
-		Channel: handlers.UISchemaChannel{
+	schema := &hmapi.UISchema{
+		Channel: hmapi.UISchemaChannel{
 			Address:  ch.Address,
 			Number:   ch.Number,
 			Type:     channelType,
@@ -119,7 +119,7 @@ func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaReq
 	schema.Groups = a.buildGroups(locale, meta, schema.Parameters)
 	if meta != nil {
 		for _, cv := range meta.ConditionalVisibility {
-			rule := handlers.UISchemaVisibility{
+			rule := hmapi.UISchemaVisibility{
 				Trigger:      cv.Trigger,
 				TriggerValue: cv.TriggerValue,
 			}
@@ -148,7 +148,7 @@ func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaReq
 			if _, ok := allowedIDs[rule.ID]; !ok {
 				continue
 			}
-			schema.CrossValidations = append(schema.CrossValidations, handlers.UISchemaCrossValidation{
+			schema.CrossValidations = append(schema.CrossValidations, hmapi.UISchemaCrossValidation{
 				ID:              rule.ID,
 				Rule:            rule.Rule,
 				ParamA:          rule.ParamA,
@@ -192,8 +192,8 @@ func (a *UISchemaAdapter) UISchema(ctx context.Context, req handlers.UISchemaReq
 func (a *UISchemaAdapter) buildSubsetGroups(
 	locale string,
 	subsets []ccudata.SubsetDef,
-	params []handlers.UISchemaParameter,
-) []handlers.UISchemaSubsetGroup {
+	params []hmapi.UISchemaParameter,
+) []hmapi.UISchemaSubsetGroup {
 	if len(subsets) == 0 {
 		return nil
 	}
@@ -207,7 +207,7 @@ func (a *UISchemaAdapter) buildSubsetGroups(
 	}
 
 	type bucket struct {
-		group handlers.UISchemaSubsetGroup
+		group hmapi.UISchemaSubsetGroup
 		key   string
 	}
 	out := make([]bucket, 0, len(subsets))
@@ -228,7 +228,7 @@ func (a *UISchemaAdapter) buildSubsetGroups(
 		if idx == -1 {
 			out = append(out, bucket{
 				key: k,
-				group: handlers.UISchemaSubsetGroup{
+				group: hmapi.UISchemaSubsetGroup{
 					ID:           "subset_" + ss.MemberParams[0],
 					Label:        a.errorLabel(locale, ss.NameKey),
 					MemberParams: append([]string(nil), ss.MemberParams...),
@@ -250,18 +250,18 @@ func (a *UISchemaAdapter) buildSubsetGroups(
 			}
 		}
 	}
-	groups := make([]handlers.UISchemaSubsetGroup, len(out))
+	groups := make([]hmapi.UISchemaSubsetGroup, len(out))
 	for i := range out {
 		groups[i] = out[i].group
 	}
 	return groups
 }
 
-func resolveSubsetOptions(ss ccudata.SubsetDef) []handlers.UISchemaSubsetOpt {
+func resolveSubsetOptions(ss ccudata.SubsetDef) []hmapi.UISchemaSubsetOpt {
 	if len(ss.Options) > 0 {
-		out := make([]handlers.UISchemaSubsetOpt, 0, len(ss.Options))
+		out := make([]hmapi.UISchemaSubsetOpt, 0, len(ss.Options))
 		for _, opt := range ss.Options {
-			out = append(out, handlers.UISchemaSubsetOpt{
+			out = append(out, hmapi.UISchemaSubsetOpt{
 				ID:     opt.ID,
 				Label:  opt.LabelKey,
 				Values: opt.Values,
@@ -271,7 +271,7 @@ func resolveSubsetOptions(ss ccudata.SubsetDef) []handlers.UISchemaSubsetOpt {
 	}
 	// Legacy single-option form: treat the whole def as one option.
 	if len(ss.Values) > 0 {
-		return []handlers.UISchemaSubsetOpt{{
+		return []hmapi.UISchemaSubsetOpt{{
 			ID:     ss.ID,
 			Label:  ss.NameKey,
 			Values: ss.Values,
@@ -328,8 +328,8 @@ func joinSorted(in []string) string {
 func (a *UISchemaAdapter) synthesiseMasterProfile(
 	locale, channelType string,
 	mp *ccudata.MasterProfile,
-	params []handlers.UISchemaParameter,
-) *handlers.UISchemaProfile {
+	params []hmapi.UISchemaParameter,
+) *hmapi.UISchemaProfile {
 	if mp == nil || len(mp.Profiles) == 0 {
 		return nil
 	}
@@ -399,7 +399,7 @@ func (a *UISchemaAdapter) synthesiseMasterProfile(
 	}
 	_ = locale
 	_ = channelType
-	return &handlers.UISchemaProfile{
+	return &hmapi.UISchemaProfile{
 		ReceiverType:    channelType,
 		SenderType:      "_MASTER",
 		ActiveProfileID: matchActiveProfile(defsForMatch, current),
@@ -430,13 +430,13 @@ func (a *UISchemaAdapter) buildParameters(
 	locale string,
 	channelType string,
 	expert bool,
-) []handlers.UISchemaParameter {
+) []hmapi.UISchemaParameter {
 	dps := ch.ParamsetDataPoints(paramset)
 	// Easymode filter: hide MASTER params without a CCU-translated
 	// label so the casual view stays readable. The SPA's expert toggle
 	// surfaces them again.
 	requireTranslation := paramset == hmenum.ParamsetKeyMaster && !expert
-	out := make([]handlers.UISchemaParameter, 0, len(dps))
+	out := make([]hmapi.UISchemaParameter, 0, len(dps))
 	for _, dp := range dps {
 		pd := dp.ParameterData()
 		name := string(dp.Parameter())
@@ -447,7 +447,7 @@ func (a *UISchemaAdapter) buildParameters(
 		if requireTranslation && label == "" {
 			continue
 		}
-		entry := handlers.UISchemaParameter{
+		entry := hmapi.UISchemaParameter{
 			Name:  name,
 			Label: label,
 			Help:  a.parameterHelp(locale, name),
@@ -459,8 +459,8 @@ func (a *UISchemaAdapter) buildParameters(
 			Max:        cloneRaw(pd.Max),
 			Default:    cloneRaw(pd.Default),
 			Control:    pd.Control,
-			Operations: handlers.UISchemaParameterOps{Read: pd.IsReadable(), Write: dpIsWritable(dp, pd), Event: pd.IsEvent()},
-			Flags:      handlers.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
+			Operations: hmapi.UISchemaParameterOps{Read: pd.IsReadable(), Write: dpIsWritable(dp, pd), Event: pd.IsEvent()},
+			Flags:      hmapi.UISchemaParameterFlags{Visible: pd.IsVisible(), Internal: pd.IsInternal(), Service: pd.IsService()},
 		}
 		if len(pd.ValueList) > 0 {
 			entry.ValueList = a.valueList(locale, channelType, name, pd.ValueList)
@@ -541,7 +541,7 @@ func isSchedulePattern(name string) bool {
 
 // applyOrder reorders params to match the easymode ParameterOrder
 // when provided; missing entries are appended alphabetically.
-func (a *UISchemaAdapter) applyOrder(params []handlers.UISchemaParameter, meta *ccudata.SenderTypeMetadata) {
+func (a *UISchemaAdapter) applyOrder(params []hmapi.UISchemaParameter, meta *ccudata.SenderTypeMetadata) {
 	if meta == nil || len(meta.ParameterOrder) == 0 {
 		sort.Slice(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 		return
@@ -672,7 +672,7 @@ func (a *UISchemaAdapter) errorLabel(locale, key string) string {
 // renders as clickable chips. Returns nil when the id is unknown or
 // the preset has no entries — that lets the SPA omit the preset row
 // entirely.
-func (a *UISchemaAdapter) expandPresets(locale, presetID string) []handlers.UISchemaPreset {
+func (a *UISchemaAdapter) expandPresets(locale, presetID string) []hmapi.UISchemaPreset {
 	if a.easymode == nil || presetID == "" {
 		return nil
 	}
@@ -680,14 +680,14 @@ func (a *UISchemaAdapter) expandPresets(locale, presetID string) []handlers.UISc
 	if !ok || len(preset.Options) == 0 {
 		return nil
 	}
-	out := make([]handlers.UISchemaPreset, 0, len(preset.Options))
+	out := make([]hmapi.UISchemaPreset, 0, len(preset.Options))
 	for _, opt := range preset.Options {
 		raw, err := json.Marshal(opt.Value)
 		if err != nil {
 			continue
 		}
 		label := a.resolvePresetLabel(locale, opt)
-		out = append(out, handlers.UISchemaPreset{
+		out = append(out, hmapi.UISchemaPreset{
 			Label: label,
 			Value: raw,
 		})
@@ -729,8 +729,8 @@ func (a *UISchemaAdapter) resolvePresetLabel(locale string, opt ccudata.OptionPr
 // The channel-qualified forms piggy-back on
 // [ccudata.Translations.ParameterValue] via a synthetic parameter prefix;
 // that helper already understands the `<param>=<value>` key shape.
-func (a *UISchemaAdapter) valueList(locale, channelType, parameter string, values []string) []handlers.UISchemaValueListEntry {
-	out := make([]handlers.UISchemaValueListEntry, 0, len(values))
+func (a *UISchemaAdapter) valueList(locale, channelType, parameter string, values []string) []hmapi.UISchemaValueListEntry {
+	out := make([]hmapi.UISchemaValueListEntry, 0, len(values))
 	for i, v := range values {
 		label := ""
 		if a.translations != nil {
@@ -739,7 +739,7 @@ func (a *UISchemaAdapter) valueList(locale, channelType, parameter string, value
 		if label == "" {
 			label = humanizeRaw(v)
 		}
-		out = append(out, handlers.UISchemaValueListEntry{Value: i, Key: v, Label: label})
+		out = append(out, hmapi.UISchemaValueListEntry{Value: i, Key: v, Label: label})
 	}
 	return out
 }

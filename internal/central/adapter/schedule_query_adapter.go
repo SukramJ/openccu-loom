@@ -9,7 +9,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ScheduleQueryAdapter wraps a [SchedulesDomain] in the
@@ -17,7 +17,7 @@ import (
 // (`internal/north/rest/ws.ScheduleQuery`) expects.
 //
 // The adapter exists because the SPA WS API is JSON-shaped while the
-// REST handler layer uses typed `*handlers.ClimateSchedule` DTOs. The
+// REST handler layer uses typed `*hmapi.ClimateSchedule` DTOs. The
 // translation is a JSON round-trip — cheap and deterministic.
 type ScheduleQueryAdapter struct {
 	domain *SchedulesDomain
@@ -42,7 +42,7 @@ func (a *ScheduleQueryAdapter) GetClimateSchedule(ctx context.Context, channelAd
 	return scheduleToMap(dto)
 }
 
-// SetClimateSchedule decodes the payload into a *handlers.ClimateSchedule
+// SetClimateSchedule decodes the payload into a *hmapi.ClimateSchedule
 // and writes it back via the domain.
 func (a *ScheduleQueryAdapter) SetClimateSchedule(ctx context.Context, channelAddress string, profile map[string]any) error {
 	if a.domain == nil {
@@ -123,7 +123,7 @@ func splitChannelAddress(channelAddress string) (device string, channelIdx int) 
 // scheduleToMap turns a typed ClimateSchedule DTO into the JSON shape
 // the WS layer hands clients. We round-trip through JSON so the field
 // names (camelCase / snake_case) match the OpenAPI contract.
-func scheduleToMap(dto *handlers.ClimateSchedule) (map[string]any, error) {
+func scheduleToMap(dto *hmapi.ClimateSchedule) (map[string]any, error) {
 	if dto == nil {
 		return map[string]any{}, nil
 	}
@@ -139,12 +139,12 @@ func scheduleToMap(dto *handlers.ClimateSchedule) (map[string]any, error) {
 }
 
 // mapToSchedule is the inverse of scheduleToMap.
-func mapToSchedule(profile map[string]any) (*handlers.ClimateSchedule, error) {
+func mapToSchedule(profile map[string]any) (*hmapi.ClimateSchedule, error) {
 	raw, err := json.Marshal(profile)
 	if err != nil {
 		return nil, fmt.Errorf("profile encode: %w", err)
 	}
-	var dto handlers.ClimateSchedule
+	var dto hmapi.ClimateSchedule
 	if err := json.Unmarshal(raw, &dto); err != nil {
 		return nil, fmt.Errorf("profile decode: %w", err)
 	}

@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ============================================================
@@ -170,7 +170,7 @@ func TestScheduleToMapNil(t *testing.T) {
 
 func TestScheduleToMapNonNil(t *testing.T) {
 	t.Parallel()
-	dto := &handlers.ClimateSchedule{}
+	dto := &hmapi.ClimateSchedule{}
 	m, err := scheduleToMap(dto)
 	if err != nil {
 		t.Fatalf("scheduleToMap non-nil: %v", err)
@@ -255,7 +255,7 @@ func TestSchedulesDomainSetAuditRecorderNil(t *testing.T) {
 
 func TestSerializeSimpleScheduleWithDomainNonLock(t *testing.T) {
 	t.Parallel()
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:   1,
 			Weekdays: []string{"MONDAY"},
@@ -275,7 +275,7 @@ func TestSerializeSimpleScheduleWithDomainNonLock(t *testing.T) {
 func TestSerializeSimpleScheduleWithDomainLock(t *testing.T) {
 	t.Parallel()
 	// lock_autorelock_start: level=0, durBase=0, durFactor=0 → empty duration
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{
 			SlotNo:     1,
 			Weekdays:   []string{"MONDAY"},
@@ -296,7 +296,7 @@ func TestSerializeSimpleScheduleWithDomainLock(t *testing.T) {
 func TestSerializeSimpleScheduleWithDomainError(t *testing.T) {
 	t.Parallel()
 	// slot_no 0 is out of range → must error
-	entries := []handlers.SimpleScheduleEntry{
+	entries := []hmapi.SimpleScheduleEntry{
 		{SlotNo: 0, Weekdays: []string{"MONDAY"}, Time: "07:00"},
 	}
 	_, err := serializeSimpleScheduleWithDomain(entries, "switch")
