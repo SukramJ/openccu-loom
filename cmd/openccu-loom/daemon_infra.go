@@ -97,6 +97,14 @@ func wireSharedInfrastructure(
 	si.visibilityAdapter = newVisibilityAdapter(si.visReg, si.visibilityStore, reg)
 	si.masterValuesStore = wireMasterValuesStore(cfg, logger) //nolint:contextcheck // wireMasterValuesStore has no ctx parameter
 	si.valuesCacheStore = wireValuesCacheStore(cfg, logger)   //nolint:contextcheck // wireValuesCacheStore has no ctx parameter
+	// Start the periodic WAL checkpoint for the values-cache DB. Without
+	// this the WAL file can grow unbounded on embedded or busy ARM targets
+	// because the values-cache DB is a separate *sql.DB from the audit DB
+	// and therefore not covered by the audit-side checkpoint loop wired in
+	// daemon.go. The stop function runs one final checkpoint before the
+	// store is closed; it is called at the top of teardown so the
+	// checkpoint drains the WAL before Close releases the file handle.
+	stopValuesCacheWAL := sqlite.StartWALCheckpointLoop(si.valuesCacheStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
 
 	si.wsHub = ws.NewHub()
 	if n := cfg.North.REST.WS.ReplayCapacity; n > 0 {
@@ -163,6 +171,9 @@ func wireSharedInfrastructure(
 			_ = otlpExp.Shutdown(shutCtx)
 			observability.SetSpanExporter(nil)
 		}
+		// Stop the WAL checkpoint loop (which also runs one final checkpoint)
+		// before closing the database so the checkpoint drains cleanly.
+		stopValuesCacheWAL()
 		_ = si.valuesCacheStore.Close()
 		_ = si.masterValuesStore.Close()
 		_ = si.visibilityStore.Close()
