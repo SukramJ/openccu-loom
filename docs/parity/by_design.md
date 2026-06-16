@@ -189,6 +189,67 @@ This is a deliberate cleanup, not a missing data point.
 suppression signature on these three parameters; any other drift on them still
 surfaces.
 
+### BD-Visibility-RedundantForcedUsage — Go records a forced_usage that restates the agreed usage
+
+Click-event press parameters (`PRESS_SHORT`, `PRESS_LONG`, `PRESS`) on physical
+remotes and push-buttons (HM-RC-*, HM-PB-*, HMW-IO-*, …) are surfaced as
+**button data points on BOTH stacks** — `usage=data_point` on each side.
+
+The two stacks reach that identical verdict by different bookkeeping:
+
+- **OpenCCU-Loom** marks it explicitly. `applyClickEventMarks`
+  (`internal/central/adapter/device_pipeline.go`) calls
+  `SetForcedUsage(DataPointUsageDataPoint)` for a writable press on a device
+  that does not suppress generic buttons, so the snapshot emits both
+  `usage=data_point` **and** `forced_usage=data_point`.
+- **aiohomematic** arrives at `usage=data_point` from the natural
+  visibility/usage resolution and never writes `_forced_usage`, so its snapshot
+  emits `usage=data_point` with no `forced_usage`.
+
+The observable surface is the same (a button entity); only the Go-internal
+`forced_usage` field is populated. This accounts for the bulk of the
+generic-DP snapshot residue (~739 DPs across ~70 button/remote devices). It is
+the same class of representation-only divergence already catalogued for
+[BD-Visibility-IgnoredVsNoCreate](#bd-visibility-ignoredvsnocreate--hidden-params-split-into-ignored--nocreate)
+and the `wrapped_dps` / `profile` tolerated fields.
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py`
+(`is_redundant_forced_usage`) drops a `forced_usage` drift **only** when both
+sides agree on `usage` and the Go `forced_usage` merely restates that same
+usage while aiohomematic leaves it unset. A force that actually *changes* the
+realised `usage` still surfaces as a `usage` drift. The two characterised cases
+where it changes — actuator-local button events
+([BD-Visibility-ActuatorLocalButtonEvents](#bd-visibility-actuatorlocalbuttonevents--keypress-events-on-actuator-local-input-channels))
+and the HM-Sec-Key/HM-Sec-Win `DIRECTION` / HmIP-SWSD-2
+`SMOKE_DETECTOR_ALARM_STATUS` suppression-direction residue — are handled
+separately below / counted against the baseline.
+
+### BD-Visibility-ActuatorLocalButtonEvents — keypress events on actuator local-input channels
+
+Some actuators carry **local push-button inputs** on dedicated channels — the
+wired blind/dimmer actuators `HMW-LC-Bl1-DR`, `HMW-LC-Bl1-DR-2`,
+`HMW-LC-Dim1L-DR` (ch1/ch2) and the HmIP blind actuator with push-button unit
+`HB-LC-Bl1PBU-FM` (ch2/ch3). Their `PRESS_SHORT` / `PRESS_LONG` parameters
+diverge:
+
+- **OpenCCU-Loom** surfaces them as a **keypress event** (`usage=event`,
+  `forced_usage=event`, `enabled_default=true`) via the `suppressGenericButton`
+  branch of `applyClickEventMarks`
+  (`internal/central/adapter/device_pipeline.go`): the device has a custom-DP
+  profile so the generic *button* is withheld, but the local press is kept as
+  an event source so automations can react to a wall-button press.
+- **aiohomematic** marks the same channels `no_create` — neither button nor
+  event.
+
+This is a deliberate, **more-capable** surface (OpenCCU-Loom exposes the local
+press; aiohomematic suppresses it), not a missing/extra data point. ~16 DPs
+across the four device families above.
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py`
+(`is_local_button_event_suppression`) tolerates exactly the
+`event`↔`no_create` signature on click-event press parameters; any other usage
+combination on a press parameter still surfaces.
+
 ---
 
 ## A2 — Custom DPs

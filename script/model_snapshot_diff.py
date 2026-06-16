@@ -155,6 +155,48 @@ def is_schedule_lock_suppression(go: dict, py: dict) -> bool:
     )
 
 
+# Click-event press parameters surfaced as keypress events. The Go
+# `IsClickEvent()` set is the authority; every member name begins with PRESS
+# (PRESS_SHORT, PRESS_LONG, PRESS_CONT, PRESS, …).
+def _is_click_press(param: str | None) -> bool:
+    return bool(param) and param.startswith("PRESS")
+
+
+def is_local_button_event_suppression(go: dict, py: dict) -> bool:
+    """True for the actuator-local-button signature: OpenCCU-Loom surfaces a
+    keypress *event* (usage=event) on the local push-button input channels of
+    actuators (HMW-LC-Bl1/Dim1L wired blind+dimmer actuators, HB-LC-Bl1PBU-FM)
+    where aiohomematic creates nothing (usage=no_create).
+
+    OpenCCU-Loom deliberately exposes these local presses as event sources so
+    automations can react to a wall-button press; aiohomematic suppresses them.
+    A deliberate, more-capable surface — see docs/parity/by_design.md
+    (BD-Visibility-ActuatorLocalButtonEvents). Any OTHER usage combination on a
+    press parameter still surfaces."""
+    return (
+        _is_click_press(go.get("parameter"))
+        and go.get("usage") == "event"
+        and py.get("usage") == "no_create"
+    )
+
+
+def is_redundant_forced_usage(go: dict, py: dict, drift: dict) -> bool:
+    """True when the only meaningful divergence is a Go `forced_usage` that
+    merely restates the `usage` both stacks already agree on, with the
+    aiohomematic side leaving `forced_usage` unset.
+
+    OpenCCU-Loom marks a verdict with SetForcedUsage even where aiohomematic
+    arrives at the same `usage` without an explicit force (the click-event
+    PRESS_* button promotion is the bulk case: both stacks surface
+    `usage=data_point`; only the Go book-keeping field differs). Because the
+    realised `usage` is compared independently, any force that actually CHANGES
+    the outcome shows up as a `usage` drift and is not swallowed here."""
+    if "forced_usage" not in drift or "usage" in drift:
+        return False
+    go_fu, py_fu = drift["forced_usage"]
+    return py_fu is None and go_fu is not None and go_fu == go.get("usage")
+
+
 def diff_dp(go_dp: dict, py_dp: dict) -> dict:
     """Per-field comparison; returns a dict {field: (go, py)} for any
     diverging field. Empty dict means no drift."""
@@ -171,6 +213,25 @@ def diff_dp(go_dp: dict, py_dp: dict) -> dict:
         # expected. A drift on any OTHER field of these params still reports.
         drift.pop("usage", None)
         drift.pop("enabled_default", None)
+    if is_local_button_event_suppression(go, py):
+        # OpenCCU-Loom surfaces a keypress event on an actuator's local
+        # push-button channel where aiohomematic creates nothing. The
+        # usage/forced_usage/enabled_default flip is the entire (deliberate)
+        # signature; a drift on any OTHER field of these params still reports.
+        drift.pop("usage", None)
+        drift.pop("forced_usage", None)
+        drift.pop("enabled_default", None)
+    if is_redundant_forced_usage(go, py, drift):
+        # OpenCCU-Loom records a visibility verdict via SetForcedUsage even
+        # when the resulting `usage` matches what aiohomematic reaches without
+        # an explicit force (e.g. click-event PRESS_* promoted to a button on
+        # both stacks). When BOTH sides agree on `usage` and the Go
+        # `forced_usage` merely restates that same usage while aiohomematic
+        # leaves it unset, the field carries no behavioural information — the
+        # observable surface is identical. A force that CHANGES the outcome
+        # still surfaces as a `usage` drift, which is NOT tolerated. See
+        # docs/parity/by_design.md (BD-Visibility-RedundantForcedUsage).
+        drift.pop("forced_usage", None)
     return drift
 
 
