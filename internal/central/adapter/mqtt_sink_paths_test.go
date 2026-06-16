@@ -350,3 +350,104 @@ func TestMQTTCommandSinkSetMasterValueUnknownParam(t *testing.T) {
 		t.Error("expected error for parameter not in MASTER paramset")
 	}
 }
+
+// ============================================================
+// Fix 1 — SetMasterValue interface mismatch guard
+// ============================================================
+
+func TestMQTTCommandSinkSetMasterValueInterfaceMismatch(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-ifmm"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	// Device is registered on HmIP-RF.
+	d := device.New(device.Config{
+		Address:     "MMDEV001",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	})
+	_ = d.AddChannel("MMDEV001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	s := NewMQTTCommandSink(reg, nil)
+	// Caller claims device is on BidCos-RF — mismatch must be rejected.
+	err = s.SetMasterValue(context.Background(), "ccu-ifmm", "BidCos-RF", "MMDEV001:1",
+		hmenum.Parameter("NO_PARAM"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error when interfaceID does not match device's interface")
+	}
+}
+
+func TestMQTTCommandSinkSetMasterValueInterfaceEmptySkipsCheck(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-ifempty"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	d := device.New(device.Config{
+		Address:     "EMDEV001",
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Model:       "HmIP-PSM",
+	})
+	_ = d.AddChannel("EMDEV001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	c.ModelRegistry.Put(d)
+
+	s := NewMQTTCommandSink(reg, nil)
+	// Empty interfaceID must not trigger the mismatch guard; the error
+	// here comes from the missing MASTER parameter, not the iface check.
+	err = s.SetMasterValue(context.Background(), "ccu-ifempty", "", "EMDEV001:1",
+		hmenum.Parameter("NO_PARAM"), true, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Error("expected error for missing MASTER param, not interface mismatch")
+	}
+	// The error must NOT mention "belongs to interface" — it was the
+	// parameter guard that fired, not the interface guard.
+	if containsString(err.Error(), "belongs to interface") {
+		t.Errorf("unexpected interface-mismatch error with empty interfaceID: %v", err)
+	}
+}
+
+// containsString reports whether sub is a substring of s.
+func containsString(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || sub == "" ||
+		func() bool {
+			for i := 0; i <= len(s)-len(sub); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+			return false
+		}())
+}
+
+// ============================================================
+// Fix 2 — SetCombinedTimerSeconds unknown kind → quiet no-op
+// ============================================================
+
+func TestMQTTCommandSinkSetCombinedTimerSecondsUnknownKindIsNoOp(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-cdt"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	_ = reg.Register(c)
+	s := NewMQTTCommandSink(reg, nil)
+	// "HSColor" is an unimplemented kind — must return nil, not an error.
+	err = s.SetCombinedTimerSeconds(
+		context.Background(),
+		"ccu-cdt", "HmIP-RF", "SOMEDEV", 1,
+		"HSColor", 0.0,
+		hmenum.CommandPriorityLow,
+	)
+	if err != nil {
+		t.Errorf("SetCombinedTimerSeconds with unsupported kind must be a no-op, got: %v", err)
+	}
+}
