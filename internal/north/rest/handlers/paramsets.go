@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
@@ -13,22 +12,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// ParamsetService is the narrow facade `GET/PUT /paramsets/{key}`
-// depends on. The paramset key is one of VALUES / MASTER / LINK.
-//
-// LINK paramsets need the peer channel address (the CCU uses it as
-// the paramset key on the wire) and therefore get their own method
-// pair. The REST surface reflects this with a dedicated route —
-// `/devices/{addr}/link-ps/{peer}` — to keep the `{key}` URL parameter
-// free of ambiguity.
-type ParamsetService interface {
-	GetParamset(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error)
-	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any) error
-	GetLinkParamset(ctx context.Context, channelAddress, peerAddress string) (map[string]any, error)
-	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
-}
+// ParamsetService is an alias for the canonical interface in pkg/interfaces.
+type ParamsetService = interfaces.ParamsetService
 
 // GetParamset proxies the read request to svc.
 func GetParamset(svc ParamsetService) http.HandlerFunc {

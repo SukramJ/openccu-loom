@@ -4,65 +4,25 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// LinksService is the narrow facade the /links endpoints depend on.
-// Mirrors `LinkCoordinator` (minus the link-paramset
-// operations, which are served through the existing paramset routes
-// with the peer address as the paramset key).
-type LinksService interface {
-	ListLinks(ctx context.Context, deviceAddress, locale string) ([]Link, error)
-	AddLink(ctx context.Context, senderAddress, receiverAddress, name, description string) error
-	RemoveLink(ctx context.Context, senderAddress, receiverAddress string) error
-	LinkableChannels(
-		ctx context.Context,
-		interfaceID, sourceChannelAddress, role, locale string,
-	) ([]LinkableChannel, error)
-}
+// LinksService is an alias for the canonical interface in pkg/interfaces.
+type LinksService = interfaces.LinksService
 
-// Link is the enriched view of a direct link between two channels.
-// Field layout mirrors.
-type Link struct {
-	Sender                   string `json:"sender_address"`
-	Receiver                 string `json:"receiver_address"`
-	Name                     string `json:"name,omitempty"`
-	Description              string `json:"description,omitempty"`
-	Flags                    int    `json:"flags,omitempty"`
-	SenderDeviceName         string `json:"sender_device_name,omitempty"`
-	SenderDeviceModel        string `json:"sender_device_model,omitempty"`
-	SenderChannelType        string `json:"sender_channel_type,omitempty"`
-	SenderChannelTypeLabel   string `json:"sender_channel_type_label,omitempty"`
-	SenderChannelName        string `json:"sender_channel_name,omitempty"`
-	ReceiverDeviceName       string `json:"receiver_device_name,omitempty"`
-	ReceiverDeviceModel      string `json:"receiver_device_model,omitempty"`
-	ReceiverChannelType      string `json:"receiver_channel_type,omitempty"`
-	ReceiverChannelTypeLabel string `json:"receiver_channel_type_label,omitempty"`
-	ReceiverChannelName      string `json:"receiver_channel_name,omitempty"`
-	PeerAddress              string `json:"peer_address"`
-	PeerDeviceName           string `json:"peer_device_name,omitempty"`
-	PeerDeviceModel          string `json:"peer_device_model,omitempty"`
-	Direction                string `json:"direction"`
-}
+// Link is an alias for the canonical DTO in pkg/hmapi.
+type Link = hmapi.Link
 
-// LinkableChannel is one candidate returned by
-// GET /channels/{no}/linkable-channels.
-type LinkableChannel struct {
-	Address          string `json:"address"`
-	ChannelType      string `json:"channel_type,omitempty"`
-	ChannelTypeLabel string `json:"channel_type_label,omitempty"`
-	ChannelName      string `json:"channel_name,omitempty"`
-	DeviceAddress    string `json:"device_address"`
-	DeviceName       string `json:"device_name,omitempty"`
-	DeviceModel      string `json:"device_model,omitempty"`
-}
+// LinkableChannel is an alias for the canonical DTO in pkg/hmapi.
+type LinkableChannel = hmapi.LinkableChannel
 
 // AddLinkRequest is the JSON body for POST /devices/{addr}/links.
 // `receiver_address` is required; `sender_address` defaults to the

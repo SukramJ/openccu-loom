@@ -8,10 +8,10 @@ import (
 	"errors"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
-// InterfacesAdapter satisfies handlers.InterfaceIndex.
+// InterfacesAdapter satisfies restapi.InterfaceIndex.
 type InterfacesAdapter struct {
 	registry    *central.Registry
 	reconnector Reconnector
@@ -35,14 +35,14 @@ var ErrNoReconnector = errors.New("adapter: no reconnector wired")
 
 // Interfaces enumerates every configured interface across every
 // central.
-func (a *InterfacesAdapter) Interfaces() []handlers.InterfaceState {
+func (a *InterfacesAdapter) Interfaces() []hmapi.InterfaceState {
 	if a.registry == nil {
 		return nil
 	}
-	var out []handlers.InterfaceState
+	var out []hmapi.InterfaceState
 	for _, u := range a.registry.List() {
 		for _, e := range u.Clients.List() {
-			out = append(out, handlers.InterfaceState{
+			out = append(out, hmapi.InterfaceState{
 				ID:        e.InterfaceID,
 				Name:      e.InterfaceID,
 				Connected: e.Connected(),
@@ -56,13 +56,13 @@ func (a *InterfacesAdapter) Interfaces() []handlers.InterfaceState {
 }
 
 // Interface returns the state for id, searching every central.
-func (a *InterfacesAdapter) Interface(id string) (handlers.InterfaceState, bool) {
+func (a *InterfacesAdapter) Interface(id string) (hmapi.InterfaceState, bool) {
 	for _, s := range a.Interfaces() {
 		if s.ID == id {
 			return s, true
 		}
 	}
-	return handlers.InterfaceState{}, false
+	return hmapi.InterfaceState{}, false
 }
 
 // Reconnect dispatches through the configured reconnector.

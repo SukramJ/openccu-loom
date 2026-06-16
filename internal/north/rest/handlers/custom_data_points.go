@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -17,42 +16,19 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// CustomDPWriter is the mutating surface Phase C handlers use to
-// invoke operations on custom data points. The daemon wires a concrete
-// implementation that translates the abstract (device address, name,
-// operation, params) tuple into the appropriate model method call and
-// ultimately pushes a wire command.
-//
-// Implementations are responsible for audit-log entries — the handler
-// layer passes Source ("rest:custom-dp:PUT") so the entry has provenance.
-type CustomDPWriter interface {
-	// InvokeCustomDP dispatches `operation` with `params` on the custom
-	// data point identified by `deviceAddress` and `name`. Returns
-	// ErrUnknownOperation when the operation string is not in the
-	// dispatch table for the DP's category, and ErrBadParam when a
-	// required param is missing or out of range.
-	InvokeCustomDP(
-		ctx context.Context,
-		deviceAddress string,
-		name string,
-		operation string,
-		params map[string]any,
-		priority hmenum.CommandPriority,
-		source string,
-	) error
-}
+// CustomDPWriter is an alias for the canonical interface in pkg/interfaces.
+type CustomDPWriter = interfaces.CustomDPWriter
 
-// --- sentinel errors (used by CustomDPWriter implementations) ---
+// ErrUnknownOperation is an alias for the sentinel in pkg/hmapi.
+var ErrUnknownOperation = hmapi.ErrUnknownOperation
 
-// ErrUnknownOperation is returned by InvokeCustomDP when `operation`
-// is not in the dispatch table for the data point's category.
-var ErrUnknownOperation = errors.New("custom_dp: unknown operation")
-
-// ErrBadParam is returned when a required param is missing or out of range.
-var ErrBadParam = errors.New("custom_dp: bad parameter")
+// ErrBadParam is an alias for the sentinel in pkg/hmapi.
+var ErrBadParam = hmapi.ErrBadParam
 
 // --- DTOs ---
 

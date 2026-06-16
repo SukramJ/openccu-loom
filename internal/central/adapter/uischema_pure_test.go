@@ -13,7 +13,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -35,7 +35,7 @@ func makeBaseCfg(addr, param string, typ hmenum.ParameterType, ops hmenum.Operat
 }
 
 // paramNames extracts Names from a UISchemaParameter slice for error messages.
-func paramNames(ps []handlers.UISchemaParameter) []string {
+func paramNames(ps []hmapi.UISchemaParameter) []string {
 	out := make([]string, len(ps))
 	for i := range ps {
 		out[i] = ps[i].Name
@@ -229,7 +229,7 @@ func TestParamShouldRenderNoReadWrite(t *testing.T) {
 func TestApplyOrderNilMeta(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{}
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "C"},
 		{Name: "A"},
 		{Name: "B"},
@@ -243,7 +243,7 @@ func TestApplyOrderNilMeta(t *testing.T) {
 func TestApplyOrderWithOrder(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{}
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "B"},
 		{Name: "A"},
 		{Name: "C"},
@@ -260,7 +260,7 @@ func TestApplyOrderWithOrder(t *testing.T) {
 func TestApplyOrderWithExtraParams(t *testing.T) {
 	t.Parallel()
 	a := &UISchemaAdapter{}
-	params := []handlers.UISchemaParameter{
+	params := []hmapi.UISchemaParameter{
 		{Name: "Z"},
 		{Name: "A"},
 		{Name: "B"},

@@ -21,12 +21,12 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
 
-// SchedulesDomain implements handlers.ScheduleService. It reads/
+// SchedulesDomain implements interfaces.ScheduleService. It reads/
 // writes climate week profiles from/to the MASTER paramset of a
 // thermostat channel, converting between the CCU's flat
 // P<n>_<FIELD>_<WEEKDAY>_<slot> format and the structured
@@ -207,7 +207,7 @@ func hasSimpleScheduleParams(raw map[string]any) bool {
 // to ask — e.g. when the schedule tab is rendered on the device level.
 func (s *SchedulesDomain) GetClimateScheduleAuto(
 	ctx context.Context, deviceAddress string,
-) (*handlers.ClimateSchedule, error) {
+) (*hmapi.ClimateSchedule, error) {
 	channelNo, err := s.FindScheduleChannel(ctx, deviceAddress)
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (s *SchedulesDomain) GetClimateScheduleAuto(
 
 // PutClimateScheduleAuto resolves the schedule channel before writing.
 func (s *SchedulesDomain) PutClimateScheduleAuto(
-	ctx context.Context, deviceAddress string, sched *handlers.ClimateSchedule,
+	ctx context.Context, deviceAddress string, sched *hmapi.ClimateSchedule,
 ) error {
 	channelNo, err := s.FindScheduleChannel(ctx, deviceAddress)
 	if err != nil {
@@ -243,7 +243,7 @@ func (s *SchedulesDomain) SetActiveProfileAuto(
 // in the unified DTO. The "kind" field disambiguates.
 func (s *SchedulesDomain) GetClimateSchedule(
 	ctx context.Context, deviceAddress string, channelNo int,
-) (*handlers.ClimateSchedule, error) {
+) (*hmapi.ClimateSchedule, error) {
 	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
 	if err != nil {
 		return nil, err
@@ -252,7 +252,7 @@ func (s *SchedulesDomain) GetClimateSchedule(
 	if err != nil {
 		return nil, fmt.Errorf("schedules: read paramset: %w", err)
 	}
-	chRef := handlers.ScheduleChannelRef{
+	chRef := hmapi.ScheduleChannelRef{
 		Address: channelAddr,
 		Number:  channelNo,
 		Device:  deviceAddress,
@@ -273,7 +273,7 @@ func (s *SchedulesDomain) GetClimateSchedule(
 	if hasSimpleScheduleParams(values) {
 		domain := s.detectScheduleDomain(deviceAddress, channelNo)
 		entries := parseSimpleScheduleWithDomain(values, domain)
-		return &handlers.ClimateSchedule{
+		return &hmapi.ClimateSchedule{
 			Channel:       chRef,
 			Kind:          "simple",
 			Domain:        domain,
@@ -534,7 +534,7 @@ var simpleScheduleUnsupportedFields = map[string]map[string]struct{}{
 
 // stripUnsupportedFields nulls fields the domain validator rejects so
 // the parsed entry survives a Parse → Validate → Build round-trip.
-func stripUnsupportedFields(entries []handlers.SimpleScheduleEntry, domain string) {
+func stripUnsupportedFields(entries []hmapi.SimpleScheduleEntry, domain string) {
 	unsupported, ok := simpleScheduleUnsupportedFields[domain]
 	if !ok {
 		return
@@ -553,7 +553,7 @@ func stripUnsupportedFields(entries []handlers.SimpleScheduleEntry, domain strin
 	}
 }
 
-func parseSimpleScheduleWithDomain(raw map[string]any, domain string) []handlers.SimpleScheduleEntry {
+func parseSimpleScheduleWithDomain(raw map[string]any, domain string) []hmapi.SimpleScheduleEntry {
 	entries := parseSimpleSchedule(raw)
 	stripUnsupportedFields(entries, domain)
 	if domain != "lock" {
@@ -592,7 +592,7 @@ func lookupSlotDuration(raw map[string]any, slotNo int) (durationBase, durationF
 	return dBase, dFactor
 }
 
-func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry { //nolint:gocognit,gocyclo,funlen // single-purpose schedule parsing logic with many branches
+func parseSimpleSchedule(raw map[string]any) []hmapi.SimpleScheduleEntry { //nolint:gocognit,gocyclo,funlen // single-purpose schedule parsing logic with many branches
 	type slot struct {
 		weekday          int
 		hour             int
@@ -702,13 +702,13 @@ func parseSimpleSchedule(raw map[string]any) []handlers.SimpleScheduleEntry { //
 		keys = append(keys, k)
 	}
 	sort.Ints(keys)
-	out := make([]handlers.SimpleScheduleEntry, 0, len(keys))
+	out := make([]hmapi.SimpleScheduleEntry, 0, len(keys))
 	for _, k := range keys {
 		s := bySlot[k]
 		if !s.seen || s.weekday == 0 {
 			continue // inactive slot
 		}
-		entry := handlers.SimpleScheduleEntry{
+		entry := hmapi.SimpleScheduleEntry{
 			SlotNo:             k,
 			Weekdays:           weekdayBitsToNames(s.weekday),
 			Time:               fmt.Sprintf("%02d:%02d", s.hour, s.minute),
@@ -897,12 +897,12 @@ func weekdayNamesToBits(names []string) int {
 // SPA users edit the friendly fields, the wire ends up consistent
 // With.
 func serializeSimpleScheduleWithDomain(
-	entries []handlers.SimpleScheduleEntry, domain string,
+	entries []hmapi.SimpleScheduleEntry, domain string,
 ) (map[string]any, error) {
 	if domain == "lock" {
 		// Apply the lock encoding *before* serialising so the
 		// downstream code only ever sees the wire shape.
-		mapped := make([]handlers.SimpleScheduleEntry, len(entries))
+		mapped := make([]hmapi.SimpleScheduleEntry, len(entries))
 		for i := range entries {
 			mapped[i] = applyLockEncoding(entries[i])
 		}
@@ -913,7 +913,7 @@ func serializeSimpleScheduleWithDomain(
 
 // applyLockEncoding rewrites a lock slot's level / duration / target_channels
 // from the high-level lock_mode + (lock_action | permission) fields.
-func applyLockEncoding(e handlers.SimpleScheduleEntry) handlers.SimpleScheduleEntry {
+func applyLockEncoding(e hmapi.SimpleScheduleEntry) hmapi.SimpleScheduleEntry {
 	switch e.LockMode {
 	case "door_lock":
 		level, durBase, durFactor, ok := lockActionRawFor(e.LockAction)
@@ -943,7 +943,7 @@ func applyLockEncoding(e handlers.SimpleScheduleEntry) handlers.SimpleScheduleEn
 	return e
 }
 
-func serializeSimpleSchedule(entries []handlers.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
+func serializeSimpleSchedule(entries []hmapi.SimpleScheduleEntry) (map[string]any, error) { //nolint:funlen // single-purpose schedule serialization logic with many branches
 	// Size hint omitted deliberately: deriving it from len(entries) (a
 	// request-controlled length) risks an integer-overflowing allocation
 	// size. The map grows on demand; schedules are small.
@@ -1090,7 +1090,7 @@ func isCCUScheduleFalsePositive(err error) bool {
 // expanded to 13 slots; for simple schedules unused slots (1..24)
 // are zeroed out so deletions take effect.
 func (s *SchedulesDomain) PutClimateSchedule(
-	ctx context.Context, deviceAddress string, channelNo int, sched *handlers.ClimateSchedule,
+	ctx context.Context, deviceAddress string, channelNo int, sched *hmapi.ClimateSchedule,
 ) error {
 	backend, channelAddr, err := s.resolve(deviceAddress, channelNo)
 	if err != nil {
@@ -1279,7 +1279,7 @@ type slotVals struct {
 // structured DTO. Unknown keys are ignored. Raises ErrNoSchedule when
 // no P<n>_ENDTIME/TEMPERATURE key is present so the caller can surface
 // "no schedule support" as an HTTP 404.
-func parseClimateSchedule(raw map[string]any) (*handlers.ClimateSchedule, error) {
+func parseClimateSchedule(raw map[string]any) (*hmapi.ClimateSchedule, error) {
 	collected := make(map[slotKey]*slotVals)
 	for name, v := range raw {
 		m := slotPattern.FindStringSubmatch(name)
@@ -1333,12 +1333,12 @@ func parseClimateSchedule(raw map[string]any) (*handlers.ClimateSchedule, error)
 		wd.slots[k.slot] = sv
 	}
 
-	out := &handlers.ClimateSchedule{
-		Profiles: make(map[string]handlers.ClimateProfile),
+	out := &hmapi.ClimateSchedule{
+		Profiles: make(map[string]hmapi.ClimateProfile),
 	}
 	for pid, prof := range perProfile {
-		dto := handlers.ClimateProfile{
-			Weekdays: make(map[string]handlers.ClimateWeekday),
+		dto := hmapi.ClimateProfile{
+			Weekdays: make(map[string]hmapi.ClimateWeekday),
 		}
 		for _, wd := range scheduleWeekdays {
 			data := prof.days[wd]
@@ -1357,7 +1357,7 @@ func parseClimateSchedule(raw map[string]any) (*handlers.ClimateSchedule, error)
 // shape). The base temperature is picked as the most frequent
 // temperature across the day, weighted by slot duration — same
 // Heuristic
-func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
+func simplifyWeekday(slots map[int]*slotVals) hmapi.ClimateWeekday {
 	// Sortierte Slot-Nummern.
 	nums := make([]int, 0, len(slots))
 	for n := range slots {
@@ -1413,7 +1413,7 @@ func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
 
 	// Periods are all slot ranges whose temperature is NOT the base,
 	// merged into contiguous blocks.
-	periods := make([]handlers.ClimatePeriod, 0)
+	periods := make([]hmapi.ClimatePeriod, 0)
 	for i := 0; i < len(flatSlots); {
 		if math.Abs(flatSlots[i].temp-base) < 1e-6 {
 			i++
@@ -1427,7 +1427,7 @@ func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
 			end = flatSlots[j].endMin
 			j++
 		}
-		periods = append(periods, handlers.ClimatePeriod{
+		periods = append(periods, hmapi.ClimatePeriod{
 			StartTime:   formatMinutes(start),
 			EndTime:     formatMinutes(end),
 			Temperature: temp,
@@ -1435,7 +1435,7 @@ func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
 		i = j
 	}
 
-	return handlers.ClimateWeekday{
+	return hmapi.ClimateWeekday{
 		BaseTemperature: base,
 		Periods:         periods,
 	}
@@ -1448,7 +1448,7 @@ func simplifyWeekday(slots map[int]*slotVals) handlers.ClimateWeekday {
 // slots; unused slots end at 24:00 with the base temperature.
 // Non-overlapping period validation is applied; the call fails
 // rather than silently dropping conflicting periods.
-func serializeClimateSchedule(sched *handlers.ClimateSchedule) (map[string]any, error) {
+func serializeClimateSchedule(sched *hmapi.ClimateSchedule) (map[string]any, error) {
 	// Size hint omitted deliberately: deriving it from len(sched.Profiles)
 	// (a request-controlled length) risks an integer-overflowing
 	// allocation size. The map grows on demand.
@@ -1484,9 +1484,9 @@ type rawSlot struct {
 // expandWeekday fills 13 slots from base temperature + periods. The
 // simple form may have gaps (times where no period is defined); those
 // default to the base temperature. Overlapping periods abort.
-func expandWeekday(wd handlers.ClimateWeekday) ([]rawSlot, error) {
+func expandWeekday(wd hmapi.ClimateWeekday) ([]rawSlot, error) {
 	// Sortierte Perioden prüfen.
-	periods := append([]handlers.ClimatePeriod(nil), wd.Periods...)
+	periods := append([]hmapi.ClimatePeriod(nil), wd.Periods...)
 	sort.Slice(periods, func(i, j int) bool {
 		return minutesFromTime(periods[i].StartTime) < minutesFromTime(periods[j].StartTime)
 	})

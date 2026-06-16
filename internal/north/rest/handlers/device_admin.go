@@ -4,25 +4,16 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// DeviceAdmin is the write-path facade for device-lifecycle
-// operations. Separate from [DeviceIndex] so read-only deployments
-// can leave it nil.
-type DeviceAdmin interface {
-	UnpairDevice(ctx context.Context, address string) error
-	RenameDevice(ctx context.Context, address, name string) error
-	AcceptInboxDevice(ctx context.Context, address string) error
-	UpdateFirmware(ctx context.Context, address string) error
-	SetRooms(ctx context.Context, address string, rooms []string) error
-	SetFunctions(ctx context.Context, address string, functions []string) error
-}
+// DeviceAdmin is an alias for the canonical interface in pkg/interfaces.
+type DeviceAdmin = interfaces.DeviceAdmin
 
 // DeleteDevice removes a device (unpair via CCU).
 func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {

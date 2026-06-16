@@ -5,23 +5,16 @@ package handlers
 
 import (
 	"net/http"
-	"time"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// Incident is one diagnostic entry surfaced at `/incidents`.
-type Incident struct {
-	ID        string    `json:"id"`
-	When      time.Time `json:"when"`
-	Component string    `json:"component"`
-	Severity  string    `json:"severity"`
-	Summary   string    `json:"summary"`
-	Detail    string    `json:"detail,omitempty"`
-}
+// Incident is an alias for the canonical DTO in pkg/hmapi.
+type Incident = hmapi.Incident
 
-// IncidentsReader is the narrow facade `/incidents` depends on.
-type IncidentsReader interface {
-	Incidents() []Incident
-}
+// IncidentsReader is an alias for the canonical interface in pkg/interfaces.
+type IncidentsReader = interfaces.IncidentsReader
 
 // ListIncidents renders the current incident list.
 func ListIncidents(reader IncidentsReader) http.HandlerFunc {

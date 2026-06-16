@@ -14,7 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -28,7 +28,7 @@ func TestUISchemaDeviceNotFound(t *testing.T) {
 	t.Parallel()
 	reg := central.NewRegistry()
 	a := &UISchemaAdapter{registry: reg}
-	_, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "NODEV001",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -75,7 +75,7 @@ func TestUISchemaDeviceFoundValuesParamset(t *testing.T) {
 	c.ModelRegistry.Put(d)
 
 	a := &UISchemaAdapter{registry: reg}
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "UISDEV001",
 		Channel:  1,
 		Paramset: "VALUES",
@@ -111,7 +111,7 @@ func TestUISchemaInvalidParamsetKey(t *testing.T) {
 	c.ModelRegistry.Put(d)
 
 	a := &UISchemaAdapter{registry: reg}
-	_, err = a.UISchema(context.Background(), handlers.UISchemaRequest{
+	_, err = a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "UISDEV002",
 		Channel:  1,
 		Paramset: "INVALID_PARAMSET",
@@ -143,7 +143,7 @@ func TestUISchemaDeviceFoundMasterParamset(t *testing.T) {
 	c.ModelRegistry.Put(d)
 
 	a := &UISchemaAdapter{registry: reg}
-	schema, err := a.UISchema(context.Background(), handlers.UISchemaRequest{
+	schema, err := a.UISchema(context.Background(), hmapi.UISchemaRequest{
 		Address:  "UISDEV003",
 		Channel:  1,
 		Paramset: "MASTER",

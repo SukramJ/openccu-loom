@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // BackupStorage abstracts where the daemon keeps locally-stored backup files.
@@ -20,7 +20,7 @@ import (
 // backends (S3, NFS, encrypted volume) can satisfy the same surface.
 type BackupStorage interface {
 	// List enumerates the backups currently held in storage.
-	List(ctx context.Context) ([]handlers.BackupEntry, error)
+	List(ctx context.Context) ([]hmapi.BackupEntry, error)
 	// Open returns a reader for the backup payload. The caller closes
 	// the reader.
 	Open(ctx context.Context, id string) (io.ReadCloser, error)
@@ -70,12 +70,12 @@ func NewFilesystemBackupStorage(dir string) (*FilesystemBackupStorage, error) {
 }
 
 // List implements [BackupStorage].
-func (s *FilesystemBackupStorage) List(_ context.Context) ([]handlers.BackupEntry, error) {
+func (s *FilesystemBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, error) {
 	entries, err := os.ReadDir(s.Dir)
 	if err != nil {
 		return nil, fmt.Errorf("backup: read dir: %w", err)
 	}
-	out := make([]handlers.BackupEntry, 0, len(entries))
+	out := make([]hmapi.BackupEntry, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -88,7 +88,7 @@ func (s *FilesystemBackupStorage) List(_ context.Context) ([]handlers.BackupEntr
 		if err != nil {
 			continue
 		}
-		out = append(out, handlers.BackupEntry{
+		out = append(out, hmapi.BackupEntry{
 			ID:        strings.TrimSuffix(name, ".sbk"),
 			Bytes:     info.Size(),
 			CreatedAt: info.ModTime().UTC(),

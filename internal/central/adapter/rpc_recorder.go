@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
@@ -35,7 +35,7 @@ const (
 // RPCRecorderAdapter exposes every central's [session.Recorder] to the REST
 // layer. Recording is operator-controlled (start/stop), duration-bounded with
 // a safety cap, optionally anonymised, and survives a daemon restart via a
-// persisted active marker. Satisfies [handlers.RPCRecorderService].
+// persisted active marker. Satisfies [interfaces.RPCRecorderService].
 type RPCRecorderAdapter struct {
 	registry *central.Registry
 	dataDir  string
@@ -106,11 +106,11 @@ func effectiveDuration(durationSeconds int) time.Duration {
 	return d
 }
 
-// Start implements [handlers.RPCRecorderService]. It raises the TTL to no
+// Start implements [interfaces.RPCRecorderService]. It raises the TTL to no
 // expiry (so the full session is captured), activates the recorder on the
 // selected centrals, arms an auto-stop timer (bounded by the cap), persists
 // the active marker, and records the anonymisation choice.
-func (a *RPCRecorderAdapter) Start(centrals []string, durationSeconds int, randomize bool) []handlers.RPCRecordingStatus {
+func (a *RPCRecorderAdapter) Start(centrals []string, durationSeconds int, randomize bool) []hmapi.RPCRecordingStatus {
 	eff := effectiveDuration(durationSeconds)
 	now := time.Now()
 	units := a.units(centrals)
@@ -141,11 +141,11 @@ func (a *RPCRecorderAdapter) armLocked(name string, eff time.Duration, durationS
 	a.states[name] = st
 }
 
-// Stop implements [handlers.RPCRecorderService]. It deactivates the recorder
+// Stop implements [interfaces.RPCRecorderService]. It deactivates the recorder
 // on the selected centrals, restores the rolling-window TTL, and cancels the
 // auto-stop timer; the trace stays available for download (with the same
 // anonymisation choice) until the next Start clears it.
-func (a *RPCRecorderAdapter) Stop(centrals []string) []handlers.RPCRecordingStatus {
+func (a *RPCRecorderAdapter) Stop(centrals []string) []hmapi.RPCRecordingStatus {
 	units := a.units(centrals)
 	a.mu.Lock()
 	for _, c := range units {
@@ -164,16 +164,16 @@ func (a *RPCRecorderAdapter) Stop(centrals []string) []handlers.RPCRecordingStat
 	return a.Status()
 }
 
-// Status implements [handlers.RPCRecorderService].
-func (a *RPCRecorderAdapter) Status() []handlers.RPCRecordingStatus {
+// Status implements [interfaces.RPCRecorderService].
+func (a *RPCRecorderAdapter) Status() []hmapi.RPCRecordingStatus {
 	units := a.units(nil)
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	out := make([]handlers.RPCRecordingStatus, 0, len(units))
+	out := make([]hmapi.RPCRecordingStatus, 0, len(units))
 	for _, c := range units {
 		meta := c.Recorder.Metadata()
 		entries, _ := meta["total_entries"].(int)
-		status := handlers.RPCRecordingStatus{
+		status := hmapi.RPCRecordingStatus{
 			Central: c.Name(),
 			Active:  c.Recorder.IsActive(),
 			Entries: entries,
@@ -189,7 +189,7 @@ func (a *RPCRecorderAdapter) Status() []handlers.RPCRecordingStatus {
 	return out
 }
 
-// Export implements [handlers.RPCRecorderService]. format selects the shape:
+// Export implements [interfaces.RPCRecorderService]. format selects the shape:
 // "golden" yields an ordered replay slice, anything else the keyed map. When
 // the recording was started with randomize, operator-identifying values in
 // the exported trace are anonymised.

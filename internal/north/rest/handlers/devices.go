@@ -20,34 +20,17 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
+	"github.com/SukramJ/openccu-loom/internal/restapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmui"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// DeviceIndex is the narrow facade the device endpoints depend on.
-// Implementations live in the central layer and translate address
-// lookups into model.Device access.
-type DeviceIndex interface {
-	Devices() []*device.Device
-	Device(address string) (*device.Device, bool)
-	// CentralOf returns the name of the central unit owning the
-	// device. Empty string when the device is unknown — handlers
-	// surface that as an empty `central` field rather than an error.
-	CentralOf(address string) string
-}
+// DeviceIndex is an alias for the canonical interface in internal/restapi.
+type DeviceIndex = restapi.DeviceIndex
 
-// DataPointWriter is how the REST surface asks the client layer to
-// push a value to the CCU. It abstracts over the per-interface
-// client so handlers never touch wire packages directly.
-type DataPointWriter interface {
-	SetValue(
-		ctx context.Context,
-		address string,
-		parameter hmenum.Parameter,
-		value any,
-		priority hmenum.CommandPriority,
-	) error
-}
+// DataPointWriter is an alias for the canonical interface in pkg/interfaces.
+type DataPointWriter = interfaces.DataPointWriter
 
 // --- DTOs ---
 
@@ -337,13 +320,8 @@ func ListRooms(idx DeviceIndex) http.HandlerFunc {
 	}
 }
 
-// ParameterLabeler is the optional translator the data-point
-// endpoints consult for a human-readable parameter name. It is
-// locale-scoped: the concrete implementation captures the active
-// locale so handlers stay language-agnostic.
-type ParameterLabeler interface {
-	ParameterLabel(parameter string) string
-}
+// ParameterLabeler is an alias for the canonical interface in pkg/interfaces.
+type ParameterLabeler = interfaces.ParameterLabeler
 
 // ChannelTypedLabeler extends [ParameterLabeler] with channel-typed
 // lookups: the channel-type-specific parameter translation (so

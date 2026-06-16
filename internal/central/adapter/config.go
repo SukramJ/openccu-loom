@@ -11,11 +11,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 )
 
 // ConfigAdapter projects the parsed daemon config onto the sanitized
-// [handlers.ConfigSnapshot] the REST endpoint returns.
+// [hmapi.ConfigSnapshot] the REST endpoint returns.
 type ConfigAdapter struct {
 	source   *config.Config
 	registry *central.Registry
@@ -27,12 +27,12 @@ func NewConfigAdapter(source *config.Config, registry *central.Registry) *Config
 	return &ConfigAdapter{source: source, registry: registry}
 }
 
-// SanitizedConfig implements handlers.ConfigReader.
-func (a *ConfigAdapter) SanitizedConfig() handlers.ConfigSnapshot {
-	snap := handlers.ConfigSnapshot{}
+// SanitizedConfig implements interfaces.ConfigReader.
+func (a *ConfigAdapter) SanitizedConfig() hmapi.ConfigSnapshot {
+	snap := hmapi.ConfigSnapshot{}
 	if a.source != nil {
 		snap.Locale = a.source.Locale
-		snap.CallbackPorts = handlers.ConfigPorts{
+		snap.CallbackPorts = hmapi.ConfigPorts{
 			XMLRPC: a.source.Callback.Port,
 			BINRPC: a.source.Callback.BinPort,
 		}
@@ -57,7 +57,7 @@ func (a *ConfigAdapter) SanitizedConfig() handlers.ConfigSnapshot {
 			for j, spec := range cc.Interfaces {
 				ifaceNames[j] = spec.Name
 			}
-			snap.Centrals = append(snap.Centrals, handlers.ConfigCentral{
+			snap.Centrals = append(snap.Centrals, hmapi.ConfigCentral{
 				Name:       cc.Name,
 				Host:       cc.Host,
 				Interfaces: ifaceNames,
@@ -129,7 +129,7 @@ func (a *HealthAdapter) trackers() []*health.Tracker {
 	return out
 }
 
-// Overall implements handlers.HealthReader. Returns the worst status
+// Overall implements restapi.HealthReader. Returns the worst status
 // observed across every consulted tracker; unknown beats healthy when
 // no degraded / unhealthy is in flight so a half-booted daemon does
 // not advertise itself as green. Trackers with no components do NOT
@@ -167,7 +167,7 @@ func (a *HealthAdapter) Overall() health.Status {
 	return worst
 }
 
-// Snapshot implements handlers.HealthReader. Unions the component
+// Snapshot implements restapi.HealthReader. Unions the component
 // lists across every tracker. Components from a central's tracker are
 // scoped as `<central>/<component>` — two CCUs typically run the same
 // interface names (HmIP-RF, BidCos-RF, the `central` heartbeat), and

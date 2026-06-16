@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -54,13 +54,13 @@ func TestClimateChannelSaverSaveNilWriter(t *testing.T) {
 
 func TestScheduleToMapNonNilSchedule(t *testing.T) {
 	t.Parallel()
-	s := &handlers.ClimateSchedule{
-		Profiles: map[string]handlers.ClimateProfile{
+	s := &hmapi.ClimateSchedule{
+		Profiles: map[string]hmapi.ClimateProfile{
 			"P1": {
-				Weekdays: map[string]handlers.ClimateWeekday{
+				Weekdays: map[string]hmapi.ClimateWeekday{
 					"MONDAY": {
 						BaseTemperature: 18.0,
-						Periods: []handlers.ClimatePeriod{
+						Periods: []hmapi.ClimatePeriod{
 							{StartTime: "06:00", EndTime: "22:00", Temperature: 21.5},
 						},
 					},

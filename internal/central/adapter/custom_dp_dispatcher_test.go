@@ -24,7 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom/valve"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -490,7 +490,7 @@ func TestDispatchLight_SetBrightness_MissingParam(t *testing.T) {
 	disp, _ := buildDispatcher(t, "LIGHT004", "LEVEL", l)
 
 	err := disp.InvokeCustomDP(context.Background(), "LIGHT004", "LEVEL", "set_brightness", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -502,7 +502,7 @@ func TestDispatchLight_SetColorOnPlainLight_ReturnsUnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "LIGHT005", "LEVEL", l)
 
 	err := disp.InvokeCustomDP(context.Background(), "LIGHT005", "LEVEL", "set_color", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -514,7 +514,7 @@ func TestDispatchLight_UnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "LIGHT006", "LEVEL", l)
 
 	err := disp.InvokeCustomDP(context.Background(), "LIGHT006", "LEVEL", "frobnicate", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -546,7 +546,7 @@ func TestDispatchColorLight_SetColorMissingHue(t *testing.T) {
 
 	err := disp.InvokeCustomDP(context.Background(), "CLGT002", "LEVEL", "set_color",
 		map[string]any{"saturation": 1.0}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -574,7 +574,7 @@ func TestDispatchColorTempLight_SetColorReturnsUnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "CTLG002", "LEVEL", l)
 
 	err := disp.InvokeCustomDP(context.Background(), "CTLG002", "LEVEL", "set_color", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -703,7 +703,7 @@ func TestDispatchClimate_UnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "CLM008", "SET_POINT_TEMPERATURE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "CLM008", "SET_POINT_TEMPERATURE", "magic", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -771,7 +771,7 @@ func TestDispatchCover_SetTiltOnPlainCoverReturnsUnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "CVR005", "LEVEL", c)
 
 	err := disp.InvokeCustomDP(context.Background(), "CVR005", "LEVEL", "set_tilt", map[string]any{"tilt": 0.5}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -850,7 +850,7 @@ func TestDispatchLock_UnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "LCK004", "STATE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "LCK004", "STATE", "disassemble", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -935,7 +935,7 @@ func TestDispatchTextDisplay_MissingID(t *testing.T) {
 	disp, _ := buildDispatcher(t, "TXT003", "STATE", carrier)
 
 	err := disp.InvokeCustomDP(context.Background(), "TXT003", "STATE", "write", map[string]any{"text": "hi"}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -988,7 +988,7 @@ func TestDispatchIrrigation_SetLevelReturnsUnknownOp(t *testing.T) {
 	disp, _ := buildDispatcher(t, "VLV004", "STATE", v)
 
 	err := disp.InvokeCustomDP(context.Background(), "VLV004", "STATE", "set_level", map[string]any{"level": 0.5}, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -1108,7 +1108,7 @@ func TestDispatchSwitch_TurnOnForMissingDuration(t *testing.T) {
 	disp, _ := buildDispatcher(t, "SW005", "STATE", s)
 
 	err := disp.InvokeCustomDP(context.Background(), "SW005", "STATE", "turn_on_for", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -1194,7 +1194,7 @@ func TestDispatch_UnsupportedDPType(t *testing.T) {
 func TestParamFloat_Bounds(t *testing.T) {
 	t.Parallel()
 	_, err := paramFloat(map[string]any{"v": 1.5}, "v", 1)
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for out-of-range, got %v", err)
 	}
 }
@@ -1202,7 +1202,7 @@ func TestParamFloat_Bounds(t *testing.T) {
 func TestParamFloat_Missing(t *testing.T) {
 	t.Parallel()
 	_, err := paramFloat(map[string]any{}, "v", 1)
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for missing key, got %v", err)
 	}
 }
@@ -1210,7 +1210,7 @@ func TestParamFloat_Missing(t *testing.T) {
 func TestParamInt32_WrongType(t *testing.T) {
 	t.Parallel()
 	_, err := paramInt32(map[string]any{"v": "not-a-number"}, "v")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -1419,7 +1419,7 @@ func TestDispatchEffectLight_SetEffectBadLabel(t *testing.T) {
 
 	params := map[string]any{"label": 42}
 	err := disp.InvokeCustomDP(context.Background(), "EFF003", "LEVEL", "set_effect", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -1446,7 +1446,7 @@ func TestDispatchEffectLight_SetColorTempNotSupported(t *testing.T) {
 	disp, _ := buildDispatcher(t, "EFF005", "LEVEL", el)
 
 	err := disp.InvokeCustomDP(context.Background(), "EFF005", "LEVEL", "set_color_temperature", nil, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrUnknownOperation) {
+	if !errors.Is(err, hmapi.ErrUnknownOperation) {
 		t.Fatalf("expected ErrUnknownOperation, got %v", err)
 	}
 }
@@ -1530,7 +1530,7 @@ func TestDispatchRGBWLight_SetEffectBadLabel(t *testing.T) {
 
 	params := map[string]any{"label": 99}
 	err := disp.InvokeCustomDP(context.Background(), "RGBW005", "LEVEL", "set_effect", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
@@ -1544,7 +1544,7 @@ func TestDispatchRGBWLight_SetEffectUnknownLabel(t *testing.T) {
 
 	params := map[string]any{"label": "NO_SUCH_EFFECT"}
 	err := disp.InvokeCustomDP(context.Background(), "RGBW006", "LEVEL", "set_effect", params, hmenum.CommandPriorityHigh, "test")
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for unknown label, got %v", err)
 	}
 }
@@ -1620,7 +1620,7 @@ func TestExtractSoundOptionsBadSound(t *testing.T) {
 	t.Parallel()
 	p := map[string]any{"sound": 99}
 	_, err := extractSoundOptions(p)
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad sound, got %v", err)
 	}
 }
@@ -1629,7 +1629,7 @@ func TestExtractSoundOptionsBadRepetitions(t *testing.T) {
 	t.Parallel()
 	p := map[string]any{"sound": "alarm", "repetitions": 3}
 	_, err := extractSoundOptions(p)
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad repetitions, got %v", err)
 	}
 }
@@ -1638,7 +1638,7 @@ func TestExtractSoundOptionsBadInterval(t *testing.T) {
 	t.Parallel()
 	p := map[string]any{"sound": "alarm", "interval": true}
 	_, err := extractSoundOptions(p)
-	if !errors.Is(err, handlers.ErrBadParam) {
+	if !errors.Is(err, hmapi.ErrBadParam) {
 		t.Fatalf("expected ErrBadParam for bad interval, got %v", err)
 	}
 }

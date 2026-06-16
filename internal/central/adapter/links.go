@@ -14,7 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
@@ -53,14 +53,14 @@ func (d *LinksDomain) SetAuditRecorder(rec audit.Recorder) *LinksDomain {
 // registered central or its interface has no backend registered.
 var ErrNoLinkBackend = errors.New("links: no backend for device")
 
-// ListLinks implements [handlers.LinksService].ListLinks.
+// ListLinks implements [interfaces.LinksService].ListLinks.
 //
 // Enumerates every link (incoming + outgoing) for a device,
 // deduplicates by the (sender, receiver) pair, and enriches each
 // entry with device + channel names, localised channel-type labels,
 // and direction ("outgoing" / "incoming") relative to the queried
 // device.
-func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale string) ([]handlers.Link, error) {
+func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale string) ([]hmapi.Link, error) {
 	c, dev, err := d.lookupDevice(deviceAddress)
 	if err != nil {
 		return nil, err
@@ -71,7 +71,7 @@ func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale strin
 	}
 
 	seen := make(map[string]struct{})
-	out := make([]handlers.Link, 0)
+	out := make([]hmapi.Link, 0)
 	for _, ch := range dev.Channels() {
 		raw, err := backend.GetLinks(ctx, ch.Address)
 		if err != nil {
@@ -95,7 +95,7 @@ func (d *LinksDomain) ListLinks(ctx context.Context, deviceAddress, locale strin
 // direction) using the local registry. Cross-central peer lookups
 // are supported because we walk the whole registry for the peer
 // device.
-func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmproto.LinkDescription, locale string) handlers.Link {
+func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmproto.LinkDescription, locale string) hmapi.Link {
 	senderDevAddr := deviceAddressOf(link.Sender)
 	receiverDevAddr := deviceAddressOf(link.Receiver)
 	isSender := senderDevAddr == dev.Address
@@ -124,7 +124,7 @@ func (d *LinksDomain) enrichLink(_ context.Context, dev *device.Device, link hmp
 		direction = "incoming"
 	}
 
-	return handlers.Link{
+	return hmapi.Link{
 		Sender:                   link.Sender,
 		Receiver:                 link.Receiver,
 		Name:                     link.Name,
@@ -262,12 +262,12 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 func (d *LinksDomain) LinkableChannels(
 	ctx context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,
-) ([]handlers.LinkableChannel, error) {
+) ([]hmapi.LinkableChannel, error) {
 	if d.registry == nil {
 		return nil, ErrNoLinkBackend
 	}
 	sourceDev := deviceAddressOf(sourceChannelAddress)
-	out := make([]handlers.LinkableChannel, 0)
+	out := make([]hmapi.LinkableChannel, 0)
 	for _, u := range d.registry.List() {
 		for _, dev := range u.ModelRegistry.List() {
 			if dev.InterfaceID != interfaceID {
@@ -280,7 +280,7 @@ func (d *LinksDomain) LinkableChannels(
 				if !d.channelMatchesRole(ctx, u.Name(), dev.InterfaceID, ch.Address, role) {
 					continue
 				}
-				out = append(out, handlers.LinkableChannel{
+				out = append(out, hmapi.LinkableChannel{
 					Address:          ch.Address,
 					ChannelType:      ch.Type,
 					ChannelTypeLabel: d.channelTypeLabel(locale, ch),

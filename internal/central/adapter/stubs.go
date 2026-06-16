@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
-	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -56,7 +56,7 @@ type IncidentsAdapter struct{}
 func NewIncidentsAdapter() *IncidentsAdapter { return &IncidentsAdapter{} }
 
 // Incidents implements handlers.IncidentsReader.
-func (a *IncidentsAdapter) Incidents() []handlers.Incident { return nil }
+func (a *IncidentsAdapter) Incidents() []hmapi.Incident { return nil }
 
 // --- Backup adapter ---
 
@@ -182,7 +182,7 @@ func backupID(centralName string) string {
 // List implements handlers.BackupService. When a [BackupStorage] is
 // wired the adapter delegates; otherwise the SPA's "no backups yet"
 // placeholder renders.
-func (a *BackupAdapter) List(ctx context.Context) ([]handlers.BackupEntry, error) {
+func (a *BackupAdapter) List(ctx context.Context) ([]hmapi.BackupEntry, error) {
 	if a.storage == nil {
 		return nil, nil
 	}

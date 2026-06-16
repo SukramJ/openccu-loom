@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,7 +12,10 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/restapi"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
 // rfc3339OrEmpty formats t in RFC3339 when non-zero; returns "" otherwise.
@@ -24,25 +26,11 @@ func rfc3339OrEmpty(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-// HubIndex is the facade hub-level endpoints depend on. Multi-CCU: the list
-// endpoints aggregate over every central via [HubIndex.Hubs], tagging each
-// item with its central; the mutating endpoints route to a specific central
-// via [HubIndex.HubFor] (selected by the `central` query parameter).
-type HubIndex interface {
-	// Hub returns the first central's hub (back-compat for single-CCU paths
-	// and tests). Prefer Hubs/HubFor for multi-CCU correctness.
-	Hub() *hub.Hub
-	// Hubs returns every registered central's hub, in stable name order.
-	Hubs() []NamedHub
-	// HubFor returns the named central's hub, or nil when unknown.
-	HubFor(centralName string) *hub.Hub
-}
+// HubIndex is an alias for the canonical interface in internal/restapi.
+type HubIndex = restapi.HubIndex
 
-// NamedHub pairs a central name with its hub for multi-CCU aggregation.
-type NamedHub struct {
-	Central string
-	Hub     *hub.Hub
-}
+// NamedHub is an alias for the canonical type in internal/restapi.
+type NamedHub = restapi.NamedHub
 
 // resolveHubForMutation picks the hub a mutating request targets. The
 // `central` query parameter names it explicitly; when omitted it falls back
@@ -215,11 +203,8 @@ type ServiceMessageDTO struct {
 	Quittable bool      `json:"quittable"`
 }
 
-// InstallModeController is the facade `install-mode` endpoints use.
-type InstallModeController interface {
-	InstallModeState() (active bool, remaining time.Duration)
-	SetInstallMode(ctx context.Context, on bool, duration time.Duration) error
-}
+// InstallModeController is an alias for the canonical interface in pkg/interfaces.
+type InstallModeController = interfaces.InstallModeController
 
 // applyHubPagination slices items according to optional `page` / `per_page`
 // query parameters and writes X-Total-Count with the full pre-slice count.
@@ -850,23 +835,11 @@ func PostInstallMode(ctrl InstallModeController) http.HandlerFunc {
 
 // --- Interfaces ---
 
-// InterfaceState is one entry in `GET /interfaces`.
-type InterfaceState struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Connected bool   `json:"connected"`
-	Interface string `json:"interface"`
-	CentralID string `json:"central_id,omitempty"`
-	Host      string `json:"host,omitempty"`
-	Note      string `json:"note,omitempty"`
-}
+// InterfaceState is an alias for the canonical DTO in pkg/hmapi.
+type InterfaceState = hmapi.InterfaceState
 
-// InterfaceIndex is the facade `interfaces` endpoints use.
-type InterfaceIndex interface {
-	Interfaces() []InterfaceState
-	Interface(id string) (InterfaceState, bool)
-	Reconnect(ctx context.Context, id string) error
-}
+// InterfaceIndex is an alias for the canonical interface in internal/restapi.
+type InterfaceIndex = restapi.InterfaceIndex
 
 // ListInterfaces renders every configured CCU interface.
 func ListInterfaces(idx InterfaceIndex) http.HandlerFunc {

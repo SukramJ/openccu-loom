@@ -11,42 +11,18 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
+	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
-// DiagnosticsIntrospectService is the facade the live-introspection
-// diagnostics endpoints depend on. It exposes read-only daemon internals
-// that have no other machine-readable surface: per-interface reliability
-// state and a live event-bus tap. *adapter.IntrospectAdapter satisfies it.
-type DiagnosticsIntrospectService interface {
-	// ReliabilitySnapshot returns per-(central, interface) reliability state,
-	// filtered to centralName when non-empty.
-	ReliabilitySnapshot(centralName string) []ReliabilityState
-	// ResolveCentral resolves the central for a tap: a named central must
-	// exist; an empty name resolves to the sole central when exactly one is
-	// configured (ADR 0002 — central is explicit otherwise). ok=false when
-	// the name is unknown or ambiguous.
-	ResolveCentral(centralName string) (string, bool)
-	// TapEventBus subscribes to the resolved central's event bus and calls
-	// emit for each event (optionally filtered by type name) until ctx is
-	// done.
-	TapEventBus(ctx context.Context, centralName string, types []string, emit func(DiagnosticsEvent))
-}
+// DiagnosticsIntrospectService is an alias for the canonical interface in pkg/interfaces.
+type DiagnosticsIntrospectService = interfaces.DiagnosticsIntrospectService
 
-// ReliabilityState is one (central, interface) reliability row. State holds
-// the InterfaceClient's live state payload, marshalled as-is.
-type ReliabilityState struct {
-	Central      string `json:"central"`
-	Interface    string `json:"interface"`
-	CircuitState int    `json:"circuit_state"`
-	State        any    `json:"state,omitempty"`
-}
+// ReliabilityState is an alias for the canonical DTO in pkg/hmapi.
+type ReliabilityState = hmapi.ReliabilityState
 
-// DiagnosticsEvent is one tapped event-bus record.
-type DiagnosticsEvent struct {
-	TS    string `json:"ts"`
-	Type  string `json:"type"`
-	Event any    `json:"event,omitempty"`
-}
+// DiagnosticsEvent is an alias for the canonical DTO in pkg/hmapi.
+type DiagnosticsEvent = hmapi.DiagnosticsEvent
 
 const (
 	tapDefaultWindow = 30 * time.Second
