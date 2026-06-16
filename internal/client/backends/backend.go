@@ -25,10 +25,9 @@ type Initializer interface {
 	Initialize(ctx context.Context) error
 }
 
-// Operations is the common contract every backend implements. It
-// maps cleanly to the calls the InterfaceClient and coordinators
-// make — backends specialise where the wire differs.
-type Operations interface {
+// LifecycleOps covers backend identity, capability reporting, and the
+// connection lifecycle: bind, unbind, and keepalive.
+type LifecycleOps interface {
 	// Kind identifies the backend flavour.
 	Kind() Kind
 
@@ -48,11 +47,94 @@ type Operations interface {
 	// Ping is the keepalive. Returns nil when the CCU responds with
 	// the matching PONG payload.
 	Ping(ctx context.Context, interfaceID string) error
+}
 
+// DeviceOps covers device enumeration, discovery helpers, firmware
+// management, pairing lifecycle, and bulk device-data retrieval.
+type DeviceOps interface {
 	// ListDevices enumerates device descriptions. Backends without
 	// [Capabilities.ListDevices] return [ErrUnsupported].
 	ListDevices(ctx context.Context) ([]hmproto.DeviceDescription, error)
 
+	// UpdateFirmware requests a firmware update. Returns
+	// [ErrUnsupported] on backends without [Capabilities.FirmwareUpdate].
+	UpdateFirmware(ctx context.Context, address string) error
+
+	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
+	// `deleteDevice(address, flags)` XML-RPC call (flags=0 — keep the
+	// bidirectional handshake clean). Backends without a pairing concept (CUxD
+	// virtual devices) return [ErrUnsupported].
+	DeleteDevice(ctx context.Context, address string) error
+
+	// GetAllDeviceData returns all current parameter values for all devices on
+	// the interface in one call (where supported). Used during discovery to
+	// pre-populate the value cache. Returns [ErrUnsupported] for backends
+	// without this capability.
+	GetAllDeviceData(ctx context.Context) (map[string]map[string]any, error)
+
+	// GetDeviceDetails returns name / ISE-ID / interface details for all known
+	// device addresses. Used during discovery. Returns [ErrUnsupported] for
+	// backends without this capability.
+	GetDeviceDetails(ctx context.Context, addresses []string) ([]map[string]any, error)
+
+	// GetDeviceDescription returns the raw device description for a single
+	// address. Returns [ErrUnsupported] for backends without this capability.
+	GetDeviceDescription(ctx context.Context, address string) (map[string]any, error)
+
+	// RenameDevice renames the CCU device identified by its ISE-ID. Returns true
+	// on success. Returns [ErrUnsupported] when [Capabilities.Rename] is false.
+	RenameDevice(ctx context.Context, iseID int, newName string) (bool, error)
+
+	// RenameChannel renames the CCU channel identified by its ISE-ID. Returns
+	// true on success. Returns [ErrUnsupported] when [Capabilities.Rename] is
+	// false.
+	RenameChannel(ctx context.Context, iseID int, newName string) (bool, error)
+
+	// AcceptDeviceInInbox accepts a device from the CCU pairing inbox. Returns
+	// true when the CCU confirmed acceptance. Returns [ErrUnsupported] when
+	// [Capabilities.InboxDevices] is false.
+	AcceptDeviceInInbox(ctx context.Context, deviceAddress string) (bool, error)
+
+	// GetInboxDevices returns devices in the CCU pairing inbox (devices that
+	// have announced but not yet been accepted). iface is the interface to
+	// query.
+	GetInboxDevices(ctx context.Context, iface string) ([]map[string]any, error)
+
+	// GetIseIDByAddress resolves a device or channel address to its ReGa ISE-ID.
+	// Returns 0 when the address is not found. Returns [ErrUnsupported] when
+	// [Capabilities.IseIDLookup] is false.
+	GetIseIDByAddress(ctx context.Context, address string) (int, error)
+
+	// GetMetadata reads a metadata blob attached to a device. On Homegear this
+	// maps to the XML-RPC `getMetadata(address, dataID)` call; device names are
+	// stored under dataID "NAME". Other backends return [ErrUnsupported].
+	GetMetadata(ctx context.Context, address, dataID string) (any, error)
+
+	// SetMetadata writes a metadata blob for a device. Only supported on
+	// Homegear; other backends return [ErrUnsupported].
+	SetMetadata(ctx context.Context, address, dataID string, value any) error
+
+	// TriggerFirmwareUpdate triggers a CCU firmware update. Returns
+	// [ErrUnsupported] when [Capabilities.FirmwareUpdate] is false.
+	TriggerFirmwareUpdate(ctx context.Context) (bool, error)
+
+	// DownloadFirmware instructs the CCU to fetch firmware from the given URL
+	// via an HTTP POST to the CCU's maintenance CGI. Only "http://" and
+	// "https://" scheme URLs are accepted; others return [ErrUnsupported].
+	// Backends without a JSON-RPC session layer (CUxD, Homegear, CCU-Jack)
+	// return [ErrUnsupported].
+	DownloadFirmware(ctx context.Context, firmwareURL string) error
+
+	// CreateBackupAndDownload triggers a CCU config backup and
+	// downloads the resulting archive. maxWaitTime and pollInterval
+	// control how long to wait for the archive to become ready.
+	// Returns [ErrUnsupported] when [Capabilities.Backup] is false.
+	CreateBackupAndDownload(ctx context.Context, maxWaitTime, pollInterval float64) ([]byte, error)
+}
+
+// ParamsetOps covers reading and writing paramset descriptors and values
+// (MASTER, VALUES, and LINK paramsets by standard key).
+type ParamsetOps interface {
 	// GetParamsetDescription reads the descriptor for one paramset.
 	GetParamsetDescription(ctx context.Context, address string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
 
@@ -65,6 +147,18 @@ type Operations interface {
 	// (e.g. BIN-RPC) silently ignore the parameter.
 	PutParamset(ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode) error
 
+	// DetermineParameter reads the current value of a named parameter from the
+	// CCU for the given channel address. The CCU auto-selects the most
+	// appropriate paramset (MASTER or VALUES) for the parameter. Returns nil
+	// when the backend does not support this operation (e.g. CUxD, which has no
+	// determineParameter XML-RPC method).
+	DetermineParameter(ctx context.Context, channelAddress, parameter string) (any, error)
+}
+
+// ValueOps covers single-parameter read and write operations on the VALUES
+// paramset, plus the click-event usage counter that routes press events
+// without requiring a real direct link.
+type ValueOps interface {
 	// SetValue sets one parameter's value. The priority is advisory
 	// backends that don't honor priority ignore the hint. rxMode is appended
 	// to the wire call when non-empty; use [hmenum.CommandRxModeUnset] for
@@ -75,19 +169,24 @@ type Operations interface {
 	// the event-coordinator cache). Used for refresh + initial load.
 	GetValue(ctx context.Context, address string, parameter hmenum.Parameter) (any, error)
 
-	// UpdateFirmware requests a firmware update. Returns
-	// [ErrUnsupported] on backends without [Capabilities.FirmwareUpdate].
-	UpdateFirmware(ctx context.Context, address string) error
+	// ReportValueUsage tells the CCU that an event-parameter on the
+	// given channel is consumed by a logic peer. The CCU uses this
+	// counter to decide whether to deliver press events to the
+	// central; a non-zero refCounter means "deliver", zero means
+	// "stop". This is the wire-level primitive
+	// implement central links — the daemon need not register a
+	// real direct link, the metadata flag is sufficient. Maps to the
+	// CCU's `reportValueUsage(channel, valueID, refCounter)` XML-RPC
+	// call. Backends without click-event routing return ErrUnsupported.
+	ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error
+}
 
-	// --- direct links ---------------------------------------------
-	// Direct links ("Direktverknüpfungen") couple a sender channel
-	// to a receiver channel so button presses, motion events, etc.
-	// propagate without involving the CCU logic layer. Each side
-	// maintains its own LINK paramset; the CCU identifies the link
-	// paramset by its peer channel address, not the string "LINK".
-	//
-	// Backends without link support return [ErrUnsupported].
-
+// LinkOps covers direct-link ("Direktverknüpfungen") management: listing,
+// creating, removing, and reading or writing the per-link LINK paramset.
+// Direct links couple a sender channel to a receiver channel so button
+// presses, motion events, etc. propagate without involving the CCU logic
+// layer. Backends without link support return [ErrUnsupported].
+type LinkOps interface {
 	// GetLinks returns every link connected to channelAddress — both
 	// outgoing (this channel as sender) and incoming (as receiver).
 	GetLinks(ctx context.Context, channelAddress string) ([]hmproto.LinkDescription, error)
@@ -116,65 +215,22 @@ type Operations interface {
 	// PutLinkParamset writes LINK paramset values atomically.
 	PutLinkParamset(ctx context.Context, channelAddress, peerAddress string, values map[string]any) error
 
-	// ReportValueUsage tells the CCU that an event-parameter on the
-	// given channel is consumed by a logic peer. The CCU uses this
-	// counter to decide whether to deliver press events to the
-	// central; a non-zero refCounter means "deliver", zero means
-	// "stop". This is the wire-level primitive
-	// implement central links — the daemon need not register a
-	// real direct link, the metadata flag is sufficient. Maps to the
-	// CCU's `reportValueUsage(channel, valueID, refCounter)` XML-RPC
-	// call. Backends without click-event routing return ErrUnsupported.
-	ReportValueUsage(ctx context.Context, channelAddress, valueID string, refCounter int) error
+	// GetLinkInfo returns the name and description of the direct link between
+	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
+	// [Capabilities.LinkOperations] is false.
+	GetLinkInfo(ctx context.Context, iface, senderAddress, receiverAddress string) (map[string]any, error)
 
-	// DeleteDevice unpairs the device from the CCU. Maps to the CCU's
-	// `deleteDevice(address, flags)` XML-RPC call (flags=0 — keep the
-	// bidirectional handshake clean). Backends without a pairing concept (CUxD
-	// virtual devices) return [ErrUnsupported].
-	DeleteDevice(ctx context.Context, address string) error
+	// SetLinkInfo sets the name and description of the direct link between
+	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
+	// [Capabilities.LinkOperations] is false.
+	SetLinkInfo(ctx context.Context, iface, senderAddress, receiverAddress, name, description string) (bool, error)
+}
 
-	// --- JSON-RPC extended operations ---------------------------------
-	// The methods below are only meaningful for backends that have a
-	// JSON-RPC layer (KindCCU). CUxD and Homegear return ErrUnsupported.
-
-	// GetAllPrograms returns all CCU automation programs as raw maps.
-	// Marker-based filtering is the caller's responsibility.
-	GetAllPrograms(ctx context.Context) ([]map[string]any, error)
-
-	// SetProgramState enables or disables the CCU automation program identified
-	// by iseID.
-	SetProgramState(ctx context.Context, iseID string, state bool) error
-
-	// GetSystemUpdateInfo returns the CCU's current firmware update state and
-	// any available new version.
-	GetSystemUpdateInfo(ctx context.Context) (map[string]any, error)
-
-	// GetInboxDevices returns devices in the CCU pairing inbox (devices that
-	// have announced but not yet been accepted). iface is the interface to
-	// query.
-	GetInboxDevices(ctx context.Context, iface string) ([]map[string]any, error)
-
-	// SetSystemVariable sets a CCU system variable. Delegates to the appropriate
-	// wire method based on the value type (bool → setBool, numeric → setFloat;
-	// string requires the ReGa layer and returns ErrUnsupported).
-	SetSystemVariable(ctx context.Context, name string, value any) error
-
-	// CreateSystemVariableBool creates a new boolean sysvar on the CCU.
-	CreateSystemVariableBool(ctx context.Context, name string, initVal bool) (map[string]any, error)
-
-	// CreateSystemVariableEnum creates a new enum sysvar on the CCU.
-	CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error)
-
-	// CreateSystemVariableFloat creates a new float sysvar on the CCU.
-	CreateSystemVariableFloat(ctx context.Context, name string, minValue, maxValue float64) (map[string]any, error)
-
-	// DetermineParameter reads the current value of a named parameter from the
-	// CCU for the given channel address. The CCU auto-selects the most
-	// appropriate paramset (MASTER or VALUES) for the parameter. Returns nil
-	// when the backend does not support this operation (e.g. CUxD, which has no
-	// determineParameter XML-RPC method).
-	DetermineParameter(ctx context.Context, channelAddress, parameter string) (any, error)
-
+// SystemOps covers CCU-level system state: install (pairing) mode, service
+// and alarm messages, rooms, functions, system variables, programs, and the
+// system update check. These are mostly JSON-RPC or ReGa operations; CUxD
+// and Homegear return [ErrUnsupported] for the majority of this group.
+type SystemOps interface {
 	// --- install mode (pairing) -------------------------------------------
 
 	// GetInstallMode returns the remaining seconds the CCU stays in install
@@ -205,6 +261,11 @@ type Operations interface {
 	// [ErrUnsupported] when [Capabilities.AlarmMessages] is false.
 	GetAlarmMessages(ctx context.Context) ([]map[string]any, error)
 
+	// GetSuppressedServiceMessages returns the list of currently suppressed
+	// service message parameter IDs for channelAddress on iface. Returns
+	// [ErrUnsupported] when [Capabilities.SuppressServiceMessage] is false.
+	GetSuppressedServiceMessages(ctx context.Context, iface, channelAddress string) ([]string, error)
+
 	// --- rooms / functions -------------------------------------------------
 
 	// GetAllRooms returns all CCU rooms as a map of roomName →
@@ -217,30 +278,24 @@ type Operations interface {
 	// [Capabilities.Functions] is false.
 	GetAllFunctions(ctx context.Context) (map[string][]string, error)
 
-	// --- device / channel naming ------------------------------------------
-
-	// RenameDevice renames the CCU device identified by its ISE-ID. Returns true
-	// on success. Returns [ErrUnsupported] when [Capabilities.Rename] is false.
-	RenameDevice(ctx context.Context, iseID int, newName string) (bool, error)
-
-	// RenameChannel renames the CCU channel identified by its ISE-ID. Returns
-	// true on success. Returns [ErrUnsupported] when [Capabilities.Rename] is
-	// false.
-	RenameChannel(ctx context.Context, iseID int, newName string) (bool, error)
-
-	// --- inbox ------------------------------------------------------------
-
-	// AcceptDeviceInInbox accepts a device from the CCU pairing inbox. Returns
-	// true when the CCU confirmed acceptance. Returns [ErrUnsupported] when
-	// [Capabilities.InboxDevices] is false.
-	AcceptDeviceInInbox(ctx context.Context, deviceAddress string) (bool, error)
-
 	// --- programs ---------------------------------------------------------
+
+	// GetAllPrograms returns all CCU automation programs as raw maps.
+	// Marker-based filtering is the caller's responsibility.
+	GetAllPrograms(ctx context.Context) ([]map[string]any, error)
+
+	// SetProgramState enables or disables the CCU automation program identified
+	// by iseID.
+	SetProgramState(ctx context.Context, iseID string, state bool) error
 
 	// ExecuteProgram triggers the CCU automation program identified by its
 	// ISE-ID. Returns true on success. Returns [ErrUnsupported] when
 	// [Capabilities.ExecuteProgram] is false.
 	ExecuteProgram(ctx context.Context, iseID string) (bool, error)
+
+	// HasProgramIDs reports whether the CCU program identified by iseID exists.
+	// Returns [ErrUnsupported] when [Capabilities.GetAllPrograms] is false.
+	HasProgramIDs(ctx context.Context, iseID string) (bool, error)
 
 	// --- system variables -------------------------------------------------
 
@@ -252,91 +307,46 @@ type Operations interface {
 	// GetAllSystemVariables returns all CCU system variables as raw maps.
 	GetAllSystemVariables(ctx context.Context) ([]map[string]any, error)
 
-	// --- bulk device data -------------------------------------------------
+	// SetSystemVariable sets a CCU system variable. Delegates to the appropriate
+	// wire method based on the value type (bool → setBool, numeric → setFloat;
+	// string requires the ReGa layer and returns ErrUnsupported).
+	SetSystemVariable(ctx context.Context, name string, value any) error
 
-	// GetAllDeviceData returns all current parameter values for all devices on
-	// the interface in one call (where supported). Used during discovery to
-	// pre-populate the value cache. Returns [ErrUnsupported] for backends
-	// without this capability.
-	GetAllDeviceData(ctx context.Context) (map[string]map[string]any, error)
+	// CreateSystemVariableBool creates a new boolean sysvar on the CCU.
+	CreateSystemVariableBool(ctx context.Context, name string, initVal bool) (map[string]any, error)
 
-	// GetDeviceDetails returns name / ISE-ID / interface details for all known
-	// device addresses. Used during discovery. Returns [ErrUnsupported] for
-	// backends without this capability.
-	GetDeviceDetails(ctx context.Context, addresses []string) ([]map[string]any, error)
+	// CreateSystemVariableEnum creates a new enum sysvar on the CCU.
+	CreateSystemVariableEnum(ctx context.Context, name string, valueList []string) (map[string]any, error)
 
-	// GetDeviceDescription returns the raw device description for a single
-	// address. Returns [ErrUnsupported] for backends without this capability.
-	GetDeviceDescription(ctx context.Context, address string) (map[string]any, error)
-
-	// --- backup -----------------------------------------------------------
-
-	// CreateBackupAndDownload triggers a CCU config backup and
-	// downloads the resulting archive. maxWaitTime and pollInterval
-	// control how long to wait for the archive to become ready.
-	// Returns [ErrUnsupported] when [Capabilities.Backup] is false.
-	CreateBackupAndDownload(ctx context.Context, maxWaitTime, pollInterval float64) ([]byte, error)
-
-	// --- trigger firmware update ------------------------------------------
-
-	// TriggerFirmwareUpdate triggers a CCU firmware update. Returns
-	// [ErrUnsupported] when [Capabilities.FirmwareUpdate] is false.
-	TriggerFirmwareUpdate(ctx context.Context) (bool, error)
-
-	// DownloadFirmware instructs the CCU to fetch firmware from the given URL
-	// via an HTTP POST to the CCU's maintenance CGI. Only "http://" and
-	// "https://" scheme URLs are accepted; others return [ErrUnsupported].
-	// Backends without a JSON-RPC session layer (CUxD, Homegear, CCU-Jack)
-	// return [ErrUnsupported].
-	DownloadFirmware(ctx context.Context, firmwareURL string) error
-
-	// --- system variable deletion -----------------------------------------
+	// CreateSystemVariableFloat creates a new float sysvar on the CCU.
+	CreateSystemVariableFloat(ctx context.Context, name string, minValue, maxValue float64) (map[string]any, error)
 
 	// DeleteSystemVariable deletes the system variable identified by name from
 	// the CCU. Returns true on success. Returns [ErrUnsupported] when
 	// [Capabilities.DeleteSystemVariable] is false.
 	DeleteSystemVariable(ctx context.Context, name string) (bool, error)
 
-	// --- ISE-ID lookup ----------------------------------------------------
+	// --- system info ------------------------------------------------------
 
-	// GetIseIDByAddress resolves a device or channel address to its ReGa ISE-ID.
-	// Returns 0 when the address is not found. Returns [ErrUnsupported] when
-	// [Capabilities.IseIDLookup] is false.
-	GetIseIDByAddress(ctx context.Context, address string) (int, error)
+	// GetSystemUpdateInfo returns the CCU's current firmware update state and
+	// any available new version.
+	GetSystemUpdateInfo(ctx context.Context) (map[string]any, error)
+}
 
-	// --- link info --------------------------------------------------------
-
-	// GetLinkInfo returns the name and description of the direct link between
-	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
-	// [Capabilities.LinkOperations] is false.
-	GetLinkInfo(ctx context.Context, iface, senderAddress, receiverAddress string) (map[string]any, error)
-
-	// SetLinkInfo sets the name and description of the direct link between
-	// senderAddress and receiverAddress on iface. Returns [ErrUnsupported] when
-	// [Capabilities.LinkOperations] is false.
-	SetLinkInfo(ctx context.Context, iface, senderAddress, receiverAddress, name, description string) (bool, error)
-
-	// --- suppressed service messages --------------------------------------
-
-	// GetSuppressedServiceMessages returns the list of currently suppressed
-	// service message parameter IDs for channelAddress on iface. Returns
-	// [ErrUnsupported] when [Capabilities.SuppressServiceMessage] is false.
-	GetSuppressedServiceMessages(ctx context.Context, iface, channelAddress string) ([]string, error)
-
-	// --- programs ---------------------------------------------------------
-
-	// HasProgramIDs reports whether the CCU program identified by iseID exists.
-	// Returns [ErrUnsupported] when [Capabilities.GetAllPrograms] is false.
-	HasProgramIDs(ctx context.Context, iseID string) (bool, error)
-
-	// --- device metadata --------------------------------------------------
-
-	// GetMetadata reads a metadata blob attached to a device. On Homegear this
-	// maps to the XML-RPC `getMetadata(address, dataID)` call; device names are
-	// stored under dataID "NAME". Other backends return [ErrUnsupported].
-	GetMetadata(ctx context.Context, address, dataID string) (any, error)
-
-	// SetMetadata writes a metadata blob for a device. Only supported on
-	// Homegear; other backends return [ErrUnsupported].
-	SetMetadata(ctx context.Context, address, dataID string, value any) error
+// Operations is the common contract every backend implements. It
+// maps cleanly to the calls the InterfaceClient and coordinators
+// make — backends specialise where the wire differs.
+//
+// The interface is composed from capability sub-interfaces so that
+// call sites can depend on the narrowest slice they need while the
+// embedding keeps the full surface identical: every existing
+// [Operations] implementation satisfies all sub-interfaces without
+// any code change.
+type Operations interface {
+	LifecycleOps
+	DeviceOps
+	ParamsetOps
+	ValueOps
+	LinkOps
+	SystemOps
 }
