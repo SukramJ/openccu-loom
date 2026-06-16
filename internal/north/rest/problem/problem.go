@@ -39,9 +39,10 @@ const (
 	TypeServiceUnready Type = "service_unready"
 	// TypeUpstreamUnavailable is the explicit signal that the daemon
 	// is temporarily refusing the call because the south-bound
-	// CCU/Interface is in an unhealthy window — circuit-breaker open
-	// or auth failing. Distinct from generic TypeInternal so the SPA
-	// can render a friendlier "retry in a few seconds" hint.
+	// CCU/Interface is in an unhealthy window — circuit-breaker open,
+	// auth failing, or the CCU unreachable at the TCP/DNS layer.
+	// Distinct from generic TypeInternal so the SPA can render a
+	// friendlier "retry in a few seconds" hint.
 	TypeUpstreamUnavailable Type = "upstream_unavailable"
 )
 
@@ -122,16 +123,17 @@ func WriteFromError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // IsUpstreamUnavailable reports whether err signals a transient
-// south-bound failure — circuit-breaker open or upstream auth
-// failing. Handlers that catch generic backend errors call this so
-// the caller can suggest a retry instead of treating it as a hard
-// fault.
+// south-bound failure — circuit-breaker open, upstream auth
+// failing, or the CCU unreachable at the TCP/DNS layer. Handlers
+// that catch generic backend errors call this so the caller can
+// suggest a retry instead of treating it as a hard fault.
 func IsUpstreamUnavailable(err error) bool {
 	if err == nil {
 		return false
 	}
 	return errors.Is(err, hmerr.ErrCircuitBreakerOpen) ||
-		errors.Is(err, hmerr.ErrAuthFailure)
+		errors.Is(err, hmerr.ErrAuthFailure) ||
+		errors.Is(err, hmerr.ErrNoConnection)
 }
 
 // Sentinels used with [WriteFromError].
