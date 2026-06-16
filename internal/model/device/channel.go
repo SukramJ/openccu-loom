@@ -67,6 +67,27 @@ const ChannelNumberDevice = -1
 // surface under [PutMaster] / [MasterParameter] / [MasterDataPoints]
 // / [MasterLen] so the UI can render configuration pages without
 // colliding with runtime state that happens to share a name.
+//
+// # Locking discipline
+//
+// Channel uses three independent mutexes. They are NEVER held simultaneously,
+// so there is no lock-ordering constraint and no deadlock risk between them:
+//
+//   - mu (sync.RWMutex) — guards all data-point maps (valuePoints,
+//     masterPoints), the writer/refresher pointers, calculatedDPs,
+//     customDP, genericEvents, eventGroups, weekProfile,
+//     masterRefreshHook, centralName, and typeTranslation.
+//   - linkPeersMu (sync.RWMutex) — guards linkPeers only. Kept
+//     separate from mu so topology updates do not stall concurrent
+//     data-point reads on a busy channel.
+//   - linkPeerMu (sync.Mutex) — guards linkPeerHandlers (the
+//     subscriber slice for OnLinkPeerChanged). Released before
+//     invoking any handler in NotifyLinkPeerChanged; never held while
+//     calling back into the channel or acquiring mu / linkPeersMu.
+//
+// Remove() releases mu before acquiring linkPeerMu (step 6), which is
+// the only method that touches two mutexes across its lifetime — and
+// it does so sequentially, not simultaneously.
 type Channel struct {
 	Address string
 	Number  int
@@ -120,12 +141,12 @@ type Channel struct {
 	// climate activity subscriptions without waiting for the next topology
 	// push. Guarded by linkPeersMu (separate from mu to avoid holding the
 	// heavy data-point lock during topology updates).
-	linkPeersMu sync.RWMutex
+	linkPeersMu sync.RWMutex // guards linkPeers only; never held with mu or linkPeerMu
 	linkPeers   []string
 
 	device *Device
 
-	mu           sync.RWMutex
+	mu           sync.RWMutex // guards data-point maps, writer/refresher, and most fields; see locking discipline above
 	valuePoints  map[hmenum.Parameter]ParameterDataPoint
 	masterPoints map[hmenum.Parameter]ParameterDataPoint
 
@@ -150,7 +171,7 @@ type Channel struct {
 	// the canonical schedule entity instead.
 	weekProfile *weekprofile.ProfileDataPoint
 
-	linkPeerMu       sync.Mutex
+	linkPeerMu       sync.Mutex // guards linkPeerHandlers only; never held with mu or linkPeersMu
 	linkPeerHandlers []func()
 
 	// masterRefreshHook is called after a successful MASTER paramset write

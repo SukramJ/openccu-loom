@@ -12,7 +12,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -62,7 +61,7 @@ type Garage struct {
 	// dataVersion tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). Bumped on every successful MatterInvoke so
 	// DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion cluster.DataVersionTracker
+	dataVersion hmtypes.DataVersionTracker
 
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on DOOR_COMMAND

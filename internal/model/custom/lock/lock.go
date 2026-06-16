@@ -24,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -111,7 +110,7 @@ type Lock struct {
 	// §10.6.5). Bumped on every CCU-confirmed wire-DP change so
 	// DataVersionFilter evaluation correctly detects cluster changes
 	// from physical operation at the device.
-	dataVersion cluster.DataVersionTracker
+	dataVersion hmtypes.DataVersionTracker
 
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on the primary write
