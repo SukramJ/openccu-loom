@@ -55,5 +55,5 @@ jobs:
       # datasource diff above already proves the wire-data layer
       # matches; the aiohomematic snapshot is for local
       # cross-stack regression checks (see
-      # `parity_request.md` §4.8.5 + CLAUDE.md
+      # docs/parity/model_snapshot_schema.md + CLAUDE.md
       # "Cross-stack model-snapshot verification").
