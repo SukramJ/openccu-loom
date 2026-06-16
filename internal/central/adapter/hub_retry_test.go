@@ -68,7 +68,9 @@ func TestStartHubRetryWiresOnRecovery(t *testing.T) {
 
 	wired := make(chan struct{}, 1)
 	cc := config.CentralConfig{Name: "retry-central"}
-	startHubRetry(context.Background(), cc, c, nil, hubFn,
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	wg := startHubRetry(ctx, cc, c, nil, hubFn,
 		[]time.Duration{time.Millisecond},
 		func(_ *rega.Runner, _ func()) { wired <- struct{}{} })
 
@@ -80,6 +82,9 @@ func TestStartHubRetryWiresOnRecovery(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("onWired was never invoked — background hub recovery did not complete")
 	}
+	// Cancel and drain so no goroutine outlives the test.
+	cancel()
+	wg.Wait()
 }
 
 // TestRetryHubWiringStopsOnContextCancel verifies the retry loop is bounded by
@@ -114,5 +119,41 @@ func TestRetryHubWiringStopsOnContextCancel(t *testing.T) {
 	}
 	if calls.Load() == 0 {
 		t.Fatal("expected at least one attempt before cancel")
+	}
+}
+
+// TestRetryHubWiringCancelDuringLongBackoffExitsPromptly verifies that a
+// context-cancel during a long backoff window returns quickly rather than
+// blocking for the full backoff duration. This locks the time.NewTimer
+// (not time.After) approach: time.After creates a timer goroutine that
+// cannot be cancelled, so ctx-cancel would have to wait out the full
+// backoff before the goroutine exits.
+func TestRetryHubWiringCancelDuringLongBackoffExitsPromptly(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// Backoff is intentionally long — context cancel must short-circuit it.
+	longBackoff := []time.Duration{10 * time.Second}
+	attempt := func(_ context.Context) error {
+		return errors.New("always fails")
+	}
+
+	done := make(chan bool, 1)
+	go func() {
+		done <- retryHubWiring(ctx, longBackoff, attempt)
+	}()
+
+	// One attempt runs synchronously; we are now mid-backoff (10 s timer).
+	// Cancel immediately — the loop must unblock within a short window,
+	// not after the 10 s timer fires.
+	cancel()
+
+	select {
+	case ok := <-done:
+		if ok {
+			t.Fatal("retryHubWiring must report failure on context cancel")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("retryHubWiring blocked for > 500 ms after cancel — timer not stopped")
 	}
 }

@@ -472,7 +472,11 @@ func makeMQTTSubscriberBuilder(
 			// NoOp client has no Subscriber; nothing to wire.
 			return func() {}, nil
 		}
-		birthSync := mqtt.NewBirthSync(sub, bridge, logger)
+		// Bound RepublishDiscovery to the daemon-lifetime ctx (not the
+		// per-Start/Swap ctx) so a broker-restart-triggered republish is
+		// cancelled on shutdown but survives a broker swap — same rationale
+		// as the command subscriber below.
+		birthSync := mqtt.NewBirthSync(sub, bridge, logger).WithLifecycleContext(lifecycleCtx)
 		if err := birthSync.Start(ctx); err != nil {
 			return nil, fmt.Errorf("birth_sync.Start: %w", err)
 		}

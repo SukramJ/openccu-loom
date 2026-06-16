@@ -20,8 +20,17 @@ import (
 // safeFire invokes cb(from, to) in a goroutine that recovers from panics.
 // A panicking state-change listener must not silently kill the dispatcher
 // goroutine, so we recover, log the panic, and continue normal operation.
-func safeFire(cb func(from, to hmenum.CircuitState), from, to hmenum.CircuitState) {
+// wg, when non-nil, is incremented before the goroutine starts and decremented
+// on exit so callers can drain in-flight callbacks (e.g. before Reset races a
+// removed handler on shutdown).
+func safeFire(wg *sync.WaitGroup, cb func(from, to hmenum.CircuitState), from, to hmenum.CircuitState) {
+	if wg != nil {
+		wg.Add(1)
+	}
 	go func() {
+		if wg != nil {
+			defer wg.Done()
+		}
 		defer func() {
 			if r := recover(); r != nil {
 				slog.Default().Error("circuit.state_listener_panic",
@@ -101,10 +110,17 @@ type CircuitBreaker struct {
 	halfOpenInFlight atomic.Int32 // atomic: number of probes currently executing in HALF_OPEN
 
 	// listeners is the slice of state-change callbacks. Setters are
-	// additive (siehe AddOnStateChange). [OnStateChange] retains its
+	// additive (see AddOnStateChange). [OnStateChange] retains its
 	// historic single-listener semantics and replaces the *primary*
 	// listener at index 0; AddOnStateChange appends.
 	listeners []func(from, to hmenum.CircuitState)
+
+	// callbackWG tracks in-flight state-change callback goroutines
+	// launched by safeFire. WaitCallbacks blocks until all goroutines
+	// started by the most recent state transition have returned, which
+	// prevents a Reset() call from racing a stale callback goroutine
+	// that refers to a handler registered before the reset.
+	callbackWG sync.WaitGroup
 }
 
 // NewCircuit returns a breaker in CLOSED state. cfg fields that are
@@ -322,6 +338,14 @@ func (c *CircuitBreaker) RecordSuccess() {
 	c.record(nil)
 }
 
+// WaitCallbacks blocks until all state-change callback goroutines launched
+// by the most recent OPEN→HALF_OPEN transition have returned. Intended for
+// shutdown paths and tests that need to confirm no goroutines remain in
+// flight after a state flip.
+func (c *CircuitBreaker) WaitCallbacks() {
+	c.callbackWG.Wait()
+}
+
 // LastFailureTime returns the wall-clock time of the most recent failure that
 // tripped or kept the breaker OPEN, or the zero value when no failure has
 // been recorded yet.
@@ -370,7 +394,7 @@ func (c *CircuitBreaker) refreshLocked() hmenum.CircuitState {
 		// dispatcher goroutine silently.
 		listeners := c.snapshotListenersLocked()
 		for _, cb := range listeners {
-			safeFire(cb, from, c.state)
+			safeFire(&c.callbackWG, cb, from, c.state)
 		}
 	}
 	return c.state

@@ -23,9 +23,10 @@ const HABirthTopic = "homeassistant/status"
 // bridge already keeps the per-topic payload cache, so this layer
 // stays a thin event-router.
 type BirthSync struct {
-	sub    Subscriber
-	bridge *Bridge
-	logger *slog.Logger
+	sub          Subscriber
+	bridge       *Bridge
+	logger       *slog.Logger
+	lifecycleCtx context.Context // bounds RepublishDiscovery to daemon lifetime
 }
 
 // NewBirthSync constructs the listener. `bridge` and `sub` must
@@ -34,7 +35,18 @@ func NewBirthSync(sub Subscriber, bridge *Bridge, logger *slog.Logger) *BirthSyn
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &BirthSync{sub: sub, bridge: bridge, logger: logger}
+	return &BirthSync{sub: sub, bridge: bridge, logger: logger, lifecycleCtx: context.Background()}
+}
+
+// WithLifecycleContext sets the daemon-lifetime context used by the
+// republish handler so that a shutdown mid-republish is cancelled promptly
+// rather than running until broker timeout. A nil ctx is ignored.
+// Returns the receiver for call-site chaining.
+func (b *BirthSync) WithLifecycleContext(ctx context.Context) *BirthSync {
+	if ctx != nil {
+		b.lifecycleCtx = ctx
+	}
+	return b
 }
 
 // Start attaches the subscription. Returns an error when the
@@ -56,7 +68,10 @@ func (b *BirthSync) handle(topic string, payload []byte, _ bool) {
 		// HA emits "offline" pre-restart; nothing to do.
 		return
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	// Derive a per-republish cancellable context from the daemon-lifetime
+	// context so a shutdown mid-republish is cancelled promptly instead of
+	// running until broker timeout on a detached background context.
+	ctx, cancel := context.WithCancel(b.lifecycleCtx)
 	defer cancel()
 	if err := b.bridge.RepublishDiscovery(ctx); err != nil {
 		b.logger.Warn("mqtt.birth_sync.republish",

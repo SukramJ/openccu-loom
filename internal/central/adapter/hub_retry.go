@@ -7,6 +7,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -47,6 +48,12 @@ func wireLoadAndRefresh(unit *central.Unit, pipeline *DevicePipeline, ifaces []c
 // boot-time WireHub failed (e.g. the CCU's ReGa was not yet reachable during
 // the daemon's startup window) — without it the central's hub surface and
 // refresh safety net would stay dead until a manual restart.
+//
+// The returned *sync.WaitGroup counts the single background goroutine. Callers
+// that need to drain on shutdown (e.g. tests with goleak) should Wait() on it
+// after cancelling ctx. Production callers that only cancel ctx can ignore the
+// return value — ctx-cancel already prompts the goroutine to exit promptly
+// (the timer inside retryHubWiring aborts on ctx.Done()).
 func startHubRetry(
 	ctx context.Context,
 	cc config.CentralConfig,
@@ -55,8 +62,11 @@ func startHubRetry(
 	hubFn hubWireFn,
 	backoff []time.Duration,
 	onWired func(runner *rega.Runner, closer func()),
-) {
-	go func() {
+) *sync.WaitGroup {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	SafeGo("hub_retry."+cc.Name, func() {
+		defer wg.Done()
 		ok := retryHubWiring(ctx, backoff, func(rctx context.Context) error {
 			runner, _, closer, err := hubFn(rctx, cc, unit, logger)
 			if err != nil {
@@ -68,7 +78,8 @@ func startHubRetry(
 		if ok && logger != nil {
 			logger.Info("wire.hub.recovered", slog.String("central", cc.Name))
 		}
-	}()
+	})
+	return &wg
 }
 
 // defaultHubRetryBackoff is the wait schedule between WireHub retries after a
@@ -94,6 +105,10 @@ var defaultHubRetryBackoff = []time.Duration{
 // there would otherwise leave a central's hub + refresh safety net dead until
 // a manual restart. The loop is pure (no goroutine, no I/O of its own) so it
 // is unit-testable with a tiny backoff and a fake attempt.
+//
+// time.NewTimer (not time.After) is used so that ctx-cancel during a long
+// backoff window stops the timer goroutine immediately instead of letting it
+// run until the full backoff duration elapses.
 func retryHubWiring(ctx context.Context, backoff []time.Duration, attempt func(context.Context) error) bool {
 	for i := 0; ; i++ {
 		if err := attempt(ctx); err == nil {
@@ -103,10 +118,12 @@ func retryHubWiring(ctx context.Context, backoff []time.Duration, attempt func(c
 		if i < len(backoff) {
 			d = backoff[i]
 		}
+		t := time.NewTimer(d)
 		select {
 		case <-ctx.Done():
+			t.Stop()
 			return false
-		case <-time.After(d):
+		case <-t.C:
 		}
 	}
 }

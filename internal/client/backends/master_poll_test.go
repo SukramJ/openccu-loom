@@ -179,3 +179,31 @@ func TestMasterPollerDefaultIntervalUsedWhenZero(t *testing.T) {
 	// Immediate close cancels the long timer — no hang.
 	p.Close()
 }
+
+// TestMasterPollerCloseWaitsForInFlightGoroutine locks down that Close() blocks
+// until the in-flight run() goroutine exits. Before the WaitGroup was added,
+// Close() returned immediately after cancelling contexts, allowing goroutines to
+// linger. With the WaitGroup, Close() must not return until the goroutine has
+// acknowledged the cancel and exited — verifiable under goleak.
+func TestMasterPollerCloseWaitsForInFlightGoroutine(t *testing.T) {
+	t.Parallel()
+	// Use a short interval so the goroutine starts running quickly.
+	g := &fakeGetter{result: map[string]any{"X": 1}}
+	p := NewMasterPoller(g)
+	p.Interval = 5 * time.Millisecond
+
+	started := make(chan struct{})
+	p.OnRefresh = func(_ string, _ hmenum.ParamsetKey, _ map[string]any) {
+		close(started)
+	}
+
+	p.SchedulePoll("ADDR:0", hmenum.ParamsetKeyMaster)
+	// Wait until the goroutine has at least fired once (timer elapsed, getter
+	// called) then close — WaitGroup ensures no goroutine outlives Close.
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("OnRefresh never called")
+	}
+	p.Close() // must not return until the run goroutine exits
+}
