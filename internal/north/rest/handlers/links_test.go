@@ -285,3 +285,31 @@ func TestLinkableChannels_ServiceError_Returns500(t *testing.T) {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// --- ErrNoConnection → 502 upstream mapping ----------------------------------
+
+func TestListLinks_NoConnection_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{listErr: hmerr.ErrNoConnection}
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	ListLinks(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("ErrNoConnection must produce 502, got %d", w.Code)
+	}
+}
+
+func TestLinkableChannels_NoConnection_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubLinksService{linkableErr: hmerr.ErrNoConnection}
+	req := httptest.NewRequest(http.MethodGet, "/?role=sender&interface=HmIP-RF", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "1"}))
+	w := httptest.NewRecorder()
+	LinkableChannels(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("ErrNoConnection must produce 502, got %d", w.Code)
+	}
+}

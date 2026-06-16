@@ -95,9 +95,7 @@ func MatterExposable(provider MatterCandidateProvider, store MatterExposureStore
 		candidates := provider.MatterCandidates(req.Context())
 		exposures, err := store.ListExposures(req.Context(), "")
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to list exposures", err.Error()))
+			problem.WriteFromError(w, req, err)
 			return
 		}
 		// Index existing rows by tuple for O(1) merge.
@@ -204,9 +202,7 @@ func MatterExposeUpdate(store MatterExposureStore, publisher MatterEventPublishe
 			Actor:        actor,
 		}
 		if err := store.UpsertExposure(req.Context(), rec); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to update exposure", err.Error()))
+			problem.WriteFromError(w, req, err)
 			return
 		}
 		reassembleAfterExposureChange(req.Context(), reassembler)
@@ -288,9 +284,7 @@ func MatterExposeBulk(store MatterExposureStore, publisher MatterEventPublisher,
 				Actor:        actor,
 			}
 			if err := store.UpsertExposure(req.Context(), rec); err != nil {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, req,
-						fmt.Sprintf("Failed at item %d", applied), err.Error()))
+				problem.WriteFromError(w, req, err)
 				return
 			}
 			applied++

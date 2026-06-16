@@ -62,6 +62,14 @@ func TestParityMatterJS_WireClusterRevisions(t *testing.T) {
 	}{
 		{matterClusterAdminCommissioning, "AdministratorCommissioning", admCommClusterRevision},
 		{matterClusterGenericSwitch, "Switch", switchClusterRevision},
+		// Groups (0x0004) and ScenesManagement (0x0062) are mandatory stubs
+		// on every OnOff device type. Their revisions are pinned here so a
+		// matter.js HEAD bump is caught automatically on the next schema
+		// regeneration run.
+		// matter.js packages/model/src/standard/elements/groups.element.ts
+		// matter.js packages/model/src/standard/elements/scenes-management.element.ts
+		{groupsClusterID, "Groups", groupsClusterRevision},
+		{scenesManagementClusterID, "ScenesManagement", scenesManagementClusterRevision},
 	}
 	for _, c := range cases {
 		js, ok := clusterByID(schema, c.id)

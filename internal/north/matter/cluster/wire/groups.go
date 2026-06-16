@@ -71,9 +71,16 @@ func (Groups) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.Comm
 	return fmt.Errorf("%w: attrID 0x%04X", errGroupsReadOnly, attrID)
 }
 
-// MatterInvoke rejects every command.
+// MatterInvoke rejects every command. The bridge dispatcher maps errors
+// whose message contains "no commands" to IM StatusCode UnsupportedCommand
+// (0x81). Returning errGroupsReadOnly alone would fall through to StatusFailure
+// (0x01); wrapping with the "no commands" sentinel ensures the controller
+// receives the correct Matter status code.
+// matter.js packages/node/src/behaviors/groups/GroupsServer.ts + chip
+// src/app/clusters/groups-server/groups-server.cpp both require a valid
+// status-code response for unsupported commands on a stub cluster.
 func (Groups) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	return nil, fmt.Errorf("%w: cmdID 0x%02X", errGroupsReadOnly, cmdID)
+	return nil, fmt.Errorf("%w: no commands supported (HM has no group management), cmdID 0x%02X", errGroupsReadOnly, cmdID)
 }
 
 // MatterReportable returns nil — no subscribe-able attributes.

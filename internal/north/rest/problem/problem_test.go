@@ -342,6 +342,34 @@ func TestSentinelErrValidationAliasesHmerr(t *testing.T) {
 	}
 }
 
+// --- ErrNoConnection upstream mapping ----------------------------------------
+
+func TestIsUpstreamUnavailableNoConnection(t *testing.T) {
+	if !problem.IsUpstreamUnavailable(hmerr.ErrNoConnection) {
+		t.Fatal("ErrNoConnection must be upstream unavailable")
+	}
+}
+
+func TestIsUpstreamUnavailableWrappedNoConnection(t *testing.T) {
+	err := fmt.Errorf("transport: %w", hmerr.ErrNoConnection)
+	if !problem.IsUpstreamUnavailable(err) {
+		t.Fatal("wrapped ErrNoConnection must be upstream unavailable")
+	}
+}
+
+func TestWriteFromErrorNoConnectionReturns502(t *testing.T) {
+	err := fmt.Errorf("dial: %w", hmerr.ErrNoConnection)
+	rr := httptest.NewRecorder()
+	problem.WriteFromError(rr, fakeRequest("/c"), err)
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("ErrNoConnection must map to 502, got %d", rr.Code)
+	}
+	d := decode(t, rr)
+	if d.Code != string(problem.TypeUpstreamUnavailable) {
+		t.Fatalf("code=%q", d.Code)
+	}
+}
+
 // --- FieldError omitempty ----------------------------------------------------
 
 func TestFieldErrorMinMaxOmitEmpty(t *testing.T) {

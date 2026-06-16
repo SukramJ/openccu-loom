@@ -5,6 +5,7 @@ package wire_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
@@ -85,6 +86,47 @@ func TestGroups_MatterInvoke_ReturnsError(t *testing.T) {
 	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Error("MatterInvoke: want non-nil error")
+	}
+}
+
+// TestGroupsInvokeContainsNoCommands verifies that MatterInvoke returns an
+// error whose message contains "no commands" so the bridge dispatcher maps
+// it to IM StatusCode UnsupportedCommand (0x81) rather than StatusFailure
+// (0x01).
+//
+// The bridge dispatcher in internal/north/matter/endpoint/dispatcher.go
+// maps errors via string-heuristic: containsAny(msg, "unknown command",
+// "no commands") → UnsupportedCommand. A bare errGroupsReadOnly without
+// "no commands" falls through to StatusFailure — an interop defect with
+// Apple Home and Google Home, which expect 0x81 for stub clusters.
+//
+// matter.js packages/node/src/behaviors/groups/GroupsServer.ts + chip
+// src/app/clusters/groups-server/groups-server.cpp both require valid
+// status-code responses for unsupported commands.
+func TestGroupsInvokeContainsNoCommands(t *testing.T) {
+	t.Parallel()
+	g := wire.Groups{}
+	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("MatterInvoke returned nil error, want rejection")
+	}
+	if !strings.Contains(err.Error(), "no commands") {
+		t.Errorf("MatterInvoke error = %q; want message containing 'no commands' so dispatcher encodes UnsupportedCommand (0x81)", err.Error())
+	}
+}
+
+// TestGroupsInvokeRejectsAllCommandIDs verifies that every arbitrary cmdID
+// returns a non-nil error — AddGroup (0x00), ViewGroup (0x01),
+// GetGroupMembership (0x02), RemoveGroup (0x03), RemoveAllGroups (0x04),
+// AddGroupIfIdentifying (0x05).
+func TestGroupsInvokeRejectsAllCommandIDs(t *testing.T) {
+	t.Parallel()
+	g := wire.Groups{}
+	for _, cmdID := range []uint32{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x40, 0xFF} {
+		_, err := g.MatterInvoke(context.Background(), cmdID, nil, hmenum.CommandPriorityHigh)
+		if err == nil {
+			t.Errorf("cmdID 0x%02X: MatterInvoke returned nil, want error", cmdID)
+		}
 	}
 }
 
