@@ -121,6 +121,54 @@ func TestListSysvars_NilHub_ReturnsEmptyArray(t *testing.T) {
 	}
 }
 
+func TestGetProgram_HappyPath(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	GetProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body ProgramSummary
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.ID != "P1" || body.Name != "Morning Routine" {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+	if body.Central != "test-ccu" {
+		t.Fatalf("central=%q want test-ccu", body.Central)
+	}
+}
+
+func TestGetProgram_NotFound_Returns404(t *testing.T) {
+	t.Parallel()
+	idx, _ := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/NonExistent", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "NonExistent"}))
+	w := httptest.NewRecorder()
+	GetProgram(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestGetProgram_NilHub_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/programs/P1", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": "P1"}))
+	w := httptest.NewRecorder()
+	GetProgram(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
 func TestGetSysvar_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	idx, _ := newTestHubWithProgram(t)

@@ -250,25 +250,7 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 				continue
 			}
 			for _, p := range nh.Hub.Programs() {
-				active, observed := p.Active()
-				e := ProgramSummary{
-					Central:     nh.Central,
-					ID:          p.ID,
-					Name:        p.Name,
-					Description: p.Description,
-				}
-				if observed {
-					v := active
-					e.Active = &v
-				}
-				// H-032: expose last_executed when a run has been observed.
-				if ts, hasTS := p.LastExecution(); hasTS {
-					e.LastExecuted = rfc3339OrEmpty(ts)
-				}
-				// M-4: propagate IsInternal so north-bound can filter Tmp_*-programs.
-				e.IsInternal = p.IsInternal
-				e.EnabledDefault = p.EnabledByDefault()
-				out = append(out, e)
+				out = append(out, toProgramSummary(p, nh.Central))
 			}
 		}
 		if out == nil {
@@ -276,6 +258,63 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 		}
 		out = applyHubPagination(w, r, out)
 		JSON(w, http.StatusOK, out)
+	}
+}
+
+// toProgramSummary maps a hub program onto its REST DTO, tagging it with the
+// owning central. Shared by the list endpoint and the single-program GET so
+// both render identical shapes.
+func toProgramSummary(p *hub.Program, central string) ProgramSummary {
+	active, observed := p.Active()
+	e := ProgramSummary{
+		Central:     central,
+		ID:          p.ID,
+		Name:        p.Name,
+		Description: p.Description,
+	}
+	if observed {
+		v := active
+		e.Active = &v
+	}
+	// H-032: expose last_executed when a run has been observed.
+	if ts, hasTS := p.LastExecution(); hasTS {
+		e.LastExecuted = rfc3339OrEmpty(ts)
+	}
+	// M-4: propagate IsInternal so north-bound can filter Tmp_*-programs.
+	e.IsInternal = p.IsInternal
+	e.EnabledDefault = p.EnabledByDefault()
+	return e
+}
+
+// GetProgram returns a single program by id. When `?central=` is supplied the
+// request is routed to that central. When absent, the id is looked up across
+// all centrals; if exactly one central owns it that central is used. Ambiguity
+// (same id on multiple centrals) requires the caller to supply `?central=`.
+// Mirrors the GET /sysvars/{name} shape.
+func GetProgram(idx HubIndex) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if idx == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+			return
+		}
+		id := chi.URLParam(r, "id")
+		h := resolveHubForRead(idx, r.URL.Query().Get("central"), func(hh *hub.Hub) bool {
+			_, ok := hh.Program(id)
+			return ok
+		})
+		if h == nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+			return
+		}
+		p, ok := h.Program(id)
+		if !ok {
+			problem.Write(w, http.StatusNotFound,
+				problem.New(problem.TypeNotFound, r, "Program not found", id))
+			return
+		}
+		JSON(w, http.StatusOK, toProgramSummary(p, h.CentralName))
 	}
 }
 

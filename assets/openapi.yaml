@@ -1737,6 +1737,19 @@ paths:
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getProgram
+      summary: Fetch a single program by id
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgramSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     patch:
       operationId: setProgramEnabled
       summary: Toggle program active flag
