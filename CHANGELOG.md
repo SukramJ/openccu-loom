@@ -6,6 +6,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /programs/{id}` single-program fetch.** Returns one
+  `ProgramSummary` by id (`404` when unknown), mirroring the existing
+  `GET /sysvars/{name}` shape. Like that endpoint it resolves the central
+  by id across CCUs and only requires `?central=` to disambiguate an id
+  shared by multiple centrals. Clients that previously fetched the full
+  `GET /programs` list and filtered locally can drop that workaround.
+
 ## [0.4.0]
 
 ### Changed

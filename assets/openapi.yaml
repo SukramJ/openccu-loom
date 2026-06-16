@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.10.0
+  version: 1.11.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1737,6 +1737,19 @@ paths:
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
+    get:
+      operationId: getProgram
+      summary: Fetch a single program by id
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgramSummary" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     patch:
       operationId: setProgramEnabled
       summary: Toggle program active flag
