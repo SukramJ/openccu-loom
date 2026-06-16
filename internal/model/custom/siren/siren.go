@@ -20,7 +20,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -48,7 +47,7 @@ type Siren struct {
 	// dataVersion tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). Bumped on every successful MatterWrite / MatterInvoke
 	// so DataVersionFilter evaluation correctly detects cluster changes.
-	dataVersion cluster.DataVersionTracker
+	dataVersion hmtypes.DataVersionTracker
 
 	key    hmtypes.DataPointKey
 	writer Writer
