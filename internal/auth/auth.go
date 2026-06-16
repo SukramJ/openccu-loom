@@ -61,13 +61,13 @@ type TokenStore interface {
 	AuthenticateToken(ctx context.Context, token string) (Identity, error)
 }
 
-// tokenEntry is the map value inside [MemoryTokenStore]. Storing the
-// raw token alongside the identity lets List() produce a fingerprint
-// without exposing the full secret, while AuthenticateToken looks up
-// by hash in O(1) and avoids iterating the whole table.
+// tokenEntry is the map value inside [MemoryTokenStore]. Only the
+// short display fingerprint (not the raw token) is retained after
+// Put so a heap or memory dump cannot reveal active bearer secrets.
+// AuthenticateToken looks up by the map key (tokenID hash) in O(1).
 type tokenEntry struct {
-	rawToken string
-	identity Identity
+	fingerprint string // first-8-hex of sha256, for display only
+	identity    Identity
 }
 
 // MemoryTokenStore is a pragmatic in-memory token store used by
@@ -80,10 +80,12 @@ type MemoryTokenStore struct {
 }
 
 // NewMemoryTokenStore constructs a store pre-populated with tokens.
+// The raw token values are hashed immediately; only the display
+// fingerprint is retained in memory.
 func NewMemoryTokenStore(tokens map[string]Identity) *MemoryTokenStore {
 	cp := make(map[string]tokenEntry, len(tokens))
 	for raw, id := range tokens {
-		cp[tokenID(raw)] = tokenEntry{rawToken: raw, identity: id}
+		cp[tokenID(raw)] = tokenEntry{fingerprint: tokenFingerprint(raw), identity: id}
 	}
 	return &MemoryTokenStore{tokens: cp}
 }
@@ -95,19 +97,14 @@ func (s *MemoryTokenStore) AuthenticateToken(_ context.Context, token string) (I
 	if token == "" {
 		return Identity{}, ErrUnauthenticated
 	}
-	// Both the stored key and the incoming candidate are SHA-256 hashes
-	// of the raw token, so the comparison is safe and O(1).
+	// The map is keyed on tokenID(token) — a truncated SHA-256 hash.
+	// The raw token is never stored, so a map hit alone authorises
+	// the request (no stored secret to compare against).
 	id := tokenID(token)
 	s.mu.RLock()
 	entry, ok := s.tokens[id]
 	s.mu.RUnlock()
 	if !ok {
-		return Identity{}, ErrUnauthenticated
-	}
-	// Constant-time comparison of the two public hashes as a
-	// belt-and-suspenders guard against timing differences between
-	// the map-lookup hit and miss paths.
-	if subtle.ConstantTimeCompare([]byte(id), []byte(tokenID(entry.rawToken))) != 1 {
 		return Identity{}, ErrUnauthenticated
 	}
 	out := entry.identity
@@ -139,6 +136,14 @@ func tokenID(token string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
+// tokenFingerprint derives a short human-readable display value from
+// a raw token. It uses the first 8 hex chars of the SHA-256 (matching
+// [tokenID]) so the fingerprint never leaks token content and is
+// stable across daemon restarts.
+func tokenFingerprint(token string) string {
+	return tokenID(token)
+}
+
 // List returns every registered token with the actual secret elided.
 // Sorted by subject for stable rendering.
 func (s *MemoryTokenStore) List() []TokenSummary {
@@ -146,11 +151,7 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 	defer s.mu.RUnlock()
 	out := make([]TokenSummary, 0, len(s.tokens))
 	for id, entry := range s.tokens {
-		fp := entry.rawToken
-		if len(fp) > 6 {
-			fp = "…" + fp[len(fp)-6:]
-		}
-		out = append(out, TokenSummary{ID: id, Fingerprint: fp, Subject: entry.identity.Subject, Role: entry.identity.Role})
+		out = append(out, TokenSummary{ID: id, Fingerprint: entry.fingerprint, Subject: entry.identity.Subject, Role: entry.identity.Role})
 	}
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0 && out[j-1].Subject > out[j].Subject; j-- {
@@ -165,6 +166,9 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 // [TokenSummary.ID] so the caller can issue subsequent
 // management requests (e.g. delete) without learning the secret
 // back from the daemon.
+//
+// The raw token is hashed immediately; only the short display
+// fingerprint is retained so a heap dump cannot reveal active secrets.
 func (s *MemoryTokenStore) Put(token string, id Identity) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,7 +176,7 @@ func (s *MemoryTokenStore) Put(token string, id Identity) string {
 		s.tokens = make(map[string]tokenEntry)
 	}
 	tid := tokenID(token)
-	s.tokens[tid] = tokenEntry{rawToken: token, identity: id}
+	s.tokens[tid] = tokenEntry{fingerprint: tokenFingerprint(token), identity: id}
 	return tid
 }
 
@@ -214,6 +218,14 @@ func (s *MemoryUserStore) Put(username, password string, role Role) {
 // across the in-memory and persistent stores.
 const bcryptCost = 12
 
+// dummyBcryptHash is a pre-generated bcrypt hash used on the
+// unknown-username path in [MemoryUserStore.AuthenticateBasic] to
+// equalise response time between "no such user" and "wrong password".
+// Without a dummy compare, response time leaks user existence.
+// The hash was generated at cost 12 and is never used as a real
+// credential — the call always returns ErrUnauthenticated.
+var dummyBcryptHash = []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eACSU6dKRLyFG")
+
 // looksLikeBcryptHash reports whether s is a bcrypt hash string — a 60-byte
 // value with a $2a$/$2b$/$2y$ prefix. Used to decide whether a stored record
 // is already hashed (verify with bcrypt) or a legacy plaintext value (verify
@@ -243,9 +255,17 @@ func HashPassword(password string) (string, error) {
 // bcrypt hash are verified with bcrypt.CompareHashAndPassword; legacy plaintext
 // records (test fixtures, or a value seeded before [HashPassword] wiring) fall
 // back to a constant-time equality check. Both comparison paths are timing-safe.
+//
+// When the username is not registered a dummy bcrypt compare is performed
+// against [dummyBcryptHash] so the response time is indistinguishable from
+// the wrong-password path, preventing user-enumeration via timing analysis.
 func (s *MemoryUserStore) AuthenticateBasic(_ context.Context, username, password string) (Identity, error) {
 	rec, ok := s.users[strings.ToLower(username)]
 	if !ok {
+		// Consume roughly the same wall-clock as a real bcrypt verify so
+		// an attacker cannot distinguish "no such user" from "wrong password"
+		// by measuring response latency.
+		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
 		return Identity{}, ErrUnauthenticated
 	}
 	if looksLikeBcryptHash(rec.password) {

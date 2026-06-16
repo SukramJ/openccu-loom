@@ -181,6 +181,16 @@ func (s *ValuesCacheStore) Close() error {
 	return s.db.Close()
 }
 
+// DB returns the underlying *sql.DB so callers can wire database-level
+// operations (e.g. WAL checkpointing) without importing a separate handle.
+// Returns nil when the store is nil or was constructed without a database.
+func (s *ValuesCacheStore) DB() *sql.DB {
+	if s == nil {
+		return nil
+	}
+	return s.db
+}
+
 // LoadChannel returns every cached value for the given channel. The
 // caller is responsible for applying each entry to its corresponding
 // data point (the channel may have evolved since the row was

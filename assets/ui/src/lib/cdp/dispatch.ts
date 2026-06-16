@@ -29,42 +29,57 @@ export type CdpWidget = Component<{
   title?: string;
 }>;
 
+/**
+ * Single-site cast helper for the CDP widget registry. Svelte's
+ * Component<P> is invariant over its prop shape, so a tile that
+ * accepts CdpWidgetProps (a superset) is not directly assignable to
+ * Component<CdpWidgetProps> without a cast. Concentrating the cast
+ * here means a future change to the CdpWidget prop contract produces
+ * one error in one place rather than silently passing across every
+ * registry entry.
+ */
+function asCdpWidget<P extends { address: string; cdp: import("$lib/api/types").CustomDPSummary }>(
+  c: Component<P>,
+): CdpWidget {
+  return c as unknown as CdpWidget;
+}
+
 const REGISTRY: Record<string, CdpWidget> = {
   // light family — one widget handles every variant; capability flags
   // decide which controls render. Covers light / light_color /
   // light_color_temp / light_fixed_color / light_rgbw / light_dali.
-  light: LightTile as unknown as CdpWidget,
-  light_color: LightTile as unknown as CdpWidget,
-  light_color_temp: LightTile as unknown as CdpWidget,
-  light_fixed_color: LightTile as unknown as CdpWidget,
-  light_rgbw: LightTile as unknown as CdpWidget,
-  light_dali: LightTile as unknown as CdpWidget,
-  light_effect: LightTile as unknown as CdpWidget,
-  light_sound_led: LightTile as unknown as CdpWidget,
+  light: asCdpWidget(LightTile),
+  light_color: asCdpWidget(LightTile),
+  light_color_temp: asCdpWidget(LightTile),
+  light_fixed_color: asCdpWidget(LightTile),
+  light_rgbw: asCdpWidget(LightTile),
+  light_dali: asCdpWidget(LightTile),
+  light_effect: asCdpWidget(LightTile),
+  light_sound_led: asCdpWidget(LightTile),
 
   // cover family — basic / blind (tilt) / garage all share one tile,
   // the kind flag picks the layout (open/close/stop/set_position
   // vs. open/close/stop/ventilate).
-  cover: CoverTile as unknown as CdpWidget,
-  cover_blind: CoverTile as unknown as CdpWidget,
-  cover_garage: CoverTile as unknown as CdpWidget,
+  cover: asCdpWidget(CoverTile),
+  cover_blind: asCdpWidget(CoverTile),
+  cover_garage: asCdpWidget(CoverTile),
 
   // climate family — simple (HM-CC-TC heat-on + setpoint) / RF
   // (action mode picker) / HmIP (CONTROL_MODE write + presets).
-  climate_simple: ClimateTile as unknown as CdpWidget,
-  climate_rf: ClimateTile as unknown as CdpWidget,
-  climate_hmip: ClimateTile as unknown as CdpWidget,
+  climate_simple: asCdpWidget(ClimateTile),
+  climate_rf: asCdpWidget(ClimateTile),
+  climate_hmip: asCdpWidget(ClimateTile),
 
   // remaining single-flavour categories — each maps one custom-DP
   // surface to one tile.
-  lock: LockTile as unknown as CdpWidget,
-  siren: SirenTile as unknown as CdpWidget,
-  switch: SwitchTile as unknown as CdpWidget,
+  lock: asCdpWidget(LockTile),
+  siren: asCdpWidget(SirenTile),
+  switch: asCdpWidget(SwitchTile),
 
   // niche categories rounding out the kind inventory.
-  text_display: TextDisplayTile as unknown as CdpWidget,
-  valve_irrigation: ValveTile as unknown as CdpWidget,
-  valve_modulating: ValveTile as unknown as CdpWidget,
+  text_display: asCdpWidget(TextDisplayTile),
+  valve_irrigation: asCdpWidget(ValveTile),
+  valve_modulating: asCdpWidget(ValveTile),
 };
 
 /** Returns the widget Component for a CDP kind, or undefined when

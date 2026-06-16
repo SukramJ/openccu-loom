@@ -95,8 +95,7 @@ func ListLinks(svc LinksService) http.HandlerFunc {
 					problem.New(problem.TypeNotFound, r, "Device not found", addr))
 				return
 			}
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Links list failed", err.Error()))
+			problem.WriteFromError(w, r, err)
 			return
 		}
 		JSON(w, http.StatusOK, links)
@@ -184,8 +183,7 @@ func LinkableChannels(svc LinksService) http.HandlerFunc {
 		source := addr + ":" + no
 		candidates, err := svc.LinkableChannels(r.Context(), interfaceID, source, role, locale)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Linkable-channels failed", err.Error()))
+			problem.WriteFromError(w, r, err)
 			return
 		}
 		JSON(w, http.StatusOK, candidates)
