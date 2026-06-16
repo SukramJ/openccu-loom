@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -60,14 +61,17 @@ func (s *MQTTCommandSink) SetValue(
 // so MQTT and REST share identical wire behaviour.
 //
 // channelAddress is the full "<device>:<channel>" form as extracted
-// from the MQTT topic (e.g. "0001ABCD:1"). Returns a descriptive
-// error when the central, device, channel, or parameter cannot be
-// resolved.
+// from the MQTT topic (e.g. "0001ABCD:1"). When interfaceID is
+// non-empty the resolved device must belong to that interface; if more
+// than one device with the same address exists across interfaces (a
+// degenerate multi-CCU edge case is not possible within one central,
+// but the guard is cheap) the call returns a clear error instead of
+// silently picking the first. Returns a descriptive error when the
+// central, device, channel, or parameter cannot be resolved.
 func (s *MQTTCommandSink) SetMasterValue(
 	ctx context.Context, centralName, interfaceID, channelAddress string,
 	parameter hmenum.Parameter, value any, priority hmenum.CommandPriority,
 ) error {
-	_ = interfaceID // resolution is via model registry keyed on device address
 	c, ok := s.registry.Get(centralName)
 	if !ok {
 		return fmt.Errorf("mqtt_sink: unknown central %q", centralName)
@@ -79,6 +83,15 @@ func (s *MQTTCommandSink) SetMasterValue(
 	dev, ok := c.ModelRegistry.Get(deviceAddress)
 	if !ok || dev == nil {
 		return fmt.Errorf("mqtt_sink: unknown device %q on %s", deviceAddress, centralName)
+	}
+	// When the caller supplies an interface hint, verify the resolved
+	// device actually belongs to that interface. Within a single central
+	// the model registry is keyed on device address so there can only
+	// ever be one entry — the check still guards against an operator
+	// misconfiguration where the same address is used on two interfaces.
+	if interfaceID != "" && dev.InterfaceID != "" && dev.InterfaceID != interfaceID {
+		return fmt.Errorf("mqtt_sink: device %q belongs to interface %q, not %q",
+			deviceAddress, dev.InterfaceID, interfaceID)
 	}
 	ch := dev.Channel(channelAddress)
 	if ch == nil {
@@ -220,8 +233,9 @@ func (s *MQTTCommandSink) SetScheduleSwitch(
 // SetCombinedTimerSeconds implements [mqtt.CombinedDPSink]. It resolves
 // the channel's attached combined Timer DP on the target central and
 // calls Timer.SetDuration(seconds * time.Second). Only the "duration"
-// kind is wired today — other combined-DP kinds return an error so the
-// caller can log the mismatch.
+// kind is wired today — other combined-DP kinds (e.g. HSColor,
+// LevelCombined) are silently dropped with a debug log so that
+// unsupported MQTT commands from HA produce no error-log noise.
 func (s *MQTTCommandSink) SetCombinedTimerSeconds(
 	ctx context.Context,
 	centralName, interfaceID, deviceAddress string, channel int,
@@ -230,7 +244,14 @@ func (s *MQTTCommandSink) SetCombinedTimerSeconds(
 ) error {
 	_ = interfaceID
 	if kind != "duration" {
-		return fmt.Errorf("mqtt_sink: combined-DP kind %q not supported", kind)
+		slog.Default().DebugContext(
+			ctx, "mqtt_sink: combined-DP kind not yet implemented, skipping",
+			slog.String("kind", kind),
+			slog.String("central", centralName),
+			slog.String("device", deviceAddress),
+			slog.Int("channel", channel),
+		)
+		return nil
 	}
 	c, ok := s.registry.Get(centralName)
 	if !ok {
