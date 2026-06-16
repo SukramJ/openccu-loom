@@ -65,9 +65,11 @@ export type DataPointSummary = components["schemas"]["DataPointSummary"];
 export type UIHint = NonNullable<components["schemas"]["DataPointSummary"]["ui_hint"]>;
 
 // TODO(openapi-typescript): reconcile with generated DeviceDetail.
-// Generated availability uses capitalized keys (IsReachable, LastUpdated, …)
-// and makes channels optional; SPA callers expect lowercase reachable + reason
-// and non-optional channels[]. Keep hand-written until openapi.yaml is updated.
+// Missing from generated: availability.reachable (boolean), availability.reason (string).
+// Generated uses capitalized availability keys (IsReachable, LastUpdated, BatteryLevel,
+// LowBattery, SignalStrength) and makes channels optional; SPA callers index
+// detail.channels as non-optional (DeviceDetail.svelte:109,120,127,505) and read
+// availability.reachable. Keep hand-written until openapi.yaml aligns the key names.
 export type DeviceDetail = DeviceSummary & {
   firmware: {
     /** Current firmware version installed on the device. */
@@ -302,9 +304,10 @@ export type BackupEntry = {
 };
 
 // TODO(openapi-typescript): reconcile with generated SysvarSummary.
-// Generated schema (SysvarSummary) makes central optional and adds extra fields
-// (min, max, is_internal, is_extended, vid, enabled_default). SPA callers
-// require central as a required field. Keep hand-written until openapi.yaml aligns.
+// Missing from generated: central as required string (generated has central?: string).
+// SPA callers rely on central being non-null (SysvarList.svelte:99 uses
+// sv.central + "/" + sv.name as a stable composite key). Keep hand-written until
+// openapi.yaml makes central a required field.
 export type SysvarEntry = {
   central: string;
   name: string;
@@ -317,9 +320,10 @@ export type SysvarEntry = {
 };
 
 // TODO(openapi-typescript): reconcile with generated ProgramSummary.
-// Generated schema makes central optional and adds last_executed, is_internal,
-// enabled_default. SPA callers require central as a required field.
-// Keep hand-written until openapi.yaml aligns.
+// Missing from generated: central as required string (generated has central?: string).
+// SPA callers rely on central being non-null (ProgramList.svelte:153 uses
+// p.central + "/" + p.id as a stable composite key). Keep hand-written until
+// openapi.yaml makes central a required field.
 export type ProgramEntry = {
   central: string;
   id: string;
@@ -335,9 +339,10 @@ export type AuditChange = {
 };
 
 // TODO(openapi-typescript): reconcile with generated AuditEntry.
-// Generated schema lacks: central, structured action enum (uses string),
-// and changes uses an inline type without the standalone AuditChange alias.
-// Keep hand-written until the openapi.yaml adds the central field.
+// Missing from generated: central field entirely (not present at all).
+// Also: generated action is plain string; SPA uses the union for
+// exhaustive branching in AuditLog.svelte. Keep hand-written until
+// openapi.yaml adds the central field.
 export type AuditEntry = {
   central?: string;
   timestamp: string;
@@ -361,7 +366,9 @@ export type AuditEntry = {
 };
 
 // TODO(openapi-typescript): reconcile with generated AlarmMessage.
-// Generated schema lacks the `central` field. Keep hand-written until openapi.yaml adds it.
+// Missing from generated: central field entirely (not present at all).
+// MessageList.svelte:209 uses a.central + "/" + a.id as a stable composite key.
+// Keep hand-written until openapi.yaml adds the central field.
 export type AlarmMessage = {
   central: string;
   id: string;
@@ -375,8 +382,10 @@ export type AlarmMessage = {
 };
 
 // TODO(openapi-typescript): reconcile with generated ServiceMessage.
-// Generated schema lacks `central` and makes `quittable` optional; SPA
-// treats quittable as required boolean. Keep hand-written until aligned.
+// Missing from generated: central field entirely (not present at all);
+// quittable is optional (quittable?: boolean) while SPA renders it as a
+// required boolean (MessageList.svelte:327 passes s.quittable to ack guard).
+// Keep hand-written until openapi.yaml adds central and makes quittable required.
 export type ServiceMessage = {
   central: string;
   id: string;
@@ -512,9 +521,9 @@ export type FunctionEntry = {
 // UserListEntry re-exported from generated schema — shapes match.
 export type UserListEntry = components["schemas"]["UserListEntry"];
 
-// TODO(openapi-typescript): reconcile with generated TokenListEntry.
+// TokenListEntry re-exported from generated schema — shapes match.
 // Generated adds an `id` field; SPA callers use only fingerprint/subject/role.
-// Safe to re-export since the extra field is additive.
+// Additive extra field is safe to ignore.
 export type TokenListEntry = components["schemas"]["TokenListEntry"];
 
 // EditSessionResponse: not in generated schema components. Keep hand-written.

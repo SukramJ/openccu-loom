@@ -28,6 +28,12 @@ vi.mock("$lib/stores/auth.svelte", () => ({
   authStore: { probe: vi.fn() },
 }));
 
+// Mock i18n — the store calls t("api.error.unauthorized") on 401;
+// return the key itself so tests can assert on a stable string.
+vi.mock("$lib/i18n", () => ({
+  t: (key: string) => key,
+}));
+
 import { api } from "$lib/api/client";
 import { deviceStore } from "./devices.svelte";
 
@@ -94,7 +100,8 @@ describe("deviceStore.refresh — error path", () => {
     listDevicesMock.mockRejectedValueOnce(new AE(401, {}, "unauthorized"));
     await deviceStore.refresh();
     expect((authStore.probe as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
-    expect(deviceStore.error).toBeTruthy();
+    // t() is mocked to return the key, so the store sets the i18n key.
+    expect(deviceStore.error).toBe("api.error.unauthorized");
   });
 });
 
