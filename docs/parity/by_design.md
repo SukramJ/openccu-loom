@@ -1362,11 +1362,11 @@ Go path: `internal/north/rest/router.go`.
 
 ---
 
-### BD-Matter-P2-D19 — Groups stub returns NameSupport=0 / rejects writes
+### BD-Matter-P2-D19 — Groups stub returns NameSupport=0x80 / rejects writes with UnsupportedCommand
 
 **Go path:** `internal/north/matter/cluster/wire/groups.go`.
 
-**Rationale:** HomeMatic has no group concept. Groups (0x0004) is mounted as a mandatory stub on OnOff device types. The stub returns `NameSupport=0x00` (no group name support) and rejects AddGroup / RemoveGroup / AddGroupIfIdentifying. Apple Home, Google Home, and chip-tool all tolerate a Groups stub that advertises `NameSupport=0` — this is the same surface that matter.js's default `GroupsBehavior` exposes when no membership provider is wired. Full implementation requires a group-membership store and coordination with the GroupKeyManagement cluster; deferred to a future release.
+**Rationale:** HomeMatic has no group concept. Groups (0x0004) is mounted as a mandatory stub on OnOff device types. The stub returns `NameSupport=0x80` (bit 7 set, GroupNames mandatory per matter.js `groups.element.ts:31`) and rejects AddGroup / RemoveGroup / AddGroupIfIdentifying with IM StatusCode `UnsupportedCommand` (0x81). The 0x81 code is produced by the bridge dispatcher's string-heuristic (`invokeErrorStatus` in `endpoint/dispatcher.go`) when the error message contains "no commands"; `MatterInvoke` includes that sentinel so Apple Home and Google Home receive the correct status. Apple Home, Google Home, and chip-tool all tolerate a Groups stub that rejects commands — this is the same surface that matter.js's default `GroupsBehavior` exposes when no membership provider is wired. Full implementation requires a group-membership store and coordination with the GroupKeyManagement cluster; deferred to a future release.
 
 ---
 
