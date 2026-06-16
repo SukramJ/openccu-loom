@@ -11,7 +11,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
-	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -43,7 +42,7 @@ type SmokeSiren struct {
 	// dataVersion tracks the per-cluster monotonic counter (Matter
 	// §10.6.5). SmokeCOAlarm has no client-writable attributes / commands
 	// in 0.1.0; the field is reserved for when SelfTestRequest is wired.
-	dataVersion cluster.DataVersionTracker
+	dataVersion hmtypes.DataVersionTracker
 
 	key     hmtypes.DataPointKey
 	writer  custom.Writer
