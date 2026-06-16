@@ -1,4 +1,5 @@
 import { api, ApiError } from "$lib/api/client";
+import { t } from "$lib/i18n";
 import { subscribe } from "./events.svelte";
 import type {
   DeviceAvailableEvent,
@@ -56,7 +57,7 @@ function createDeviceStore() {
         // Session expired mid-flight; let the auth probe reset so
         // the router re-renders the login page.
         await authStore.probe();
-        error = "Sitzung abgelaufen";
+        error = t("api.error.unauthorized");
       } else {
         error = err instanceof Error ? err.message : String(err);
       }
