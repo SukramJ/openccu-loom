@@ -35,6 +35,12 @@ const (
 	// The table can therefore exceed the retention window by at most
 	// this many rows before it is trimmed again.
 	auditPurgeEveryNAppends = 256
+	// maxAuditListRows caps the number of rows returned by List when the
+	// caller passes limit <= 0 ("all"). A multi-year install can
+	// accumulate hundreds of thousands of rows; an unbounded scan risks
+	// OOM on embedded targets. Callers that genuinely need streaming-all
+	// should use a separate pagination path instead.
+	maxAuditListRows = 10_000
 )
 
 // NewAuditStore returns a store backed by db.
@@ -107,21 +113,31 @@ VALUES (
 		return fmt.Errorf("sqlite: append audit entry: %w", err)
 	}
 	// Opportunistic retention: every auditPurgeEveryNAppends inserts,
-	// drop rows past the retention window. Best-effort — a purge failure
-	// must not fail the append that just succeeded.
+	// drop rows past the retention window. The counter is reset only
+	// after a successful Purge so that a persistent failure retries on
+	// the next threshold crossing rather than silently disarming.
+	// Best-effort — a purge failure must not fail the append that just succeeded.
 	if s.appendsSincePurge.Add(1) >= auditPurgeEveryNAppends {
-		s.appendsSincePurge.Store(0)
-		_, _ = s.Purge(ctx, auditRetentionDays)
+		if _, err := s.Purge(ctx, auditRetentionDays); err == nil {
+			s.appendsSincePurge.Store(0)
+		}
 	}
 	return nil
 }
 
-// List returns the most-recent audit entries. limit <= 0 means "all".
+// List returns the most-recent audit entries. limit <= 0 means "all", but
+// the result is capped at maxAuditListRows to prevent unbounded scans on
+// long-running installs. Pass an explicit positive limit to retrieve fewer.
 // Filter is intentionally narrow (only deviceAddress); the SPA does the
 // rest in memory after fetching.
 func (s *AuditStore) List(ctx context.Context, deviceAddress string, limit int) ([]audit.Entry, error) {
 	if s == nil || s.db == nil {
 		return nil, nil
+	}
+	// Apply the safety cap: treat limit <= 0 as maxAuditListRows, and
+	// clamp any explicit limit that exceeds the cap.
+	if limit <= 0 || limit > maxAuditListRows {
+		limit = maxAuditListRows
 	}
 	args := []any{}
 	q := `SELECT timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
@@ -133,10 +149,8 @@ func (s *AuditStore) List(ctx context.Context, deviceAddress string, limit int) 
 		args = append(args, deviceAddress)
 	}
 	q += ` ORDER BY id DESC`
-	if limit > 0 {
-		q += ` LIMIT ?`
-		args = append(args, limit)
-	}
+	q += ` LIMIT ?`
+	args = append(args, limit)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: list audit: %w", err)
