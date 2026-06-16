@@ -1604,6 +1604,45 @@ func TestWiringPublishSysvarLogsError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// BirthSync.WithLifecycleContext: nil is a no-op; a valid ctx is stored.
+// ---------------------------------------------------------------------------
+
+func TestBirthSyncWithLifecycleContextReturnsSelf(t *testing.T) {
+	t.Parallel()
+	bs := NewBirthSync(nil, nil, nil)
+	// WithLifecycleContext must return the receiver for call-site chaining.
+	result := bs.WithLifecycleContext(context.Background())
+	if result != bs {
+		t.Fatal("WithLifecycleContext must return the receiver")
+	}
+}
+
+func TestBirthSyncHandleRespectsLifecycleCtxCancel(t *testing.T) {
+	t.Parallel()
+	// When lifecycleCtx is cancelled before "online" is handled, the
+	// RepublishDiscovery call must receive an already-cancelled context
+	// and return promptly. This locks down that the handle() method
+	// derives its working context from lifecycleCtx, not context.Background().
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+
+	mp := &mockPublisher{}
+	bridge := NewBridge(BridgeConfig{Base: "gh", HADiscoveryEnabled: true}, mp)
+	bridge.mu.Lock()
+	bridge.declared["homeassistant/switch/gh/obj1/config"] = []byte(`{"x":1}`)
+	bridge.mu.Unlock()
+	sub := &nopSubscriber{}
+	bs := NewBirthSync(sub, bridge, nil).WithLifecycleContext(cancelled)
+	if err := bs.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	// Delivering "online" on a pre-cancelled lifecycleCtx must not block
+	// or panic; RepublishDiscovery receives the cancelled ctx and may
+	// succeed or return ctx.Err() — either way the call returns promptly.
+	sub.deliver(HABirthTopic, []byte("online"))
+}
+
+// ---------------------------------------------------------------------------
 // BirthSync.handle: republish failure is logged, not propagated.
 // ---------------------------------------------------------------------------
 

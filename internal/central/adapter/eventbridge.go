@@ -64,11 +64,28 @@ type EventBridge struct {
 	// per value-change event — only on a reachability transition
 	// (UNREACH / STICKY_UNREACH flipping) does the topic change.
 	availabilityCache sync.Map
+
+	// goroutineWG tracks background SafeGo goroutines (warm-up schedule
+	// loads) so Stop() can wait for them to exit rather than leaving
+	// orphaned goroutines after the bridge tears down.
+	goroutineWG sync.WaitGroup
+
+	// lifetimeCtx / stopCancel bound the bridge's background goroutines.
+	// Stop() calls stopCancel() then waits on goroutineWG so no goroutine
+	// outlives the bridge. Goroutines use lifetimeCtx (not context.Background())
+	// so a daemon shutdown aborts a long warm-up load promptly.
+	lifetimeCtx context.Context //nolint:containedctx // stored for background goroutine lifetime, not for per-call use
+	stopCancel  context.CancelFunc
 }
 
 // NewEventBridge constructs a bridge. vis may be nil (no MQTT filter).
 func NewEventBridge(r *central.Registry, wsHub *ws.Hub, mq *mqtt.Wiring) *EventBridge {
-	return &EventBridge{registry: r, wsHub: wsHub, mqtt: mq}
+	eb := &EventBridge{registry: r, wsHub: wsHub, mqtt: mq}
+	// Pre-set a background lifetime context so callers that invoke
+	// PublishInitialSnapshot without calling Start first do not hit a nil
+	// lifetimeCtx. Start() replaces this with a cancellable child.
+	eb.lifetimeCtx, eb.stopCancel = context.WithCancel(context.Background()) //nolint:contextcheck // pre-init; replaced by Start()
+	return eb
 }
 
 // WithVisibility wires a [filter.VisibilitySet] that gates MQTT publish.
@@ -93,6 +110,11 @@ func (b *EventBridge) WithParameterLabels(l mqtt.ParameterLabeler) *EventBridge 
 
 // Start attaches a subscription per central.
 func (b *EventBridge) Start(ctx context.Context) {
+	// Initialise a bridge-lifetime cancellable context. Background goroutines
+	// spawned during PublishInitialSnapshot hold lifetimeCtx so Stop()
+	// can cancel them early (via stopCancel) and then drain via goroutineWG.
+	//nolint:contextcheck // background goroutines must survive Start's ctx; stopCancel is invoked by Stop()
+	b.lifetimeCtx, b.stopCancel = context.WithCancel(ctx)
 	if b.registry == nil {
 		return
 	}
@@ -549,7 +571,8 @@ func (b *EventBridge) registerAndLoadUnobservedCalculatedDP(
 	b.publishDiscoveryForUnobservedDP(ctx, centralName, ifaceID, d, ch, channelNo, parameter, hmenum.ParamsetKeyValues)
 }
 
-// Stop releases every subscription.
+// Stop releases every subscription, cancels background goroutines and waits
+// for them to exit. Safe to call before Start (stopCancel may be nil).
 func (b *EventBridge) Stop() {
 	for _, u := range b.unsubs {
 		if u != nil {
@@ -557,6 +580,10 @@ func (b *EventBridge) Stop() {
 		}
 	}
 	b.unsubs = nil
+	if b.stopCancel != nil {
+		b.stopCancel()
+	}
+	b.goroutineWG.Wait()
 }
 
 func (b *EventBridge) onValueChanged(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
@@ -1737,14 +1764,18 @@ func (b *EventBridge) publishWeekProfileSnapshot(
 		// triggered from a request context that may already be
 		// closed by the time the callback runs.
 		scheduleUnsub := cp.OnChange(func(_, _ *schedule.Climate) { //nolint:contextcheck // OnChange callback fires asynchronously; the snapshot ctx may already be done
-			b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
+			SafeGo("eventbridge.climate_dp_state", func() {
+				b.publishCustomDPState(context.Background(), centralName, iface, d.Address, channelNo, ch)
+			})
 		})
 		b.unsubs = append(b.unsubs, scheduleUnsub)
 		// Background load: deliberately decoupled from any request
 		// context — the goroutine outlives the function call and a
 		// cancelled request must not abort the warm-up fetch.
-		SafeGo("eventbridge.climate_schedule_load", func() { //nolint:contextcheck // intentionally background-scoped; snapshot ctx must not cancel the warm-up load; see #20
-			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		b.goroutineWG.Add(1)
+		SafeGo("eventbridge.climate_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
+			defer b.goroutineWG.Done()
+			loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
 			defer cancel()
 			_, _ = cp.Load(loadCtx)
 		})
@@ -1881,8 +1912,10 @@ func (b *EventBridge) publishScheduleEntitySnapshot(
 	// Profile's OnChange, which we subscribe to below for re-publishing.
 	if sp := wp.Simple(); sp != nil {
 		capturedSP := sp
-		SafeGo("eventbridge.simple_schedule_load", func() { //nolint:contextcheck // background load intentionally uses its own timeout context; snapshot ctx must not cancel the load; see #20
-			loadCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		b.goroutineWG.Add(1)
+		SafeGo("eventbridge.simple_schedule_load", func() { //nolint:contextcheck // background goroutine bounded by b.lifetimeCtx; Stop() cancels and drains; see #20
+			defer b.goroutineWG.Done()
+			loadCtx, cancel := context.WithTimeout(b.lifetimeCtx, 30*time.Second)
 			defer cancel()
 			_, _ = capturedSP.Load(loadCtx)
 		})

@@ -40,6 +40,7 @@ type MasterPoller struct {
 	OnError func(address string, key hmenum.ParamsetKey, err error)
 
 	mu        sync.Mutex
+	wg        sync.WaitGroup // tracks in-flight run() goroutines
 	scheduled map[pollKey]*pollEntry
 	closed    bool
 }
@@ -97,6 +98,7 @@ func (p *MasterPoller) SchedulePoll(address string, key hmenum.ParamsetKey) {
 	if interval <= 0 {
 		interval = 2 * time.Second
 	}
+	p.wg.Add(1)
 	p.mu.Unlock()
 
 	go p.run(ctx, pk, interval)
@@ -105,6 +107,7 @@ func (p *MasterPoller) SchedulePoll(address string, key hmenum.ParamsetKey) {
 // run waits for the configured interval (or cancellation) and then
 // performs the get + dispatch.
 func (p *MasterPoller) run(ctx context.Context, pk pollKey, interval time.Duration) {
+	defer p.wg.Done()
 	defer func() {
 		p.mu.Lock()
 		if entry, ok := p.scheduled[pk]; ok && entry.cancel != nil {
@@ -136,7 +139,9 @@ func (p *MasterPoller) run(ctx context.Context, pk pollKey, interval time.Durati
 	}
 }
 
-// Close cancels every pending poll and rejects further schedules.
+// Close cancels every pending poll, rejects further schedules, and waits for
+// all in-flight run() goroutines to exit. Callers can rely on no poller
+// goroutines remaining after Close returns.
 func (p *MasterPoller) Close() {
 	if p == nil {
 		return
@@ -148,4 +153,5 @@ func (p *MasterPoller) Close() {
 	}
 	p.scheduled = nil
 	p.mu.Unlock()
+	p.wg.Wait()
 }

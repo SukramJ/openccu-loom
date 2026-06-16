@@ -82,9 +82,10 @@ func TestCircuitPanicingListenerInRefreshLockedDoesNotCrash(t *testing.T) {
 		t.Fatalf("state = %s, want HALF_OPEN", got)
 	}
 
-	// Give the async goroutines time to complete (both the panicking and the
-	// recording listener each run in their own safeFire goroutine).
-	time.Sleep(80 * time.Millisecond)
+	// Drain in-flight callback goroutines deterministically instead of
+	// sleeping: WaitCallbacks blocks until every safeFire goroutine from the
+	// most recent state transition has returned.
+	c.WaitCallbacks()
 
 	// The non-panicking listener must have been called for the transition.
 	callsMu.Lock()
