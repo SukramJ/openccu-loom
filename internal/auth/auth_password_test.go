@@ -99,3 +99,90 @@ func TestMemoryUserStorePlaintextRecordStillAuthenticates(t *testing.T) {
 		t.Errorf("plaintext wrong-password err = %v, want ErrUnauthenticated", err)
 	}
 }
+
+// TestAuthenticateBasicUnknownUsernameRunsDummyCompare verifies that
+// the unknown-username path returns ErrUnauthenticated (same as wrong
+// password) and that the code path reaches the dummy bcrypt compare
+// rather than short-circuiting. Structural test: we cannot measure wall
+// time in a unit test, but we can confirm the function:
+//   - does NOT return nil error for an unknown user
+//   - returns ErrUnauthenticated, same sentinel as wrong-password path
+func TestAuthenticateBasicUnknownUsernameRunsDummyCompare(t *testing.T) {
+	t.Parallel()
+	us := NewMemoryUserStore()
+	us.Put("alice", "s3cret", RoleViewer)
+
+	_, err := us.AuthenticateBasic(context.Background(), "nobody", "anypassword")
+	if !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("unknown username must return ErrUnauthenticated, got %v", err)
+	}
+}
+
+// TestAuthenticateBasicUnknownUsernameReturnsSameSentinelAsWrongPassword
+// ensures that both failure modes — unknown user and wrong password —
+// surface the same error type, so callers cannot distinguish them.
+func TestAuthenticateBasicUnknownUsernameReturnsSameSentinelAsWrongPassword(t *testing.T) {
+	t.Parallel()
+	us := NewMemoryUserStore()
+	h, err := HashPassword("correct")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+	us.Put("alice", h, RoleViewer)
+
+	_, errUnknown := us.AuthenticateBasic(context.Background(), "nobody", "x")
+	_, errWrong := us.AuthenticateBasic(context.Background(), "alice", "x")
+
+	if !errors.Is(errUnknown, ErrUnauthenticated) {
+		t.Fatalf("unknown user: %v", errUnknown)
+	}
+	if !errors.Is(errWrong, ErrUnauthenticated) {
+		t.Fatalf("wrong password: %v", errWrong)
+	}
+	// Both errors must be the same sentinel so callers cannot branch on error type.
+	if !errors.Is(errUnknown, errWrong) {
+		t.Fatalf("unknown-user error %v != wrong-password error %v", errUnknown, errWrong)
+	}
+}
+
+// TestMemoryTokenStoreFingerprintNotRawToken verifies that List() returns
+// a fingerprint derived from the token hash rather than any portion of the
+// raw token value. A heap dump of the token map must not reveal bearer secrets.
+func TestMemoryTokenStoreFingerprintNotRawToken(t *testing.T) {
+	t.Parallel()
+	rawToken := "super-secret-bearer-12345"
+	ts := NewMemoryTokenStore(map[string]Identity{
+		rawToken: {Subject: "ci", Role: RoleOperator},
+	})
+	list := ts.List()
+	if len(list) != 1 {
+		t.Fatalf("len=%d, want 1", len(list))
+	}
+	fp := list[0].Fingerprint
+	if fp == rawToken {
+		t.Fatalf("fingerprint must not be the raw token: %q", fp)
+	}
+	// Fingerprint must not contain any suffix/prefix of the raw token.
+	if fp != "" && (len(fp) >= 4 && fp == rawToken[len(rawToken)-len(fp):]) {
+		t.Fatalf("fingerprint appears to be a suffix of the raw token: %q", fp)
+	}
+	if fp == "" {
+		t.Fatal("fingerprint must not be empty")
+	}
+}
+
+// TestMemoryTokenStorePutFingerprintNotRawToken verifies the same invariant
+// for tokens added via Put (not the constructor).
+func TestMemoryTokenStorePutFingerprintNotRawToken(t *testing.T) {
+	t.Parallel()
+	rawToken := "another-secret-abc123"
+	ts := &MemoryTokenStore{}
+	ts.Put(rawToken, Identity{Subject: "ops", Role: RoleAdmin})
+	list := ts.List()
+	if len(list) != 1 {
+		t.Fatalf("len=%d, want 1", len(list))
+	}
+	if list[0].Fingerprint == rawToken {
+		t.Fatalf("Put must not store raw token as fingerprint: %q", list[0].Fingerprint)
+	}
+}

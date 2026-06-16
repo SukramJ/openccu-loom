@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strings"
 	"testing"
@@ -364,4 +365,109 @@ func (a *atomicInt32) Store(v int32) {
 
 func (a *atomicInt32) Load() int32 {
 	return a.v
+}
+
+// ─── Test 9: BIN-RPC peer allowlist ──────────────────────────────────────────
+
+// TestBINRPCServerPeerAllowlistRejectsUnlisted verifies that a connection
+// from a peer whose IP is not covered by PeerAllowlist is closed before
+// any BIN-RPC data is dispatched (the client sees a read error, not a
+// fault response).
+func TestBINRPCServerPeerAllowlistRejectsUnlisted(t *testing.T) {
+	t.Parallel()
+	// Allow only 192.0.2.0/24 (TEST-NET-1, RFC 5737 — no local host is
+	// in this range, so any loopback connection will be rejected).
+	allowlist := []netip.Prefix{netip.MustParsePrefix("192.0.2.0/24")}
+	srv, err := NewBINRPCServer(BINRPCConfig{
+		Addr:          "127.0.0.1:0",
+		PeerAllowlist: allowlist,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done; _ = srv.Close() })
+
+	// Raw TCP connection from 127.0.0.1 — not in 192.0.2.0/24.
+	conn, err := net.DialTimeout("tcp", srv.Addr().String(), 500*time.Millisecond)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+	// The server should close the conn immediately; reading should return EOF.
+	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	buf := make([]byte, 8)
+	_, err = conn.Read(buf)
+	if err == nil {
+		t.Fatal("expected EOF/connection-close from server after allowlist rejection")
+	}
+}
+
+// TestBINRPCServerPeerAllowlistAcceptsListedPeer verifies that a connection
+// whose source IP IS in the allowlist proceeds normally.
+func TestBINRPCServerPeerAllowlistAcceptsListedPeer(t *testing.T) {
+	t.Parallel()
+	// Allow 127.0.0.1/8 so the loopback address passes the filter.
+	allowlist := []netip.Prefix{netip.MustParsePrefix("127.0.0.0/8")}
+	srv, err := NewBINRPCServer(BINRPCConfig{
+		Addr:          "127.0.0.1:0",
+		PeerAllowlist: allowlist,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &stubHandlers{}
+	srv.Register("CUxD", h)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done; _ = srv.Close() })
+
+	client, err := binrpc.NewClient(binrpc.Config{
+		Addr:      srv.Addr().String(),
+		Interface: "CUxD",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Call(context.Background(), "system.listMethods", []xmlrpc.Value{
+		xmlrpc.StringValue("CUxD"),
+	})
+	if err != nil {
+		t.Fatalf("expected listed peer to succeed, got: %v", err)
+	}
+}
+
+// TestBINRPCServerEmptyAllowlistAcceptsAll verifies that the default
+// (nil/empty PeerAllowlist) accepts all peers, preserving existing behaviour.
+func TestBINRPCServerEmptyAllowlistAcceptsAll(t *testing.T) {
+	t.Parallel()
+	srv, err := NewBINRPCServer(BINRPCConfig{Addr: "127.0.0.1:0"}) // no allowlist
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := &stubHandlers{}
+	srv.Register("CUxD", h)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- srv.Serve(ctx) }()
+	t.Cleanup(func() { cancel(); <-done; _ = srv.Close() })
+
+	client, err := binrpc.NewClient(binrpc.Config{
+		Addr:      srv.Addr().String(),
+		Interface: "CUxD",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.Call(context.Background(), "system.listMethods", []xmlrpc.Value{
+		xmlrpc.StringValue("CUxD"),
+	})
+	if err != nil {
+		t.Fatalf("empty allowlist must accept all peers, got: %v", err)
+	}
 }

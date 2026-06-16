@@ -34,7 +34,8 @@ func TestMemoryTokenStoreListSorted(t *testing.T) {
 }
 
 // TestMemoryTokenStoreListShortToken exercises the branch where the token is
-// ≤6 chars (no truncation).
+// ≤6 chars. Fingerprints are always a hash-derived hex string, never the
+// raw token, regardless of token length.
 func TestMemoryTokenStoreListShortToken(t *testing.T) {
 	ts := NewMemoryTokenStore(map[string]Identity{
 		"abc": {Subject: "s", Role: RoleViewer},
@@ -43,9 +44,13 @@ func TestMemoryTokenStoreListShortToken(t *testing.T) {
 	if len(list) != 1 {
 		t.Fatalf("len=%d", len(list))
 	}
-	// Short token: fingerprint == the token itself (no leading "…").
-	if strings.HasPrefix(list[0].Fingerprint, "…") {
-		t.Fatalf("short token should not be truncated: %q", list[0].Fingerprint)
+	// Fingerprint must not contain the raw token "abc" — it is always a
+	// hash-derived value so a short token does not leak its content.
+	if list[0].Fingerprint == "abc" {
+		t.Fatalf("fingerprint must not be the raw token: %q", list[0].Fingerprint)
+	}
+	if list[0].Fingerprint == "" {
+		t.Fatalf("fingerprint must not be empty")
 	}
 }
 
