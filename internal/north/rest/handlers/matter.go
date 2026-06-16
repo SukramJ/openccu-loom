@@ -228,9 +228,7 @@ func MatterFabrics(s MatterFabricStore) http.HandlerFunc {
 		}
 		recs, err := s.ListFabrics(req.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to list fabrics", err.Error()))
+			problem.WriteFromError(w, req, err)
 			return
 		}
 		out := make([]MatterFabricResponse, 0, len(recs))

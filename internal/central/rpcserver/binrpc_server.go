@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +30,13 @@ type BINRPCServer struct {
 
 	mu     sync.RWMutex
 	routes map[string]Handlers // interface_id → handlers
+
+	// allowlist is an optional source-IP filter. When non-empty, only
+	// connections whose remote IP falls within one of the prefixes are
+	// dispatched; others are closed immediately with a debug log.
+	// Empty/nil means accept all peers (default: open — preserves
+	// existing behaviour on home-LAN deployments).
+	allowlist []netip.Prefix
 
 	ioTimeout   time.Duration
 	wg          sync.WaitGroup
@@ -56,6 +64,13 @@ type BINRPCConfig struct {
 	// Set via [config.ParsePortRange] and [NewPortRange]. Ignored when
 	// Addr specifies a fixed non-zero port.
 	PortRange *PortRange
+
+	// PeerAllowlist, when non-empty, restricts accepted TCP connections
+	// to source IPs covered by one of the listed CIDR prefixes. A
+	// connection from an unlisted peer is closed immediately before any
+	// BIN-RPC data is read. Nil or empty means accept all peers (the
+	// default, preserving the current open-LAN behaviour).
+	PeerAllowlist []netip.Prefix
 }
 
 // NewBINRPCServer binds a listener.
@@ -82,6 +97,7 @@ func NewBINRPCServer(cfg BINRPCConfig) (*BINRPCServer, error) {
 		listener:  ln,
 		routes:    make(map[string]Handlers),
 		ioTimeout: ioTimeout,
+		allowlist: cfg.PeerAllowlist,
 	}, nil
 }
 
@@ -164,10 +180,41 @@ func (s *BINRPCServer) Close() error {
 	return nil
 }
 
+// peerAllowed reports whether the connection's remote address is
+// permitted by the server's optional allowlist. When the allowlist is
+// empty every peer is allowed.
+func (s *BINRPCServer) peerAllowed(conn net.Conn) bool {
+	if len(s.allowlist) == 0 {
+		return true
+	}
+	remote := conn.RemoteAddr().String()
+	host, _, err := net.SplitHostPort(remote)
+	if err != nil {
+		return false
+	}
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
+		return false
+	}
+	for _, prefix := range s.allowlist {
+		if prefix.Contains(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 // handleConn reads exactly one request, dispatches it, writes one
 // response.
 func (s *BINRPCServer) handleConn(ctx context.Context, conn net.Conn) {
 	defer func() { _ = conn.Close() }()
+
+	if !s.peerAllowed(conn) {
+		s.logger.Debug("binrpc callback: peer not in allowlist, closing",
+			slog.String("remote", conn.RemoteAddr().String()))
+		return
+	}
+
 	_ = conn.SetDeadline(time.Now().Add(s.ioTimeout))
 
 	req, err := binrpc.ReadRequest(io.LimitReader(conn, binrpc.MaxMessageSize+8))

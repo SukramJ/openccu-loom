@@ -4,7 +4,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -64,10 +63,7 @@ func ValuesBatch(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibility
 			return
 		}
 		var req ValuesBatchRequest
-		defer func() { _ = r.Body.Close() }()
-		dec := json.NewDecoder(r.Body)
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&req); err != nil {
+		if err := DecodeJSON(r, &req); err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
 			return
