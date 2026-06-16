@@ -250,6 +250,36 @@ across the four device families above.
 `event`↔`no_create` signature on click-event press parameters; any other usage
 combination on a press parameter still surfaces.
 
+### BD-Visibility-VariantModelHiddenParams — DIRECTION / SMOKE_DETECTOR_ALARM_STATUS hidden on variant models
+
+A handful of parameters are surfaced by the reference stack but kept hidden by
+OpenCCU-Loom on **variant device models**:
+
+- `DIRECTION` on `HM-Sec-Key-S`, `HM-Sec-Key-O`, `HM-Sec-Key-Generic`,
+  `HM-Sec-Win-Generic` (ch1) — `usage=no_create` (Go) vs `usage=data_point`
+  (aiohomematic).
+- `SMOKE_DETECTOR_ALARM_STATUS` on `HmIP-SWSD-2` (ch1) — `usage=no_create`
+  (Go) vs `usage=ce_visible` (aiohomematic, via the siren custom profile).
+
+OpenCCU-Loom treats these parameters as hidden by default and re-promotes them
+only for the **base / exact** device model — the built-in per-device un-ignore
+(`unIgnoreParametersByDevice`, `internal/store/visibility/rules.go`) is matched
+by reverse-prefix (`deviceUnIgnoresByPrefix`, `internal/store/visibility/decider.go`),
+so a longer variant model (`HM-Sec-Key-S`) does not inherit the shorter base
+model's (`HM-Sec-Key`) un-ignore and stays at the default-hidden state.
+
+This is a **deliberate** scoping choice: the per-device exceptions are pinned to
+the exact models they were authored for, rather than fanning out to every
+variant. The affected parameters are status/diagnostic surfaces (lock/window
+movement direction, smoke-alarm status), not control points — hiding them on
+unlisted variants keeps the north-bound surface conservative. ~5 DPs across the
+device families above.
+
+**Snapshot tolerance:** `script/model_snapshot_diff.py`
+(`is_reference_only_visibility`) tolerates exactly the `no_create`↔(`data_point`
+| `ce_visible`) signature on `DIRECTION` / `SMOKE_DETECTOR_ALARM_STATUS`; any
+other usage combination on these parameters still surfaces.
+
 ---
 
 ## A2 — Custom DPs

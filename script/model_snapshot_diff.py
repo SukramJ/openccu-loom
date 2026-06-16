@@ -162,6 +162,31 @@ def _is_click_press(param: str | None) -> bool:
     return bool(param) and param.startswith("PRESS")
 
 
+# Parameters OpenCCU-Loom keeps hidden on variant device models (e.g.
+# HM-Sec-Key-S/-O/-Generic, HM-Sec-Win-Generic, HmIP-SWSD-2) where the
+# reference stack surfaces them. The built-in per-device un-ignore /
+# custom-profile visibility is scoped to the base/exact model, so a variant
+# inherits the default-hidden state. Accepted by-design suppression.
+_REFERENCE_ONLY_VISIBLE_PARAMS: frozenset[str] = frozenset({
+    "DIRECTION",
+    "SMOKE_DETECTOR_ALARM_STATUS",
+})
+
+
+def is_reference_only_visibility(go: dict, py: dict) -> bool:
+    """True when OpenCCU-Loom hides one of the variant-model parameters
+    (`usage=no_create`) while aiohomematic surfaces it (`data_point` /
+    `ce_visible`). The usage/forced_usage/enabled_default flip is the entire
+    (deliberate) signature — see docs/parity/by_design.md
+    (BD-Visibility-VariantModelHiddenParams). Any other usage combination on
+    these parameters still surfaces."""
+    return (
+        go.get("parameter") in _REFERENCE_ONLY_VISIBLE_PARAMS
+        and go.get("usage") == "no_create"
+        and py.get("usage") in ("data_point", "ce_visible")
+    )
+
+
 def is_local_button_event_suppression(go: dict, py: dict) -> bool:
     """True for the actuator-local-button signature: OpenCCU-Loom surfaces a
     keypress *event* (usage=event) on the local push-button input channels of
@@ -218,6 +243,13 @@ def diff_dp(go_dp: dict, py_dp: dict) -> dict:
         # push-button channel where aiohomematic creates nothing. The
         # usage/forced_usage/enabled_default flip is the entire (deliberate)
         # signature; a drift on any OTHER field of these params still reports.
+        drift.pop("usage", None)
+        drift.pop("forced_usage", None)
+        drift.pop("enabled_default", None)
+    if is_reference_only_visibility(go, py):
+        # OpenCCU-Loom keeps a variant-model parameter hidden where the
+        # reference surfaces it. Same deliberate usage/forced_usage/
+        # enabled_default signature; any other field drift still reports.
         drift.pop("usage", None)
         drift.pop("forced_usage", None)
         drift.pop("enabled_default", None)
