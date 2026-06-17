@@ -513,6 +513,12 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"TokenStore:Delete":         "reason: tokens table is daemon-global; fingerprint is the natural key",
 		"ConfigSectionStore:Get":    "reason: config_sections is daemon-global; section is the natural key",
 		"ConfigSectionStore:Delete": "reason: config_sections is daemon-global; section is the natural key",
+		// Measurement-history retention is a time-based purge over the one
+		// history.db file: it drops every row older than the cutoff
+		// regardless of central. Per-central scoping would be wrong — the
+		// retention window is global. Per-central deletes use DeleteDevice
+		// (which DOES carry central) instead. See ADR 0040.
+		"MeasurementStore:DeleteOlderThan": "reason: retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")
