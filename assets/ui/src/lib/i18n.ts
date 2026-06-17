@@ -641,6 +641,12 @@ const EN: Catalog = {
     "Token values are never exposed; only the last six characters are shown as a fingerprint.",
   "settings.rooms_help":
     "Derived from CCU device metadata. Rooms and functions are assigned per device from the detail header.",
+  // --- Settings sidebar groups ---
+  "settings.group.general": "General & System",
+  "settings.group.bridges": "Bridges (Northbound)",
+  "settings.group.ccus": "CCUs & Connectivity",
+  "settings.group.security": "Security & Access",
+  "settings.group.advanced": "Advanced",
   // --- Settings tabs ---
   "settings.tab.general": "General",
   "settings.tab.ccus": "CCUs",
@@ -2159,6 +2165,12 @@ const DE: Catalog = {
     "Token-Werte werden niemals offengelegt; angezeigt werden nur die letzten sechs Zeichen als Fingerprint.",
   "settings.rooms_help":
     "Aus den Geräte-Metadaten der CCU abgeleitet. Räume und Gewerke werden pro Gerät im Detail-Header zugewiesen.",
+  // --- Settings-Sidebar-Gruppen ---
+  "settings.group.general": "Allgemein & System",
+  "settings.group.bridges": "Bridges (Northbound)",
+  "settings.group.ccus": "CCUs & Anbindung",
+  "settings.group.security": "Sicherheit & Zugriff",
+  "settings.group.advanced": "Erweitert",
   // --- Settings-Tabs ---
   "settings.tab.general": "Allgemein",
   "settings.tab.ccus": "CCUs",
