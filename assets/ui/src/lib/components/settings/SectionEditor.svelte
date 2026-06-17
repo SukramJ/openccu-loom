@@ -6,6 +6,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import SourceBadge from "$lib/components/ui/SourceBadge.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
+  import { prefs } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -52,6 +53,66 @@
       return true;
     }),
   );
+
+  // A field is visible in the current mode. Expert-class fields are
+  // hidden in basic mode (mirrors the ExpertGate wrapper around the
+  // widget); secret/basic fields always show.
+  function isVisible(f: ConfigSchemaField): boolean {
+    return f.class !== "expert" || prefs.expertMode;
+  }
+
+  // Subgrouping. Fields whose path is nested below the section (e.g.
+  // `north.rest.auth.basic_enabled` under section `north.rest`) are
+  // bucketed by their first relative segment ("auth"). Fields that sit
+  // directly under the section fall into a synthetic "general" bucket
+  // that always renders first. The dotted config path already encodes
+  // the struct nesting, so no backend hint is required.
+  const SUBGROUP_GENERAL = "__general__";
+
+  const fieldGroups = $derived.by(() => {
+    const order: string[] = [];
+    const buckets = new Map<string, ConfigSchemaField[]>();
+    for (const f of sectionFields) {
+      if (!isVisible(f)) continue;
+      const rel = relativePath(f.path);
+      const dot = rel.indexOf(".");
+      const key = dot === -1 ? SUBGROUP_GENERAL : rel.slice(0, dot);
+      let bucket = buckets.get(key);
+      if (!bucket) {
+        bucket = [];
+        buckets.set(key, bucket);
+        order.push(key);
+      }
+      bucket.push(f);
+    }
+    // General bucket leads; the rest keep first-appearance order.
+    const ordered = [
+      ...order.filter((k) => k === SUBGROUP_GENERAL),
+      ...order.filter((k) => k !== SUBGROUP_GENERAL),
+    ];
+    return ordered.map((key) => ({ key, fields: buckets.get(key)! }));
+  });
+
+  // Render subgroup headers only when there is genuine structure —
+  // a flat section (single bucket) stays header-free as before.
+  const hasSubgroups = $derived(
+    fieldGroups.length > 1 || (fieldGroups.length === 1 && fieldGroups[0].key !== SUBGROUP_GENERAL),
+  );
+
+  // subgroupLabel resolves a subgroup key to a readable heading.
+  // Lookup chain: section-scoped i18n key → generic subgroup key →
+  // humanised segment. The humanise fallback means a never-before-seen
+  // nested struct still gets a sensible heading without a catalogue row.
+  function subgroupLabel(key: string): string {
+    if (key === SUBGROUP_GENERAL) return t("config.subgroup.general");
+    const scoped = "config.subgroup." + section + "." + key;
+    const scopedT = t(scoped);
+    if (scopedT !== scoped) return scopedT;
+    const generic = "config.subgroup." + key;
+    const genericT = t(generic);
+    if (genericT !== generic) return genericT;
+    return humanize(key);
+  }
 
   // Section-level intro: i18n key `settings.section.intro.<section>`.
   // Empty when not defined so the renderer can suppress the row.
@@ -597,6 +658,18 @@
   </div>
 {/snippet}
 
+{#snippet fieldRow(field: ConfigSchemaField)}
+  {#if field.class === "secret"}
+    {@render secretWidget(field)}
+  {:else if field.class === "expert"}
+    <ExpertGate>
+      {@render fieldWidget(field)}
+    </ExpertGate>
+  {:else}
+    {@render fieldWidget(field)}
+  {/if}
+{/snippet}
+
 <div class="space-y-3">
   {#if loading}
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
@@ -614,19 +687,31 @@
       </p>
     {/if}
 
-    <div>
-      {#each sectionFields as field (field.path)}
-        {#if field.class === "secret"}
-          {@render secretWidget(field)}
-        {:else if field.class === "expert"}
-          <ExpertGate>
-            {@render fieldWidget(field)}
-          </ExpertGate>
-        {:else}
-          {@render fieldWidget(field)}
-        {/if}
-      {/each}
-    </div>
+    {#if hasSubgroups}
+      <div class="space-y-5">
+        {#each fieldGroups as group (group.key)}
+          <div>
+            <div class="mb-1 flex items-center gap-2 border-b border-slate-200 pb-1 dark:border-slate-700">
+              <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {subgroupLabel(group.key)}
+              </h3>
+              <Badge variant="muted">{group.fields.length}</Badge>
+            </div>
+            <div>
+              {#each group.fields as field (field.path)}
+                {@render fieldRow(field)}
+              {/each}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {:else}
+      <div>
+        {#each fieldGroups[0]?.fields ?? [] as field (field.path)}
+          {@render fieldRow(field)}
+        {/each}
+      </div>
+    {/if}
 
     <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
       <Button
