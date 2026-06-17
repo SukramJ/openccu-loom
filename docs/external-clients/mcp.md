@@ -104,9 +104,15 @@ curl -s -H "Authorization: Bearer $TOKEN" http://host:8080/info \
 
 ## 2. The tool surface
 
-Nine tools, in two tiers. **Read tools** are always registered (each
+Eighteen tools, in two tiers. **Read tools** are always registered (each
 gated on its backing subsystem being wired). **Write tools** are
 registered only when `allow_writes: true`.
+
+Tool names follow one taxonomy across the whole surface: `list_<plural>`
+enumerates like entities, `get_<singular>` fetches one record or an
+overall view, `read_<noun>` reads a keyed sub-structure, and
+`<verb>_<noun>` is a write/action. Names use the project's compact
+domain vocabulary (`central`, `datapoint`, `paramset`, `sysvar`).
 
 Every tool that touches a specific CCU takes a `central_name`. It is
 **optional on reads** (omit to span all centrals) and **required on
@@ -120,9 +126,22 @@ device, or the call is rejected (ADR 0002, multi-CCU safety).
 | `list_centrals` | — | The configured CCU names. These are the scoping dimension for every other tool. |
 | `list_devices` | `central_name?` | Device summaries (address, model, name, interface, central). Omit `central_name` to list all. |
 | `get_device` | `address` | A single device summary + its owning central. |
+| `list_channels` | `address` (device-level) | The device's channels (address, number, type, name, room, data-point count). Use it to discover channel addresses (`<device>:<n>`) before `read_paramset`. |
 | `read_paramset` | `address` (channel, e.g. `ABC:1`), `key` (`MASTER` or `VALUES`) | The parameter→value map. `MASTER` = configuration, `VALUES` = current state. |
+| `list_rooms` | `central_name?` | Configured rooms with the device count for each. |
+| `list_functions` | `central_name?` | Configured functions (Gewerke) with the device count for each. |
+| `list_programs` | `central_name?` | CCU automation programs (id, name, last-execution state). The `id` is what `trigger_program` takes; internal `Tmp_*` programs are omitted. |
+| `list_sysvars` | `central_name?` | CCU system variables (name, type, current value, unit). Internal sysvars omitted. |
+| `list_service_messages` | `central_name?` | Active service messages (low battery, sabotage, comms errors) — device-maintenance conditions `get_health` does not report. |
+| `list_alarm_messages` | `central_name?` | Active alarm messages (the alarm set, distinct from service messages). |
+| `list_inbox` | `central_name?` | Devices in the inbox — newly detected, not yet accepted into the configuration. |
 | `list_audit` | `limit?` (default 50, max 1000) | Recent config change-log, newest first (who changed what, when). |
 | `get_health` | — | Overall daemon status + per-component status (CCU connectivity, subsystems). |
+| `get_system_info` | `central_name?` | Daemon version, plus per-central program/sysvar counts and CCU firmware-update state. |
+
+The central-spanning read tools (`central_name?`) span every configured
+central when `central_name` is omitted, or scope to the named one when
+set — the same multi-CCU rule the rest of the surface follows.
 
 ### 2.2 Write tools (only when `allow_writes: true`)
 

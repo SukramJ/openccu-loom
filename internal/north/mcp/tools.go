@@ -116,6 +116,18 @@ func parseParamsetKey(s string) (hmenum.ParamsetKey, bool) {
 // registerReadTools wires the always-available read surface. Each tool
 // gates on its own dependency so a partial wiring never exposes a tool
 // that cannot answer.
+//
+// Tool names follow one taxonomy across the whole MCP surface so the
+// catalogue reads as a single design rather than a grab-bag:
+//
+//   - list_<plural>   — enumerate like entities (list_devices, list_programs)
+//   - get_<singular>  — fetch one record or an overall view (get_device, get_health)
+//   - read_<noun>     — read a keyed sub-structure (read_paramset)
+//   - <verb>_<noun>   — write / action tools (set_datapoint, trigger_program)
+//
+// Names also use the project's compact domain vocabulary (central,
+// datapoint, paramset, sysvar) rather than verbose spelled-out forms.
+// Every central-spanning read tool takes an optional central_name.
 func registerReadTools(s *mcpsdk.Server, d Deps) {
 	registerListCentrals(s, d)
 	registerListDevices(s, d)
@@ -128,6 +140,22 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	}
 	if d.Health != nil {
 		registerGetHealth(s, d)
+	}
+	// Device-topology read tools project the device model directly.
+	if d.Devices != nil {
+		registerListRooms(s, d)
+		registerListFunctions(s, d)
+		registerListChannels(s, d)
+	}
+	// Hub-aggregate read tools span the configured centrals via the
+	// already-wired HubResolver + CentralLister seams.
+	if d.Hubs != nil && d.Centrals != nil {
+		registerListPrograms(s, d)
+		registerListSysvars(s, d)
+		registerListServiceMessages(s, d)
+		registerListAlarmMessages(s, d)
+		registerListInbox(s, d)
+		registerGetSystemInfo(s, d)
 	}
 }
 

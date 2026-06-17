@@ -219,6 +219,19 @@ REST/service capability that has been removed, and a removed
 capability cannot silently orphan a tool. This is the in-tree guard
 Option B structurally cannot provide.
 
+### Tool names follow one taxonomy
+
+The catalogue must read as a single coherent surface, not an
+accumulation of ad-hoc names. Every tool name uses one of four
+sanctioned verb prefixes — `list_<plural>` (enumerate like entities),
+`get_<singular>` (one record or an overall view), `read_<noun>` (a
+keyed sub-structure), `<verb>_<noun>` (a write/action) — and the
+project's compact domain vocabulary (`central`, `datapoint`,
+`paramset`, `sysvar`) rather than verbose spelled-out forms. A
+contract test (`TestMCPToolNamingTaxonomy`) enforces the verb set so a
+new tool cannot invent a fifth verb. The rule is documented over
+`registerReadTools` in `internal/north/mcp/tools.go`.
+
 ## Consequences
 
 ### Positive
