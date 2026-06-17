@@ -42,6 +42,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shared by multiple centrals. Clients that previously fetched the full
   `GET /programs` list and filtered locally can drop that workaround.
 
+### Changed
+
+- **Clearer grouping across the config UIs.** As the number of settings
+  grew, the editors had gone flat. The daemon Settings sidebar now buckets
+  its tabs into five collapsible top-level categories (General & System,
+  Bridges, CCUs & Connectivity, Security & Access, Advanced) instead of one
+  long list. Within a section, fields are split into labelled subgroups
+  (e.g. Authentication / Rate Limiting / WebSocket / Tracing under
+  *API & WebSocket*; Commissioning / CASE / Attestation under *Matter*),
+  derived from the config path with a count badge per group. The device
+  channel-config editor (MASTER paramset) gets the same header treatment and
+  its curated group titles (Temperature, Timing, Boost, …) are now localized
+  (de/en) instead of hard-coded English; easymode-metadata groups keep their
+  archive label. Frontend-only and additive — no API or config changes.
+
 ## [0.4.0]
 
 ### Changed
