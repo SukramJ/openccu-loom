@@ -72,6 +72,14 @@ var consumerDefaults = map[string]any{
 	// and internal/central/adapter.DefaultValuesCacheFlushInterval.
 	"persistence.values_cache.enabled":        true,
 	"persistence.values_cache.flush_interval": int64(60_000_000_000), // 60 s
+	// Persistence/History — see internal/config/config.go HistoryConfig
+	// and internal/history.Default* constants. Opt-in: the *bool fields
+	// default to false and need the explicit value so the SPA renders an
+	// unchecked checkbox rather than an indeterminate one.
+	"persistence.history.enabled":        false,
+	"persistence.history.retention":      int64(2_592_000_000_000_000), // 720 h (30 d)
+	"persistence.history.flush_interval": int64(5_000_000_000),         // 5 s
+	"persistence.history.export.enabled": false,
 	// WS — see internal/config/config.go NorthRESTWS.
 	"north.rest.ws.replay_capacity": 1024,
 	// Rate-limit — see middleware/ratelimit; zero means "use the

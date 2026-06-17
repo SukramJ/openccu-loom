@@ -347,6 +347,18 @@ const EN: Catalog = {
   "config.field.persistence.values_cache.enabled": "Enable VALUES cache",
   "config.field.persistence.values_cache.flush_interval": "Cache flush interval",
   "config.field.persistence.values_cache.disabled_centrals": "Excluded CCUs",
+  "config.field.persistence.history.enabled": "Enable history recorder",
+  "config.field.persistence.history.retention": "Sample retention period",
+  "config.field.persistence.history.flush_interval": "History flush interval",
+  "config.field.persistence.history.include": "Include parameters",
+  "config.field.persistence.history.exclude": "Exclude parameters",
+  "config.field.persistence.history.disabled_centrals": "Excluded CCUs",
+  "config.field.persistence.history.export.enabled": "Enable history export",
+  "config.field.persistence.history.export.kind": "Export backend",
+  "config.field.persistence.history.export.endpoint": "Export endpoint",
+  "config.field.persistence.history.export.org": "InfluxDB org",
+  "config.field.persistence.history.export.bucket": "InfluxDB bucket",
+  "config.field.persistence.history.export.token_env": "Token env var",
   "config.field.reliability.command_retry_initial_delay": "Retry initial delay",
   "config.field.reliability.command_throttle_inter_command_delay":
     "Throttle inter-command delay",
@@ -367,6 +379,25 @@ const EN: Catalog = {
   "config.field.centrals.interfaces.port": "Interface port",
   "config.field.centrals.interfaces.remote_path": "Remote path",
   "config.field.centrals.interfaces.rpc_type": "RPC type",
+  "config.field.centrals.check_connection_interval": "Connection check interval",
+  "config.field.centrals.behavior.delay_new_device_creation": "Defer new-device creation",
+  "config.field.centrals.behavior.enable_device_firmware_check": "Firmware update entities",
+  "config.field.centrals.behavior.enable_program_scan": "Scan programs",
+  "config.field.centrals.behavior.enable_sysvar_scan": "Scan system variables",
+  "config.field.centrals.behavior.include_internal_programs": "Include internal programs",
+  "config.field.centrals.behavior.include_internal_sysvars": "Include internal sysvars",
+  "config.field.centrals.behavior.light_last_brightness": "Restore last brightness",
+  "config.field.centrals.behavior.program_markers": "Program markers",
+  "config.field.centrals.behavior.sysvar_markers": "Sysvar markers",
+  "config.field.centrals.behavior.sysvar_scan_interval": "Sysvar scan interval",
+  "config.field.centrals.behavior.use_group_channel_for_cover_state": "Group channel for cover state",
+  "config.field.north.mcp.enabled": "Enable MCP server",
+  "config.field.north.mcp.allow_writes": "Allow writes",
+  "config.field.north.mcp.path": "MCP mount path",
+  "config.field.north.mqtt.retain_cleanup_window_ms": "Retain cleanup window (ms)",
+  "config.field.north.rest.csrf_enabled": "CSRF protection",
+  "config.field.north.rest.csrf_secure": "CSRF Secure cookie",
+  "config.field.north.rest.tracing.otlp_endpoint": "OTLP trace endpoint",
   // Inline help — shown beneath the field label. Same key
   // namespace as the labels above, but with `.help.` instead of
   // `.field.`. A missing help row is fine; the editor just
@@ -473,6 +504,30 @@ const EN: Catalog = {
     "How often to flush queued cache writes to disk. Default 60 s — short enough to survive a crash with minimal loss, long enough to coalesce bursts.",
   "config.help.persistence.values_cache.disabled_centrals":
     "List of central names (one per line) whose data points are kept out of the cache. Useful for test rigs in a multi-CCU deployment.",
+  "config.help.persistence.history.enabled":
+    "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
+  "config.help.persistence.history.retention":
+    "How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows.",
+  "config.help.persistence.history.flush_interval":
+    "How often the recorder flushes a batch of samples to history.db; zero falls back to the daemon default of 5 s.",
+  "config.help.persistence.history.include":
+    "Parameter-name globs to record (e.g. TEMPERATURE, *POWER*); empty (default) records every numeric VALUES parameter.",
+  "config.help.persistence.history.exclude":
+    "Parameter-name globs to drop from recording; exclude always wins over include — empty (default) excludes nothing.",
+  "config.help.persistence.history.disabled_centrals":
+    "Central names whose data points must not be recorded; empty (default) records all enabled centrals.",
+  "config.help.persistence.history.export.enabled":
+    "Turn on the push exporter that forwards each recorded sample to an external time-series store (InfluxDB by default); disabled by default.",
+  "config.help.persistence.history.export.kind":
+    "Exporter backend; empty or \"influxdb\" selects the InfluxDB v2 line-protocol writer (the only available backend today).",
+  "config.help.persistence.history.export.endpoint":
+    "Base URL of the target time-series store, e.g. http://influx:8086.",
+  "config.help.persistence.history.export.org":
+    "InfluxDB v2 organisation name that owns the target bucket.",
+  "config.help.persistence.history.export.bucket":
+    "InfluxDB v2 bucket into which samples are written.",
+  "config.help.persistence.history.export.token_env":
+    "Name of the environment variable that holds the InfluxDB write token; the token is never stored inline in config.",
   "config.help.reliability.command_retry_initial_delay":
     "First backoff delay after a transient CCU write failure (the retry-stack doubles on each step). Default 250 ms; raise to 2 s to mirror the reference implementation or lower for fast test rigs.",
   "config.help.reliability.command_throttle_inter_command_delay":
@@ -495,6 +550,38 @@ const EN: Catalog = {
   "config.help.centrals.interfaces.port": "Managed in the CCUs tab.",
   "config.help.centrals.interfaces.remote_path": "Managed in the CCUs tab.",
   "config.help.centrals.interfaces.rpc_type": "Managed in the CCUs tab.",
+  "config.help.centrals.check_connection_interval":
+    "How often the daemon pings the CCU in the background; zero uses the compiled-in default of 30 s, negative disables the check entirely.",
+  "config.help.centrals.behavior.delay_new_device_creation":
+    "Defer creation of a newly-paired device until its description is complete, avoiding half-formed entities during pairing; default false.",
+  "config.help.centrals.behavior.enable_device_firmware_check":
+    "Surface a firmware-update entity for every device that reports available firmware; default true.",
+  "config.help.centrals.behavior.enable_program_scan":
+    "Fetch CCU programs and expose them as hub entities; disable to skip program discovery entirely (default true).",
+  "config.help.centrals.behavior.enable_sysvar_scan":
+    "Fetch CCU system variables and expose them as hub entities; disable to skip sysvar discovery entirely (default true).",
+  "config.help.centrals.behavior.include_internal_programs":
+    "Include CCU-internal programs (those not intended for user control) in the hub entity surface; default false.",
+  "config.help.centrals.behavior.include_internal_sysvars":
+    "Include CCU-internal system variables in the hub entity surface; default true.",
+  "config.help.centrals.behavior.light_last_brightness":
+    "When turning a light on, restore the last non-zero brightness the CCU reported rather than switching to full (100%); default true.",
+  "config.help.centrals.behavior.program_markers":
+    "Restrict program hub entities to those whose CCU description carries one of these marker tokens (prefix match, e.g. HAHM, HX); empty includes everything.",
+  "config.help.centrals.behavior.sysvar_markers":
+    "Restrict sysvar hub entities to those whose CCU description carries one of these marker tokens (prefix match); empty includes everything.",
+  "config.help.centrals.behavior.sysvar_scan_interval":
+    "How often the daemon refreshes system variables from the CCU; zero uses the compiled-in default.",
+  "config.help.centrals.behavior.use_group_channel_for_cover_state":
+    "Report a cover's position from its group-channel LEVEL rather than from its own channel; default true.",
+  "config.help.north.mqtt.retain_cleanup_window_ms":
+    "How long (in milliseconds) the daemon waits for the broker to deliver all retained messages before processing the retain-cleanup eviction list; zero falls back to 2000 ms.",
+  "config.help.north.rest.csrf_enabled":
+    "Mount the double-submit cookie/header CSRF guard on mutating REST endpoints; enabled by default for browser-facing deployments — disable only for pure API-token setups where no session cookies are issued.",
+  "config.help.north.rest.csrf_secure":
+    "Set the Secure flag on the CSRF cookie; enable when the daemon is behind an HTTPS / TLS terminator.",
+  "config.help.north.rest.tracing.otlp_endpoint":
+    "Base URL of an OTLP/HTTP trace collector (e.g. http://jaeger:4318); empty (default) disables span export entirely.",
   "settings.section.intro.persistence":
     "Local on-disk cache of CCU data-point values. The cache lets the daemon survive restarts without re-reading every paramset from the CCU. By default it is ON with a 60-second flush interval — leave it alone unless you are debugging cache behaviour.",
   "settings.section.intro.reliability":
@@ -1782,6 +1869,18 @@ const DE: Catalog = {
   "config.field.persistence.values_cache.enabled": "VALUES-Cache aktiv",
   "config.field.persistence.values_cache.flush_interval": "Cache-Flush-Intervall",
   "config.field.persistence.values_cache.disabled_centrals": "Ausgeschlossene CCUs",
+  "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
+  "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
+  "config.field.persistence.history.flush_interval": "Verlaufs-Flush-Intervall",
+  "config.field.persistence.history.include": "Parameter einschließen",
+  "config.field.persistence.history.exclude": "Parameter ausschließen",
+  "config.field.persistence.history.disabled_centrals": "Ausgeschlossene CCUs",
+  "config.field.persistence.history.export.enabled": "Verlaufsexport aktiv",
+  "config.field.persistence.history.export.kind": "Export-Backend",
+  "config.field.persistence.history.export.endpoint": "Export-Endpunkt",
+  "config.field.persistence.history.export.org": "InfluxDB-Organisation",
+  "config.field.persistence.history.export.bucket": "InfluxDB-Bucket",
+  "config.field.persistence.history.export.token_env": "Token-Umgebungsvariable",
   "config.field.reliability.command_retry_initial_delay": "Retry-Anfangsverzögerung",
   "config.field.reliability.command_throttle_inter_command_delay":
     "Throttle-Befehlsabstand",
@@ -1802,6 +1901,25 @@ const DE: Catalog = {
   "config.field.centrals.interfaces.port": "Interface-Port",
   "config.field.centrals.interfaces.remote_path": "Remote-Pfad",
   "config.field.centrals.interfaces.rpc_type": "RPC-Typ",
+  "config.field.centrals.check_connection_interval": "Verbindungsprüfungsintervall",
+  "config.field.centrals.behavior.delay_new_device_creation": "Neue Geräte zurückstellen",
+  "config.field.centrals.behavior.enable_device_firmware_check": "Firmware-Update-Entitäten",
+  "config.field.centrals.behavior.enable_program_scan": "Programme scannen",
+  "config.field.centrals.behavior.enable_sysvar_scan": "Systemvariablen scannen",
+  "config.field.centrals.behavior.include_internal_programs": "Interne Programme einschließen",
+  "config.field.centrals.behavior.include_internal_sysvars": "Interne Systemvariablen einschließen",
+  "config.field.centrals.behavior.light_last_brightness": "Letzte Helligkeit wiederherstellen",
+  "config.field.centrals.behavior.program_markers": "Programm-Marker",
+  "config.field.centrals.behavior.sysvar_markers": "Systemvariablen-Marker",
+  "config.field.centrals.behavior.sysvar_scan_interval": "Systemvariablen-Scan-Intervall",
+  "config.field.centrals.behavior.use_group_channel_for_cover_state": "Gruppenkanal für Rollladenstatus",
+  "config.field.north.mcp.enabled": "MCP-Server aktiv",
+  "config.field.north.mcp.allow_writes": "Schreibzugriff erlauben",
+  "config.field.north.mcp.path": "MCP-Mount-Pfad",
+  "config.field.north.mqtt.retain_cleanup_window_ms": "Retain-Cleanup-Fenster (ms)",
+  "config.field.north.rest.csrf_enabled": "CSRF-Schutz",
+  "config.field.north.rest.csrf_secure": "CSRF Secure-Cookie",
+  "config.field.north.rest.tracing.otlp_endpoint": "OTLP-Trace-Endpunkt",
   "config.help.locale": "Standard-Sprache der SPA beim ersten Aufruf. Operatoren können pro Benutzer in den Einstellungen umschalten.",
   "config.help.data_dir": "Verzeichnis für SQLite-Datenbank, Sessions, Backups, Logs. Muss schreibbar sein; wird beim ersten Start angelegt.",
   "config.help.logging.level": "Filter-Schwelle des strukturierten Loggers. debug zeigt Wire-Level-Traces; info ist der typische Operator-Level.",
@@ -1908,6 +2026,30 @@ const DE: Catalog = {
     "Wie oft gepufferte Schreibvorgänge auf Disk geschrieben werden. Default 60 s — kurz genug, um einen Crash gut zu überstehen, lang genug, um Bursts zu sammeln.",
   "config.help.persistence.values_cache.disabled_centrals":
     "Liste von Central-Namen (eine pro Zeile), deren Datenpunkte NICHT gecached werden. Praktisch für Test-Rigs in Multi-CCU-Setups.",
+  "config.help.persistence.history.enabled":
+    "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
+  "config.help.persistence.history.retention":
+    "Wie lange Rohmesswerte aufbewahrt werden; 0 = Standardwert von 30 Tagen (720 h), ältere Zeilen werden vom Retention-Job gelöscht.",
+  "config.help.persistence.history.flush_interval":
+    "Wie oft der Recorder einen Batch von Messwerten in history.db schreibt; 0 = Daemon-Standard von 5 s.",
+  "config.help.persistence.history.include":
+    "Parameter-Name-Globs, die aufgezeichnet werden (z. B. TEMPERATURE, *POWER*); leer (Standard) = alle numerischen VALUES-Parameter.",
+  "config.help.persistence.history.exclude":
+    "Parameter-Name-Globs, die von der Aufzeichnung ausgeschlossen werden; Exclude gewinnt immer über Include — leer (Standard) = kein Ausschluss.",
+  "config.help.persistence.history.disabled_centrals":
+    "Central-Namen, deren Datenpunkte nicht aufgezeichnet werden; leer (Standard) = alle aktiven Centrals.",
+  "config.help.persistence.history.export.enabled":
+    "Push-Exporter aktivieren, der jeden aufgezeichneten Messwert an einen externen Zeitreihenspeicher weiterleitet (Standard: InfluxDB); standardmäßig aus.",
+  "config.help.persistence.history.export.kind":
+    "Exporter-Backend; leer oder \"influxdb\" wählt den InfluxDB-v2-Line-Protocol-Writer (aktuell einziges Backend).",
+  "config.help.persistence.history.export.endpoint":
+    "Basis-URL des Zeitreihenspeichers, z. B. http://influx:8086.",
+  "config.help.persistence.history.export.org":
+    "InfluxDB-v2-Organisationsname, dem der Ziel-Bucket gehört.",
+  "config.help.persistence.history.export.bucket":
+    "InfluxDB-v2-Bucket, in den die Messwerte geschrieben werden.",
+  "config.help.persistence.history.export.token_env":
+    "Name der Umgebungsvariablen, die das InfluxDB-Schreib-Token hält; das Token wird nie direkt in der Konfiguration gespeichert.",
   "config.help.centrals":
     "Alle konfigurierten CCUs. Verwaltung im dedizierten CCUs-Tab — Einträge in config.yaml werden als Bootstrap-Seeds behandelt.",
   "config.help.centrals.name": "Im CCUs-Tab verwaltet.",
@@ -1926,6 +2068,38 @@ const DE: Catalog = {
   "config.help.centrals.interfaces.port": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.interfaces.remote_path": "Im CCUs-Tab verwaltet.",
   "config.help.centrals.interfaces.rpc_type": "Im CCUs-Tab verwaltet.",
+  "config.help.centrals.check_connection_interval":
+    "Wie oft der Daemon die CCU im Hintergrund anpingt; 0 = Compiler-Standard von 30 s, negativ = Prüfung deaktiviert.",
+  "config.help.centrals.behavior.delay_new_device_creation":
+    "Neu angekoppelte Geräte erst anlegen, wenn ihre Beschreibung vollständig ist — verhindert halb-fertige Entitäten während des Pairings. Standard: aus.",
+  "config.help.centrals.behavior.enable_device_firmware_check":
+    "Für jedes Gerät, das Firmware-Updates meldet, eine Firmware-Update-Entität anzeigen. Standard: an.",
+  "config.help.centrals.behavior.enable_program_scan":
+    "CCU-Programme abrufen und als Hub-Entitäten bereitstellen; deaktivieren um das Programm-Discovery vollständig zu überspringen. Standard: an.",
+  "config.help.centrals.behavior.enable_sysvar_scan":
+    "CCU-Systemvariablen abrufen und als Hub-Entitäten bereitstellen; deaktivieren um das Systemvariablen-Discovery vollständig zu überspringen. Standard: an.",
+  "config.help.centrals.behavior.include_internal_programs":
+    "CCU-interne Programme (nicht für Benutzersteuerung gedacht) in die Hub-Entitätsfläche einschließen. Standard: aus.",
+  "config.help.centrals.behavior.include_internal_sysvars":
+    "CCU-interne Systemvariablen in die Hub-Entitätsfläche einschließen. Standard: an.",
+  "config.help.centrals.behavior.light_last_brightness":
+    "Beim Einschalten eines Lichts die zuletzt von der CCU gemeldete Helligkeit (≠ 0) wiederherstellen statt auf 100 % zu gehen. Standard: an.",
+  "config.help.centrals.behavior.program_markers":
+    "Programm-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match, z. B. HAHM, HX); leer = alles einschließen.",
+  "config.help.centrals.behavior.sysvar_markers":
+    "Systemvariablen-Hub-Entitäten auf solche beschränken, deren CCU-Beschreibung einen dieser Marker-Token trägt (Präfix-Match); leer = alles einschließen.",
+  "config.help.centrals.behavior.sysvar_scan_interval":
+    "Wie oft der Daemon Systemvariablen von der CCU aktualisiert; 0 = Daemon-Standard.",
+  "config.help.centrals.behavior.use_group_channel_for_cover_state":
+    "Rollladen-Position vom LEVEL-Wert des Gruppenkanals statt vom eigenen Kanal melden. Standard: an.",
+  "config.help.north.mqtt.retain_cleanup_window_ms":
+    "Wie lange (in Millisekunden) der Daemon auf alle retained Messages des Brokers wartet, bevor die Retain-Cleanup-Eviction-Liste verarbeitet wird; 0 = 2000 ms.",
+  "config.help.north.rest.csrf_enabled":
+    "Double-Submit-Cookie/Header-CSRF-Schutz auf mutierenden REST-Endpunkten aktivieren; standardmäßig an für Browser-Deployments — nur für reine API-Token-Setups ohne Session-Cookies deaktivieren.",
+  "config.help.north.rest.csrf_secure":
+    "Secure-Flag auf dem CSRF-Cookie setzen; aktivieren, wenn der Daemon hinter einem HTTPS-/TLS-Terminator betrieben wird.",
+  "config.help.north.rest.tracing.otlp_endpoint":
+    "Basis-URL eines OTLP/HTTP-Trace-Collectors (z. B. http://jaeger:4318); leer (Standard) = kein Span-Export.",
   "settings.section.intro.persistence":
     "Lokaler Disk-Cache der CCU-Datenpunkt-Werte. Erlaubt dem Daemon, Neustarts ohne kompletten Paramset-Re-Read zu überstehen. Standardmäßig AN mit 60-Sekunden-Flush — nur anfassen, wenn man Cache-Verhalten debuggt.",
   "settings.section.intro.reliability":
