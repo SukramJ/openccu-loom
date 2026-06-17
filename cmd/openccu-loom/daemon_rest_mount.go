@@ -82,6 +82,7 @@ type restMountDeps struct {
 	visibilityAdapter       *visibilityAdapter
 
 	valuesCacheStore *sqlitestore.ValuesCacheStore
+	historyStore     *sqlitestore.MeasurementStore
 }
 
 // mountRESTServer stands up the REST router + server (and the optional mDNS
@@ -221,6 +222,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// SupervisedRestart capability — fails closed.
 		EnableRestartEndpoint: detectSupervisedRestart(),
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
+		History:               newHistoryHandlerAdapter(d.historyStore),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,

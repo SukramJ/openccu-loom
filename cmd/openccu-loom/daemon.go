@@ -137,6 +137,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	visibilityAdapter := si.visibilityAdapter
 	masterValuesStore := si.masterValuesStore
 	valuesCacheStore := si.valuesCacheStore
+	historyStore := si.historyStore
 	wsHub := si.wsHub
 	wsHandler := si.wsHandler
 	valueWriter := si.valueWriter
@@ -264,6 +265,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visReg:                  visReg,
 		masterValuesStore:       masterValuesStore,
 		valuesCacheStore:        valuesCacheStore,
+		historyStore:            historyStore,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		mqttWiring:              mqttWiring,
@@ -466,6 +468,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
+		historyStore:            historyStore,
 	})
 	defer restMountTeardown()
 

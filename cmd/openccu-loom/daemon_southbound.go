@@ -38,6 +38,7 @@ type southboundWiringDeps struct {
 	visReg                  *visibility.Registry
 	masterValuesStore       *sqlite.MasterValuesStore
 	valuesCacheStore        *sqlite.ValuesCacheStore
+	historyStore            *sqlite.MeasurementStore
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
@@ -134,9 +135,17 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		teardowns = append(teardowns, stopFlusher)
 	}
 	// Evict a device's persisted cache rows when it is removed, so an
-	// unpaired device does not leave orphaned values_cache rows behind.
-	//nolint:contextcheck // WireValuesCacheEviction has no ctx parameter; its handlers bound each DELETE with their own timeout context
-	teardowns = append(teardowns, adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger))
+	// unpaired device does not leave orphaned values_cache rows behind;
+	// and wire the opt-in measurement-history recorder, which subscribes
+	// to genuine live wire value changes and persists a numeric
+	// time-series for SPA charts (no-op when history is off — nil store).
+	// See ADR 0040. Both helpers manage their own daemon-lifetime context.
+	//nolint:contextcheck // these wiring helpers take no ctx; they bound their own internal contexts
+	teardowns = append(
+		teardowns,
+		adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger),
+		wireHistoryRecorder(cfg, reg, d.historyStore, d.healthTracker, logger),
+	)
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many
 	// rows survived the last restart, how many got cast-rejected,

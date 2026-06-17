@@ -8,6 +8,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Opt-in measurement history for SPA charts (no external stack
+  required).** A daemon running without Home Assistant can now record a
+  time-series of numeric sensor values and chart it in the SPA. The
+  recorder subscribes to live wire value changes and persists them to a
+  dedicated `history.db` (its own WAL, separate from the config/session
+  store); only genuine live observations are recorded — boot-time
+  pseudo-values, cache replays, and source-only flips are filtered out by
+  provenance (`ValueSource`), so a real `0` is kept but a restart spike is
+  not. A new `GET /api/v1/history` endpoint returns a server-side-bucketed
+  (avg/min/max/count) series sized for charting. For users who already run
+  Grafana/InfluxDB, an opt-in push exporter forwards each sample via
+  InfluxDB line protocol (no client dependency; token sourced from the
+  environment). Everything is off by default and configured under
+  `persistence.history` (DB-tier, SPA-editable). See
+  [ADR 0040](docs/adr/0040-measurement-history.md) and SPECIFICATION §4.6.
 - **Nine new MCP read tools** project domain data that previously had no
   MCP surface: `list_programs`, `list_sysvars`, `list_service_messages`,
   `list_alarm_messages`, `list_inbox`, `get_system_info` (hub aggregates,

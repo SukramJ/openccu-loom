@@ -356,6 +356,40 @@ in the same commit.
   typed `ErrAuditOverflow` error for backpressure — silent drops
   are not allowed (the SPEC says "append-only").
 
+### 4.6 Measurement history
+
+A user who runs OpenCCU-Loom **without** Home Assistant has no
+recorder to capture a time-series of sensor values. To serve that
+audience without forcing an external stack, the daemon ships an
+**opt-in, embedded measurement history** (default off). The driving
+use case is charts in the Svelte SPA over the short-to-medium term;
+long-term archival is served by an opt-in push exporter, not by the
+embedded store. See **[ADR 0040](./docs/adr/0040-measurement-history.md)**
+for the full design.
+
+- **Capture point**: a recorder subscribes to
+  `DataPointValueChangedEvent` on each central's EventBus, filters to
+  numeric `VALUES` parameters, buffers, and batch-flushes — the same
+  non-blocking flusher shape as the VALUES cache (§4.5).
+- **Provenance guard**: only genuine *live* wire observations are
+  recorded. Boot-time pseudo-values — a freshly created DP's zero
+  default, a value replayed from the VALUES cache, or a source-only
+  freshness flip — are rejected via the `hmenum.ValueSource`
+  lifecycle (ADR 0019), **not** by filtering on the value, so a real
+  `0` is kept. The sample timestamp is the wire-reception time, never
+  the boot wall-clock.
+- **Storage**: a dedicated `history.db` (its own WAL + migration
+  series), separate from the config/session DB so an append-heavy
+  writer never contends with config writes. Retention runs on the
+  scheduler; rollup downsampling is a later additive step.
+- **Surface**: a REST history endpoint with server-side bucketing
+  feeds SPA charts; an opt-in `MeasurementExporter` seam (modelled on
+  the span exporter, ADR 0037) ships a lean InfluxDB line-protocol
+  implementation for users who already run Grafana/Influx.
+- **Configuration**: one DB-tier `persistence.history` section,
+  editable through the SPA like `persistence.values_cache` and
+  `north.mqtt`. Export credentials are secrets (ADR 0027).
+
 ---
 
 ## 5. Enumerations & Wire Identities

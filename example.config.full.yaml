@@ -459,6 +459,51 @@ persistence:
     # Empty = all centrals are cached.
     disabled_centrals: []
 
+  # Measurement history (ADR 0040). Opt-in time-series of numeric sensor
+  # values for charting in the SPA without an external stack (InfluxDB,
+  # Grafana, …). Stored in a dedicated history.db. Only genuine live wire
+  # observations are recorded — boot-time pseudo-values and cache replays
+  # are filtered out by provenance, and a real 0 is kept.
+  history:
+    # Master switch. Pointer-bool: nil → false (OPT-IN, unlike the
+    # values cache).  [default: false]
+    enabled: false
+
+    # How long raw samples are kept. 0 = default (720h / 30 days).
+    # retention: 720h
+
+    # Batch-flush cadence. 0 = default (5s).
+    # flush_interval: 5s
+
+    # Parameter-name globs to record. Empty = every numeric VALUES
+    # parameter. Non-empty = only matching parameters.
+    # include: ["TEMPERATURE", "HUMIDITY", "*POWER*", "ACTUAL_*"]
+    include: []
+
+    # Parameter-name globs to drop. Exclude always wins over include.
+    exclude: []
+
+    # Central names whose data points should NOT be recorded.
+    # Empty = all enabled centrals are recorded.
+    disabled_centrals: []
+
+    # Opt-in push exporter (ADR 0040). Forwards each recorded sample to an
+    # external time-series store in addition to the embedded history.db —
+    # for users who already run Grafana/InfluxDB. The embedded store stays
+    # the default; this is additive.
+    export:
+      # Master switch. Defaults to false.
+      enabled: false
+      # Backend. "" or "influxdb" = InfluxDB v2 line protocol.
+      kind: influxdb
+      # Base URL of the target.
+      endpoint: ""        # e.g. http://influx:8086
+      org: ""
+      bucket: ""
+      # Name of the environment variable holding the write token. The
+      # token is a secret and is NEVER stored inline (read from env_file).
+      token_env: ""       # e.g. OPENCCU_INFLUX_TOKEN
+
 
 # =============================================================================
 # CENTRALS — Homematic CCUs

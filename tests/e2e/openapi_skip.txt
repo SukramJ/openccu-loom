@@ -19,3 +19,9 @@ systemRestart -- terminates the daemon; route not mounted in E2E harness
 # but calling logout mid-run clears the cookie jar and produces a misleading
 # 204 in the mutation coverage table.
 logout -- covered by TestRESTSessionLifecycle; side-effects disrupt walker
+
+# getHistory is opt-in (persistence.history.enabled defaults to false). The
+# route is therefore not mounted in the E2E harness and the walker sees 404
+# rather than a documented status — same situation as systemRestart. Covered
+# by handler unit tests in internal/north/rest/handlers/history_test.go.
+getHistory -- opt-in feature; route not mounted in E2E harness (history off by default)

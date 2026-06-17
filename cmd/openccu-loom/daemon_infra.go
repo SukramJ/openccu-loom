@@ -41,6 +41,7 @@ type sharedInfra struct {
 
 	masterValuesStore *sqlite.MasterValuesStore
 	valuesCacheStore  *sqlite.ValuesCacheStore
+	historyStore      *sqlite.MeasurementStore
 
 	wsHub       *ws.Hub
 	wsHandler   http.Handler
@@ -105,6 +106,17 @@ func wireSharedInfrastructure(
 	// store is closed; it is called at the top of teardown so the
 	// checkpoint drains the WAL before Close releases the file handle.
 	stopValuesCacheWAL := sqlite.StartWALCheckpointLoop(si.valuesCacheStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
+
+	// Open the opt-in measurement-history DB (its own file + WAL). nil
+	// when the feature is off (the default). The append-heavy recorder
+	// makes a periodic WAL checkpoint worthwhile on busy ARM targets, so
+	// wire one when the store exists; the stop closer drains the WAL
+	// before Close at teardown.
+	si.historyStore = wireHistoryStore(cfg, logger) //nolint:contextcheck // wireHistoryStore creates its own bounded context internally
+	var stopHistoryWAL func()
+	if si.historyStore != nil {
+		stopHistoryWAL = sqlite.StartWALCheckpointLoop(si.historyStore.DB(), 0, logger) //nolint:contextcheck // StartWALCheckpointLoop creates its own daemon-lifetime context internally
+	}
 
 	si.wsHub = ws.NewHub()
 	if n := cfg.North.REST.WS.ReplayCapacity; n > 0 {
@@ -175,6 +187,10 @@ func wireSharedInfrastructure(
 		// before closing the database so the checkpoint drains cleanly.
 		stopValuesCacheWAL()
 		_ = si.valuesCacheStore.Close()
+		if stopHistoryWAL != nil {
+			stopHistoryWAL()
+		}
+		_ = si.historyStore.Close()
 		_ = si.masterValuesStore.Close()
 		_ = si.visibilityStore.Close()
 	}

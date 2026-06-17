@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.11.0
+  version: 1.12.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1984,6 +1984,68 @@ paths:
                 items: { $ref: "#/components/schemas/AuditEntry" }
         "400":
           $ref: "#/components/responses/BadRequest"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /history:
+    get:
+      operationId: getHistory
+      summary: Bucketed measurement history for one data point
+      tags: [history]
+      description: >
+        Server-side-bucketed view of one numeric data point's recorded
+        measurement history, sized for charting. Requires the opt-in
+        history feature (persistence.history.enabled); the route is absent
+        and returns 404 when disabled. The half-open range [from,to) is
+        aggregated into at most `buckets` evenly spaced buckets, each
+        carrying avg/min/max/count; empty buckets are omitted.
+      parameters:
+        - in: query
+          name: central
+          required: true
+          schema: { type: string }
+          description: Central (CCU) name that owns the data point.
+        - in: query
+          name: interface_id
+          required: true
+          schema: { type: string }
+          description: Canonical interface id (&lt;central&gt;-&lt;interface&gt;).
+        - in: query
+          name: channel
+          required: true
+          schema: { type: string }
+          description: Channel address, e.g. ABC0000001:4.
+        - in: query
+          name: parameter
+          required: true
+          schema: { type: string }
+          description: Parameter name, e.g. ACTUAL_TEMPERATURE.
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date-time }
+          description: Inclusive lower bound (RFC3339).
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date-time }
+          description: Exclusive upper bound (RFC3339). Must be after from.
+        - in: query
+          name: buckets
+          schema: { type: integer, minimum: 1, maximum: 2000, default: 200 }
+          description: >
+            Target bucket count. Capped to 2000; values &lt;= 0 or absent
+            use the default (200).
+      responses:
+        "200":
+          description: Chronological list of non-empty buckets.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HistoryBucket" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /incidents:
     get:
@@ -4195,6 +4257,30 @@ components:
       required: [value]
       properties:
         value: {}
+    HistoryBucket:
+      type: object
+      required: [ts, avg, min, max, count]
+      description: >
+        One aggregated bucket of measurement history: the average,
+        minimum, maximum and sample count over the bucket's time span.
+      properties:
+        ts:
+          type: string
+          format: date-time
+          description: Start of the bucket's time span (UTC).
+        avg:
+          type: number
+          description: Mean of the raw samples in this bucket.
+        min:
+          type: number
+          description: Minimum raw sample in this bucket.
+        max:
+          type: number
+          description: Maximum raw sample in this bucket.
+        count:
+          type: integer
+          format: int64
+          description: Number of raw samples aggregated into this bucket.
     AuditEntry:
       type: object
       required: [timestamp, action]
