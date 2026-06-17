@@ -468,6 +468,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
 		visibilityAdapter:       visibilityAdapter,
 		valuesCacheStore:        valuesCacheStore,
+		historyStore:            historyStore,
 	})
 	defer restMountTeardown()
 

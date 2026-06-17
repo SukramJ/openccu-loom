@@ -90,6 +90,9 @@ type Deps struct {
 	SystemStatus handlers.SystemStatusReader
 	// Audit feeds the change-history view: GET /api/v1/audit.
 	Audit handlers.AuditService
+	// History feeds the measurement-history chart: GET /api/v1/history.
+	// Nil when the opt-in history feature is disabled (the default).
+	History handlers.HistoryService
 	// Auth exposes login/logout/me endpoints at /api/v1/auth so the
 	// SPA can authenticate without the HTMX pages. Nil disables the
 	// endpoints (they 503 on request).
@@ -517,6 +520,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.Audit != nil {
 				pr.Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
+			}
+			if d.History != nil {
+				pr.Get("/history", handlers.GetHistory(d.History))
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
