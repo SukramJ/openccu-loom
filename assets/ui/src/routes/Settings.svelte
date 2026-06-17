@@ -164,9 +164,45 @@
 
   let activeTab = $state("general");
 
+  // Sidebar grouping: the flat tab list is bucketed into a handful of
+  // top-level categories so the navigation stays recognizable as the
+  // number of config sections grows. Each group id maps to a
+  // `settings.group.<id>` i18n label; tab order within a group is the
+  // order listed here.
+  type TabGroup = { id: string; tabIds: string[] };
+
+  const TAB_GROUPS: TabGroup[] = [
+    { id: "general", tabIds: ["general", "system"] },
+    { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
+    { id: "ccus", tabIds: ["ccus", "callback"] },
+    { id: "security", tabIds: ["oidc", "users", "tokens"] },
+    { id: "advanced", tabIds: ["reliability", "persistence"] },
+  ];
+
   const visibleTabs = $derived(
     ALL_TABS.filter((tab) => !tab.expertOnly || prefs.expertMode),
   );
+
+  // Groups with their currently-visible tabs resolved. A group whose
+  // tabs are all expert-only collapses to empty when expert mode is off
+  // and is dropped entirely.
+  const visibleGroups = $derived(
+    TAB_GROUPS.map((group) => ({
+      id: group.id,
+      tabs: group.tabIds
+        .map((id) => ALL_TABS.find((tab) => tab.id === id))
+        .filter((tab): tab is Tab => tab !== undefined)
+        .filter((tab) => !tab.expertOnly || prefs.expertMode),
+    })).filter((group) => group.tabs.length > 0),
+  );
+
+  // Per-group collapse state. Groups start expanded so every category is
+  // visible at a glance; the heading toggles its section closed.
+  let collapsedGroups = $state<Record<string, boolean>>({});
+
+  function toggleGroup(id: string) {
+    collapsedGroups[id] = !collapsedGroups[id];
+  }
 
   // When expert mode is turned off, switch away from an expert-only tab.
   $effect(() => {
@@ -205,24 +241,73 @@
     </Card>
   {/if}
 
+  {#snippet tabButton(tab: Tab, full: boolean)}
+    <button
+      type="button"
+      class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition {full
+        ? 'w-full'
+        : ''}
+        {activeTab === tab.id
+          ? 'bg-brand-50 font-medium text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
+          : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
+      aria-current={activeTab === tab.id ? "page" : undefined}
+      onclick={() => (activeTab = tab.id)}
+    >
+      {tab.label}
+    </button>
+  {/snippet}
+
   <div class="flex flex-col gap-0 rounded-lg border border-slate-200 bg-white shadow-sm md:flex-row dark:border-slate-800 dark:bg-slate-900">
-    <!-- Tab nav: a horizontal scroll strip on phones, vertical sidebar on md+. -->
+    <!--
+      Tab nav. Two render paths share the same tabButton snippet:
+        - phones (<md): a flat horizontal scroll strip of all visible tabs,
+          keeping the compact single-row layout.
+        - md+: a vertical sidebar grouped into collapsible categories so
+          the navigation stays scannable as sections grow.
+    -->
     <nav
-      class="flex flex-row gap-1 overflow-x-auto border-b border-slate-200 p-2 md:min-w-[10rem] md:flex-col md:gap-0.5 md:border-r md:border-b-0 dark:border-slate-800"
+      class="border-b border-slate-200 md:min-w-[12rem] md:border-r md:border-b-0 dark:border-slate-800"
       aria-label={t("settings.title")}
     >
-      {#each visibleTabs as tab (tab.id)}
-        <button
-          type="button"
-          class="shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-left text-sm transition md:w-full
-            {activeTab === tab.id
-              ? 'bg-brand-50 font-medium text-brand-900 dark:bg-brand-900/20 dark:text-brand-100'
-              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
-          onclick={() => (activeTab = tab.id)}
-        >
-          {tab.label}
-        </button>
-      {/each}
+      <!-- Mobile: flat horizontal strip -->
+      <div class="flex flex-row gap-1 overflow-x-auto p-2 md:hidden">
+        {#each visibleTabs as tab (tab.id)}
+          {@render tabButton(tab, false)}
+        {/each}
+      </div>
+
+      <!-- Desktop: grouped collapsible sidebar -->
+      <div class="hidden flex-col gap-2 p-2 md:flex">
+        {#each visibleGroups as group (group.id)}
+          <div class="flex flex-col gap-0.5">
+            <button
+              type="button"
+              class="flex items-center gap-1.5 px-2 py-1 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase transition hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+              aria-expanded={!collapsedGroups[group.id]}
+              onclick={() => toggleGroup(group.id)}
+            >
+              <svg
+                class="h-3 w-3 shrink-0 transition-transform {collapsedGroups[group.id]
+                  ? '-rotate-90'
+                  : ''}"
+                viewBox="0 0 12 12"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span>{t(`settings.group.${group.id}`)}</span>
+            </button>
+            {#if !collapsedGroups[group.id]}
+              <div class="flex flex-col gap-0.5 pl-1.5">
+                {#each group.tabs as tab (tab.id)}
+                  {@render tabButton(tab, true)}
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
     </nav>
 
     <!-- Tab content panel -->

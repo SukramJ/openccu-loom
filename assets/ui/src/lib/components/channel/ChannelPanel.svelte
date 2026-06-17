@@ -354,6 +354,18 @@
     }
   }
 
+  // groupLabel localises a parameter group's heading. The curated
+  // pattern-based groups carry a stable id (temperature, timing, …) and
+  // an English fallback title from the backend; we prefer a
+  // `config.paramgroup.<id>` i18n row when present. Metadata-derived
+  // groups (easymode archive) arrive already localised, so the fallback
+  // to the backend label keeps them intact.
+  function groupLabel(group: { id: string; label: string }): string {
+    const key = "config.paramgroup." + group.id;
+    const translated = t(key);
+    return translated === key ? group.label : translated;
+  }
+
   const parameterIndex = $derived(
     new Map(visibleParams.map((p) => [p.name, p])),
   );
@@ -781,7 +793,10 @@
       )}
       {#if leftover.length > 0}
         <section>
-          <h3 class="mb-3 text-sm font-semibold">{t("channel.other")}</h3>
+          <h3 class="mb-3 flex items-center gap-2 border-b border-slate-200 pb-1 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+            {t("channel.other")}
+            <Badge variant="muted">{leftover.length}</Badge>
+          </h3>
           <ParameterGrid
             parameters={leftover}
             {values}
@@ -804,8 +819,8 @@
           .filter((p): p is NonNullable<typeof p> => p != null)}
         {#if groupItems.length > 0}
           <section class="mb-6">
-            <h3 class="mb-3 flex items-center gap-2 text-sm font-semibold">
-              {group.label}
+            <h3 class="mb-3 flex items-center gap-2 border-b border-slate-200 pb-1 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+              {groupLabel(group)}
               <Badge variant="muted">{groupItems.length}</Badge>
             </h3>
             <ParameterGrid
@@ -829,7 +844,10 @@
       )}
       {#if remaining.length > 0}
         <section>
-          <h3 class="mb-3 text-sm font-semibold">{t("channel.other")}</h3>
+          <h3 class="mb-3 flex items-center gap-2 border-b border-slate-200 pb-1 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200">
+            {t("channel.other")}
+            <Badge variant="muted">{remaining.length}</Badge>
+          </h3>
           <ParameterGrid
             parameters={remaining}
             {values}
