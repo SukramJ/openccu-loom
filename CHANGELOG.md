@@ -8,6 +8,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Nine new MCP read tools** project domain data that previously had no
+  MCP surface: `list_programs`, `list_sysvars`, `list_service_messages`,
+  `list_alarm_messages`, `list_inbox`, `get_system_info` (hub aggregates,
+  each `central_name`-scoped), plus `list_rooms`, `list_functions`, and
+  `list_channels` (device topology). `list_channels` closes a real gap —
+  agents can now discover channel addresses before calling `read_paramset`
+  instead of guessing `:n`. All are reads (no new write surface, no new
+  config, no new capability token); the MCP catalogue grows from 9 to 18
+  tools. Tool names follow a documented verb/vocabulary taxonomy now
+  pinned by a contract test. See
+  [ADR 0025](docs/adr/0025-mcp-northbound-adapter.md) and
+  [the MCP guide](docs/external-clients/mcp.md).
 - **`GET /programs/{id}` single-program fetch.** Returns one
   `ProgramSummary` by id (`404` when unknown), mirroring the existing
   `GET /sysvars/{name}` shape. Like that endpoint it resolves the central

@@ -6,6 +6,7 @@ package contract
 import (
 	"context"
 	"slices"
+	"strings"
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -25,7 +26,14 @@ import (
 func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 	t.Parallel()
 
-	readTools := []string{"list_centrals", "list_devices", "get_device", "read_paramset", "get_health"}
+	readTools := []string{
+		"list_centrals", "list_devices", "get_device", "read_paramset", "get_health",
+		// Device-topology read tools (gated on a wired DeviceLister).
+		"list_rooms", "list_functions", "list_channels",
+		// Hub-aggregate read tools (gated on HubResolver + CentralLister).
+		"list_programs", "list_sysvars", "list_service_messages",
+		"list_alarm_messages", "list_inbox", "get_system_info",
+	}
 	writeTools := []string{"set_datapoint", "write_paramset", "trigger_program"}
 
 	fullDeps := func(allowWrites bool) mcp.Deps {
@@ -71,6 +79,40 @@ func TestMCPWriteToolsGatedByAllowWrites(t *testing.T) {
 	for _, name := range writeTools {
 		if !slices.Contains(withWrites, name) {
 			t.Errorf("write-enabled catalogue must contain %q (have %v)", name, withWrites)
+		}
+	}
+}
+
+// TestMCPToolNamingTaxonomy pins the naming concept documented over
+// registerReadTools: every MCP tool name uses one of the four sanctioned
+// verb prefixes so the catalogue reads as a single coherent design rather
+// than a grab-bag. A new tool that invents a fifth verb (or spells one
+// out verbosely) trips this guard.
+func TestMCPToolNamingTaxonomy(t *testing.T) {
+	t.Parallel()
+
+	allowedVerbs := []string{"list", "get", "read", "set", "write", "trigger"}
+
+	names := mcpToolNames(t, mcp.Deps{
+		Centrals:    emptyCentrals{},
+		Devices:     emptyDevices{},
+		Writer:      mcpNoopWriter{},
+		Paramsets:   mcpNoopParamsets{},
+		Health:      mcpNoopHealth{},
+		Hubs:        mcpNoopHubs{},
+		AllowWrites: true,
+	})
+	if len(names) == 0 {
+		t.Fatal("no tools advertised")
+	}
+	for _, name := range names {
+		verb, _, found := strings.Cut(name, "_")
+		if !found {
+			t.Errorf("tool %q has no verb_noun shape", name)
+			continue
+		}
+		if !slices.Contains(allowedVerbs, verb) {
+			t.Errorf("tool %q uses verb %q outside the sanctioned set %v", name, verb, allowedVerbs)
 		}
 	}
 }
