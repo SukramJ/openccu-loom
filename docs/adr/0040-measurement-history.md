@@ -1,6 +1,6 @@
 # ADR 0040 — Embedded SQLite measurement history (default) with an opt-in push exporter
 
-- **Status**: proposed
+- **Status**: accepted
 - **Date**: 2026-06-17
 - **Related**:
   [ADR 0002 — multi-CCU first class](./0002-multi-ccu-first-class.md),

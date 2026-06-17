@@ -1141,6 +1141,68 @@ export type CentralBehavior = {
   delay_new_device_creation?: boolean;
 };
 
+/**
+ * One aggregated measurement bucket returned by GET /api/v1/history.
+ * The ts field is the UTC start of the bucket's time span (RFC3339).
+ */
+export type HistoryBucket = {
+  ts: string;
+  avg: number;
+  min: number;
+  max: number;
+  count: number;
+};
+
+/**
+ * Thrown by getHistory when the history feature is disabled on the
+ * daemon (the /history route returns 404). Callers distinguish this
+ * from a generic 404 so the UI can display a "history not enabled"
+ * message instead of a generic error banner.
+ */
+export class HistoryDisabledError extends Error {
+  constructor() {
+    super("history feature not enabled");
+    this.name = "HistoryDisabledError";
+  }
+}
+
+/**
+ * Fetch bucketed measurement history for one numeric data point.
+ * Returns an empty array when the daemon returns no buckets (valid
+ * range with no recorded samples). Throws HistoryDisabledError when
+ * the daemon returns 404 (feature off). Re-throws ApiError for 400/5xx.
+ */
+export async function getHistory(params: {
+  central: string;
+  interfaceId: string;
+  channel: string;
+  parameter: string;
+  from: string;
+  to: string;
+  buckets?: number;
+}): Promise<HistoryBucket[]> {
+  const qs = new URLSearchParams({
+    central: params.central,
+    interface_id: params.interfaceId,
+    channel: params.channel,
+    parameter: params.parameter,
+    from: params.from,
+    to: params.to,
+  });
+  if (params.buckets !== undefined) {
+    qs.set("buckets", String(params.buckets));
+  }
+  try {
+    const result = await request<HistoryBucket[]>(`/history?${qs.toString()}`);
+    return result ?? [];
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
 export { ApiError };
 
 /**

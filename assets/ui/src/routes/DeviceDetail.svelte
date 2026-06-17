@@ -9,6 +9,7 @@
   import ScheduleTab from "$lib/components/schedule/ScheduleTab.svelte";
   import MaintenanceStatusGrid from "$lib/components/device/MaintenanceStatusGrid.svelte";
   import AuditLog from "./AuditLog.svelte";
+  import HistoryChart from "$lib/components/HistoryChart.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
@@ -52,6 +53,14 @@
   // Probe whether the device exposes a climate schedule. Drives
   // whether we render the schedule sub-tab in `configure`.
   let scheduleSupported = $state<boolean | null>(null);
+
+  // Measurement history: channel+parameter selector state.
+  // Populated lazily when the user opens the history tab.
+  let historyChannelNo = $state<number | null>(null);
+  let historyParameter = $state<string | null>(null);
+  let historyDPs = $state<import("$lib/api/types").DataPointSummary[]>([]);
+  let historyDPsLoading = $state(false);
+
   async function probeSchedule() {
     if (!detail) {
       scheduleSupported = null;
@@ -66,6 +75,41 @@
       } else {
         scheduleSupported = null;
       }
+    }
+  }
+
+  // Load data points for the history measurement chart when the
+  // history tab opens. We pick the first user channel with numeric DPs.
+  async function loadHistoryDPs(channelNo: number) {
+    if (!detail) return;
+    historyDPsLoading = true;
+    historyDPs = [];
+    historyParameter = null;
+    try {
+      const dps = await api.listDataPoints(detail.address, channelNo);
+      // Only numeric parameters (FLOAT / INTEGER) make sense to chart.
+      historyDPs = dps.filter(
+        (dp) => dp.type === "FLOAT" || dp.type === "INTEGER",
+      );
+      if (historyDPs.length > 0) {
+        historyParameter = historyDPs[0].parameter;
+      }
+    } catch {
+      historyDPs = [];
+    } finally {
+      historyDPsLoading = false;
+    }
+  }
+
+  function onHistoryTabClick() {
+    if (!detail) return;
+    // Pick the first user-facing channel as the default for history.
+    const firstCh = userChannels[0];
+    if (!firstCh) return;
+    const no = firstCh.number;
+    if (historyChannelNo !== no) {
+      historyChannelNo = no;
+      void loadHistoryDPs(no);
     }
   }
 
@@ -515,7 +559,10 @@
             type="button"
             class="-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition"
             style="border-color: {topTab === tab.key ? 'var(--ha-primary-color)' : 'transparent'}; color: {topTab === tab.key ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'};"
-            onclick={() => (topTab = tab.key)}
+            onclick={() => {
+              topTab = tab.key;
+              if (tab.key === "history") onHistoryTabClick();
+            }}
           >
             <Icon name={tab.icon} size={16} />
             {tab.label}
@@ -677,7 +724,65 @@
           <ScheduleTab address={detail.address} />
         {/if}
       {:else if topTab === "history"}
-        <AuditLog deviceFilter={detail.address} embedded />
+        <div class="space-y-6">
+          <!-- Measurement history chart for a user-selected numeric data point. -->
+          {#if userChannels.length > 0}
+            <div>
+              <div class="mb-2 flex flex-wrap items-center gap-2">
+                <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">Channel:</span>
+                <select
+                  class="rounded border px-2 py-1 text-xs"
+                  style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                  value={historyChannelNo ?? userChannels[0]?.number}
+                  onchange={(e) => {
+                    const no = Number((e.target as HTMLSelectElement).value);
+                    historyChannelNo = no;
+                    void loadHistoryDPs(no);
+                  }}
+                >
+                  {#each userChannels as ch (ch.number)}
+                    <option value={ch.number}>
+                      {ch.name?.trim() || ch.type_label || `Channel ${ch.number}`} ({ch.number})
+                    </option>
+                  {/each}
+                </select>
+                {#if historyDPs.length > 0}
+                  <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">Parameter:</span>
+                  <select
+                    class="rounded border px-2 py-1 text-xs"
+                    style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                    value={historyParameter ?? historyDPs[0]?.parameter}
+                    onchange={(e) => {
+                      historyParameter = (e.target as HTMLSelectElement).value;
+                    }}
+                  >
+                    {#each historyDPs as dp (dp.parameter)}
+                      <option value={dp.parameter}>
+                        {dp.parameter_label || dp.parameter}{dp.unit ? ` (${dp.unit})` : ""}
+                      </option>
+                    {/each}
+                  </select>
+                {:else if historyDPsLoading}
+                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">Loading parameters…</span>
+                {:else if historyChannelNo !== null}
+                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">No numeric parameters on this channel.</span>
+                {/if}
+              </div>
+              {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
+                {@const selectedDP = historyDPs.find((dp) => dp.parameter === historyParameter)}
+                <HistoryChart
+                  central={detail.central ?? ""}
+                  interfaceId={detail.interface_id}
+                  channel={`${detail.address}:${historyChannelNo}`}
+                  parameter={historyParameter}
+                  unit={selectedDP?.unit ?? ""}
+                />
+              {/if}
+            </div>
+          {/if}
+          <!-- Change audit log (existing). -->
+          <AuditLog deviceFilter={detail.address} embedded />
+        </div>
       {/if}
     {:else}
       <Card class="p-4">
