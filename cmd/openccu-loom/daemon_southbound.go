@@ -38,6 +38,7 @@ type southboundWiringDeps struct {
 	visReg                  *visibility.Registry
 	masterValuesStore       *sqlite.MasterValuesStore
 	valuesCacheStore        *sqlite.ValuesCacheStore
+	historyStore            *sqlite.MeasurementStore
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
 	mqttWiring              *mqtt.Wiring
@@ -137,6 +138,11 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// unpaired device does not leave orphaned values_cache rows behind.
 	//nolint:contextcheck // WireValuesCacheEviction has no ctx parameter; its handlers bound each DELETE with their own timeout context
 	teardowns = append(teardowns, adapter.WireValuesCacheEviction(reg, d.valuesCacheStore, logger))
+	// Opt-in measurement-history recorder: subscribe to genuine live wire
+	// value changes and persist a numeric time-series for SPA charts.
+	// No-op when history is disabled (nil store). See ADR 0040.
+	//nolint:contextcheck // wireHistoryRecorder has no ctx parameter; the recorder runs its own daemon-lifetime context internally
+	teardowns = append(teardowns, wireHistoryRecorder(cfg, reg, d.historyStore, d.healthTracker, logger))
 	// Surface the values-cache counters as health gauges so the
 	// /diagnostics surface and any Prometheus scraper see how many
 	// rows survived the last restart, how many got cast-rejected,

@@ -459,6 +459,34 @@ persistence:
     # Empty = all centrals are cached.
     disabled_centrals: []
 
+  # Measurement history (ADR 0040). Opt-in time-series of numeric sensor
+  # values for charting in the SPA without an external stack (InfluxDB,
+  # Grafana, …). Stored in a dedicated history.db. Only genuine live wire
+  # observations are recorded — boot-time pseudo-values and cache replays
+  # are filtered out by provenance, and a real 0 is kept.
+  history:
+    # Master switch. Pointer-bool: nil → false (OPT-IN, unlike the
+    # values cache).  [default: false]
+    enabled: false
+
+    # How long raw samples are kept. 0 = default (720h / 30 days).
+    # retention: 720h
+
+    # Batch-flush cadence. 0 = default (5s).
+    # flush_interval: 5s
+
+    # Parameter-name globs to record. Empty = every numeric VALUES
+    # parameter. Non-empty = only matching parameters.
+    # include: ["TEMPERATURE", "HUMIDITY", "*POWER*", "ACTUAL_*"]
+    include: []
+
+    # Parameter-name globs to drop. Exclude always wins over include.
+    exclude: []
+
+    # Central names whose data points should NOT be recorded.
+    # Empty = all enabled centrals are recorded.
+    disabled_centrals: []
+
 
 # =============================================================================
 # CENTRALS — Homematic CCUs

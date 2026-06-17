@@ -127,6 +127,63 @@ type Config struct {
 // caches (e.g. linkprofile snapshots) get their own sub-block here.
 type PersistenceConfig struct {
 	ValuesCache ValuesCacheConfig `yaml:"values_cache,omitempty" json:"values_cache,omitzero" cfg:"expert"`
+	History     HistoryConfig     `yaml:"history,omitempty" json:"history,omitzero" cfg:"expert"`
+}
+
+// HistoryConfig configures the opt-in measurement-history recorder
+// introduced by ADR 0040. Unlike the VALUES cache, history is OPT-IN:
+// Enabled defaults to false (nil), so the recorder, the dedicated
+// history.db, and the retention job are only wired when the operator
+// turns the feature on.
+//
+// This block is DB-tier config: it is seeded into the config_sections
+// table and editable through the SPA, like persistence.values_cache and
+// north.mqtt.
+type HistoryConfig struct {
+	// Enabled is the master switch. Defaults to false (opt-in). Use
+	// *bool so the YAML decoder can distinguish "not set" from
+	// "explicitly false".
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
+
+	// Retention bounds how long raw samples are kept. Zero falls back to
+	// the daemon default (720h / 30 days). The retention job purges rows
+	// older than now-Retention.
+	Retention time.Duration `yaml:"retention,omitempty" json:"retention,omitempty" cfg:"expert"`
+
+	// FlushInterval overrides the recorder's batch-flush cadence. Zero
+	// falls back to the daemon default (5s).
+	FlushInterval time.Duration `yaml:"flush_interval,omitempty" json:"flush_interval,omitempty" cfg:"expert"`
+
+	// Include lists parameter-name globs to record. Empty (default)
+	// records every numeric VALUES parameter. A non-empty list records
+	// only parameters matching at least one pattern (e.g. "TEMPERATURE",
+	// "*POWER*", "ACTUAL_*").
+	Include []string `yaml:"include,omitempty" json:"include,omitempty" cfg:"expert"`
+
+	// Exclude lists parameter-name globs to drop. Exclude always wins
+	// over Include. Empty (default) excludes nothing.
+	Exclude []string `yaml:"exclude,omitempty" json:"exclude,omitempty" cfg:"expert"`
+
+	// DisabledCentrals lists central names whose data points must not be
+	// recorded. Empty (default) records every enabled central.
+	DisabledCentrals []string `yaml:"disabled_centrals,omitempty" json:"disabled_centrals,omitempty" cfg:"expert"`
+}
+
+// HistoryEnabled reports whether the history recorder should be wired
+// for the named central. True only when the feature is explicitly
+// enabled AND the central is not in DisabledCentrals.
+func (c HistoryConfig) HistoryEnabled(centralName string) bool {
+	if c.Enabled == nil || !*c.Enabled {
+		return false
+	}
+	return !slices.Contains(c.DisabledCentrals, centralName)
+}
+
+// HistoryFeatureEnabled reports whether the feature is on at all
+// (independent of any single central). Used to decide whether to open
+// history.db and wire the retention job.
+func (c HistoryConfig) HistoryFeatureEnabled() bool {
+	return c.Enabled != nil && *c.Enabled
 }
 
 // ValuesCacheConfig overrides the defaults baked into the wire-DP
