@@ -6,7 +6,9 @@ package main
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -58,15 +60,28 @@ func wireHistoryRecorder(
 		return func() {}
 	}
 	hc := cfg.Persistence.History
+	exporter := buildHistoryExporter(hc.Export, logger)
 	rec := history.New(store, history.Options{
 		EnabledFor:    hc.HistoryEnabled,
 		Include:       hc.Include,
 		Exclude:       hc.Exclude,
 		FlushInterval: hc.FlushInterval,
 		Retention:     hc.Retention,
+		Exporter:      exporter,
 		Logger:        logger,
 	})
 	stop := rec.Wire(reg)
+
+	if healthTracker != nil && exporter != nil {
+		if infl, ok := exporter.(*history.InfluxExporter); ok {
+			healthTracker.RegisterGauge("history.export_exported",
+				func() float64 { return float64(infl.Metrics().Exported) })
+			healthTracker.RegisterGauge("history.export_failures",
+				func() float64 { return float64(infl.Metrics().Failures) })
+			healthTracker.RegisterGauge("history.export_dropped",
+				func() float64 { return float64(infl.Metrics().Dropped) })
+		}
+	}
 
 	if healthTracker != nil {
 		healthTracker.RegisterGauge("history.recorded",
@@ -79,4 +94,41 @@ func wireHistoryRecorder(
 			func() float64 { return float64(store.MetricsSnapshot().RetentionDeleted) })
 	}
 	return stop
+}
+
+// buildHistoryExporter constructs the opt-in push exporter from config,
+// or returns nil when export is disabled or misconfigured. The write
+// token is read from the named environment variable (ADR 0027) — never
+// from inline config.
+func buildHistoryExporter(ec config.HistoryExportConfig, logger *slog.Logger) history.MeasurementExporter {
+	if !ec.ExportEnabled() {
+		return nil
+	}
+	switch strings.ToLower(ec.Kind) {
+	case "", "influxdb":
+		var token string
+		if ec.TokenEnv != "" {
+			token = os.Getenv(ec.TokenEnv)
+		}
+		if ec.Endpoint == "" || token == "" {
+			logger.Warn("history.export.misconfigured",
+				slog.String("reason", "endpoint or token missing"),
+				slog.String("token_env", ec.TokenEnv))
+			return nil
+		}
+		logger.Info("history.export.enabled",
+			slog.String("kind", "influxdb"),
+			slog.String("endpoint", ec.Endpoint),
+			slog.String("bucket", ec.Bucket))
+		return history.NewInfluxExporter(history.InfluxConfig{
+			Endpoint: ec.Endpoint,
+			Org:      ec.Org,
+			Bucket:   ec.Bucket,
+			Token:    token,
+			Logger:   logger,
+		})
+	default:
+		logger.Warn("history.export.unknown_kind", slog.String("kind", ec.Kind))
+		return nil
+	}
 }

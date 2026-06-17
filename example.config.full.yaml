@@ -487,6 +487,23 @@ persistence:
     # Empty = all enabled centrals are recorded.
     disabled_centrals: []
 
+    # Opt-in push exporter (ADR 0040). Forwards each recorded sample to an
+    # external time-series store in addition to the embedded history.db —
+    # for users who already run Grafana/InfluxDB. The embedded store stays
+    # the default; this is additive.
+    export:
+      # Master switch. Defaults to false.
+      enabled: false
+      # Backend. "" or "influxdb" = InfluxDB v2 line protocol.
+      kind: influxdb
+      # Base URL of the target.
+      endpoint: ""        # e.g. http://influx:8086
+      org: ""
+      bucket: ""
+      # Name of the environment variable holding the write token. The
+      # token is a secret and is NEVER stored inline (read from env_file).
+      token_env: ""       # e.g. OPENCCU_INFLUX_TOKEN
+
 
 # =============================================================================
 # CENTRALS — Homematic CCUs

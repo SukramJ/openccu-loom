@@ -167,6 +167,42 @@ type HistoryConfig struct {
 	// DisabledCentrals lists central names whose data points must not be
 	// recorded. Empty (default) records every enabled central.
 	DisabledCentrals []string `yaml:"disabled_centrals,omitempty" json:"disabled_centrals,omitempty" cfg:"expert"`
+
+	// Export configures the opt-in push exporter that forwards each
+	// recorded sample to an external time-series store (ADR 0040). The
+	// embedded history.db stays the default surface; this is additive.
+	Export HistoryExportConfig `yaml:"export,omitempty" json:"export,omitzero" cfg:"expert"`
+}
+
+// HistoryExportConfig configures the opt-in measurement-history push
+// exporter. Default off. The shipped backend speaks InfluxDB line
+// protocol; the seam allows other backends later (ADR 0040).
+//
+// The access token is a secret and is read from the named environment
+// variable (TokenEnv), never stored inline in config (ADR 0027).
+type HistoryExportConfig struct {
+	// Enabled turns the exporter on. Defaults to false.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"expert"`
+
+	// Kind selects the backend. Empty or "influxdb" = InfluxDB line
+	// protocol (the only backend today).
+	Kind string `yaml:"kind,omitempty" json:"kind,omitempty" cfg:"expert"`
+
+	// Endpoint is the base URL of the target (e.g. http://influx:8086).
+	Endpoint string `yaml:"endpoint,omitempty" json:"endpoint,omitempty" cfg:"expert"`
+
+	// Org and Bucket are the InfluxDB v2 write target.
+	Org    string `yaml:"org,omitempty" json:"org,omitempty" cfg:"expert"`
+	Bucket string `yaml:"bucket,omitempty" json:"bucket,omitempty" cfg:"expert"`
+
+	// TokenEnv names the environment variable that holds the write
+	// token. The daemon reads os.Getenv(TokenEnv) at wiring time.
+	TokenEnv string `yaml:"token_env,omitempty" json:"token_env,omitempty" cfg:"expert"`
+}
+
+// ExportEnabled reports whether the push exporter should be wired.
+func (c HistoryExportConfig) ExportEnabled() bool {
+	return c.Enabled != nil && *c.Enabled
 }
 
 // HistoryEnabled reports whether the history recorder should be wired

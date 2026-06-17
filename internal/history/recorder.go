@@ -55,6 +55,7 @@ type liveSourced interface {
 // sample is tagged with its central name and canonical interface id.
 type Recorder struct {
 	store         *sqlite.MeasurementStore
+	exporter      MeasurementExporter
 	enabledFor    func(centralName string) bool
 	include       []string
 	exclude       []string
@@ -84,6 +85,9 @@ type Options struct {
 	Retention     time.Duration
 	MaxBuffer     int
 	Logger        *slog.Logger
+	// Exporter, when non-nil, receives every recorded sample for
+	// forwarding to an external time-series store. Optional.
+	Exporter MeasurementExporter
 }
 
 // New returns a Recorder backed by store. A nil store yields a Recorder
@@ -91,6 +95,7 @@ type Options struct {
 func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 	r := &Recorder{
 		store:         store,
+		exporter:      opts.Exporter,
 		enabledFor:    opts.EnabledFor,
 		include:       opts.Include,
 		exclude:       opts.Exclude,
@@ -170,6 +175,11 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 			}
 			cancel()
 			<-done
+			if r.exporter != nil {
+				shutCtx, cancelShut := context.WithTimeout(context.Background(), 5*time.Second)
+				_ = r.exporter.Shutdown(shutCtx)
+				cancelShut()
+			}
 		})
 	}
 }
@@ -232,14 +242,19 @@ func (r *Recorder) onValueChanged(unit *central.Unit, e hmevent.DataPointValueCh
 		return
 	}
 
-	r.enqueue(sqlite.MeasurementSample{
+	sample := sqlite.MeasurementSample{
 		CentralName:    unit.Name(),
 		InterfaceID:    e.Key.InterfaceID,
 		ChannelAddress: e.Key.ChannelAddress,
 		Parameter:      e.Key.Parameter,
 		TS:             e.Timestamp(),
 		Value:          val,
-	})
+	}
+	r.enqueue(sample)
+	if r.exporter != nil {
+		// Non-blocking by contract; the exporter buffers internally.
+		r.exporter.Export(sample)
+	}
 }
 
 // enqueue appends a sample, dropping the oldest when the buffer is full
