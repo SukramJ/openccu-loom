@@ -107,8 +107,16 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		logger.Info("diagnostics.rpc_recording.resumed", slog.Any("centrals", resumed))
 	}
 	// One provider snapshots the boot config and serves both the
-	// restart-pending banner and the changed-settings overview.
-	restartState := newRestartPendingProvider(cfg, d.configSvc)
+	// restart-pending banner and the changed-settings overview. The
+	// baseline is the *assembled* effective config at boot (not the raw
+	// YAML cfg): the overview compares it against the same assembly per
+	// request, so YAML-only fields the effective view derives elsewhere
+	// (e.g. locale) don't read as spurious changes on a clean start.
+	bootBaseline := cfg
+	if eff, err := d.configSvc.Effective(ctx); err == nil && eff != nil && eff.Config != nil {
+		bootBaseline = eff.Config
+	}
+	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
 	deps := rest.Deps{
 		Logger:         logger,
 		StartedAt:      time.Now(),
