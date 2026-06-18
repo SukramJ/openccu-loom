@@ -4,6 +4,25 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4]
+
+### Fixed
+
+- **The "waiting for CCU to become ready" health entry no longer lingers after
+  a successful boot.** The readiness-gated startup records a transient
+  `startup.<central>` component while it waits for the CCU; it was never
+  cleared once the central came up, so its last sample went stale and decayed
+  to UNKNOWN, pinning the overall health verdict at "unknown" (e.g. 66 %) even
+  though the central and its interfaces were healthy. The component is now
+  removed as soon as the bring-up succeeds.
+- **`/health` no longer returns a transient 503 while a slow CCU boots.**
+  During the gated-startup wait a central has no interface clients registered
+  yet, which the health heartbeat read as the critical `central` component
+  being unhealthy → ServiceAvailability → 503 until the CCU finished booting.
+  Zero registered clients is now treated as a "starting" state (the central
+  stays healthy); a genuine outage still leaves clients registered-but-
+  disconnected and reports unhealthy.
+
 ## [0.5.3]
 
 ### Changed

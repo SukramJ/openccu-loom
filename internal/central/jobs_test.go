@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -709,5 +710,112 @@ func TestHasConnectionIssueTrueWhenClientDisconnected(t *testing.T) {
 
 	if !hasConnectionIssue(c) {
 		t.Error("hasConnectionIssue must be true when a client is not CONNECTED")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Heartbeat startup-guard: central.health_heartbeat Fix B
+// ---------------------------------------------------------------------------
+
+// runHeartbeat registers StandardJobs on c and immediately drives the
+// heartbeat job's Run closure once. Returns the recorded "central"
+// health component after the run.
+func runHeartbeat(t *testing.T, c *Unit) health.Component {
+	t.Helper()
+	if _, err := RegisterStandardJobs(c, StandardJobs{
+		HealthHeartbeatInterval: 10 * time.Second,
+	}); err != nil {
+		t.Fatalf("RegisterStandardJobs: %v", err)
+	}
+	run := findJobRun(c, "central.health_heartbeat")
+	if run == nil {
+		t.Fatal("central.health_heartbeat job not registered")
+	}
+	if err := run(context.Background()); err != nil {
+		t.Fatalf("heartbeat run: %v", err)
+	}
+	comp, ok := c.Health.Get("central")
+	if !ok {
+		t.Fatal("heartbeat did not record a 'central' component")
+	}
+	return comp
+}
+
+// TestHeartbeatStartupGuard_ZeroClients verifies that the heartbeat
+// records the "central" component as Healthy when no interface clients
+// are registered, even though the state machine is not Running.
+// Zero clients signals that the gated bring-up is still waiting for
+// the CCU; this must not flip /health to 503.
+func TestHeartbeatStartupGuard_ZeroClients(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "hb-startup"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// State machine stays in its initial (non-Running) state.
+	// Clients coordinator exists but has zero entries.
+
+	comp := runHeartbeat(t, c)
+	if !comp.LastSample.Healthy {
+		t.Errorf("heartbeat recorded Healthy=false with zero clients; want true (startup guard)")
+	}
+	if comp.LastSample.Note != "heartbeat" {
+		t.Errorf("heartbeat note = %q, want %q", comp.LastSample.Note, "heartbeat")
+	}
+}
+
+// TestHeartbeatStartupGuard_RunningState verifies that the heartbeat
+// records Healthy when the state machine is in Running, regardless of
+// registered clients.
+func TestHeartbeatStartupGuard_RunningState(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "hb-running"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	advanceCentralToRunning(t, c)
+
+	comp := runHeartbeat(t, c)
+	if !comp.LastSample.Healthy {
+		t.Errorf("heartbeat recorded Healthy=false in Running state; want true")
+	}
+}
+
+// TestHeartbeatStartupGuard_DisconnectedClientNotStarting verifies that
+// the heartbeat records the "central" component as unhealthy when at
+// least one client is registered but disconnected and the state machine
+// is not Running. This is the genuine-outage path: clients exist
+// (bring-up already completed) but connectivity is lost.
+func TestHeartbeatStartupGuard_DisconnectedClientNotStarting(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "hb-outage"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a client that is not connected (default initial state).
+	ic, err := client.New(client.Config{
+		CentralName: c.cfg.Name,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Caller:      client.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) { return nil, nil }),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// State machine stays non-Running (e.g. Initializing after a failed boot).
+
+	comp := runHeartbeat(t, c)
+	if comp.LastSample.Healthy {
+		t.Errorf("heartbeat recorded Healthy=true with disconnected client and non-Running state; want false (outage)")
 	}
 }

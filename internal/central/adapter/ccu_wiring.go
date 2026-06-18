@@ -235,6 +235,11 @@ func gatedCentralBringUp(
 			return // teardown
 		}
 		if err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, addCloser, logger); err == nil {
+			// Bring-up done: clear the transient "waiting for CCU" component so it
+			// does not linger and decay to UNKNOWN (which would drag the overall
+			// health verdict down forever even though the central is now healthy).
+			// The interface + central components take over from here.
+			resolveCentralWaiting(unit)
 			events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
 				Base:        hmevent.NewBase(),
 				CentralName: cc.Name,
@@ -253,6 +258,11 @@ func gatedCentralBringUp(
 	}
 }
 
+// startupHealthComponent names the transient health component that carries a
+// central's "waiting for its CCU to boot" state. Kept in one place so the
+// record and resolve sides never drift.
+func startupHealthComponent(centralName string) string { return "startup." + centralName }
+
 // recordCentralWaiting marks a central as waiting for its CCU to finish
 // booting. Recorded via RecordQuality (capped at DEGRADED) on a dedicated
 // `startup.<central>` component so the wait is visible in diagnostics without
@@ -262,7 +272,19 @@ func recordCentralWaiting(unit *central.Unit) {
 	if unit == nil || unit.Health == nil {
 		return
 	}
-	unit.Health.RecordQuality("startup."+unit.Name(), "waiting for CCU to become ready")
+	unit.Health.RecordQuality(startupHealthComponent(unit.Name()), "waiting for CCU to become ready")
+}
+
+// resolveCentralWaiting removes the transient "waiting for CCU" component once
+// the central's bring-up has succeeded. Without this the last DEGRADED sample
+// goes stale after the tracker's StaleAfter window and decays to UNKNOWN,
+// pinning the overall health verdict at "unknown" even though the central and
+// its interfaces are healthy.
+func resolveCentralWaiting(unit *central.Unit) {
+	if unit == nil || unit.Health == nil {
+		return
+	}
+	unit.Health.Unregister(startupHealthComponent(unit.Name()))
 }
 
 // bringUpCentral runs a central's full southbound bring-up against a ready CCU.
