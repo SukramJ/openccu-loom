@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { DeviceSummary } from "$lib/api/types";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import { deviceTypeIcon } from "$lib/device-icon";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import { t } from "$lib/i18n";
 
@@ -12,6 +13,7 @@
   let { device, selected = false, onToggleSelect }: Props = $props();
 
   const subtitle = $derived(device.model_label || device.model);
+  const typeIcon = $derived(deviceTypeIcon(device));
 
   // Live maintenance values from the WS bus. `null` until the daemon
   // ships an event for this device — keeps the icons honest about
@@ -48,14 +50,21 @@
     href="#/devices/{encodeURIComponent(device.address)}"
     class="flex min-w-0 flex-1 items-start gap-3"
   >
-    <div
-      class="mt-0.5 h-2.5 w-2.5 flex-shrink-0 rounded-full"
-      class:bg-emerald-500={device.available}
-      class:bg-slate-400={!device.available}
-      title={device.available
-        ? t("device.list.reachable")
-        : t("device.list.unreachable")}
-    ></div>
+    <!-- Leading device-type icon with a reachability dot at the corner.
+         The glyph is a heuristic stand-in for the eQ-3 device image,
+         which is not available locally. -->
+    <div class="relative mt-0.5 flex-shrink-0" style="color: var(--ha-secondary-text-color);">
+      <Icon name={typeIcon} size={26} aria-label={subtitle} title={subtitle} />
+      <span
+        class="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full"
+        class:bg-emerald-500={device.available}
+        class:bg-slate-400={!device.available}
+        style="box-shadow: 0 0 0 2px var(--ha-card-background-color);"
+        title={device.available
+          ? t("device.list.reachable")
+          : t("device.list.unreachable")}
+      ></span>
+    </div>
     <div class="min-w-0 flex-1">
       <h3
         class="break-words font-medium"
