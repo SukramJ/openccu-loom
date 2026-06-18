@@ -56,11 +56,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (persisted vs. running boot config over the restart-required field set)
   drives an app-wide banner that stays until the change is reverted or the
   daemon restarts; it links to Settings and offers an inline restart where
-  a supervisor is detected. A new "Changed settings" tab lists every field
-  overridden from its default, grouped by section, each revertible on its
-  own via `DELETE /config/fields/{path}` (removes just that leaf, pruning
-  the section row when empty) — the per-field counterpart to the existing
-  whole-section reset.
+  a supervisor is detected. A new "Changed settings" overview
+  (`GET /system/config-changes`) lists exactly the fields that differ from
+  the running boot config — what was edited this session, not what differs
+  from the built-in default — so a clean start shows nothing and reverting
+  an edit empties the list. Each entry is revertible on its own via
+  `DELETE /config/fields/{path}` (removes just that leaf, pruning the
+  section row when empty), the per-field counterpart to the whole-section
+  reset. The overview is a standalone tab at the end of the settings nav,
+  shown only while there are changes.
 - **Grid/list toggle for the device list, with sticky search.** The list
   can switch between the multi-column card grid and a single-column list
   (durable preference); the search term, filters and sort now survive
@@ -90,6 +94,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   range". Long config pages keep Save reachable via sticky action bars, and
   the weekly-schedule fallback line names the base temperature so it no
   longer looks inconsistent with the period temperatures in the heatmap.
+  A further round of UX-audit polish: generic data-point labels localize
+  client-side (STATE → "Status"); the device-overview tile grid drops to
+  two columns for one- or two-tile devices so it no longer wastes a third
+  of the row; the top-bar connectivity badge is labelled as the live-update
+  (WebSocket) stream rather than a bare red dot; and the maintenance stripe
+  replaces double negatives ("Duty-Cycle blockiert: Nein") with status
+  words (OK / Blockiert / Schwach). The device list also uses the full
+  width.
+
+### Fixed
+
+- **Change-history view was always empty.** The audit recorder persisted
+  every config change to SQLite, but the read path served only an
+  in-memory ring buffer that starts empty on each daemon start — so the
+  history showed nothing after a restart and never surfaced seeded config.
+  The buffer is now hydrated from the persisted store on boot (preserving
+  original ordering and timestamps).
 
 ## [0.4.0]
 
