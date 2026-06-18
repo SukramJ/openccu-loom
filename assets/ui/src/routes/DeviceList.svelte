@@ -41,7 +41,7 @@
   const listClass = $derived(
     prefs.deviceView === "list"
       ? "flex flex-col gap-2"
-      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3",
+      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4",
   );
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
@@ -237,7 +237,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+<section class="w-full px-4 py-8 sm:px-6">
   <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
