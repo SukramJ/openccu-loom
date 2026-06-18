@@ -14,6 +14,16 @@
 
   const subtitle = $derived(device.model_label || device.model);
   const typeIcon = $derived(deviceTypeIcon(device));
+  // Real eQ-3 device image, proxied from the CCU. Falls back to the
+  // type glyph when the CCU has no icon for this model or is offline.
+  const iconUrl = $derived(`/api/v1/devices/${encodeURIComponent(device.address)}/icon`);
+  let iconFailed = $state(false);
+  // Reset the failure flag if this card instance is reused for another
+  // device (defensive — the list is keyed by address).
+  $effect(() => {
+    device.address;
+    iconFailed = false;
+  });
 
   // Live maintenance values from the WS bus. `null` until the daemon
   // ships an event for this device — keeps the icons honest about
@@ -50,11 +60,24 @@
     href="#/devices/{encodeURIComponent(device.address)}"
     class="flex min-w-0 flex-1 items-start gap-3"
   >
-    <!-- Leading device-type icon with a reachability dot at the corner.
-         The glyph is a heuristic stand-in for the eQ-3 device image,
-         which is not available locally. -->
+    <!-- Leading device icon with a reachability dot at the corner.
+         Prefer the real eQ-3 image proxied from the CCU; fall back to a
+         type glyph when it is unavailable. -->
     <div class="relative mt-0.5 flex-shrink-0" style="color: var(--ha-secondary-text-color);">
-      <Icon name={typeIcon} size={26} aria-label={subtitle} title={subtitle} />
+      {#if iconFailed}
+        <Icon name={typeIcon} size={26} aria-label={subtitle} title={subtitle} />
+      {:else}
+        <img
+          src={iconUrl}
+          alt={subtitle}
+          title={subtitle}
+          width="26"
+          height="26"
+          loading="lazy"
+          class="h-[26px] w-[26px] object-contain"
+          onerror={() => (iconFailed = true)}
+        />
+      {/if}
       <span
         class="absolute -right-0.5 -bottom-0.5 h-2.5 w-2.5 rounded-full"
         class:bg-emerald-500={device.available}

@@ -50,6 +50,9 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceIcons proxies device-type icon images from the CCU for the
+	// device list. Optional — nil answers 404 (SPA uses a glyph).
+	DeviceIcons handlers.DeviceIconProxy
 	// CustomDPWriter drives POST .../cdps/{name}/{operation}.
 	// Nil disables the mutating endpoint (list/get remain available).
 	CustomDPWriter handlers.CustomDPWriter
@@ -399,6 +402,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		}
 		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities))
 		r.Get("/health", handlers.Health(d.Health))
+
+		// Device-type icon proxy. Unauthenticated like /health: it
+		// serves only non-sensitive device model artwork and must
+		// resolve from an <img> tag regardless of auth scheme. Nil
+		// proxy → 404 (SPA falls back to a generic glyph).
+		r.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
 
 		// Auth endpoints stay outside the AuthRequire group — a logged-
 		// out SPA must be able to POST credentials to /auth/login.

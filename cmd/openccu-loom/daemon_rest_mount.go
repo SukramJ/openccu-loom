@@ -113,6 +113,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Config:         d.configAdapter,
 		Devices:        d.devicesAdapter,
 		DeviceAdmin:    d.deviceAdminDomain,
+		DeviceIcons:    newDeviceIconProxy(d.reg, cfg.Centrals),
 		RefreshDevices: d.devicesAdapter,
 		DPWriter:       d.dpWriterAdapter,
 		CustomDPWriter: d.customDPDispatcher,

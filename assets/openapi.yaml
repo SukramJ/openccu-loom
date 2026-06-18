@@ -201,6 +201,30 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /devices/{addr}/icon:
+    get:
+      operationId: getDeviceIcon
+      tags: [devices]
+      summary: Device-type icon image (proxied from the CCU)
+      description: >
+        Returns the device's model-icon PNG, proxied from the owning
+        CCU's web server (`/config/img/devices/250/<file>`).
+        Unauthenticated, like /health — it exposes only non-sensitive
+        device model artwork and must resolve from an <img> tag
+        regardless of auth scheme. Responds 404 when the device, its
+        central, or the upstream image is unavailable; the SPA then
+        falls back to a generic glyph.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Icon image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /devices/{addr}/channels:
     get:
       tags: [devices]
