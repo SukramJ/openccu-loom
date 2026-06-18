@@ -21,7 +21,7 @@ import (
 // CCU's ReGa is not yet reachable during the daemon's startup window it fails,
 // leaving that central's entire hub surface (programs / sysvars / inbox /
 // service+alarm messages) AND the refresh_client_data safety net dead until a
-// manual restart. retryHubWiring re-attempts until the hub comes up, so a
+// manual restart. retryWithBackoff re-attempts until the hub comes up, so a
 // transient boot failure self-heals.
 func TestRetryHubWiringSucceedsAfterTransientFailures(t *testing.T) {
 	t.Parallel()
@@ -36,9 +36,9 @@ func TestRetryHubWiringSucceedsAfterTransientFailures(t *testing.T) {
 
 	// Tiny backoff keeps the test fast; the last value is reused once the
 	// slice is exhausted.
-	ok := retryHubWiring(context.Background(), []time.Duration{time.Millisecond}, attempt)
+	ok := retryWithBackoff(context.Background(), []time.Duration{time.Millisecond}, attempt)
 	if !ok {
-		t.Fatal("retryHubWiring must report success once the attempt succeeds")
+		t.Fatal("retryWithBackoff must report success once the attempt succeeds")
 	}
 	if got := calls.Load(); got != 3 {
 		t.Fatalf("attempt called %d times, want 3 (two failures then success)", got)
@@ -102,7 +102,7 @@ func TestRetryHubWiringStopsOnContextCancel(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		done <- retryHubWiring(ctx, []time.Duration{50 * time.Millisecond}, attempt)
+		done <- retryWithBackoff(ctx, []time.Duration{50 * time.Millisecond}, attempt)
 	}()
 
 	// Let at least one attempt run, then cancel.
@@ -112,10 +112,10 @@ func TestRetryHubWiringStopsOnContextCancel(t *testing.T) {
 	select {
 	case ok := <-done:
 		if ok {
-			t.Fatal("retryHubWiring must report failure when the context is cancelled")
+			t.Fatal("retryWithBackoff must report failure when the context is cancelled")
 		}
 	case <-time.After(2 * time.Second):
-		t.Fatal("retryHubWiring did not return after context cancel — goroutine leak")
+		t.Fatal("retryWithBackoff did not return after context cancel — goroutine leak")
 	}
 	if calls.Load() == 0 {
 		t.Fatal("expected at least one attempt before cancel")
@@ -140,7 +140,7 @@ func TestRetryHubWiringCancelDuringLongBackoffExitsPromptly(t *testing.T) {
 
 	done := make(chan bool, 1)
 	go func() {
-		done <- retryHubWiring(ctx, longBackoff, attempt)
+		done <- retryWithBackoff(ctx, longBackoff, attempt)
 	}()
 
 	// One attempt runs synchronously; we are now mid-backoff (10 s timer).
@@ -151,9 +151,9 @@ func TestRetryHubWiringCancelDuringLongBackoffExitsPromptly(t *testing.T) {
 	select {
 	case ok := <-done:
 		if ok {
-			t.Fatal("retryHubWiring must report failure on context cancel")
+			t.Fatal("retryWithBackoff must report failure on context cancel")
 		}
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("retryHubWiring blocked for > 500 ms after cancel — timer not stopped")
+		t.Fatal("retryWithBackoff blocked for > 500 ms after cancel — timer not stopped")
 	}
 }

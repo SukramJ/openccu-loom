@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2]
+
+### Fixed
+
+- **Devices now appear even when the CCU backend is not yet ready at daemon
+  start.** When OpenCCU-Loom starts alongside a (re)booting CCU — e.g. as a
+  co-located add-on — the backend answers `listDevices` with http 503
+  ("internal backend exception") for the first minute or so while its services
+  warm up. The boot-time device-load previously gave up after a few quick
+  retries and left the interface empty until an unrelated recovery cycle
+  happened to fire — or indefinitely, if the CCU's ping stayed responsive while
+  `listDevices` was still 503. The per-interface device-load (ingest + callback
+  init) is now retried in the background with backoff until the CCU answers,
+  mirroring the existing hub-side retry, so devices populate on their own
+  without a daemon restart.
+
 ## [0.5.1]
 
 ### Fixed

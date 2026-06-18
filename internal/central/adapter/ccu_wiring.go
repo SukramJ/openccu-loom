@@ -806,173 +806,187 @@ func wireInterface(
 		pipeline.WithMasterRefreshHook(nil)
 	}
 
-	// Pull the device snapshot and hydrate data points. Without this
-	// the domain stays empty and every `/api/v1/devices` call returns
-	// nothing; without the per-channel paramset load the devices have
-	// no parameters underneath their channels.
+	// Pull the device snapshot and hydrate data points, then announce the
+	// callback so the CCU pushes live events. Without this the domain stays
+	// empty and every `/api/v1/devices` call returns nothing.
 	//
-	// On failure (e.g. transient http 401 during the CCU's
-	// rega-startup window) the client is already registered with
-	// `unit.Clients` in state CREATED. Walk it to DISCONNECTED before
-	// returning so the recovery pipeline's CanReconnect probe accepts
-	// the state on the first retry — without this every subsequent
-	// recovery.trigger is rejected with "CanReconnect returned false"
-	// and the daemon needs a manual restart to come up.
-	if err := pipeline.IngestFromBackend(ctx, wireID, iface, backend, writer, runner, logger); err != nil {
-		// Ingest failed before the closer was registered — stop the
-		// connection-probe goroutine here so it does not outlive the
-		// half-wired client and keep probing a backend nobody owns.
-		probeCancel()
-		if poller != nil {
-			poller.Close()
+	// Wrapped in activate() so a boot-time failure can be retried in the
+	// background instead of leaving the interface empty. An add-on that
+	// co-starts with the CCU commonly sees the backend answer http 503 /
+	// 401 while ReGaHss and the per-interface RPC service warm up; the first
+	// listDevices then fails. Without a retry the interface only recovers if
+	// an unrelated recovery cycle happens to fire — or never, if the CCU's
+	// ping stays responsive while listDevices is still 503. activateCtx is
+	// the wiring ctx on the first attempt and a detached, teardown-bounded
+	// ctx on every background retry.
+	activate := func(activateCtx context.Context) error {
+		if err := pipeline.IngestFromBackend(activateCtx, wireID, iface, backend, writer, runner, logger); err != nil {
+			return fmt.Errorf("ingest: %w", err)
 		}
-		ensureDisconnectedClientState(ic, logger)
-		return nil, fmt.Errorf("ingest: %w", err)
-	}
-	logger.Info("wire.ingest.ok",
-		slog.String("central", cc.Name),
-		slog.String("interface", wireID),
-		slog.Int("devices", unit.ModelRegistry.Len()))
+		logger.Info("wire.ingest.ok",
+			slog.String("central", cc.Name),
+			slog.String("interface", wireID),
+			slog.Int("devices", unit.ModelRegistry.Len()))
 
-	// Schedule a background paramset-consistency check for the HmIP-RF
-	// interface. HmIP-RF and HmIP-Wired devices both arrive through this
-	// single service and are affected by the HmIPServer stale-files bug
-	// after firmware updates. The check runs asynchronously so it does
-	// not block the wiring path; mismatches are logged and can be used
-	// to drive re-ingest or alerts.
-	if unit.Devices != nil && iface == hmenum.InterfaceHmIPRF {
-		var deviceAddrs []string
-		for _, d := range unit.ModelRegistry.List() {
-			if d.InterfaceID == wireID && !strings.Contains(d.Address, ":") {
-				deviceAddrs = append(deviceAddrs, d.Address)
-			}
-		}
-		if len(deviceAddrs) > 0 {
-			//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
-			unit.Devices.ScheduleParamsetConsistencyCheck(
-				context.Background(), iface, deviceAddrs, backend,
-				func(inconsistencies []coordinators.ParamsetInconsistency) {
-					for _, inc := range inconsistencies {
-						logger.Warn("wire.paramset_inconsistency",
-							slog.String("central", cc.Name),
-							slog.String("interface", wireID),
-							slog.String("device", inc.DeviceAddress),
-							slog.Int("missing", len(inc.MissingParameters)))
-					}
-				},
-			)
-		}
-	}
-
-	// Wire the on-demand value loader on every device that belongs to
-	// this interface. The cache + singleflight on the device picks up
-	// from here; subsequent `LoadValue` calls (REST / WS reads,
-	// reconciler sweeps, RELEVANT_INIT_PARAMETERS bootstrap) coalesce
-	// concurrent loads for the same channel/parameter through it.
-	for _, d := range unit.ModelRegistry.List() {
-		if d.InterfaceID != wireID {
-			continue
-		}
-		d.SetValueLoader(backend)
-	}
-
-	// RELEVANT_INIT_PARAMETERS bootstrap
-	// `init_base_data_points` (model/device.py:1934-1977) explicitly
-	// loads UNREACH / STICKY_UN_REACH / CONFIG_PENDING on channel 0
-	// because fetch_all_device_data does not always include them. The
-	// daemon's availability tracking depends on these values being
-	// present, so we mirror the explicit load here. Errors are logged
-	// at debug level — the daemon still works without these (just with
-	// availability defaulted to "reachable" until the first push event).
-	seedRelevantInitParameters(ctx, unit, iface, logger)
-
-	// Readable-events bootstrap
-	// (model/device.py:1947-1958) explicitly loads every event DP that
-	// reports as readable. fetch_all_device_data only ships DPs with a
-	// non-zero timestamp, so events that have not fired since the last
-	// CCU restart end up unobserved otherwise — REST/MQTT consumers
-	// then see "unknown" until the user actually presses the button.
-	seedReadableEvents(ctx, unit, iface, logger)
-
-	// Announce the callback URL to the CCU so it starts pushing live
-	// events. A non-callback-capable setup (no server, no URL) skips
-	// this step and leaves the daemon in read-through mode.
-	if callbackURL != "" {
-		// Pre-Init Deinit: tell the CCU to forget any callback URL
-		// previously registered for this interface_id before we
-		// install the fresh one. Mirrors the recovery pipeline's
-		// ReinitProxy (interface_client.go:653) two-step sequence.
-		// A previous daemon-run that died without invoking the
-		// shutdown closer (SIGKILL, panic, host reboot, pair-test
-		// restart) leaves a dangling registration on the CCU; the
-		// CCU then fans state-echo events to the orphan URL and our
-		// fresh process never receives them — the live-Subscribe
-		// path (Matter, WS Hub, MQTT) then reports stale state
-		// indefinitely. Best-effort: a Deinit failure does not abort
-		// the subsequent Init (the CCU may already have timed the
-		// old registration out, or this is a first-ever boot).
-		if err := backend.Deinit(ctx, initID); err != nil {
-			logger.Debug("wire.deinit.pre_init",
-				slog.String("central", cc.Name),
-				slog.String("interface", initID),
-				slog.String("err", err.Error()))
-		}
-		// Snapshot the last-event monotonic timestamp before the init
-		// call. If the CCU's `init` RPC times out — a known
-		// VirtualDevices-service-bug pattern — but the listDevices
-		// callback was nonetheless dispatched, the event coordinator
-		// stamps a fresh time during init. Treating that as success
-		// matches the reference init_proxy fallback at
-		// interface_client.py:749-781. Best-effort: a missing event
-		// coordinator (test fixture) leaves the snapshot at zero, the
-		// post-error comparison short-circuits to "no callback seen",
-		// and the legacy hard-failure log fires.
-		var preInitEventAt time.Time
-		if unit.Events != nil {
-			if at, ok := unit.Events.LastEventMonotonicForInterface(wireID); ok {
-				preInitEventAt = at
-			}
-		}
-		if err := backend.Init(ctx, initID, callbackURL); err != nil {
-			callbackSeen := false
-			if unit.Events != nil {
-				if at, ok := unit.Events.LastEventMonotonicForInterface(wireID); ok && at.After(preInitEventAt) {
-					callbackSeen = true
+		// Schedule a background paramset-consistency check for the HmIP-RF
+		// interface. HmIP-RF and HmIP-Wired devices both arrive through this
+		// single service and are affected by the HmIPServer stale-files bug
+		// after firmware updates. The check runs asynchronously so it does
+		// not block the wiring path; mismatches are logged and can be used
+		// to drive re-ingest or alerts.
+		if unit.Devices != nil && iface == hmenum.InterfaceHmIPRF {
+			var deviceAddrs []string
+			for _, d := range unit.ModelRegistry.List() {
+				if d.InterfaceID == wireID && !strings.Contains(d.Address, ":") {
+					deviceAddrs = append(deviceAddrs, d.Address)
 				}
 			}
-			if callbackSeen {
-				logger.Info("wire.init.timeout_callback_received",
-					slog.String("central", cc.Name),
-					slog.String("interface", wireID),
-					slog.String("callback", callbackURL),
-					slog.String("err", err.Error()),
-					slog.String("hint", "CCU processed init() despite RPC timeout; callback received during init window"))
-				ensureConnectedClientState(ic, logger)
-			} else {
-				logger.Warn("wire.init.failed",
-					slog.String("central", cc.Name),
-					slog.String("interface", wireID),
-					slog.String("err", err.Error()))
-				// Walk CREATED → INITIALIZING → FAILED → DISCONNECTED so
-				// the recovery pipeline finds a CanReconnect-friendly
-				// state on the first probe success. Without this the
-				// client sits in CREATED forever once the boot-time
-				// init() failed, and every subsequent recovery.trigger
-				// is rejected with "CanReconnect returned false".
-				ensureDisconnectedClientState(ic, logger)
+			if len(deviceAddrs) > 0 {
+				//nolint:contextcheck // consistency check runs asynchronously and must outlive the wiring ctx (60s timeout)
+				unit.Devices.ScheduleParamsetConsistencyCheck(
+					context.Background(), iface, deviceAddrs, backend,
+					func(inconsistencies []coordinators.ParamsetInconsistency) {
+						for _, inc := range inconsistencies {
+							logger.Warn("wire.paramset_inconsistency",
+								slog.String("central", cc.Name),
+								slog.String("interface", wireID),
+								slog.String("device", inc.DeviceAddress),
+								slog.Int("missing", len(inc.MissingParameters)))
+						}
+					},
+				)
 			}
-		} else {
-			logger.Info("wire.init.ok",
-				slog.String("central", cc.Name),
-				slog.String("interface", wireID),
-				slog.String("callback", callbackURL))
-			// Walk the client state forward so the recovery pipeline
-			// sees a CanReconnect-friendly state on the next CCU
-			// outage. Without this the state stays at CREATED, and
-			// every recovery.trigger fails immediately with
-			// "CanReconnect returned false".
-			ensureConnectedClientState(ic, logger)
 		}
+
+		// Wire the on-demand value loader on every device that belongs to
+		// this interface. The cache + singleflight on the device picks up
+		// from here; subsequent `LoadValue` calls (REST / WS reads,
+		// reconciler sweeps, RELEVANT_INIT_PARAMETERS bootstrap) coalesce
+		// concurrent loads for the same channel/parameter through it.
+		for _, d := range unit.ModelRegistry.List() {
+			if d.InterfaceID != wireID {
+				continue
+			}
+			d.SetValueLoader(backend)
+		}
+
+		// RELEVANT_INIT_PARAMETERS bootstrap
+		// `init_base_data_points` (model/device.py:1934-1977) explicitly
+		// loads UNREACH / STICKY_UN_REACH / CONFIG_PENDING on channel 0
+		// because fetch_all_device_data does not always include them. The
+		// daemon's availability tracking depends on these values being
+		// present, so we mirror the explicit load here. Errors are logged
+		// at debug level — the daemon still works without these (just with
+		// availability defaulted to "reachable" until the first push event).
+		seedRelevantInitParameters(activateCtx, unit, iface, logger)
+
+		// Readable-events bootstrap
+		// (model/device.py:1947-1958) explicitly loads every event DP that
+		// reports as readable. fetch_all_device_data only ships DPs with a
+		// non-zero timestamp, so events that have not fired since the last
+		// CCU restart end up unobserved otherwise — REST/MQTT consumers
+		// then see "unknown" until the user actually presses the button.
+		seedReadableEvents(activateCtx, unit, iface, logger)
+
+		// Announce the callback URL to the CCU so it starts pushing live
+		// events. A non-callback-capable setup (no server, no URL) skips
+		// this step and leaves the daemon in read-through mode.
+		if callbackURL != "" {
+			// Pre-Init Deinit: tell the CCU to forget any callback URL
+			// previously registered for this interface_id before we
+			// install the fresh one. Mirrors the recovery pipeline's
+			// ReinitProxy (interface_client.go:653) two-step sequence.
+			// A previous daemon-run that died without invoking the
+			// shutdown closer (SIGKILL, panic, host reboot, pair-test
+			// restart) leaves a dangling registration on the CCU; the
+			// CCU then fans state-echo events to the orphan URL and our
+			// fresh process never receives them — the live-Subscribe
+			// path (Matter, WS Hub, MQTT) then reports stale state
+			// indefinitely. Best-effort: a Deinit failure does not abort
+			// the subsequent Init (the CCU may already have timed the
+			// old registration out, or this is a first-ever boot).
+			if err := backend.Deinit(activateCtx, initID); err != nil {
+				logger.Debug("wire.deinit.pre_init",
+					slog.String("central", cc.Name),
+					slog.String("interface", initID),
+					slog.String("err", err.Error()))
+			}
+			// Snapshot the last-event monotonic timestamp before the init
+			// call. If the CCU's `init` RPC times out — a known
+			// VirtualDevices-service-bug pattern — but the listDevices
+			// callback was nonetheless dispatched, the event coordinator
+			// stamps a fresh time during init. Treating that as success
+			// matches the reference init_proxy fallback at
+			// interface_client.py:749-781. Best-effort: a missing event
+			// coordinator (test fixture) leaves the snapshot at zero, the
+			// post-error comparison short-circuits to "no callback seen",
+			// and the legacy hard-failure log fires.
+			var preInitEventAt time.Time
+			if unit.Events != nil {
+				if at, ok := unit.Events.LastEventMonotonicForInterface(wireID); ok {
+					preInitEventAt = at
+				}
+			}
+			if err := backend.Init(activateCtx, initID, callbackURL); err != nil {
+				callbackSeen := false
+				if unit.Events != nil {
+					if at, ok := unit.Events.LastEventMonotonicForInterface(wireID); ok && at.After(preInitEventAt) {
+						callbackSeen = true
+					}
+				}
+				if callbackSeen {
+					logger.Info("wire.init.timeout_callback_received",
+						slog.String("central", cc.Name),
+						slog.String("interface", wireID),
+						slog.String("callback", callbackURL),
+						slog.String("err", err.Error()),
+						slog.String("hint", "CCU processed init() despite RPC timeout; callback received during init window"))
+					ensureConnectedClientState(ic, logger)
+				} else {
+					logger.Warn("wire.init.failed",
+						slog.String("central", cc.Name),
+						slog.String("interface", wireID),
+						slog.String("err", err.Error()))
+					// Walk CREATED → INITIALIZING → FAILED → DISCONNECTED so
+					// the recovery pipeline finds a CanReconnect-friendly
+					// state on the first probe success. Without this the
+					// client sits in CREATED forever once the boot-time
+					// init() failed, and every subsequent recovery.trigger
+					// is rejected with "CanReconnect returned false".
+					ensureDisconnectedClientState(ic, logger)
+				}
+			} else {
+				logger.Info("wire.init.ok",
+					slog.String("central", cc.Name),
+					slog.String("interface", wireID),
+					slog.String("callback", callbackURL))
+				// Walk the client state forward so the recovery pipeline
+				// sees a CanReconnect-friendly state on the next CCU
+				// outage. Without this the state stays at CREATED, and
+				// every recovery.trigger fails immediately with
+				// "CanReconnect returned false".
+				ensureConnectedClientState(ic, logger)
+			}
+		}
+		return nil
+	}
+
+	// Run the boot-time interface activation. On a transient backend failure
+	// (e.g. http 503 while the CCU warms up) keep the client + connection
+	// probe alive and retry the device-load in the background until the CCU is
+	// ready, mirroring the hub-side startHubRetry. The interface is still
+	// reported as wired (the closer below tracks it for shutdown); it just
+	// populates once the backend answers instead of needing a daemon restart.
+	var ingestRetryCancel context.CancelFunc
+	if err := activate(ctx); err != nil {
+		logger.Warn("wire.interface.ingest_retry_scheduled",
+			slog.String("central", cc.Name),
+			slog.String("interface", wireID),
+			slog.String("err", err.Error()))
+		//nolint:contextcheck // the retry uses a detached, teardown-bounded ctx so it can outlive the short-lived wiring ctx
+		retryCtx, cancel := context.WithCancel(context.Background())
+		ingestRetryCancel = cancel
+		startInterfaceRetry(retryCtx, cc.Name, wireID, defaultInterfaceRetryBackoff, activate, logger)
 	}
 
 	// Closer deregisters the callback + unregisters the backend writer
@@ -982,6 +996,11 @@ func wireInterface(
 	deinitID := initID
 	//nolint:contextcheck // teardown closure: deinit runs on a fresh short-timeout ctx, not the already-cancelled wiring ctx
 	closer := func() {
+		// Stop the background ingest-retry (if one is still running) so it
+		// does not keep re-initialising a backend that is being torn down.
+		if ingestRetryCancel != nil {
+			ingestRetryCancel()
+		}
 		// Stop the connection-probe goroutine first so the next tick
 		// does not race against the backend being torn down.
 		probeCancel()
