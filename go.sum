@@ -1,5 +1,5 @@
-github.com/SukramJ/godevccu v0.1.4 h1:Uw5ZxfSChZwZPqjymt6f8Vj50EoTGp0MKH5uBAShKqo=
-github.com/SukramJ/godevccu v0.1.4/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
+github.com/SukramJ/godevccu v0.1.5 h1:QTSqXz9UaqXOLuqQVHIndq9qt9ETCmPvBsDbjTid8I8=
+github.com/SukramJ/godevccu v0.1.5/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
