@@ -399,6 +399,7 @@
               void loadSchema();
               void refreshRestartPending();
             }}
+            onNavigate={(tab) => (activeTab = tab)}
           />
         {/if}
 

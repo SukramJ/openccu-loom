@@ -15,9 +15,12 @@
     effectiveConfig: Record<string, unknown>;
     allSections: string[];
     onChanged?: () => void;
+    // Switch the settings view to another tab (used to route a non-section
+    // field like "centrals" to the CCUs tab where it is managed).
+    onNavigate?: (tab: string) => void;
   };
 
-  let { changedPaths, schemaFields, effectiveConfig, allSections, onChanged }: Props = $props();
+  let { changedPaths, schemaFields, effectiveConfig, allSections, onChanged, onNavigate }: Props = $props();
 
   // Humanize helper (mirrors SectionEditor).
   function humanize(k: string): string {
@@ -56,18 +59,29 @@
   const changedSet = $derived(new Set(changedPaths));
   const changedFields = $derived(schemaFields.filter((f) => changedSet.has(f.path)));
 
-  // Group by "owning section" — longest allSections prefix of f.path.
-  function owningSection(path: string): string {
+  // Longest allSections prefix of a path — empty when no config section
+  // owns it (e.g. "centrals", which lives in its own store and is managed
+  // on the CCUs tab, not via the per-field config reset).
+  function sectionPrefix(path: string): string {
     let best = "";
     for (const s of allSections) {
-      if (
-        (path === s || path.startsWith(s + ".")) &&
-        s.length > best.length
-      ) {
+      if ((path === s || path.startsWith(s + ".")) && s.length > best.length) {
         best = s;
       }
     }
-    return best || "(other)";
+    return best;
+  }
+
+  function owningSection(path: string): string {
+    return sectionPrefix(path) || "(other)";
+  }
+
+  // A field is revertible via DELETE /config/fields/{path} only when a
+  // config section owns it. Non-section fields (centrals) can't be reset
+  // that way — DELETE returns 400 — so we route the operator to where
+  // they actually manage them instead.
+  function revertible(path: string): boolean {
+    return sectionPrefix(path) !== "";
   }
 
   const groupedChanged = $derived.by(() => {
@@ -167,15 +181,30 @@
                   {displayValue(field)}
                 </span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!!reverting[field.path]}
-                onclick={() => void revertField(field.path)}
-              >
-                {reverting[field.path] ? "…" : t("changes.revert")}
-              </Button>
+              {#if revertible(field.path)}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={!!reverting[field.path]}
+                  onclick={() => void revertField(field.path)}
+                >
+                  {reverting[field.path] ? "…" : t("changes.revert")}
+                </Button>
+              {:else if field.path === "centrals"}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => onNavigate?.("ccus")}
+                >
+                  {t("changes.manage_ccus")}
+                </Button>
+              {:else}
+                <span class="text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("changes.not_revertible")}
+                </span>
+              {/if}
             </div>
           {/each}
         </div>
