@@ -30,6 +30,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to 503. The signal stays visible in diagnostics and no longer skews the
   primary-client-healthy verdict. Mirrors the reference's distinct
   `ping_pong_mismatch_{interface_id}` issue model.
+- **Measured sensors no longer publish the `0.0` placeholder as available
+  after a CCU restart.** A numeric measurement parameter (e.g.
+  `ACTUAL_TEMPERATURE`) reporting `STATUS = UNKNOWN` — the `DEFAULT` placeholder
+  the CCU pushes after a restart until the device delivers a real reading — is
+  now treated as invalid by `DataPoint.IsStatusValid`. All north-bound surfaces
+  (MQTT, REST, WebSocket) now gate `available` on `IsStatusValid()`, so an
+  `OVERFLOW`/`UNDERFLOW` status is suppressed too. For MQTT, when the paired
+  `<X>_STATUS` arrives the base parameter's slot is republished, so Home
+  Assistant marks the entity unavailable for that window instead of recording
+  the implausible value into long-term statistics. Control parameters such as
+  `LEVEL` carry no physical quantity and stay valid/available while `UNKNOWN`.
+  Mirrors the reference fixes for upstream issues #3228 and #2630; see
+  `docs/parity/by_design.md` (BD-CCU-StatusUncertainViaTracker).
 
 ## [0.5.0]
 

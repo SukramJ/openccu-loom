@@ -726,6 +726,13 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 		// a HA entity.
 		b.publishSlotState(ctx, centralName, iface, deviceAddr, channelNo, e, ch)
 
+		// A `<X>_STATUS` event updates the base parameter's measurement
+		// status out-of-band; republish the base slot so its availability
+		// reflects the new status.
+		if _, isPair := hmenum.Parameter(e.Key.Parameter).BasePair(); isPair {
+			b.republishBaseForStatusPair(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ch)
+		}
+
 		// ADR 0011 phase 1c — when the channel carries a custom-DP,
 		// publish its derived-field aggregate to
 		// `channels/<ch>/custom/<kind>/state` so HA's discovery (which
@@ -1064,6 +1071,13 @@ func (b *EventBridge) publishSlotState(
 	// on the retained /config companion topic, ADR 0011.
 	src, dp := lookupDPSource(ch, e.Key.Parameter, bucket)
 	if dp != nil {
+		// Gate availability on the measurement status: a numeric measured
+		// value reporting STATUS=UNKNOWN after a CCU restart carries only the
+		// DEFAULT placeholder (e.g. ACTUAL_TEMPERATURE = 0.0), and an
+		// OVERFLOW/UNDERFLOW status is likewise invalid. Publishing it as
+		// unavailable keeps HA from recording the implausible value. See
+		// docs/parity/by_design.md (BD-CCU-StatusUncertainViaTracker).
+		state.Available = statusAvailable(dp)
 		pd := dp.ParameterData()
 		// ENUM wire values come off the wire as int indices; HA's
 		// MQTT discovery declares `options: [...]` from the same
@@ -1085,6 +1099,74 @@ func (b *EventBridge) publishSlotState(
 	if src != nil {
 		_ = bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config())
 	}
+}
+
+// statusAvailable reports whether a data point's current measurement status
+// allows it to be published as available: a measured value reporting
+// STATUS=UNKNOWN/OVERFLOW/… is not available. Data points that do not expose a
+// status gate default to available — which keeps the unobserved-DP snapshot
+// convention (`{"value":null,"available":true}`) intact, since IsStatusValid is
+// vacuously true before any status observation. Gating on the full IsValid()
+// chain is deliberately NOT done here; see docs/parity/by_design.md
+// (BD-CCU-StatusUncertainViaTracker).
+func statusAvailable(dp device.ParameterDataPoint) bool {
+	if sv, ok := dp.(interface{ IsStatusValid() bool }); ok {
+		return sv.IsStatusValid()
+	}
+	return true
+}
+
+// republishBaseForStatusPair re-publishes the base parameter's slot state after
+// its paired `<X>_STATUS` changed. A status event is delivered on its own topic
+// and updates the base data point's status out-of-band, so without this the
+// base slot would keep its stale availability when a measured value flips
+// (in)valid on UNKNOWN.
+func (b *EventBridge) republishBaseForStatusPair(
+	ctx context.Context,
+	centralName, iface, deviceAddr string,
+	channelNo int,
+	statusParam string,
+	ch *device.Channel,
+) {
+	if b.mqtt == nil || ch == nil {
+		return
+	}
+	bridge := b.mqtt.Bridge()
+	if bridge == nil {
+		return
+	}
+	base, isPair := hmenum.Parameter(statusParam).BasePair()
+	if !isPair {
+		return
+	}
+	_, dp := lookupDPSource(ch, string(base), payload.BucketValues)
+	if dp == nil {
+		return
+	}
+	value, observed := dp.RawValue()
+	if !observed {
+		return
+	}
+	pd := dp.ParameterData()
+	if pd.Type == hmenum.ParameterTypeEnum && len(pd.ValueList) > 0 {
+		value = mqtt.ResolveEnumLabel(value, pd.Type, pd.ValueList)
+	}
+	state := payload.PerDPState{
+		Value:     value,
+		Available: statusAvailable(dp),
+	}
+	if ts := dp.ModifiedAt(); !ts.IsZero() {
+		epoch := payload.EpochSeconds(ts)
+		state.RefreshedAt = epoch
+		state.ModifiedAt = epoch
+	}
+	slot := payload.TopicSlot{
+		Address:   deviceAddr,
+		Channel:   channelNo,
+		Bucket:    payload.BucketValues,
+		Parameter: string(base),
+	}
+	_ = bridge.PublishSlotState(ctx, centralName, iface, slot, state)
 }
 
 // lookupDPSource returns the DP and (if available) the payload.Source

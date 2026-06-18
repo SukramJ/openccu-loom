@@ -123,7 +123,7 @@ func (d *DataPoint[T]) Config() payload.ConfigPayload {
 // just those fields.
 //
 //   - value        — typed value, present iff observed
-//   - available    — true iff a CCU value has been observed at least once
+//   - available    — true iff a CCU value has been observed AND IsStatusValid()
 //   - modified_at  — RFC3339 nano of last observed update (omitted when zero)
 //   - refreshed_at — RFC3339 nano of last refresh (omitted when zero)
 //   - status       — ParameterStatus enum string when observed
@@ -133,7 +133,16 @@ func (d *DataPoint[T]) State() payload.StatePayload {
 	}
 	v, observed := d.Value()
 	st := &payload.GenericDataPointState{
-		Available: observed,
+		// Availability additionally gates on IsStatusValid() so REST/WS
+		// consumers never treat a measured value that is only the DEFAULT
+		// placeholder (e.g. ACTUAL_TEMPERATURE = 0.0 reported with
+		// STATUS=UNKNOWN after a CCU restart) or an OVERFLOW/UNDERFLOW status as
+		// a real reading. The value itself is still carried so a consumer that
+		// ignores availability can see it. Gating on the full IsValid() chain is
+		// deliberately NOT done — its refreshed/range checks would conflict with
+		// the unobserved-DP snapshot convention. See docs/parity/by_design.md
+		// (BD-CCU-StatusUncertainViaTracker).
+		Available: observed && d.IsStatusValid(),
 	}
 	if observed {
 		st.Value = v

@@ -438,10 +438,49 @@ sensors (`internal/model/calculated/state_uncertain.go`).
 **Rationale:** both stacks expose `state_uncertain`; OpenCCU-Loom derives
 it from the optimistic-write lifecycle rather than a separate
 ParameterStatus enum. (Parity audit 2026-05-30 C-07 — reclassified.) The
-one case not yet covered — a *sensor* reporting `STATUS=UNKNOWN` to
-invalidate a reading with no optimistic write in flight — is a narrow
-follow-up that needs golden-replay evidence that HM devices use `_STATUS`
-that way.
+formerly-uncovered case — a *sensor* reporting `STATUS=UNKNOWN` to
+invalidate a reading with no optimistic write in flight — is now handled:
+`DataPoint.IsStatusValid` treats `UNKNOWN` as invalid for numeric measured
+quantities (but valid for control parameters such as `LEVEL`). All three
+north-bound surfaces gate availability on `IsStatusValid()` so neither push nor
+pull consumers treat the placeholder as a real value:
+
+- **MQTT** — the per-DP slot-state publish sets `available` from
+  `IsStatusValid()` and republishes the base parameter when its paired
+  `<X>_STATUS` event arrives out-of-band
+  (`internal/central/adapter/eventbridge.go`).
+- **REST / WebSocket** — `DataPoint.State()` reports
+  `available = observed && IsStatusValid()` so pull-based reads never expose the
+  placeholder as a real value (`internal/model/generic/payload.go`).
+
+This mirrors reference issues #3228 (suppress the `0.0` DEFAULT placeholder
+after a CCU restart) and #2630 (keep control values valid). Like the reference
+fix it still awaits golden-replay / DEBUG-log evidence that HM devices actually
+push `STATUS=UNKNOWN` after a restart.
+
+**Gate is `IsStatusValid()`, not the full `is_valid` chain (by design).** The
+reference gates `HmSensor.native_value` on `is_valid` (refreshed + status +
+value type + range). OpenCCU-Loom intentionally gates the north-bound
+`available` flag on `IsStatusValid()` only:
+
+- The `refreshed` check conflicts with the unobserved-DP snapshot convention —
+  the discovery/initial-snapshot path deliberately publishes a not-yet-observed
+  DP as `{"value":null,"available":true}` so HA renders the entity immediately;
+  `IsValid()` would force `available:false` until the first value arrives.
+- The range/type checks are enforced on the write/coerce path and would risk
+  flipping legitimately boundary-valued readings to `unavailable`.
+- `IsStatusValid()` already covers the failure modes the reference's `is_valid`
+  adds for *this* problem — `UNKNOWN` on a measured quantity and any
+  `OVERFLOW`/`UNDERFLOW` status both fail it.
+
+**Divergence in the unavailable window (acceptable):** the reference keeps the
+HA sensor *available* and substitutes the last restored value (entity state
+`RESTORED`) while the reading is invalid. OpenCCU-Loom instead reports the
+entity *unavailable* (per-DP `available:false` → HA `availability_mode: all`),
+relying on the broker's retained last-good value rather than an in-process
+restore cache. Both prevent the implausible `0.0` from entering long-term
+statistics; the only user-visible difference is `unavailable` vs. a frozen
+last value during the window.
 
 ### asyncio idioms → Go concurrency
 
