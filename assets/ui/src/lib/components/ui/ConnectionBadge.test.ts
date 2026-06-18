@@ -28,14 +28,14 @@ describe("ConnectionBadge", () => {
   it("renders the disconnected label when WS is closed", () => {
     wsStatusValue = "closed";
     const { getByText } = render(ConnectionBadge);
-    // t("diagnostics.disconnected") is mocked to return the key
-    expect(getByText("diagnostics.disconnected")).toBeTruthy();
+    // The badge labels the live-update (WS) stream; t() is mocked to the key.
+    expect(getByText("connection.live_off")).toBeTruthy();
   });
 
   it("renders the connected label when WS is open", () => {
     wsStatusValue = "open";
     const { getByText } = render(ConnectionBadge);
-    expect(getByText("diagnostics.connected")).toBeTruthy();
+    expect(getByText("connection.live_on")).toBeTruthy();
   });
 
   it("renders the reconnecting label when WS is connecting", () => {
