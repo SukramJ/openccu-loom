@@ -950,6 +950,11 @@ export const api = {
       method: "DELETE",
     });
   },
+  resetConfigField(path: string) {
+    return request<void>(`/config/fields/${encodeURIComponent(path)}`, {
+      method: "DELETE",
+    });
+  },
   // Trigger an atomic MQTT-stack rebuild from the live config. The
   // new broker connection is established before the previous one is
   // torn down; on failure the previous stack continues to serve.

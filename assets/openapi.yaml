@@ -3161,6 +3161,33 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /config/fields/{path}:
+    parameters:
+      - name: path
+        in: path
+        required: true
+        schema: { type: string }
+        description: Dotted config field path, e.g. "north.rest.rate_limit.enabled".
+    delete:
+      operationId: resetConfigField
+      summary: Reset one config field to its default (admin)
+      description: >
+        Removes the override for a single field from its owning section
+        (pruning empty parent objects, dropping the section row when
+        nothing is left), so the field falls back to the built-in
+        default. Idempotent.
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Reset (idempotent — 204 even if already at default)
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   # ---- User management (Wave-C) ----
   /users:
     get:

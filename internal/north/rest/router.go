@@ -707,6 +707,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/config/sections/{section}", handlers.GetConfigSection(d.ConfigAdmin))
 				pr.With(admin).Put("/config/sections/{section}", handlers.PutConfigSection(d.ConfigAdmin, d.AuditRecorder))
 				pr.With(admin).Delete("/config/sections/{section}", handlers.DeleteConfigSection(d.ConfigAdmin, d.AuditRecorder))
+				// Per-field reset: revert a single config field to its default.
+				pr.With(admin).Delete("/config/fields/{path}", handlers.ResetConfigField(d.ConfigAdmin, d.AuditRecorder))
 			}
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))

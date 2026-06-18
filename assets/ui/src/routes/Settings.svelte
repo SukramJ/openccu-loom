@@ -9,6 +9,7 @@
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
   import CentralsAdmin from "$lib/components/settings/CentralsAdmin.svelte";
   import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
+  import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { prefs, setLocale, setExpertMode } from "$lib/stores/preferences.svelte";
   import { t } from "$lib/i18n";
@@ -147,6 +148,7 @@
 
   const ALL_TABS: Tab[] = [
     { id: "general", label: t("settings.tab.general") },
+    { id: "changes", label: t("settings.tab.changes") },
     { id: "ccus", label: t("settings.tab.ccus") },
     { id: "mqtt", label: t("settings.tab.mqtt") },
     { id: "matter", label: t("settings.tab.matter") },
@@ -172,7 +174,7 @@
   type TabGroup = { id: string; tabIds: string[] };
 
   const TAB_GROUPS: TabGroup[] = [
-    { id: "general", tabIds: ["general", "system"] },
+    { id: "general", tabIds: ["general", "changes", "system"] },
     { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
     { id: "security", tabIds: ["oidc", "users", "tokens"] },
@@ -351,6 +353,19 @@
             </div>
           </div>
         </div>
+
+      {:else if activeTab === "changes"}
+        {#if schemaLoading}
+          <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+        {:else}
+          <ChangesOverview
+            {schemaFields}
+            {sources}
+            {effectiveConfig}
+            allSections={schemaSections}
+            onChanged={() => void loadSchema()}
+          />
+        {/if}
 
       {:else if activeTab === "ccus"}
         <CentralsAdmin />
