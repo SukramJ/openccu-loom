@@ -77,10 +77,17 @@
     return JSON.stringify(eff) !== JSON.stringify(def);
   }
 
-  // A field is "changed" when it is actively stored in the DB AND its
-  // effective value differs from the schema default.
+  // A field is "changed" when it is stored in the DB AND its effective
+  // value differs from the schema default. The sources map is keyed at
+  // section granularity (e.g. "north.mcp" rather than
+  // "north.mcp.enabled"), so check the owning section too — otherwise
+  // every nested field would be missed.
+  function isDbOverride(f: ConfigSchemaField): boolean {
+    return sources[f.path] === "db" || sources[owningSection(f.path)] === "db";
+  }
+
   const changedFields = $derived(
-    schemaFields.filter((f) => sources[f.path] === "db" && differsFromDefault(f)),
+    schemaFields.filter((f) => isDbOverride(f) && differsFromDefault(f)),
   );
 
   // Group by "owning section" — longest allSections prefix of f.path.
@@ -115,11 +122,18 @@
   function displayValue(f: ConfigSchemaField): string {
     if (f.class === "secret") return "••••";
     const v = getEffective(f.path);
-    if (v == null) return "";
+    if (v == null) return "—";
     if (f.go_type === "time.Duration" && typeof v === "number") {
       return formatDuration(v);
     }
-    if (Array.isArray(v)) return v.join(", ") || "[]";
+    if (Array.isArray(v)) {
+      // Arrays of primitives join cleanly; arrays of objects (e.g.
+      // centrals) would render as "[object Object]" — show a count.
+      if (v.every((x) => x === null || typeof x !== "object")) {
+        return v.join(", ") || "[]";
+      }
+      return t("changes.n_entries", { count: String(v.length) });
+    }
     if (typeof v === "object") return JSON.stringify(v);
     return String(v);
   }
