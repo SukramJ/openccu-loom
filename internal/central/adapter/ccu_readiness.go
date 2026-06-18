@@ -1,0 +1,149 @@
+// SPDX-License-Identifier: MIT
+// Copyright (C) 2026 OpenCCU-Loom authors.
+
+package adapter
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/config"
+)
+
+// checkRegaPath is the CCU's own readiness endpoint. The OCCU WebUI boot
+// page (the "CCU is not yet ready" splash) polls this exact CGI in a JS
+// loop and only proceeds once the body is the literal "OK".
+// It is part of the OCCU package, so it works uniformly across eQ-3
+// CCU2/CCU3, RaspberryMatic and OpenCCU — the only manufacturer-sanctioned,
+// SSH-free, cross-variant "system fully started" signal.
+const checkRegaPath = "/ise/checkrega.cgi"
+
+// checkRegaReadyBody is the exact body the CGI returns once ReGaHss is up
+// and serving. A 200 with any other body (or a connection error while
+// lighttpd is still coming up) means "still booting".
+const checkRegaReadyBody = "OK"
+
+// CCUReadinessConfig tunes [WaitForCCUReady].
+type CCUReadinessConfig struct {
+	// Timeout bounds the whole wait. Zero falls back to the parity default.
+	// A NEGATIVE value waits indefinitely (until ctx is cancelled) — the
+	// production gate uses this so a co-booting CCU is never abandoned and a
+	// central never comes up in a partial, half-named state.
+	Timeout time.Duration
+	// Interval is the gap between probes. Zero falls back to the default.
+	Interval time.Duration
+	// Client overrides the HTTP client (TLS-insecure path / tests). Nil uses
+	// a short-timeout default.
+	Client *http.Client
+}
+
+const (
+	defaultCCUReadinessTimeout  = 120 * time.Second
+	defaultCCUReadinessInterval = 3 * time.Second
+	defaultCCUReadinessProbeTTL = 5 * time.Second
+)
+
+// WaitForCCUReady blocks until the CCU answers `/ise/checkrega.cgi` with the
+// literal body "OK", ctx is cancelled, or the configured timeout elapses. It
+// returns true only when readiness was observed.
+//
+// This gates the per-central boot loads (device names via JSON-RPC AND the
+// per-interface listDevices) so they run only once ReGaHss is serving —
+// otherwise an add-on co-started with a (re)booting CCU sees `Device.listAllDetail`
+// and `listDevices` warm up at DIFFERENT times, which surfaces as devices that
+// appear without their CCU-assigned names until a restart. A timeout is NOT
+// fatal: the caller proceeds and the existing background retries
+// (startHubRetry / startInterfaceRetry) remain the safety net.
+//
+// Connection errors and non-OK bodies are treated identically — "keep waiting".
+func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {
+	timeout := cfg.Timeout
+	unbounded := timeout < 0
+	if timeout == 0 {
+		timeout = defaultCCUReadinessTimeout
+	}
+	interval := cfg.Interval
+	if interval <= 0 {
+		interval = defaultCCUReadinessInterval
+	}
+	client := cfg.Client
+	if client == nil {
+		if client = jsonrpcHTTPClient(cc); client == nil {
+			client = &http.Client{Timeout: defaultCCUReadinessProbeTTL}
+		}
+	}
+	url := ccuBaseURLFor(cc) + checkRegaPath
+
+	// deadlineC fires when the bounded budget elapses; in unbounded mode it
+	// stays nil so the select only resolves on readiness or ctx-cancel.
+	var deadlineC <-chan time.Time
+	if !unbounded {
+		deadline := time.NewTimer(timeout)
+		defer deadline.Stop()
+		deadlineC = deadline.C
+	}
+
+	for attempt := 0; ; attempt++ {
+		if probeCCUReady(ctx, client, url) {
+			if logger != nil && attempt > 0 {
+				logger.Info("wire.ccu_ready",
+					slog.String("central", cc.Name),
+					slog.Int("probes", attempt+1))
+			}
+			return true
+		}
+		if attempt == 0 && logger != nil {
+			// Only log the wait once, at the point we discover the CCU is not
+			// ready — a ready CCU returns on the first probe and stays quiet.
+			logger.Info("wire.ccu_not_ready_waiting",
+				slog.String("central", cc.Name),
+				slog.String("probe", url),
+				slog.Bool("unbounded", unbounded))
+		}
+
+		t := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return false
+		case <-deadlineC:
+			t.Stop()
+			if logger != nil {
+				logger.Warn("wire.ccu_ready_timeout",
+					slog.String("central", cc.Name),
+					slog.Duration("waited", timeout))
+			}
+			return false
+		case <-t.C:
+		}
+	}
+}
+
+// probeCCUReady performs a single GET and reports whether the body is the
+// literal readiness marker. Any error (connection refused while lighttpd is
+// still starting, non-200, non-OK body) reports false.
+func probeCCUReady(ctx context.Context, client *http.Client, url string) bool {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return false
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		// Drain a bounded amount so the connection can be reused.
+		_, _ = io.CopyN(io.Discard, resp.Body, 1<<10)
+		return false
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(body)) == checkRegaReadyBody
+}
