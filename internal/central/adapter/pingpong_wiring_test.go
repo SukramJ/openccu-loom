@@ -194,6 +194,82 @@ func TestWirePingPongBusPONGCorrelation(t *testing.T) {
 	}
 }
 
+// TestWirePingPongBusRejectsForeignDaemonPONG is the regression guard for the
+// two-daemons-one-CCU bug: when a second OpenCCU-Loom runs against the same CCU,
+// the CCU broadcasts ITS PONGs onto our interface too. Both daemons speak the
+// same interface TYPE (HmIP-RF), so a correlation keyed on the bare interface
+// name could not tell the foreign daemon's PONG from ours — it matched no
+// pending ping and piled up as an "unknown" mismatch, decaying interface health
+// until /health flipped to 503. Keying the caller_id (and the match) on the full
+// wire-boundary triple `<instance>-<central>-<interface>` makes the two daemons
+// distinguishable: our own PONG closes pending, the foreign one is ignored.
+func TestWirePingPongBusRejectsForeignDaemonPONG(t *testing.T) {
+	t.Parallel()
+
+	const (
+		centralName = "OttoLoom"
+		// ifID is the canonical (instance-stripped) interface id the inbound
+		// callback handler hands to the event coordinator.
+		ifID = "OttoLoom-HmIP-RF"
+		// ourWireID is this daemon's wire-boundary triple — the caller_id base.
+		ourWireID = "Otto-OttoLoom-HmIP-RF"
+		// foreignWireID is a co-located daemon's triple: same central + interface
+		// type, different instance name. Its PONGs reach our interface via the
+		// CCU broadcast but must NOT correlate.
+		foreignWireID = "OtherLoom-OttoLoom-HmIP-RF"
+	)
+
+	c := newTestCentralNamed(t, centralName)
+	ic, err := clientpkg.New(clientpkg.Config{
+		CentralName:     centralName,
+		Interface:       hmenum.InterfaceHmIPRF,
+		InitInterfaceID: ourWireID,
+		Caller: clientpkg.CallerFunc(func(_ context.Context, _ string, _ []any) (any, error) {
+			return nil, nil
+		}),
+		PingPong: reliability.NewPingPongTracker(reliability.PingPongConfig{
+			MismatchThreshold: 5,
+			PendingTTL:        30 * time.Second,
+			UnknownTTL:        30 * time.Second,
+		}),
+	})
+	if err != nil {
+		t.Fatalf("clientpkg.New: %v", err)
+	}
+	if err := c.Clients.Register(&coordinators.ClientEntry{
+		InterfaceID: ifID,
+		Interface:   hmenum.InterfaceHmIPRF,
+		Client:      ic,
+	}); err != nil {
+		t.Fatalf("register client: %v", err)
+	}
+	WirePingPongBus(c, ic, ifID, nil)
+
+	deliver := func(callerID string) {
+		c.Events.HandleRawEventNormalized(
+			context.Background(), ifID, "CENTRAL", "PONG",
+			hmtypes.StringValue(callerID),
+		)
+	}
+
+	// Our own tracking ping → recorded, then matched by its PONG (echoed with
+	// our full triple).
+	ic.RecordPing("42")
+	deliver(ourWireID + "#42")
+	if got := ic.PingPong().PendingCount(); got != 0 {
+		t.Fatalf("own PONG must close pending: pending=%d, want 0", got)
+	}
+
+	// A co-located daemon's PONGs (same interface type, different instance)
+	// broadcast onto our interface → must be ignored, not filed as unknown.
+	deliver(foreignWireID + "#7")
+	deliver(foreignWireID + "#8")
+	if got := ic.PingPong().UnknownCount(); got != 0 {
+		t.Fatalf("foreign daemon's PONGs must not be recorded as unknown: "+
+			"unknown=%d, want 0", got)
+	}
+}
+
 // TestWirePingPongBusNilSafe verifies that WirePingPongBus does not
 // panic when called with nil arguments.
 func TestWirePingPongBusNilSafe(t *testing.T) {
