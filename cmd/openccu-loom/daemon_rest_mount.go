@@ -106,6 +106,9 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if resumed := rpcRecorder.ResumeFromMarker(ctx); len(resumed) > 0 {
 		logger.Info("diagnostics.rpc_recording.resumed", slog.Any("centrals", resumed))
 	}
+	// One provider snapshots the boot config and serves both the
+	// restart-pending banner and the changed-settings overview.
+	restartState := newRestartPendingProvider(cfg, d.configSvc)
 	deps := rest.Deps{
 		Logger:         logger,
 		StartedAt:      time.Now(),
@@ -133,7 +136,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Audit:          d.auditBuf,
 		Auth:           d.restAuth,
 		ConfigAdmin:    d.configSvc,
-		RestartPending: newRestartPendingProvider(cfg, d.configSvc),
+		RestartPending: restartState,
+		ConfigChanges:  restartState,
 		UserAdmin:      d.userSvc,
 		TokenAdmin:     d.tokenSvc,
 		CentralAdmin:   d.centSvc,

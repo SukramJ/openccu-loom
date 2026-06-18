@@ -42,3 +42,16 @@ func (p *restartPendingProvider) Pending(ctx context.Context) (pending bool, fie
 	fields = config.RestartRequiredDiff(p.boot, eff.Config)
 	return len(fields) > 0, fields, nil
 }
+
+// Changes implements handlers.ConfigChangesProvider — every config field
+// that differs from the running boot config (what changed since start).
+func (p *restartPendingProvider) Changes(ctx context.Context) (fields []string, err error) {
+	if p == nil || p.boot == nil || p.svc == nil {
+		return nil, nil
+	}
+	eff, err := p.svc.Effective(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return config.ChangedFields(p.boot, eff.Config), nil
+}

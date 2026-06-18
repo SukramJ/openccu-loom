@@ -838,6 +838,30 @@ paths:
                     type: array
                     items: { type: string }
 
+  /system/config-changes:
+    get:
+      operationId: getConfigChanges
+      summary: Config fields changed since the daemon started
+      description: >
+        Lists the config field paths whose persisted value differs from
+        the running boot config — i.e. what was edited since start, not
+        what differs from the built-in default. Empty right after a clean
+        start; an entry drops out when its value is reverted. Backs the
+        SPA's "Changed settings" overview.
+      tags: [core]
+      responses:
+        "200":
+          description: Changed config field paths
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fields]
+                properties:
+                  fields:
+                    type: array
+                    items: { type: string }
+
   /system/status:
     get:
       operationId: listSystemStatus

@@ -1,21 +1,23 @@
 <script lang="ts">
   import { api, ApiError } from "$lib/api/client";
-  import type { ConfigSchemaField, ConfigFieldSource } from "$lib/api/client";
+  import type { ConfigSchemaField } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
-  import SourceBadge from "$lib/components/ui/SourceBadge.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
 
   type Props = {
+    // changedPaths is the authoritative set from the backend (config
+    // fields that differ from the running boot config) — i.e. what the
+    // operator changed this session, not what differs from the default.
+    changedPaths: string[];
     schemaFields: ConfigSchemaField[];
-    sources: Record<string, ConfigFieldSource>;
     effectiveConfig: Record<string, unknown>;
     allSections: string[];
     onChanged?: () => void;
   };
 
-  let { schemaFields, sources, effectiveConfig, allSections, onChanged }: Props = $props();
+  let { changedPaths, schemaFields, effectiveConfig, allSections, onChanged }: Props = $props();
 
   // Humanize helper (mirrors SectionEditor).
   function humanize(k: string): string {
@@ -48,47 +50,11 @@
     return cur;
   }
 
-  // Resolve the type-based zero value for a Go type.
-  function typeZero(goType: string): unknown {
-    if (goType === "bool" || goType === "*bool") return false;
-    if (
-      goType.startsWith("int") ||
-      goType.startsWith("uint") ||
-      goType.startsWith("float") ||
-      goType === "time.Duration"
-    )
-      return 0;
-    if (goType === "string") return "";
-    if (goType === "[]string") return [];
-    return undefined;
-  }
-
-  // Returns the schema default for a field, falling back to type zero.
-  function schemaDefault(f: ConfigSchemaField): unknown {
-    if (f.default !== undefined && f.default !== null) return f.default;
-    return typeZero(f.go_type);
-  }
-
-  // Compare effective value against default; treat arrays by JSON equality.
-  function differsFromDefault(f: ConfigSchemaField): boolean {
-    const eff = getEffective(f.path);
-    const def = schemaDefault(f);
-    if (def === undefined) return true; // conservative: show when no default known
-    return JSON.stringify(eff) !== JSON.stringify(def);
-  }
-
-  // A field is "changed" when it is stored in the DB AND its effective
-  // value differs from the schema default. The sources map is keyed at
-  // section granularity (e.g. "north.mcp" rather than
-  // "north.mcp.enabled"), so check the owning section too — otherwise
-  // every nested field would be missed.
-  function isDbOverride(f: ConfigSchemaField): boolean {
-    return sources[f.path] === "db" || sources[owningSection(f.path)] === "db";
-  }
-
-  const changedFields = $derived(
-    schemaFields.filter((f) => isDbOverride(f) && differsFromDefault(f)),
-  );
+  // The changed fields are exactly those the backend reports as differing
+  // from the boot config; intersect with the schema so we have a label,
+  // type and current value for each.
+  const changedSet = $derived(new Set(changedPaths));
+  const changedFields = $derived(schemaFields.filter((f) => changedSet.has(f.path)));
 
   // Group by "owning section" — longest allSections prefix of f.path.
   function owningSection(path: string): string {
@@ -196,7 +162,6 @@
                 <div class="flex flex-wrap items-center gap-1">
                   <span class="text-sm font-medium">{fieldLabel(field.path)}</span>
                   <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{field.path}</span>
-                  <SourceBadge source={sources[field.path] ?? "db"} />
                 </div>
                 <span class="mt-0.5 block font-mono text-xs text-slate-600 dark:text-slate-300">
                   {displayValue(field)}

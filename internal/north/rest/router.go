@@ -108,6 +108,9 @@ type Deps struct {
 	// RestartPending backs GET /system/restart-pending — whether a saved
 	// restart-required config change is staged but not yet active.
 	RestartPending handlers.RestartPendingProvider
+	// ConfigChanges backs GET /system/config-changes — config fields that
+	// differ from the running boot config (what changed since start).
+	ConfigChanges handlers.ConfigChangesProvider
 
 	// UserAdmin backs the SQLite-backed `/users` CRUD. Nil keeps
 	// the legacy in-memory `/auth/users` read-only path active.
@@ -559,6 +562,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
 			// Persistent "restart required" status for the SPA banner.
 			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
+			// Config fields changed since the daemon started.
+			pr.Get("/system/config-changes", handlers.GetConfigChanges(d.ConfigChanges))
 			if d.LogLevels != nil {
 				pr.Get("/diagnostics/log-levels", handlers.ListLogLevels(d.LogLevels))
 				pr.With(admin).Put("/diagnostics/log-levels/{path}", handlers.PutLogLevel(d.LogLevels, d.AuditRecorder))

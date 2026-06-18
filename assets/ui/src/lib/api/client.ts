@@ -701,6 +701,10 @@ export const api = {
   getRestartPending() {
     return request<{ pending: boolean; fields: string[] }>(`/system/restart-pending`);
   },
+  // Config field paths changed since the daemon started (boot diff).
+  getConfigChanges() {
+    return request<{ fields: string[] }>(`/system/config-changes`);
+  },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);
