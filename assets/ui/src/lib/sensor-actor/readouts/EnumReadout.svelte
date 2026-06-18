@@ -1,11 +1,12 @@
 <!--
   EnumReadout — ENUM-typed value, displayed as the value_list entry
-  at the numeric index. value_list entries get title-cased so wire
-  tokens like `INTRUSION_ALARM` surface as "Intrusion Alarm".
+  at the numeric index. value_list tokens are localised via
+  enumValueText (i18n `enum.<TOKEN>`), falling back to a title-cased
+  form so `INTRUSION_ALARM` still surfaces as "Intrusion Alarm".
 -->
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
-  import { dpLabel } from "../classify";
+  import { dpLabel, enumValueText } from "../classify";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
 
@@ -28,16 +29,7 @@
     else if (typeof v === "boolean") idx = v ? 1 : 0;
     else return String(v);
     if (idx < 0 || idx >= dp.value_list.length) return String(v);
-    return prettify(dp.value_list[idx]);
-  }
-
-  function prettify(s: string): string {
-    return s
-      .toLowerCase()
-      .split("_")
-      .filter(Boolean)
-      .map((p) => p[0].toUpperCase() + p.slice(1))
-      .join(" ");
+    return enumValueText(dp.value_list[idx]);
   }
 
   function formatAge(seconds?: number): string {
