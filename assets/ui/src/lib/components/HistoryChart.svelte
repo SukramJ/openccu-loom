@@ -2,6 +2,8 @@
   import { onMount } from "svelte";
   import { getHistory, HistoryDisabledError } from "$lib/api/client";
   import type { HistoryBucket } from "$lib/api/client";
+  import { t } from "$lib/i18n";
+  import Icon from "$lib/components/ui/Icon.svelte";
 
   // Props mirror the required /history query parameters.
   // hoursBack controls the default time range shown on first render.
@@ -10,6 +12,8 @@
     interfaceId: string;
     channel: string;
     parameter: string;
+    /** Localised caption for the parameter; falls back to the raw key. */
+    parameterLabel?: string;
     unit?: string;
     /** How many hours of history to show by default. Default 24. */
     hoursBack?: number;
@@ -20,6 +24,7 @@
     interfaceId,
     channel,
     parameter,
+    parameterLabel,
     unit = "",
     // hoursBack is intentionally not wired into $state — the range selector
     // below owns the mutable state. The prop serves as a hint for callers but
@@ -174,59 +179,71 @@
 <div class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
   <div class="mb-2 flex items-center justify-between gap-2">
     <h4 class="text-sm font-semibold" style="color: var(--ha-primary-text-color);">
-      Measurement history — {parameter}{unit ? ` (${unit})` : ""}
+      {t("history.chart_title", { name: parameterLabel || parameter })}{unit ? ` (${unit})` : ""}
     </h4>
-    <div class="flex gap-1">
-      {#each RANGE_OPTIONS as opt (opt.value)}
+    <!-- Range + reload toolbar is meaningless when recording is off, so
+         hide it in the disabled state (which carries its own CTA). -->
+    {#if chartStatus.kind !== "disabled"}
+      <div class="flex gap-1">
+        {#each RANGE_OPTIONS as opt (opt.value)}
+          <button
+            type="button"
+            class="rounded px-2 py-0.5 text-xs transition"
+            style="
+              background-color: {selectedHours === opt.value ? 'var(--ha-primary-color)' : 'transparent'};
+              color: {selectedHours === opt.value ? 'white' : 'var(--ha-secondary-text-color)'};
+              border: 1px solid {selectedHours === opt.value ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'};
+            "
+            onclick={() => { selectedHours = opt.value; }}
+          >
+            {opt.label}
+          </button>
+        {/each}
         <button
           type="button"
-          class="rounded px-2 py-0.5 text-xs transition"
-          style="
-            background-color: {selectedHours === opt.value ? 'var(--ha-primary-color)' : 'transparent'};
-            color: {selectedHours === opt.value ? 'white' : 'var(--ha-secondary-text-color)'};
-            border: 1px solid {selectedHours === opt.value ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'};
-          "
-          onclick={() => { selectedHours = opt.value; }}
+          class="ml-1 rounded px-2 py-0.5 text-xs"
+          style="color: var(--ha-secondary-text-color); border: 1px solid var(--ha-divider-color);"
+          onclick={() => void load()}
+          aria-label={t("history.reload")}
         >
-          {opt.label}
+          ↺
         </button>
-      {/each}
-      <button
-        type="button"
-        class="ml-1 rounded px-2 py-0.5 text-xs"
-        style="color: var(--ha-secondary-text-color); border: 1px solid var(--ha-divider-color);"
-        onclick={() => void load()}
-        aria-label="Reload"
-      >
-        ↺
-      </button>
-    </div>
+      </div>
+    {/if}
   </div>
 
   {#if chartStatus.kind === "loading" || chartStatus.kind === "idle"}
     <div class="flex h-[180px] items-center justify-center text-sm" style="color: var(--ha-secondary-text-color);">
-      Loading…
+      {t("common.loading")}
     </div>
   {:else if chartStatus.kind === "disabled"}
-    <div class="flex h-[180px] items-center justify-center text-sm" style="color: var(--ha-secondary-text-color);">
-      History recording is not enabled. Set
-      <code class="mx-1 rounded bg-slate-100 px-1 py-0.5 text-xs dark:bg-slate-800">persistence.history.enabled: true</code>
-      in the daemon config.
+    <!-- Feature off: distinct from "no data" — explain in plain language
+         and link straight to the setting instead of naming a YAML key. -->
+    <div class="flex h-[180px] flex-col items-center justify-center gap-1.5 px-4 text-center" style="color: var(--ha-secondary-text-color);">
+      <Icon name="mdi:history" size={28} />
+      <span class="text-sm font-medium" style="color: var(--ha-primary-text-color);">{t("history.disabled_title")}</span>
+      <span class="text-xs">{t("history.disabled_hint")}</span>
+      <a href="#/settings" class="mt-0.5 text-xs font-medium underline" style="color: var(--ha-primary-color);">
+        {t("history.enable_link")}
+      </a>
     </div>
   {:else if chartStatus.kind === "empty"}
-    <div class="flex h-[180px] items-center justify-center text-sm" style="color: var(--ha-secondary-text-color);">
-      No recorded samples in this time range.
+    <!-- Enabled but no samples in the selected window. -->
+    <div class="flex h-[180px] flex-col items-center justify-center gap-1.5 px-4 text-center" style="color: var(--ha-secondary-text-color);">
+      <Icon name="mdi:information-outline" size={28} />
+      <span class="text-sm">{t("history.empty")}</span>
     </div>
   {:else if chartStatus.kind === "error"}
-    <div class="flex h-[180px] items-center justify-center text-sm" style="color: var(--ha-error-color);">
-      {chartStatus.message}
+    <div class="flex h-[180px] flex-col items-center justify-center gap-1.5 px-4 text-center" style="color: var(--ha-error-color);">
+      <Icon name="mdi:alert-circle" size={28} />
+      <span class="text-sm">{chartStatus.message}</span>
     </div>
   {:else if chartStatus.kind === "data" && chart}
     <!-- SVG line chart: min/max band + avg polyline + labelled axes -->
     <svg
       viewBox="0 0 {SVG_W} {SVG_H}"
       class="w-full"
-      aria-label="Measurement history chart for {parameter}"
+      aria-label={t("history.chart_title", { name: parameterLabel || parameter })}
       role="img"
     >
       <!-- Plot area background -->
