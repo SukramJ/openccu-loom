@@ -57,6 +57,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// health probe and the stores that read the DB handle.
 	ov, auditOverlayTeardown := wireAuditOverlay(ctx, cfg, logger)
 	defer auditOverlayTeardown()
+
+	// Persist the external Config-UI URL hint now that the overlay has
+	// merged any SPA-persisted north.rest.public_url into cfg, so the CCU
+	// add-on's config.cgi can link at the operator's reverse proxy. Best-
+	// effort; empty value removes the hint. The field is restart-required
+	// (restart.go / reload.go), so writing once at boot is sufficient.
+	writeConfigUIHint(cfg.DataDir, cfg.North.REST.ConfigUIURL(), logger)
 	auditBuf := ov.buf
 	auditRec := ov.rec
 	auditDB := ov.db

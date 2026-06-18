@@ -81,6 +81,14 @@ logging:
 north:
   rest:
     listen: ":8080"
+    # public_url: "https://loom.example.de"
+    #                       # Externally-reachable base URL of this REST + Config-UI
+    #                       # surface. Set it when behind a reverse proxy (Traefik,
+    #                       # nginx, …) that terminates TLS and routes a hostname to
+    #                       # the REST listener: the CCU add-on's "Open Config UI"
+    #                       # button then links at <public_url>/app/ instead of the
+    #                       # direct host:8080 heuristic (unreachable from the public
+    #                       # side). No path suffix; omit for a LAN-direct install.
     # csrf_enabled: true    # double-submit cookie/header guard for mutating
     #                       # endpoints. Default: true. Set to false only for
     #                       # pure API-token deployments without browser sessions.

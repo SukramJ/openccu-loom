@@ -53,6 +53,54 @@ external CCU gets the LAN IP automatically — no manual callback host
 needed. This is what makes the CCU push events back reliably (otherwise:
 no events, "central heartbeat degraded").
 
+## Behind a reverse proxy
+
+The add-on's **Settings** page (the "OpenCCU-Loom" entry on *Additional
+software*) has an **Open Config UI** button. By default it links the
+browser straight at the daemon on `http://<same-host>:8080/app/` — correct
+when you reach the CCU directly on the LAN, but unreachable from behind a
+reverse proxy (Traefik, nginx, …) that terminates TLS and only routes
+`:443`, not `:8080`.
+
+For a proxied deployment, give the daemon its externally-reachable base URL
+via **`north.rest.public_url`** (Settings tab in the SPA, or YAML):
+
+```yaml
+north:
+  rest:
+    public_url: "https://loom.example.de"   # no path suffix; /app/ is appended
+    csrf_secure: true                        # Secure flag on the CSRF cookie (HTTPS)
+```
+
+The daemon writes the resolved URL to `<data_dir>/public_url`, and
+`config.cgi` then links the button at `<public_url>/app/` instead of the
+direct-host heuristic. `public_url` is **restart-required** — set it, then
+use the SPA's **Restart** action (see below). Leave it empty for a
+LAN-direct install; the heuristic stays in effect.
+
+Point a router at the daemon on the CCU. The CCU is an external service
+(not a container), so use the file provider rather than Docker labels, and
+prefer a dedicated host over a path prefix — the daemon serves its surfaces
+(`/app`, `/api`, `/ws`) at the root:
+
+```yaml
+# Traefik dynamic config (file provider)
+http:
+  routers:
+    loom:
+      rule: "Host(`loom.example.de`)"
+      service: loom
+      tls: {}
+  services:
+    loom:
+      loadBalancer:
+        servers:
+          - url: "http://<ccu-lan-ip>:8080"
+```
+
+The SPA is then reachable at `https://loom.example.de/app/`, and the
+add-on button links there.
+
 ## Restart from the UI
 
 The add-on runs the daemon under **monit** (active mode) and sets

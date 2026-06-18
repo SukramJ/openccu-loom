@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.2]
 
+### Added
+
+- **Reverse-proxy support for the CCU add-on's "Open Config UI" button via
+  `north.rest.public_url`.** Behind a TLS-terminating reverse proxy (Traefik,
+  nginx, …) the add-on landing page previously linked the button at
+  `http://<host>:8080/app/` — a direct host:port heuristic that the public
+  side cannot reach (the proxy routes 443, not 8080, and forces `http`). Set
+  `north.rest.public_url` (e.g. `https://loom.example.de`) and the daemon
+  writes the resolved Config-UI URL to a hint file in its data dir that
+  `config.cgi` links at instead (`<public_url>/app/`). Empty (the default)
+  keeps the existing heuristic, which stays correct for a LAN-direct install.
+  The field is editable in the SPA and is restart-required.
+
 ### Fixed
 
 - **Devices now appear even when the CCU backend is not yet ready at daemon
