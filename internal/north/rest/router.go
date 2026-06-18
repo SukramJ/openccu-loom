@@ -50,6 +50,9 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceIcons proxies device-type icon images from the CCU for the
+	// device list. Optional — nil answers 404 (SPA uses a glyph).
+	DeviceIcons handlers.DeviceIconProxy
 	// CustomDPWriter drives POST .../cdps/{name}/{operation}.
 	// Nil disables the mutating endpoint (list/get remain available).
 	CustomDPWriter handlers.CustomDPWriter
@@ -102,6 +105,12 @@ type Deps struct {
 	// (`GET /config/schema`, `GET|PUT|DELETE /config/{section}`).
 	// Nil disables all of them with 503.
 	ConfigAdmin handlers.ConfigAdminService
+	// RestartPending backs GET /system/restart-pending — whether a saved
+	// restart-required config change is staged but not yet active.
+	RestartPending handlers.RestartPendingProvider
+	// ConfigChanges backs GET /system/config-changes — config fields that
+	// differ from the running boot config (what changed since start).
+	ConfigChanges handlers.ConfigChangesProvider
 
 	// UserAdmin backs the SQLite-backed `/users` CRUD. Nil keeps
 	// the legacy in-memory `/auth/users` read-only path active.
@@ -400,6 +409,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Get("/info", handlers.Info(d.StartedAt, d.Capabilities))
 		r.Get("/health", handlers.Health(d.Health))
 
+		// Device-type icon proxy. Unauthenticated like /health: it
+		// serves only non-sensitive device model artwork and must
+		// resolve from an <img> tag regardless of auth scheme. Nil
+		// proxy → 404 (SPA falls back to a generic glyph).
+		r.Get("/devices/{addr}/icon", handlers.GetDeviceIcon(d.DeviceIcons))
+
 		// Auth endpoints stay outside the AuthRequire group — a logged-
 		// out SPA must be able to POST credentials to /auth/login.
 		// `/auth/me` is the probe the SPA uses on startup to decide
@@ -545,6 +560,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
 			}
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
+			// Persistent "restart required" status for the SPA banner.
+			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
+			// Config fields changed since the daemon started.
+			pr.Get("/system/config-changes", handlers.GetConfigChanges(d.ConfigChanges))
 			if d.LogLevels != nil {
 				pr.Get("/diagnostics/log-levels", handlers.ListLogLevels(d.LogLevels))
 				pr.With(admin).Put("/diagnostics/log-levels/{path}", handlers.PutLogLevel(d.LogLevels, d.AuditRecorder))
@@ -693,6 +712,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/config/sections/{section}", handlers.GetConfigSection(d.ConfigAdmin))
 				pr.With(admin).Put("/config/sections/{section}", handlers.PutConfigSection(d.ConfigAdmin, d.AuditRecorder))
 				pr.With(admin).Delete("/config/sections/{section}", handlers.DeleteConfigSection(d.ConfigAdmin, d.AuditRecorder))
+				// Per-field reset: revert a single config field to its default.
+				pr.With(admin).Delete("/config/fields/{path}", handlers.ResetConfigField(d.ConfigAdmin, d.AuditRecorder))
 			}
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))

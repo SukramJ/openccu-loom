@@ -729,7 +729,7 @@
           {#if userChannels.length > 0}
             <div>
               <div class="mb-2 flex flex-wrap items-center gap-2">
-                <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">Channel:</span>
+                <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">{t("history.label_channel")}</span>
                 <select
                   class="rounded border px-2 py-1 text-xs"
                   style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
@@ -742,12 +742,12 @@
                 >
                   {#each userChannels as ch (ch.number)}
                     <option value={ch.number}>
-                      {ch.name?.trim() || ch.type_label || `Channel ${ch.number}`} ({ch.number})
+                      {ch.name?.trim() || ch.type_label || t("history.channel_n", { n: ch.number })} ({ch.number})
                     </option>
                   {/each}
                 </select>
                 {#if historyDPs.length > 0}
-                  <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">Parameter:</span>
+                  <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">{t("history.label_parameter")}</span>
                   <select
                     class="rounded border px-2 py-1 text-xs"
                     style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
@@ -763,9 +763,9 @@
                     {/each}
                   </select>
                 {:else if historyDPsLoading}
-                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">Loading parameters…</span>
+                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">{t("history.loading_parameters")}</span>
                 {:else if historyChannelNo !== null}
-                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">No numeric parameters on this channel.</span>
+                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">{t("history.no_numeric")}</span>
                 {/if}
               </div>
               {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
@@ -775,6 +775,7 @@
                   interfaceId={detail.interface_id}
                   channel={`${detail.address}:${historyChannelNo}`}
                   parameter={historyParameter}
+                  parameterLabel={selectedDP?.parameter_label || selectedDP?.parameter}
                   unit={selectedDP?.unit ?? ""}
                 />
               {/if}

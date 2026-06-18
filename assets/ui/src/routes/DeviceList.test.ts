@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { deviceListFilters } from "$lib/stores/deviceListFilters.svelte";
 
 // The deviceStore is a module-level singleton; mock the whole module so
 // we can control its state without touching any real API or WebSocket.
@@ -88,6 +89,19 @@ beforeEach(() => {
   mockLoading = false;
   mockError = null;
   mockLastLoaded = null;
+  // The list filter/sort state lives in a module-scoped store (it must
+  // survive navigation in the app), so reset it between tests to avoid a
+  // search term from one test leaking into the next.
+  Object.assign(deviceListFilters, {
+    filter: "",
+    availability: "all",
+    updateOnly: false,
+    roomFilter: "",
+    centralFilter: "",
+    sortColumn: "name",
+    sortAsc: true,
+    groupByInterface: true,
+  });
 });
 
 afterEach(() => {

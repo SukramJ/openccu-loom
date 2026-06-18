@@ -22,12 +22,14 @@
   // Svelte's $derived tracks it and re-runs whenever the state changes.
   const wsState: "connecting" | "open" | "closed" = $derived(wsStatus());
 
+  // This badge reflects the live-update (WebSocket) stream, not the CCU
+  // link — label it as such so a red dot doesn't read as a CCU outage.
   const label = $derived(
     wsState === "open"
-      ? t("diagnostics.connected")
+      ? t("connection.live_on")
       : wsState === "connecting"
         ? t("connection.reconnecting")
-        : t("diagnostics.disconnected"),
+        : t("connection.live_off"),
   );
 
   const dotClass = $derived(
@@ -40,7 +42,7 @@
 
   const diag = $derived(diagnostics());
   const tooltip = $derived(
-    `WebSocket: ${label} · ${diag.received} events${diag.lastType ? ` · last: ${diag.lastType}` : ""}`,
+    `${t("connection.ws_tooltip")} — ${label} · ${diag.received} ${t("connection.events")}${diag.lastType ? ` · ${t("connection.last")}: ${diag.lastType}` : ""}`,
   );
 </script>
 

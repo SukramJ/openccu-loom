@@ -97,6 +97,16 @@
   // but unobserved, …) so the tile grid stays clean.
   const autoTileChannels = $derived(orphanChannels);
 
+  // Adaptive column count: a device with one or two tiles (e.g. a wall
+  // thermostat or a contact) used only a third of the width on a 3-col
+  // grid. Drop to two columns when there is little to show so the tiles
+  // fill more of the row.
+  const tileGridClass = $derived(
+    renderable.length + autoTileChannels.length <= 2
+      ? "grid grid-cols-1 gap-3 sm:grid-cols-2"
+      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3",
+  );
+
   // --- Sub-device grouping ---
   //
   // When the device declares multiple channel-groups (`has_sub_devices` —
@@ -210,7 +220,7 @@
 {/if}
 
 {#snippet tileGrid(cdps: CustomDPSummary[], actors: typeof orphanChannels)}
-  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+  <div class={tileGridClass}>
     {#each cdps as cdp (`${cdp.name}:${cdp.channel_no}`)}
       {@const Widget = cdpWidgetFor(cdp.kind)}
       {@const ch = detail.channels.find((c) => c.number === cdp.channel_no)}
@@ -306,7 +316,7 @@
        all render as siblings in the same grid; the composer's
        gridSpan hint widens readout-heavy tiles to 2 cells. -->
   {#if renderable.length > 0 || autoTileChannels.length > 0}
-    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div class={tileGridClass}>
       {#each renderable as cdp (`${cdp.name}:${cdp.channel_no}`)}
         {@const Widget = cdpWidgetFor(cdp.kind)}
         {@const ch = detail.channels.find((c) => c.number === cdp.channel_no)}

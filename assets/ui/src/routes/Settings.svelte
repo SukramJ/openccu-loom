@@ -9,8 +9,10 @@
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
   import CentralsAdmin from "$lib/components/settings/CentralsAdmin.svelte";
   import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
+  import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { prefs, setLocale, setExpertMode } from "$lib/stores/preferences.svelte";
+  import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -20,6 +22,9 @@
   let schemaSections = $state<string[]>([]);
   let sources = $state<Record<string, ConfigFieldSource>>({});
   let effectiveConfig = $state<Record<string, unknown>>({});
+  // Config field paths changed since the daemon started (boot diff). Drives
+  // the conditional "Changed settings" tab.
+  let changedFields = $state<string[]>([]);
   let schemaLoading = $state(true);
   let schemaError = $state<string | null>(null);
 
@@ -41,14 +46,16 @@
     schemaLoading = true;
     schemaError = null;
     try {
-      const [schema, effective] = await Promise.all([
+      const [schema, effective, changes] = await Promise.all([
         api.getConfigSchema(),
         api.getEffectiveConfig(),
+        api.getConfigChanges().catch(() => ({ fields: [] as string[] })),
       ]);
       schemaFields = schema.fields;
       schemaSections = schema.sections;
       sources = effective.sources;
       effectiveConfig = effective.config;
+      changedFields = changes.fields ?? [];
       // Probe daemon capabilities once at mount so the restart
       // button reflects the supervisor state.
       try {
@@ -147,6 +154,7 @@
 
   const ALL_TABS: Tab[] = [
     { id: "general", label: t("settings.tab.general") },
+    { id: "changes", label: t("settings.tab.changes") },
     { id: "ccus", label: t("settings.tab.ccus") },
     { id: "mqtt", label: t("settings.tab.mqtt") },
     { id: "matter", label: t("settings.tab.matter") },
@@ -179,9 +187,17 @@
     { id: "advanced", tabIds: ["reliability", "persistence"] },
   ];
 
+  // "changes" is rendered separately at the end of the nav (only when
+  // there are changes), so it is excluded from the normal grouped/flat
+  // flow here.
   const visibleTabs = $derived(
-    ALL_TABS.filter((tab) => !tab.expertOnly || prefs.expertMode),
+    ALL_TABS.filter((tab) => tab.id !== "changes").filter(
+      (tab) => !tab.expertOnly || prefs.expertMode,
+    ),
   );
+
+  const changesTab = ALL_TABS.find((tab) => tab.id === "changes");
+  const hasChanges = $derived(changedFields.length > 0);
 
   // Groups with their currently-visible tabs resolved. A group whose
   // tabs are all expert-only collapses to empty when expert mode is off
@@ -211,6 +227,14 @@
       if (current?.expertOnly) {
         activeTab = "general";
       }
+    }
+  });
+
+  // The "Changed settings" tab only exists while there are changes; if it
+  // empties out while open, fall back so we don't sit on a hidden tab.
+  $effect(() => {
+    if (activeTab === "changes" && !hasChanges) {
+      activeTab = "general";
     }
   });
 </script>
@@ -274,6 +298,9 @@
         {#each visibleTabs as tab (tab.id)}
           {@render tabButton(tab, false)}
         {/each}
+        {#if hasChanges && changesTab}
+          {@render tabButton(changesTab, false)}
+        {/if}
       </div>
 
       <!-- Desktop: grouped collapsible sidebar -->
@@ -307,6 +334,13 @@
             {/if}
           </div>
         {/each}
+        <!-- Standalone "Changed settings" entry, at the very end and only
+             while there are changes. -->
+        {#if hasChanges && changesTab}
+          <div class="mt-1 border-t border-slate-200 pt-2 dark:border-slate-800">
+            {@render tabButton(changesTab, true)}
+          </div>
+        {/if}
       </div>
     </nav>
 
@@ -351,6 +385,22 @@
             </div>
           </div>
         </div>
+
+      {:else if activeTab === "changes"}
+        {#if schemaLoading}
+          <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+        {:else}
+          <ChangesOverview
+            changedPaths={changedFields}
+            {schemaFields}
+            {effectiveConfig}
+            allSections={schemaSections}
+            onChanged={() => {
+              void loadSchema();
+              void refreshRestartPending();
+            }}
+          />
+        {/if}
 
       {:else if activeTab === "ccus"}
         <CentralsAdmin />

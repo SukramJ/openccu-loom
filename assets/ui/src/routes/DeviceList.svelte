@@ -6,19 +6,43 @@
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
+  import { prefs, setDeviceView } from "$lib/stores/preferences.svelte";
+  import { deviceListFilters as saved } from "$lib/stores/deviceListFilters.svelte";
+  import Icon from "$lib/components/ui/Icon.svelte";
 
-  let filter = $state("");
-  let availability = $state<"all" | "available" | "unavailable">("all");
-  let updateOnly = $state(false);
-  let roomFilter = $state("");
-  let centralFilter = $state("");
-  // Sort + interface-grouping mirror homematicip-local-frontend's
+  // Filter/sort state is seeded from a module store and synced back to
+  // it, so the search term and filters survive opening a device and
+  // navigating back. (View mode is the durable preference above.)
+  let filter = $state(saved.filter);
+  let availability = $state<"all" | "available" | "unavailable">(saved.availability);
+  let updateOnly = $state(saved.updateOnly);
+  let roomFilter = $state(saved.roomFilter);
+  let centralFilter = $state(saved.centralFilter);
+  // Sort + interface-grouping mirror the reference config panel's
   // device-list view: clicking a column toggles asc/desc, and devices
   // are clustered under interface headers so a multi-CCU setup stays
   // legible.
-  let sortColumn = $state<"name" | "address" | "model">("name");
-  let sortAsc = $state(true);
-  let groupByInterface = $state(true);
+  let sortColumn = $state<"name" | "address" | "model">(saved.sortColumn);
+  let sortAsc = $state(saved.sortAsc);
+  let groupByInterface = $state(saved.groupByInterface);
+  $effect(() => {
+    saved.filter = filter;
+    saved.availability = availability;
+    saved.updateOnly = updateOnly;
+    saved.roomFilter = roomFilter;
+    saved.centralFilter = centralFilter;
+    saved.sortColumn = sortColumn;
+    saved.sortAsc = sortAsc;
+    saved.groupByInterface = groupByInterface;
+  });
+
+  // Layout class for the device containers — a multi-column card grid
+  // or a single-column list, per the operator's view preference.
+  const listClass = $derived(
+    prefs.deviceView === "list"
+      ? "flex flex-col gap-2"
+      : "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4",
+  );
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
   let bulkBanner = $state<string | null>(null);
@@ -213,7 +237,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+<section class="w-full px-4 py-8 sm:px-6">
   <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
     <div>
       <h1 class="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
@@ -285,6 +309,35 @@
       >
         {t("devicelist.ccu_refresh")}
       </Button>
+      <!-- Grid / list layout toggle (persisted preference). -->
+      <div
+        class="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-700"
+        role="group"
+        aria-label={t("devicelist.view_mode")}
+      >
+        <button
+          type="button"
+          class="px-2.5 py-2 transition {prefs.deviceView === 'grid'
+            ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+          aria-pressed={prefs.deviceView === "grid"}
+          title={t("devicelist.view_grid")}
+          onclick={() => setDeviceView("grid")}
+        >
+          <Icon name="mdi:dots-grid" size={18} />
+        </button>
+        <button
+          type="button"
+          class="px-2.5 py-2 transition {prefs.deviceView === 'list'
+            ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
+            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+          aria-pressed={prefs.deviceView === "list"}
+          title={t("devicelist.view_list")}
+          onclick={() => setDeviceView("list")}
+        >
+          <Icon name="mdi:format-list-bulleted" size={18} />
+        </button>
+      </div>
     </div>
   </header>
 
@@ -376,7 +429,7 @@
           {g.iface}
           <span style="color: var(--ha-disabled-text-color);">·&nbsp;{g.items.length}</span>
         </h2>
-        <ul class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <ul class={listClass}>
           {#each g.items as device (device.interface_id + "/" + device.address)}
             <li>
               <DeviceCard
@@ -393,7 +446,7 @@
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
-    <ul class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <ul class={listClass}>
       {#each filtered as device (device.interface_id + "/" + device.address)}
         <li>
           <DeviceCard

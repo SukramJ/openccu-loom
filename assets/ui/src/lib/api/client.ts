@@ -698,6 +698,13 @@ export const api = {
       method: "POST",
     });
   },
+  getRestartPending() {
+    return request<{ pending: boolean; fields: string[] }>(`/system/restart-pending`);
+  },
+  // Config field paths changed since the daemon started (boot diff).
+  getConfigChanges() {
+    return request<{ fields: string[] }>(`/system/config-changes`);
+  },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);
@@ -944,6 +951,11 @@ export const api = {
   },
   deleteConfigSection(section: string) {
     return request<void>(`/config/sections/${encodeURIComponent(section)}`, {
+      method: "DELETE",
+    });
+  },
+  resetConfigField(path: string) {
+    return request<void>(`/config/fields/${encodeURIComponent(path)}`, {
       method: "DELETE",
     });
   },

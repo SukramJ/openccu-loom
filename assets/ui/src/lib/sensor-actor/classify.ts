@@ -158,7 +158,23 @@ function enumValueLabel(dp: DataPointSummary): string | undefined {
     return undefined;
   }
   if (idx < 0 || idx >= dp.value_list.length) return undefined;
-  return titleCase(dp.value_list[idx]);
+  return enumValueText(dp.value_list[idx]);
+}
+
+/**
+ * Localised caption for an ENUM *value* token. Wire tokens like
+ * `CLOSED` / `UNKNOWN` carry no server-resolved label (only parameter
+ * names do), so the SPA owns their translation: look up
+ * `enum.<TOKEN>` in the i18n catalogue and fall back to a title-cased
+ * form (`IDLE_OFF` → `Idle Off`) for the long tail. Shared with the
+ * Enum/Boolean readouts so every surface renders the same caption.
+ */
+export function enumValueText(token: string): string {
+  if (!token) return "";
+  const key = "enum." + token.toUpperCase();
+  const translated = t(key);
+  if (translated !== key) return translated;
+  return titleCase(token);
 }
 
 function formatNumber(n: number, dp: DataPointSummary): string {
@@ -183,6 +199,14 @@ function formatNumber(n: number, dp: DataPointSummary): string {
  * only a transport fallback for responses that predate the field.
  */
 export function dpLabel(dp: DataPointSummary): string {
+  // A curated set of generic parameter names is localised client-side:
+  // the data-point list endpoint resolves labels without a locale, so
+  // names like STATE come through title-cased English ("State"). The
+  // catalogue (`datapoint.<NAME>`) only carries safe, channel-agnostic
+  // names; everything else keeps the server's parameter_label.
+  const key = "datapoint." + dp.parameter.toUpperCase();
+  const translated = t(key);
+  if (translated !== key) return translated;
   if (dp.parameter_label && dp.parameter_label.trim()) return dp.parameter_label;
   return dp.parameter;
 }

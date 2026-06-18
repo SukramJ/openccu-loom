@@ -10,6 +10,7 @@
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
 
   type Props = {
     section: string;
@@ -492,6 +493,7 @@
       original = deepClone(working);
       toastStore.success(t("settings.saved"));
       usingDefaults = false;
+      void refreshRestartPending();
       if (result.restart_required || hasRestartField) {
         showRestartModal = true;
       }
@@ -516,6 +518,7 @@
     try {
       await api.deleteConfigSection(section);
       toastStore.success(t("settings.reset_done"));
+      void refreshRestartPending();
       await load();
     } catch (err) {
       toastStore.error(
@@ -713,7 +716,9 @@
       </div>
     {/if}
 
-    <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+    <!-- Action bar sticks to the bottom of the viewport so Save stays
+         reachable on long sections without scrolling back up. -->
+    <div class="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white py-3 dark:border-slate-800 dark:bg-slate-900">
       <Button
         type="button"
         variant="default"

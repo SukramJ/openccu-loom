@@ -167,6 +167,16 @@ export type IconName =
   | "mdi:radio-tower"
   | "mdi:waveform"
   | "mdi:text-box-search-outline"
+  | "mdi:bell-alert"
+  | "mdi:cube-outline"
+  | "mdi:dots-grid"
+  | "mdi:door"
+  | "mdi:format-list-bulleted"
+  | "mdi:gesture-tap-button"
+  | "mdi:run-fast"
+  | "mdi:smoke-detector-variant"
+  | "mdi:water-alert"
+  | "mdi:weather-windy"
   | "mdi:zap";
 
 const REGISTRY: Record<IconName, Component> = {
@@ -236,6 +246,19 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:waveform": Activity,
   "mdi:text-box-search-outline": List,
   "mdi:zap": Zap,
+  // Device-type + view-toggle glyphs (also present in LOOSE_REGISTRY,
+  // promoted here so the strict <Icon> component renders them instead of
+  // falling back to Info).
+  "mdi:bell-alert": Bell,
+  "mdi:cube-outline": Box,
+  "mdi:door": DoorClosed,
+  "mdi:dots-grid": Grid3x3,
+  "mdi:format-list-bulleted": List,
+  "mdi:gesture-tap-button": MousePointerClick,
+  "mdi:run-fast": Activity,
+  "mdi:smoke-detector-variant": AlertOctagonReplacement(),
+  "mdi:water-alert": Droplets,
+  "mdi:weather-windy": Wind,
 };
 
 export function resolveIcon(name: IconName): Component {

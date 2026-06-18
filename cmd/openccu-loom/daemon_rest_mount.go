@@ -106,6 +106,17 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if resumed := rpcRecorder.ResumeFromMarker(ctx); len(resumed) > 0 {
 		logger.Info("diagnostics.rpc_recording.resumed", slog.Any("centrals", resumed))
 	}
+	// One provider snapshots the boot config and serves both the
+	// restart-pending banner and the changed-settings overview. The
+	// baseline is the *assembled* effective config at boot (not the raw
+	// YAML cfg): the overview compares it against the same assembly per
+	// request, so YAML-only fields the effective view derives elsewhere
+	// (e.g. locale) don't read as spurious changes on a clean start.
+	bootBaseline := cfg
+	if eff, err := d.configSvc.Effective(ctx); err == nil && eff != nil && eff.Config != nil {
+		bootBaseline = eff.Config
+	}
+	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
 	deps := rest.Deps{
 		Logger:         logger,
 		StartedAt:      time.Now(),
@@ -113,6 +124,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Config:         d.configAdapter,
 		Devices:        d.devicesAdapter,
 		DeviceAdmin:    d.deviceAdminDomain,
+		DeviceIcons:    newDeviceIconProxy(d.reg, cfg.Centrals),
 		RefreshDevices: d.devicesAdapter,
 		DPWriter:       d.dpWriterAdapter,
 		CustomDPWriter: d.customDPDispatcher,
@@ -132,6 +144,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Audit:          d.auditBuf,
 		Auth:           d.restAuth,
 		ConfigAdmin:    d.configSvc,
+		RestartPending: restartState,
+		ConfigChanges:  restartState,
 		UserAdmin:      d.userSvc,
 		TokenAdmin:     d.tokenSvc,
 		CentralAdmin:   d.centSvc,

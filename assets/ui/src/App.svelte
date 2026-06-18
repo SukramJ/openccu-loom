@@ -38,6 +38,8 @@
   import Icon from "$lib/components/ui/Icon.svelte";
   import { dirty } from "$lib/stores/dirty.svelte";
   import { t } from "$lib/i18n";
+  import RestartBanner from "$lib/components/RestartBanner.svelte";
+  import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
 
   // Minimal hash-based router. The Go handler serves the SPA under
   // /app/ and rewrites unknown paths to index.html, so client-side
@@ -48,11 +50,13 @@
 
   function onHash() {
     path = location.hash.replace(/^#/, "") || "/devices";
+    void refreshRestartPending();
   }
   window.addEventListener("hashchange", onHash);
 
   onMount(() => {
     authStore.probe();
+    void refreshRestartPending();
     // Apply persisted/system theme on first paint and bind to OS-
     // preference changes for "system" mode.
     applyTheme();
@@ -207,6 +211,7 @@
           <ConnectionBadge />
         </div>
       </header>
+      <RestartBanner />
       <main>
         {#if route.kind === "list"}
           <DeviceList />

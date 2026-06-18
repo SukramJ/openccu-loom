@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.12.0
+  version: 1.13.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -200,6 +200,30 @@ paths:
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /devices/{addr}/icon:
+    get:
+      operationId: getDeviceIcon
+      tags: [devices]
+      summary: Device-type icon image (proxied from the CCU)
+      description: >
+        Returns the device's model-icon PNG, proxied from the owning
+        CCU's web server (`/config/img/devices/250/<file>`).
+        Unauthenticated, like /health — it exposes only non-sensitive
+        device model artwork and must resolve from an <img> tag
+        regardless of auth scheme. Responds 404 when the device, its
+        central, or the upstream image is unavailable; the SPA then
+        falls back to a generic glyph.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+      responses:
+        "200":
+          description: Icon image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /devices/{addr}/channels:
     get:
@@ -788,6 +812,55 @@ paths:
                   entries:
                     type: array
                     items: { $ref: "#/components/schemas/SystemCCUEntry" }
+
+  /system/restart-pending:
+    get:
+      operationId: getRestartPending
+      summary: Whether a saved config change needs a daemon restart
+      description: >
+        Reports whether any restart-required config field has a persisted
+        value the running daemon has not yet adopted (computed on demand:
+        persisted config vs. the running boot config). The SPA shows a
+        persistent banner while `pending` is true; it clears once the
+        values are reverted or the daemon restarts.
+      tags: [core]
+      responses:
+        "200":
+          description: Restart-pending status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, fields]
+                properties:
+                  pending: { type: boolean }
+                  fields:
+                    type: array
+                    items: { type: string }
+
+  /system/config-changes:
+    get:
+      operationId: getConfigChanges
+      summary: Config fields changed since the daemon started
+      description: >
+        Lists the config field paths whose persisted value differs from
+        the running boot config — i.e. what was edited since start, not
+        what differs from the built-in default. Empty right after a clean
+        start; an entry drops out when its value is reverted. Backs the
+        SPA's "Changed settings" overview.
+      tags: [core]
+      responses:
+        "200":
+          description: Changed config field paths
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fields]
+                properties:
+                  fields:
+                    type: array
+                    items: { type: string }
 
   /system/status:
     get:
@@ -3108,6 +3181,33 @@ paths:
       responses:
         "204":
           description: Deleted (idempotent — 204 even if section was absent)
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /config/fields/{path}:
+    parameters:
+      - name: path
+        in: path
+        required: true
+        schema: { type: string }
+        description: Dotted config field path, e.g. "north.rest.rate_limit.enabled".
+    delete:
+      operationId: resetConfigField
+      summary: Reset one config field to its default (admin)
+      description: >
+        Removes the override for a single field from its owning section
+        (pruning empty parent objects, dropping the section row when
+        nothing is left), so the field falls back to the built-in
+        default. Idempotent.
+      tags: [config-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204":
+          description: Reset (idempotent — 204 even if already at default)
         "400": { $ref: "#/components/responses/BadRequest" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }

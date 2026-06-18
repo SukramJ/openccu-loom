@@ -109,8 +109,34 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		} else if err := cfg.Validate(); err != nil {
 			logger.Warn("configstore.overlay.validate", slog.String("err", err.Error()))
 		}
+		// Replay the persisted audit history into the in-memory read
+		// buffer so GET /api/v1/audit surfaces past changes instead of
+		// only what happened since this boot (the recorder persists to
+		// SQLite, but the read path is the buffer).
+		hydrateAuditBuffer(ctx, ov.buf, sqlitestore.NewAuditStore(ov.db), logger)
 	}
 	return ov, teardown
+}
+
+// hydrateAuditBuffer loads the most recent persisted audit entries into
+// the in-memory buffer on boot. The store lists newest-first; the buffer
+// prepends on Record, so replay oldest-first to preserve order. Existing
+// timestamps are kept (Buffer.Record only stamps zero-value times).
+func hydrateAuditBuffer(ctx context.Context, buf *audit.Buffer, store *sqlitestore.AuditStore, logger *slog.Logger) {
+	if buf == nil || store == nil {
+		return
+	}
+	entries, err := store.List(ctx, "", 500)
+	if err != nil {
+		logger.Warn("audit.buffer.hydrate", slog.String("err", err.Error()))
+		return
+	}
+	for i := len(entries) - 1; i >= 0; i-- {
+		buf.Record(entries[i])
+	}
+	if len(entries) > 0 {
+		logger.Info("audit.buffer.hydrated", slog.Int("entries", len(entries)))
+	}
 }
 
 // ccuArchive bundles the optional CCU translation / easymode / profile

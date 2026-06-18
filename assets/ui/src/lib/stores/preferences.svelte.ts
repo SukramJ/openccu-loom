@@ -18,6 +18,9 @@ type Prefs = {
   // toggle). Persisted alongside the other preferences so the
   // operator's choice survives navigation and reloads.
   expertMode: boolean;
+  // deviceView toggles the device-list layout between a multi-column
+  // card grid and a single-column list (HA-config-panel style).
+  deviceView: "grid" | "list";
 };
 
 function detectLocale(): "de" | "en" {
@@ -39,12 +42,13 @@ function load(): Prefs {
           : "system";
       const navCollapsed = parsed.navCollapsed === true;
       const expertMode = parsed.expertMode === true;
-      return { locale, theme, navCollapsed, expertMode };
+      const deviceView: "grid" | "list" = parsed.deviceView === "list" ? "list" : "grid";
+      return { locale, theme, navCollapsed, expertMode, deviceView };
     }
   } catch {
     // ignore
   }
-  return { locale: detectLocale(), theme: "system", navCollapsed: false, expertMode: false };
+  return { locale: detectLocale(), theme: "system", navCollapsed: false, expertMode: false, deviceView: "grid" };
 }
 
 function persist(p: Prefs): void {
@@ -62,6 +66,7 @@ export const prefs = $state<Prefs>({
   theme: initial.theme,
   navCollapsed: initial.navCollapsed,
   expertMode: initial.expertMode,
+  deviceView: initial.deviceView,
 });
 
 // Keep <html> in sync with the resolved theme. Listens to
@@ -94,6 +99,11 @@ export function setNavCollapsed(collapsed: boolean): void {
 
 export function setExpertMode(on: boolean): void {
   prefs.expertMode = on;
+  persist({ ...prefs });
+}
+
+export function setDeviceView(view: "grid" | "list"): void {
+  prefs.deviceView = view;
   persist({ ...prefs });
 }
 

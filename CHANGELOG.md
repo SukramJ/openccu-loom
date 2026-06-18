@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0]
 
 ### Added
 
@@ -41,6 +41,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   by id across CCUs and only requires `?central=` to disambiguate an id
   shared by multiple centrals. Clients that previously fetched the full
   `GET /programs` list and filtered locally can drop that workaround.
+- **Device-type icons in the device list — real images proxied from the
+  CCU.** Cards led with a bare reachability dot, leaving 140+ tiles
+  visually identical. They now show the device's icon with the
+  reachability state as a corner dot. A new `GET /devices/{addr}/icon`
+  resolves the device to its central and proxies the real eQ-3 image the
+  CCU serves under `/config/img/devices/250/<file>` (cached, since icons
+  are static; unauthenticated like `/health`). When the CCU has no icon
+  for a model or is offline, the card falls back to a representative type
+  glyph, so it always shows something.
+- **Persistent "restart required" banner + a changed-settings overview
+  with per-field revert.** Saving a config change that needs a restart
+  gave only a one-shot modal. A new `GET /system/restart-pending`
+  (persisted vs. running boot config over the restart-required field set)
+  drives an app-wide banner that stays until the change is reverted or the
+  daemon restarts; it links to Settings and offers an inline restart where
+  a supervisor is detected. A new "Changed settings" overview
+  (`GET /system/config-changes`) lists exactly the fields that differ from
+  the running boot config — what was edited this session, not what differs
+  from the built-in default — so a clean start shows nothing and reverting
+  an edit empties the list. Each entry is revertible on its own via
+  `DELETE /config/fields/{path}` (removes just that leaf, pruning the
+  section row when empty), the per-field counterpart to the whole-section
+  reset. The overview is a standalone tab at the end of the settings nav,
+  shown only while there are changes.
+- **Grid/list toggle for the device list, with sticky search.** The list
+  can switch between the multi-column card grid and a single-column list
+  (durable preference); the search term, filters and sort now survive
+  opening a device and navigating back instead of resetting each time.
 
 ### Changed
 
@@ -56,6 +84,33 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its curated group titles (Temperature, Timing, Boost, …) are now localized
   (de/en) instead of hard-coded English; easymode-metadata groups keep their
   archive label. Frontend-only and additive — no API or config changes.
+- **Clearer device value presentation in the SPA.** Enum status values
+  now localize (a door contact reads "Geschlossen", not "Closed"; a dimmer
+  "Unbekannt", not "Unknown"). Momentary event channels (a remote's
+  PRESS_SHORT/LONG) render as events with when they last fired instead of a
+  raw `false`. The measurement-history tab is fully localized and its
+  states are distinct — "recording off" explains itself and links to the
+  setting (rather than naming a YAML key), separate from "no data in this
+  range". Long config pages keep Save reachable via sticky action bars, and
+  the weekly-schedule fallback line names the base temperature so it no
+  longer looks inconsistent with the period temperatures in the heatmap.
+  A further round of UX-audit polish: generic data-point labels localize
+  client-side (STATE → "Status"); the device-overview tile grid drops to
+  two columns for one- or two-tile devices so it no longer wastes a third
+  of the row; the top-bar connectivity badge is labelled as the live-update
+  (WebSocket) stream rather than a bare red dot; and the maintenance stripe
+  replaces double negatives ("Duty-Cycle blockiert: Nein") with status
+  words (OK / Blockiert / Schwach). The device list also uses the full
+  width.
+
+### Fixed
+
+- **Change-history view was always empty.** The audit recorder persisted
+  every config change to SQLite, but the read path served only an
+  in-memory ring buffer that starts empty on each daemon start — so the
+  history showed nothing after a restart and never surfaced seeded config.
+  The buffer is now hydrated from the persisted store on boot (preserving
+  original ordering and timestamps).
 
 ## [0.4.0]
 

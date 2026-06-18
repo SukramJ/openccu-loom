@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import type { DataPointSummary } from "$lib/api/types";
-  import { dpLabel } from "../classify";
+  import { dpLabel, enumValueText } from "../classify";
   import { resolveIconLoose } from "$lib/icons";
   import { stateColorFor } from "../state-color";
   import { t } from "$lib/i18n";
@@ -27,20 +27,11 @@
     if (dp.value_list && dp.value_list.length >= 2) {
       const idx = typeof v === "boolean" ? (v ? 1 : 0) : typeof v === "number" ? Math.round(v) : -1;
       if (idx >= 0 && idx < dp.value_list.length) {
-        return prettify(dp.value_list[idx]);
+        return enumValueText(dp.value_list[idx]);
       }
     }
     if (typeof v === "boolean") return v ? t("quick.on") : t("quick.off");
     return String(v);
-  }
-
-  function prettify(s: string): string {
-    return s
-      .toLowerCase()
-      .split("_")
-      .filter(Boolean)
-      .map((p) => p[0].toUpperCase() + p.slice(1))
-      .join(" ");
   }
 
   function formatAge(seconds?: number): string {

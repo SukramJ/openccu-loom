@@ -224,7 +224,7 @@
             {#each blocks as block, i (`${block.startMinutes}-${block.endMinutes}-${i}`)}
               {@const heightPct = ((block.endMinutes - block.startMinutes) / 1440) * 100}
               <div
-                class="absolute left-0 right-0 flex items-center justify-center text-[10px] font-medium {block.isBase
+                class="absolute left-0 right-0 flex items-center justify-center text-[11px] font-medium {block.isBase
                   ? 'text-slate-500 dark:text-slate-400'
                   : 'text-white drop-shadow-sm'}"
                 style="top: {(block.startMinutes / 1440) * 100}%; height: {heightPct}%; {blockBackground(blocks, i)}"
