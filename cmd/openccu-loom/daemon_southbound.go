@@ -105,8 +105,11 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// injects the live HTTPBackupRestorer into it after the first
 	// successful hub handshake.
 	backupAdapter := buildBackupAdapter(cfg, reg, logger)
-	wireCtx, wireCancel := context.WithTimeout(ctx, 60*time.Second)
-	wireTeardown, wireErr := adapter.WireCentrals(wireCtx, cfg, reg, adapter.WireDeps{
+	// WireCentrals returns immediately: each central's southbound bring-up runs
+	// in the background, gated on CCU readiness. No wiring timeout here — a
+	// co-booting CCU is waited on indefinitely (the bring-up is bounded by the
+	// daemon-lifetime ctx + the teardown closer, not a fixed window).
+	wireTeardown, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
 		Writer:               d.valueWriter,
 		Translations:         d.translations,
 		CallbackServer:       d.callbackSrv,
@@ -183,7 +186,6 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 				return float64(stats.ValueJSONSize)
 			})
 	}
-	wireCancel()
 	if wireErr != nil {
 		logger.Warn("wire.partial", slog.String("err", wireErr.Error()))
 	}

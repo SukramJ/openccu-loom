@@ -148,6 +148,17 @@ func (b *EventBridge) Start(ctx context.Context) {
 			b.onDeviceRemoved(e)
 		})
 		b.unsubs = append(b.unsubs, unsubRemoved)
+
+		// Per-central southbound-ready: the readiness-gated bring-up loads each
+		// central's devices (with names) asynchronously, after this boot-time
+		// PublishInitialSnapshot would have run. Publish that central's snapshot
+		// when it signals ready so its devices reach the broker without waiting
+		// for a restart. Idempotent (the bridge diff-gates on its declared map),
+		// so it composes safely with the catch-up PublishInitialSnapshot call.
+		unsubReady := events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
+			b.PublishCentralSnapshot(ctx, e.CentralName)
+		})
+		b.unsubs = append(b.unsubs, unsubReady)
 	}
 }
 
@@ -221,140 +232,162 @@ func (b *EventBridge) PublishInitialSnapshot(ctx context.Context) {
 		return
 	}
 	for _, u := range b.registry.List() {
-		centralName := u.Name()
-		for _, d := range u.ModelRegistry.List() {
-			ifaceID := d.InterfaceID
-			// Publish per-device availability FIRST. The HA Discovery
-			// payload references the device-availability topic (with
-			// `availability_mode: all`) — without an explicit publish
-			// HA marks every entity as unavailable and the discovery
-			// effectively does nothing.
-			//
-			// Availability tracks device REACHABILITY (UNREACH /
-			// STICKY_UNREACH via Device.Available()), not "has a value
-			// been observed yet". A reachable
-			// device whose data points have not reported yet is `online`
-			// with each entity showing an `unknown` value, which is the
-			// Home-Assistant convention. The per-DP snapshot below
-			// publishes an explicit `{available:true}` state for every
-			// data point so the state topic is never empty (avoiding the
-			// empty-template warnings that the previous observed-gating
-			// design worked around by leaving entities unavailable).
-			online := d.Available()
-			b.markAvailability(ctx, centralName, ifaceID, d.Address, online)
+		b.publishCentralSnapshot(ctx, u)
+	}
+}
 
-			// ADR 0011 phase 1c — device info + diagnostics topics.
-			// Both are retained one-shot snapshots; the info topic
-			// re-publishes when the model gains channels or
-			// firmware-tracker fields update.
-			b.publishDeviceInfo(ctx, centralName, ifaceID, d)
-			b.publishDeviceDiagnostics(ctx, centralName, ifaceID, d)
+// PublishCentralSnapshot publishes the device snapshot for a single central,
+// resolved by name. The per-central southbound-ready subscription uses it so a
+// readiness-gated central's devices reach the broker as soon as THAT central
+// finishes its bring-up, rather than waiting on a global boot snapshot.
+func (b *EventBridge) PublishCentralSnapshot(ctx context.Context, centralName string) {
+	if b == nil || b.registry == nil {
+		return
+	}
+	u, ok := b.registry.Get(centralName)
+	if !ok || u == nil {
+		return
+	}
+	b.publishCentralSnapshot(ctx, u)
+}
 
-			for _, ch := range d.Channels() {
-				_, channelNo := parseChannel(ch.Address)
-				// VALUES paramset — runtime state.
-				for _, dp := range ch.DataPoints() {
-					b.registerAndLoadDP(ctx, centralName, ifaceID, d, ch, channelNo, dp, hmenum.ParamsetKeyValues)
-				}
-				// ADR 0011 phase 1c — also publish MASTER paramset.
-				// MASTER values are seeded once via OnWireValue and
-				// don't generate normal value-change bus events; the
-				// initial-snapshot pass synthesises them so the
-				// `channels/<ch>/master/<param>/state` topics actually
-				// contain something. Subsequent MASTER edits flow
-				// through the configuration coordinator's regular
-				// bus events so the runtime case is covered.
-				for _, dp := range ch.MasterDataPoints() {
-					b.registerAndLoadDP(ctx, centralName, ifaceID, d, ch, channelNo, dp, hmenum.ParamsetKeyMaster)
-				}
-				// Calculated DPs are written by the calculator's own
-				// OnWireValue calls; surface them initially via the
-				// same synthesised-event path. publishSlotState routes
-				// them to the calculated/ bucket via
-				// isCalculatedParameter.
-				//
-				// Observed calc-DPs (DEW_POINT, ENTHALPY — always
-				// computable from the channel's temperature/humidity)
-				// take the happy path through onValueChangedKind. Calc
-				// binary_sensors (SMOKE_ALARM, INTRUSION_ALARM,
-				// WINDOW_OPEN) start unobserved — they only compute a
-				// value once the underlying alarm fires — yet the
-				// reference stack registers them as HA entities at setup
-				// regardless. Mirror the unobserved-DP boot path so they
-				// reach HA discovery with an `unknown` slot state instead
-				// of silently never surfacing.
-				for _, dp := range ch.CalculatedDataPoints() {
-					pdp, ok := dp.(interface {
-						RawValue() (any, bool)
-						Parameter() hmenum.Parameter
-					})
-					if !ok {
-						continue
-					}
-					raw, observed := pdp.RawValue()
-					if !observed {
-						b.registerAndLoadUnobservedCalculatedDP(ctx, centralName, ifaceID, d, ch, channelNo, string(pdp.Parameter()))
-						continue
-					}
-					newVal, err := hmtypes.NewParamValue(raw)
-					if err != nil {
-						continue
-					}
-					b.onValueChangedKind(ctx, centralName, ws.KindInitial, hmevent.DataPointValueChangedEvent{
-						Base: hmevent.NewBase(),
-						Key: hmtypes.DataPointKey{
-							InterfaceID:    ifaceID,
-							ChannelAddress: ch.Address,
-							ParamsetKey:    hmenum.ParamsetKeyValues,
-							Parameter:      string(pdp.Parameter()),
-						},
-						OldValue: hmtypes.NoneValue(),
-						NewValue: newVal,
-					})
-				}
-				// Week-profile DP — publish HA-Discovery select entity and
-				// initial state, then subscribe to live profile-pointer changes.
-				b.publishWeekProfileSnapshot(ctx, centralName, ifaceID, d, ch)
+// publishCentralSnapshot publishes every device's current snapshot for one
+// central — the per-unit body shared by the full boot snapshot
+// ([PublishInitialSnapshot]) and the per-central southbound-ready path.
+func (b *EventBridge) publishCentralSnapshot(ctx context.Context, u *central.Unit) {
+	centralName := u.Name()
+	for _, d := range u.ModelRegistry.List() {
+		ifaceID := d.InterfaceID
+		// Publish per-device availability FIRST. The HA Discovery
+		// payload references the device-availability topic (with
+		// `availability_mode: all`) — without an explicit publish
+		// HA marks every entity as unavailable and the discovery
+		// effectively does nothing.
+		//
+		// Availability tracks device REACHABILITY (UNREACH /
+		// STICKY_UNREACH via Device.Available()), not "has a value
+		// been observed yet". A reachable
+		// device whose data points have not reported yet is `online`
+		// with each entity showing an `unknown` value, which is the
+		// Home-Assistant convention. The per-DP snapshot below
+		// publishes an explicit `{available:true}` state for every
+		// data point so the state topic is never empty (avoiding the
+		// empty-template warnings that the previous observed-gating
+		// design worked around by leaving entities unavailable).
+		online := d.Available()
+		b.markAvailability(ctx, centralName, ifaceID, d.Address, online)
 
-				// Zeitplan sensor — device-level HA `sensor` carrying the
-				// active-entry count + rich schedule attributes
-				// (schedule_type, max_entries, available_target_channels,
-				// schedule_enabled, schedule_data).
-				b.publishScheduleEntitySnapshot(ctx, centralName, ifaceID, d, ch)
+		// ADR 0011 phase 1c — device info + diagnostics topics.
+		// Both are retained one-shot snapshots; the info topic
+		// re-publishes when the model gains channels or
+		// firmware-tracker fields update.
+		b.publishDeviceInfo(ctx, centralName, ifaceID, d)
+		b.publishDeviceDiagnostics(ctx, centralName, ifaceID, d)
 
-				// Combined DPs (Timer, HSColor, LevelCombined, …): publish
-				// one HA-Discovery entity per attached combined DP for
-				// visible CombinedTimerField surfaces. Currently only the
-				// Timer surface is wired; HSColor / LevelCombined remain
-				// attachable scaffolding.
-				b.publishCombinedDPSnapshot(ctx, centralName, ifaceID, d, ch)
-
-				// Press-event entity discovery — emit the HA `event`
-				// payload for every channel that exposes PRESS_*
-				// parameters even though no value-change event has
-				// fired yet. Without this seeding HA never sees the
-				// button entity until somebody actually presses the
-				// button on a fresh broker, and many physical buttons
-				// have no observed value persisted between presses.
-				b.publishChannelEventDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
-
-				// Custom-DP aggregate discovery — write-only custom-DPs
-				// (HmIP-WRCD text-display) have no readable parameter, so
-				// the register-and-load path never emits their aggregate
-				// entity. Publish it directly here so they (and their
-				// companion entities, e.g. the text-display `notify`
-				// surface) reach HA from boot.
-				b.publishCustomDPDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
+		for _, ch := range d.Channels() {
+			_, channelNo := parseChannel(ch.Address)
+			// VALUES paramset — runtime state.
+			for _, dp := range ch.DataPoints() {
+				b.registerAndLoadDP(ctx, centralName, ifaceID, d, ch, channelNo, dp, hmenum.ParamsetKeyValues)
 			}
-			// Device-level firmware-update entity: published once per
-			// updatable device. The update entity is not a channel — it
-			// maps to the device's Firmware tracker and lives under the
-			// device address with no channel suffix. Wires a live
-			// OnChange subscription so subsequent firmware-state
-			// transitions (CCU push → FirmwareInfo.Set) automatically
-			// re-publish the state topic.
-			b.publishUpdateSnapshot(ctx, centralName, ifaceID, d)
+			// ADR 0011 phase 1c — also publish MASTER paramset.
+			// MASTER values are seeded once via OnWireValue and
+			// don't generate normal value-change bus events; the
+			// initial-snapshot pass synthesises them so the
+			// `channels/<ch>/master/<param>/state` topics actually
+			// contain something. Subsequent MASTER edits flow
+			// through the configuration coordinator's regular
+			// bus events so the runtime case is covered.
+			for _, dp := range ch.MasterDataPoints() {
+				b.registerAndLoadDP(ctx, centralName, ifaceID, d, ch, channelNo, dp, hmenum.ParamsetKeyMaster)
+			}
+			// Calculated DPs are written by the calculator's own
+			// OnWireValue calls; surface them initially via the
+			// same synthesised-event path. publishSlotState routes
+			// them to the calculated/ bucket via
+			// isCalculatedParameter.
+			//
+			// Observed calc-DPs (DEW_POINT, ENTHALPY — always
+			// computable from the channel's temperature/humidity)
+			// take the happy path through onValueChangedKind. Calc
+			// binary_sensors (SMOKE_ALARM, INTRUSION_ALARM,
+			// WINDOW_OPEN) start unobserved — they only compute a
+			// value once the underlying alarm fires — yet the
+			// reference stack registers them as HA entities at setup
+			// regardless. Mirror the unobserved-DP boot path so they
+			// reach HA discovery with an `unknown` slot state instead
+			// of silently never surfacing.
+			for _, dp := range ch.CalculatedDataPoints() {
+				pdp, ok := dp.(interface {
+					RawValue() (any, bool)
+					Parameter() hmenum.Parameter
+				})
+				if !ok {
+					continue
+				}
+				raw, observed := pdp.RawValue()
+				if !observed {
+					b.registerAndLoadUnobservedCalculatedDP(ctx, centralName, ifaceID, d, ch, channelNo, string(pdp.Parameter()))
+					continue
+				}
+				newVal, err := hmtypes.NewParamValue(raw)
+				if err != nil {
+					continue
+				}
+				b.onValueChangedKind(ctx, centralName, ws.KindInitial, hmevent.DataPointValueChangedEvent{
+					Base: hmevent.NewBase(),
+					Key: hmtypes.DataPointKey{
+						InterfaceID:    ifaceID,
+						ChannelAddress: ch.Address,
+						ParamsetKey:    hmenum.ParamsetKeyValues,
+						Parameter:      string(pdp.Parameter()),
+					},
+					OldValue: hmtypes.NoneValue(),
+					NewValue: newVal,
+				})
+			}
+			// Week-profile DP — publish HA-Discovery select entity and
+			// initial state, then subscribe to live profile-pointer changes.
+			b.publishWeekProfileSnapshot(ctx, centralName, ifaceID, d, ch)
+
+			// Zeitplan sensor — device-level HA `sensor` carrying the
+			// active-entry count + rich schedule attributes
+			// (schedule_type, max_entries, available_target_channels,
+			// schedule_enabled, schedule_data).
+			b.publishScheduleEntitySnapshot(ctx, centralName, ifaceID, d, ch)
+
+			// Combined DPs (Timer, HSColor, LevelCombined, …): publish
+			// one HA-Discovery entity per attached combined DP for
+			// visible CombinedTimerField surfaces. Currently only the
+			// Timer surface is wired; HSColor / LevelCombined remain
+			// attachable scaffolding.
+			b.publishCombinedDPSnapshot(ctx, centralName, ifaceID, d, ch)
+
+			// Press-event entity discovery — emit the HA `event`
+			// payload for every channel that exposes PRESS_*
+			// parameters even though no value-change event has
+			// fired yet. Without this seeding HA never sees the
+			// button entity until somebody actually presses the
+			// button on a fresh broker, and many physical buttons
+			// have no observed value persisted between presses.
+			b.publishChannelEventDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
+
+			// Custom-DP aggregate discovery — write-only custom-DPs
+			// (HmIP-WRCD text-display) have no readable parameter, so
+			// the register-and-load path never emits their aggregate
+			// entity. Publish it directly here so they (and their
+			// companion entities, e.g. the text-display `notify`
+			// surface) reach HA from boot.
+			b.publishCustomDPDiscoverySnapshot(ctx, centralName, ifaceID, d, ch)
 		}
+		// Device-level firmware-update entity: published once per
+		// updatable device. The update entity is not a channel — it
+		// maps to the device's Firmware tracker and lives under the
+		// device address with no channel suffix. Wires a live
+		// OnChange subscription so subsequent firmware-state
+		// transitions (CCU push → FirmwareInfo.Set) automatically
+		// re-publish the state topic.
+		b.publishUpdateSnapshot(ctx, centralName, ifaceID, d)
 	}
 }
 

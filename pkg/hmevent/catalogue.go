@@ -114,6 +114,14 @@ const (
 	// can listen on this bus event instead of registering per-profile
 	// OnChange callbacks.
 	EventTypeWeekProfileChanged EventType = "weekprofile.changed"
+
+	// EventTypeCentralSouthboundReady fires once a central's southbound
+	// bring-up (hub load → device/interface load → callbacks) has completed
+	// against a ready CCU. North-bound adapters subscribe to it to publish
+	// that central's device snapshot — the per-central counterpart to the
+	// one-shot boot snapshot, needed because the bring-up is gated behind
+	// CCU readiness and therefore completes asynchronously, per central.
+	EventTypeCentralSouthboundReady EventType = "central.southbound_ready"
 )
 
 // ---------- Central / clients ----------
@@ -130,6 +138,17 @@ type CentralStateChangedEvent struct {
 
 // Type implements Event.
 func (CentralStateChangedEvent) Type() EventType { return EventTypeCentralStateChanged }
+
+// CentralSouthboundReadyEvent fires once a central's southbound bring-up has
+// completed against a ready CCU (names loaded with devices). North-bound
+// adapters publish that central's snapshot in response.
+type CentralSouthboundReadyEvent struct {
+	Base
+	CentralName string
+}
+
+// Type implements Event.
+func (CentralSouthboundReadyEvent) Type() EventType { return EventTypeCentralSouthboundReady }
 
 // ClientStateChangedEvent fires when a client's state machine transitions.
 type ClientStateChangedEvent struct {

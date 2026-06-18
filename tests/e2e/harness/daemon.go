@@ -74,6 +74,14 @@ type Options struct {
 	// (30 s). A short value (e.g. 5 s) makes degraded-state detection
 	// faster in tests that exercise CCU disconnects.
 	CheckConnectionInterval time.Duration
+
+	// StartCCUNotReady boots godevccu in its "still warming up" state
+	// (JSON-RPC 503, /ise/checkrega.cgi != "OK") so the daemon's
+	// readiness-gated southbound bring-up waits before loading devices.
+	// Flip it live with h.CCU().V().SetReady(true). The daemon's
+	// north-bound surface still comes up immediately, so Start's
+	// /api/v1/health wait is unaffected.
+	StartCCUNotReady bool
 }
 
 // Harness is the test-owned facade over a running daemon sub-process.
@@ -130,7 +138,7 @@ func Start(t *testing.T, opts Options) *Harness {
 
 	binPath := locateDaemonBinary(t)
 
-	h.ccu = startMockCCU(t, opts.Devices)
+	h.ccu = startMockCCU(t, opts.Devices, opts.StartCCUNotReady)
 
 	if opts.EnableMQTT {
 		h.mqtt = startMQTTBroker(t)

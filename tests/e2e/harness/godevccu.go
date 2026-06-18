@@ -85,7 +85,7 @@ func (m *MockCCU) Stop() error {
 // startMockCCU spins up a godevccu instance in CCU mode (auth
 // enabled, JSON-RPC available) on OS-assigned ephemeral ports and
 // registers a t.Cleanup that stops it.
-func startMockCCU(t *testing.T, devices []string) *MockCCU {
+func startMockCCU(t *testing.T, devices []string, notReady bool) *MockCCU {
 	t.Helper()
 	if len(devices) == 0 {
 		devices = DefaultDevices
@@ -101,6 +101,7 @@ func startMockCCU(t *testing.T, devices []string) *MockCCU {
 		Devices:       devices,
 		Serial:        "GODEVCCU0001",
 		SetupDefaults: true,
+		StartNotReady: notReady,
 	})
 	if err != nil {
 		t.Fatalf("godevccu.New: %v", err)
