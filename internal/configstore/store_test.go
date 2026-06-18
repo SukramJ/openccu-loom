@@ -166,6 +166,91 @@ func TestStoreEffectiveAppliesSectionMQTT(t *testing.T) {
 	if res.Sources[string(SectionMQTT)] != SourceDB {
 		t.Errorf("Sources[north.mqtt]=%q want db", res.Sources[string(SectionMQTT)])
 	}
+	// Per-FIELD attribution: the SPA's source pill keys on the full
+	// field path (e.g. "north.mqtt.enabled"), not the bare section
+	// name. A persisted section must therefore attribute each of its
+	// fields to the DB tier so the dot renders green instead of grey.
+	for _, path := range []string{"north.mqtt.enabled", "north.mqtt.broker_url", "north.mqtt.client_id"} {
+		if res.Sources[path] != SourceDB {
+			t.Errorf("Sources[%q]=%q want db", path, res.Sources[path])
+		}
+	}
+}
+
+// TestStoreEffectivePerFieldSourceAttribution verifies that persisting
+// one section attributes its own fields to the DB tier without leaking
+// into a sibling section, that the longest-prefix rule credits OIDC
+// fields to the OIDC section (not REST), and that bootstrap-owned paths
+// keep their bootstrap attribution even when their owning section row
+// is present.
+func TestStoreEffectivePerFieldSourceAttribution(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+
+	rest := config.NorthREST{PublicURL: "https://loom.example.com"}
+	rraw, _ := json.Marshal(rest)
+	sl.rows[string(SectionREST)] = sqlite.SectionRow{Section: string(SectionREST), ValueJSON: rraw}
+
+	s := New(defaultBootstrap(), sl, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	// A field inside the persisted REST section flips to db.
+	if res.Sources["north.rest.public_url"] != SourceDB {
+		t.Errorf("Sources[north.rest.public_url]=%q want db", res.Sources["north.rest.public_url"])
+	}
+	// north.rest.listen is a bootstrap-owned path nested under the REST
+	// section struct; its bootstrap attribution must survive.
+	if res.Sources["north.rest.listen"] != SourceBootstrap {
+		t.Errorf("Sources[north.rest.listen]=%q want bootstrap", res.Sources["north.rest.listen"])
+	}
+	// The OIDC section was never persisted, so its fields stay default
+	// rather than being swept up by the REST section's prefix.
+	if got := res.Sources["north.rest.auth.oidc.client_secret"]; got == SourceDB {
+		t.Errorf("Sources[north.rest.auth.oidc.client_secret]=%q must not be db (OIDC section absent)", got)
+	}
+	// A sibling section that was never persisted stays default.
+	if got := res.Sources["north.mqtt.enabled"]; got == SourceDB {
+		t.Errorf("Sources[north.mqtt.enabled]=%q must not be db (MQTT section absent)", got)
+	}
+}
+
+// TestStoreEffectivePrunedFieldNotSourceDB verifies that a field which
+// was pruned from a stored section (e.g. by a per-field revert) is no
+// longer attributed to the DB tier, even though the section row still
+// exists for its remaining fields. This is the source-pill half of the
+// per-field revert: the value falls back to its built-in default, so the
+// dot must read default, not db.
+func TestStoreEffectivePrunedFieldNotSourceDB(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+
+	// Stored row after a revert of allow_writes: only enabled+path remain.
+	sl.rows[string(SectionMCP)] = sqlite.SectionRow{
+		Section:   string(SectionMCP),
+		ValueJSON: []byte(`{"enabled":true,"path":"/mcp"}`),
+	}
+
+	s := New(defaultBootstrap(), sl, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	// Present fields stay db.
+	if res.Sources["north.mcp.enabled"] != SourceDB {
+		t.Errorf("Sources[north.mcp.enabled]=%q want db", res.Sources["north.mcp.enabled"])
+	}
+	if res.Sources["north.mcp.path"] != SourceDB {
+		t.Errorf("Sources[north.mcp.path]=%q want db", res.Sources["north.mcp.path"])
+	}
+	// The pruned field must NOT read as db — it fell back to default.
+	if got := res.Sources["north.mcp.allow_writes"]; got == SourceDB {
+		t.Errorf("Sources[north.mcp.allow_writes]=%q must not be db after prune", got)
+	}
+	if res.Config.North.MCP.AllowWrites {
+		t.Error("North.MCP.AllowWrites: want false (reverted to default)")
+	}
 }
 
 // TestStoreEffectiveAppliesSectionMCP verifies that a north.mcp row in
@@ -198,6 +283,9 @@ func TestStoreEffectiveAppliesSectionMCP(t *testing.T) {
 	}
 	if res.Sources[string(SectionMCP)] != SourceDB {
 		t.Errorf("Sources[north.mcp]=%q want db", res.Sources[string(SectionMCP)])
+	}
+	if res.Sources["north.mcp.allow_writes"] != SourceDB {
+		t.Errorf("Sources[north.mcp.allow_writes]=%q want db", res.Sources["north.mcp.allow_writes"])
 	}
 }
 

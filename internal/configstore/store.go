@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -161,6 +162,7 @@ func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
 // layerSections walks every known section, reads its JSON row when
 // present, and applies it to the runtime config.
 func (s *Store) layerSections(ctx context.Context, cfg *config.Config, srcs map[string]FieldSource) error {
+	owned := sectionFieldPaths()
 	for _, sec := range AllSections() {
 		row, err := s.sections.Get(ctx, string(sec))
 		if errors.Is(err, sqlite.ErrSectionNotFound) {
@@ -172,9 +174,110 @@ func (s *Store) layerSections(ctx context.Context, cfg *config.Config, srcs map[
 		if err := applySection(sec, row.ValueJSON, cfg); err != nil {
 			return fmt.Errorf("configstore: apply %s: %w", sec, err)
 		}
+		// Attribute each field that is *actually present* in the stored
+		// section JSON to the DB tier. The SPA's source pill keys on the
+		// full field path (e.g. "north.mqtt.enabled"), not the bare
+		// section name, so attributing only the section key would leave
+		// every field rendering as "default". Conversely, a field that
+		// was pruned from the row by a per-field revert must NOT read as
+		// db — it has fallen back to its built-in default, so it stays
+		// at whatever attribution it already had (default). Bootstrap-
+		// owned paths live under a section's struct but are sourced from
+		// BootstrapConfig, not the section row, so they keep their
+		// bootstrap attribution.
+		tree := sectionTree(sec, row.ValueJSON)
+		for _, path := range owned[sec] {
+			if existing, ok := srcs[path]; ok && existing == SourceBootstrap {
+				continue
+			}
+			if !pathPresent(tree, relativeFieldPath(sec, path)) {
+				continue
+			}
+			srcs[path] = SourceDB
+		}
+		// Keep the bare section-key attribution too, so callers that
+		// reason about whole sections (and the existing section-keyed
+		// tests) keep working.
 		srcs[string(sec)] = SourceDB
 	}
 	return nil
+}
+
+// sectionTree decodes a stored section payload into a generic JSON tree
+// so present-field probing can run without per-section reflection. The
+// OIDC section persists the OIDCConfig sub-tree directly (it is rooted at
+// "north.rest.auth.oidc"), so its keys are already relative to the
+// section. Returns nil on a non-object payload, which makes every
+// pathPresent probe report false.
+func sectionTree(_ Section, raw []byte) map[string]any {
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil
+	}
+	return m
+}
+
+// relativeFieldPath strips the section prefix from a full field path so
+// it can be walked against the section's own JSON tree. e.g. for section
+// "north.mqtt" and path "north.mqtt.broker_url" it returns "broker_url".
+func relativeFieldPath(sec Section, path string) string {
+	ss := string(sec)
+	if path == ss {
+		return ""
+	}
+	return strings.TrimPrefix(path, ss+".")
+}
+
+// pathPresent reports whether a dotted path resolves to a key that
+// exists in the decoded section tree (the value may be null/zero — what
+// matters is that the operator's stored payload carries the key, which
+// is what marks it as a DB-tier override).
+func pathPresent(tree map[string]any, dotted string) bool {
+	if tree == nil || dotted == "" {
+		return false
+	}
+	var cur any = tree
+	parts := strings.Split(dotted, ".")
+	for i, part := range parts {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return false
+		}
+		v, ok := m[part]
+		if !ok {
+			return false
+		}
+		if i == len(parts)-1 {
+			return true
+		}
+		cur = v
+	}
+	return false
+}
+
+// sectionFieldPaths buckets every classified config field path under
+// the section that owns it (longest matching section prefix wins, so
+// "north.rest.auth.oidc.*" attaches to the OIDC section rather than
+// REST). Sections with no config.Config-backed fields (e.g. the
+// security/locale pseudo-sections) simply get no entries.
+func sectionFieldPaths() map[Section][]string {
+	all := AllSections()
+	out := make(map[Section][]string, len(all))
+	for _, f := range config.ClassifyFields(&config.Config{}) {
+		var best Section
+		for _, sec := range all {
+			ss := string(sec)
+			if f.Path == ss || strings.HasPrefix(f.Path, ss+".") {
+				if len(ss) > len(string(best)) {
+					best = sec
+				}
+			}
+		}
+		if best != "" {
+			out[best] = append(out[best], f.Path)
+		}
+	}
+	return out
 }
 
 // applySection routes one section payload to the corresponding
