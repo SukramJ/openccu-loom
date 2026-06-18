@@ -642,6 +642,16 @@ type TracingConfig struct {
 type NorthREST struct {
 	Listen string   `yaml:"listen" json:"listen" cfg:"basic"`
 	CORS   []string `yaml:"cors" json:"cors" cfg:"basic"`
+	// PublicURL is the externally-reachable base URL of this daemon's
+	// REST + Config-UI surface, e.g. "https://loom.example.de". Set it
+	// when the daemon sits behind a reverse proxy (Traefik, nginx, …)
+	// that terminates TLS and routes a hostname to the REST listener:
+	// the CCU add-on's "Open Config UI" button then links straight at
+	// the proxy instead of the direct host:port heuristic, which a
+	// browser on the public side cannot reach. Empty (the default) keeps
+	// the heuristic — correct for a LAN install hitting the CCU directly.
+	// No path suffix: the SPA mount (/app/) is appended by ConfigUIURL.
+	PublicURL string `yaml:"public_url" json:"public_url" cfg:"basic"`
 	// Enabled is the master switch for the REST + WebSocket
 	// server. Defaults to true when absent — the daemon has no
 	// operator surface without it. Use *bool so the YAML decoder
@@ -725,6 +735,19 @@ func (n NorthREST) OpenAPIValidateEnabled() bool {
 		return true
 	}
 	return *n.OpenAPIValidate
+}
+
+// ConfigUIURL returns the externally-reachable Config-UI (SPA) URL
+// derived from PublicURL, or "" when no public URL is configured. The
+// SPA is mounted at /app/ on the REST listener, so the mount path is
+// appended to the operator-supplied origin (any trailing slash on
+// PublicURL is collapsed first). The CCU add-on writes this value to a
+// hint file that config.cgi links at.
+func (n NorthREST) ConfigUIURL() string {
+	if n.PublicURL == "" {
+		return ""
+	}
+	return strings.TrimRight(n.PublicURL, "/") + "/app/"
 }
 
 // IsEnabled reports whether the REST + WebSocket server should run.
@@ -1149,6 +1172,9 @@ func (c *Config) Validate() error {
 	if c.Callback.BinPort < 0 || c.Callback.BinPort > 65535 {
 		return fmt.Errorf("config: callback.bin_port out of range: %d", c.Callback.BinPort)
 	}
+	if err := validatePublicURL(c.North.REST.PublicURL); err != nil {
+		return err
+	}
 	names := make(map[string]struct{}, len(c.Centrals))
 	for i := range c.Centrals {
 		cc := &c.Centrals[i]
@@ -1180,6 +1206,28 @@ func (c *Config) Validate() error {
 		}
 	}
 	return validateMQTT(&c.North.MQTT)
+}
+
+// validatePublicURL checks north.rest.public_url when set. Empty is
+// valid (feature off). When present it must be an absolute http/https
+// URL with a host — the value is handed to a browser as the "Open
+// Config UI" target, so a relative or schemeless string would not be
+// reachable from the public side.
+func validatePublicURL(raw string) error {
+	if raw == "" {
+		return nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("config: north.rest.public_url: invalid URL %q: %w", raw, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("config: north.rest.public_url: scheme must be http or https, got %q", raw)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("config: north.rest.public_url: missing host in %q", raw)
+	}
+	return nil
 }
 
 // validateMQTT enforces MQTT-block invariants when MQTT is enabled.

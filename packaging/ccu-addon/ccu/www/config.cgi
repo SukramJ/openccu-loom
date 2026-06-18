@@ -9,6 +9,21 @@
 # Implementation note: tclsh `puts {...}` treats `{` / `}` literally, so the
 # markup uses inline `style="..."` attributes only — no `<style>{ }` block —
 # to keep the brace quoting balanced.
+
+# Resolve the operator-configured external Config-UI URL, if any. The daemon
+# writes north.rest.public_url (with the /app/ SPA path appended) to
+# <data_dir>/public_url whenever it is set; the path mirrors the rc.d default
+# OPENCCU_LOOM_DATA_DIR=${ADDON_DIR}/var. Absent / empty means "fall back to
+# the direct host:8080 heuristic", which is correct for a LAN install hitting
+# the CCU directly but unreachable from behind a reverse proxy.
+set cfg_url ""
+set hint /usr/local/addons/openccu-loom/var/public_url
+if {[file readable $hint]} {
+  set fh [open $hint r]
+  set cfg_url [string trim [read $fh]]
+  close $fh
+}
+
 puts -nonewline "Content-Type: text/html; charset=utf-8\r\n\r\n"
 puts {<!doctype html>
 <html lang="en">
@@ -37,15 +52,31 @@ puts {<!doctype html>
     <h1 style="margin:0 0 6px;font-size:20px;font-weight:650;">OpenCCU-Loom</h1>
     <p style="margin:0 0 22px;font-size:13px;line-height:1.5;color:#64748b;">
       Bridges this CCU to MQTT, a REST + WebSocket API, a Config UI and a Matter bridge.
-    </p>
-    <a id="cfg" href="#" style="display:inline-block;padding:11px 22px;background:#0F766E;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;">
-      Open Config UI
-    </a>
-    <p style="margin:18px 0 0;font-size:11px;color:#94a3b8;">
-      The Config UI is served on port 8080.
-    </p>
-  </div>
-  <script>document.getElementById('cfg').href='http://'+window.location.hostname+':8080/app/'</script>
-</body>
-</html>
+    </p>}
+
+# Open-UI button. With a configured external URL, link at it directly via a
+# server-side href (no client heuristic). Without one, fall back to the
+# direct host:8080 heuristic resolved in the browser — right for a LAN
+# install reaching the CCU itself. cfg_url is HTML-escaped for the href.
+set astyle "display:inline-block;padding:11px 22px;background:#0F766E;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;"
+if {$cfg_url ne ""} {
+  set href [string map {& &amp; < &lt; > &gt; \" &quot;} $cfg_url]
+} else {
+  set href "#"
 }
+puts "    <a id=\"cfg\" href=\"$href\" style=\"$astyle\">"
+puts {      Open Config UI
+    </a>
+    <p style="margin:18px 0 0;font-size:11px;color:#94a3b8;">}
+if {$cfg_url ne ""} {
+  puts {      Opens the OpenCCU-Loom Config UI.}
+} else {
+  puts {      The Config UI is served on port 8080.}
+}
+puts {    </p>
+  </div>}
+if {$cfg_url eq ""} {
+  puts {  <script>document.getElementById('cfg').href='http://'+window.location.hostname+':8080/app/'</script>}
+}
+puts {</body>
+</html>}

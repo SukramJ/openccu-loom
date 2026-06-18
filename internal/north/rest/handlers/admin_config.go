@@ -125,15 +125,16 @@ type SchemaResponse struct {
 // restartRequiredPaths enumerates fields whose change cannot be
 // hot-reloaded. Mirrors §7.1 Q12 of SPECIFICATION.md.
 var restartRequiredPaths = map[string]struct{}{
-	"data_dir":             {},
-	"north.rest.listen":    {},
-	"north.ui.listen":      {},
-	"callback.host":        {},
-	"callback.port":        {},
-	"callback.bin_port":    {},
-	"callback.port_range":  {},
-	"north.matter.enabled": {},
-	"north.matter.listen":  {},
+	"data_dir":              {},
+	"north.rest.listen":     {},
+	"north.rest.public_url": {},
+	"north.ui.listen":       {},
+	"callback.host":         {},
+	"callback.port":         {},
+	"callback.bin_port":     {},
+	"callback.port_range":   {},
+	"north.matter.enabled":  {},
+	"north.matter.listen":   {},
 	// MCP route is mounted once at boot (cmd/openccu-loom/daemon_rest_mount.go),
 	// so toggling any MCP field takes effect only after a restart.
 	"north.mcp.enabled":      {},

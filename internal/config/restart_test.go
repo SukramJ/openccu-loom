@@ -85,6 +85,10 @@ func TestRestartRequiredDiff_SingleFieldChange(t *testing.T) {
 			mutate: func(c *Config) { c.North.REST.Listen = ":9090" },
 		},
 		{
+			path:   "north.rest.public_url",
+			mutate: func(c *Config) { c.North.REST.PublicURL = "https://loom.example.de" },
+		},
+		{
 			path:   "north.ui.listen",
 			mutate: func(c *Config) { c.North.UI.Listen = ":9091" },
 		},

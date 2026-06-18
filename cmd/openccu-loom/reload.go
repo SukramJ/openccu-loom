@@ -35,6 +35,7 @@ import (
 //   - centrals (count, name, host, credentials, interfaces)
 //   - callback.host / port / bin_port (callback servers bind once)
 //   - north.rest.listen / north.ui.listen / north.mqtt.listen
+//   - north.rest.public_url (add-on hint file is written once at boot)
 //   - north.rest.openapi_validate (router middleware is fixed at boot)
 //   - data_dir (SQLite / backup paths committed at boot)
 //   - locale, auth, oidc
@@ -168,6 +169,10 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 		if prev.North.REST.Listen != next.North.REST.Listen {
 			restart++
 			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.listen"))
+		}
+		if prev.North.REST.PublicURL != next.North.REST.PublicURL {
+			restart++
+			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.public_url"))
 		}
 		if prev.North.UI.Listen != next.North.UI.Listen {
 			restart++
