@@ -872,5 +872,22 @@
         onAction={runAction}
       />
     {/if}
+
+    {#if dirtyNames.length > 0}
+      <!-- Sticky save bar: mirrors the header's Reset/Save so they stay
+           reachable on long channel-config pages without scrolling up.
+           Negative margins bleed to the Card's p-4 edges. -->
+      <div class="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-[var(--ha-divider-color)] bg-[var(--ha-card-background-color)] px-4 py-3">
+        <span class="mr-auto text-xs text-[var(--ha-secondary-text-color)]">
+          {t("channel.unsaved")}
+        </span>
+        <Button type="button" variant="outline" size="sm" onclick={reset} disabled={saving}>
+          {t("common.reset")}
+        </Button>
+        <Button type="button" size="sm" onclick={save} disabled={saving || hasErrors}>
+          {saving ? t("common.saving") : t("channel.save_n", { count: dirtyNames.length })}
+        </Button>
+      </div>
+    {/if}
   </Card>
 {/if}

@@ -713,7 +713,9 @@
       </div>
     {/if}
 
-    <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+    <!-- Action bar sticks to the bottom of the viewport so Save stays
+         reachable on long sections without scrolling back up. -->
+    <div class="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-slate-200 bg-white py-3 dark:border-slate-800 dark:bg-slate-900">
       <Button
         type="button"
         variant="default"
