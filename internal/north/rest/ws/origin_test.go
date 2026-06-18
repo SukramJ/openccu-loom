@@ -76,3 +76,22 @@ func TestWSHandlerOriginAllowlist(t *testing.T) {
 		})
 	}
 }
+
+// TestWSHandlerSameOriginAllowed pins that a same-origin handshake (the
+// Origin's host equals the request Host) is accepted even when that origin
+// is NOT in the allow-list — same-origin is never a CSRF vector, so the
+// SPA connects on whatever authority the daemon is reached on, not just the
+// localhost self-origin the allow-list derives.
+func TestWSHandlerSameOriginAllowed(t *testing.T) {
+	t.Parallel()
+	hub, _, _, _, _, _ := newTestHub(t)
+	// Allow-list deliberately excludes the server's own origin.
+	server := httptest.NewServer(Handler(hub, nil, []string{"http://localhost:9999"}))
+	t.Cleanup(server.Close)
+
+	wsURL, _ := url.Parse(server.URL)
+	sameOrigin := "http://" + wsURL.Host // host matches the request Host header
+	if got := wsHandshakeStatus(t, server, sameOrigin); got != http.StatusSwitchingProtocols {
+		t.Fatalf("same-origin handshake: status = %d, want %d", got, http.StatusSwitchingProtocols)
+	}
+}

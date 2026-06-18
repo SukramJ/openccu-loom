@@ -22,11 +22,15 @@ const handshakeMagic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 // and hands them to [*Hub]. It is suitable as an http.Handler mount
 // point (see NewRouter wiring).
 //
-// When allowedOrigins is non-empty each incoming request that carries an
-// Origin header must match one of the listed origins (scheme+host);
-// cross-site browser handshakes are rejected with 403 before the upgrade
-// completes, closing the WebSocket CSRF vector that exists when session
-// cookies are active. Requests without an Origin header are allowed even
+// When allowedOrigins is non-empty each incoming cross-origin request
+// that carries an Origin header must match one of the listed origins
+// (scheme+host); cross-site browser handshakes are rejected with 403
+// before the upgrade completes, closing the WebSocket CSRF vector that
+// exists when session cookies are active. Same-origin handshakes (the
+// Origin's host equals the request Host) are always allowed — they are
+// not a CSRF vector — so the embedded SPA connects on any authority the
+// daemon is reached on, not just the localhost self-origin.
+// Requests without an Origin header are allowed even
 // when the list is non-empty: CSRF is a browser-only attack vector and
 // browsers always attach an Origin to WebSocket handshakes, so an absent
 // Origin identifies a non-browser client (native app, server-side
@@ -68,10 +72,18 @@ func Handler(hub *Hub, logger *slog.Logger, allowedOrigins []string) http.Handle
 				http.Error(w, "websocket origin invalid", http.StatusForbidden)
 				return
 			}
-			normalized := strings.ToLower(u.Scheme + "://" + u.Host)
-			if _, ok := originSet[normalized]; !ok {
-				http.Error(w, "websocket origin not allowed", http.StatusForbidden)
-				return
+			// Same-origin handshakes are never a CSRF vector (CSRF requires a
+			// *different* origin), so allow them regardless of the allow-list.
+			// This lets the embedded SPA connect no matter which authority the
+			// operator reaches the daemon on — IP, hostname, container name —
+			// not just the localhost self-origin the allow-list derives. The
+			// allow-list still gates genuinely cross-origin browser clients.
+			if !strings.EqualFold(u.Host, r.Host) {
+				normalized := strings.ToLower(u.Scheme + "://" + u.Host)
+				if _, ok := originSet[normalized]; !ok {
+					http.Error(w, "websocket origin not allowed", http.StatusForbidden)
+					return
+				}
 			}
 		}
 
