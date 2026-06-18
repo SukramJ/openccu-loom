@@ -124,8 +124,8 @@
       const low = Boolean(values.LOW_BAT);
       out.push({
         icon: "mdi:battery-alert",
-        label: t("device.maintenance.low_bat"),
-        value: fmtBool(values.LOW_BAT, t("common.yes"), t("common.no")),
+        label: t("device.maintenance.battery"),
+        value: low ? t("device.maintenance.bat_low") : t("device.maintenance.status_ok"),
         tone: low ? "warn" : "ok",
       });
     }
@@ -140,8 +140,8 @@
       const blocked = Boolean(values.DUTY_CYCLE);
       out.push({
         icon: blocked ? "mdi:alert-triangle" : "mdi:check-circle",
-        label: t("device.maintenance.duty_cycle"),
-        value: fmtBool(values.DUTY_CYCLE, t("common.yes"), t("common.no")),
+        label: t("device.maintenance.duty_cycle_level"),
+        value: blocked ? t("device.maintenance.blocked") : t("device.maintenance.status_ok"),
         tone: blocked ? "warn" : "ok",
       });
     }

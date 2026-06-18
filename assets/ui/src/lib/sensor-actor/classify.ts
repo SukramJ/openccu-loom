@@ -199,6 +199,14 @@ function formatNumber(n: number, dp: DataPointSummary): string {
  * only a transport fallback for responses that predate the field.
  */
 export function dpLabel(dp: DataPointSummary): string {
+  // A curated set of generic parameter names is localised client-side:
+  // the data-point list endpoint resolves labels without a locale, so
+  // names like STATE come through title-cased English ("State"). The
+  // catalogue (`datapoint.<NAME>`) only carries safe, channel-agnostic
+  // names; everything else keeps the server's parameter_label.
+  const key = "datapoint." + dp.parameter.toUpperCase();
+  const translated = t(key);
+  if (translated !== key) return translated;
   if (dp.parameter_label && dp.parameter_label.trim()) return dp.parameter_label;
   return dp.parameter;
 }
