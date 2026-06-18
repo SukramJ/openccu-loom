@@ -322,8 +322,16 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 		RunOnStart: false,
 		Run: func(_ context.Context) error {
 			running := unit.StateMachine != nil && unit.StateMachine.State() == hmenum.CentralStateRunning
+			// Zero registered clients means the central is still in its
+			// gated-startup wait — the southbound bring-up only registers
+			// clients once the CCU reports ready. That is a "starting" state,
+			// not a failure, so keep the critical `central` component healthy
+			// rather than flapping /health to 503 while a slow CCU boots. A
+			// genuine outage always leaves clients registered (disconnected),
+			// which still reports unhealthy below.
+			startingUp := unit.Clients == nil || len(unit.Clients.List()) == 0
 			unit.Health.Record("central", health.Sample{
-				Healthy: running,
+				Healthy: running || startingUp,
 				Note:    "heartbeat",
 			})
 			// Per-interface liveness sample. The CCU only pushes

@@ -51,3 +51,46 @@ func TestRecordCentralWaitingNilSafe(t *testing.T) {
 	recordCentralWaiting(nil)             // must not panic
 	recordCentralWaiting(&central.Unit{}) // nil Health field — must not panic
 }
+
+// TestResolveCentralWaitingRemovesComponent verifies that after
+// recordCentralWaiting has registered the transient startup component,
+// resolveCentralWaiting removes it so Get returns ok==false.
+func TestResolveCentralWaitingRemovesComponent(t *testing.T) {
+	t.Parallel()
+
+	unit, err := central.New(central.Config{Name: "RolfLoom"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	recordCentralWaiting(unit)
+
+	// Precondition: component must be present before resolve.
+	if _, ok := unit.Health.Get(startupHealthComponent(unit.Name())); !ok {
+		t.Fatal("precondition: startup component not registered after recordCentralWaiting")
+	}
+
+	resolveCentralWaiting(unit)
+
+	// After resolve the component must be gone.
+	if _, ok := unit.Health.Get(startupHealthComponent(unit.Name())); ok {
+		t.Error("startup component still present after resolveCentralWaiting; want it unregistered")
+	}
+}
+
+// TestResolveCentralWaitingNilSafe verifies the helper tolerates nil
+// inputs (nil unit and a unit with a nil Health field).
+func TestResolveCentralWaitingNilSafe(t *testing.T) {
+	t.Parallel()
+	resolveCentralWaiting(nil)             // must not panic
+	resolveCentralWaiting(&central.Unit{}) // nil Health field — must not panic
+}
+
+// TestStartupComponentNameIncludesCentralName verifies the naming
+// convention so the record and resolve sides stay in sync.
+func TestStartupComponentNameIncludesCentralName(t *testing.T) {
+	t.Parallel()
+	if got, want := startupHealthComponent("my-ccu"), "startup.my-ccu"; got != want {
+		t.Errorf("startupHealthComponent = %q, want %q", got, want)
+	}
+}
