@@ -53,7 +53,7 @@ func wireLoadAndRefresh(unit *central.Unit, pipeline *DevicePipeline, ifaces []c
 // that need to drain on shutdown (e.g. tests with goleak) should Wait() on it
 // after cancelling ctx. Production callers that only cancel ctx can ignore the
 // return value — ctx-cancel already prompts the goroutine to exit promptly
-// (the timer inside retryHubWiring aborts on ctx.Done()).
+// (the timer inside retryWithBackoff aborts on ctx.Done()).
 func startHubRetry(
 	ctx context.Context,
 	cc config.CentralConfig,
@@ -67,7 +67,7 @@ func startHubRetry(
 	wg.Add(1)
 	SafeGo("hub_retry."+cc.Name, func() {
 		defer wg.Done()
-		ok := retryHubWiring(ctx, backoff, func(rctx context.Context) error {
+		ok := retryWithBackoff(ctx, backoff, func(rctx context.Context) error {
 			runner, _, closer, err := hubFn(rctx, cc, unit, logger)
 			if err != nil {
 				return err
@@ -95,21 +95,22 @@ var defaultHubRetryBackoff = []time.Duration{
 	60 * time.Second,
 }
 
-// retryHubWiring calls attempt repeatedly until it returns nil (success) or
+// retryWithBackoff calls attempt repeatedly until it returns nil (success) or
 // ctx is cancelled. Between attempts it waits backoff[i], reusing the last
 // element once the slice is exhausted. Returns true on success, false when
 // ctx is cancelled first.
 //
 // This is the bounded, context-aware backoff loop behind the background
-// hub-wiring recovery: WireHub runs once at boot, and a transient failure
-// there would otherwise leave a central's hub + refresh safety net dead until
-// a manual restart. The loop is pure (no goroutine, no I/O of its own) so it
-// is unit-testable with a tiny backoff and a fake attempt.
+// boot-wiring recovery for both the hub (startHubRetry) and the per-interface
+// device-load (startInterfaceRetry): each runs once at boot, and a transient
+// failure there would otherwise leave a central's hub / interface dead until a
+// manual restart. The loop is pure (no goroutine, no I/O of its own) so it is
+// unit-testable with a tiny backoff and a fake attempt.
 //
 // time.NewTimer (not time.After) is used so that ctx-cancel during a long
 // backoff window stops the timer goroutine immediately instead of letting it
 // run until the full backoff duration elapses.
-func retryHubWiring(ctx context.Context, backoff []time.Duration, attempt func(context.Context) error) bool {
+func retryWithBackoff(ctx context.Context, backoff []time.Duration, attempt func(context.Context) error) bool {
 	for i := 0; ; i++ {
 		if err := attempt(ctx); err == nil {
 			return true
