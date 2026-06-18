@@ -180,7 +180,6 @@
   let deleting = $state(false);
   let usingDefaults = $state(false);
   let loadError = $state<string | null>(null);
-  let showRestartModal = $state(false);
 
   // humanize turns a snake_case identifier into a readable label.
   // `broker_url` → "Broker URL", `tls_insecure_skip_verify` → "TLS
@@ -428,7 +427,6 @@
   onMount(() => void load());
 
   const isDirty = $derived(JSON.stringify(working) !== JSON.stringify(original));
-  const hasRestartField = $derived(sectionFields.some((f) => f.restart_required));
 
   function resetWorking() {
     working = deepClone(original);
@@ -489,14 +487,18 @@
           setDeep(payload, rel, JSON.parse(v));
         }
       }
-      const result = await api.putConfigSection(section, payload);
+      await api.putConfigSection(section, payload);
       original = deepClone(working);
       toastStore.success(t("settings.saved"));
       usingDefaults = false;
+      // Saving only persists. A restart-required field surfaces in the
+      // app-wide restart-pending banner and the Changed-settings
+      // overview — never an immediate per-save restart prompt. This
+      // keeps every section's save behaviour homogeneous regardless of
+      // whether it contains restart-required fields (e.g. Matter vs
+      // MQTT). The explicit "Restart daemon" action lives on the
+      // System tab for the operator to trigger deliberately.
       void refreshRestartPending();
-      if (result.restart_required || hasRestartField) {
-        showRestartModal = true;
-      }
     } catch (err) {
       toastStore.error(
         t("settings.save_failed", { err: err instanceof ApiError ? err.message : String(err) }),
@@ -526,16 +528,6 @@
       );
     } finally {
       deleting = false;
-    }
-  }
-
-  async function restartNow() {
-    showRestartModal = false;
-    try {
-      await api.restartDaemon();
-      toastStore.success(t("settings.restart_signalled"));
-    } catch (err) {
-      toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
 
@@ -752,27 +744,3 @@
     </div>
   {/if}
 </div>
-
-{#if showRestartModal}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-    style="background-color: rgb(0 0 0 / 0.45);"
-    role="dialog"
-    aria-modal="true"
-  >
-    <div class="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
-      <h2 class="mb-2 text-base font-semibold">{t("settings.restart_required")}</h2>
-      <p class="mb-4 text-sm text-[var(--ha-secondary-text-color)]">
-        {t("settings.restart_daemon_help")}
-      </p>
-      <div class="flex justify-end gap-2">
-        <Button type="button" variant="outline" size="sm" onclick={() => (showRestartModal = false)}>
-          {t("settings.restart_later")}
-        </Button>
-        <Button type="button" variant="destructive" size="sm" onclick={() => void restartNow()}>
-          {t("settings.restart_daemon")}
-        </Button>
-      </div>
-    </div>
-  </div>
-{/if}

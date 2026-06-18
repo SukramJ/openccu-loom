@@ -4,26 +4,20 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.5.4]
+## [0.6.0]
 
-### Fixed
+### Added
 
-- **The "waiting for CCU to become ready" health entry no longer lingers after
-  a successful boot.** The readiness-gated startup records a transient
-  `startup.<central>` component while it waits for the CCU; it was never
-  cleared once the central came up, so its last sample went stale and decayed
-  to UNKNOWN, pinning the overall health verdict at "unknown" (e.g. 66 %) even
-  though the central and its interfaces were healthy. The component is now
-  removed as soon as the bring-up succeeds.
-- **`/health` no longer returns a transient 503 while a slow CCU boots.**
-  During the gated-startup wait a central has no interface clients registered
-  yet, which the health heartbeat read as the critical `central` component
-  being unhealthy → ServiceAvailability → 503 until the CCU finished booting.
-  Zero registered clients is now treated as a "starting" state (the central
-  stays healthy); a genuine outage still leaves clients registered-but-
-  disconnected and reports unhealthy.
-
-## [0.5.3]
+- **Reverse-proxy support for the CCU add-on's "Open Config UI" button via
+  `north.rest.public_url`.** Behind a TLS-terminating reverse proxy (Traefik,
+  nginx, …) the add-on landing page previously linked the button at
+  `http://<host>:8080/app/` — a direct host:port heuristic that the public
+  side cannot reach (the proxy routes 443, not 8080, and forces `http`). Set
+  `north.rest.public_url` (e.g. `https://loom.example.de`) and the daemon
+  writes the resolved Config-UI URL to a hint file in its data dir that
+  `config.cgi` links at instead (`<public_url>/app/`). Empty (the default)
+  keeps the existing heuristic, which stays correct for a LAN-direct install.
+  The field is editable in the SPA and is restart-required.
 
 ### Changed
 
@@ -45,23 +39,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   background retry; only a thin retry for residual per-interface RPC lag
   remains.
 
-## [0.5.2]
-
-### Added
-
-- **Reverse-proxy support for the CCU add-on's "Open Config UI" button via
-  `north.rest.public_url`.** Behind a TLS-terminating reverse proxy (Traefik,
-  nginx, …) the add-on landing page previously linked the button at
-  `http://<host>:8080/app/` — a direct host:port heuristic that the public
-  side cannot reach (the proxy routes 443, not 8080, and forces `http`). Set
-  `north.rest.public_url` (e.g. `https://loom.example.de`) and the daemon
-  writes the resolved Config-UI URL to a hint file in its data dir that
-  `config.cgi` links at instead (`<public_url>/app/`). Empty (the default)
-  keeps the existing heuristic, which stays correct for a LAN-direct install.
-  The field is editable in the SPA and is restart-required.
-
 ### Fixed
 
+- **Config-save behaviour is now homogeneous across every Settings section.**
+  Three inconsistencies are resolved so that saving any field behaves the same
+  way it already did for MQTT — persist to the DB, update the per-field source
+  dot, and (for restart-required fields) surface in the app-wide restart-pending
+  banner and the "Changed settings" overview, never an immediate restart:
+  - **Source dots now reflect the real origin of each field.** The effective-
+    config endpoint attributed the DB tier by section name only
+    (`north.mqtt`), while the SPA's source pill keys on the full field path
+    (`north.mqtt.enabled`), so every DB-backed field rendered as "default".
+    The daemon now attributes every field path owned by a persisted section to
+    the DB tier (honouring the longest-prefix rule so `north.rest.auth.oidc.*`
+    is credited to the OIDC section, not REST), while bootstrap- and
+    env-sourced fields keep their own attribution.
+  - **Saving a Matter (or any restart-required) field no longer pops an
+    immediate "restart daemon" modal.** The per-save restart prompt was driven
+    section-wide, so saving an unrelated field (e.g. the Matter `node_label`)
+    in a section that happens to contain a restart-required field forced the
+    modal — unlike MQTT, which only updated the banner. The per-save modal is
+    removed; a restart-required change is signalled solely by the persistent
+    restart-pending banner and the Changed-settings overview, and the operator
+    triggers a restart deliberately from that banner or the System tab. Saving
+    never restarts the daemon.
 - **Devices now appear even when the CCU backend is not yet ready at daemon
   start.** When OpenCCU-Loom starts alongside a (re)booting CCU — e.g. as a
   co-located add-on — the backend answers `listDevices` with http 503
@@ -73,6 +74,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   init) is now retried in the background with backoff until the CCU answers,
   mirroring the existing hub-side retry, so devices populate on their own
   without a daemon restart.
+- **The "waiting for CCU to become ready" health entry no longer lingers after
+  a successful boot.** The readiness-gated startup records a transient
+  `startup.<central>` component while it waits for the CCU; it was never
+  cleared once the central came up, so its last sample went stale and decayed
+  to UNKNOWN, pinning the overall health verdict at "unknown" (e.g. 66 %) even
+  though the central and its interfaces were healthy. The component is now
+  removed as soon as the bring-up succeeds.
+- **`/health` no longer returns a transient 503 while a slow CCU boots.**
+  During the gated-startup wait a central has no interface clients registered
+  yet, which the health heartbeat read as the critical `central` component
+  being unhealthy → ServiceAvailability → 503 until the CCU finished booting.
+  Zero registered clients is now treated as a "starting" state (the central
+  stays healthy); a genuine outage still leaves clients registered-but-
+  disconnected and reports unhealthy.
 
 ## [0.5.1]
 
