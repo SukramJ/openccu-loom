@@ -1294,6 +1294,8 @@ const EN: Catalog = {
   "sensor_actor.load_failed": "Could not load channel {address}.",
   "sensor_actor.true": "On",
   "sensor_actor.false": "Off",
+  "sensor_actor.event_last": "last {age}",
+  "sensor_actor.event_idle": "not triggered yet",
   // --- Log viewer ---
   "nav.logs": "Logs",
   "logs.title": "Log Viewer",
@@ -2862,6 +2864,8 @@ const DE: Catalog = {
   "sensor_actor.load_failed": "Konnte Kanal {address} nicht laden.",
   "sensor_actor.true": "An",
   "sensor_actor.false": "Aus",
+  "sensor_actor.event_last": "zuletzt {age}",
+  "sensor_actor.event_idle": "noch nicht ausgelöst",
   // --- Log viewer ---
   "nav.logs": "Protokoll",
   "logs.title": "Protokoll-Viewer",

@@ -28,6 +28,7 @@
   import BooleanReadout from "./readouts/BooleanReadout.svelte";
   import EnumReadout from "./readouts/EnumReadout.svelte";
   import StringReadout from "./readouts/StringReadout.svelte";
+  import EventReadout from "./readouts/EventReadout.svelte";
 
   import TogglePill from "./primitives/TogglePill.svelte";
   import ActionButton from "./primitives/ActionButton.svelte";
@@ -91,18 +92,24 @@
     return () => unsub();
   });
 
-  // Pick the right readout component for a DP. Boolean and 2-value
-  // ENUMs (e.g. SHUTTER_CONTACT) render via BooleanReadout; longer
-  // ENUMs via EnumReadout; numerics via NumericReadout; everything
-  // else via StringReadout.
+  // Pick the right readout component for a DP. ACTION-typed DPs (a
+  // remote's PRESS_SHORT/LONG that landed in the readout bucket) carry
+  // no steady-state value — render them as events, never as a raw
+  // boolean. Boolean and 2-value ENUMs (e.g. SHUTTER_CONTACT) render
+  // via BooleanReadout; longer ENUMs via EnumReadout; numerics via
+  // NumericReadout. Any remaining DP whose value is a boolean also
+  // routes to BooleanReadout so a stray `false` never reaches the raw
+  // String() fallback; everything else via StringReadout.
   function readoutComponentFor(dp: DataPointSummary) {
     const t = (dp.type ?? "").toUpperCase();
+    if (t === "ACTION") return EventReadout;
     if (t === "BOOL") return BooleanReadout;
     if (t === "ENUM") {
       if (dp.value_list && dp.value_list.length === 2) return BooleanReadout;
       return EnumReadout;
     }
     if (t === "INTEGER" || t === "FLOAT") return NumericReadout;
+    if (typeof dp.value === "boolean") return BooleanReadout;
     return StringReadout;
   }
 
