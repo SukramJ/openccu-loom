@@ -1326,21 +1326,40 @@ func (d *DataPoint[T]) HasStatusParameter() bool {
 // IsStatusValid reports whether the paired `<param>_STATUS` parameter is in
 // an acceptable state.
 //
-// if self._status_value is None: return True return self._status_value in
-// (ParameterStatus.NORMAL, ParameterStatus.UNKNOWN)
-//
 // When no status observation has been recorded (HasStatusParameter() ==
-// false) the check passes vacuously — there is nothing to fail. Once observed
-// the status must be NORMAL or UNKNOWN; the latter covers the init-phase
-// grace period before the CCU has reported a definitive quality reading.
+// false) the check passes vacuously — there is nothing to fail. NORMAL is
+// always valid. UNKNOWN means "not measured yet" during the init-phase grace
+// period: it stays valid for control parameters (e.g. LEVEL, whose reported
+// position is meaningful) but is invalid for numeric measurement parameters,
+// whose value is then only the DEFAULT placeholder (e.g. ACTUAL_TEMPERATURE =
+// 0.0 after a CCU restart). See docs/parity/by_design.md
+// (BD-CCU-StatusUncertainViaTracker).
 func (d *DataPoint[T]) IsStatusValid() bool {
 	d.mu.RLock()
-	defer d.mu.RUnlock()
-	if !d.statusObserved {
+	observed := d.statusObserved
+	status := d.status
+	d.mu.RUnlock()
+	if !observed {
 		return true
 	}
-	return d.status == hmenum.ParameterStatusNormal ||
-		d.status == hmenum.ParameterStatusUnknown
+	if status == hmenum.ParameterStatusNormal {
+		return true
+	}
+	if status == hmenum.ParameterStatusUnknown {
+		return !d.isMeasuredQuantity()
+	}
+	return false
+}
+
+// isMeasuredQuantity reports whether this data point is a numeric physical
+// measurement (e.g. ACTUAL_TEMPERATURE, HUMIDITY, voltage). Such parameters
+// report the DEFAULT placeholder together with STATUS=UNKNOWN after a CCU
+// restart until the device delivers a real reading. Control/actuator
+// parameters such as LEVEL carry no physical quantity and are not measured.
+func (d *DataPoint[T]) isMeasuredQuantity() bool {
+	t := d.Descriptor.Type
+	return (t == hmenum.ParameterTypeFloat || t == hmenum.ParameterTypeInteger) &&
+		d.Quantity() != hmenum.QuantityNone
 }
 
 // allowsNoneValue reports whether nil/zero is a valid "value" for this
