@@ -698,6 +698,9 @@ export const api = {
       method: "POST",
     });
   },
+  getRestartPending() {
+    return request<{ pending: boolean; fields: string[] }>(`/system/restart-pending`);
+  },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {
     return request<SystemUpdateEntry[]>(`/system/update`);

@@ -133,6 +133,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Audit:          d.auditBuf,
 		Auth:           d.restAuth,
 		ConfigAdmin:    d.configSvc,
+		RestartPending: newRestartPendingProvider(cfg, d.configSvc),
 		UserAdmin:      d.userSvc,
 		TokenAdmin:     d.tokenSvc,
 		CentralAdmin:   d.centSvc,

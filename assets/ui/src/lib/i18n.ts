@@ -689,6 +689,9 @@ const EN: Catalog = {
   "settings.restart_later": "Later",
   "settings.reset_confirm": "Remove the persisted override for this section? The daemon will revert to its built-in defaults on the next restart.",
   "settings.reset_done": "Section reset to built-in defaults.",
+  "restart.banner_text": "Configuration changes need a daemon restart to take effect.",
+  "restart.banner_action": "Open settings",
+  "restart.now": "Restart now",
   "settings.json_parse_error": "Invalid JSON — check syntax.",
   "settings.duration_parse_error": "Invalid duration. Use Go syntax: 60s, 5m, 250ms, 1h30m.",
   // --- Users admin ---
@@ -2271,6 +2274,9 @@ const DE: Catalog = {
   "settings.restart_later": "Später",
   "settings.reset_confirm": "Gespeicherte Überschreibung für diesen Bereich entfernen? Der Daemon fällt beim nächsten Neustart auf die eingebauten Standards zurück.",
   "settings.reset_done": "Bereich auf eingebaute Standards zurückgesetzt.",
+  "restart.banner_text": "Konfigurationsänderungen werden erst nach einem Neustart des Daemons wirksam.",
+  "restart.banner_action": "Einstellungen öffnen",
+  "restart.now": "Jetzt neu starten",
   "settings.json_parse_error": "Ungültiges JSON — Syntax prüfen.",
   "settings.duration_parse_error": "Ungültige Dauer. Go-Syntax: 60s, 5m, 250ms, 1h30m.",
   // --- Benutzer-Verwaltung ---

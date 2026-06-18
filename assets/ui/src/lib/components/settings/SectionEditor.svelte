@@ -10,6 +10,7 @@
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
 
   type Props = {
     section: string;
@@ -492,6 +493,7 @@
       original = deepClone(working);
       toastStore.success(t("settings.saved"));
       usingDefaults = false;
+      void refreshRestartPending();
       if (result.restart_required || hasRestartField) {
         showRestartModal = true;
       }
@@ -516,6 +518,7 @@
     try {
       await api.deleteConfigSection(section);
       toastStore.success(t("settings.reset_done"));
+      void refreshRestartPending();
       await load();
     } catch (err) {
       toastStore.error(

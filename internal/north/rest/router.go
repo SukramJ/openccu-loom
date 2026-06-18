@@ -105,6 +105,9 @@ type Deps struct {
 	// (`GET /config/schema`, `GET|PUT|DELETE /config/{section}`).
 	// Nil disables all of them with 503.
 	ConfigAdmin handlers.ConfigAdminService
+	// RestartPending backs GET /system/restart-pending — whether a saved
+	// restart-required config change is staged but not yet active.
+	RestartPending handlers.RestartPendingProvider
 
 	// UserAdmin backs the SQLite-backed `/users` CRUD. Nil keeps
 	// the legacy in-memory `/auth/users` read-only path active.
@@ -554,6 +557,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/status", handlers.ListSystemStatus(d.SystemStatus))
 			}
 			pr.Get("/system/ccu", handlers.SystemCCU(d.SystemCCU))
+			// Persistent "restart required" status for the SPA banner.
+			pr.Get("/system/restart-pending", handlers.GetRestartPending(d.RestartPending))
 			if d.LogLevels != nil {
 				pr.Get("/diagnostics/log-levels", handlers.ListLogLevels(d.LogLevels))
 				pr.With(admin).Put("/diagnostics/log-levels/{path}", handlers.PutLogLevel(d.LogLevels, d.AuditRecorder))

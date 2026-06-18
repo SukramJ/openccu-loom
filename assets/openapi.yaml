@@ -813,6 +813,31 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/SystemCCUEntry" }
 
+  /system/restart-pending:
+    get:
+      operationId: getRestartPending
+      summary: Whether a saved config change needs a daemon restart
+      description: >
+        Reports whether any restart-required config field has a persisted
+        value the running daemon has not yet adopted (computed on demand:
+        persisted config vs. the running boot config). The SPA shows a
+        persistent banner while `pending` is true; it clears once the
+        values are reverted or the daemon restarts.
+      tags: [core]
+      responses:
+        "200":
+          description: Restart-pending status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, fields]
+                properties:
+                  pending: { type: boolean }
+                  fields:
+                    type: array
+                    items: { type: string }
+
   /system/status:
     get:
       operationId: listSystemStatus
