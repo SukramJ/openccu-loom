@@ -2668,14 +2668,38 @@ func TestWireHealth_PingPongMismatch(t *testing.T) {
 	closer := WireHealth(c)
 	defer closer()
 
-	events.Publish(c.EventBus, hmevent.PingPongMismatchEvent{
-		Base:         hmevent.NewBase(),
-		InterfaceID:  "HmIP-RF",
-		MismatchType: hmenum.PingPongMismatchUnknown,
-		PendingCount: 1,
-		UnknownCount: 2,
-	})
-	drainBus()
+	mismatch := func() {
+		events.Publish(c.EventBus, hmevent.PingPongMismatchEvent{
+			Base:         hmevent.NewBase(),
+			InterfaceID:  "HmIP-RF",
+			MismatchType: hmenum.PingPongMismatchUnknown,
+			PendingCount: 1,
+			UnknownCount: 2,
+		})
+		drainBus()
+	}
+
+	// A ping/pong mismatch must land on the SEPARATE quality component, never
+	// on the interface's liveness entry — otherwise a co-located daemon's
+	// orphan PONGs could escalate the only interface to UNHEALTHY and trip the
+	// "every interface down → 503" rule in ServiceAvailability.
+	mismatch()
+	if pp, ok := c.Health.Get(health.PingPongComponent("HmIP-RF")); !ok {
+		t.Fatal("expected ping_pong/HmIP-RF quality component to be recorded")
+	} else if pp.Status != health.StatusDegraded {
+		t.Errorf("ping_pong component status = %q, want degraded", pp.Status)
+	}
+	if _, ok := c.Health.Get("HmIP-RF"); ok {
+		t.Error("interface liveness component must NOT be touched by a ping/pong mismatch")
+	}
+
+	// Even after the flap-damp escalation (a second consecutive unhealthy
+	// sample), service availability must stay clear of 503: the ping/pong
+	// component is neither an interface nor a critical dependency.
+	mismatch()
+	if got := health.ServiceAvailability(c.Health.Snapshot()); got == health.StatusUnhealthy {
+		t.Errorf("ServiceAvailability = %q; a ping/pong mismatch must never map to 503", got)
+	}
 }
 
 func TestWireHealth_DataPointValueReceived_MatchingCentral(t *testing.T) {

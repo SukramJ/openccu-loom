@@ -55,6 +55,19 @@ type Config struct {
 	// Interface is the logical interface (HmIP-RF, CUxD, …).
 	Interface hmenum.Interface
 
+	// InitInterfaceID is the wire-boundary identifier advertised to the CCU at
+	// init() — the `<instance>-<central>-<interface>` triple. It is the base of
+	// the ping caller_id (`<InitInterfaceID>#<token>`) so the CCU's PONG echo can
+	// be attributed to THIS daemon: the CCU broadcasts every PONG to all
+	// registered clients, so two daemons against one CCU receive each other's
+	// PONGs. Keying the caller_id on the full triple (not the bare interface
+	// name) lets each daemon reject the other's PONGs instead of filing them as
+	// unmatched "unknown" mismatches that decay interface health. Mirrors the
+	// reference `caller_id = f"{interface_id}#{token}"`
+	// (client/interface_client.py:266). Empty falls back to the bare interface
+	// name (tests / single-daemon tooling).
+	InitInterfaceID string
+
 	// Enabled, when set to false explicitly, marks the interface as
 	// administratively disabled. The client refuses to forward calls and
 	// [InterfaceClient.Enabled] returns false. The zero value (false) would
@@ -514,6 +527,20 @@ func (c *InterfaceClient) Interface() hmenum.Interface { return c.cfg.Interface 
 // CentralName returns the owning central's name.
 func (c *InterfaceClient) CentralName() string { return c.cfg.CentralName }
 
+// WireBoundaryID returns the wire-boundary identifier used as the ping
+// caller_id base — the `<instance>-<central>-<interface>` triple advertised to
+// the CCU at init(). It is the single source of truth for PONG attribution: the
+// outbound ping embeds it (`<WireBoundaryID>#<token>`) and the PONG-ingest hook
+// matches the echoed prefix against it, so a co-located daemon's PONGs (which
+// carry a different triple) are rejected instead of inflating the unknown count.
+// Falls back to the bare interface name when [Config.InitInterfaceID] is unset.
+func (c *InterfaceClient) WireBoundaryID() string {
+	if c.cfg.InitInterfaceID != "" {
+		return c.cfg.InitInterfaceID
+	}
+	return string(c.cfg.Interface)
+}
+
 // callbackFreshness is the window during which a recent inbound callback
 // counts as "alive". 15s scheduler tick × 12 = 180s of headroom before a
 // silent interface is treated as broken.
@@ -737,12 +764,15 @@ func (c *InterfaceClient) CheckConnectionAvailability(ctx context.Context, handl
 	}
 	// Build the caller_id. When ping_pong correlation is requested and the
 	// backend supports it, embed a unique token so the CCU's PONG echo can
-	// be matched back to this probe.
-	callerID := string(c.cfg.Interface)
+	// be matched back to this probe. The base is the wire-boundary triple (not
+	// the bare interface name) so a co-located daemon against the same CCU sends
+	// a distinguishable caller_id and its broadcast PONGs are not mistaken for
+	// ours. See [InterfaceClient.WireBoundaryID].
+	callerID := c.WireBoundaryID()
 	if handlePingPong && c.cfg.Capabilities.PingPong {
 		seq := c.pingSeq.Add(1)
 		token := strconv.FormatUint(seq, 10)
-		callerID = string(c.cfg.Interface) + "#" + token
+		callerID = c.WireBoundaryID() + "#" + token
 		// Record the pending ping before sending — the CCU may deliver the
 		// PONG event before the RPC call returns on fast transports.
 		c.RecordPing(token)

@@ -69,13 +69,15 @@ func WirePingPongBus(
 	//
 	// The CCU echoes the ping caller_id as the PONG value and broadcasts PONG
 	// events to EVERY registered logic-layer client — so on a shared CCU we
-	// also receive other instances' PONGs (e.g. "Otto-HmIP-RF#<ts>") plus the
-	// bare-name liveness probes ("HmIP-RF", no token) on our own interface.
+	// also receive other daemons' PONGs (e.g. "OtherLoom-OttoLoom-HmIP-RF#<n>")
+	// plus the bare-name liveness probes (no token) on our own interface.
 	// Correlate ONLY when the caller_id carries a '#' token AND its prefix
-	// equals this client's own ping prefix (the bare interface name sent in
-	// CheckConnectionAvailability). Otherwise every foreign / tokenless PONG
-	// would be filed as an unmatched "unknown" mismatch and decay interface
-	// health. Mirrors the reference v_interface_id == interface_id guard.
+	// equals this client's own wire-boundary id — the `<instance>-<central>-
+	// <interface>` triple it embeds in its own pings. Matching on the bare
+	// interface name would be blind to a second daemon (which sends the same
+	// bare prefix), so its PONGs would be filed as unmatched "unknown"
+	// mismatches and decay interface health. Mirrors the reference
+	// v_interface_id == interface_id guard (central/coordinators/event.py:211).
 	if unit.Events != nil && unit.Clients != nil {
 		unit.Events.SetPingPongTracker(func(ifID, callerID string) {
 			entry, ok := unit.Clients.Get(ifID)
@@ -83,7 +85,7 @@ func WirePingPongBus(
 				return
 			}
 			prefix, token, hasToken := strings.Cut(callerID, "#")
-			if !hasToken || prefix != string(entry.Interface) {
+			if !hasToken || prefix != entry.Client.WireBoundaryID() {
 				return
 			}
 			entry.Client.RecordPong(token)

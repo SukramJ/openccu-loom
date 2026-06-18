@@ -24,7 +24,9 @@ import (
 // healthy / HALF_OPEN degraded / OPEN unhealthy RecoveryStartedEvent →
 // degraded (recovery in progress) RecoveryCompletedEvent → healthy on
 // success, unhealthy on failure result RecoveryFailedEvent → unhealthy
-// PingPongMismatchEvent → degraded
+// PingPongMismatchEvent → degraded on a SEPARATE `ping_pong/<interfaceID>`
+// component (kept off the interface's liveness entry so correlation noise
+// cannot drive the service-availability verdict to 503)
 //
 // After every Record call a [hmevent.ConnectionHealthChangedEvent] is
 // published on the bus so north-bound subscribers (metrics, REST/WS, MQTT)
@@ -133,8 +135,16 @@ func WireHealth(unit *central.Unit) func() { //nolint:funlen // composition/wiri
 		}),
 
 		events.Subscribe(bus, func(e hmevent.PingPongMismatchEvent) {
-			record(e.InterfaceID, false, fmt.Sprintf("ping/pong mismatch: %s pending=%d unknown=%d",
-				e.MismatchType, e.PendingCount, e.UnknownCount))
+			// Record on a SEPARATE quality component, not the interface's
+			// liveness entry, and via RecordQuality so it caps at DEGRADED: a
+			// ping/pong mismatch (often orphan PONGs broadcast by a co-located
+			// daemon on the same CCU) must neither escalate the interface to
+			// UNHEALTHY and trip the "every interface down → 503" rule in
+			// health.ServiceAvailability, nor cascade the central state to
+			// failed. See [health.PingPongComponent] / [health.Tracker.RecordQuality].
+			tr.RecordQuality(health.PingPongComponent(component(e.InterfaceID)),
+				fmt.Sprintf("ping/pong mismatch: %s pending=%d unknown=%d",
+					e.MismatchType, e.PendingCount, e.UnknownCount))
 		}),
 
 		// record last-event timestamp on every push-event so the

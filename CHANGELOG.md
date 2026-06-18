@@ -4,6 +4,33 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1]
+
+### Fixed
+
+- **Two OpenCCU-Loom daemons against the same CCU no longer drive each
+  other's `/health` to `503`.** The XML-RPC ping embedded only the bare
+  interface name in its `caller_id` (`HmIP-RF#<token>`), and the PONG-ingest
+  hook correlated on that bare name. Because the CCU broadcasts every PONG to
+  all registered clients, a co-located daemon's PONGs carried the same bare
+  prefix, passed the correlation guard, matched no pending ping, and piled up
+  as "unknown" mismatches — degrading, then (after the flap-damp escalation)
+  failing the only interface, which tripped the "every interface down → 503"
+  rule. The ping now keys its `caller_id` on the full wire-boundary triple
+  `<instance>-<central>-<interface>` and the hook matches the echoed prefix
+  against the client's own triple, so a foreign daemon's PONGs are rejected
+  instead of counted. Mirrors the reference
+  `caller_id = f"{interface_id}#{token}"` and its `v_interface_id ==
+  interface_id` guard.
+- **A ping/pong correlation mismatch alone can no longer make `/health`
+  return `503`.** Ping/pong mismatches are now recorded on a separate
+  `ping_pong/<interfaceID>` quality component instead of the interface's
+  liveness entry, so correlation noise can at most degrade service
+  availability (HTTP 200) — never escalate the interface to unhealthy and map
+  to 503. The signal stays visible in diagnostics and no longer skews the
+  primary-client-healthy verdict. Mirrors the reference's distinct
+  `ping_pong_mismatch_{interface_id}` issue model.
+
 ## [0.5.0]
 
 ### Added

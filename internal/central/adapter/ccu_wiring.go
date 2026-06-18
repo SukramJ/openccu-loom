@@ -527,6 +527,7 @@ func wireInterface(
 	icCfg := client.Config{
 		CentralName:         cc.Name,
 		Interface:           iface,
+		InitInterfaceID:     initID,
 		Caller:              xmlSliceCaller,
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),

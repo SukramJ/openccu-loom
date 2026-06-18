@@ -93,6 +93,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	icCfg := client.Config{
 		CentralName:         cc.Name,
 		Interface:           iface,
+		InitInterfaceID:     initID,
 		Caller:              binSliceCaller,
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),

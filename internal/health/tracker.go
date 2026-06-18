@@ -229,6 +229,33 @@ func statusFromSample(s Sample) Status {
 	return StatusUnhealthy
 }
 
+// RecordQuality records a soft, non-fatal observation for a quality signal
+// (e.g. ping/pong correlation noise). Unlike [Record], the resulting status is
+// CAPPED at [StatusDegraded] — a quality signal must never escalate a component
+// to [StatusUnhealthy], so it cannot push [ServiceAvailability] to 503 or
+// cascade the central state to failed via the change hook. The note and a
+// history sample are still recorded so the signal stays visible in diagnostics
+// and decays to [StatusUnknown] once stale.
+func (t *Tracker) RecordQuality(name, note string) {
+	sample := Sample{Healthy: false, Note: note, Timestamp: t.clk.Now()}
+	t.mu.Lock()
+	t.components[name] = Component{Name: name, Status: StatusDegraded, LastSample: sample}
+	hist := t.history[name]
+	hist = append(hist, sample)
+	if len(hist) > t.historySize {
+		hist = hist[len(hist)-t.historySize:]
+	}
+	t.history[name] = hist
+	t.mu.Unlock()
+
+	t.onChangeMu.RLock()
+	fn := t.onChangeFn
+	t.onChangeMu.RUnlock()
+	if fn != nil {
+		fn(t.Overall())
+	}
+}
+
 // Get returns the recorded component and reports whether it exists.
 // Stale samples (older than [WithStaleAfter]) decay the component's
 // status to [StatusUnknown]; the underlying [LastSample] is returned
@@ -357,6 +384,24 @@ func ServiceAvailability(components []Component) Status {
 	return worst
 }
 
+// PingPongComponentPrefix tags health components that carry the ping/pong
+// correlation-quality signal for an interface (full name
+// `ping_pong/<interfaceID>`). These are recorded SEPARATELY from the interface's
+// connection-liveness component on purpose: a ping/pong mismatch — orphan PONGs,
+// often broadcast by a co-located daemon on the same CCU — is a quality signal,
+// not a "south-bound interface is down" signal. Keeping it off the interface
+// component prevents it from escalating that component to UNHEALTHY and tripping
+// the "every interface down → 503" rule in [ServiceAvailability]. Mirrors the
+// reference, which models this as a distinct `ping_pong_mismatch_{interface_id}`
+// issue rather than a connection state (const.py:1505-1509).
+const PingPongComponentPrefix = "ping_pong/"
+
+// PingPongComponent returns the health-component name carrying the ping/pong
+// correlation signal for the given interface id.
+func PingPongComponent(interfaceID string) string {
+	return PingPongComponentPrefix + interfaceID
+}
+
 // isCriticalComponent reports whether a component's failure means the daemon
 // cannot serve at all (mapped to HTTP 503), regardless of south-bound state:
 // the persistence layer (sqlite) and the central coordinator heartbeat. A
@@ -368,10 +413,16 @@ func isCriticalComponent(name string) bool {
 // isInterfaceComponent reports whether name identifies a per-central south-bound
 // interface health entry (e.g. "OttoGo-HmIP-RF", "KearneyGo-CUxD") rather than
 // an infrastructure entry. Interface names carry a "<central>-<interface>"
-// shape; the known infra entries are single tokens.
+// shape; the known infra entries are single tokens. The ping/pong quality
+// components share the interface-id suffix but are NOT liveness entries, so they
+// are excluded — otherwise a degraded ping/pong signal would count toward the
+// "every interface down → 503" verdict it is meant to stay clear of.
 func isInterfaceComponent(name string) bool {
 	switch name {
 	case "central", "mqtt", "sqlite":
+		return false
+	}
+	if strings.HasPrefix(name, PingPongComponentPrefix) {
 		return false
 	}
 	return strings.Contains(name, "-")
@@ -844,8 +895,13 @@ func (t *Tracker) PrimaryClientHealthy() bool {
 	// Resolve against every registered component — the wiring layer
 	// scopes interface ids with the central name (e.g.
 	// `ccu-main-HmIP-RF`), so a substring match is the simplest
-	// portable rule.
+	// portable rule. The ping/pong quality component shares the
+	// interface-id suffix but is not a liveness entry; skip it so a
+	// noisy correlation signal cannot flip the primary-client verdict.
 	for compName, raw := range t.components {
+		if strings.HasPrefix(compName, PingPongComponentPrefix) {
+			continue
+		}
 		if !strings.Contains(compName, name) {
 			continue
 		}
