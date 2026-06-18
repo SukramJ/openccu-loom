@@ -138,208 +138,234 @@ type WireDeps struct {
 // backend + ingest + value seeding), and — when [WireDeps.CallbackServer]
 // is set — registers the callback handler + announces the daemon's
 // callback URL to the CCU so live events start flowing.
-func WireCentrals( //nolint:funlen // composition/wiring: long sequential setup
+func WireCentrals(
 	ctx context.Context,
 	cfg *config.Config,
 	reg *central.Registry,
 	deps WireDeps,
 	logger *slog.Logger,
 ) (func(), error) {
-	writer := deps.Writer
-	translations := deps.Translations
 	if logger == nil {
 		logger = slog.Default()
 	}
 
+	// Each central's southbound bring-up runs in its own background goroutine,
+	// gated on CCU readiness (checkrega.cgi == OK). WireCentrals returns
+	// immediately so the daemon's north-bound surface (REST/SPA/health) is up
+	// while a co-booting CCU is still warming — the central then brings itself
+	// up, fully and once, the moment its CCU is ready (so devices are created
+	// already carrying their names). bringUpCtx is cancelled by teardown; wg
+	// drains the goroutines on shutdown. The closers slice is shared across the
+	// concurrent goroutines, so it is mutex-guarded. bringUpCtx is derived from
+	// the daemon-lifetime ctx (NOT a short wiring timeout) so a co-booting CCU
+	// is waited on indefinitely; teardown cancels it explicitly on shutdown.
+	bringUpCtx, cancelBringUp := context.WithCancel(ctx)
 	var (
-		closers []func()
-		joined  []string
+		closersMu sync.Mutex
+		closers   []func()
+		wg        sync.WaitGroup
 	)
-	teardown := func() {
-		for _, closer := range slices.Backward(closers) {
-			closer()
+	addCloser := func(c func()) {
+		if c == nil {
+			return
 		}
+		closersMu.Lock()
+		closers = append(closers, c)
+		closersMu.Unlock()
 	}
+
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
 		unit, ok := reg.Get(cc.Name)
 		if !ok {
-			joined = append(joined, cc.Name+": not registered")
+			logger.Warn("wire.central.not_registered", slog.String("central", cc.Name))
 			continue
 		}
-		// Register callback handlers + resolve the per-central XML-RPC
-		// callback URL and BIN-RPC (CUxD) callback address. Extracted so
-		// WireCentrals stays within the cognitive-complexity budget.
+		// Callback-handler routing is local (no CCU I/O), so register it
+		// synchronously up front; the actual init()/announce to the CCU happens
+		// inside the gated bring-up when the interface backends come up.
 		callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(deps, cc, unit, logger)
-		if deregister != nil {
-			closers = append(closers, deregister)
-		}
+		addCloser(deregister)
 
-		// Hub wiring runs first so programs + sysvars are available and
-		// so subsequent interface wiring can reuse the authenticated
-		// Rega runner for value seeding. A hub-wiring failure leaves
-		// the daemon functional at reduced fidelity.
-		var (
-			runner  *rega.Runner
-			hubData HubData
-		)
-		if r, h, closer, err := WireHub(ctx, *cc, unit, logger); err != nil {
-			joined = append(joined, fmt.Sprintf("%s/hub: %v", cc.Name, err))
-			logger.Warn("wire.hub.failed",
-				slog.String("central", cc.Name),
-				slog.String("err", err.Error()))
-		} else {
-			runner = r
-			hubData = h
-			if closer != nil {
-				closers = append(closers, closer)
-			}
-			// Wire the backup restorer the first time a central comes
-			// up successfully — the BackupAdapter selects the first
-			// central as its source (multi-CCU support is a
-			// follow-up). Subsequent centrals do not overwrite the
-			// existing restorer.
-			if deps.Backup != nil && deps.Backup.Restorer() == nil {
-				deps.Backup.SetRestorer(&HTTPBackupRestorer{
-					BaseURL:               ccuBaseURLFor(*cc),
-					Session:               runner.Client(),
-					InsecureSkipTLSVerify: cc.TLSInsecureSkipVerify,
-				})
-				logger.Info("wire.backup.restorer_ready",
-					slog.String("central", cc.Name))
-			}
-		}
-
-		// Per-central interface→backend lookup, populated by
-		// wireInterface as each iface comes up. The CONFIG_PENDING hook
-		// uses it lazily to resolve the right backend at event time —
-		// the hook is installed BEFORE the ifaces loop runs, so the
-		// map starts empty and fills as the wiring progresses.
-		backendsByInterface := newBackendRegistry()
-
-		// Install the CONFIG_PENDING True→False handler so HmIP devices
-		// re-sync MASTER values from the CCU (after a 10 s carenz) into
-		// the persistent SQLite cache. Classic HM devices ignore this
-		// signal and use the MasterPoller path.
-		//
-		// Note: getParamset(MASTER) on a non-battery device costs
-		// duty-cycle — the CCU fetches the values directly from the
-		// device by radio. CONFIG_PENDING True→False from the CCU
-		// means it just completed its own sync round, so reading
-		// straight after is the cheapest moment we get; that is the
-		// only justification for this hook running at all. Anything
-		// more aggressive (periodic refresh, recovery-triggered roll
-		// across the whole installation) is unsafe.
-		wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger) //nolint:contextcheck // hook installs a background goroutine that must outlive the wiring ctx
-
-		// Wire the source-token lifecycle on the central's event bus.
-		// ConnectionLost flips every wire DP to `stale`;
-		// RecoveryCompleted flips them back to `live`. Independent of
-		// the values_cache being enabled — the source token is
-		// computed from the in-memory state machine on the data point
-		// itself; persistence is just the survival layer.
-		if closer := WireValueSourceLifecycle(unit, logger); closer != nil {
-			closers = append(closers, closer)
-		}
-
-		pipeline := NewDevicePipeline(unit).
-			WithTranslations(translations, cfg.Locale).
-			WithNames(hubData.Names).
-			WithRooms(hubData.Rooms).
-			WithFunctions(hubData.Functions).
-			WithVisibility(deps.Visibility).
-			WithCustomDPBehavior(
-				cc.Behavior.LightLastBrightnessEnabled(),
-				cc.Behavior.UseGroupChannelForCoverStateEnabled(),
-			).
-			WithFirmwareCheck(cc.Behavior.EnableDeviceFirmwareCheckEnabled()).
-			WithMasterValuesStore(deps.MasterValues, cc.Name).
-			WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name)
-
-		// Build a Caller adapter for the hub's JSON-RPC session so
-		// CcuBackend can dispatch JSON-RPC-only operations (install-mode,
-		// service messages, renaming, sysvar/program calls). The adapter
-		// is nil when hub wiring failed — CcuBackend falls back to
-		// ErrUnsupported for those operations.
-		var jCaller backends.Caller
-		if runner != nil {
-			jCaller = &jsonrpcCaller{client: runner.Client()}
-		}
-
-		for _, ifaceSpec := range cc.Interfaces {
-			iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
-			closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
-			if err != nil {
-				joined = append(joined, fmt.Sprintf("%s/%s: %v", cc.Name, iface, err))
-				logger.Warn("wire.interface.failed",
-					slog.String("central", cc.Name),
-					slog.String("interface", string(iface)),
-					slog.String("err", err.Error()))
-				continue
-			}
-			if closer != nil {
-				closers = append(closers, closer)
-			}
-			logger.Info("wire.interface.ok",
-				slog.String("central", cc.Name),
-				slog.String("interface", string(iface)))
-		}
-
-		// Homegear has no JSON-RPC layer, so WireHub fails at login and its
-		// loadSysvars (SysVar.getAll over JSON-RPC) never runs — the hub
-		// sysvar surface would stay empty. Now that the interface backend is
-		// up, wire the XML-RPC sysvar load + refresh against it, mirroring
-		// the reference stack's getAllSystemVariables path for Homegear.
-		wireHomegearHubIfPresent(ctx, unit, backendsByInterface, logger)
-
-		// Wire the periodic data-refresh handler now that the pipeline and
-		// Rega runner are established. The central.refresh_client_data
-		// scheduler job (default 5 min) delegates here to re-run the
-		// fetch-all-device-data sweep per interface — the reconciliation
-		// safety net the push-event-first architecture relies on. Without
-		// it the job failed every tick with "LoadAndRefreshDataPointData
-		// not wired". Best-effort per interface, mirroring the boot-time
-		// seed (IngestFromBackend → seedValues); a runner is required
-		// because the sweep is a Rega script call. The scheduler gates the
-		// job to the operational state, so the sweep never races bootstrap.
-		if runner != nil {
-			wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
-		} else {
-			// Boot-time WireHub failed (e.g. the CCU's ReGa was not yet
-			// reachable during the daemon's startup window). Recover in the
-			// background so the central's hub surface (programs / sysvars /
-			// inbox / service+alarm messages) AND the refresh safety net
-			// self-heal once the CCU answers — WireHub otherwise runs exactly
-			// once at boot, leaving a transient failure permanent until a
-			// restart. The retry's WireHub re-applies the hub wiring through
-			// guarded setters, so it does not race the running daemon.
-			retryCtx, cancelRetry := context.WithCancel(context.Background()) //nolint:gosec // cancelRetry is invoked on shutdown via the closers slice on the next line
-			closers = append(closers, cancelRetry)
-			ccCopy, refreshPipeline := *cc, pipeline
-			//nolint:contextcheck // the retry deliberately uses a detached, teardown-bounded ctx (retryCtx) so it can outlive the short-lived wiring ctx
-			startHubRetry(retryCtx, ccCopy, unit, logger, WireHub, defaultHubRetryBackoff,
-				func(r *rega.Runner, closer func()) {
-					wireLoadAndRefresh(unit, refreshPipeline, ccCopy.Interfaces, r, logger)
-					if closer != nil {
-						unit.AddOnStopHook(closer)
-					}
-				})
-		}
-
-		// wire the sysvar creator after all interfaces are
-		// registered so the primary client + backend are both available
-		// when the first CreateSysvar* call arrives.
-		WireSysvarCreator(unit, writer)
-		// Same late-binding precondition: the backup-and-download handler
-		// resolves the primary backend at trigger time.
-		WireBackupAndDownload(unit, writer)
-		logger.Info("wire.sysvar_creator.ok",
-			slog.String("central", cc.Name))
+		ccCopy := *cc
+		wg.Add(1)
+		SafeGo("central_bringup."+cc.Name, func() {
+			defer wg.Done()
+			//nolint:contextcheck // the gated bring-up runs on bringUpCtx (teardown-bounded), not the short-lived wiring ctx
+			gatedCentralBringUp(bringUpCtx, cfg, &ccCopy, unit, deps, callbackURL, binRPCCallbackAddr, addCloser, logger)
+		})
 	}
-	if len(joined) > 0 {
-		return teardown, fmt.Errorf("wire: %s", strings.Join(joined, "; "))
+
+	teardown := func() {
+		cancelBringUp()
+		wg.Wait()
+		closersMu.Lock()
+		cs := slices.Clone(closers)
+		closersMu.Unlock()
+		for _, closer := range slices.Backward(cs) {
+			closer()
+		}
 	}
+	// Bring-up is asynchronous: there is no synchronous aggregate error to
+	// return. Per-central failures surface via logs + the "waiting for CCU"
+	// health state and are retried by the gate.
 	return teardown, nil
+}
+
+// gatedCentralBringUp waits until the CCU reports ready (checkrega.cgi == OK),
+// then runs the central's full southbound bring-up once and signals north-bound
+// adapters to publish it. It loops: if the hub load fails right after the gate
+// (the CCU dropped again), it returns to waiting and re-probes. Returns when the
+// bring-up succeeds or ctx is cancelled (teardown). Waits indefinitely for a
+// never-ready CCU rather than bringing the central up half-loaded.
+func gatedCentralBringUp(
+	ctx context.Context,
+	cfg *config.Config,
+	cc *config.CentralConfig,
+	unit *central.Unit,
+	deps WireDeps,
+	callbackURL, binRPCCallbackAddr string,
+	addCloser func(func()),
+	logger *slog.Logger,
+) {
+	const reGateBackoff = 5 * time.Second
+	recordCentralWaiting(unit)
+	for {
+		if !WaitForCCUReady(ctx, *cc, CCUReadinessConfig{Timeout: -1}, logger) {
+			return // teardown
+		}
+		if err := bringUpCentral(ctx, cfg, cc, unit, deps, callbackURL, binRPCCallbackAddr, addCloser, logger); err == nil {
+			events.Publish(unit.EventBus, hmevent.CentralSouthboundReadyEvent{
+				Base:        hmevent.NewBase(),
+				CentralName: cc.Name,
+			})
+			logger.Info("wire.central.ready", slog.String("central", cc.Name))
+			return
+		}
+		// Hub load failed even though the CCU just reported ready — most likely
+		// the CCU dropped again between the probe and the load. Back to waiting.
+		recordCentralWaiting(unit)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(reGateBackoff):
+		}
+	}
+}
+
+// recordCentralWaiting marks a central as waiting for its CCU to finish
+// booting. Recorded via RecordQuality (capped at DEGRADED) on a dedicated
+// `startup.<central>` component so the wait is visible in diagnostics without
+// tripping ServiceAvailability to 503 — a co-booting CCU is a startup state,
+// not a hard failure.
+func recordCentralWaiting(unit *central.Unit) {
+	if unit == nil || unit.Health == nil {
+		return
+	}
+	unit.Health.RecordQuality("startup."+unit.Name(), "waiting for CCU to become ready")
+}
+
+// bringUpCentral runs a central's full southbound bring-up against a ready CCU.
+// Order matters: the hub load (names/rooms/functions) runs FIRST so every
+// device the pipeline then creates already carries its CCU-assigned name — the
+// whole point of gating on readiness. It returns an error only when the hub
+// load fails (CCU not actually serving) BEFORE any local wiring or closers are
+// registered, so the gated caller can re-probe and retry without double-wiring.
+// Per-interface load failures (residual RPC lag) are retried thinly inside
+// wireInterface and otherwise logged, never surfaced as a bring-up failure.
+func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setup
+	ctx context.Context,
+	cfg *config.Config,
+	cc *config.CentralConfig,
+	unit *central.Unit,
+	deps WireDeps,
+	callbackURL, binRPCCallbackAddr string,
+	addCloser func(func()),
+	logger *slog.Logger,
+) error {
+	writer := deps.Writer
+	translations := deps.Translations
+
+	// Hub first: a failure here means the CCU is not yet serving JSON-RPC.
+	// Return before any wiring so the gate retries cleanly with no half-state.
+	runner, hubData, hubCloser, err := WireHub(ctx, *cc, unit, logger)
+	if err != nil {
+		logger.Warn("wire.hub.failed",
+			slog.String("central", cc.Name),
+			slog.String("err", err.Error()))
+		return fmt.Errorf("hub: %w", err)
+	}
+	addCloser(hubCloser)
+	// Wire the backup restorer the first time a central comes up successfully —
+	// the BackupAdapter selects the first central as its source. Idempotent on a
+	// re-gate: SetRestorer is skipped once a restorer exists.
+	if deps.Backup != nil && deps.Backup.Restorer() == nil {
+		deps.Backup.SetRestorer(&HTTPBackupRestorer{
+			BaseURL:               ccuBaseURLFor(*cc),
+			Session:               runner.Client(),
+			InsecureSkipTLSVerify: cc.TLSInsecureSkipVerify,
+		})
+		logger.Info("wire.backup.restorer_ready", slog.String("central", cc.Name))
+	}
+
+	// Per-central interface→backend lookup, populated by wireInterface as each
+	// iface comes up. The CONFIG_PENDING hook resolves the backend lazily.
+	backendsByInterface := newBackendRegistry()
+	wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger) //nolint:contextcheck // hook installs a background goroutine that must outlive the wiring ctx
+
+	// Source-token lifecycle on the central's bus: ConnectionLost → stale,
+	// RecoveryCompleted → live.
+	addCloser(WireValueSourceLifecycle(unit, logger))
+
+	pipeline := NewDevicePipeline(unit).
+		WithTranslations(translations, cfg.Locale).
+		WithNames(hubData.Names).
+		WithRooms(hubData.Rooms).
+		WithFunctions(hubData.Functions).
+		WithVisibility(deps.Visibility).
+		WithCustomDPBehavior(
+			cc.Behavior.LightLastBrightnessEnabled(),
+			cc.Behavior.UseGroupChannelForCoverStateEnabled(),
+		).
+		WithFirmwareCheck(cc.Behavior.EnableDeviceFirmwareCheckEnabled()).
+		WithMasterValuesStore(deps.MasterValues, cc.Name).
+		WithValuesCacheStore(centralScopedValuesCache(deps, cc.Name), cc.Name)
+
+	// JSON-RPC Caller adapter so CcuBackend can dispatch JSON-RPC-only ops.
+	var jCaller backends.Caller
+	if runner != nil {
+		jCaller = &jsonrpcCaller{client: runner.Client()}
+	}
+
+	for _, ifaceSpec := range cc.Interfaces {
+		iface := hmenum.Interface(strings.TrimSpace(ifaceSpec.Name))
+		closer, err := wireInterface(ctx, *cc, iface, unit, pipeline, writer, runner, callbackURL, cfg.Reliability, deps.MasterValues, backendsByInterface, jCaller, deps.BINRPCCallbackServer, binRPCCallbackAddr, logger)
+		if err != nil {
+			logger.Warn("wire.interface.failed",
+				slog.String("central", cc.Name),
+				slog.String("interface", string(iface)),
+				slog.String("err", err.Error()))
+			continue
+		}
+		addCloser(closer)
+		logger.Info("wire.interface.ok",
+			slog.String("central", cc.Name),
+			slog.String("interface", string(iface)))
+	}
+
+	// Homegear has no JSON-RPC layer; wire its XML-RPC sysvar surface now that
+	// the interface backend is up.
+	wireHomegearHubIfPresent(ctx, unit, backendsByInterface, logger)
+
+	// Periodic data-refresh handler (the fetch-all-device-data reconciliation
+	// safety net). runner is non-nil here — the hub load above succeeded.
+	wireLoadAndRefresh(unit, pipeline, cc.Interfaces, runner, logger)
+
+	// Late-binding handlers: resolve the primary client/backend at call time.
+	WireSysvarCreator(unit, writer)
+	WireBackupAndDownload(unit, writer)
+	logger.Info("wire.sysvar_creator.ok", slog.String("central", cc.Name))
+	return nil
 }
 
 // backendRegistry is the central-scoped interface→backend lookup the
@@ -664,6 +690,7 @@ func wireInterface(
 		capturedWireID := wireID
 		capturedInitID := initID
 		capturedCallbackURL := callbackURL
+		ccForRecovery := cc // captured for the readiness-gated reconnect stage
 		// Wire hub refresh into recovery so sysvar/program data is
 		// reloaded after a successful reconnect.
 		if unit.Hub != nil {
@@ -696,6 +723,18 @@ func wireInterface(
 				return capturedBackend.Ping(ctx, capturedInitID)
 			},
 			Reconnect: func(rctx context.Context) error {
+				// Gate the reconnect on CCU readiness (checkrega.cgi == OK),
+				// homogeneously with the boot path: after a CCU reboot ReGaHss +
+				// the interface RPC service warm up over ~a minute, so
+				// re-initialising before the CCU is serving just churns. A CCU
+				// that is merely up answers immediately, so this is a no-op
+				// except during an actual reboot. Bounded (default timeout,
+				// also cut short by rctx) so a genuinely-down CCU lets the
+				// recovery pipeline report failure and back off rather than
+				// blocking this stage forever; the pipeline's own retry re-gates.
+				if !WaitForCCUReady(rctx, ccForRecovery, CCUReadinessConfig{}, logger) {
+					return errors.New("reconnect: CCU not ready (checkrega.cgi != OK)")
+				}
 				attempts := 0
 				ok, err := captured.Reconnect(rctx, capturedBackend, capturedInitID, capturedCallbackURL, nil, &attempts)
 				if err != nil {
@@ -971,22 +1010,41 @@ func wireInterface(
 		return nil
 	}
 
-	// Run the boot-time interface activation. On a transient backend failure
-	// (e.g. http 503 while the CCU warms up) keep the client + connection
-	// probe alive and retry the device-load in the background until the CCU is
-	// ready, mirroring the hub-side startHubRetry. The interface is still
-	// reported as wired (the closer below tracks it for shutdown); it just
-	// populates once the backend answers instead of needing a daemon restart.
-	var ingestRetryCancel context.CancelFunc
-	if err := activate(ctx); err != nil {
-		logger.Warn("wire.interface.ingest_retry_scheduled",
+	// Boot-time interface activation. The readiness gate (gatedCentralBringUp)
+	// already confirmed the CCU's ReGaHss is serving, so this normally succeeds
+	// on the first try; a few short retries cover residual per-interface RPC lag
+	// (the XML-RPC service can trail ReGaHss by a few seconds). Inline —
+	// wireInterface runs on the central's background bring-up goroutine, so a
+	// brief block is fine; ctx-cancel (teardown) aborts the wait. The interface
+	// is reported as wired regardless (the closer tracks it for shutdown).
+	ingestBackoff := []time.Duration{
+		1 * time.Second, 2 * time.Second, 5 * time.Second, 10 * time.Second, 15 * time.Second,
+	}
+ingestLoop:
+	for attempt := 0; ; attempt++ {
+		err := activate(ctx)
+		if err == nil {
+			break
+		}
+		if attempt >= len(ingestBackoff) {
+			logger.Warn("wire.interface.ingest_failed",
+				slog.String("central", cc.Name),
+				slog.String("interface", wireID),
+				slog.String("err", err.Error()))
+			break
+		}
+		logger.Debug("wire.interface.ingest_retry",
 			slog.String("central", cc.Name),
 			slog.String("interface", wireID),
+			slog.Int("attempt", attempt+1),
 			slog.String("err", err.Error()))
-		//nolint:contextcheck // the retry uses a detached, teardown-bounded ctx so it can outlive the short-lived wiring ctx
-		retryCtx, cancel := context.WithCancel(context.Background())
-		ingestRetryCancel = cancel
-		startInterfaceRetry(retryCtx, cc.Name, wireID, defaultInterfaceRetryBackoff, activate, logger)
+		t := time.NewTimer(ingestBackoff[attempt])
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			break ingestLoop
+		case <-t.C:
+		}
 	}
 
 	// Closer deregisters the callback + unregisters the backend writer
@@ -996,11 +1054,6 @@ func wireInterface(
 	deinitID := initID
 	//nolint:contextcheck // teardown closure: deinit runs on a fresh short-timeout ctx, not the already-cancelled wiring ctx
 	closer := func() {
-		// Stop the background ingest-retry (if one is still running) so it
-		// does not keep re-initialising a backend that is being torn down.
-		if ingestRetryCancel != nil {
-			ingestRetryCancel()
-		}
 		// Stop the connection-probe goroutine first so the next tick
 		// does not race against the backend being torn down.
 		probeCancel()

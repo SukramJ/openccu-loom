@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3]
+
+### Changed
+
+- **Devices now appear with their names on a cold boot — the daemon waits for
+  the CCU to be ready instead of racing it.** When OpenCCU-Loom co-boots with a
+  (re)booting CCU, the backend answers `listDevices` / `Device.listAllDetail`
+  with http 503 for ~a minute while ReGaHss warms up. Previously the device
+  load and the name load (a separate JSON-RPC path) warmed up at different
+  times, so devices could appear without their CCU-assigned names until a
+  restart. Each central's southbound bring-up is now gated on the CCU's own
+  readiness endpoint (`GET /ise/checkrega.cgi` returning `OK` — the marker the
+  OCCU WebUI boot page itself polls): names load first, then devices, once,
+  against a ready CCU, so devices are created already named. The daemon's
+  north-bound surface (REST/SPA/health) comes up immediately and shows a
+  "waiting for CCU" state per central while it waits (which never trips
+  `/health` to 503). The wait is indefinite — a slow CCU is never abandoned
+  into a half-loaded state. The same gate guards mid-life reconnects after a
+  CCU reboot. This homogeneous gate replaces the previous partial-load
+  background retry; only a thin retry for residual per-interface RPC lag
+  remains.
+
 ## [0.5.2]
 
 ### Added

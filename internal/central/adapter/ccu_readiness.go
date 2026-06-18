@@ -51,13 +51,13 @@ const (
 // literal body "OK", ctx is cancelled, or the configured timeout elapses. It
 // returns true only when readiness was observed.
 //
-// This gates the per-central boot loads (device names via JSON-RPC AND the
-// per-interface listDevices) so they run only once ReGaHss is serving —
-// otherwise an add-on co-started with a (re)booting CCU sees `Device.listAllDetail`
+// This gates the per-central southbound bring-up (device names via JSON-RPC
+// AND the per-interface listDevices) so it runs only once ReGaHss is serving.
+// Otherwise an add-on co-started with a (re)booting CCU sees `Device.listAllDetail`
 // and `listDevices` warm up at DIFFERENT times, which surfaces as devices that
-// appear without their CCU-assigned names until a restart. A timeout is NOT
-// fatal: the caller proceeds and the existing background retries
-// (startHubRetry / startInterfaceRetry) remain the safety net.
+// appear without their CCU-assigned names until a restart. The production gate
+// (gatedCentralBringUp) passes a negative timeout to wait indefinitely so a
+// central is never brought up half-loaded.
 //
 // Connection errors and non-OK bodies are treated identically — "keep waiting".
 func WaitForCCUReady(ctx context.Context, cc config.CentralConfig, cfg CCUReadinessConfig, logger *slog.Logger) bool {

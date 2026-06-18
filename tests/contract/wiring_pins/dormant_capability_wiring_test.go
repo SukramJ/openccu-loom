@@ -168,11 +168,10 @@ func TestPin_SetOriginVersion_WiredInDaemon(t *testing.T) {
 // registered central.refresh_client_data scheduler job (default 5 min) fails
 // every tick with "LoadAndRefreshDataPointData not wired" and the
 // push-event-first reconciliation safety net — the periodic
-// fetch-all-device-data sweep — never runs. The call lives in hub_retry.go's
-// wireLoadAndRefresh, shared by the boot path and the background hub-recovery
-// path (so a transient boot-time WireHub failure self-heals).
+// fetch-all-device-data sweep — never runs. The call lives in load_refresh.go's
+// wireLoadAndRefresh, invoked from the gated per-central southbound bring-up.
 func TestPin_SetLoadAndRefreshFn_WiredInCCUWiring(t *testing.T) {
 	contract.MustFindMethodCall(t,
-		"internal/central/adapter/hub_retry.go",
+		"internal/central/adapter/load_refresh.go",
 		"unit", "SetLoadAndRefreshFn")
 }
