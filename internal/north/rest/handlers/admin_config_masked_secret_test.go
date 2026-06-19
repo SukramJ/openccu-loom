@@ -15,7 +15,52 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
+
+// getSection drives GetConfigSection for the given section.
+func getSection(svc ConfigAdminService, section string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/config/"+section, http.NoBody)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("section", section)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	GetConfigSection(svc).ServeHTTP(w, req)
+	return w
+}
+
+// TestGetConfigSection_MasksSecrets verifies the per-section GET masks secret
+// values to "***" instead of handing the operator's cleartext credential to
+// the browser. The section store opens (decrypts) secrets on read, so without
+// masking the GET would leak them — unlike the snapshot endpoint, which masks.
+func TestGetConfigSection_MasksSecrets(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.mqtt",
+			ValueJSON: []byte(`{"enabled":true,"password":"hunter2"}`),
+		},
+	}
+	w := getSection(fake, "north.mqtt")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "hunter2") {
+		t.Fatalf("cleartext secret leaked to the GET response: %s", w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not valid JSON: %v", err)
+	}
+	if got["password"] != "***" {
+		t.Errorf("password should be masked to ***, got %v", got["password"])
+	}
+	if got["enabled"] != true {
+		t.Errorf("non-secret field must pass through unchanged, got %v", got["enabled"])
+	}
+}
 
 // putSection drives PutConfigSection with the given section + JSON body.
 func putSection(svc ConfigAdminService, section, body string) *httptest.ResponseRecorder {
