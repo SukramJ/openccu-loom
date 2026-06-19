@@ -1,0 +1,10 @@
+[
+  {
+    "name": "TestVar",
+    "value": true,
+    "value_type": "BOOL",
+    "unit": "",
+    "central": "ccu1",
+    "description": "A test sysvar"
+  }
+]

@@ -13,10 +13,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "gen:types": "openapi-typescript ../openapi.yaml -o src/lib/api/types.generated.ts"
+    "gen:types": "openapi-typescript ../openapi.yaml -o src/lib/api/types.generated.ts",
+    "e2e": "playwright test",
+    "e2e:update": "playwright test --update-snapshots"
   },
   "devDependencies": {
     "@fontsource/inter": "^5.2.8",
+    "@playwright/test": "^1.61.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tailwindcss/vite": "^4.0.0",
     "@testing-library/jest-dom": "^6.9.1",

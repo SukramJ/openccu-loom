@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "address": "ABC123",
+      "name": "Test Switch",
+      "type": "HmIP-PSM",
+      "interface": "HmIP-RF",
+      "central": "ccu1",
+      "room": null,
+      "firmware_version": "1.0.0",
+      "available_firmware_version": null,
+      "rssi_device": -60,
+      "rssi_peer": -65,
+      "is_alive": true,
+      "last_seen": "2026-06-01T10:00:00Z"
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "per_page": 50
+}

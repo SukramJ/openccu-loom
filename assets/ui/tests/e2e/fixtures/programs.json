@@ -1,0 +1,9 @@
+[
+  {
+    "id": "prog1",
+    "name": "Morning Routine",
+    "active": true,
+    "is_active": true,
+    "central": "ccu1"
+  }
+]
