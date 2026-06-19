@@ -62,7 +62,7 @@
         type="button"
         class="h-11 w-11 rounded-full border-2 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
         class:scale-110={opt.name === currentLabel}
-        style="background-color: {opt.css}; border-color: {opt.name === currentLabel ? 'var(--ha-primary-color)' : 'rgba(0,0,0,0.15)'};"
+        style="background-color: {opt.css}; border-color: {opt.name === currentLabel ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'};"
         role="radio"
         aria-checked={opt.name === currentLabel}
         aria-label={opt.name}
