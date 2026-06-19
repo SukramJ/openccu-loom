@@ -196,7 +196,7 @@
     <header class="mb-4 flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">{t("links.title")}</h2>
-        <p class="text-xs text-[var(--ha-secondary-text-color)]">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
           {loading
             ? t("common.loading")
             : `${links.length} ${t("links.links_label")}`}
@@ -250,7 +250,7 @@
             placeholder={t("common.search")}
             class="w-full rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm sm:w-56 dark:border-slate-700 dark:bg-slate-900"
           />
-          <span class="text-[var(--ha-secondary-text-color)]">{t("common.sort")}</span>
+          <span class="text-slate-500 dark:text-slate-400">{t("common.sort")}</span>
           {#each [
             { k: "direction" as const, label: t("links.direction") },
             { k: "name" as const, label: t("links.name") },
@@ -270,7 +270,7 @@
               {/if}
             </button>
           {/each}
-          <span class="ml-auto text-[var(--ha-secondary-text-color)]">
+          <span class="ml-auto text-slate-500 dark:text-slate-400">
             {visibleLinks.length} / {links.length}
           </span>
         </div>
@@ -290,7 +290,7 @@
                   <span class="font-medium">{link.name}</span>
                 {/if}
               </div>
-              <div class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
+              <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 <span>
                   {partyLabel(
                     link.sender_device_name,
@@ -299,7 +299,7 @@
                     link.sender_address,
                   )}
                 </span>
-                <span class="mx-2 text-[var(--ha-secondary-text-color)]">→</span>
+                <span class="mx-2 text-slate-500 dark:text-slate-400">→</span>
                 <span>
                   {partyLabel(
                     link.receiver_device_name,
@@ -310,7 +310,7 @@
                 </span>
               </div>
               {#if link.description}
-                <p class="mt-1 text-xs italic text-[var(--ha-secondary-text-color)]">
+                <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">
                   {link.description}
                 </p>
               {/if}
