@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Persistent login sessions — a daemon restart no longer logs everyone out.**
+  Browser auth sessions are now SQLite-backed via a save-through cache: the
+  in-memory store stays the hot path for speed, each issued/revoked session is
+  best-effort mirrored to a new `auth_sessions` table, and the store hydrates
+  active sessions from disk on boot. A background sweep (and lazy eviction on
+  lookup) purges expired rows. A DB hiccup at login still lets the login
+  succeed — only that one session's cross-restart durability is lost.
+  Dynamically created API tokens were already SQLite-backed; the in-memory
+  YAML-seeded Basic user store is unchanged. See ADR 0041.
+
 - **Reverse-proxy support for the CCU add-on's "Open Config UI" button via
   `north.rest.public_url`.** Behind a TLS-terminating reverse proxy (Traefik,
   nginx, …) the add-on landing page previously linked the button at

@@ -159,7 +159,7 @@ func handleOIDCCallback(d Deps) http.HandlerFunc {
 			return
 		}
 		identity := d.OIDC.Client.IdentityFrom(claims)
-		sess, err := d.Auth.Sessions.Issue(identity)
+		sess, err := d.Auth.Sessions.Issue(identity) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		if err != nil {
 			ifLogger(d).ErrorContext(r.Context(), "auth.oidc.session_issue_fail",
 				slog.String("subject", identity.Subject),

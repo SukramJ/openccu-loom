@@ -4,9 +4,13 @@
 package auth
 
 import (
+	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -100,5 +104,245 @@ func TestCSRFMiddlewareAcceptsMatchingHeader(t *testing.T) {
 	mw.ServeHTTP(rr, req)
 	if rr.Code != 204 || hit != 1 {
 		t.Fatalf("status=%d hit=%d", rr.Code, hit)
+	}
+}
+
+// --- fake SessionPersistence for persistence-wiring tests ---
+
+type fakeSessionPersist struct {
+	mu             sync.Mutex
+	saved          map[string]*Session
+	saveCalls      int
+	deleteCalls    []string
+	purgeCallCount int   // how many times DeleteExpiredSessions was called
+	loadErr        error // returned by LoadActiveSessions when set
+	preloaded      []*Session
+	sentinelCount  int
+}
+
+func newFakePersist() *fakeSessionPersist {
+	return &fakeSessionPersist{saved: make(map[string]*Session)}
+}
+
+func (f *fakeSessionPersist) SaveSession(_ context.Context, sess *Session) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.saveCalls++
+	cp := *sess
+	f.saved[sess.ID] = &cp
+	return nil
+}
+
+func (f *fakeSessionPersist) DeleteSession(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleteCalls = append(f.deleteCalls, id)
+	delete(f.saved, id)
+	return nil
+}
+
+func (f *fakeSessionPersist) LoadActiveSessions(_ context.Context, _ time.Time) ([]*Session, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.loadErr != nil {
+		return nil, f.loadErr
+	}
+	return f.preloaded, nil
+}
+
+func (f *fakeSessionPersist) DeleteExpiredSessions(_ context.Context, _ time.Time) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.purgeCallCount++
+	return f.sentinelCount, nil
+}
+
+func (f *fakeSessionPersist) savedByID(id string) *Session {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.saved[id]
+}
+
+func (f *fakeSessionPersist) saveCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.saveCalls
+}
+
+func (f *fakeSessionPersist) deleteCallsFor(id string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, d := range f.deleteCalls {
+		if d == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *fakeSessionPersist) purgeWasCalled() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.purgeCallCount > 0
+}
+
+// discardLogger builds a slog.Logger that discards all output.
+func discardLogger() *slog.Logger {
+	return slog.New(slog.DiscardHandler)
+}
+
+// TestPersistentSessionStoreIssueSaves verifies that Issue calls
+// SaveSession on the persistence layer and the entry is findable there.
+func TestPersistentSessionStoreIssueSaves(t *testing.T) {
+	fake := newFakePersist()
+	store, err := NewPersistentSessionStore(fake, discardLogger())
+	if err != nil {
+		t.Fatalf("NewPersistentSessionStore: %v", err)
+	}
+
+	sess, err := store.Issue(Identity{Subject: "alice", Role: RoleOperator})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	if fake.saveCallCount() < 1 {
+		t.Error("SaveSession was not called after Issue")
+	}
+	if fake.savedByID(sess.ID) == nil {
+		t.Errorf("session %q not found in fake persistence", sess.ID)
+	}
+}
+
+// TestPersistentSessionStoreRevokeDeletes verifies that Revoke calls
+// DeleteSession and the entry is removed from the persistence layer.
+func TestPersistentSessionStoreRevokeDeletes(t *testing.T) {
+	fake := newFakePersist()
+	store, err := NewPersistentSessionStore(fake, discardLogger())
+	if err != nil {
+		t.Fatalf("NewPersistentSessionStore: %v", err)
+	}
+
+	sess, err := store.Issue(Identity{Subject: "bob", Role: RoleViewer})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+	store.Revoke(sess.ID)
+
+	if !fake.deleteCallsFor(sess.ID) {
+		t.Error("DeleteSession was not called after Revoke")
+	}
+	if fake.savedByID(sess.ID) != nil {
+		t.Error("session still present in fake after Revoke")
+	}
+}
+
+// TestNewPersistentSessionStoreHydrates verifies that a pre-seeded
+// persistence is hydrated into in-memory state during construction so
+// Lookup succeeds without a re-issue.
+func TestNewPersistentSessionStoreHydrates(t *testing.T) {
+	fake := newFakePersist()
+	now := time.Now()
+	preloaded := &Session{
+		ID:       "hydrated-id",
+		Identity: Identity{Subject: "carol", Role: RoleAdmin},
+		Created:  now.Add(-time.Minute),
+		Expires:  now.Add(time.Hour),
+	}
+	fake.preloaded = []*Session{preloaded}
+
+	store, err := NewPersistentSessionStore(fake, discardLogger())
+	if err != nil {
+		t.Fatalf("NewPersistentSessionStore: %v", err)
+	}
+	// Anchor virtual time so the hydrated session is not expired.
+	store.now = func() time.Time { return now }
+
+	got := store.Lookup(preloaded.ID)
+	if got == nil {
+		t.Fatal("Lookup returned nil for hydrated session")
+	}
+	if got.Identity.Subject != "carol" {
+		t.Errorf("Subject=%q want carol", got.Identity.Subject)
+	}
+}
+
+// TestNewPersistentSessionStorePropagatesHydrationError verifies that a
+// LoadActiveSessions error is returned by the constructor.
+func TestNewPersistentSessionStorePropagatesHydrationError(t *testing.T) {
+	fake := newFakePersist()
+	fake.loadErr = errors.New("db down")
+
+	_, err := NewPersistentSessionStore(fake, discardLogger())
+	if err == nil {
+		t.Fatal("expected error from NewPersistentSessionStore, got nil")
+	}
+	if !errors.Is(err, fake.loadErr) && err.Error() != fake.loadErr.Error() {
+		t.Errorf("error=%v want db down", err)
+	}
+}
+
+// TestPurgeExpiredEvictsAndDelegates verifies that PurgeExpired both
+// sweeps the in-memory map and calls DeleteExpiredSessions on the
+// persistence layer, returning the sentinel count from the fake.
+func TestPurgeExpiredEvictsAndDelegates(t *testing.T) {
+	fake := newFakePersist()
+	fake.sentinelCount = 7
+	store, err := NewPersistentSessionStore(fake, discardLogger())
+	if err != nil {
+		t.Fatalf("NewPersistentSessionStore: %v", err)
+	}
+
+	vnow := time.Now()
+	store.TTL = 10 * time.Millisecond
+	store.now = func() time.Time { return vnow }
+
+	sess, err := store.Issue(Identity{Subject: "dave"})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	// Advance time past TTL so the session is considered expired.
+	vnow = vnow.Add(20 * time.Millisecond)
+
+	count, err := store.PurgeExpired(context.Background())
+	if err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	if count != 7 {
+		t.Errorf("PurgeExpired count=%d want 7 (sentinel)", count)
+	}
+	if !fake.purgeWasCalled() {
+		t.Error("DeleteExpiredSessions was not called")
+	}
+	// In-memory item must be gone.
+	if store.Lookup(sess.ID) != nil {
+		t.Error("expired session still in memory after PurgeExpired")
+	}
+}
+
+// TestPurgeExpiredNoOpSafeWithNilPersist verifies that PurgeExpired is
+// safe when the store has no persistence layer: it sweeps memory and
+// returns (0, nil).
+func TestPurgeExpiredNoOpSafeWithNilPersist(t *testing.T) {
+	store := NewSessionStore()
+	vnow := time.Now()
+	store.TTL = 10 * time.Millisecond
+	store.now = func() time.Time { return vnow }
+
+	sess, err := store.Issue(Identity{Subject: "eve"})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	vnow = vnow.Add(20 * time.Millisecond)
+
+	count, err := store.PurgeExpired(context.Background())
+	if err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count=%d want 0 for nil persist", count)
+	}
+	if store.Lookup(sess.ID) != nil {
+		t.Error("expired session still in memory after PurgeExpired")
 	}
 }

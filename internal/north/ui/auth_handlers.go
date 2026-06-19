@@ -46,7 +46,7 @@ func handleLoginPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 			http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
 			return
 		}
-		sess, err := ad.Sessions.Issue(id)
+		sess, err := ad.Sessions.Issue(id) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		if err != nil {
 			slog.ErrorContext(r.Context(), "auth.session.issue_fail",
 				slog.String("subject", id.Subject),
@@ -68,7 +68,7 @@ func handleLoginPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 func handleLogoutPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(auth.SessionCookieName); err == nil && ad != nil && ad.Sessions != nil {
-			ad.Sessions.Revoke(c.Value)
+			ad.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 			slog.InfoContext(r.Context(), "auth.logout",
 				slog.String("remote", r.RemoteAddr))
 		}

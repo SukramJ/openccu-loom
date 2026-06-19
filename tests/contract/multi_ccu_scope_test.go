@@ -513,6 +513,12 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		"TokenStore:Delete":         "reason: tokens table is daemon-global; fingerprint is the natural key",
 		"ConfigSectionStore:Get":    "reason: config_sections is daemon-global; section is the natural key",
 		"ConfigSectionStore:Delete": "reason: config_sections is daemon-global; section is the natural key",
+		// auth_sessions is daemon-global, not per-CCU: a login session
+		// belongs to a user in the single auth realm, never to a CCU.
+		// DeleteSession's natural key is the session id; the purge sweep
+		// is a global time-based delete over the expiry. See ADR 0041.
+		"AuthSessionStore:DeleteSession":         "reason: auth_sessions is daemon-global (one auth realm); session id is the natural key",
+		"AuthSessionStore:DeleteExpiredSessions": "reason: auth_sessions purge is a global time-based delete across the one auth realm; central scoping would be incorrect",
 		// Measurement-history retention is a time-based purge over the one
 		// history.db file: it drops every row older than the cutoff
 		// regardless of central. Per-central scoping would be wrong — the

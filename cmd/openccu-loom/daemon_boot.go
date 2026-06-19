@@ -32,11 +32,12 @@ type auditOverlay struct {
 	db           *gosql.DB
 	durableStats *audit.DurableSinkStats
 
-	sqUsers     *sqlitestore.UserStore
-	sqTokens    *sqlitestore.TokenStore
-	sqCentrals  *sqlitestore.CentralsStore
-	sqSections  *sqlitestore.ConfigSectionStore
-	configStore *configstore.Store
+	sqUsers      *sqlitestore.UserStore
+	sqTokens     *sqlitestore.TokenStore
+	sqCentrals   *sqlitestore.CentralsStore
+	sqSections   *sqlitestore.ConfigSectionStore
+	authSessions *sqlitestore.AuthSessionStore
+	configStore  *configstore.Store
 
 	// secretsAvailable reports whether the at-rest secret cipher resolved a
 	// master key. When false the daemon stores config secrets in plaintext
@@ -74,6 +75,7 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		ov.sqTokens = sqlitestore.NewTokenStore(ov.db)
 		ov.sqCentrals = sqlitestore.NewCentralsStore(ov.db)
 		ov.sqSections = sqlitestore.NewConfigSectionStore(ov.db)
+		ov.authSessions = sqlitestore.NewAuthSessionStore(ov.db)
 		bootstrapCfg := &config.BootstrapConfig{
 			DataDir: cfg.DataDir,
 			Logging: cfg.Logging,

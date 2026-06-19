@@ -10,6 +10,7 @@ import (
 	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -299,14 +300,24 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// token/session resolvers. Extracted into buildAuthStores
 	// (daemon_north.go). The SQLite-backed stores are layered on top inside
 	// wireREST below; these stay as the secondary fallback so YAML-pinned
-	// legacy users keep working.
-	as := buildAuthStores(cfg, wsHub)
+	// legacy users keep working. The session store is durable (save-through
+	// SQLite) when the DB opened — a typed-nil store must be passed as a
+	// genuine nil interface so the in-memory fallback path is taken.
+	var sessionPersist auth.SessionPersistence
+	if ov.authSessions != nil {
+		sessionPersist = ov.authSessions
+	}
+	as := buildAuthStores(cfg, wsHub, sessionPersist, logger) //nolint:contextcheck // session-store hydration runs at boot wiring with a background ctx; there is no request ctx here
 	users := as.users
 	tokens := as.tokens
 	sessions := as.sessions
 	authMw := as.authMw
 	sessionResolve := as.sessionResolve
 	restResolve := as.restResolve
+
+	// Periodically sweep expired auth sessions from memory and (when
+	// durable) the SQLite store. Stopped on shutdown via the daemon ctx.
+	defer startSessionPurge(ctx, sessions, logger, sessionPurgeInterval)()
 
 	// --- REST --------------------------------------------------
 	rw := wireREST(ctx, restWiringDeps{
