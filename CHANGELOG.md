@@ -136,6 +136,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   stays healthy); a genuine outage still leaves clients registered-but-
   disconnected and reports unhealthy.
 
+### Security
+
+- **The per-section config API no longer hands cleartext secrets to the
+  browser.** `GET /api/v1/config` already masks secret-class fields to `***`,
+  but the per-section editor load (`GET /api/v1/config/sections/<section>`)
+  returned the stored value with secrets *opened* (the section store decrypts
+  on read) — so an admin opening, e.g., the REST section received the real MQTT
+  password / OIDC client secret / basic-auth hashes in cleartext. The
+  per-section GET now masks secrets the same way as the snapshot; the SPA
+  round-trips the `***` sentinel and the save path restores the real value, so
+  masking does not break saving. Additionally, the basic-auth credential maps
+  `north.rest.auth.users` / `auth.tokens` — managed by their own Users/Tokens
+  admin panels — are no longer rendered as (meaningless, single-password-input)
+  fields in the generic section editor.
+
 ## [0.5.1]
 
 ### Fixed
