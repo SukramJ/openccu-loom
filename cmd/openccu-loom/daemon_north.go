@@ -92,7 +92,14 @@ type authStores struct {
 // login page sets; since the browser sends cookies across ports to the same
 // hostname, both tokens (Bearer, Basic) AND sessions must resolve on the REST
 // listener, so the two resolvers are chained.
-func buildAuthStores(cfg *config.Config, wsHub *ws.Hub) authStores {
+//
+// When sessionPersist is non-nil the session store is durable
+// (SQLite-backed, save-through): it hydrates active sessions on boot and
+// mirrors Issue/Revoke so a daemon restart no longer logs every browser
+// out. A nil persistence (no DB — tests, dev-loopback) keeps the
+// historical in-memory-only behaviour, and a hydration failure falls
+// back to in-memory rather than crashing boot.
+func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.SessionPersistence, logger *slog.Logger) authStores {
 	users := auth.NewMemoryUserStore()
 	for name, pass := range cfg.North.REST.Auth.Users {
 		hashed, err := auth.HashPassword(pass)
@@ -105,7 +112,7 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub) authStores {
 	}
 	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
 	wsHub.SetTokenStore(tokens)
-	sessions := auth.NewSessionStore()
+	sessions := buildSessionStore(sessionPersist, logger)
 	authMw := auth.NewMiddleware(users, tokens)
 
 	sessionResolve := auth.SessionMiddleware(sessions)
@@ -120,6 +127,24 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub) authStores {
 		sessionResolve: sessionResolve,
 		restResolve:    restResolve,
 	}
+}
+
+// buildSessionStore returns a save-through session store when a durable
+// backing is available, else the in-memory store. A persistence
+// hydration error degrades to in-memory (login still works) rather than
+// aborting boot.
+func buildSessionStore(persist auth.SessionPersistence, logger *slog.Logger) *auth.SessionStore {
+	if persist == nil {
+		return auth.NewSessionStore()
+	}
+	sessions, err := auth.NewPersistentSessionStore(persist, logger)
+	if err != nil {
+		logger.Warn("auth.session.persist.hydrate",
+			slog.String("err", err.Error()),
+			slog.String("effect", "sessions in-memory only this run"))
+		return auth.NewSessionStore()
+	}
+	return sessions
 }
 
 // uiMountDeps bundles the live subsystems the browser-facing UI router needs.

@@ -37,7 +37,7 @@ summary.
 |---|---|---|
 | Basic | `Authorization: Basic …` (or the HTML login form) | `north.rest.auth.users` map, constant-time password compare |
 | Bearer / API token | `Authorization: Bearer <token>` | in-memory token store; token ID = first 16 hex of the token's SHA-256 |
-| Session | `openccu_loom_session` cookie issued after a successful login | in-memory session store, 12-hour TTL |
+| Session | `openccu_loom_session` cookie issued after a successful login | SQLite-backed save-through session store (survives restart), 12-hour TTL |
 | OIDC | browser redirect to the IdP, authorization-code + PKCE | `north.rest.auth.oidc.*` |
 
 Roles are coarse: `admin` ⊇ `operator` ⊇ `viewer`. Mutating endpoints
@@ -140,8 +140,12 @@ callback) verify the ID token before issuing a session:
   `*tls.Config` programmatically, but there are no config keys for
   client cert/key files yet. Server-side TLS via a `tls://` broker URL
   works.
-- **In-memory sessions and tokens.** The default Basic/session/token
-  stores live in memory; a restart invalidates active sessions.
+- **In-memory Basic user store.** The default YAML-seeded Basic-auth
+  user store lives in memory. Login sessions and dynamically created API
+  tokens are SQLite-backed and survive a restart: browser sessions
+  hydrate from the `auth_sessions` table on boot (save-through cache; see
+  ADR 0041), and tokens are persisted as bcrypt-style hashes. A restart
+  therefore no longer logs active browsers out.
 
 ## Verify before a release
 
