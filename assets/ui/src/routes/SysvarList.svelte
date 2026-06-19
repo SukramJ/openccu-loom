@@ -8,18 +8,20 @@
   import Switch from "$lib/components/ui/Switch.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
 
   let sysvars = $state<SysvarEntry[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let search = $state("");
   let centralFilter = $state("");
-  // Pending edits keyed by sysvar name; commit individually.
   let drafts = $state<Record<string, unknown>>({});
   let savingName = $state<string | null>(null);
-  let banner = $state<string | null>(null);
   let creating = $state(false);
   let createCentral = $state("");
   let createForm = $state<{
@@ -54,7 +56,6 @@
   async function saveEdit() {
     if (!editing) return;
     savingName = editing.name;
-    banner = null;
     try {
       const body: Record<string, unknown> = {};
       if (editForm.unit) body.unit = editForm.unit;
@@ -68,16 +69,17 @@
           .filter(Boolean);
       }
       await api.patchSysvar(editing.name, body, editing.central);
-      banner = t("sysvars.updated", { name: editing.name });
+      toastStore.success(t("sysvars.updated", { name: editing.name }));
       editing = null;
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       savingName = null;
     }
@@ -103,20 +105,20 @@
     const key = draftKey(sv);
     if (!(key in drafts)) return;
     savingName = sv.name;
-    banner = null;
     try {
       await api.setSysvar(sv.name, drafts[key], sv.central);
       delete drafts[key];
       drafts = { ...drafts };
-      banner = t("sysvars.saved", { name: sv.name });
+      toastStore.success(t("sysvars.saved", { name: sv.name }));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       savingName = null;
     }
@@ -131,7 +133,6 @@
   async function createSv() {
     if (!createForm.name) return;
     savingName = "__create__";
-    banner = null;
     try {
       await api.createSysvar(
         {
@@ -146,17 +147,18 @@
         },
         createCentral,
       );
-      banner = t("sysvars.created");
+      toastStore.success(t("sysvars.created"));
       creating = false;
       createForm = { name: "", value_type: "BOOL", unit: "", min: "", max: "", value_list: "" };
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       savingName = null;
     }
@@ -170,18 +172,18 @@
     });
     if (!ok) return;
     savingName = sv.name;
-    banner = null;
     try {
       await api.deleteSysvar(sv.name, sv.central);
-      banner = t("sysvars.removed", { name: sv.name });
+      toastStore.success(t("sysvars.removed", { name: sv.name }));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       savingName = null;
     }
@@ -232,20 +234,17 @@
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("sysvars.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
         {loading
           ? t("common.loading")
           : t("sysvars.count", { count: sysvars.length })}
       </p>
     </div>
     <div class="flex items-center gap-2">
-      {#if banner}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-      {/if}
       {#if centrals.length > 1}
         <select
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title="CCU"
         >
           <option value="">{t("common.all_ccus")}</option>
@@ -269,10 +268,10 @@
       <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
         {#if centrals.length > 1}
           <label class="text-sm md:col-span-2">
-            <span class="block text-xs text-[var(--ha-secondary-text-color)]">CCU</span>
+            <span class="block text-xs text-slate-500 dark:text-slate-400">CCU</span>
             <select
               bind:value={createCentral}
-              class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+              class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
             >
               <option value="">{t("common.select_placeholder")}</option>
               {#each centrals as c (c)}
@@ -282,14 +281,14 @@
           </label>
         {/if}
         <label class="text-sm">
-          <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.name")}</span>
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.name")}</span>
           <Input bind:value={createForm.name} />
         </label>
         <label class="text-sm">
-          <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.type")}</span>
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.type")}</span>
           <select
             bind:value={createForm.value_type}
-            class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900"
+            class="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="BOOL">BOOL</option>
             <option value="INTEGER">INTEGER</option>
@@ -299,24 +298,24 @@
           </select>
         </label>
         <label class="text-sm">
-          <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.unit")}</span>
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={createForm.unit} />
         </label>
         {#if createForm.value_type === "INTEGER" || createForm.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
               <Input bind:value={createForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.max")}</span>
               <Input bind:value={createForm.max} />
             </label>
           </div>
         {/if}
         {#if createForm.value_type === "ENUM"}
           <label class="text-sm md:col-span-2">
-            <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.values")}</span>
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
             <Input bind:value={createForm.value_list} placeholder={t("sysvars.create.values_placeholder")} />
           </label>
         {/if}
@@ -351,17 +350,13 @@
   </div>
 
   {#if loadError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {loadError}
-      </p>
-    </Card>
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
-  {#if !loading && filtered.length === 0}
-    <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-      {t("sysvars.empty")}
-    </Card>
+  {#if loading}
+    <LoadingState />
+  {:else if filtered.length === 0}
+    <EmptyState message={t("sysvars.empty")} icon="mdi:sliders" />
   {:else}
     <ul class="space-y-2">
       {#each filtered as sv (sv.central + "/" + sv.name)}
@@ -375,7 +370,7 @@
                   <h3 class="font-mono text-sm font-semibold">{sv.name}</h3>
                   <Badge variant="muted">{sv.value_type}</Badge>
                   {#if sv.unit}
-                    <span class="text-xs text-[var(--ha-secondary-text-color)]">{sv.unit}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>
                   {/if}
                   {#if dirty}
                     <Badge variant="warning">{t("common.modified")}</Badge>
@@ -385,7 +380,7 @@
                   {/if}
                 </div>
                 {#if sv.description}
-                  <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">{sv.description}</p>
+                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{sv.description}</p>
                 {/if}
               </div>
               <div class="flex flex-wrap items-center gap-2">
@@ -484,35 +479,35 @@
       <header class="mb-3 flex items-baseline justify-between gap-2">
         <h2 class="text-lg font-semibold">
           {t("sysvars.edit.title")}
-          <span class="font-mono text-sm text-[var(--ha-secondary-text-color)]">{editing.name}</span>
+          <span class="font-mono text-sm text-slate-500 dark:text-slate-400">{editing.name}</span>
         </h2>
         <Badge variant="muted">{editing.value_type}</Badge>
       </header>
-      <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.edit.note")}</p>
+      <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.note")}</p>
       <div class="space-y-2">
         <label class="block text-sm">
-          <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.edit.description")}</span>
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.edit.description")}</span>
           <Input bind:value={editForm.description} />
         </label>
         <label class="block text-sm">
-          <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.unit")}</span>
+          <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.unit")}</span>
           <Input bind:value={editForm.unit} />
         </label>
         {#if editing.value_type === "INTEGER" || editing.value_type === "FLOAT"}
           <div class="grid grid-cols-2 gap-2">
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.min")}</span>
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.min")}</span>
               <Input bind:value={editForm.min} />
             </label>
             <label class="text-sm">
-              <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("common.max")}</span>
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{t("common.max")}</span>
               <Input bind:value={editForm.max} />
             </label>
           </div>
         {/if}
         {#if editing.value_type === "ENUM"}
           <label class="block text-sm">
-            <span class="block text-xs text-[var(--ha-secondary-text-color)]">{t("sysvars.create.values")}</span>
+            <span class="block text-xs text-slate-500 dark:text-slate-400">{t("sysvars.create.values")}</span>
             <Input bind:value={editForm.value_list} />
           </label>
         {/if}

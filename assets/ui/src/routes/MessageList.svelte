@@ -5,9 +5,12 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
-  // `t()` reads prefs.locale reactively; date formatting reads it directly.
+  import { toastStore } from "$lib/stores/toast.svelte";
 
   let alarms = $state<AlarmMessage[]>([]);
   let services = $state<ServiceMessage[]>([]);
@@ -15,7 +18,6 @@
   let loadError = $state<string | null>(null);
   let tab = $state<"alarm" | "service">("alarm");
   let acking = $state<string | null>(null);
-  let banner = $state<string | null>(null);
   let typeFilter = $state<string>("");
   let onlyQuittable = $state(false);
   let centralFilter = $state<string>("");
@@ -51,18 +53,18 @@
 
   async function ackAlarm(id: string, central: string) {
     acking = id;
-    banner = null;
     try {
       await api.ackAlarm(id, central);
-      banner = t("messages.acknowledged");
+      toastStore.success(t("messages.acknowledged"));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       acking = null;
     }
@@ -70,18 +72,18 @@
 
   async function ackService(id: string, central: string) {
     acking = id;
-    banner = null;
     try {
       await api.ackService(id, central);
-      banner = t("messages.acknowledged");
+      toastStore.success(t("messages.acknowledged"));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       acking = null;
     }
@@ -140,18 +142,15 @@
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("messages.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
         {t("messages.summary", { alarms: alarms.length, services: services.length })}
       </p>
     </div>
     <div class="flex items-center gap-2">
-      {#if banner}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-      {/if}
       {#if (tab === "alarm" ? alarmCentrals : serviceCentrals).length > 1}
         <select
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title="CCU"
         >
           <option value="">{t("common.all_ccus")}</option>
@@ -170,8 +169,8 @@
     <button
       type="button"
       class="border-b-2 px-3 py-2 text-sm transition {tab === 'alarm'
-        ? 'border-brand-500 text-brand-700'
-        : 'border-transparent text-[var(--ha-secondary-text-color)] hover:text-brand-700'}"
+        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
+        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
       onclick={() => (tab = "alarm")}
     >
       {t("messages.alarms")}
@@ -180,8 +179,8 @@
     <button
       type="button"
       class="border-b-2 px-3 py-2 text-sm transition {tab === 'service'
-        ? 'border-brand-500 text-brand-700'
-        : 'border-transparent text-[var(--ha-secondary-text-color)] hover:text-brand-700'}"
+        ? 'border-brand-500 text-brand-700 dark:text-brand-400'
+        : 'border-transparent text-slate-500 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-400'}"
       onclick={() => (tab = "service")}
     >
       {t("messages.service")}
@@ -190,20 +189,14 @@
   </nav>
 
   {#if loadError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {loadError}
-      </p>
-    </Card>
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
   {#if loading}
-    <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+    <LoadingState />
   {:else if tab === "alarm"}
     {#if alarmsSorted.length === 0}
-      <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-        {t("messages.empty.alarms")}
-      </Card>
+      <EmptyState message={t("messages.empty.alarms")} icon="mdi:bell-off" />
     {:else}
       <ul class="space-y-2">
         {#each alarmsSorted as a (a.central + "/" + a.id)}
@@ -213,7 +206,7 @@
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-baseline gap-2">
                     <h3 class="font-semibold">{a.name}</h3>
-                    <span class="text-xs text-[var(--ha-secondary-text-color)]">{formatDate(a.timestamp)}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.timestamp)}</span>
                     {#if a.counter > 1}
                       <Badge variant="warning">×{a.counter}</Badge>
                     {/if}
@@ -221,7 +214,7 @@
                       <Badge variant="muted">{a.device_name}</Badge>
                     {/if}
                     {#if a.rooms && a.rooms.length > 0}
-                      <span class="text-xs text-[var(--ha-secondary-text-color)]">{a.rooms.join(", ")}</span>
+                      <span class="text-xs text-slate-500 dark:text-slate-400">{a.rooms.join(", ")}</span>
                     {/if}
                     {#if alarmCentrals.length > 1 && a.central}
                       <Badge variant="muted">{a.central}</Badge>
@@ -231,7 +224,7 @@
                     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{a.description}</p>
                   {/if}
                   {#if a.last_trigger}
-                    <p class="mt-1 text-xs italic text-[var(--ha-secondary-text-color)]">
+                    <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">
                       {t("messages.last_trigger")} {a.last_trigger}
                     </p>
                   {/if}
@@ -256,7 +249,7 @@
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <select
         bind:value={typeFilter}
-        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+        class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
       >
         <option value="">{t("messages.all_types")}</option>
         {#each serviceTypes as st (st)}
@@ -270,7 +263,7 @@
       {#if serviceCentrals.length > 1}
         <select
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title="CCU"
         >
           <option value="">{t("common.all_ccus")}</option>
@@ -279,14 +272,12 @@
           {/each}
         </select>
       {/if}
-      <span class="text-[var(--ha-secondary-text-color)]">
+      <span class="text-slate-500 dark:text-slate-400">
         {servicesSorted.length} / {services.length}
       </span>
     </div>
     {#if servicesSorted.length === 0}
-      <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-        {t("messages.empty.service")}
-      </Card>
+      <EmptyState message={t("messages.empty.service")} icon="mdi:bell-off" />
     {:else}
       <ul class="space-y-2">
         {#each servicesSorted as s (s.central + "/" + s.id)}
@@ -296,7 +287,7 @@
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-baseline gap-2">
                     <h3 class="font-semibold">{s.name}</h3>
-                    <span class="text-xs text-[var(--ha-secondary-text-color)]">{formatDate(s.timestamp)}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(s.timestamp)}</span>
                     {#if s.counter > 1}
                       <Badge variant="warning">×{s.counter}</Badge>
                     {/if}
@@ -311,7 +302,7 @@
                     {/if}
                   </div>
                   {#if s.device_name || s.address}
-                    <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {s.device_name ?? ""}
                       {#if s.address}
                         <span class="font-mono">· {s.address}</span>

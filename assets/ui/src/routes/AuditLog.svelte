@@ -5,9 +5,11 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
-  // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   type Props = {
     /** When set, only entries that match this device address are
@@ -69,8 +71,6 @@
     expandedIdx = next;
   }
 
-  // Distinct action types present in the current page so the filter
-  // dropdown only offers values that actually exist.
   const actions = $derived.by(() => {
     const set = new Set<string>();
     for (const e of entries) set.add(e.action);
@@ -80,7 +80,6 @@
   const centrals = $derived.by(() => {
     const set = new Set<string>();
     for (const e of entries) {
-      // Empty/undefined central = global/daemon-wide entry; shown under "—".
       if (e.central) set.add(e.central);
     }
     return Array.from(set).sort((a, b) =>
@@ -120,13 +119,13 @@
 </script>
 
 <section
-  class={embedded ? "" : "mx-auto max-w-6xl px-4 sm:px-6 py-6"}
+  class={embedded ? "" : "mx-auto max-w-6xl px-4 py-6 sm:px-6"}
 >
   {#if !embedded}
     <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold">{t("audit.title")}</h1>
-        <p class="text-sm" style="color: var(--ha-secondary-text-color);">
+        <p class="text-sm text-slate-500 dark:text-slate-400">
           {loading
             ? t("common.loading")
             : t("audit.entries", { count: entries.length })}
@@ -143,11 +142,11 @@
       type="search"
       placeholder={t("common.search")}
       bind:value={searchFilter}
-      class="w-full sm:w-64 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 sm:w-64"
     />
     <select
       bind:value={actionFilter}
-      class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+      class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
     >
       <option value="">{t("audit.filter.all")}</option>
       {#each actions as a (a)}
@@ -157,7 +156,7 @@
     {#if centrals.length > 0}
       <select
         bind:value={centralFilter}
-        class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+        class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         title="CCU"
       >
         <option value="">{t("common.all_ccus")}</option>
@@ -167,21 +166,19 @@
         <option value="__global__">{t("audit.filter.global")}</option>
       </select>
     {/if}
-    <span class="text-xs text-[var(--ha-secondary-text-color)]">
+    <span class="text-xs text-slate-500 dark:text-slate-400">
       {filteredEntries.length} / {entries.length}
     </span>
   </div>
 
   {#if loadError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">{loadError}</p>
-    </Card>
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
-  {#if !loading && entries.length === 0}
-    <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-      {t("audit.empty")}
-    </Card>
+  {#if loading}
+    <LoadingState />
+  {:else if entries.length === 0}
+    <EmptyState message={t("audit.empty")} icon="mdi:history" />
   {:else}
     <ul class="space-y-2">
       {#each filteredEntries as entry, idx (idx)}
@@ -193,7 +190,7 @@
               class="flex w-full flex-wrap items-baseline gap-2 text-left text-sm"
               onclick={() => toggle(idx)}
             >
-              <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{formatTs(entry.timestamp)}</span>
+              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{formatTs(entry.timestamp)}</span>
               <Badge variant="default">{actionLabel(entry.action)}</Badge>
               {#if entry.user}
                 <Badge variant="muted">{entry.user}</Badge>
@@ -207,13 +204,13 @@
                 </span>
               {/if}
               {#if entry.paramset}
-                <span class="text-xs text-[var(--ha-secondary-text-color)]">{entry.paramset}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{entry.paramset}</span>
               {/if}
               {#if entry.peer}
-                <span class="text-xs text-[var(--ha-secondary-text-color)]">→ {entry.peer}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">→ {entry.peer}</span>
               {/if}
               {#if entry.changes && entry.changes.length > 0}
-                <span class="ml-auto text-xs text-[var(--ha-secondary-text-color)]">
+                <span class="ml-auto text-xs text-slate-500 dark:text-slate-400">
                   {entry.changes.length}
                   {t("audit.changes")}
                 </span>
@@ -221,7 +218,7 @@
             </button>
             {#if expanded && entry.changes && entry.changes.length > 0}
               <table class="table-reflow mt-2 w-full text-left text-xs">
-                <thead class="text-[var(--ha-secondary-text-color)]">
+                <thead class="text-slate-500 dark:text-slate-400">
                   <tr>
                     <th class="py-1 pr-2">{t("audit.col.parameter")}</th>
                     <th class="py-1 pr-2">{t("audit.col.before")}</th>
@@ -232,7 +229,7 @@
                   {#each entry.changes as change (change.parameter)}
                     <tr class="border-t border-slate-100 dark:border-slate-800">
                       <td class="reflow-title py-1 pr-2 font-mono">{change.parameter}</td>
-                      <td class="py-1 pr-2 font-mono text-[var(--ha-secondary-text-color)]" data-label={t("audit.col.before")}>
+                      <td class="py-1 pr-2 font-mono text-slate-500 dark:text-slate-400" data-label={t("audit.col.before")}>
                         {change.before == null ? "—" : JSON.stringify(change.before)}
                       </td>
                       <td class="py-1 font-mono" data-label={t("audit.col.after")}>
@@ -244,7 +241,7 @@
               </table>
             {/if}
             {#if entry.note}
-              <p class="mt-1 text-xs italic text-[var(--ha-secondary-text-color)]">{entry.note}</p>
+              <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">{entry.note}</p>
             {/if}
           </Card>
         </li>

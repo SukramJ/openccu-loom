@@ -6,8 +6,12 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
-
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let programs = $state<ProgramEntry[]>([]);
   let loading = $state(true);
@@ -16,7 +20,6 @@
   let centralFilter = $state("");
   let runningId = $state<string | null>(null);
   let togglingId = $state<string | null>(null);
-  let banner = $state<string | null>(null);
 
   async function load() {
     loading = true;
@@ -31,18 +34,24 @@
   }
 
   async function execute(id: string, name: string, central: string) {
+    const ok = await confirmStore.ask({
+      title: t("programs.confirm_run", { name }),
+      confirmLabel: t("programs.run"),
+      destructive: false,
+    });
+    if (!ok) return;
     runningId = id;
-    banner = null;
     try {
       await api.executeProgram(id, central);
-      banner = t("programs.executed", { name });
+      toastStore.success(t("programs.executed", { name }));
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       runningId = null;
     }
@@ -50,22 +59,24 @@
 
   async function toggle(id: string, name: string, current: boolean | undefined, central: string) {
     togglingId = id;
-    banner = null;
     try {
       const next = !(current === true);
       await api.setProgramEnabled(id, next, central);
-      banner = t("programs.toggle_done", {
-        name,
-        state: next ? t("programs.enabled") : t("programs.disabled"),
-      });
+      toastStore.success(
+        t("programs.toggle_done", {
+          name,
+          state: next ? t("programs.enabled") : t("programs.disabled"),
+        }),
+      );
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       togglingId = null;
     }
@@ -100,20 +111,17 @@
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("programs.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
         {loading
           ? t("common.loading")
           : t("programs.count", { count: programs.length })}
       </p>
     </div>
     <div class="flex items-center gap-2">
-      {#if banner}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-      {/if}
       {#if centrals.length > 1}
         <select
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title="CCU"
         >
           <option value="">{t("common.all_ccus")}</option>
@@ -137,17 +145,13 @@
   </div>
 
   {#if loadError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {loadError}
-      </p>
-    </Card>
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
-  {#if !loading && filtered.length === 0}
-    <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-      {t("programs.empty")}
-    </Card>
+  {#if loading}
+    <LoadingState />
+  {:else if filtered.length === 0}
+    <EmptyState message={t("programs.empty")} icon="mdi:play" />
   {:else}
     <ul class="grid grid-cols-1 gap-3 md:grid-cols-2">
       {#each filtered as p (p.central + "/" + p.id)}
@@ -167,9 +171,9 @@
                 {/if}
               </div>
               {#if p.description}
-                <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">{p.description}</p>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
               {/if}
-              <p class="mt-1 font-mono text-[10px] text-[var(--ha-secondary-text-color)]">{p.id}</p>
+              <p class="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{p.id}</p>
             </div>
             <div class="mt-3 flex justify-end gap-2">
               {#if p.active !== undefined}

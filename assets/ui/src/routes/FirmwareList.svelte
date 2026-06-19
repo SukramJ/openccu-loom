@@ -4,9 +4,15 @@
   import { api, ApiError } from "$lib/api/client";
   import type { DeviceDetail } from "$lib/api/types";
   import Button from "$lib/components/ui/Button.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Input from "$lib/components/ui/Input.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
 
   // Firmware overview — shows all devices that have firmware metadata,
   // grouped by update availability. Uses:
@@ -22,8 +28,6 @@
   let detailMap = $state<Record<string, DeviceDetail>>({});
   let loadingDetail = $state<Set<string>>(new Set());
   let updating = $state<Set<string>>(new Set());
-  let banner = $state<string | null>(null);
-  let bannerKind = $state<"ok" | "err">("ok");
   let filterMode = $state<"all" | "updatable">("all");
   let searchText = $state("");
   let centralFilter = $state("");
@@ -32,8 +36,6 @@
 
   const allDevices = $derived(deviceStore.items);
 
-  // Distinct CCUs present in the data — drives the optional CCU filter
-  // (shown only in multi-CCU setups).
   const centrals = $derived([
     ...new Set(allDevices.map((d) => d.central).filter(Boolean)),
   ].sort());
@@ -58,8 +60,6 @@
     return list;
   });
 
-  // Count devices with an actually-installable update pending (image
-  // delivered), NOT merely update-capable devices — see update_available.
   const updatableCount = $derived(
     allDevices.filter((d) => d.update_available).length,
   );
@@ -96,7 +96,6 @@
   }
 
   async function triggerUpdate(addr: string, name: string) {
-    banner = null;
     const ok = await confirmStore.ask({
       title: t("firmware.confirm_update", { name }),
       body: "",
@@ -109,18 +108,17 @@
     updating = next;
     try {
       await api.updateFirmware(addr);
-      banner = t("firmware.triggered", { name });
-      bannerKind = "ok";
+      toastStore.success(t("firmware.triggered", { name }));
       // Refresh device list so the updatable badge updates.
       await deviceStore.refresh();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
-      bannerKind = "err";
+            : String(err),
+      );
     } finally {
       const next2 = new Set(updating);
       next2.delete(addr);
@@ -161,82 +159,65 @@
   }
 </script>
 
-<section class="mx-auto max-w-6xl px-4 sm:px-6 py-6">
+<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <!-- Header -->
   <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("firmware.title")}</h1>
-      <p class="text-sm" style="color: var(--ha-secondary-text-color);">
+      <p class="text-sm text-slate-500 dark:text-slate-400">
         {t("firmware.subtitle")}
       </p>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-      {#if banner}
-        <span
-          class="text-xs {bannerKind === 'err' ? 'text-red-600' : ''}"
-          style={bannerKind === "ok" ? "color: var(--ha-secondary-text-color);" : ""}
-        >
-          {banner}
-        </span>
-      {/if}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onclick={() => void deviceStore.refresh()}
-        disabled={deviceStore.loading}
-      >
-        {t("common.reload")}
-      </Button>
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onclick={() => void deviceStore.refresh()}
+      disabled={deviceStore.loading}
+    >
+      {t("common.reload")}
+    </Button>
   </header>
 
   <!-- Summary bar -->
   {#if updatableCount > 0}
-    <div
-      class="mb-4 rounded-md border px-4 py-3 text-sm"
-      style="border-color: var(--ha-warning-color, #f59e0b); background-color: rgba(245,158,11,0.08);"
-    >
+    <div class="mb-4 rounded-md border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
       {t("firmware.updates_available", { count: updatableCount })}
     </div>
   {/if}
 
   <!-- Filters -->
   <div class="mb-4 flex flex-wrap items-center gap-3">
-    <div class="flex rounded-md border" style="border-color: var(--ha-divider-color);">
-      <button
+    <div class="flex rounded-md border border-slate-300 dark:border-slate-700">
+      <Button
         type="button"
-        class="px-3 py-1.5 text-sm font-medium transition"
-        style={filterMode === "all"
-          ? "background-color: var(--ha-primary-color); color: #fff; border-radius: 0.375rem 0 0 0.375rem;"
-          : "color: var(--ha-primary-text-color); border-radius: 0.375rem 0 0 0.375rem;"}
+        variant={filterMode === "all" ? "default" : "outline"}
+        size="sm"
+        class="rounded-r-none border-r-0"
         onclick={() => (filterMode = "all")}
       >
         {t("firmware.filter.all")}
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
-        class="px-3 py-1.5 text-sm font-medium transition"
-        style={filterMode === "updatable"
-          ? "background-color: var(--ha-primary-color); color: #fff; border-radius: 0 0.375rem 0.375rem 0;"
-          : "color: var(--ha-primary-text-color); border-radius: 0 0.375rem 0.375rem 0;"}
+        variant={filterMode === "updatable" ? "default" : "outline"}
+        size="sm"
+        class="rounded-l-none"
         onclick={() => (filterMode = "updatable")}
       >
         {t("firmware.filter.updatable")}
         {#if updatableCount > 0}
           <span
-            class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold"
-            style="background-color: var(--ha-warning-color, #f59e0b); color: #fff;"
+            class="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white dark:bg-amber-600"
           >{updatableCount}</span>
         {/if}
-      </button>
+      </Button>
     </div>
 
     {#if centrals.length > 1}
       <select
         bind:value={centralFilter}
-        class="h-8 rounded-md border px-2 text-sm"
-        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+        class="h-8 rounded-md border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
         title="CCU"
       >
         <option value="">{t("common.all_ccus")}</option>
@@ -246,35 +227,29 @@
       </select>
     {/if}
 
-    <input
+    <Input
       type="search"
       placeholder={t("common.search")}
       bind:value={searchText}
-      class="h-8 rounded-md border px-3 text-sm"
-      style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
     />
   </div>
 
-  <!-- Loading / error -->
+  <!-- Loading / error / empty -->
   {#if deviceStore.loading && allDevices.length === 0}
-    <p class="py-8 text-center text-sm" style="color: var(--ha-secondary-text-color);">
-      {t("common.loading")}
-    </p>
+    <LoadingState />
   {:else if deviceStore.error}
-    <p class="py-8 text-center text-sm text-red-600">{deviceStore.error}</p>
+    <ErrorState message={deviceStore.error} onRetry={() => void deviceStore.refresh()} />
   {:else if filtered.length === 0}
-    <p class="py-8 text-center text-sm" style="color: var(--ha-secondary-text-color);">
-      {filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
-    </p>
+    <EmptyState
+      message={filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
+      icon="mdi:upload"
+    />
   {:else}
     <!-- Device table -->
-    <div class="overflow-hidden rounded-lg border" style="border-color: var(--ha-divider-color);">
+    <Card class="overflow-hidden p-0">
       <table class="table-reflow w-full text-sm">
-        <thead>
-          <tr
-            class="border-b text-left text-xs font-semibold uppercase tracking-wide"
-            style="border-color: var(--ha-divider-color); background-color: var(--ha-secondary-background-color); color: var(--ha-secondary-text-color);"
-          >
+        <thead class="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+          <tr>
             <th class="px-4 py-2">{t("firmware.col.device")}</th>
             <th class="px-4 py-2">{t("firmware.col.model")}</th>
             <th class="px-4 py-2">{t("firmware.col.current")}</th>
@@ -291,20 +266,16 @@
             {@const loadingFw = loadingDetail.has(device.address)}
             {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
             {@const updateAvailable = detail?.update_available ?? false}
-            <tr
-              class="border-b transition-colors last:border-0"
-              style="border-color: var(--ha-divider-color);"
-            >
+            <tr class="border-b border-slate-100 transition-colors last:border-0 dark:border-slate-800">
               <!-- Device name / address -->
               <td class="reflow-title px-4 py-3">
                 <a
                   href="#/devices/{encodeURIComponent(device.address)}"
-                  class="font-medium hover:underline"
-                  style="color: var(--ha-primary-color);"
+                  class="font-medium text-brand-700 hover:underline dark:text-brand-400"
                 >
                   {device.name || device.address}
                 </a>
-                <div class="text-xs" style="color: var(--ha-secondary-text-color);">
+                <div class="text-xs text-slate-500 dark:text-slate-400">
                   {device.address}
                   {#if centrals.length > 1 && device.central}
                     · <span class="font-medium">{device.central}</span>
@@ -316,7 +287,7 @@
               <td class="px-4 py-3" data-label={t("firmware.col.model")}>
                 <span>{device.model}</span>
                 {#if device.model_label && device.model_label !== device.model}
-                  <div class="text-xs" style="color: var(--ha-secondary-text-color);">
+                  <div class="text-xs text-slate-500 dark:text-slate-400">
                     {device.model_label}
                   </div>
                 {/if}
@@ -325,7 +296,7 @@
               <!-- Current version -->
               <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.current")}>
                 {#if loadingFw}
-                  <span style="color: var(--ha-secondary-text-color);">…</span>
+                  <span class="text-slate-400 dark:text-slate-500">…</span>
                 {:else}
                   {fw?.Current || "—"}
                 {/if}
@@ -334,9 +305,9 @@
               <!-- Available version -->
               <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.available")}>
                 {#if loadingFw}
-                  <span style="color: var(--ha-secondary-text-color);">…</span>
+                  <span class="text-slate-400 dark:text-slate-500">…</span>
                 {:else if fw?.Available && fw.Available !== fw.Current}
-                  <span class="font-semibold" style="color: var(--ha-warning-color, #f59e0b);">
+                  <span class="font-semibold text-amber-600 dark:text-amber-400">
                     {fw.Available}
                   </span>
                 {:else}
@@ -356,7 +327,7 @@
                       flag, NOT the updatable capability) for a best-effort hint. -->
               <td class="px-4 py-3" data-label={t("firmware.col.state")}>
                 {#if loadingFw}
-                  <span style="color: var(--ha-secondary-text-color);" class="text-xs">…</span>
+                  <span class="text-xs text-slate-400 dark:text-slate-500">…</span>
                 {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
                   <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
                 {:else if updateAvailable}
@@ -409,7 +380,7 @@
                     {t("firmware.triggering")}
                   </Button>
                 {:else if !loadingFw && detail && !updateAvailable}
-                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">
+                  <span class="text-xs text-slate-500 dark:text-slate-400">
                     {t("firmware.up_to_date")}
                   </span>
                 {/if}
@@ -418,9 +389,9 @@
           {/each}
         </tbody>
       </table>
-    </div>
+    </Card>
 
-    <p class="mt-3 text-xs" style="color: var(--ha-secondary-text-color);">
+    <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">
       {t("firmware.count", { count: filtered.length, total: allDevices.length })}
     </p>
   {/if}
