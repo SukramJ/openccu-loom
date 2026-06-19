@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "$lib/api/client";
+  import { api, ApiError } from "$lib/api/client";
   import { t } from "$lib/i18n";
   import {
     restartPending,
@@ -27,8 +27,8 @@
     try {
       await api.restartDaemon();
       toastStore.success(t("settings.restart_signalled"));
-    } catch {
-      // error is surfaced by the toast in the settings panel; swallow here
+    } catch (err) {
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
 </script>

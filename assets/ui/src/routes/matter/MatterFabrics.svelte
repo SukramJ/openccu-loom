@@ -40,7 +40,7 @@
     if (!confirmed) return;
     try {
       await api.deleteMatterFabric(fabricIndex);
-      toastStore.success(t("common.remove") + " OK");
+      toastStore.success(t("matter.fabric.unpaired"));
       await matterStore.loadFabrics();
       await matterStore.loadStatus();
     } catch (err) {
@@ -64,16 +64,16 @@
 
 <div class="space-y-6">
   {#if matterStore.fabricsLoading}
-    <p class="text-sm" style="color: var(--ha-secondary-text-color);">{t("common.loading")}</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{t("common.loading")}</p>
   {:else if matterStore.fabricsError}
-    <p class="text-sm" style="color: var(--ha-error-color, #ef4444);">{matterStore.fabricsError}</p>
+    <p class="text-sm text-red-600 dark:text-red-400">{matterStore.fabricsError}</p>
   {:else if matterStore.fabrics.length === 0}
-    <p class="text-sm" style="color: var(--ha-secondary-text-color);">{t("matter.fabrics.empty")}</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{t("matter.fabrics.empty")}</p>
   {:else}
-    <div class="rounded-lg border overflow-x-auto" style="border-color: var(--ha-divider-color);">
+    <div class="rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto">
       <table class="table-reflow w-full text-sm">
         <thead>
-          <tr style="border-bottom: 1px solid var(--ha-divider-color); background-color: var(--ha-secondary-background-color);">
+          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <th class="px-3 py-3 text-left">{t("matter.fabrics.col_vendor")}</th>
             <th class="px-3 py-3 text-left">{t("matter.fabrics.col_label")}</th>
             <th class="px-3 py-3 text-left hidden md:table-cell">{t("matter.fabrics.col_fabric")}</th>
@@ -83,23 +83,24 @@
         </thead>
         <tbody>
           {#each matterStore.fabrics as fabric (fabric.fabric_index)}
-            <tr style="border-bottom: 1px solid var(--ha-divider-color);">
-              <td class="reflow-title px-3 py-3" style="color: var(--ha-primary-text-color);">
+            <tr class="border-b border-slate-200 dark:border-slate-700">
+              <td class="reflow-title px-3 py-3 text-slate-900 dark:text-slate-100">
                 {vendorName(fabric.vendor_id)}
               </td>
-              <td class="px-3 py-3" data-label={t("matter.fabrics.col_label")} style="color: {fabric.label ? 'var(--ha-primary-text-color)' : 'var(--ha-secondary-text-color)'};">
+              <td class="px-3 py-3 {fabric.label ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}" data-label={t("matter.fabrics.col_label")}>
                 {fabric.label || t("matter.fabric.label_unknown")}
               </td>
-              <td class="px-3 py-3 hidden md:table-cell" data-label={t("matter.fabrics.col_fabric")} style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-3 hidden md:table-cell text-slate-500 dark:text-slate-400" data-label={t("matter.fabrics.col_fabric")}>
                 {fabric.fabric_index}
               </td>
-              <td class="px-3 py-3 hidden lg:table-cell font-mono text-xs" data-label={t("matter.fabrics.col_node_id")} style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-3 hidden lg:table-cell font-mono text-xs text-slate-500 dark:text-slate-400" data-label={t("matter.fabrics.col_node_id")}>
                 0x{fabric.node_id}
               </td>
               <td class="reflow-actions px-3 py-3 text-right">
                 <Button
                   size="sm"
-                  variant="destructive"
+                  variant="ghost"
+                  class="text-red-600 hover:text-red-700 dark:text-red-400"
                   onclick={() => void unpair(fabric.fabric_index, fabric.label)}
                 >
                   {t("common.remove")}
@@ -113,17 +114,13 @@
   {/if}
 
   <!-- Share bridge section -->
-  <div
-    class="rounded-lg border p-4"
-    style="border-color: var(--ha-divider-color); background-color: var(--ha-secondary-background-color);"
-  >
-    <h3 class="font-medium mb-2" style="color: var(--ha-primary-text-color);">
+  <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-4">
+    <h3 class="font-medium mb-2 text-slate-900 dark:text-slate-100">
       {t("matter.fabric.share_bridge")}
     </h3>
     <div class="flex flex-wrap items-center gap-2">
       <select
-        class="h-9 rounded-md border px-2 text-sm"
-        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+        class="h-9 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-sm"
         bind:value={shareDuration}
       >
         <option value={300}>5 {t("matter.pair.minutes")}</option>
@@ -137,11 +134,11 @@
 
     {#if shareWindow}
       <div class="mt-4 space-y-2">
-        <p class="text-sm font-medium" style="color: var(--ha-primary-text-color);">
+        <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
           {t("matter.pair.manual_code")}:
           <span class="font-mono break-all">{shareWindow.manual_code}</span>
         </p>
-        <p class="text-xs" style="color: var(--ha-secondary-text-color);">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
           {t("matter.pair.qr_payload")}: <span class="font-mono break-all">{shareWindow.qr_code}</span>
         </p>
       </div>

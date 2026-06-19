@@ -12,8 +12,16 @@
   // tab switch, or out-of-band `POST /matter/commissioning/window`
   // surfaces the QR + countdown instead of the empty "open window"
   // form.
-  onMount(() => {
-    void matterStore.hydrateCommissioning();
+  onMount(async () => {
+    hydrateLoading = true;
+    hydrateError = null;
+    try {
+      await matterStore.hydrateCommissioning();
+    } catch (err) {
+      hydrateError = err instanceof ApiError ? err.message : String(err);
+    } finally {
+      hydrateLoading = false;
+    }
   });
 
   let selectedDuration = $state(300); // seconds
@@ -29,6 +37,8 @@
   const remaining = $derived(matterStore.commissioning.remaining);
   const addedLabel = $derived(matterStore.commissioning.addedFabricLabel);
 
+  let hydrateLoading = $state(true);
+  let hydrateError = $state<string | null>(null);
   let opening = $state(false);
   let closing = $state(false);
 
@@ -75,16 +85,19 @@
 </script>
 
 <div class="max-w-lg px-4 sm:px-0">
-  {#if phase === "idle"}
+  {#if hydrateLoading}
+    <p class="text-sm text-slate-500 dark:text-slate-400">{t("matter.pair.loading")}</p>
+  {:else if hydrateError}
+    <p class="text-sm text-red-600 dark:text-red-400">{t("matter.pair.load_error")}</p>
+  {:else if phase === "idle"}
     <!-- Step 1 -->
     <Card class="p-6">
-      <h2 class="text-base font-semibold mb-4" style="color: var(--ha-primary-text-color);">
+      <h2 class="text-base font-semibold mb-4 text-slate-900 dark:text-slate-100">
         {t("matter.pair.window_open_duration")}
       </h2>
       <div class="flex flex-wrap items-center gap-3 mb-4">
         <select
-          class="h-10 rounded-md border px-2 text-base sm:text-sm sm:h-9"
-          style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+          class="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-base sm:text-sm sm:h-9"
           bind:value={selectedDuration}
         >
           {#each DURATION_OPTIONS as opt}
@@ -95,14 +108,14 @@
           {opening ? t("common.saving") : t("matter.pair.window_open")}
         </Button>
       </div>
-      <p class="text-xs" style="color: var(--ha-secondary-text-color);">
+      <p class="text-xs text-slate-500 dark:text-slate-400">
         {t("matter.pair.qr_caption")}
       </p>
     </Card>
   {:else if phase === "open" && window}
     <!-- Step 2: QR + countdown -->
     <Card class="p-6">
-      <h2 class="text-base font-semibold mb-4" style="color: var(--ha-primary-text-color);">
+      <h2 class="text-base font-semibold mb-4 text-slate-900 dark:text-slate-100">
         {t("matter.pair.qr_caption")}
       </h2>
       <div class="flex flex-col items-center gap-4">
@@ -130,10 +143,7 @@
                 style="transition: stroke-dashoffset 1s linear;"
               />
             </svg>
-            <span
-              class="absolute text-xl font-semibold"
-              style="color: var(--ha-primary-text-color);"
-            >
+            <span class="absolute text-xl font-semibold text-slate-900 dark:text-slate-100">
               {remaining}s
             </span>
           </div>
@@ -142,8 +152,7 @@
         <!-- QR code -->
         {#if qrSvg()}
           <div
-            class="border rounded p-2 max-w-full"
-            style="border-color: var(--ha-divider-color);"
+            class="border border-slate-200 dark:border-slate-700 rounded p-2 max-w-full"
             aria-label={t("matter.pair.qr_caption")}
           >
             <!-- eslint-disable-next-line svelte/no-at-html-tags -->
@@ -153,20 +162,20 @@
 
         <!-- Manual code -->
         <div class="text-center">
-          <p class="text-xs mb-1" style="color: var(--ha-secondary-text-color);">
+          <p class="text-xs mb-1 text-slate-500 dark:text-slate-400">
             {t("matter.pair.manual_code")}
           </p>
-          <p class="text-lg font-mono font-semibold tracking-widest whitespace-nowrap overflow-x-auto" style="color: var(--ha-primary-text-color);">
+          <p class="text-lg font-mono font-semibold tracking-widest whitespace-nowrap overflow-x-auto text-slate-900 dark:text-slate-100">
             {window.manual_code}
           </p>
         </div>
 
         <!-- QR payload (raw, for debugging / alternate scan) -->
         <details class="w-full">
-          <summary class="text-xs cursor-pointer" style="color: var(--ha-secondary-text-color);">
+          <summary class="text-xs cursor-pointer text-slate-500 dark:text-slate-400">
             {t("matter.pair.qr_payload")}
           </summary>
-          <p class="mt-1 text-xs font-mono break-all" style="color: var(--ha-secondary-text-color);">
+          <p class="mt-1 text-xs font-mono break-all text-slate-500 dark:text-slate-400">
             {window.qr_code}
           </p>
         </details>
@@ -180,11 +189,11 @@
     <!-- Step 3: success -->
     <Card class="p-6 text-center">
       <div class="text-4xl mb-3">✓</div>
-      <h2 class="text-base font-semibold mb-2" style="color: var(--ha-primary-text-color);">
+      <h2 class="text-base font-semibold mb-2 text-slate-900 dark:text-slate-100">
         {t("matter.pair.success")}
       </h2>
       {#if addedLabel}
-        <p class="text-sm mb-4" style="color: var(--ha-secondary-text-color);">
+        <p class="text-sm mb-4 text-slate-500 dark:text-slate-400">
           {addedLabel}
         </p>
       {/if}

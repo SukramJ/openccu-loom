@@ -35,17 +35,17 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
-  <h1 class="text-2xl font-semibold" style="color: var(--ha-primary-text-color);">
+  <h1 class="text-2xl font-semibold text-slate-900 dark:text-slate-100">
     {t("nav.matter")}
   </h1>
 
   {#if matterStore.statusLoading}
-    <p class="mt-4 text-sm" style="color: var(--ha-secondary-text-color);">
+    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
       {t("common.loading")}
     </p>
   {:else if !statusEnabled}
     <Card class="mt-6 p-6">
-      <p class="text-sm font-medium" style="color: var(--ha-secondary-text-color);">
+      <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
         {t("matter.status.disabled")}
       </p>
     </Card>
@@ -54,16 +54,16 @@
     {@const s = matterStore.status!}
     <Card class="mt-4 p-4">
       <div class="flex flex-wrap items-center gap-4">
-        <span class="font-medium" style="color: var(--ha-primary-text-color);">
+        <span class="font-medium text-slate-900 dark:text-slate-100">
           {t("matter.status.enabled")}
         </span>
         <Badge variant={s.listening ? "success" : "muted"}>
           {s.listening ? t("matter.status.listening") : t("matter.status.not_listening")}
         </Badge>
-        <span class="text-sm" style="color: var(--ha-secondary-text-color);">
+        <span class="text-sm text-slate-500 dark:text-slate-400">
           {t("matter.status.endpoints", { count: String(s.endpoint_count) })}
         </span>
-        <span class="text-sm" style="color: var(--ha-secondary-text-color);">
+        <span class="text-sm text-slate-500 dark:text-slate-400">
           {t("matter.status.fabrics", { count: String(s.fabric_count) })}
         </span>
         {#if s.advertising}
@@ -82,8 +82,7 @@
 
     <!-- Tab bar -->
     <div
-      class="mt-4 flex gap-1 border-b overflow-x-auto"
-      style="border-color: var(--ha-divider-color);"
+      class="mt-4 flex gap-1 border-b border-slate-200 dark:border-slate-700 overflow-x-auto"
       role="tablist"
     >
       {#each ([["expose", "#/matter/expose"], ["fabrics", "#/matter/fabrics"], ["pair", "#/matter/pair"]] as const) as [tab, href]}
@@ -92,8 +91,7 @@
           {href}
           role="tab"
           aria-selected={active}
-          class="flex-1 text-center px-4 py-3 text-sm font-medium transition border-b-2 -mb-px whitespace-nowrap"
-          style="color: {active ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'}; border-color: {active ? 'var(--ha-primary-color)' : 'transparent'};"
+          class="flex-1 text-center px-4 py-3 text-sm font-medium transition border-b-2 -mb-px whitespace-nowrap {active ? 'text-brand-600 dark:text-brand-400 border-brand-600 dark:border-brand-400' : 'text-slate-500 dark:text-slate-400 border-transparent'}"
         >
           {t(`matter.tab.${tab}`)}
         </a>
