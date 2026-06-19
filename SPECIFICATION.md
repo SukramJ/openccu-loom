@@ -5,7 +5,7 @@
 # OpenCCU-Loom — Specification
 
 **Status**: Living reference — last refresh 2026-05-05.
-**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom 0.1.0+.
+**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.5.1; 0.6.0 in development).
 
 ## What this document is — and what it is not
 
@@ -140,13 +140,16 @@ eQ-3 HomeMatic Software License — see ADR 0003.
   partial implementation, not a certified product.
 - **No cloud features** (remote access, multi-tenant, OTA).
   OpenCCU-Loom is a LAN service.
-- **No CCU-Jack / pull-only path** in 0.1.0. Every interface
-  supports push callbacks; there is no JSON-RPC-only mode.
-- **No Homegear depth-parity** in 0.1.0. The backend abstraction
-  exists and a basic `HomegearBackend` works, but full
-  programs/rooms/functions parity is a post-0.1.0 milestone.
+- **No CCU-Jack / pull-only path.** Every interface supports push
+  callbacks; there is no JSON-RPC-only mode.
+- **No Homegear depth-parity** (full). The backend abstraction exists
+  and sysvars work; full programs/rooms/functions parity is a
+  post-1.0 milestone.
 
-### 2.3 Success Criteria (MVP = 0.1.0)
+### 2.3 Success Criteria (MVP — shipped as 0.1.0)
+
+All criteria below were met at the 0.1.0 release and remain invariants
+for every subsequent release.
 
 - OpenCCU-Loom connects to a real CCU3/RaspberryMatic and to
   `godevccu` without configuration drift.
@@ -169,11 +172,11 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 - Backup: `openccu-loom backup create` produces a consistent
   tarball; FS-level backup of `state-dir` also works.
 
-**Explicitly out of scope for 0.1.0 MVP**: HA Add-on packaging,
-RaspberryMatic Add-on packaging, deep Homegear parity. (Both add-on
-channels landed post-0.1.0 — the CCU/RaspberryMatic add-on under
-`packaging/ccu-addon/` (Q10) and the Home Assistant add-on under
-`packaging/ha-addon/` (Q9). Deep Homegear parity remains out of scope.)
+Items that were explicitly out of scope for 0.1.0 but have since
+shipped: HA Add-on packaging (Q9, landed in 0.2.0 under
+`packaging/ha-addon/`) and CCU/RaspberryMatic Add-on packaging
+(Q10, landed in 0.2.0 under `packaging/ccu-addon/`). Deep Homegear
+parity remains out of scope.
 
 ---
 
@@ -316,10 +319,10 @@ port (after OS assignment) is re-advertised to the CCU on every
 `init()` call and every reconnect — a daemon restart that picks a
 different ephemeral port is transparent to the CCU.
 
-CUxD is a first-class push-capable interface in 0.1.0 — OpenCCU-Loom
-runs its own native BIN-RPC stack and a BIN-RPC callback server.
-There is no MQTT workaround and no polling fallback. This is a
-deliberate divergence from aiohomematic.
+CUxD is a first-class push-capable interface — OpenCCU-Loom runs its
+own native BIN-RPC stack and a BIN-RPC callback server. There is no
+MQTT workaround and no polling fallback. This is a deliberate
+divergence from aiohomematic.
 
 ### 4.4 Reliability layering (orthogonal)
 
@@ -444,11 +447,11 @@ constraints**:
 
 ### 5.1 Diverging classification sets vs aiohomematic
 
-| Set | aiohomematic | OpenCCU-Loom 0.1.0 | Reason |
+| Set | aiohomematic | OpenCCU-Loom | Reason |
 |---|---|---|---|
 | `INTERFACES_REQUIRING_JSON_RPC_CLIENT` | `{CUxD, CCU-Jack}` | `{}` (empty) | OpenCCU-Loom uses native BIN-RPC for CUxD; CCU-Jack is dropped (no pull-only path). |
 | `INTERFACES_SUPPORTING_RPC_CALLBACK` | XML-RPC interfaces only | + CUxD | OpenCCU-Loom runs its own BIN-RPC callback server. |
-| `DEFAULT_INTERFACES_REQUIRING_PERIODIC_REFRESH` | `{CUxD, CCU-Jack}` | `{}` (empty) | Every interface in 0.1.0 supports push. |
+| `DEFAULT_INTERFACES_REQUIRING_PERIODIC_REFRESH` | `{CUxD, CCU-Jack}` | `{}` (empty) | Every interface supports push; there is no polling fallback. |
 
 These differences exist because OpenCCU-Loom is push-native; the
 contract tests in `tests/contract/` codify each one.

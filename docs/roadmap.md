@@ -125,7 +125,7 @@ Both items confirmed correctly deferred; no action this round.
 ## HomegearBackend depth-parity
 
 **Status**: backend abstraction + basic backend in place; depth-parity
-deferred to a post-0.1.0 release.
+deferred to a future release.
 
 The `internal/client/backends/homegear.go` backend speaks the same
 XML-RPC surface as `CcuBackend` and works end-to-end for devices,
