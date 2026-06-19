@@ -4,6 +4,7 @@
   import type { LogRecord } from "$lib/api/types";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -261,6 +262,10 @@
   });
 </script>
 
+<svelte:head>
+  <title>{t("page.title.logs")}</title>
+</svelte:head>
+
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   <!-- Header -->
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -297,34 +302,22 @@
     style="background-color: var(--ha-secondary-background-color); border-color: var(--ha-divider-color);"
   >
     <!-- View toggle -->
-    <div
-      class="flex overflow-hidden rounded-md border text-xs"
-      style="border-color: var(--ha-divider-color);"
-    >
-      <button
-        type="button"
-        class="px-3 py-1.5 font-medium transition"
-        style="background-color: {view === 'aggregated'
-          ? 'var(--ha-primary-color)'
-          : 'transparent'}; color: {view === 'aggregated'
-          ? 'white'
-          : 'var(--ha-primary-text-color)'};"
-        onclick={() => (view = "aggregated")}
-      >
-        {t("logs.view.aggregated")}
-      </button>
-      <button
-        type="button"
-        class="px-3 py-1.5 font-medium transition"
-        style="background-color: {view === 'detail'
-          ? 'var(--ha-primary-color)'
-          : 'transparent'}; color: {view === 'detail'
-          ? 'white'
-          : 'var(--ha-primary-text-color)'};"
-        onclick={() => (view = "detail")}
-      >
-        {t("logs.view.detail")}
-      </button>
+    <div class="flex overflow-hidden rounded-md border border-slate-200 text-xs dark:border-slate-700">
+      {#each (["aggregated", "detail"] as const) as v (v)}
+        <button
+          type="button"
+          class={[
+            "px-3 py-1.5 font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500",
+            view === v
+              ? "bg-[var(--ha-primary-color)] text-white"
+              : "bg-transparent text-[var(--ha-primary-text-color)] hover:bg-slate-100 dark:hover:bg-slate-800",
+          ].join(" ")}
+          onclick={() => (view = v)}
+          aria-pressed={view === v}
+        >
+          {v === "aggregated" ? t("logs.view.aggregated") : t("logs.view.detail")}
+        </button>
+      {/each}
     </div>
 
     <!-- Default level select -->
@@ -399,9 +392,7 @@
 
   <!-- Error state -->
   {#if loadError}
-    <Card class="p-4 text-sm" style="color: var(--ha-error-color, #dc2626);">
-      {loadError}
-    </Card>
+    <ErrorState message={loadError} />
   {:else if records.length === 0}
     <Card class="p-6 text-center text-sm" style="color: var(--ha-secondary-text-color);">
       {t("logs.empty")}
@@ -427,7 +418,7 @@
             >
               <button
                 type="button"
-                class="flex w-full flex-wrap items-baseline gap-2 text-left"
+                class="flex w-full flex-wrap items-baseline gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
                 onclick={() => r.attrs && toggleSeq(r.seq)}
               >
                 <span class="w-20 shrink-0 text-[var(--ha-secondary-text-color)] sm:w-28">
@@ -465,7 +456,7 @@
             >
               <button
                 type="button"
-                class="flex w-full flex-wrap items-baseline gap-2 text-left"
+                class="flex w-full flex-wrap items-baseline gap-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500"
                 onclick={() => toggleGroup(row.key)}
               >
                 <span class="w-20 shrink-0 text-[var(--ha-secondary-text-color)] sm:w-28">
@@ -509,8 +500,7 @@
         <div class="absolute bottom-4 left-1/2 -translate-x-1/2">
           <button
             type="button"
-            class="rounded-full px-4 py-2 text-xs font-semibold shadow-lg transition hover:opacity-90"
-            style="background-color: var(--ha-primary-color); color: white;"
+            class="rounded-full bg-[var(--ha-primary-color)] px-4 py-2 text-xs font-semibold text-white shadow-lg transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
             onclick={resumeLive}
           >
             {t("logs.to_live", { count: pausedCount })}

@@ -123,14 +123,14 @@ describe("DeviceList — empty and loading states", () => {
     expect(getByText("devices.empty")).toBeTruthy();
   });
 
-  it("shows an error banner when the store reports an error", () => {
+  it("shows an error surface when the store reports an error", () => {
     mockError = "connection refused";
     mockItems = [];
     const { container } = render(DeviceList);
-    // The error text is interpolated via t("devicelist.load_error", …);
-    // our mock t() returns the key. The component renders the key.
-    const banner = container.querySelector(".text-red-800, .text-red-200");
-    expect(banner).not.toBeNull();
+    // The error now renders through the shared <ErrorState> component, which
+    // styles the message with `text-red-600` (dark: `text-red-400`).
+    const errorSurface = container.querySelector(".text-red-600, .text-red-400");
+    expect(errorSurface).not.toBeNull();
   });
 });
 

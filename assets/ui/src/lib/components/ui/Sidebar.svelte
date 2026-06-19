@@ -294,7 +294,7 @@
               aria-current={active ? "page" : undefined}
               title={!expanded
                 ? showInstallDot
-                  ? `${item.label} · Anlernmodus aktiv`
+                  ? `${item.label} · ${t("sidebar.install_mode_active")}`
                   : item.label
                 : undefined}
             >

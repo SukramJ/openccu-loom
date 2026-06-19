@@ -101,11 +101,11 @@
     return "◯";
   }
 
-  function stateColor(item: MatterExposure): string {
-    if (item.mappable === "unmappable") return "var(--ha-disabled-text-color)";
-    if (item.enabled && item.mappable === "mappable") return "#22c55e"; // green
-    if (item.enabled && item.mappable === "partially_mappable") return "#f59e0b"; // amber
-    return "var(--ha-secondary-text-color)";
+  function stateColorClass(item: MatterExposure): string {
+    if (item.mappable === "unmappable") return "text-slate-300 dark:text-slate-600";
+    if (item.enabled && item.mappable === "mappable") return "text-green-500 dark:text-green-400";
+    if (item.enabled && item.mappable === "partially_mappable") return "text-amber-500 dark:text-amber-400";
+    return "text-slate-400 dark:text-slate-500";
   }
 
   function isBulkable(item: MatterExposure): boolean {
@@ -169,6 +169,7 @@
       friendly_name: drawerFriendlyName,
     });
     closeDrawer();
+    toastStore.info(t("common.modified"));
   }
 
   // Conflict hint: enabled rows on the same channel with a different dp_kind
@@ -218,8 +219,7 @@
         class="w-full sm:w-64"
       />
       <select
-        class="h-10 rounded-md border px-2 text-base sm:text-sm sm:h-9"
-        style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+        class="h-10 rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 text-base sm:text-sm sm:h-9"
         bind:value={filterKind}
         aria-label={t("matter.expose.filter_kind")}
       >
@@ -251,17 +251,12 @@
   <!-- Class chip filter -->
   {#if classChips.length > 0}
     <div class="flex flex-wrap items-center gap-1.5 mb-4">
-      <span class="text-xs font-semibold mr-1" style="color: var(--ha-secondary-text-color);">
+      <span class="text-xs font-semibold mr-1 text-slate-500 dark:text-slate-400">
         {t("matter.expose.filter_class")}:
       </span>
       <button
         type="button"
-        class="h-7 px-2.5 rounded-full border text-xs transition"
-        style={
-          selectedClasses.size === 0
-            ? "background-color: var(--ha-primary-color, #2563eb); border-color: var(--ha-primary-color, #2563eb); color: #fff;"
-            : "background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
-        }
+        class="h-7 px-2.5 rounded-full border text-xs transition {selectedClasses.size === 0 ? 'bg-brand-600 border-brand-600 text-white dark:bg-brand-500 dark:border-brand-500' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100'}"
         onclick={clearClassFilter}
       >
         {t("matter.expose.filter_class_all")}
@@ -270,12 +265,7 @@
         {@const active = selectedClasses.has(chip.value)}
         <button
           type="button"
-          class="h-7 px-2.5 rounded-full border text-xs transition flex items-center gap-1"
-          style={
-            active
-              ? "background-color: var(--ha-primary-color, #2563eb); border-color: var(--ha-primary-color, #2563eb); color: #fff;"
-              : "background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
-          }
+          class="h-7 px-2.5 rounded-full border text-xs transition flex items-center gap-1 {active ? 'bg-brand-600 border-brand-600 text-white dark:bg-brand-500 dark:border-brand-500' : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-slate-100'}"
           onclick={() => toggleClass(chip.value)}
           aria-pressed={active}
         >
@@ -290,16 +280,16 @@
   {/if}
 
   {#if matterStore.exposuresLoading && matterStore.exposures.length === 0}
-    <p class="text-sm" style="color: var(--ha-secondary-text-color);">{t("common.loading")}</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{t("common.loading")}</p>
   {:else if matterStore.exposuresError}
-    <p class="text-sm" style="color: var(--ha-error-color, #ef4444);">{matterStore.exposuresError}</p>
+    <p class="text-sm text-red-600 dark:text-red-400">{matterStore.exposuresError}</p>
   {:else if filteredItems.length === 0}
-    <p class="text-sm" style="color: var(--ha-secondary-text-color);">{t("matter.expose.empty")}</p>
+    <p class="text-sm text-slate-500 dark:text-slate-400">{t("matter.expose.empty")}</p>
   {:else}
-    <div class="rounded-lg border overflow-x-auto" style="border-color: var(--ha-divider-color);">
+    <div class="rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto">
       <table class="w-full text-sm">
         <thead>
-          <tr style="border-bottom: 1px solid var(--ha-divider-color); background-color: var(--ha-secondary-background-color);">
+          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <th class="px-3 py-2 text-left w-10">
               <span class="sr-only">{t("matter.expose.col_select")}</span>
             </th>
@@ -320,8 +310,7 @@
             {@const bulkable = isBulkable(item)}
             {@const pending = matterStore.pendingUpdates.has(key)}
             <tr
-              class="cursor-pointer transition"
-              style="border-bottom: 1px solid var(--ha-divider-color); background-color: {selected ? 'rgb(0 0 0 / 0.04)' : 'transparent'};"
+              class="cursor-pointer transition border-b border-slate-200 dark:border-slate-700 {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
               onclick={() => openDrawer(item)}
               onkeydown={(e) => { if (e.key === "Enter") openDrawer(item); }}
               tabindex="0"
@@ -339,20 +328,20 @@
                 </label>
               </td>
               <td class="px-3 py-2">
-                <span style="color: {stateColor(item)}; font-size: 1rem;">
+                <span class="text-base {stateColorClass(item)}">
                   {stateIcon(item)}
                 </span>
               </td>
-              <td class="px-3 py-2 font-medium" style="color: var(--ha-primary-text-color);">
+              <td class="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
                 {(matterStore.pendingUpdates.get(key)?.friendly_name ?? item.friendly_name) || item.display_name}
                 {#if pending}
-                  <span class="ml-1 text-xs" style="color: var(--ha-primary-color);">{t("common.modified")}</span>
+                  <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
                 {/if}
               </td>
-              <td class="px-3 py-2 hidden md:table-cell" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
                 {item.channel_no}
               </td>
-              <td class="px-3 py-2 hidden md:table-cell" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
                 {#if item.parameter_label}
                   {item.parameter_label}
                   <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
@@ -360,10 +349,10 @@
                   <span class="font-mono text-xs">{item.dp_key}</span>
                 {/if}
               </td>
-              <td class="px-3 py-2 hidden md:table-cell" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
                 {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
               </td>
-              <td class="px-3 py-2 hidden lg:table-cell" style="color: var(--ha-secondary-text-color);">
+              <td class="px-3 py-2 hidden lg:table-cell text-slate-500 dark:text-slate-400">
                 {item.device_type_label || "—"}
               </td>
             </tr>
@@ -379,8 +368,7 @@
   {@const item = drawerExposure}
   <!-- Backdrop -->
   <div
-    class="fixed inset-0 z-40"
-    style="background-color: rgb(0 0 0 / 0.3);"
+    class="fixed inset-0 z-40 bg-black/30"
     onclick={closeDrawer}
     onkeydown={(e) => { if (e.key === "Escape") closeDrawer(); }}
     role="presentation"
@@ -389,12 +377,11 @@
   ></div>
   <!-- Drawer panel -->
   <aside
-    class="fixed right-0 top-0 h-full w-full max-w-sm z-50 flex flex-col border-l overflow-y-auto"
-    style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color);"
+    class="fixed right-0 top-0 h-full w-full max-w-sm z-50 flex flex-col border-l border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-y-auto"
     aria-label={t("matter.expose.drawer_aria")}
   >
-    <div class="flex items-center justify-between p-4 border-b" style="border-color: var(--ha-divider-color);">
-      <h2 class="text-base font-semibold" style="color: var(--ha-primary-text-color);">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+      <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100">
         {item.display_name}
       </h2>
       <button
@@ -407,15 +394,14 @@
     <div class="flex-1 p-4 space-y-4">
       <!-- Friendly name -->
       <div>
-        <label for="drawer-friendly-name" class="block text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
+        <label for="drawer-friendly-name" class="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
           {t("matter.expose.friendly_name")}
         </label>
         <input
           id="drawer-friendly-name"
           type="text"
           bind:value={drawerFriendlyName}
-          class="w-full rounded-md border px-2 h-10 text-base sm:text-sm"
-          style="border-color: var(--ha-divider-color); background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color);"
+          class="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 px-2 h-10 text-base sm:text-sm"
           placeholder={item.display_name}
         />
       </div>
@@ -428,37 +414,37 @@
           disabled={item.mappable === "unmappable"}
           class="cursor-pointer"
         />
-        <label for="drawer-enabled" class="text-sm" style="color: var(--ha-primary-text-color);">
+        <label for="drawer-enabled" class="text-sm text-slate-900 dark:text-slate-100">
           {t("matter.status.enabled")}
         </label>
       </div>
       <!-- Conflict hint: non-custom DP, but a custom DP is already enabled on this channel -->
       {#if drawerConflictCustomActive}
-        <div class="rounded-md border px-3 py-2 text-sm space-y-1" style="background-color: rgb(255 251 235); border-color: rgb(253 230 138); color: rgb(120 53 15);">
+        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
             <span aria-hidden="true">⚠</span>
             {t("matter.expose.conflict_hint")}
           </p>
-          <p class="text-xs" style="color: rgb(146 64 14);">
+          <p class="text-xs text-amber-800 dark:text-amber-300">
             {t("matter.expose.conflict_hint_custom_active", { profile: drawerConflictCustomDpKey })}
           </p>
         </div>
       {/if}
       <!-- Conflict hint: custom DP, but generic/calculated DPs are already enabled on this channel -->
       {#if drawerConflictGenericActive}
-        <div class="rounded-md border px-3 py-2 text-sm space-y-1" style="background-color: rgb(255 251 235); border-color: rgb(253 230 138); color: rgb(120 53 15);">
+        <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">
             <span aria-hidden="true">⚠</span>
             {t("matter.expose.conflict_hint")}
           </p>
-          <p class="text-xs" style="color: rgb(146 64 14);">
+          <p class="text-xs text-amber-800 dark:text-amber-300">
             {t("matter.expose.conflict_hint_generic_active")}
           </p>
         </div>
       {/if}
       <!-- Mappability state -->
       <div>
-        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">
+        <p class="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
           {t("matter.expose.drawer_state")}
         </p>
         <p class="text-sm">
@@ -472,27 +458,27 @@
           {/if}
         </p>
         {#if item.reason}
-          <p class="mt-1 text-xs" style="color: var(--ha-secondary-text-color);">{item.reason}</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{item.reason}</p>
         {/if}
       </div>
       <!-- Source -->
       <div>
-        <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_source")}</p>
+        <p class="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">{t("matter.expose.drawer_source")}</p>
         {#if item.parameter_label}
-          <p class="text-sm" style="color: var(--ha-primary-text-color);">{item.parameter_label}</p>
-          <p class="text-xs font-mono" style="color: var(--ha-secondary-text-color);">{item.dp_kind}: {item.dp_key}</p>
+          <p class="text-sm text-slate-900 dark:text-slate-100">{item.parameter_label}</p>
+          <p class="text-xs font-mono text-slate-500 dark:text-slate-400">{item.dp_kind}: {item.dp_key}</p>
         {:else}
-          <p class="text-sm font-mono" style="color: var(--ha-primary-text-color);">{item.dp_kind}: {item.dp_key}</p>
+          <p class="text-sm font-mono text-slate-900 dark:text-slate-100">{item.dp_kind}: {item.dp_key}</p>
         {/if}
-        <p class="text-xs" style="color: var(--ha-secondary-text-color);">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
           {item.device_address} ch.{item.channel_no}
         </p>
       </div>
       <!-- Device type -->
       {#if item.device_type_label || item.device_type}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_device_type")}</p>
-          <p class="text-sm" style="color: var(--ha-primary-text-color);">
+          <p class="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">{t("matter.expose.drawer_device_type")}</p>
+          <p class="text-sm text-slate-900 dark:text-slate-100">
             {item.device_type_label || `0x${item.device_type.toString(16).toUpperCase().padStart(4, "0")}`}
           </p>
         </div>
@@ -500,14 +486,14 @@
       <!-- Clusters -->
       {#if item.clusters.length > 0}
         <div>
-          <p class="text-xs font-semibold mb-1" style="color: var(--ha-secondary-text-color);">{t("matter.expose.drawer_clusters")}</p>
-          <p class="text-sm font-mono" style="color: var(--ha-primary-text-color);">
+          <p class="text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">{t("matter.expose.drawer_clusters")}</p>
+          <p class="text-sm font-mono text-slate-900 dark:text-slate-100">
             {item.clusters.map((c) => `0x${c.toString(16).toUpperCase().padStart(4, "0")}`).join(" · ")}
           </p>
         </div>
       {/if}
     </div>
-    <div class="p-4 border-t flex gap-2" style="border-color: var(--ha-divider-color);">
+    <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex gap-2">
       <Button size="sm" onclick={saveDrawer}>{t("common.save")}</Button>
       <Button size="sm" variant="outline" onclick={closeDrawer}>{t("common.cancel")}</Button>
     </div>

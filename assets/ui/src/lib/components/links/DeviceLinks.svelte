@@ -9,6 +9,8 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   type Props = {
     deviceAddress: string;
@@ -21,7 +23,6 @@
   let links = $state<Link[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let banner = $state<string | null>(null);
   let adding = $state(false);
   // The link currently being edited (or null for list view).
   let editing = $state<Link | null>(null);
@@ -138,7 +139,6 @@
       destructive: true,
     });
     if (!ok) return;
-    banner = null;
     try {
       await api.removeLink(
         deviceAddress,
@@ -196,16 +196,13 @@
     <header class="mb-4 flex items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold">{t("links.title")}</h2>
-        <p class="text-xs text-[var(--ha-secondary-text-color)]">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
           {loading
             ? t("common.loading")
             : `${links.length} ${t("links.links_label")}`}
         </p>
       </div>
       <div class="flex items-center gap-2">
-        {#if banner}
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-        {/if}
         <Button
           type="button"
           variant="outline"
@@ -227,8 +224,8 @@
     </header>
 
     {#if loadError}
-      <div class="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        {loadError}
+      <div class="mb-4">
+        <ErrorState message={loadError} onRetry={load} />
       </div>
     {/if}
 
@@ -243,7 +240,7 @@
     {/if}
 
     {#if links.length === 0 && !loading && !adding}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("links.no_for_device")}</p>
+      <EmptyState message={t("links.no_for_device")} />
     {:else}
       {#if links.length > 1}
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -253,7 +250,7 @@
             placeholder={t("common.search")}
             class="w-full rounded-md border border-slate-300 bg-white px-2 py-1 shadow-sm sm:w-56 dark:border-slate-700 dark:bg-slate-900"
           />
-          <span class="text-[var(--ha-secondary-text-color)]">{t("common.sort")}</span>
+          <span class="text-slate-500 dark:text-slate-400">{t("common.sort")}</span>
           {#each [
             { k: "direction" as const, label: t("links.direction") },
             { k: "name" as const, label: t("links.name") },
@@ -273,13 +270,13 @@
               {/if}
             </button>
           {/each}
-          <span class="ml-auto text-[var(--ha-secondary-text-color)]">
+          <span class="ml-auto text-slate-500 dark:text-slate-400">
             {visibleLinks.length} / {links.length}
           </span>
         </div>
       {/if}
       {#if visibleLinks.length === 0}
-        <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.no_matches")}</p>
+        <EmptyState message={t("common.no_matches")} />
       {/if}
       <ul class="space-y-2">
         {#each visibleLinks as link (link.sender_address + "->" + link.receiver_address)}
@@ -293,7 +290,7 @@
                   <span class="font-medium">{link.name}</span>
                 {/if}
               </div>
-              <div class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
+              <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 <span>
                   {partyLabel(
                     link.sender_device_name,
@@ -302,7 +299,7 @@
                     link.sender_address,
                   )}
                 </span>
-                <span class="mx-2 text-[var(--ha-secondary-text-color)]">→</span>
+                <span class="mx-2 text-slate-500 dark:text-slate-400">→</span>
                 <span>
                   {partyLabel(
                     link.receiver_device_name,
@@ -313,7 +310,7 @@
                 </span>
               </div>
               {#if link.description}
-                <p class="mt-1 text-xs italic text-[var(--ha-secondary-text-color)]">
+                <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">
                   {link.description}
                 </p>
               {/if}

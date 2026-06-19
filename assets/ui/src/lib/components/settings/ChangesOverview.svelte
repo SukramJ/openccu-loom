@@ -2,6 +2,7 @@
   import { api, ApiError } from "$lib/api/client";
   import type { ConfigSchemaField } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
+  import Badge from "$lib/components/ui/Badge.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
@@ -165,9 +166,7 @@
           <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
             {group.sec}
           </h3>
-          <span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-            {group.fields.length}
-          </span>
+          <Badge variant="muted">{group.fields.length}</Badge>
         </div>
         <div>
           {#each group.fields as field (field.path)}

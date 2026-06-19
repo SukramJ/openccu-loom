@@ -16,6 +16,7 @@
   import { t } from "$lib/i18n";
   import ConnectivityLights from "$lib/components/settings/ConnectivityLights.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
 
   // Schema loaded once; passed down to all SectionEditors.
   let schemaFields = $state<ConfigSchemaField[]>([]);
@@ -33,9 +34,7 @@
   let startupCaptureDuration = $state(600);
   let startupCaptureAnonymise = $state(true);
   let startupCaptureSaving = $state(false);
-  let startupCaptureBanner = $state<string | null>(null);
   let restartRequesting = $state(false);
-  let restartBanner = $state<string | null>(null);
   // Restart-Daemon capability — only when the daemon detected
   // a supervisor (systemd / Docker / Kubernetes / OPENCCU_LOOM_SUPERVISOR=1).
   // Without one the daemon would not come back up after a clean
@@ -84,16 +83,15 @@
 
   async function saveStartupCapture() {
     startupCaptureSaving = true;
-    startupCaptureBanner = null;
     try {
       await api.putStartupCapture({
         enabled: startupCaptureEnabled,
         duration_seconds: startupCaptureDuration,
         anonymise: startupCaptureAnonymise,
       });
-      startupCaptureBanner = t("settings.startup_capture_saved");
+      toastStore.success(t("settings.startup_capture_saved"));
     } catch (err) {
-      startupCaptureBanner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       startupCaptureSaving = false;
     }
@@ -134,12 +132,11 @@
     });
     if (!ok) return;
     restartRequesting = true;
-    restartBanner = null;
     try {
       await api.restartDaemon();
-      restartBanner = t("settings.restart_signalled");
+      toastStore.success(t("settings.restart_signalled"));
     } catch (err) {
-      restartBanner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       restartRequesting = false;
     }
@@ -610,9 +607,6 @@
               >
                 {t("common.save")}
               </Button>
-              {#if startupCaptureBanner}
-                <span class="text-xs text-[var(--ha-secondary-text-color)]">{startupCaptureBanner}</span>
-              {/if}
             </div>
           </div>
 
@@ -640,9 +634,6 @@
                 {restartRequesting ? t("settings.restarting") : t("settings.restart_daemon")}
               </Button>
             </div>
-            {#if restartBanner}
-              <p class="mt-2 text-xs text-[var(--ha-secondary-text-color)]">{restartBanner}</p>
-            {/if}
           </div>
         </div>
       {/if}

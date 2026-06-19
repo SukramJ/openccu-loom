@@ -5,10 +5,13 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
-  // `t()` reads prefs.locale reactively; date formatting reads it directly.
+  import { toastStore } from "$lib/stores/toast.svelte";
 
   // Inbox of pending pairing candidates. The CCU populates the list
   // through its system-variable feed; this view lets the operator
@@ -20,7 +23,6 @@
   let loadError = $state<string | null>(null);
   let centralFilter = $state("");
   let accepting = $state<string | null>(null);
-  let banner = $state<string | null>(null);
 
   // Active-pairing tick: while the install mode is running on the CCU,
   // the inbox should reflect freshly-discovered candidates without the
@@ -54,18 +56,18 @@
 
   async function accept(addr: string, central: string) {
     accepting = addr;
-    banner = null;
     try {
       await api.acceptInboxDevice(addr, central);
-      banner = t("inbox.accepted", { name: addr });
+      toastStore.success(t("inbox.accepted", { name: addr }));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       accepting = null;
     }
@@ -112,17 +114,16 @@
   <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold">{t("inbox.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("inbox.subtitle")}</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400">{t("inbox.subtitle")}</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {#if banner}<span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>{/if}
       {#if installModeStore.banner && !installModeStore.active}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{installModeStore.banner}</span>
+        <span class="text-xs text-slate-500 dark:text-slate-400">{installModeStore.banner}</span>
       {/if}
       {#if centrals.length > 1}
         <select
           bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title="CCU"
         >
           <option value="">{t("common.all_ccus")}</option>
@@ -165,19 +166,13 @@
   {/if}
 
   {#if loadError}
-    <Card class="mb-4 p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {loadError}
-      </p>
-    </Card>
+    <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
   {#if loading}
-    <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+    <LoadingState />
   {:else if visibleEntries.length === 0}
-    <Card class="p-6 text-center text-sm text-[var(--ha-secondary-text-color)]">
-      {t("inbox.empty")}
-    </Card>
+    <EmptyState message={t("inbox.empty")} />
   {:else}
     <ul class="space-y-2">
       {#each visibleEntries as d (d.central + "/" + d.address)}
@@ -196,12 +191,12 @@
                   {/if}
                 </div>
                 {#if d.serial}
-                  <p class="mt-1 font-mono text-[11px] text-[var(--ha-secondary-text-color)]">
+                  <p class="mt-1 font-mono text-[11px] text-slate-500 dark:text-slate-400">
                     {t("inbox.serial")} {d.serial}
                   </p>
                 {/if}
                 {#if d.first_seen}
-                  <p class="mt-0.5 text-xs text-[var(--ha-secondary-text-color)]">
+                  <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                     {t("inbox.first_seen")} {formatTs(d.first_seen)}
                   </p>
                 {/if}

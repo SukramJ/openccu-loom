@@ -6,6 +6,9 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   let selectedCentral = $state<string>("");
   let searchText = $state("");
@@ -32,8 +35,6 @@
     visibilityStore.centrals.map((c) => c.central_name),
   );
 
-  // Effective pattern set for the active central (pending if any, else
-  // active server-side).
   const effective = $derived.by<string[]>(() => {
     if (!selectedCentral) return [];
     return visibilityStore.effectivePatterns(selectedCentral);
@@ -41,11 +42,6 @@
 
   const effectiveSet = $derived(new Set(effective));
 
-  // Candidate list shown in the picker. Active patterns are always
-  // included even if they fall outside the candidate set (e.g. a
-  // wildcard pattern the operator added for a parameter no device
-  // currently exposes — server-side candidates only show the
-  // intersection with the live model registry).
   const pickerItems = $derived.by<string[]>(() => {
     const set = new Set<string>(visibilityStore.candidates);
     for (const p of effective) set.add(p);
@@ -103,29 +99,32 @@
     if (!selectedCentral) return;
     visibilityStore.discardPending(selectedCentral);
   }
+
+  async function reloadCentrals() {
+    await Promise.all([
+      visibilityStore.loadCentrals(),
+      visibilityStore.loadCandidates(includeMaster),
+    ]);
+  }
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
   <header class="mb-6">
     <h1 class="text-2xl font-semibold">{t("unignore.title")}</h1>
-    <p class="mt-2 text-sm" style="color: var(--ha-secondary-text-color);">
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
       {t("unignore.subtitle")}
     </p>
-    <p class="mt-2 text-sm" style="color: var(--ha-warning-color);">
+    <p class="mt-2 text-sm text-amber-600 dark:text-amber-400">
       ⚠ {t("unignore.warning")}
     </p>
   </header>
 
   {#if visibilityStore.centralsLoading || visibilityStore.candidatesLoading}
-    <p style="color: var(--ha-secondary-text-color);">{t("common.loading")}</p>
+    <LoadingState />
   {:else if visibilityStore.centralsError}
-    <p style="color: var(--ha-error-color);">
-      {visibilityStore.centralsError}
-    </p>
+    <ErrorState message={visibilityStore.centralsError} onRetry={reloadCentrals} />
   {:else if centralOptions.length === 0}
-    <p style="color: var(--ha-secondary-text-color);">
-      {t("unignore.no_centrals")}
-    </p>
+    <EmptyState message={t("unignore.no_centrals")} icon="mdi:server" />
   {:else}
     <Card>
       <div class="flex flex-wrap items-center gap-3 p-4">
@@ -133,8 +132,7 @@
           {t("unignore.central_label")}
           <select
             bind:value={selectedCentral}
-            class="ml-2 rounded border px-2 py-1"
-            style="background-color: var(--ha-card-background-color); color: var(--ha-primary-text-color); border-color: var(--ha-divider-color);"
+            class="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             {#each centralOptions as name (name)}
               <option value={name}>{name}</option>
@@ -152,7 +150,7 @@
         </label>
       </div>
 
-      <div class="border-t p-4" style="border-color: var(--ha-divider-color);">
+      <div class="border-t border-slate-200 p-4 dark:border-slate-800">
         <Input
           bind:value={searchText}
           placeholder={t("unignore.search_placeholder")}
@@ -160,8 +158,7 @@
         />
 
         <ul
-          class="mt-3 max-h-[480px] divide-y overflow-y-auto rounded border"
-          style="border-color: var(--ha-divider-color); divide-color: var(--ha-divider-color);"
+          class="mt-3 max-h-[480px] divide-y divide-slate-100 overflow-y-auto rounded border border-slate-200 dark:divide-slate-800 dark:border-slate-700"
         >
           {#each pickerItems as pattern (pattern)}
             <li class="flex items-center gap-3 px-3 py-2 text-sm">
@@ -172,29 +169,20 @@
               />
               <code class="font-mono">{pattern}</code>
               {#if !visibilityStore.candidates.includes(pattern)}
-                <span
-                  class="ml-auto text-xs"
-                  style="color: var(--ha-secondary-text-color);"
-                >
+                <span class="ml-auto text-xs text-slate-500 dark:text-slate-400">
                   {t("unignore.no_match")}
                 </span>
               {/if}
             </li>
           {:else}
-            <li
-              class="px-3 py-3 text-sm"
-              style="color: var(--ha-secondary-text-color);"
-            >
+            <li class="px-3 py-3 text-sm text-slate-500 dark:text-slate-400">
               {t("unignore.no_candidates")}
             </li>
           {/each}
         </ul>
       </div>
 
-      <div
-        class="flex flex-wrap items-center gap-2 border-t p-4"
-        style="border-color: var(--ha-divider-color);"
-      >
+      <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
         <Input
           bind:value={customPattern}
           placeholder={t("unignore.add_pattern_placeholder")}
@@ -205,12 +193,9 @@
         </Button>
       </div>
 
-      <div
-        class="flex flex-wrap items-center gap-2 border-t p-4"
-        style="border-color: var(--ha-divider-color);"
-      >
+      <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
         {#if hasPending}
-          <span class="text-sm" style="color: var(--ha-warning-color);">
+          <span class="text-sm text-amber-600 dark:text-amber-400">
             {t("unignore.unsaved_changes")}
           </span>
         {/if}
@@ -234,12 +219,9 @@
       </div>
 
       {#if visibilityStore.lastSave && visibilityStore.lastSave.parse_errors && visibilityStore.lastSave.parse_errors.length > 0}
-        <div
-          class="border-t p-4 text-sm"
-          style="border-color: var(--ha-divider-color); color: var(--ha-error-color);"
-        >
-          <p class="font-semibold">{t("unignore.parse_errors_title")}</p>
-          <ul class="mt-2 list-disc pl-5">
+        <div class="border-t border-slate-200 p-4 text-sm dark:border-slate-800">
+          <p class="font-semibold text-red-600 dark:text-red-400">{t("unignore.parse_errors_title")}</p>
+          <ul class="mt-2 list-disc pl-5 text-red-600 dark:text-red-400">
             {#each visibilityStore.lastSave.parse_errors as err (err)}
               <li>{err}</li>
             {/each}
