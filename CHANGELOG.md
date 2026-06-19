@@ -59,6 +59,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Saving a config section that carries a secret (e.g. `north.rest` with
+  its `public_url`) no longer fails silently.** Sections whose schema contains
+  a *complex* secret field — `north.rest.auth.users` / `auth.tokens` are
+  `map[string]string` — could not be saved: the editor's Save button activated
+  but clicking it did nothing and the typed value vanished on navigating away.
+  The backend masks secret values to the sentinel `***` in the GET response;
+  the SPA then ran `JSON.parse("***")` while pre-validating every complex field,
+  which threw and aborted the save before the request was ever sent — with no
+  error shown. MQTT was unaffected because it has no complex secret field. The
+  root cause is fixed both sides: the SPA no longer parses or rewrites
+  secret-class (or empty) complex fields, and the API restores every masked
+  `***` sentinel to the operator's real stored value before validating and
+  persisting a section — so the edited field saves, existing secrets are
+  preserved, and a round-tripped sentinel can no longer overwrite a credential.
+  A genuine malformed-JSON value now raises a toast instead of failing quietly.
 - **Config-save behaviour is now homogeneous across every Settings section.**
   Three inconsistencies are resolved so that saving any field behaves the same
   way it already did for MQTT — persist to the DB, update the per-field source

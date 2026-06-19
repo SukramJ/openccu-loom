@@ -1,0 +1,292 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
+
+// ---------------------------------------------------------------------------
+// Module-level mock state — populated per test in beforeEach
+// ---------------------------------------------------------------------------
+
+let mockGetConfigSectionResult: Record<string, unknown> = {};
+const mockPutConfigSection = vi.fn();
+const mockGetConfigSection = vi.fn();
+const mockToastError = vi.fn();
+const mockToastSuccess = vi.fn();
+
+// ---------------------------------------------------------------------------
+// Mocks — registered before any component import
+// ---------------------------------------------------------------------------
+
+vi.mock("$lib/api/client", () => ({
+  api: {
+    getConfigSection: (...args: unknown[]) => mockGetConfigSection(...args),
+    putConfigSection: (...args: unknown[]) => mockPutConfigSection(...args),
+    getRestartPending: vi.fn().mockResolvedValue({ pending: false, fields: [] }),
+  },
+  ApiError: class ApiError extends Error {
+    constructor(
+      public readonly status: number,
+      public readonly body: unknown,
+      message: string,
+    ) {
+      super(message);
+    }
+  },
+}));
+
+vi.mock("$lib/stores/toast.svelte", () => ({
+  toastStore: {
+    error: (...args: unknown[]) => mockToastError(...args),
+    success: (...args: unknown[]) => mockToastSuccess(...args),
+  },
+}));
+
+vi.mock("$lib/stores/confirm.svelte", () => ({
+  confirmStore: { ask: vi.fn().mockResolvedValue(false) },
+}));
+
+vi.mock("$lib/stores/preferences.svelte", () => ({
+  prefs: { expertMode: false },
+  applyTheme: vi.fn(),
+  setLocale: vi.fn(),
+  setTheme: vi.fn(),
+  setNavCollapsed: vi.fn(),
+  setExpertMode: vi.fn(),
+  setDeviceView: vi.fn(),
+  bindSystemTheme: vi.fn(() => () => {}),
+}));
+
+vi.mock("$lib/stores/restartPending.svelte", () => ({
+  restartPending: { pending: false, fields: [] },
+  restartCaps: { supervised: false, loaded: false },
+  refreshRestartPending: vi.fn().mockResolvedValue(undefined),
+  loadRestartCaps: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("$lib/i18n", () => ({
+  t: (key: string, _params?: unknown) => key,
+}));
+
+// ---------------------------------------------------------------------------
+// Delayed component import so mocks are hoisted first
+// ---------------------------------------------------------------------------
+
+import type { ConfigSchemaField } from "$lib/api/client";
+import SectionEditor from "./SectionEditor.svelte";
+
+// ---------------------------------------------------------------------------
+// Schema fixtures
+// ---------------------------------------------------------------------------
+
+const PUBLIC_URL_FIELD: ConfigSchemaField = {
+  path: "north.rest.public_url",
+  class: "basic",
+  go_type: "string",
+};
+
+const AUTH_USERS_FIELD: ConfigSchemaField = {
+  path: "north.rest.auth.users",
+  class: "secret",
+  go_type: "map[string]string",
+};
+
+const AUTH_TOKENS_FIELD: ConfigSchemaField = {
+  path: "north.rest.auth.tokens",
+  class: "secret",
+  go_type: "map[string]string",
+};
+
+// Non-secret complex field for the invalid-JSON test.
+const EXTRA_MAP_FIELD: ConfigSchemaField = {
+  path: "north.rest.extra_map",
+  class: "basic",
+  go_type: "map[string]string",
+};
+
+// ---------------------------------------------------------------------------
+// Helper: render SectionEditor for "north.rest"
+// ---------------------------------------------------------------------------
+
+function renderEditor(fields: ConfigSchemaField[]) {
+  return render(SectionEditor, {
+    props: {
+      section: "north.rest",
+      schemaFields: fields,
+      sources: {} as Record<string, "bootstrap" | "db" | "env" | "default">,
+      allSections: ["north.rest"],
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test lifecycle
+// ---------------------------------------------------------------------------
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+  mockPutConfigSection.mockResolvedValue({
+    section: "north.rest",
+    version: 1,
+    updated_at: "",
+    restart_required: false,
+  });
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+// ---------------------------------------------------------------------------
+// Test 1 — Regression: masked secret must NOT abort save()
+//
+// Before the fix: save() ran JSON.parse("***") on the secret-class
+// map[string]string field, threw, and silently returned without calling
+// putConfigSection. After the fix secret fields are skipped entirely.
+// ---------------------------------------------------------------------------
+
+describe("SectionEditor.save — regression: masked secret field", () => {
+  it("calls putConfigSection even when a secret field carries the masked '***' sentinel", async () => {
+    mockGetConfigSectionResult = {
+      public_url: "https://old.example.com",
+      auth: {
+        users: "***",
+        tokens: "***",
+      },
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container } = renderEditor([
+      PUBLIC_URL_FIELD,
+      AUTH_USERS_FIELD,
+      AUTH_TOKENS_FIELD,
+    ]);
+
+    // Wait for onMount to finish (getConfigSection resolves).
+    await waitFor(() => {
+      expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+    });
+
+    // Wait for the text input (public_url) to appear.
+    await waitFor(() => {
+      const inputs = container.querySelectorAll('input[type="text"]');
+      expect(inputs.length).toBeGreaterThan(0);
+    });
+
+    // Change the public_url value so the form becomes dirty and Save enables.
+    const publicUrlInput = container.querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(publicUrlInput, {
+      target: { value: "https://new.example.com" },
+    });
+
+    // Wait for the Save button to become enabled (isDirty = true).
+    await waitFor(() => {
+      const buttons = Array.from(
+        container.querySelectorAll("button"),
+      ) as HTMLButtonElement[];
+      const saveBtn = buttons.find((b) =>
+        b.textContent?.trim().includes("common.save"),
+      );
+      expect(saveBtn).toBeDefined();
+      expect(saveBtn!.disabled).toBe(false);
+    });
+
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"))!;
+
+    await fireEvent.click(saveBtn);
+
+    // Core regression assertion: putConfigSection MUST be called.
+    // Before the fix JSON.parse("***") aborted save() silently.
+    await waitFor(() => {
+      expect(mockPutConfigSection).toHaveBeenCalledTimes(1);
+    });
+
+    // The PUT must have been called for the right section.
+    expect(mockPutConfigSection.mock.calls[0][0]).toBe("north.rest");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 2 — Invalid JSON in a non-secret complex field is surfaced
+//
+// A basic-class map[string]string field that the user types broken JSON
+// into must NOT reach putConfigSection. Either save() calls toastStore.error
+// OR the Save button is disabled (both are correct post-fix behaviour).
+// ---------------------------------------------------------------------------
+
+describe("SectionEditor.save — invalid JSON in a non-secret complex field", () => {
+  it("blocks the PUT and surfaces an error when a basic complex field has bad JSON", async () => {
+    mockGetConfigSectionResult = {
+      public_url: "https://example.com",
+      extra_map: null,
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container } = renderEditor([PUBLIC_URL_FIELD, EXTRA_MAP_FIELD]);
+
+    await waitFor(() => {
+      expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+    });
+
+    // The complex map field renders as a <textarea>.
+    await waitFor(() => {
+      const textareas = container.querySelectorAll("textarea");
+      expect(textareas.length).toBeGreaterThan(0);
+    });
+
+    const textarea = container.querySelector(
+      "textarea",
+    ) as HTMLTextAreaElement;
+
+    // Type invalid JSON.
+    await fireEvent.input(textarea, {
+      target: { value: "not valid json {{" },
+    });
+
+    // Also change the string field so isDirty is true (Save could enable).
+    const textInput = container.querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
+    if (textInput) {
+      await fireEvent.input(textInput, {
+        target: { value: "https://changed.example.com" },
+      });
+    }
+
+    // Give Svelte reactivity a tick to settle.
+    await waitFor(() => {
+      // Either the Save button is now disabled (jsonErrors blocks it)
+      // or it is still enabled — we will handle both branches below.
+      const buttons = container.querySelectorAll("button");
+      expect(buttons.length).toBeGreaterThan(0);
+    });
+
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"));
+
+    if (!saveBtn || saveBtn.disabled) {
+      // Correct behaviour path A: Save is disabled because jsonErrors
+      // blocks submission. Verify no PUT went out.
+      expect(mockPutConfigSection).not.toHaveBeenCalled();
+
+      // Inline error indicator must be visible.
+      const errorEl = container.querySelector(
+        ".text-red-600, .text-red-400",
+      );
+      expect(errorEl).not.toBeNull();
+    } else {
+      // Correct behaviour path B: Save is clickable but save() bails
+      // after pre-validation and calls toastStore.error instead.
+      await fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalled();
+      });
+      expect(mockPutConfigSection).not.toHaveBeenCalled();
+    }
+  });
+});
