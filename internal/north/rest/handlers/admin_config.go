@@ -241,6 +241,38 @@ func maskPath(v any, prefix string, set map[string]struct{}) {
 	}
 }
 
+// maskSectionSecrets is the section-scoped counterpart of maskSecrets: it
+// replaces every secret-class value inside a single section's stored JSON with
+// the "***" sentinel. The section store opens (decrypts) secrets on read, so
+// without this the per-section GET would hand the operator's cleartext
+// credentials (MQTT password, OIDC client secret, basic-auth hashes) to the
+// browser — unlike the snapshot endpoint, which already masks. The SPA round-
+// trips the sentinel and [restoreMaskedSecrets] swaps it back on save, so a
+// masked load still persists correctly. Returns the input unchanged for a
+// section with no secret fields or a non-object payload.
+func maskSectionSecrets(section configstore.Section, valueJSON []byte) []byte {
+	var m map[string]any
+	if err := json.Unmarshal(valueJSON, &m); err != nil {
+		return valueJSON
+	}
+	prefix := string(section) + "."
+	rel := make(map[string]struct{})
+	for full := range secretPathSet() {
+		if r, ok := strings.CutPrefix(full, prefix); ok {
+			rel[r] = struct{}{}
+		}
+	}
+	if len(rel) == 0 {
+		return valueJSON
+	}
+	maskPath(m, "", rel)
+	out, err := json.Marshal(m)
+	if err != nil {
+		return valueJSON
+	}
+	return out
+}
+
 // maskSentinel is the placeholder maskSecrets writes in place of every
 // secret-class value so the GET response is safe to log. The SPA echoes it
 // back unchanged for any secret the operator did not edit; restoreMaskedSecrets
@@ -365,7 +397,10 @@ func GetConfigSection(svc ConfigAdminService) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(row.ValueJSON)
+		// Mask secrets before they reach the browser — the store opened them on
+		// read. The SPA round-trips the sentinel; restoreMaskedSecrets restores
+		// it on save.
+		_, _ = w.Write(maskSectionSecrets(section, row.ValueJSON))
 	}
 }
 
