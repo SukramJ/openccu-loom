@@ -1,0 +1,27 @@
+{
+  "schema_version": "1",
+  "generated_at": "2026-06-19T00:00:00Z",
+  "anonymized": false,
+  "build": {
+    "version": "0.2.0",
+    "commit": "abc123",
+    "go_version": "go1.26",
+    "build_time": "2026-06-01T00:00:00Z"
+  },
+  "health": {
+    "status": "healthy",
+    "score": 100,
+    "available": true,
+    "degraded": false,
+    "failed": false,
+    "components": [],
+    "clients": [],
+    "central_scores": {},
+    "gauges": {},
+    "primary_client_healthy": true
+  },
+  "interfaces": [],
+  "incidents": [],
+  "system_status": [],
+  "log_levels": { "items": [], "default": "info" }
+}

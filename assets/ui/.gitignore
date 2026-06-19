@@ -3,3 +3,8 @@ dist/
 .vite/
 *.log
 .DS_Store
+
+# Playwright e2e — generated artefacts (baselines under tests/e2e/**-snapshots/ are committed).
+test-results/
+playwright-report/
+/playwright/.cache/
