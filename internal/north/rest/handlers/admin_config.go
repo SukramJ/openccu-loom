@@ -247,16 +247,18 @@ func maskPath(v any, prefix string, set map[string]struct{}) {
 // turns it back into the real value before validation and persistence.
 const maskSentinel = "***"
 
-// restoreMaskedSecrets is the inverse of maskSecrets, scoped to one section.
-// A section PUT round-trips the masked sentinel for every secret the operator
-// did not change (the SPA never receives the cleartext). Left as-is that
-// sentinel would either fail strict type-validation — a map[string]string
-// secret like north.rest.auth.users would arrive as the bare string "***" —
-// or overwrite the stored secret with "***". This walks every secret path
-// under the section and, wherever the payload still carries the sentinel,
-// substitutes the operator's current real value (a map, string, number — any
-// shape). Secret fields the operator actually changed carry a non-sentinel
-// value and are left untouched, so new secrets still persist.
+// restoreMaskedSecrets reconciles the secret fields of a section PUT against
+// the operator's current real values, scoped to one section. The SPA echoes a
+// secret it is not changing as a string placeholder — either the masked "***"
+// sentinel (from the snapshot view) or an empty "" (an unset complex secret,
+// e.g. north.rest.auth.users, which the editor's parseValue yields as the
+// empty string). Left as-is such a placeholder would either fail strict
+// type-validation — a string into a map[string]string secret 400s — or
+// overwrite the stored secret with the placeholder. This walks every secret
+// path under the section and, wherever the payload carries such a placeholder,
+// substitutes the current real value (a map, string, number — any shape, or
+// null when unset). A secret the operator actually changed carries a
+// non-placeholder value and is left untouched, so new secrets still persist.
 func restoreMaskedSecrets(current *config.Config, section configstore.Section, raw json.RawMessage) json.RawMessage {
 	if current == nil {
 		return raw
@@ -280,8 +282,16 @@ func restoreMaskedSecrets(current *config.Config, section configstore.Section, r
 		if !ok {
 			continue
 		}
-		if getDeepAny(payload, rel) != maskSentinel {
-			continue // absent, cleared, or an operator-supplied new secret
+		ps, isStr := getDeepAny(payload, rel).(string)
+		// The SPA echoes a secret it is not changing as a string placeholder:
+		// the masked "***" sentinel (the snapshot view) or an empty "" (an
+		// unset complex secret that parsed to the empty string). Neither may be
+		// persisted verbatim — a string into a map[string]string secret fails
+		// strict validation, and "***" would overwrite a real string secret. A
+		// genuine operator-typed secret is a non-empty, non-sentinel string (or
+		// a real object) and is left untouched.
+		if !isStr || (ps != maskSentinel && ps != "") {
+			continue
 		}
 		setDeepAny(payload, rel, getDeepAny(curMap, full))
 		changed = true

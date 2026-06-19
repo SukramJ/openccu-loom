@@ -60,19 +60,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Saving a config section that carries a secret (e.g. `north.rest` with
-  its `public_url`) no longer fails silently.** Sections whose schema contains
-  a *complex* secret field — `north.rest.auth.users` / `auth.tokens` are
-  `map[string]string` — could not be saved: the editor's Save button activated
-  but clicking it did nothing and the typed value vanished on navigating away.
-  The backend masks secret values to the sentinel `***` in the GET response;
-  the SPA then ran `JSON.parse("***")` while pre-validating every complex field,
-  which threw and aborted the save before the request was ever sent — with no
-  error shown. MQTT was unaffected because it has no complex secret field. The
-  root cause is fixed both sides: the SPA no longer parses or rewrites
-  secret-class (or empty) complex fields, and the API restores every masked
-  `***` sentinel to the operator's real stored value before validating and
-  persisting a section — so the edited field saves, existing secrets are
-  preserved, and a round-tripped sentinel can no longer overwrite a credential.
+  its `public_url`) no longer fails.** Sections whose schema contains a
+  *complex* secret field — `north.rest.auth.users` / `auth.tokens` are
+  `map[string]string` — could not be saved. With no HTTP-basic users
+  configured, the section load returns `north.rest` without `auth.users`, so
+  the editor represented that absent map as the empty string `""`. Saving then
+  either aborted silently (the pre-validation ran `JSON.parse("")`, which threw
+  before the request was sent — Save did nothing and the typed value vanished
+  on navigating away) or, once it reached the request, was rejected with
+  `400 … cannot unmarshal string into … auth.users of type map[string]string`.
+  MQTT was unaffected because it has no complex secret field. Fixed on both
+  sides: the SPA no longer parses or round-trips a placeholder for a
+  secret-class or empty complex field — it sends `null` instead of a mistyped
+  string — and the API reconciles every secret-field placeholder (the empty
+  `""` or the masked `***` sentinel) back to the operator's current real value
+  before validating and persisting a section. So the edited field saves,
+  existing secrets are preserved, a genuinely changed secret still persists,
+  and a round-tripped placeholder can no longer 400 or overwrite a credential.
   A genuine malformed-JSON value now raises a toast instead of failing quietly.
 - **Config-save behaviour is now homogeneous across every Settings section.**
   Three inconsistencies are resolved so that saving any field behaves the same

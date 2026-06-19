@@ -487,12 +487,17 @@
     try {
       const payload = deepClone(working);
       for (const f of sectionFields) {
-        // Leave secret fields untouched: their value is the masked "***"
-        // sentinel, which the backend swaps back to the real secret. Parsing
-        // or rewriting it here would corrupt the stored credential.
-        if (f.class === "secret") continue;
         const rel = relativePath(f.path);
         const v = getDeep(payload, rel);
+        if (f.class === "secret") {
+          // An unchanged/unset secret is a placeholder — an empty string for an
+          // unset field, or the masked "***" sentinel. Send null instead of a
+          // mistyped string: a complex (map) secret would otherwise 400 on the
+          // strict unmarshal, and the backend reconciles the null/sentinel back
+          // to the stored value. A genuinely typed secret keeps its value.
+          if (v === "" || v === "***") setDeep(payload, rel, null);
+          continue;
+        }
         if (f.go_type === "[]string" && typeof v === "string") {
           setDeep(payload, rel, v.split("\n").map((s) => s.trim()).filter(Boolean));
         } else if (isComplex(f.go_type) && typeof v === "string") {

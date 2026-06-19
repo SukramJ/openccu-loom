@@ -109,3 +109,41 @@ func TestPutConfigSection_KeepsOperatorSuppliedSecret(t *testing.T) {
 		t.Errorf("operator-supplied new secret was not persisted: %#v", saved.Auth.Users)
 	}
 }
+
+// TestPutConfigSection_EmptyComplexSecretPlaceholder reproduces the operator's
+// actual 400: when no HTTP-basic users are configured, the section load
+// returns north.rest WITHOUT auth.users, so the SPA's parseValue yields an
+// empty string "" for that map[string]string field and the editor echoes it
+// back. Strict unmarshal of "" into a map fails with
+// `cannot unmarshal string into ... AuthConfig.auth.users of type map[string]string`.
+// The reconcile must replace the empty placeholder (no stored value) so the
+// edited public_url still saves.
+func TestPutConfigSection_EmptyComplexSecretPlaceholder(t *testing.T) {
+	t.Parallel()
+
+	// Current config has NO basic-auth users/tokens.
+	current := &config.Config{North: config.NorthConfig{REST: config.NorthREST{}}}
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: current}}
+
+	// What the SPA sends: a changed public_url plus the empty-string
+	// placeholders for the unset secret maps.
+	body := `{"public_url":"https://loom-rc.toonlan.de/","auth":{"users":"","tokens":""}}`
+	w := putSection(fake, "north.rest", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	if !fake.putCalled {
+		t.Fatal("PutSection was never called")
+	}
+	var saved config.NorthREST
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON is invalid: %v", err)
+	}
+	if saved.PublicURL != "https://loom-rc.toonlan.de/" {
+		t.Errorf("edited public_url not persisted: %q", saved.PublicURL)
+	}
+	if len(saved.Auth.Users) != 0 {
+		t.Errorf("auth.users should stay empty, got: %#v", saved.Auth.Users)
+	}
+}
