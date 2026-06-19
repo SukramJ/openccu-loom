@@ -37,9 +37,20 @@
 
   let { section, schemaFields, sources, allSections, effectiveConfig }: Props = $props();
 
+  // Fields managed by their own dedicated admin surfaces (the Users and Tokens
+  // panels, backed by the /users and /auth/tokens CRUD). The generic section
+  // editor must not also render them: they are map[string]string secrets, and a
+  // single masked password input for a credential map is meaningless — it was
+  // the trigger for the section-save failure. Hide them here.
+  const MANAGED_ELSEWHERE = new Set([
+    "north.rest.auth.users",
+    "north.rest.auth.tokens",
+  ]);
+
   const sectionFields = $derived(
     schemaFields.filter((f) => {
       if (f.path !== section && !f.path.startsWith(section + ".")) return false;
+      if (MANAGED_ELSEWHERE.has(f.path)) return false;
       // Longest-prefix wins: if a more specific section claims
       // this field, hide it here.
       for (const other of allSections ?? []) {
