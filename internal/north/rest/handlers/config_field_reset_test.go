@@ -23,6 +23,8 @@ type fakeConfigAdminSvc struct {
 	getSectionErr    error
 	putSectionErr    error
 	deleteSectionErr error
+	effectiveResult  *configstore.EffectiveResult
+	effectiveErr     error
 
 	putCalled    bool
 	putJSON      []byte
@@ -30,7 +32,7 @@ type fakeConfigAdminSvc struct {
 }
 
 func (f *fakeConfigAdminSvc) Effective(_ context.Context) (*configstore.EffectiveResult, error) {
-	return nil, nil
+	return f.effectiveResult, f.effectiveErr
 }
 
 func (f *fakeConfigAdminSvc) GetSection(_ context.Context, _ configstore.Section) (sqlitestore.SectionRow, error) {

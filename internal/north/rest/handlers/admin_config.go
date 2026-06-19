@@ -234,11 +234,106 @@ func maskPath(v any, prefix string, set map[string]struct{}) {
 			path = prefix + "." + k
 		}
 		if _, hit := set[path]; hit {
-			m[k] = "***"
+			m[k] = maskSentinel
 			continue
 		}
 		maskPath(val, path, set)
 	}
+}
+
+// maskSentinel is the placeholder maskSecrets writes in place of every
+// secret-class value so the GET response is safe to log. The SPA echoes it
+// back unchanged for any secret the operator did not edit; restoreMaskedSecrets
+// turns it back into the real value before validation and persistence.
+const maskSentinel = "***"
+
+// restoreMaskedSecrets reconciles the secret fields of a section PUT against
+// the operator's current real values, scoped to one section. The SPA echoes a
+// secret it is not changing as a string placeholder — either the masked "***"
+// sentinel (from the snapshot view) or an empty "" (an unset complex secret,
+// e.g. north.rest.auth.users, which the editor's parseValue yields as the
+// empty string). Left as-is such a placeholder would either fail strict
+// type-validation — a string into a map[string]string secret 400s — or
+// overwrite the stored secret with the placeholder. This walks every secret
+// path under the section and, wherever the payload carries such a placeholder,
+// substitutes the current real value (a map, string, number — any shape, or
+// null when unset). A secret the operator actually changed carries a
+// non-placeholder value and is left untouched, so new secrets still persist.
+func restoreMaskedSecrets(current *config.Config, section configstore.Section, raw json.RawMessage) json.RawMessage {
+	if current == nil {
+		return raw
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return raw // non-object payloads pass through; validateSection rejects them
+	}
+	curRaw, err := json.Marshal(current)
+	if err != nil {
+		return raw
+	}
+	var curMap map[string]any
+	if err := json.Unmarshal(curRaw, &curMap); err != nil {
+		return raw
+	}
+	prefix := string(section) + "."
+	changed := false
+	for full := range secretPathSet() {
+		rel, ok := strings.CutPrefix(full, prefix)
+		if !ok {
+			continue
+		}
+		ps, isStr := getDeepAny(payload, rel).(string)
+		// The SPA echoes a secret it is not changing as a string placeholder:
+		// the masked "***" sentinel (the snapshot view) or an empty "" (an
+		// unset complex secret that parsed to the empty string). Neither may be
+		// persisted verbatim — a string into a map[string]string secret fails
+		// strict validation, and "***" would overwrite a real string secret. A
+		// genuine operator-typed secret is a non-empty, non-sentinel string (or
+		// a real object) and is left untouched.
+		if !isStr || (ps != maskSentinel && ps != "") {
+			continue
+		}
+		setDeepAny(payload, rel, getDeepAny(curMap, full))
+		changed = true
+	}
+	if !changed {
+		return raw
+	}
+	out, err := json.Marshal(payload)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// getDeepAny walks a dotted path through nested JSON objects, returning nil
+// when any segment is missing or not an object.
+func getDeepAny(m map[string]any, path string) any {
+	var cur any = m
+	for _, part := range strings.Split(path, ".") {
+		mm, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+		cur = mm[part]
+	}
+	return cur
+}
+
+// setDeepAny sets a dotted path in nested JSON objects, creating intermediate
+// objects as needed.
+func setDeepAny(m map[string]any, path string, val any) {
+	parts := strings.Split(path, ".")
+	cur := m
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			next = map[string]any{}
+			cur[part] = next
+		}
+		cur = next
+	}
+	cur[parts[len(parts)-1]] = val
 }
 
 // GetConfigSection renders one persisted section. Returns 404 when
@@ -293,6 +388,13 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Invalid JSON", err.Error()))
 			return
+		}
+		// Turn any masked-secret sentinel the SPA echoed back into the real
+		// stored value before validation/persistence, so a round-tripped "***"
+		// neither fails type-validation nor overwrites the secret. Best-effort:
+		// if the current config is unavailable the raw payload validates as-is.
+		if cur, cerr := svc.Effective(r.Context()); cerr == nil && cur != nil {
+			raw = restoreMaskedSecrets(cur.Config, section, raw)
 		}
 		if err := validateSection(section, raw); err != nil {
 			problem.Write(w, http.StatusBadRequest,
