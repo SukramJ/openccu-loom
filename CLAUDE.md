@@ -51,8 +51,11 @@ the spec; when in doubt about *implementation*, read the code.
    side under `../` on the developer's
    machine. See §[aiohomematic as a Reference](#aiohomematic-as-a-reference)
    for the mapping and when to consult which.
-4. The project is **released at 0.2.0** (phases 0–10 complete,
-   status 2026-06-14; approximate counts as of the 0.1.0 snapshot):
+4. The project has shipped through **v0.5.1** (latest git tag) with
+   **0.6.0 in development** (`internal/build/version.go`); the
+   authoritative release history is `CHANGELOG.md`. Phases 0–10 are
+   complete. Approximate code size as of the 0.1.0 snapshot (kept as a
+   rough baseline, not re-counted each release):
    ~547 k Go LOC across
    2 099 files (817 production / 194 k LOC + 1 282 tests / 353 k LOC),
    all 8 coordinators, all
@@ -63,8 +66,14 @@ the spec; when in doubt about *implementation*, read the code.
    via `go:embed all:spa_dist`); a minimal HTMX bootstrap surface
    (login, first-run setup, OIDC callback, server-rendered /health
    and /about) covers what the SPA cannot reach — pre-auth flows
-   and SPA-down diagnosis. Open work focuses on depth parity against
-   aiohomematic, not the skeleton build-out — architectural
+   and SPA-down diagnosis. The SPA has a shared design-system
+   (`assets/ui/src/lib/components/ui/`) and a homogeneous operating
+   concept (toasts for action results, the shared confirm dialog for
+   destructive actions, and shared `LoadingState`/`EmptyState`/
+   `ErrorState` surfaces — see §[Architecture Quick Reference](#architecture-quick-reference)),
+   locked in by a committed Playwright browser-e2e + visual-regression
+   layer (`assets/ui/tests/e2e/`). Open work focuses on depth parity
+   against aiohomematic, not the skeleton build-out — architectural
    divergences are documented as by-design items in
    `docs/parity/by_design.md`. Ongoing correctness is held by standing
    build- and test-time parity guards rather than regenerated audit
@@ -185,6 +194,23 @@ all; `central_name` is the scoping dimension. See ADR 0002.
 
 Use `modernc.org/sqlite` (no CGo). Do not switch to `mattn/go-sqlite3`
 without an ADR documenting the reason.
+
+### Config secrets: never round-trip the `***` mask
+
+`GET /api/v1/config` masks every `cfg:"secret"` value to the sentinel
+`***` (`maskSecrets` in `internal/north/rest/handlers/admin_config.go`)
+so the response is safe to log. The SPA never receives the cleartext, so
+it must **not** treat that sentinel as data: the section editor skips
+secret-class fields when it validates and serialises a save, and the PUT
+handler calls `restoreMaskedSecrets` to swap every `***` back to the
+operator's current real value **before** validation + persistence.
+Breaking either side regresses real bugs — a *complex* secret (e.g.
+`north.rest.auth.users`, a `map[string]string`) round-tripped as the
+string `***` fails strict type-validation, and a string secret saved as
+`***` overwrites the real credential. A secret the operator genuinely
+changed carries a non-sentinel value and persists normally. When you add
+a `cfg:"secret"` field, keep this round-trip intact and extend the
+masked-secret tests under `internal/north/rest/handlers/`.
 
 ### Interfaces in the consumer package, except for cross-cutting protocols
 
@@ -313,6 +339,12 @@ openccu-loom/
 │                              master/link profile, devicedetails)
 ├── assets/
 │   ├── ui/                  — Svelte 5 SPA source (Tailwind 4, Vite)
+│   │   ├── src/lib/components/ui/ — shared design-system primitives
+│   │   │                            (Button, Card, Badge, Input, Select,
+│   │   │                            Switch, ConfirmDialog, Toaster,
+│   │   │                            LoadingState, EmptyState, ErrorState)
+│   │   └── tests/e2e/       — Playwright browser-e2e + visual regression
+│   │                          (mocked API; light/dark screenshot baselines)
 │   ├── openapi.yaml         — REST spec
 │   └── wsapi.json           — WebSocket command schema
 ├── docs/
@@ -340,9 +372,9 @@ openccu-loom/
     └── bench/
 ```
 
-The tree reflects the released 0.2.0 state; the
-`internal/north/ui/spa_dist/` directory is populated by `vite build`
-out of `assets/ui/` and embedded into the binary at compile time.
+The `internal/north/ui/spa_dist/` directory is populated by `vite build`
+out of `assets/ui/` and embedded into the binary at compile time (it is
+gitignored — regenerated in CI, not committed).
 
 ---
 
@@ -588,6 +620,13 @@ CCU
 - `internal/central`: `CentralUnit`, coordinators, callback servers,
   scheduler, registry. Multi-CCU: one `CentralUnit` per configured CCU;
   all held by a `CentralRegistry` shared with north-bound adapters.
+- `internal/central/adapter`: per-central southbound bring-up is
+  **readiness-gated** — `ccu_readiness.go` polls the CCU's own boot
+  marker (`GET /ise/checkrega.cgi` returning `OK`) before loading names
+  then devices, so a co-booting CCU never yields devices-without-names.
+  The northbound surface (REST/SPA/health) comes up immediately and
+  shows a per-central "waiting for CCU" state that never trips `/health`
+  to 503. The same gate guards mid-life reconnects after a CCU reboot.
 - `internal/client`: `InterfaceClient`, circuit breaker, retry,
   throttle, coalescer, ping/pong. One `InterfaceClient` per
   `(central, interface)` pair.
@@ -626,6 +665,32 @@ defer unsubscribe()
 
 events.Publish(bus, hmevent.DataPointValueChanged{ /* ... */ })
 ```
+
+### SPA operating concept (Config UI)
+
+The Svelte SPA has one consistent operating concept; match it when you
+touch any view. Source the recurring surfaces from the shared
+design-system in `assets/ui/src/lib/components/ui/` instead of
+hand-rolling them:
+
+- **Loading / empty / error** → the shared `LoadingState` /
+  `EmptyState` / `ErrorState` components (never a bare `<p>`). The error
+  surface always renders a localized `Error: …` with an optional retry.
+- **Action results** (save / delete / create / run / restore) →
+  `toastStore.success` / `toastStore.error`, never an inline header
+  banner. A failure must surface — silent aborts are a bug.
+- **Destructive actions** → the shared `confirmStore.ask({ …,
+  destructive: true })` dialog; no hand-rolled modals, no unconfirmed
+  deletes.
+- **Primitives** → `Button` / `Input` / `Select` / `Card` / `Badge`
+  over raw elements; every colour utility carries a `dark:` variant (or
+  uses the theme-aware `--ha-*` CSS tokens, which already invert).
+- Strings stay localized via `t(...)` (de + en in `lib/i18n.ts`).
+
+UI patterns (session-based MASTER editing, undo/redo, dirty tracking,
+preset selection) mirror `homematicip-local-frontend`; the operating
+concept above is locked in by the Playwright e2e + visual suite
+(see [Testing Guidelines](#testing-guidelines)).
 
 ---
 
@@ -681,6 +746,23 @@ compare emitted events or output JSON against golden files. Run with
 Run the daemon against an in-process `godevccu` simulator (a pure-Go
 port of pydevccu — no Python toolchain required) and assert
 end-to-end behavior. Slow; gated behind `-tags=integration`.
+
+### SPA browser-e2e + visual regression (`assets/ui/tests/e2e/`)
+
+Playwright drives the real SPA in a headless Chromium and locks in the
+homogeneous operating concept (navigation + document titles + skip-link,
+the shared loading/empty/error states, toast feedback, the confirm
+dialog) plus visual baselines of representative views in **both light
+and dark mode**. The suite is hermetic: it serves the SPA via the Vite
+dev server and **mocks every `/api/v1/*` call** (`tests/e2e/helpers/
+mock-api.ts`), so no daemon or CCU is needed and screenshots are
+deterministic. Run with `cd assets/ui && npm run e2e`; refresh baselines
+with `npm run e2e:update`. CI (`.github/workflows/spa-e2e.yml`) runs it
+inside the official `mcr.microsoft.com/playwright` container so
+rendering matches — screenshot baselines are committed **per platform**
+(`*-chromium-linux.png` for CI; macOS `-darwin` baselines coexist for
+local runs). The component-level Svelte tests are the separate `vitest`
+suite (`*.test.ts` under `assets/ui/src/`); keep both green.
 
 ### Unit tests
 
