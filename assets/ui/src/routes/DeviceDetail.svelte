@@ -20,6 +20,10 @@
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
   import { t } from "$lib/i18n";
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   type Props = {
     address: string;
@@ -31,7 +35,6 @@
 
   let detail = $state<DeviceDetail | null>(null);
   let error = $state<string | null>(null);
-  let banner = $state<string | null>(null);
 
   // Top-level tabs.
   //   • overview  = Maintenance + CDP-Tiles + read-only sensor cards
@@ -194,7 +197,6 @@
   function startRename() {
     renameValue = detail?.name ?? "";
     renaming = true;
-    banner = null;
   }
 
   async function commitRename() {
@@ -205,14 +207,13 @@
       return;
     }
     renameBusy = true;
-    banner = null;
     try {
       await api.renameDevice(address, next);
-      banner = t("device.renamed");
+      toastStore.success(t("device.renamed"));
       renaming = false;
       await load();
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       renameBusy = false;
     }
@@ -230,13 +231,12 @@
     });
     if (!ok) return;
     deleting = true;
-    banner = null;
     try {
       await api.deleteDevice(address);
-      banner = t("device.removed");
+      toastStore.success(t("device.removed"));
       location.hash = "#/devices";
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       deleting = false;
     }
@@ -253,12 +253,11 @@
     });
     if (!ok) return;
     updatingFw = true;
-    banner = null;
     try {
       await api.updateFirmware(address);
-      banner = t("device.firmware_triggered");
+      toastStore.success(t("device.firmware_triggered"));
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       updatingFw = false;
     }
@@ -277,18 +276,17 @@
   async function saveRooms() {
     if (!detail) return;
     roomsBusy = true;
-    banner = null;
     try {
       const list = roomsDraft
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
       await api.setDeviceRooms(detail.address, list);
-      banner = t("device.rooms_updated");
+      toastStore.success(t("device.rooms_updated"));
       editingRooms = false;
       await load();
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       roomsBusy = false;
     }
@@ -297,18 +295,17 @@
   async function saveFunctions() {
     if (!detail) return;
     functionsBusy = true;
-    banner = null;
     try {
       const list = functionsDraft
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
       await api.setDeviceFunctions(detail.address, list);
-      banner = t("device.functions_updated");
+      toastStore.success(t("device.functions_updated"));
       editingFunctions = false;
       await load();
     } catch (err) {
-      banner = err instanceof Error ? err.message : String(err);
+      toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       functionsBusy = false;
     }
@@ -353,17 +350,11 @@
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
   {#if error}
-    <Card class="mb-4 p-3">
-      <p class="text-sm" style="color: var(--ha-error-color);">
-        {t("device.error_label", { message: error })}
-      </p>
-    </Card>
-  {/if}
-
-  {#if banner}
-    <Card class="mb-4 p-3">
-      <p class="text-sm" style="color: var(--ha-secondary-text-color);">{banner}</p>
-    </Card>
+    <div class="mb-4">
+      <ErrorState message={error} onRetry={load} />
+    </div>
+  {:else if !detail}
+    <LoadingState />
   {/if}
 
   {#if detail}
@@ -411,14 +402,11 @@
               </Button>
             </div>
           {:else}
-            <h1
-              class="text-2xl font-semibold"
-              style="color: var(--ha-primary-text-color);"
-            >
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">
               {detail.name || detail.address}
             </h1>
           {/if}
-          <p class="mt-1 text-sm flex flex-wrap items-center gap-2" style="color: var(--ha-secondary-text-color);">
+          <p class="mt-1 text-sm flex flex-wrap items-center gap-2 text-slate-500 dark:text-slate-400">
             <span class="font-mono">{detail.model}</span>
             {#if detail.model_label && detail.model_label !== detail.model}
               <span>·</span>
@@ -441,7 +429,7 @@
               </Badge>
             {/if}
           </p>
-          <div class="mt-1 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs" style="color: var(--ha-secondary-text-color);">
+          <div class="mt-1 grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
             <span class="font-semibold">{t("device.rooms")}:</span>
             <div class="flex items-baseline gap-2">
               {#if editingRooms}
@@ -450,8 +438,7 @@
                     type="text"
                     bind:value={roomsDraft}
                     placeholder={t("device.rooms.placeholder")}
-                    class="flex-1 rounded-md border px-2 py-1 text-xs"
-                    style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
                   <Button type="button" size="sm" onclick={() => void saveRooms()} disabled={roomsBusy}>
                     {t("common.save")}
@@ -464,8 +451,7 @@
                 <span>{(detail.rooms ?? []).join(", ") || t("common.none")}</span>
                 <button
                   type="button"
-                  class="hover:underline"
-                  style="color: var(--ha-primary-color);"
+                  class="text-brand-600 hover:underline dark:text-brand-400"
                   onclick={startEditRooms}
                 >
                   {t("common.edit")}
@@ -480,8 +466,7 @@
                     type="text"
                     bind:value={functionsDraft}
                     placeholder={t("device.functions.placeholder")}
-                    class="flex-1 rounded-md border px-2 py-1 text-xs"
-                    style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                    class="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   />
                   <Button type="button" size="sm" onclick={() => void saveFunctions()} disabled={functionsBusy}>
                     {t("common.save")}
@@ -494,8 +479,7 @@
                 <span>{(detail.functions ?? []).join(", ") || t("common.none")}</span>
                 <button
                   type="button"
-                  class="hover:underline"
-                  style="color: var(--ha-primary-color);"
+                  class="text-brand-600 hover:underline dark:text-brand-400"
                   onclick={startEditFunctions}
                 >
                   {t("common.edit")}
@@ -549,16 +533,19 @@
     {#if detail.channels.length > 0}
       <!-- Top-level tab strip — Bedienen / Status / Konfigurieren / Verlauf.
            Sticks to icon + label, HA-style. -->
-      <nav
-        class="mb-4 flex gap-0 border-b"
-        style="border-color: var(--ha-divider-color);"
+      <div
+        class="mb-4 flex gap-0 border-b border-slate-200 dark:border-slate-700"
+        role="tablist"
         aria-label={t("device.aria.top_tabs")}
       >
         {#each topTabs as tab (tab.key)}
           <button
             type="button"
-            class="-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition"
-            style="border-color: {topTab === tab.key ? 'var(--ha-primary-color)' : 'transparent'}; color: {topTab === tab.key ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'};"
+            role="tab"
+            aria-selected={topTab === tab.key}
+            class="-mb-px inline-flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition {topTab === tab.key
+              ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+              : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'}"
             onclick={() => {
               topTab = tab.key;
               if (tab.key === "history") onHistoryTabClick();
@@ -568,7 +555,7 @@
             {tab.label}
           </button>
         {/each}
-      </nav>
+      </div>
 
       {#if topTab === "overview"}
         <!-- Übersicht: maintenance grid (`:0` health) plus the
@@ -581,22 +568,25 @@
         </div>
       {:else if topTab === "configure"}
         <!-- Sub-tab strip: Geräte-Konfiguration / Kanäle / Verknüpfungen / Zeitplan -->
-        <nav class="mb-4 flex flex-wrap gap-2" aria-label={t("device.aria.configure_sub_tabs")}>
+        <div class="mb-4 flex flex-wrap gap-2" role="tablist" aria-label={t("device.aria.configure_sub_tabs")}>
           {#each configSubs as sub (sub.key)}
             <button
               type="button"
-              class="rounded-md border px-3 py-1.5 text-sm transition"
-              style="border-color: {configSub === sub.key ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'}; background-color: {configSub === sub.key ? 'var(--ha-primary-color)' : 'transparent'}; color: {configSub === sub.key ? 'white' : 'var(--ha-primary-text-color)'};"
+              role="tab"
+              aria-selected={configSub === sub.key}
+              class="rounded-md border px-3 py-1.5 text-sm transition {configSub === sub.key
+                ? 'border-brand-500 bg-brand-500 text-white'
+                : 'border-slate-300 text-slate-700 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
               onclick={() => (configSub = sub.key)}
             >
               {sub.label}
             </button>
           {/each}
-        </nav>
+        </div>
 
         {#if configSub === "device-config"}
           {#if deviceChannel}
-            <h3 class="mb-2 text-sm font-semibold" style="color: var(--ha-primary-text-color);">
+            <h3 class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
               {t("device.subtab.device_config")} — {deviceChannel.address}
             </h3>
             <ChannelPanel
@@ -607,7 +597,7 @@
               pushesConfigPending={detail.master_pushes_config_pending}
             />
             {#if channelZero && channelZero.address !== deviceChannel.address}
-              <h3 class="mb-2 mt-6 text-sm font-semibold" style="color: var(--ha-primary-text-color);">
+              <h3 class="mb-2 mt-6 text-sm font-semibold text-slate-900 dark:text-white">
                 {t("device.subtab.maintenance_config")} — {channelZero.address}
               </h3>
               <ChannelPanel
@@ -618,7 +608,7 @@
               />
             {/if}
           {:else if channelZero}
-            <h3 class="mb-2 text-sm font-semibold" style="color: var(--ha-primary-text-color);">
+            <h3 class="mb-2 text-sm font-semibold text-slate-900 dark:text-white">
               {t("device.subtab.maintenance_config")} — {channelZero.address}
             </h3>
             <ChannelPanel
@@ -629,20 +619,16 @@
               pushesConfigPending={detail.master_pushes_config_pending}
             />
           {:else}
-            <Card class="p-4">
-              <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-                {t("device.no_device_config")}
-              </p>
-            </Card>
+            <EmptyState message={t("device.no_device_config")} />
           {/if}
         {:else if configSub === "channels"}
           <!-- Channel selector strip. Each chip carries channel name +
                number badge, virtual marker (≥50), and a click that
                either selects the channel for editing or — for week-
                profile channels — switches to the Schedule sub-tab. -->
-          <nav
-            class="mb-4 flex flex-wrap gap-1 border-b"
-            style="border-color: var(--ha-divider-color);"
+          <div
+            class="mb-4 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-700"
+            role="tablist"
             aria-label={t("device.subtab.channels")}
           >
             {#each userChannels as ch (ch.address)}
@@ -650,9 +636,12 @@
               {@const isWeek = isWeekProfileChannel(ch.type)}
               <button
                 type="button"
+                role="tab"
+                aria-selected={ch.number === selectedChannel}
                 onclick={() => clickChannelInStrip(ch)}
-                class="-mb-px border-b-2 px-3 py-2 text-sm transition"
-                style="border-color: {ch.number === selectedChannel ? 'var(--ha-primary-color)' : 'transparent'}; color: {ch.number === selectedChannel ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'}; {isVirt ? 'border-style: dashed;' : ''}"
+                class="-mb-px border-b-2 px-3 py-2 text-sm transition {ch.number === selectedChannel
+                  ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'} {isVirt ? '[border-style:dashed]' : ''}"
                 title={ch.type_label ? `${ch.address} · ${ch.type_label}` : ch.address}
               >
                 {ch.name?.trim() || ch.type_label || t("device.channel_n", { n: ch.number })}
@@ -664,19 +653,15 @@
                 {#if isVirt}
                   <Badge variant="muted" class="ml-1">{t("device.virtual")}</Badge>
                 {/if}
-                <span class="ml-1 text-xs" style="color: var(--ha-disabled-text-color);">
+                <span class="ml-1 text-xs text-slate-400 dark:text-slate-500">
                   ({ch.data_points_count})
                 </span>
               </button>
             {/each}
-          </nav>
+          </div>
 
           {#if userChannels.length === 0}
-            <Card class="p-4">
-              <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-                {t("device.no_channels")}
-              </p>
-            </Card>
+            <EmptyState message={t("device.no_channels")} />
           {:else}
             {@const ch = userChannels.find((c) => c.number === selectedChannel) ?? userChannels[0]}
             {#if isWeekProfileChannel(ch.type)}
@@ -684,10 +669,10 @@
                 <div class="flex items-center gap-3">
                   <Icon name="mdi:calendar-clock" size={24} />
                   <div class="flex-1">
-                    <h3 class="font-medium" style="color: var(--ha-primary-text-color);">
+                    <h3 class="font-medium text-slate-900 dark:text-white">
                       {t("device.week_profile_channel.title")}
                     </h3>
-                    <p class="text-sm" style="color: var(--ha-secondary-text-color);">
+                    <p class="text-sm text-slate-500 dark:text-slate-400">
                       {t("device.week_profile_channel.body")}
                     </p>
                   </div>
@@ -729,10 +714,9 @@
           {#if userChannels.length > 0}
             <div>
               <div class="mb-2 flex flex-wrap items-center gap-2">
-                <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">{t("history.label_channel")}</span>
+                <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{t("history.label_channel")}</span>
                 <select
-                  class="rounded border px-2 py-1 text-xs"
-                  style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                  class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                   value={historyChannelNo ?? userChannels[0]?.number}
                   onchange={(e) => {
                     const no = Number((e.target as HTMLSelectElement).value);
@@ -747,10 +731,9 @@
                   {/each}
                 </select>
                 {#if historyDPs.length > 0}
-                  <span class="text-xs font-semibold" style="color: var(--ha-secondary-text-color);">{t("history.label_parameter")}</span>
+                  <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">{t("history.label_parameter")}</span>
                   <select
-                    class="rounded border px-2 py-1 text-xs"
-                    style="background-color: var(--ha-card-background-color); border-color: var(--ha-divider-color); color: var(--ha-primary-text-color);"
+                    class="rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                     value={historyParameter ?? historyDPs[0]?.parameter}
                     onchange={(e) => {
                       historyParameter = (e.target as HTMLSelectElement).value;
@@ -763,9 +746,9 @@
                     {/each}
                   </select>
                 {:else if historyDPsLoading}
-                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">{t("history.loading_parameters")}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.loading_parameters")}</span>
                 {:else if historyChannelNo !== null}
-                  <span class="text-xs" style="color: var(--ha-secondary-text-color);">{t("history.no_numeric")}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{t("history.no_numeric")}</span>
                 {/if}
               </div>
               {#if historyParameter && historyChannelNo !== null && detail.central && detail.interface_id}
@@ -786,11 +769,7 @@
         </div>
       {/if}
     {:else}
-      <Card class="p-4">
-        <p class="text-sm" style="color: var(--ha-secondary-text-color);">
-          {t("device.no_channels")}
-        </p>
-      </Card>
+      <EmptyState message={t("device.no_channels")} />
     {/if}
   {/if}
 </section>

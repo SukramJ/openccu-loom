@@ -6,6 +6,8 @@
   import { t } from "$lib/i18n";
   import Icon from "$lib/components/ui/Icon.svelte";
   import type { IconName } from "$lib/icons";
+  import Card from "$lib/components/ui/Card.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Maintenance / health status grid for a device's `:0` channel.
   // Mirrors homematicip-local-frontend `_renderStatusSummary`
@@ -193,39 +195,35 @@
     return out;
   });
 
-  function toneColor(tone: StatusItem["tone"]): string {
+  function toneClass(tone: StatusItem["tone"]): string {
     switch (tone) {
       case "error":
-        return "color: var(--ha-error-color);";
+        return "text-red-600 dark:text-red-400";
       case "warn":
-        return "color: var(--ha-warning-color);";
+        return "text-amber-600 dark:text-amber-400";
       case "ok":
-        return "color: var(--ha-success-color);";
+        return "text-green-600 dark:text-green-400";
       default:
-        return "color: var(--ha-secondary-text-color);";
+        return "text-slate-500 dark:text-slate-400";
     }
   }
 </script>
 
 {#if !loading && items.length > 0}
-  <div class="ha-card">
-    <div class="ha-card-header">{t("device.maintenance.title")}</div>
-    <div class="ha-status-grid">
+  <Card class="p-4">
+    <h2 class="mb-3 text-sm font-semibold text-slate-700 dark:text-slate-300">{t("device.maintenance.title")}</h2>
+    <div class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
       {#each items as item, i (i)}
-        <div class="ha-status-item">
-          <span style={toneColor(item.tone)}>
+        <div class="flex items-center gap-2 text-sm">
+          <span class={toneClass(item.tone)}>
             <Icon name={item.icon} size={18} aria-label={item.label} />
           </span>
-          <span style="color: var(--ha-secondary-text-color);">{item.label}:</span>
-          <span style="color: var(--ha-primary-text-color);">{item.value}</span>
+          <span class="text-slate-500 dark:text-slate-400">{item.label}:</span>
+          <span class="font-medium text-slate-900 dark:text-white">{item.value}</span>
         </div>
       {/each}
     </div>
-  </div>
+  </Card>
 {:else if error}
-  <div class="ha-card">
-    <div class="ha-card-body" style="color: var(--ha-error-color);">
-      {error}
-    </div>
-  </div>
+  <ErrorState message={error} onRetry={load} />
 {/if}

@@ -9,6 +9,10 @@
   import { prefs, setDeviceView } from "$lib/stores/preferences.svelte";
   import { deviceListFilters as saved } from "$lib/stores/deviceListFilters.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   // Filter/sort state is seeded from a module store and synced back to
   // it, so the search term and filters survive opening a device and
@@ -45,7 +49,6 @@
   );
   let selected = $state<Set<string>>(new Set());
   let bulkBusy = $state(false);
-  let bulkBanner = $state<string | null>(null);
   // Inline "set room" editor — replaces a native prompt() so the bulk
   // flow stays on-brand and works cleanly on touch.
   let roomEditing = $state(false);
@@ -83,7 +86,7 @@
       );
     });
     if (list.length === 0) {
-      bulkBanner = t("devicelist.bulk_no_updates");
+      toastStore.info(t("devicelist.bulk_no_updates"));
       return;
     }
     const ok2 = await confirmStore.ask({
@@ -93,7 +96,6 @@
     });
     if (!ok2) return;
     bulkBusy = true;
-    bulkBanner = null;
     let ok = 0;
     let fail = 0;
     for (const addr of list) {
@@ -104,7 +106,9 @@
         fail++;
       }
     }
-    bulkBanner = t("devicelist.bulk_result", { ok, fail });
+    const msg = t("devicelist.bulk_result", { ok, fail });
+    if (ok > 0) toastStore.success(msg);
+    else toastStore.error(msg);
     bulkBusy = false;
     selected = new Set();
   }
@@ -113,7 +117,6 @@
     if (selected.size === 0) return;
     const room = roomDraft.trim();
     bulkBusy = true;
-    bulkBanner = null;
     let ok = 0;
     let fail = 0;
     for (const addr of selected) {
@@ -124,7 +127,9 @@
         fail++;
       }
     }
-    bulkBanner = t("devicelist.bulk_result", { ok, fail });
+    const msg = t("devicelist.bulk_result", { ok, fail });
+    if (ok > 0) toastStore.success(msg);
+    else toastStore.error(msg);
     bulkBusy = false;
     roomEditing = false;
     roomDraft = "";
@@ -374,22 +379,22 @@
       <Button type="button" size="sm" onclick={() => void bulkUpdateFirmware()} disabled={bulkBusy}>
         {t("devicelist.bulk_firmware_label")}
       </Button>
-      {#if bulkBanner}
-        <span class="text-xs text-[var(--ha-primary-text-color)]">{bulkBanner}</span>
-      {/if}
     </div>
   {/if}
 
   {#if deviceStore.error}
-    <div class="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-      {t("devicelist.load_error", { error: deviceStore.error })}
+    <div class="mb-4">
+      <ErrorState
+        message={t("devicelist.load_error", { error: deviceStore.error })}
+        onRetry={() => deviceStore.refresh()}
+      />
     </div>
   {/if}
 
   <!-- Sort toolbar: click a column to set the sort direction; clicking
        again flips asc/desc. The "group by interface" toggle clusters
        devices under section headers. -->
-  <div class="mb-3 flex flex-wrap items-center gap-2 text-xs" style="color: var(--ha-secondary-text-color);">
+  <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
     <span>{t("common.sort")}</span>
     {#each [
       { key: "name", label: t("devicelist.col.name") },
@@ -398,8 +403,9 @@
     ] as col (col.key)}
       <button
         type="button"
-        class="rounded-md border px-2 py-0.5 transition"
-        style="border-color: {sortColumn === col.key ? 'var(--ha-primary-color)' : 'var(--ha-divider-color)'}; color: {sortColumn === col.key ? 'var(--ha-primary-color)' : 'var(--ha-secondary-text-color)'};"
+        class="rounded-md border px-2 py-0.5 transition {sortColumn === col.key
+          ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+          : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
         onclick={() => setSort(col.key as "name" | "address" | "model")}
       >
         {col.label}
@@ -416,18 +422,15 @@
   </div>
 
   {#if deviceStore.loading && deviceStore.items.length === 0}
-    <p style="color: var(--ha-secondary-text-color);">{t("devices.loading")}</p>
+    <LoadingState message={t("devices.loading")} />
   {:else if filtered.length === 0}
-    <p style="color: var(--ha-secondary-text-color);">{t("devices.empty")}</p>
+    <EmptyState message={t("devices.empty")} />
   {:else if groups}
     {#each groups as g (g.iface)}
       <section class="mb-6">
-        <h2
-          class="mb-2 text-xs font-semibold uppercase tracking-wide"
-          style="color: var(--ha-secondary-text-color);"
-        >
+        <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
           {g.iface}
-          <span style="color: var(--ha-disabled-text-color);">·&nbsp;{g.items.length}</span>
+          <span class="text-slate-400 dark:text-slate-500">·&nbsp;{g.items.length}</span>
         </h2>
         <ul class={listClass}>
           {#each g.items as device (device.interface_id + "/" + device.address)}
@@ -442,7 +445,7 @@
         </ul>
       </section>
     {/each}
-    <p class="mt-4 text-sm" style="color: var(--ha-secondary-text-color);">
+    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
@@ -457,7 +460,7 @@
         </li>
       {/each}
     </ul>
-    <p class="mt-4 text-sm" style="color: var(--ha-secondary-text-color);">
+    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {/if}

@@ -7,11 +7,14 @@
   // `<p>{t("common.loading")}</p>` reimplementations so every view shows the
   // same spinner + label and the same vertical rhythm.
   type Props = {
+    // `label` and `message` are aliases for the loading text — either works
+    // so call-sites can read naturally; `label` wins when both are passed.
     label?: string;
+    message?: string;
     class?: string;
   };
 
-  let { label, class: className }: Props = $props();
+  let { label, message, class: className }: Props = $props();
 </script>
 
 <div
@@ -23,5 +26,5 @@
   aria-live="polite"
 >
   <Spinner size={18} />
-  <span>{label ?? t("common.loading")}</span>
+  <span>{label ?? message ?? t("common.loading")}</span>
 </div>

@@ -9,6 +9,8 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   type Props = {
     deviceAddress: string;
@@ -21,7 +23,6 @@
   let links = $state<Link[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let banner = $state<string | null>(null);
   let adding = $state(false);
   // The link currently being edited (or null for list view).
   let editing = $state<Link | null>(null);
@@ -138,7 +139,6 @@
       destructive: true,
     });
     if (!ok) return;
-    banner = null;
     try {
       await api.removeLink(
         deviceAddress,
@@ -203,9 +203,6 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        {#if banner}
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-        {/if}
         <Button
           type="button"
           variant="outline"
@@ -227,8 +224,8 @@
     </header>
 
     {#if loadError}
-      <div class="mb-4 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
-        {loadError}
+      <div class="mb-4">
+        <ErrorState message={loadError} onRetry={load} />
       </div>
     {/if}
 
@@ -243,7 +240,7 @@
     {/if}
 
     {#if links.length === 0 && !loading && !adding}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("links.no_for_device")}</p>
+      <EmptyState message={t("links.no_for_device")} />
     {:else}
       {#if links.length > 1}
         <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
@@ -279,7 +276,7 @@
         </div>
       {/if}
       {#if visibleLinks.length === 0}
-        <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.no_matches")}</p>
+        <EmptyState message={t("common.no_matches")} />
       {/if}
       <ul class="space-y-2">
         {#each visibleLinks as link (link.sender_address + "->" + link.receiver_address)}
