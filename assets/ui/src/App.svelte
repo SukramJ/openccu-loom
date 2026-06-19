@@ -36,6 +36,7 @@
   import ConfirmDialog from "$lib/components/ui/ConfirmDialog.svelte";
   import Sidebar from "$lib/components/ui/Sidebar.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import { dirty } from "$lib/stores/dirty.svelte";
   import { t } from "$lib/i18n";
   import RestartBanner from "$lib/components/RestartBanner.svelte";
@@ -156,6 +157,23 @@
   );
 </script>
 
+<svelte:head>
+  <title>{
+    route.kind === "diagnostics" ? t("page.title.diagnostics") :
+    route.kind === "logs" ? t("page.title.logs") :
+    route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
+    route.kind === "settings" ? t("page.title.settings") :
+    t("page.title.default")
+  }</title>
+</svelte:head>
+
+<a
+  href="#main"
+  class="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg focus:ring-2 focus:ring-brand-500 dark:focus:bg-slate-900 dark:focus:text-white"
+>
+  {t("app.skip_to_content")}
+</a>
+
 <Toaster />
 <ConfirmDialog />
 <ShortcutHelp open={helpOpen} onClose={() => (helpOpen = false)} />
@@ -212,7 +230,7 @@
         </div>
       </header>
       <RestartBanner />
-      <main>
+      <main id="main">
         {#if route.kind === "list"}
           <DeviceList />
         {:else if route.kind === "detail"}
@@ -232,17 +250,23 @@
         {:else if route.kind === "audit"}
           <AuditLog />
         {:else if route.kind === "diagnostics"}
-          {#await loadDiagnostics() then { default: Diagnostics }}
+          {#await loadDiagnostics()}
+            <LoadingState />
+          {:then { default: Diagnostics }}
             <Diagnostics />
           {/await}
         {:else if route.kind === "logs"}
           {#if authStore.identity?.role === "admin"}
-            {#await loadLogs() then { default: Logs }}
+            {#await loadLogs()}
+              <LoadingState />
+            {:then { default: Logs }}
               <Logs />
             {/await}
           {:else}
             <section class="mx-auto max-w-6xl px-6 py-8">
-              <p style="color: var(--ha-secondary-text-color);">{t("logs.forbidden")}</p>
+              <div class="rounded-lg border border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)] px-4 py-3 text-sm text-[var(--ha-secondary-text-color)]">
+                {t("logs.forbidden")}
+              </div>
             </section>
           {/if}
         {:else if route.kind === "settings"}
@@ -252,7 +276,9 @@
         {:else if route.kind === "firmware"}
           <FirmwareList />
         {:else if route.kind === "matter"}
-          {#await loadMatter() then { default: Matter }}
+          {#await loadMatter()}
+            <LoadingState />
+          {:then { default: Matter }}
             <Matter subpath={route.subpath} />
           {/await}
         {:else if route.kind === "visibility"}

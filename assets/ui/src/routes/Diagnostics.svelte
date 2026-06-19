@@ -13,8 +13,10 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
+  import { toastStore } from "$lib/stores/toast.svelte";
   // `t()` reads prefs.locale reactively; date formatting reads it directly.
 
   let health = $state<HealthSnapshot | null>(null);
@@ -30,7 +32,6 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
   let reconnecting = $state<string | null>(null);
-  let banner = $state<string | null>(null);
 
   // Log-Level toggle form state
   let newLevelPath = $state("openccu-loom.client.transport.xmlrpc");
@@ -101,25 +102,23 @@
   async function applyLevel() {
     if (!newLevelPath.trim()) return;
     levelSaving = true;
-    banner = null;
     try {
       await api.setLogLevel(newLevelPath.trim(), newLevel, newLevelTTL);
       logLevels = await api.listLogLevels();
-      banner = t("diagnostics.log_level_applied");
+      toastStore.success(t("diagnostics.log_level_applied"));
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       levelSaving = false;
     }
   }
 
   async function resetLevel(path: string) {
-    banner = null;
     try {
       await api.resetLogLevel(path);
       logLevels = await api.listLogLevels();
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
 
@@ -144,18 +143,17 @@
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
 
   async function stopCapture(id: string) {
     captureStopping = id;
-    banner = null;
     try {
       await api.stopCapture(id);
       captures = await api.listCaptures();
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       captureStopping = null;
     }
@@ -163,18 +161,18 @@
 
   async function reconnect(id: string) {
     reconnecting = id;
-    banner = null;
     try {
       await api.reconnectInterface(id);
-      banner = t("diagnostics.reconnect_done", { id });
+      toastStore.success(t("diagnostics.reconnect_done", { id }));
       await load();
     } catch (err) {
-      banner =
+      toastStore.error(
         err instanceof ApiError
           ? `${err.status}: ${err.message}`
           : err instanceof Error
             ? err.message
-            : String(err);
+            : String(err),
+      );
     } finally {
       reconnecting = null;
     }
@@ -184,18 +182,17 @@
     try {
       rpcRecordings = await api.listRpcRecordings();
     } catch {
-      // silent — banner already set by start/stop callers
+      // silent — errors are surfaced by the start/stop callers
     }
   }
 
   async function stopRpcRecording() {
     rpcRecordingStopping = true;
-    banner = null;
     try {
       rpcRecordings = await api.stopRpcRecording();
-      banner = t("diagnostics.rpc_recording.stopped");
+      toastStore.success(t("diagnostics.rpc_recording.stopped"));
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       rpcRecordingStopping = false;
     }
@@ -206,7 +203,6 @@
 
   async function startRecording() {
     recordingStarting = true;
-    banner = null;
     try {
       if (recType === "log" || recType === "both") {
         await api.startCapture({
@@ -218,9 +214,9 @@
       if (recType === "rpc" || recType === "both") {
         rpcRecordings = await api.startRpcRecording(rpcScope ? [rpcScope] : undefined, captureDuration, captureAnonymise);
       }
-      banner = t("diagnostics.rpc_recording.started");
+      toastStore.success(t("diagnostics.rpc_recording.started"));
     } catch (err) {
-      banner = err instanceof ApiError ? err.message : String(err);
+      toastStore.error(err instanceof ApiError ? err.message : String(err));
     } finally {
       recordingStarting = false;
     }
@@ -250,7 +246,7 @@
       rows.push({
         kind: "log",
         id: c.id,
-        ccu: "alle",
+        ccu: t("diagnostics.all_ccus"),
         status: c.status,
         statusVariantKey: c.status === "running" ? "warning" : "default",
         startedAt: c.started_at ?? "",
@@ -382,6 +378,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>{t("page.title.diagnostics")}</title>
+</svelte:head>
+
 <section class="mx-auto max-w-6xl px-4 sm:px-6 py-6 space-y-6">
   <header class="flex flex-wrap items-center justify-between gap-3">
     <div>
@@ -389,9 +389,6 @@
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.subtitle")}</p>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      {#if banner}
-        <span class="text-xs text-[var(--ha-secondary-text-color)]">{banner}</span>
-      {/if}
       <Button
         type="button"
         variant="outline"
@@ -413,11 +410,7 @@
   </header>
 
   {#if loadError}
-    <Card class="p-3">
-      <p class="text-sm text-red-600 dark:text-red-400">
-        {t("common.error")} {loadError}
-      </p>
-    </Card>
+    <ErrorState message={loadError} onRetry={() => void load()} />
   {/if}
 
   {#if centralScoreEntries.length > 0}

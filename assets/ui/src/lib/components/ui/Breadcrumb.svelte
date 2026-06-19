@@ -22,9 +22,8 @@
 
 {#if items.length > 0}
   <nav
-    class="flex flex-wrap items-center gap-1 text-sm {className}"
+    class="flex flex-wrap items-center gap-1 text-sm text-[var(--ha-secondary-text-color)] dark:text-slate-400 {className}"
     aria-label={t("ui.breadcrumb")}
-    style="color: var(--ha-secondary-text-color);"
   >
     {#each items as crumb, i (i)}
       {#if i > 0}
@@ -33,16 +32,14 @@
       {#if crumb.href && i < items.length - 1}
         <a
           href={crumb.href}
-          class="hover:text-brand-700 hover:underline"
-          style="color: var(--ha-secondary-text-color);"
+          class="text-[var(--ha-secondary-text-color)] hover:text-brand-700 hover:underline dark:text-slate-400 dark:hover:text-brand-300"
         >
           {crumb.label}
         </a>
       {:else}
         <span
-          class="font-medium"
+          class="font-medium text-[var(--ha-primary-text-color)] dark:text-slate-100"
           aria-current={i === items.length - 1 ? "page" : undefined}
-          style="color: var(--ha-primary-text-color);"
         >
           {crumb.label}
         </span>
