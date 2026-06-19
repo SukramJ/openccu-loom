@@ -177,19 +177,30 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to 503. The signal stays visible in diagnostics and no longer skews the
   primary-client-healthy verdict. Mirrors the reference's distinct
   `ping_pong_mismatch_{interface_id}` issue model.
-- **Measured sensors no longer publish the `0.0` placeholder as available
-  after a CCU restart.** A numeric measurement parameter (e.g.
-  `ACTUAL_TEMPERATURE`) reporting `STATUS = UNKNOWN` — the `DEFAULT` placeholder
-  the CCU pushes after a restart until the device delivers a real reading — is
-  now treated as invalid by `DataPoint.IsStatusValid`. All north-bound surfaces
-  (MQTT, REST, WebSocket) now gate `available` on `IsStatusValid()`, so an
-  `OVERFLOW`/`UNDERFLOW` status is suppressed too. For MQTT, when the paired
-  `<X>_STATUS` arrives the base parameter's slot is republished, so Home
-  Assistant marks the entity unavailable for that window instead of recording
-  the implausible value into long-term statistics. Control parameters such as
-  `LEVEL` carry no physical quantity and stay valid/available while `UNKNOWN`.
-  Mirrors the reference fixes for upstream issues #3228 and #2630; see
-  `docs/parity/by_design.md` (BD-CCU-StatusUncertainViaTracker).
+- **Sensors no longer publish a spurious `0` after a CCU restart.** The
+  `fetch_all_device_data.fn` ReGa bulk-load script coerced an **empty**
+  (not-yet-measured) numeric value into `"0"`. After a restart a data point such
+  as `ACTUAL_TEMPERATURE` can already carry a timestamp but no real reading yet;
+  the script then emitted `0`, published as a confirmed value (e.g. `0 °C`, or
+  `0`/closed for a cover's `LEVEL`). The script now **skips** empty values, so
+  the data point stays unset until a real measurement arrives. This is the
+  actual fix for upstream issue #3228 — the `#3228` DEBUG log confirmed the
+  source is the seed coercion (the CCU pushes no `STATUS = UNKNOWN`; every
+  `*_STATUS` event is `NORMAL` and a post-reconnect `getValue` returns
+  `Fault -5`), not the measurement status.
+- **North-bound `available` is now gated on the full data-point validity,
+  mirroring the reference `is_valid`.** REST, WebSocket and the MQTT runtime
+  (`VALUES`) plane now report a reading as available only when it is valid:
+  refreshed (a value has been observed), its paired `<X>_STATUS` is acceptable,
+  its value type matches, and it is within range. An `OVERFLOW`/`UNDERFLOW`
+  status or an as-yet-unobserved data point therefore publishes as unavailable
+  (with a `null` value) instead of as a confirmed reading. STATUS validity keeps
+  reference parity — `NORMAL` and `UNKNOWN` are both valid for every parameter
+  (no measured-vs-control discriminator), so a control actuator such as `LEVEL`
+  reporting `UNKNOWN` during the init-phase grace period stays available
+  (upstream #2630). MQTT device-level reachability and the `MASTER`/`CALCULATED`
+  planes are unchanged. See `docs/parity/by_design.md`
+  (BD-CCU-StatusUncertainViaTracker).
 
 ## [0.5.0]
 

@@ -761,7 +761,7 @@ func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKi
 
 		// A `<X>_STATUS` event updates the base parameter's measurement
 		// status out-of-band; republish the base slot so its availability
-		// reflects the new status.
+		// reflects the new status under the IsValid() gate.
 		if _, isPair := hmenum.Parameter(e.Key.Parameter).BasePair(); isPair {
 			b.republishBaseForStatusPair(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ch)
 		}
@@ -1104,13 +1104,16 @@ func (b *EventBridge) publishSlotState(
 	// on the retained /config companion topic, ADR 0011.
 	src, dp := lookupDPSource(ch, e.Key.Parameter, bucket)
 	if dp != nil {
-		// Gate availability on the measurement status: a numeric measured
-		// value reporting STATUS=UNKNOWN after a CCU restart carries only the
-		// DEFAULT placeholder (e.g. ACTUAL_TEMPERATURE = 0.0), and an
-		// OVERFLOW/UNDERFLOW status is likewise invalid. Publishing it as
-		// unavailable keeps HA from recording the implausible value. See
-		// docs/parity/by_design.md (BD-CCU-StatusUncertainViaTracker).
-		state.Available = statusAvailable(dp)
+		// Gate availability on the data point's full validity, mirroring
+		// the reference is_valid north-bound gate (model/data_point.py
+		// is_valid): refreshed + acceptable STATUS + value type + range. An
+		// unobserved, out-of-range or OVERFLOW/UNDERFLOW reading publishes as
+		// unavailable so HA never records it as a confirmed value. Only the
+		// runtime VALUES plane is gated; MASTER config and CALCULATED derived
+		// slots keep their existing availability.
+		if bucket == payload.BucketValues {
+			state.Available = dpValid(dp)
+		}
 		pd := dp.ParameterData()
 		// ENUM wire values come off the wire as int indices; HA's
 		// MQTT discovery declares `options: [...]` from the same
@@ -1134,26 +1137,22 @@ func (b *EventBridge) publishSlotState(
 	}
 }
 
-// statusAvailable reports whether a data point's current measurement status
-// allows it to be published as available: a measured value reporting
-// STATUS=UNKNOWN/OVERFLOW/… is not available. Data points that do not expose a
-// status gate default to available — which keeps the unobserved-DP snapshot
-// convention (`{"value":null,"available":true}`) intact, since IsStatusValid is
-// vacuously true before any status observation. Gating on the full IsValid()
-// chain is deliberately NOT done here; see docs/parity/by_design.md
-// (BD-CCU-StatusUncertainViaTracker).
-func statusAvailable(dp device.ParameterDataPoint) bool {
-	if sv, ok := dp.(interface{ IsStatusValid() bool }); ok {
-		return sv.IsStatusValid()
+// dpValid reports whether a data point is in a fully valid state for
+// north-bound exposure. Data points that do not expose IsValid default to
+// available. Mirrors the reference is_valid (model/data_point.py): refreshed
+// + acceptable STATUS + value type + range.
+func dpValid(dp device.ParameterDataPoint) bool {
+	if v, ok := dp.(interface{ IsValid() bool }); ok {
+		return v.IsValid()
 	}
 	return true
 }
 
-// republishBaseForStatusPair re-publishes the base parameter's slot state after
-// its paired `<X>_STATUS` changed. A status event is delivered on its own topic
-// and updates the base data point's status out-of-band, so without this the
-// base slot would keep its stale availability when a measured value flips
-// (in)valid on UNKNOWN.
+// republishBaseForStatusPair re-publishes the base parameter's slot state
+// after its paired `<X>_STATUS` changed. A status event is delivered on its
+// own topic and updates the base data point's status out-of-band, so without
+// this the base slot would keep its stale availability when a measured value
+// flips (in)valid as its STATUS changes.
 func (b *EventBridge) republishBaseForStatusPair(
 	ctx context.Context,
 	centralName, iface, deviceAddr string,
@@ -1186,7 +1185,7 @@ func (b *EventBridge) republishBaseForStatusPair(
 	}
 	state := payload.PerDPState{
 		Value:     value,
-		Available: statusAvailable(dp),
+		Available: dpValid(dp),
 	}
 	if ts := dp.ModifiedAt(); !ts.IsZero() {
 		epoch := payload.EpochSeconds(ts)
