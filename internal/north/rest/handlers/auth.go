@@ -283,7 +283,7 @@ func Login(d *AuthDeps) http.HandlerFunc {
 				problem.New(problem.TypeUnauthorized, r, "Invalid credentials", "login refused"))
 			return
 		}
-		sess, err := d.Sessions.Issue(id)
+		sess, err := d.Sessions.Issue(id) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		if err != nil {
 			problem.Write(w, http.StatusInternalServerError,
 				problem.New(problem.TypeInternal, r, "Session issue failed", err.Error()))
@@ -302,7 +302,7 @@ func Login(d *AuthDeps) http.HandlerFunc {
 func Logout(d *AuthDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if c, err := r.Cookie(auth.SessionCookieName); err == nil && d != nil && d.Sessions != nil {
-			d.Sessions.Revoke(c.Value)
+			d.Sessions.Revoke(c.Value) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		}
 		auth.ClearSessionCookie(w)
 		w.WriteHeader(http.StatusNoContent)
