@@ -196,7 +196,7 @@ Items still pending under P0-5 / P1, ordered by impact:
 
 ## Pre-release production-load test
 
-**Status**: not started; pre-release QA blocker for 0.1.0.
+**Status**: not started; pre-release QA gate (target: before 1.0.0).
 
 The daemon ships with contract tests + golden-file replay +
 godevccu integration tests, but no measured headroom against a
@@ -235,6 +235,6 @@ realistic fleet.
 
 ### When
 
-Before tagging the 0.1.0 release. Findings + remediation tracked
+Before tagging the 1.0.0 release. Findings + remediation tracked
 in the architecture audit doc.
 
