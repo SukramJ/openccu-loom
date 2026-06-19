@@ -21,6 +21,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Consistent operating concept across the whole Config UI (SPA).** A UX audit
+  found the screens had drifted apart because there was no shared vocabulary for
+  the recurring states, so every view hand-rolled its own. New shared
+  `LoadingState` / `EmptyState` / `ErrorState` components (plus a `Spinner`) now
+  back every list and detail screen, so loading, empty and error surfaces look
+  and behave the same everywhere (the error surface always shows a localized
+  "Error: …" with an optional retry). Action results (save / delete / create /
+  run / restore) now consistently use toast notifications instead of a mix of
+  toasts and easy-to-miss inline header banners; every destructive action is
+  guarded by the shared confirm dialog (including the previously-unguarded
+  program "Run"). Several real dark-mode bugs are fixed — `Input`/`Select`
+  rendered typed text black-on-dark, and a few widgets used hardcoded colours
+  that didn't invert — and raw `<button>`/`<select>`/`<input>` elements were
+  replaced with the design-system primitives. Accessibility was tightened
+  (tab strips expose `role="tab"`/`aria-selected`, a skip-to-content link, and
+  per-route document titles), and two stray hardcoded German strings were
+  localized. The daemon restart that previously could fire silently from the
+  app-wide banner now surfaces its result.
 - **Devices now appear with their names on a cold boot — the daemon waits for
   the CCU to be ready instead of racing it.** When OpenCCU-Loom co-boots with a
   (re)booting CCU, the backend answers `listDevices` / `Device.listAllDetail`
