@@ -1327,39 +1327,17 @@ func (d *DataPoint[T]) HasStatusParameter() bool {
 // an acceptable state.
 //
 // When no status observation has been recorded (HasStatusParameter() ==
-// false) the check passes vacuously — there is nothing to fail. NORMAL is
-// always valid. UNKNOWN means "not measured yet" during the init-phase grace
-// period: it stays valid for control parameters (e.g. LEVEL, whose reported
-// position is meaningful) but is invalid for numeric measurement parameters,
-// whose value is then only the DEFAULT placeholder (e.g. ACTUAL_TEMPERATURE =
-// 0.0 after a CCU restart). See docs/parity/by_design.md
-// (BD-CCU-StatusUncertainViaTracker).
+// false) the check passes vacuously — there is nothing to fail. Once observed
+// the status must be NORMAL or UNKNOWN; the latter covers the init-phase
+// grace period before the CCU has reported a definitive quality reading.
 func (d *DataPoint[T]) IsStatusValid() bool {
 	d.mu.RLock()
-	observed := d.statusObserved
-	status := d.status
-	d.mu.RUnlock()
-	if !observed {
+	defer d.mu.RUnlock()
+	if !d.statusObserved {
 		return true
 	}
-	if status == hmenum.ParameterStatusNormal {
-		return true
-	}
-	if status == hmenum.ParameterStatusUnknown {
-		return !d.isMeasuredQuantity()
-	}
-	return false
-}
-
-// isMeasuredQuantity reports whether this data point is a numeric physical
-// measurement (e.g. ACTUAL_TEMPERATURE, HUMIDITY, voltage). Such parameters
-// report the DEFAULT placeholder together with STATUS=UNKNOWN after a CCU
-// restart until the device delivers a real reading. Control/actuator
-// parameters such as LEVEL carry no physical quantity and are not measured.
-func (d *DataPoint[T]) isMeasuredQuantity() bool {
-	t := d.Descriptor.Type
-	return (t == hmenum.ParameterTypeFloat || t == hmenum.ParameterTypeInteger) &&
-		d.Quantity() != hmenum.QuantityNone
+	return d.status == hmenum.ParameterStatusNormal ||
+		d.status == hmenum.ParameterStatusUnknown
 }
 
 // allowsNoneValue reports whether nil/zero is a valid "value" for this

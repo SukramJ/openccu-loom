@@ -116,7 +116,7 @@ func TestStaleEviction_ObservedDP_NormalPublish(t *testing.T) {
 	}
 }
 
-// TestUnobservedDP_NoWireLoad_AvailableSlotState pins two boot-time
+// TestUnobservedDP_NoWireLoad_UnavailableSlotState pins two boot-time
 // invariants for an unobserved DP:
 //
 //  1. registerAndLoadDP MUST NOT issue a LoadValue / getValue radio
@@ -126,13 +126,13 @@ func TestStaleEviction_ObservedDP_NormalPublish(t *testing.T) {
 //     the warning band on every restart. The reference design also
 //     skips per-DP wire loads — see [seedRelevantInitParameters] /
 //     [seedReadableEvents] for the limited boot loads that ARE permitted.
-//  2. The DP's slot state is published with `available:true` and a
-//     `null` value (NOT evicted to an empty payload). Availability
-//     tracks device reachability, not value observation — a reachable
-//     device whose DP has not reported yet is online with an `unknown`
-//     value. The previous evict-to-empty design left the entity
-//     `unavailable` in HA under `availability_mode: all`.
-func TestUnobservedDP_NoWireLoad_AvailableSlotState(t *testing.T) {
+//  2. The DP's slot state is published with `available:false` and a
+//     `null` value (NOT evicted to an empty payload). An unobserved DP
+//     is not refreshed and therefore fails the IsValid() gate, mirroring
+//     the reference is_valid gate: not-refreshed → not valid → unavailable.
+//     The no-eviction contract is unchanged — the slot always carries a
+//     JSON body so HA discovery does not remove the entity.
+func TestUnobservedDP_NoWireLoad_UnavailableSlotState(t *testing.T) {
 	t.Parallel()
 
 	dp := generic.NewDataPoint[bool](generic.Spec{
@@ -167,14 +167,14 @@ func TestUnobservedDP_NoWireLoad_AvailableSlotState(t *testing.T) {
 	}
 
 	evictions := 0
-	availablePublishes := 0
+	unavailablePublishes := 0
 	for _, p := range pub.Published() {
 		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			switch {
 			case len(p.Payload) == 0 && p.Retain:
 				evictions++
-			case strings.Contains(string(p.Payload), `"available":true`):
-				availablePublishes++
+			case strings.Contains(string(p.Payload), `"available":false`):
+				unavailablePublishes++
 				if !strings.Contains(string(p.Payload), `"value":null`) {
 					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
 				}
@@ -184,8 +184,8 @@ func TestUnobservedDP_NoWireLoad_AvailableSlotState(t *testing.T) {
 	if evictions != 0 {
 		t.Fatalf("expected 0 evictions for unobserved DP, got %d", evictions)
 	}
-	if availablePublishes != 1 {
-		t.Fatalf("expected 1 available:true slot publish for unobserved DP, got %d", availablePublishes)
+	if unavailablePublishes != 1 {
+		t.Fatalf("expected 1 available:false slot publish for unobserved DP, got %d", unavailablePublishes)
 	}
 }
 

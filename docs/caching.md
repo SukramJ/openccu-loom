@@ -57,6 +57,37 @@ daemon's database carries a recent values snapshot.
     combined load into the DutyCycle warning band. Let the CCU settle
     first.
 
+### Restored values and north-bound availability
+
+Boot applies caches in a fixed order: the device model is built, the
+persistent values cache is **restored** onto each data point, then
+`fetch_all_device_data` **seeds** live values, then the initial snapshot is
+published north-bound.
+
+The restore step is what makes a warm start look ready instantly — and it also
+governs the `available` flag that REST, WebSocket and MQTT expose. Restoring a
+cached value marks the data point as **observed** and stamps it with the
+persisted timestamp, so it satisfies the same `IsValid()` gate a live value
+would (refreshed + acceptable status + value type + range). The north-bound
+`available` flag is therefore `true` and the entity carries its **last-known
+value** — stale but plausible — until the CCU pushes a fresh one.
+
+Only a data point that has **never** been observed **and** has no cached value
+publishes `available:false` (a brand-new device, a freshly added parameter, an
+un-cached value type, or a wiped `data_dir`). It flips to `available:true`
+automatically on the first real value.
+
+The seed pass overwrites a restored value only where the CCU returns a fresh,
+non-empty value. It deliberately does **not** coerce an empty (not-yet-measured)
+value into `0`: doing so used to clobber the restored last-known reading with an
+implausible placeholder (e.g. `0 °C` right after a CCU restart). See
+`docs/parity/by_design.md` (BD-CCU-StatusUncertainViaTracker).
+
+`available` means "we have a value", not "it is fresh". How old the value is
+travels separately — `refreshed_at` / `modified_at` on the REST/WS payload, and
+the MQTT `expire_after` retention — so a consumer can distinguish a freshly
+pushed reading from a restored one.
+
 ## Steady-state radio load
 
 Once the daemon is ready, the only radio traffic it generates is from

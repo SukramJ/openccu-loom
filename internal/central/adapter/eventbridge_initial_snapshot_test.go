@@ -100,15 +100,15 @@ func TestPublishInitialSnapshotPushesEveryObservedDataPoint(t *testing.T) {
 	}
 }
 
-// TestPublishInitialSnapshotPublishesAvailableForUnobservedDP guards
+// TestPublishInitialSnapshotPublishesUnavailableForUnobservedDP guards
 // that a DataPoint without an observed value (and no ValueLoader
 // installed, so no wire load happens) is published with an explicit
-// `available:true` slot state carrying a `null` value — NOT evicted to
-// an empty payload. Availability tracks device reachability, not value
-// observation: a reachable device whose DP has not reported yet is
-// online with an `unknown` value. Evicting to empty left the entity
-// `unavailable` in HA under `availability_mode: all`.
-func TestPublishInitialSnapshotPublishesAvailableForUnobservedDP(t *testing.T) {
+// `available:false` slot state carrying a `null` value — NOT evicted to
+// an empty payload. An unobserved DP is not refreshed and therefore fails
+// the IsValid() gate (not-refreshed → not valid → unavailable), mirroring
+// the reference is_valid gate. The no-eviction contract is unchanged: the
+// slot is always published with a JSON body, never with an empty payload.
+func TestPublishInitialSnapshotPublishesUnavailableForUnobservedDP(t *testing.T) {
 	t.Parallel()
 
 	reg, dev := registryWithDevice(t)
@@ -142,17 +142,17 @@ func TestPublishInitialSnapshotPublishesAvailableForUnobservedDP(t *testing.T) {
 
 	eb.PublishInitialSnapshot(context.Background())
 
-	// Expect exactly one available:true slot publish (null value) to the
+	// Expect exactly one available:false slot publish (null value) to the
 	// state topic and zero empty-payload evictions.
 	evictions := 0
-	availablePublishes := 0
+	unavailablePublishes := 0
 	for _, p := range pub.Published() {
 		if strings.HasSuffix(p.Topic, "/0001ABCD/1/values/STATE") {
 			switch {
 			case len(p.Payload) == 0 && p.Retain:
 				evictions++
-			case strings.Contains(string(p.Payload), `"available":true`):
-				availablePublishes++
+			case strings.Contains(string(p.Payload), `"available":false`):
+				unavailablePublishes++
 				if !strings.Contains(string(p.Payload), `"value":null`) {
 					t.Errorf("unobserved slot state should carry a null value, got %s", p.Payload)
 				}
@@ -162,8 +162,8 @@ func TestPublishInitialSnapshotPublishesAvailableForUnobservedDP(t *testing.T) {
 	if evictions != 0 {
 		t.Fatalf("expected 0 evictions for unobserved DP, got %d", evictions)
 	}
-	if availablePublishes != 1 {
-		t.Fatalf("expected 1 available:true slot publish for unobserved DP, got %d", availablePublishes)
+	if unavailablePublishes != 1 {
+		t.Fatalf("expected 1 available:false slot publish for unobserved DP, got %d", unavailablePublishes)
 	}
 }
 
@@ -350,6 +350,10 @@ func TestEventBridgeRoutesCalculatedDPToCalculatedBucket(t *testing.T) {
 // at the per-DP slot topic (`channels/<n>/values/<param>/state`)
 // carrying the canonical [payload.PerDPState] JSON wrapper. Both publish
 // paths run in parallel until the legacy aggregate publish is retired.
+//
+// The model DP is seeded via OnWireValue before the bus event is published
+// so that IsValid() returns true and the slot is published with available:true.
+// In production a value-change event always corresponds to an observed DP.
 func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 	t.Parallel()
 	reg, dev := registryWithDevice(t)
@@ -366,6 +370,10 @@ func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
 		},
 	})
+	// Seed the model DP so IsValid() is true when the bus event arrives.
+	if !dp.OnWireValue(true) {
+		t.Fatalf("OnWireValue refused to seed")
+	}
 	ch.Put(dp)
 
 	pub := mqtt.NewNoopClient()

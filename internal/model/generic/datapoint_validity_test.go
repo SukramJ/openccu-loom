@@ -330,30 +330,15 @@ func TestIsStatusValidTrueAfterNormalStatus(t *testing.T) {
 }
 
 // TestIsStatusValidTrueAfterUnknownStatus verifies that after
-// UpdateStatus(UNKNOWN) the status gate still passes for a CONTROL parameter
-// (LEVEL carries no physical quantity) — the init-phase grace period where the
-// reported position is meaningful.
+// UpdateStatus(UNKNOWN) the status gate still passes — the init-phase grace
+// period before the CCU has reported a definitive quality reading.
 func TestIsStatusValidTrueAfterUnknownStatus(t *testing.T) {
 	t.Parallel()
 
 	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterLevel, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
 	dp.UpdateStatus(hmenum.ParameterStatusUnknown)
 	if !dp.IsStatusValid() {
-		t.Fatal("IsStatusValid() must be true when status is UNKNOWN for a control parameter (mirrors aiohomematic)")
-	}
-}
-
-// TestIsStatusValidFalseAfterUnknownStatusForMeasuredValue verifies that a
-// numeric measurement parameter (ACTUAL_TEMPERATURE → QuantityTemperature)
-// becomes invalid while STATUS=UNKNOWN: the reported value is then only the
-// DEFAULT placeholder (0.0) after a CCU restart.
-func TestIsStatusValidFalseAfterUnknownStatusForMeasuredValue(t *testing.T) {
-	t.Parallel()
-
-	dp := NewDataPoint[float64](baseCfg(hmenum.ParameterActualTemperature, hmenum.ParameterTypeFloat, hmenum.OperationsRead))
-	dp.UpdateStatus(hmenum.ParameterStatusUnknown)
-	if dp.IsStatusValid() {
-		t.Fatal("IsStatusValid() must be false when status is UNKNOWN for a measured value (#3228)")
+		t.Fatal("IsStatusValid() must be true when status is UNKNOWN (init-phase, mirrors aiohomematic)")
 	}
 }
 
