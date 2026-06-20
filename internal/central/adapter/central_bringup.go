@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // centralBringUp owns one central's south-bound bring-up as a restartable
@@ -147,13 +148,32 @@ func (b *centralBringUp) reinit(ctx context.Context) {
 }
 
 // clearModel removes every device from the unit's model registry via the
-// unit's own RemoveDevice path, so channel teardown + bus unsubscribe +
-// DeviceRemovedEvent fire for each (north-bound surfaces drop the entities).
+// unit's own RemoveDevice path (channel teardown + bus unsubscribe +
+// DeviceRemovedEvent fire for each, so north-bound surfaces drop the entities),
+// and also drops each device's in-memory device-description + paramset entries
+// (mirrors the unpair cleanup, DeviceCoordinator.RefreshAfterUnpair).
+//
+// Clearing the descriptions is what lets the re-pull forget a device the CCU no
+// longer reports: the re-pull's ListDevices omits it, but
+// CheckAndCreateDevicesFromCache would otherwise re-materialise it from a stale
+// description still in the registry — resurrecting a device removed on the CCU.
 func (b *centralBringUp) clearModel() {
 	if b.unit == nil || b.unit.ModelRegistry == nil {
 		return
 	}
 	for _, d := range b.unit.ModelRegistry.List() {
+		iface := hmenum.Interface(d.InterfaceID)
+		if b.unit.DescRegistry != nil {
+			b.unit.DescRegistry.Delete(iface, d.Address)
+		}
+		if b.unit.ParamsetReg != nil {
+			for _, ch := range d.Channels() {
+				b.unit.ParamsetReg.DeleteChannel(iface, ch.Address)
+			}
+		}
+		if b.unit.DeviceRegistry != nil {
+			b.unit.DeviceRegistry.Remove(iface, d.Address)
+		}
 		b.unit.RemoveDevice(d.Address)
 	}
 }

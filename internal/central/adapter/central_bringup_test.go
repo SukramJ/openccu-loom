@@ -13,7 +13,51 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
+
+// TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries is the
+// reproducer for the resurrection gap: clearModel must drop a device's
+// in-memory device-description and paramset entries, not just the model object.
+// Otherwise the re-pull's CheckAndCreateDevicesFromCache re-materialises a
+// device the CCU no longer reports from its stale description, so a device
+// removed on the CCU would survive a cache clear + re-pull.
+func TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries(t *testing.T) {
+	t.Parallel()
+
+	unit, err := central.New(central.Config{Name: "ccu-test"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	d := device.New(device.Config{
+		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		Address: "AAAA0001", Model: "HmIP-STH", Name: "Sensor",
+	})
+	d.AddChannel("AAAA0001:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	unit.ModelRegistry.Put(d)
+	unit.DescRegistry.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{Address: "AAAA0001"})
+	unit.ParamsetReg.Add(hmenum.InterfaceHmIPRF, "AAAA0001:1", hmenum.ParamsetKeyValues,
+		hmproto.Paramset{"STATE": {Type: hmenum.ParameterTypeBool}}, "HmIP-STH")
+
+	if unit.DescRegistry.Len() == 0 || unit.ParamsetReg.Len() == 0 {
+		t.Fatalf("precondition: registries must be populated (desc=%d paramset=%d)",
+			unit.DescRegistry.Len(), unit.ParamsetReg.Len())
+	}
+
+	b := &centralBringUp{logger: slog.Default(), unit: unit}
+	b.clearModel()
+
+	if got := unit.ModelRegistry.Len(); got != 0 {
+		t.Fatalf("model registry not cleared: Len() = %d, want 0", got)
+	}
+	if got := unit.DescRegistry.Len(); got != 0 {
+		t.Fatalf("description registry not cleared: Len() = %d, want 0 (stale device would be resurrected)", got)
+	}
+	if got := unit.ParamsetReg.Len(); got != 0 {
+		t.Fatalf("paramset registry not cleared: Len() = %d, want 0", got)
+	}
+}
 
 // TestCentralBringUp_CloserOrderAndReRunnable verifies that teardown runs
 // per-generation closers in reverse registration order and that a second
