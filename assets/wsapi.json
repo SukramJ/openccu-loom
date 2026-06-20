@@ -84,6 +84,12 @@
     },
     {
       "category": "ccu",
+      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+      "name": "ccu.reload_channel_config",
+      "args": { "channel_address": "string" }
+    },
+    {
+      "category": "ccu",
       "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
       "name": "ccu.reload_device_config",
       "args": { "device_address": "string" }
@@ -130,6 +136,12 @@
       "category": "change_history",
       "description": "List recent paramset-write history entries, optionally filtered by channel address.",
       "name": "change_history.list"
+    },
+    {
+      "category": "config",
+      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+      "name": "config.reload_channel_config",
+      "args": { "channel_address": "string" }
     },
     {
       "category": "config",

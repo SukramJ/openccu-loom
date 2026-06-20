@@ -13,6 +13,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // DeviceReloaderAdapter implements ws.DeviceReloader. It locates the
@@ -63,6 +64,52 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface)
 	}
 	return fmt.Errorf("device_reloader: device not found: %s", deviceAddress)
+}
+
+// ReloadChannelConfig re-pulls the paramset descriptions (VALUES, MASTER,
+// LINK) and current MASTER values for a single channel, then re-materialises
+// the channel's data points so description changes (e.g. patched MIN/MAX)
+// propagate. It locates the channel's device by address across all
+// registered centrals, resolves the backend, re-pulls the channel's paramset
+// config via DeviceCoordinator.ReloadChannelConfig, and recreates the
+// channel's data points via the device-level refresh path.
+//
+// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// on_config_changed), scoped to one channel.
+//
+// channelAddress is the "DDDDDDDDDD:n" form; the device address is derived by
+// stripping the ":n" suffix. Returns an error when the channel is unknown or
+// no backend can be resolved.
+func (a *DeviceReloaderAdapter) ReloadChannelConfig(ctx context.Context, channelAddress string) error {
+	if a.registry == nil || a.writer == nil {
+		return errors.New("channel_reloader: adapter not fully wired")
+	}
+	if channelAddress == "" {
+		return errors.New("channel_reloader: empty channel address")
+	}
+	deviceAddr := hmtypes.DeviceAddress(channelAddress)
+	for _, unit := range a.registry.List() {
+		dev, ok := unit.ModelRegistry.Get(deviceAddr)
+		if !ok {
+			continue
+		}
+		b, ok := a.writer.Backend(unit.Name(), dev.InterfaceID)
+		if !ok {
+			return fmt.Errorf("channel_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
+		}
+		// Re-pull the channel's paramset descriptions + MASTER values.
+		if err := unit.Devices.ReloadChannelConfig(ctx, b, dev.Interface, channelAddress, dev.Model); err != nil {
+			return err
+		}
+		// Re-materialise the channel's data points so the refreshed
+		// descriptions take effect. The single-channel materialisation
+		// path is not yet factored out of the device pipeline, so we run
+		// the device-level refresh for the channel's owning device — the
+		// observable result for the target channel is identical.
+		fetcher := &backendDescFetcher{ops: b}
+		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface)
+	}
+	return fmt.Errorf("channel_reloader: channel not found: %s", channelAddress)
 }
 
 // backendDescFetcher wraps a [backends.Operations] as a

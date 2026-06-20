@@ -54,7 +54,8 @@ type wsCommandWiring struct {
 	valueWriter      *clientpkg.ValueWriter
 	registry         *central.Registry
 	// deviceReloader backs config.reload_device_config and
-	// ccu.reload_device_config
+	// ccu.reload_device_config. The same adapter also backs
+	// config.reload_channel_config / ccu.reload_channel_config.
 	deviceReloader *adapter.DeviceReloaderAdapter
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
@@ -109,6 +110,10 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ccu.reload_device_config — re-pulls device descriptions from the
 		// CCU and recreates missing channels/DPs.
 		DeviceReloader: w.deviceReloader,
+		// ChannelReloader backs config.reload_channel_config and
+		// ccu.reload_channel_config — re-pulls a single channel's paramset
+		// descriptions + MASTER values and refreshes its data points.
+		ChannelReloader: w.deviceReloader,
 	})
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{

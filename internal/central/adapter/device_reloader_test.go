@@ -3,13 +3,16 @@
 
 package adapter
 
-// Tests for DeviceReloaderAdapter (L-7002, A7).
+// Tests for DeviceReloaderAdapter — both ReloadDeviceConfig and
+// ReloadChannelConfig.
 //
 // Strategy: build a central with a device seeded into ModelRegistry,
 // register a fake backends.Operations that records ListDevices calls,
-// then call ReloadDeviceConfig and assert delegation reaches the
-// DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices
-// path (verified via the ListDevices call on the backend).
+// then call the reload methods and assert delegation reaches the
+// DeviceCoordinator refresh path (verified via the ListDevices call on the
+// backend). For ReloadChannelConfig, fakeOperations.GetParamsetDescription
+// returns (nil, nil), so fetched == 3 and ReloadChannelConfig on the
+// coordinator succeeds before the device-level refresh runs.
 
 import (
 	"context"
@@ -150,6 +153,86 @@ func TestReloadDeviceConfigNoBackendReturnsError(t *testing.T) {
 	a := NewDeviceReloaderAdapter(reg, w)
 
 	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err == nil {
+		t.Fatal("expected error when backend not registered")
+	}
+}
+
+// ─── ReloadChannelConfig ──────────────────────────────────────────────────────
+
+func TestReloadChannelConfigCallsBackend(t *testing.T) {
+	t.Parallel()
+
+	// The backend returns one description so RefreshDeviceDescriptionsAndCreateMissingDevices
+	// has something to work with after the channel paramset re-pull.
+	descs := []hmproto.DeviceDescription{
+		{Address: "0001ABCD", Type: "HmIP-STH", Children: []string{"0001ABCD:0", "0001ABCD:1"}},
+	}
+	adapter, fake := buildReloaderFixture(t, "0001ABCD", descs, nil)
+
+	if err := adapter.ReloadChannelConfig(context.Background(), "0001ABCD:1"); err != nil {
+		t.Fatalf("ReloadChannelConfig: %v", err)
+	}
+	// The device-level refresh fires after the channel paramset re-pull.
+	if fake.listCalls != 1 {
+		t.Errorf("expected 1 ListDevices call after channel reload, got %d", fake.listCalls)
+	}
+}
+
+func TestReloadChannelConfigUnknownChannelReturnsError(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := buildReloaderFixture(t, "0001ABCD", nil, nil)
+
+	err := adapter.ReloadChannelConfig(context.Background(), "DEADBEEF:1")
+	if err == nil {
+		t.Fatal("expected error for unknown channel address")
+	}
+}
+
+func TestReloadChannelConfigEmptyAddressReturnsError(t *testing.T) {
+	t.Parallel()
+
+	adapter, _ := buildReloaderFixture(t, "0001ABCD", nil, nil)
+
+	if err := adapter.ReloadChannelConfig(context.Background(), ""); err == nil {
+		t.Fatal("expected error for empty channel address")
+	}
+}
+
+func TestReloadChannelConfigNilRegistryReturnsError(t *testing.T) {
+	t.Parallel()
+
+	a := NewDeviceReloaderAdapter(nil, clientpkg.NewValueWriter())
+	if err := a.ReloadChannelConfig(context.Background(), "0001ABCD:1"); err == nil {
+		t.Fatal("expected error when registry is nil")
+	}
+}
+
+func TestReloadChannelConfigNoBackendReturnsError(t *testing.T) {
+	t.Parallel()
+
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "0001ABCD",
+		Model:       "HmIP-STH",
+	})
+	c.ModelRegistry.Put(dev)
+
+	// Writer has no backend registered for this central/interface.
+	w := clientpkg.NewValueWriter()
+	a := NewDeviceReloaderAdapter(reg, w)
+
+	if err := a.ReloadChannelConfig(context.Background(), "0001ABCD:1"); err == nil {
 		t.Fatal("expected error when backend not registered")
 	}
 }

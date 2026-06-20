@@ -197,6 +197,19 @@ type DeviceReloader interface {
 	ReloadDeviceConfig(ctx context.Context, deviceAddress string) error
 }
 
+// ChannelReloader is the write surface for `config.reload_channel_config`
+// and `ccu.reload_channel_config`. Both commands re-pull a single channel's
+// paramset descriptions (VALUES/MASTER/LINK) and MASTER values from the CCU,
+// then re-materialise the channel's data points.
+// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// on_config_changed).
+type ChannelReloader interface {
+	// ReloadChannelConfig re-pulls the channel's paramset descriptions and
+	// MASTER values and refreshes the channel's data points. channelAddress
+	// is the "DDDDDDDDDD:n" form.
+	ReloadChannelConfig(ctx context.Context, channelAddress string) error
+}
+
 // DefaultCommandsConfig bundles the optional providers consumed by
 // [RegisterDefaultCommands]. Any nil field disables the dependent
 // command(s) — useful for tests and for daemons that only wire up a
@@ -215,6 +228,9 @@ type DefaultCommandsConfig struct {
 	// DeviceReloader backs `config.reload_device_config` and
 	// `ccu.reload_device_config`.
 	DeviceReloader DeviceReloader
+	// ChannelReloader backs `config.reload_channel_config` and
+	// `ccu.reload_channel_config`.
+	ChannelReloader ChannelReloader
 	// Constraints backs the cross-validation pass in
 	// `config.session.save`. When nil the save handler
 	// skips cross-validation (backwards-compatible).
@@ -318,6 +334,16 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		// domain action. Mirrors Python `ws_panel_reload_device_config`
 		// (websocket_api.py:2285).
 		router.Register("ccu.reload_device_config", reloadDeviceConfigHandler(cfg.DeviceReloader))
+	}
+
+	if cfg.ChannelReloader != nil {
+		// config.reload_channel_config — re-pull one channel's paramset
+		// descriptions + MASTER values and refresh its data points.
+		// Mirrors Channel.reload_channel_config (model/device.py:1448).
+		router.Register("config.reload_channel_config", reloadChannelConfigHandler(cfg.ChannelReloader))
+		// ccu.reload_channel_config — panel variant with the same domain
+		// action.
+		router.Register("ccu.reload_channel_config", reloadChannelConfigHandler(cfg.ChannelReloader))
 	}
 }
 
@@ -1217,5 +1243,37 @@ func reloadDeviceConfigHandler(r DeviceReloader) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "reload_device_config: "+err.Error())
 		}
 		return map[string]any{"success": true, "device_address": args.DeviceAddress}, nil
+	}
+}
+
+// reloadChannelConfigHandler implements `config.reload_channel_config` and
+// `ccu.reload_channel_config` (both share the same domain action). Re-pulls a
+// single channel's paramset descriptions (VALUES/MASTER/LINK) and MASTER
+// values from the CCU, then refreshes the channel's data points.
+// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// on_config_changed).
+//
+// Request: { "channel_address": str } (alias: { "address": str })
+// Response: { "success": true, "channel_address": str }
+func reloadChannelConfigHandler(r ChannelReloader) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args struct {
+			ChannelAddress string `json:"channel_address"`
+			Address        string `json:"address"`
+		}
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		}
+		channelAddress := args.ChannelAddress
+		if channelAddress == "" {
+			channelAddress = args.Address
+		}
+		if channelAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
+		}
+		if err := r.ReloadChannelConfig(ctx, channelAddress); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "reload_channel_config: "+err.Error())
+		}
+		return map[string]any{"success": true, "channel_address": channelAddress}, nil
 	}
 }
