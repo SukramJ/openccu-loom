@@ -57,6 +57,9 @@ type southboundWiring struct {
 	// the live HTTPBackupRestorer after the first hub handshake; the
 	// REST backup handler reads it later.
 	backupAdapter *adapter.BackupAdapter
+	// bringUpManager exposes per-central re-initialization (clear caches +
+	// readiness-gated re-pull) to the cache-reset service. ADR 0042.
+	bringUpManager *adapter.BringUpManager
 }
 
 // wireSouthbound performs the southbound wiring phase of the composition
@@ -109,7 +112,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// in the background, gated on CCU readiness. No wiring timeout here — a
 	// co-booting CCU is waited on indefinitely (the bring-up is bounded by the
 	// daemon-lifetime ctx + the teardown closer, not a fixed window).
-	wireTeardown, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
+	bringUpMgr, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
 		Writer:               d.valueWriter,
 		Translations:         d.translations,
 		CallbackServer:       d.callbackSrv,
@@ -189,8 +192,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	if wireErr != nil {
 		logger.Warn("wire.partial", slog.String("err", wireErr.Error()))
 	}
-	if wireTeardown != nil {
-		teardowns = append(teardowns, wireTeardown)
+	if bringUpMgr != nil {
+		teardowns = append(teardowns, bringUpMgr.Teardown)
 	}
 
 	// Wire per-central health subscriptions AFTER WireCentrals so
@@ -383,7 +386,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(teardowns, stopSweep)
 
 	result = southboundWiring{
-		backupAdapter: backupAdapter,
+		backupAdapter:  backupAdapter,
+		bringUpManager: bringUpMgr,
 	}
 	return result, teardown
 }

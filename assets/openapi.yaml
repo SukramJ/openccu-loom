@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.13.0
+  version: 1.14.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2606,6 +2606,49 @@ paths:
         "503":
           description: cache feature disabled or store unwired.
 
+  /admin/cache/clear:
+    post:
+      operationId: clearCache
+      summary: Clear CCU-derivable caches and re-pull them fresh (admin-only)
+      description: |
+        Clears only CCU-derivable persisted state for the requested
+        scope — device descriptions, paramset descriptions, the
+        persistent VALUES cache and persisted MASTER values, plus the
+        in-memory value cache — then re-initializes the owning
+        central(s) through the boot path so the data is re-pulled fresh
+        from the CCU (ADR 0042).
+
+        It never touches operator-authored or system state (visibility
+        rules, config, auth, Matter pairing, audit/incident history).
+        The clear is idempotent and recorded into the audit log.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CacheClearRequest" }
+      responses:
+        "200":
+          description: clear completed; report describes what was removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheClearReport" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502":
+          description: |
+            clear ran but one or more stores reported an error; the
+            partial report (with the `errors` array populated) is still
+            returned in the body.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CacheClearReport" }
+        "503":
+          description: cache reset unavailable (south-bound never came up).
+
   /diagnostics/capture/{id}/download:
     get:
       operationId: downloadCapture
@@ -4084,6 +4127,45 @@ components:
       properties:
         reloaded: { type: boolean, description: "Always true on success; the 503 path returns a problem+json document instead." }
         took_ms: { type: integer, format: int64, description: "Wall-clock duration of the swap in milliseconds." }
+
+    CacheClearRequest:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [global, central, interface, device]
+          description: |
+            Breadth of the clear. `central`/`interface`/`device` require
+            the matching identifier fields at or below their level.
+        central: { type: string, description: "Central name. Required for kind central/interface/device." }
+        interface: { type: string, description: "Interface id. Required for kind interface/device." }
+        device: { type: string, description: "Device address. Required for kind device." }
+
+    CacheClearReport:
+      type: object
+      required: [scope, devices, paramsets, values, master, centrals_reinit]
+      properties:
+        scope:
+          type: object
+          description: "The resolved scope the clear ran against."
+          properties:
+            Kind: { type: string }
+            Central: { type: string }
+            Interface: { type: string }
+            Device: { type: string }
+        devices: { type: integer, format: int64, description: "Device-description rows removed (-1 when the store does not report a count)." }
+        paramsets: { type: integer, format: int64, description: "Paramset-description rows removed." }
+        values: { type: integer, format: int64, description: "Persistent VALUES-cache rows removed (-1 for device-scoped deletes)." }
+        master: { type: integer, format: int64, description: "Persisted MASTER-value rows removed (-1 for device-scoped deletes)." }
+        centrals_reinit:
+          type: array
+          items: { type: string }
+          description: "Centrals that were re-initialized through the boot path."
+        errors:
+          type: array
+          items: { type: string }
+          description: "Per-store errors collected during the clear; present only when the clear partially failed."
 
     ValuesCacheStats:
       type: object

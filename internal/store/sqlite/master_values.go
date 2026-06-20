@@ -194,3 +194,22 @@ func (s *MasterValuesStore) DeleteDevice(
 	}
 	return nil
 }
+
+// DeleteForInterface removes every cached MASTER value for one (central, interface).
+func (s *MasterValuesStore) DeleteForInterface(ctx context.Context, centralName, interfaceID string) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx, `
+        DELETE FROM master_values
+         WHERE central_name = ? AND interface_id = ?
+    `, centralName, interfaceID)
+	if err != nil {
+		return 0, fmt.Errorf("master_values.DeleteForInterface: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("master_values.DeleteForInterface: %w", err)
+	}
+	return n, nil
+}

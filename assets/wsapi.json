@@ -49,9 +49,23 @@
       "name": "backup.trigger"
     },
     {
+      "args": {
+        "central": "string?",
+        "device": "string?",
+        "interface": "string?",
+        "kind": "string?"
+      },
       "category": "ccu",
-      "description": "Clear all in-memory caches on the central; next read fetches fresh data from the CCU. Mirrors Python ws_clear_cache (V8-N10).",
-      "name": "ccu.cache_clear"
+      "description": "Clear CCU-derivable caches scoped by kind (global/central/interface/device) and trigger a re-pull. Omitting kind defaults to global. Mirrors Python ws_clear_cache (websocket_api.py:1885).",
+      "name": "ccu.cache_clear",
+      "result": {
+        "centrals_reinit": "array",
+        "devices": "integer",
+        "master": "integer",
+        "paramsets": "integer",
+        "scope": "string",
+        "values": "integer"
+      }
     },
     {
       "category": "ccu",

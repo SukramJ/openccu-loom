@@ -282,6 +282,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}, &availClosers)
 	defer southboundTeardown()
 	backupAdapter := sb.backupAdapter
+	// Cache-reset service (ADR 0042) — drives POST /admin/cache/clear.
+	// Nil when south-bound never came up (no re-init manager); the route
+	// then stays unmounted.
+	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, sb.bringUpManager, auditBuf, logger)
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)
@@ -427,11 +431,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		// and ccu.reload_device_config — re-pulls device descriptions from the
 		// CCU and recreates missing channels/DPs.
 		deviceReloader: adapter.NewDeviceReloaderAdapter(reg, valueWriter),
-		logger:         logger,
-		centralName:    singleCentralName(reg),
-		sessionStore:   sessionStore,
-		changeLog:      configChangeLog,
-		labels:         parameterLabels,
+		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
+		cacheResetSvc: cacheResetSvc,
+		logger:        logger,
+		centralName:   singleCentralName(reg),
+		sessionStore:  sessionStore,
+		changeLog:     configChangeLog,
+		labels:        parameterLabels,
 	})
 	_ = uiSchemaAdapter
 	_ = dpWriterAdapter
@@ -466,6 +472,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		schedulesDomain:         schedulesDomain,
 		centralLinksDomain:      centralLinksDomain,
 		backupAdapter:           backupAdapter,
+		cacheResetSvc:           cacheResetReset(cacheResetSvc),
 		auditBuf:                auditBuf,
 		auditRec:                auditRec,
 		restAuth:                restAuth,

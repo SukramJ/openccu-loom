@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	neturl "net/url"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -144,7 +143,7 @@ func WireCentrals(
 	reg *central.Registry,
 	deps WireDeps,
 	logger *slog.Logger,
-) (func(), error) {
+) (*BringUpManager, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -160,19 +159,8 @@ func WireCentrals(
 	// the daemon-lifetime ctx (NOT a short wiring timeout) so a co-booting CCU
 	// is waited on indefinitely; teardown cancels it explicitly on shutdown.
 	bringUpCtx, cancelBringUp := context.WithCancel(ctx)
-	var (
-		closersMu sync.Mutex
-		closers   []func()
-		wg        sync.WaitGroup
-	)
-	addCloser := func(c func()) {
-		if c == nil {
-			return
-		}
-		closersMu.Lock()
-		closers = append(closers, c)
-		closersMu.Unlock()
-	}
+	mgr := newBringUpManager()
+	mgr.parentCancel = cancelBringUp
 
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
@@ -183,33 +171,31 @@ func WireCentrals(
 		}
 		// Callback-handler routing is local (no CCU I/O), so register it
 		// synchronously up front; the actual init()/announce to the CCU happens
-		// inside the gated bring-up when the interface backends come up.
+		// inside the gated bring-up when the interface backends come up. The
+		// routing is permanent for the central's life — it survives a re-init
+		// (only the gated bring-up generation is cycled).
 		callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(deps, cc, unit, logger)
-		addCloser(deregister)
 
-		ccCopy := *cc
-		wg.Add(1)
-		SafeGo("central_bringup."+cc.Name, func() {
-			defer wg.Done()
-			//nolint:contextcheck // the gated bring-up runs on bringUpCtx (teardown-bounded), not the short-lived wiring ctx
-			gatedCentralBringUp(bringUpCtx, cfg, &ccCopy, unit, deps, callbackURL, binRPCCallbackAddr, addCloser, logger)
-		})
-	}
-
-	teardown := func() {
-		cancelBringUp()
-		wg.Wait()
-		closersMu.Lock()
-		cs := slices.Clone(closers)
-		closersMu.Unlock()
-		for _, closer := range slices.Backward(cs) {
-			closer()
+		b := &centralBringUp{
+			cfg:                cfg,
+			cc:                 *cc,
+			unit:               unit,
+			deps:               deps,
+			callbackURL:        callbackURL,
+			binRPCCallbackAddr: binRPCCallbackAddr,
+			logger:             logger,
+			parentCtx:          bringUpCtx,
 		}
+		b.addPermanentCloser(deregister)
+		//nolint:contextcheck // start runs the gated bring-up on the handle's teardown-bounded parent ctx, not the short-lived wiring ctx
+		b.start()
+		mgr.add(b)
 	}
+
 	// Bring-up is asynchronous: there is no synchronous aggregate error to
 	// return. Per-central failures surface via logs + the "waiting for CCU"
 	// health state and are retried by the gate.
-	return teardown, nil
+	return mgr, nil
 }
 
 // gatedCentralBringUp waits until the CCU reports ready (checkrega.cgi == OK),

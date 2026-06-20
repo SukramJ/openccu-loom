@@ -142,6 +142,38 @@
     }
   }
 
+  let cacheClearClearing = $state(false);
+
+  async function clearCcuCache() {
+    const ok = await confirmStore.ask({
+      title: t("admin.cache_clear.title"),
+      body: t("admin.cache_clear.body"),
+      confirmLabel: t("admin.cache_clear.confirm"),
+      destructive: true,
+    });
+    if (!ok) return;
+    cacheClearClearing = true;
+    try {
+      const report = await api.clearCache({ kind: "global" });
+      toastStore.success(
+        t("admin.cache_clear.success", {
+          devices: String(report.devices),
+          paramsets: String(report.paramsets),
+          values: String(report.values),
+          centrals: String(report.centrals_reinit),
+        }),
+      );
+    } catch (err) {
+      toastStore.error(
+        t("admin.cache_clear.error", {
+          err: err instanceof ApiError ? err.message : String(err),
+        }),
+      );
+    } finally {
+      cacheClearClearing = false;
+    }
+  }
+
   // Tab definitions. Expert-only tabs are hidden unless expertMode is on.
   type Tab = {
     id: string;
@@ -606,6 +638,26 @@
                 onclick={() => void saveStartupCapture()}
               >
                 {t("common.save")}
+              </Button>
+            </div>
+          </div>
+
+          <div class="rounded border border-slate-200 p-3 dark:border-slate-800">
+            <div class="flex items-center justify-between gap-2">
+              <div>
+                <h3 class="font-medium">{t("admin.cache_clear.heading")}</h3>
+                <p class="text-xs text-[var(--ha-secondary-text-color)]">
+                  {t("admin.cache_clear.help")}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={cacheClearClearing}
+                onclick={() => void clearCcuCache()}
+              >
+                {cacheClearClearing ? "…" : t("admin.cache_clear.button")}
               </Button>
             </div>
           </div>

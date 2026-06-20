@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -76,11 +77,11 @@ type ThrottleStats interface {
 }
 
 // CacheClearer is the write contract for `ccu.cache_clear`.
-// Clears all in-memory caches on the central so the next read fetches
-// fresh data from the CCU. Mirrors Python `ws_clear_cache`
-// (websocket_api.py:1885).
+// Clears CCU-derivable caches scoped by kind (global/central/interface/device)
+// and triggers a re-pull so the next read fetches fresh data from the CCU.
+// Mirrors Python `ws_clear_cache` (websocket_api.py:1885).
 type CacheClearer interface {
-	ClearAllCaches(ctx context.Context) error
+	ClearCache(ctx context.Context, scope cachereset.Scope) (cachereset.Report, error)
 }
 
 // DeviceStatisticsQuery is the read contract for `ccu.device_statistics`.
@@ -527,14 +528,54 @@ func ccuThrottleStatsHandler(s ThrottleStats) CommandHandler {
 }
 
 // ccuCacheClearHandler implements `ccu.cache_clear`.
-// Clears all in-memory caches on the central; next read fetches fresh data.
+// Accepts optional params {kind, central, interface, device} to scope the
+// clear; omitting kind (or passing "global") clears every central.
 // Mirrors Python `ws_clear_cache` (websocket_api.py:1885).
 func ccuCacheClearHandler(c CacheClearer) CommandHandler {
-	return func(ctx context.Context, _ json.RawMessage) (any, error) {
-		if err := c.ClearAllCaches(ctx); err != nil {
-			return nil, fmt.Errorf("ccu.cache_clear: %w", err)
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var p struct {
+			Kind      string `json:"kind"`
+			Central   string `json:"central"`
+			Interface string `json:"interface"`
+			Device    string `json:"device"`
 		}
-		return map[string]any{"success": true}, nil
+		if err := decodeOrEmpty(raw, &p); err != nil {
+			return nil, err
+		}
+		if p.Kind == "" {
+			p.Kind = string(cachereset.ScopeGlobal)
+		}
+		scope := cachereset.Scope{
+			Kind:      cachereset.ScopeKind(p.Kind),
+			Central:   p.Central,
+			Interface: p.Interface,
+			Device:    p.Device,
+		}
+		if err := scope.Validate(); err != nil {
+			return nil, NewCommandError(CommandErrorBadRequest, err.Error())
+		}
+		report, err := c.ClearCache(ctx, scope)
+		if err != nil {
+			// Partial errors: surface the report alongside the error so
+			// the caller can inspect what was cleared before the failure.
+			return map[string]any{
+				"scope":           string(report.Scope.Kind),
+				"devices":         report.Devices,
+				"paramsets":       report.Paramsets,
+				"values":          report.Values,
+				"master":          report.Master,
+				"centrals_reinit": report.CentralsReinit,
+				"errors":          report.Errors,
+			}, fmt.Errorf("ccu.cache_clear: %w", err)
+		}
+		return map[string]any{
+			"scope":           string(report.Scope.Kind),
+			"devices":         report.Devices,
+			"paramsets":       report.Paramsets,
+			"values":          report.Values,
+			"master":          report.Master,
+			"centrals_reinit": report.CentralsReinit,
+		}, nil
 	}
 }
 

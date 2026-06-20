@@ -55,6 +55,7 @@ type restMountDeps struct {
 	schedulesDomain    *adapter.SchedulesDomain
 	centralLinksDomain *adapter.CentralLinksDomain
 	backupAdapter      *adapter.BackupAdapter
+	cacheResetSvc      handlers.CacheResetService
 
 	auditBuf  *audit.Buffer
 	auditRec  audit.Recorder
@@ -153,6 +154,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		OIDC:           buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:     ui.SPAHandler(),
 		Backup:         d.backupAdapter,
+		CacheReset:     d.cacheResetSvc,
 		EditSessions:   handlers.NewEditSessions(),
 		WSHandler:      d.wsHandler,
 		AuthResolve:    d.restResolve,
