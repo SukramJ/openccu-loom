@@ -57,6 +57,9 @@ type southboundWiring struct {
 	// the live HTTPBackupRestorer after the first hub handshake; the
 	// REST backup handler reads it later.
 	backupAdapter *adapter.BackupAdapter
+	// bringUpManager exposes per-central re-initialization (clear caches +
+	// readiness-gated re-pull) to the cache-reset service. ADR 0042.
+	bringUpManager *adapter.BringUpManager
 }
 
 // wireSouthbound performs the southbound wiring phase of the composition
@@ -383,7 +386,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	teardowns = append(teardowns, stopSweep)
 
 	result = southboundWiring{
-		backupAdapter: backupAdapter,
+		backupAdapter:  backupAdapter,
+		bringUpManager: bringUpMgr,
 	}
 	return result, teardown
 }

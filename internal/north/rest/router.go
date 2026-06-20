@@ -126,6 +126,10 @@ type Deps struct {
 	// route — operators on builds without the supervisor (tests,
 	// MQTT-disabled deployments) get a clean 404 rather than a 500.
 	MQTTReload handlers.MQTTReloadService
+	// CacheReset backs POST /admin/cache/clear — the scoped
+	// clear-caches + readiness-gated re-pull operation (ADR 0042).
+	// Nil disables the route (404) when south-bound never came up.
+	CacheReset handlers.CacheResetService
 	// OIDC mounts /api/v1/auth/oidc/{start,callback} when configured.
 	// The flow drops the same session cookie as Login(), so the rest
 	// of the SPA needs no further wiring. Nil = OIDC disabled.
@@ -735,6 +739,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.MQTTReload != nil {
 				pr.With(admin).Post("/admin/mqtt/reload", handlers.MQTTReload(d.MQTTReload, d.AuditRecorder))
+			}
+			if d.CacheReset != nil {
+				pr.With(admin).Post("/admin/cache/clear", handlers.ClearCache(d.CacheReset))
 			}
 			if d.EditSessions != nil {
 				pr.With(op).Post("/sessions/edit", handlers.OpenEditSession(d.EditSessions))

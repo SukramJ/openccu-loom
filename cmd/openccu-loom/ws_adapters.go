@@ -23,6 +23,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -54,7 +55,9 @@ type wsCommandWiring struct {
 	// deviceReloader backs config.reload_device_config and
 	// ccu.reload_device_config
 	deviceReloader *adapter.DeviceReloaderAdapter
-	logger         *slog.Logger
+	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
+	cacheResetSvc *cachereset.Service
+	logger        *slog.Logger
 	// centralName scopes every WS-command log record. Empty in multi-
 	// central setups; populated from [singleCentralName] in daemon.go.
 	centralName string
@@ -110,12 +113,13 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		Devices:        &wsDeviceWriter{admin: w.deviceAdmin},
 		Paramsets:      &wsParamsetWriter{domain: w.paramsets},
 		MasterProfiles: w.masterProfiles,
-		// ChangeHistory, ThrottleStats, CacheClearer, DeviceStatistics,
-		// FirmwareRefresher, IncidentClearer, ChangeHistoryClearer, ExtendedHub,
-		// Central, ParamsetReader: all nil — see docs/parity/by_design.md
-		// "ws-rest-split". The in-tree Svelte SPA uses REST + WS event-stream;
-		// These command families are parity-shape against
-		// and remain dormant until an external WS bridge wires them.
+		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
+		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),
+		// ChangeHistory, ThrottleStats, DeviceStatistics, FirmwareRefresher,
+		// IncidentClearer, ChangeHistoryClearer, ExtendedHub, Central,
+		// ParamsetReader: all nil — see docs/parity/by_design.md "ws-rest-split".
+		// The in-tree Svelte SPA uses REST + WS event-stream; these command
+		// families remain dormant until an external WS bridge wires them.
 	})
 
 	ws.RegisterCustomDPCommands(router, ws.CustomDPCommandsConfig{
@@ -785,6 +789,24 @@ func structToMap(v any) (map[string]any, error) {
 		return nil, fmt.Errorf("ws: decode: %w", err)
 	}
 	return out, nil
+}
+
+// ── wsCacheClearer ───────────────────────────────────────────────────────────
+
+// wsCacheClearer adapts *cachereset.Service onto ws.CacheClearer.
+type wsCacheClearer struct{ svc *cachereset.Service }
+
+func (w *wsCacheClearer) ClearCache(ctx context.Context, scope cachereset.Scope) (cachereset.Report, error) {
+	return w.svc.Clear(ctx, scope)
+}
+
+// wsCacheClearerFrom returns a ws.CacheClearer backed by svc, or nil when svc
+// is nil (leaves ccu.cache_clear unregistered in reduced builds).
+func wsCacheClearerFrom(svc *cachereset.Service) ws.CacheClearer {
+	if svc == nil {
+		return nil
+	}
+	return &wsCacheClearer{svc: svc}
 }
 
 // deviceAddrFromChannel strips the ":N" channel suffix from a channel

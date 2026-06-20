@@ -967,6 +967,21 @@ export const api = {
       method: "POST",
     });
   },
+  // Clear CCU-derived in-memory and on-disk caches. Does NOT touch
+  // config, visibility, auth, or Matter state. 200 = full success,
+  // 502 = partial (report still in body), 503 = feature unavailable.
+  clearCache(body: {
+    kind: "global" | "central" | "interface" | "device";
+    central?: string;
+    interface?: string;
+    device?: string;
+  }) {
+    return request<CacheClearReport>(`/admin/cache/clear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
   // User CRUD ----------------------------------------------------
   listUsersV2() {
     return request<UserSummaryV2[]>(`/users`);
@@ -1260,3 +1275,13 @@ export function friendlyError(
   if (err instanceof Error) return err.message;
   return String(err);
 }
+
+export type CacheClearReport = {
+  scope: string;
+  devices: number;
+  paramsets: number;
+  values: number;
+  master: number;
+  centrals_reinit: number;
+  errors: number;
+};

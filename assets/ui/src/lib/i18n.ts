@@ -632,6 +632,17 @@ const EN: Catalog = {
     "Really restart the daemon? CCU connections drop for a few seconds.",
   "settings.restart_signalled": "Shutdown signalled — wait for the supervisor.",
   "settings.restarting": "Restarting…",
+  "admin.cache_clear.button": "Clear CCU cache",
+  "admin.cache_clear.title": "Clear CCU cache",
+  "admin.cache_clear.body":
+    "Discards all CCU-derived in-memory and on-disk caches (device data, paramsets, values, master profiles). The daemon re-pulls everything from the CCU on next access. Config, visibility settings, auth sessions and Matter state are NOT affected.",
+  "admin.cache_clear.confirm": "Clear cache",
+  "admin.cache_clear.success":
+    "Cache cleared — {devices} devices, {paramsets} paramsets, {values} values, {centrals} centrals re-initialised.",
+  "admin.cache_clear.error": "Cache clear failed: {err}",
+  "admin.cache_clear.heading": "Clear CCU cache",
+  "admin.cache_clear.help":
+    "Removes all CCU-derived caches without restarting. Useful after importing data or when the daemon's view diverges from the CCU.",
   "settings.callback_ports": "Callback ports",
   "settings.feature_off": "off",
   "settings.live_edit_pending":
@@ -2254,6 +2265,17 @@ const DE: Catalog = {
     "Daemon wirklich neu starten? CCU-Verbindungen sind für ein paar Sekunden weg.",
   "settings.restart_signalled": "Shutdown signalisiert — warte auf den Supervisor.",
   "settings.restarting": "Wird neu gestartet…",
+  "admin.cache_clear.button": "CCU-Cache leeren",
+  "admin.cache_clear.title": "CCU-Cache leeren",
+  "admin.cache_clear.body":
+    "Verwirft alle CCU-abgeleiteten In-Memory- und On-Disk-Caches (Gerätedaten, Paramsets, Values, Master-Profile). Der Daemon lädt alles beim nächsten Zugriff neu von der CCU. Konfiguration, Sichtbarkeitseinstellungen, Auth-Sessions und Matter-Zustand bleiben unverändert.",
+  "admin.cache_clear.confirm": "Cache leeren",
+  "admin.cache_clear.success":
+    "Cache geleert — {devices} Geräte, {paramsets} Paramsets, {values} Values, {centrals} Centrals neu initialisiert.",
+  "admin.cache_clear.error": "Cache-Leerung fehlgeschlagen: {err}",
+  "admin.cache_clear.heading": "CCU-Cache leeren",
+  "admin.cache_clear.help":
+    "Entfernt alle CCU-abgeleiteten Caches ohne Neustart. Nützlich nach dem Import von Daten oder wenn der Daemon vom CCU-Zustand abweicht.",
   "settings.callback_ports": "Callback-Ports",
   "settings.feature_off": "aus",
   "settings.live_edit_pending":

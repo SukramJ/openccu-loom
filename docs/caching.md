@@ -125,6 +125,33 @@ There are deliberately few knobs.
 There is intentionally **no** "preload everything on boot" option — that
 would defeat the radio-cost guarantees above.
 
+## Clearing the CCU caches (and re-pulling)
+
+When a device is reconfigured on the CCU and the daemon is holding stale
+descriptions or values, clear the CCU caches and re-pull fresh. The operation
+(ADR 0042) clears only **CCU-derivable** state — the persistent VALUES cache,
+persisted MASTER values, and the in-memory model + value cache — then
+re-initializes the affected central(s) through the normal readiness-gated boot
+path, so device/paramset descriptions and values are fetched again from the
+CCU. It never touches operator-authored or system state: configuration,
+visibility rules, auth, Matter pairing, and the audit / incident history all
+survive (the clear is itself recorded in the audit log).
+
+Scopes: **global**, a single **central**, a single **interface**, or a single
+**device**. The scope decides which rows are cleared; the re-pull always
+re-initializes the whole owning central — so the affected central's entities
+briefly read `unavailable` while it re-pulls, exactly as during a normal boot.
+
+Surfaces (all drive the same operation):
+
+- **Config UI** — a "Clear CCU cache" action (with a confirmation dialog).
+- **REST** — `POST /api/v1/admin/cache/clear` with `{"kind":"global", …}`.
+- **WebSocket** — the `ccu.cache_clear` command (same scope arguments).
+- **CLI** — `hmcli cache clear --scope …`. Add `--offline` to clear the
+  persisted rows directly against the database when the daemon is down or
+  wedged; an offline clear cannot re-pull, so the next daemon start performs
+  the readiness-gated bring-up.
+
 ## Where this data lives
 
 - Persistent caches and all daemon state: `<data_dir>/openccu-loom.db`

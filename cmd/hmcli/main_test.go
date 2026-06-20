@@ -241,7 +241,7 @@ func TestHelpTextMentionsAllSubcommands(t *testing.T) {
 		t.Fatalf("help: %v", err)
 	}
 	out := stdout.String()
-	for _, want := range []string{"version", "config", "validate"} {
+	for _, want := range []string{"version", "config", "validate", "cache"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help text missing %q: %q", want, out)
 		}

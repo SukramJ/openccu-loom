@@ -36,6 +36,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return nil
 	case "config":
 		return cmdConfig(args[1:], stdout, stderr)
+	case "cache":
+		return cmdCache(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -50,6 +52,7 @@ func printUsage(w io.Writer) {
 Usage:
   hmcli version                 print version metadata
   hmcli config validate <file>  validate a openccu-loom YAML config
+  hmcli cache clear [flags]     clear CCU-derivable caches (online) or SQLite rows (--offline)
   hmcli help                    print this help
 `, build.Version)
 }

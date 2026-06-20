@@ -10,6 +10,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -27,13 +28,15 @@ func (s *stubThrottleStats) CommandThrottleStats(_ context.Context) ([]map[strin
 }
 
 type stubCacheClearer struct {
-	cleared bool
-	err     error
+	lastScope cachereset.Scope
+	report    cachereset.Report
+	err       error
 }
 
-func (s *stubCacheClearer) ClearAllCaches(_ context.Context) error {
-	s.cleared = true
-	return s.err
+func (s *stubCacheClearer) ClearCache(_ context.Context, scope cachereset.Scope) (cachereset.Report, error) {
+	s.lastScope = scope
+	s.report.Scope = scope
+	return s.report, s.err
 }
 
 type stubDeviceStats struct {
@@ -147,14 +150,91 @@ func TestCCUThrottleStatsHandlerError(t *testing.T) {
 // ccu.cache_clear
 // ---------------------------------------------------------------------------
 
-func TestCCUCacheClearHandler(t *testing.T) {
-	b := newRouterWithOpsExtended()
-	out := dispatchOps(t, b.router, "ccu.cache_clear").(map[string]any)
-	if out["success"] != true {
-		t.Fatalf("expected success=true, got %v", out)
+func dispatchCacheClear(t *testing.T, r *Router, raw string) any {
+	t.Helper()
+	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(raw))
+	if res.Error != nil {
+		t.Fatalf("ccu.cache_clear: dispatch err: %v", res.Error.Message)
 	}
-	if !b.cc.cleared {
-		t.Fatal("expected ClearAllCaches to be called")
+	return res.Data
+}
+
+func TestCCUCacheClearHandlerGlobal(t *testing.T) {
+	// Omitting kind defaults to "global".
+	b := newRouterWithOpsExtended()
+	out := dispatchCacheClear(t, b.router, `{}`).(map[string]any)
+	if out["scope"] != "global" {
+		t.Fatalf("expected scope=global, got %v", out["scope"])
+	}
+	if b.cc.lastScope.Kind != cachereset.ScopeGlobal {
+		t.Fatalf("expected ScopeGlobal, got %v", b.cc.lastScope.Kind)
+	}
+}
+
+func TestCCUCacheClearHandlerCentral(t *testing.T) {
+	b := newRouterWithOpsExtended()
+	out := dispatchCacheClear(t, b.router, `{"kind":"central","central":"ccu1"}`).(map[string]any)
+	if out["scope"] != "central" {
+		t.Fatalf("expected scope=central, got %v", out["scope"])
+	}
+	if b.cc.lastScope.Kind != cachereset.ScopeCentral || b.cc.lastScope.Central != "ccu1" {
+		t.Fatalf("unexpected scope: %+v", b.cc.lastScope)
+	}
+}
+
+func TestCCUCacheClearHandlerInterface(t *testing.T) {
+	b := newRouterWithOpsExtended()
+	out := dispatchCacheClear(t, b.router, `{"kind":"interface","central":"ccu1","interface":"HmIP-RF"}`).(map[string]any)
+	if out["scope"] != "interface" {
+		t.Fatalf("expected scope=interface, got %v", out["scope"])
+	}
+	if b.cc.lastScope.Interface != "HmIP-RF" {
+		t.Fatalf("unexpected scope: %+v", b.cc.lastScope)
+	}
+}
+
+func TestCCUCacheClearHandlerDevice(t *testing.T) {
+	b := newRouterWithOpsExtended()
+	out := dispatchCacheClear(t, b.router, `{"kind":"device","central":"ccu1","interface":"HmIP-RF","device":"ABC0001"}`).(map[string]any)
+	if out["scope"] != "device" {
+		t.Fatalf("expected scope=device, got %v", out["scope"])
+	}
+	if b.cc.lastScope.Device != "ABC0001" {
+		t.Fatalf("unexpected scope: %+v", b.cc.lastScope)
+	}
+}
+
+func TestCCUCacheClearHandlerReportFields(t *testing.T) {
+	// Verify that Report fields are forwarded to the client.
+	r := NewRouter()
+	cc := &stubCacheClearer{report: cachereset.Report{
+		Devices:        3,
+		Paramsets:      7,
+		CentralsReinit: []string{"ccu1"},
+	}}
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{CacheClearer: cc})
+	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(`{}`))
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error.Message)
+	}
+	out := res.Data.(map[string]any)
+	if out["devices"] != int64(3) {
+		t.Fatalf("expected devices=3, got %v", out["devices"])
+	}
+	if out["paramsets"] != int64(7) {
+		t.Fatalf("expected paramsets=7, got %v", out["paramsets"])
+	}
+}
+
+func TestCCUCacheClearHandlerBadScope(t *testing.T) {
+	// A central-scoped clear without providing the central name must return
+	// a bad-request error.
+	r := NewRouter()
+	cc := &stubCacheClearer{}
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{CacheClearer: cc})
+	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(`{"kind":"central"}`))
+	if res.Error == nil {
+		t.Fatal("expected error for missing central field, got none")
 	}
 }
 
