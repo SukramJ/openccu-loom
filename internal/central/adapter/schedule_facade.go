@@ -90,6 +90,21 @@ func (f *ScheduleFacade) SetDeviceActiveProfile(ctx context.Context, deviceAddre
 	return f.adapter.SetDeviceActiveProfile(ctx, deviceAddress, profile)
 }
 
+// CopySchedule copies the whole week schedule from one device to another.
+// Delegates to [ScheduleQueryAdapter.CopySchedule].
+func (f *ScheduleFacade) CopySchedule(ctx context.Context, srcDeviceAddress, dstDeviceAddress string) error {
+	return f.adapter.CopySchedule(ctx, srcDeviceAddress, dstDeviceAddress)
+}
+
+// CopyClimateProfile copies a single climate profile from a source
+// channel/profile to a target channel/profile. Delegates to
+// [ScheduleQueryAdapter.CopyClimateProfile].
+func (f *ScheduleFacade) CopyClimateProfile(
+	ctx context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int,
+) error {
+	return f.adapter.CopyClimateProfile(ctx, srcChannelAddress, srcProfile, dstChannelAddress, dstProfile)
+}
+
 // MaxProfilesForDevice returns the number of climate profile slots for
 // deviceAddress. Delegates to [SchedulesDomain.MaxProfilesForDevice].
 func (f *ScheduleFacade) MaxProfilesForDevice(ctx context.Context, deviceAddress string) (int, error) {

@@ -44,6 +44,22 @@ type SetActiveProfileRequest struct {
 	Profile string `json:"profile"`
 }
 
+// CopyScheduleRequest is the body of POST .../schedules/copy. The source
+// device is the path {addr}; the target device is named here.
+type CopyScheduleRequest struct {
+	TargetDeviceAddress string `json:"target_device_address"`
+}
+
+// CopyProfileRequest is the body of POST
+// .../channels/{no}/week_profile/copy. The source channel is the path
+// {addr}:{no}; the target channel and the source/target profile indices
+// are named here.
+type CopyProfileRequest struct {
+	SourceProfile        int    `json:"source_profile"`
+	TargetChannelAddress string `json:"target_channel_address"`
+	TargetProfile        int    `json:"target_profile"`
+}
+
 // --- HTTP handlers ------------------------------------------------
 
 // GetSchedule returns the full climate schedule for one channel.
@@ -188,6 +204,78 @@ func PostActiveProfile(svc ScheduleService) http.HandlerFunc {
 			return
 		}
 		if err := svc.SetActiveProfile(r.Context(), addr, no, body.Profile); err != nil {
+			writeScheduleError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// PostCopySchedule copies the whole week schedule from the path device
+// to the target device named in the body. Both schedule channels are
+// auto-resolved by the adapter.
+func PostCopySchedule(svc ScheduleService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Schedule service unavailable", ""))
+			return
+		}
+		addr := chi.URLParam(r, "addr")
+		var body CopyScheduleRequest
+		if err := DecodeJSON(r, &body); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if body.TargetDeviceAddress == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "target_device_address is required", ""))
+			return
+		}
+		if err := svc.CopySchedule(r.Context(), addr, body.TargetDeviceAddress); err != nil {
+			writeScheduleError(w, r, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// PostCopyProfile copies a single climate profile from the path channel
+// ({addr}:{no}) / source_profile to the target channel / target_profile
+// named in the body.
+func PostCopyProfile(svc ScheduleService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Schedule service unavailable", ""))
+			return
+		}
+		addr := chi.URLParam(r, "addr")
+		no, err := strconv.Atoi(chi.URLParam(r, "no"))
+		if err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid channel number", chi.URLParam(r, "no")))
+			return
+		}
+		var body CopyProfileRequest
+		if err := DecodeJSON(r, &body); err != nil {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
+			return
+		}
+		if body.TargetChannelAddress == "" {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "target_channel_address is required", ""))
+			return
+		}
+		if body.SourceProfile < 1 || body.SourceProfile > 6 || body.TargetProfile < 1 || body.TargetProfile > 6 {
+			problem.Write(w, http.StatusUnprocessableEntity,
+				problem.New(problem.TypeValidation, r, "source_profile and target_profile must be 1..6", ""))
+			return
+		}
+		srcChannelAddress := addr + ":" + strconv.Itoa(no)
+		if err := svc.CopyClimateProfile(r.Context(), srcChannelAddress, body.SourceProfile, body.TargetChannelAddress, body.TargetProfile); err != nil {
 			writeScheduleError(w, r, err)
 			return
 		}

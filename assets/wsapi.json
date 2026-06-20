@@ -524,6 +524,12 @@
     },
     {
       "category": "schedules",
+      "description": "Copy a single climate profile from a source channel/profile to a target channel/profile. Mirrors Python copy_schedule_profile.",
+      "name": "schedules.climate.copy_profile",
+      "args": { "source_channel_address": "string", "source_profile": "number", "target_channel_address": "string", "target_profile": "number" }
+    },
+    {
+      "category": "schedules",
       "description": "Read the active climate week-program for a thermostat channel.",
       "name": "schedules.climate.get"
     },
@@ -531,6 +537,12 @@
       "category": "schedules",
       "description": "Write a climate week-program back to a thermostat channel.",
       "name": "schedules.climate.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Copy the whole week schedule from a source device to a target device (channels auto-resolved). Mirrors Python copy_schedule.",
+      "name": "schedules.copy",
+      "args": { "source_device_address": "string", "target_device_address": "string" }
     },
     {
       "category": "schedules",
@@ -594,6 +606,12 @@
       "category": "system",
       "description": "Return the effective role and permissions for the authenticated user. Mirrors Python ws_get_user_permissions (websocket_api.py:2727).",
       "name": "system.user_permissions"
+    },
+    {
+      "category": "sysvars",
+      "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
+      "name": "sysvars.fetch",
+      "args": { "central_name": "string" }
     },
     {
       "category": "sysvars",

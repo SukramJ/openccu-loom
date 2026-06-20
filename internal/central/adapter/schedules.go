@@ -238,6 +238,91 @@ func (s *SchedulesDomain) SetActiveProfileAuto(
 	return s.SetActiveProfile(ctx, deviceAddress, channelNo, profile)
 }
 
+// ErrScheduleCopyNoOp is returned when a copy would read and write the
+// same channel/profile (or device), which is always a no-op and almost
+// always a caller mistake.
+var ErrScheduleCopyNoOp = errors.New("schedules: copy source and destination are identical")
+
+// ErrScheduleCopyProfileRange is returned when a profile index is
+// outside the supported 1..6 range.
+var ErrScheduleCopyProfileRange = errors.New("schedules: profile index out of range (1..6)")
+
+// CopyClimateProfile copies a single climate week-profile from the
+// source channel/profile to the destination channel/profile. It reads
+// the full climate schedule of the source channel, lifts out profile
+// P<srcProfile>, and writes it under P<dstProfile> on the destination
+// channel — composed from the existing get + put primitives so the
+// CCU-side filtering and false-positive handling are reused as-is.
+//
+// Mirrors the Python reference's copy_schedule_profile
+// (model/week_profile_data_point.py:556).
+func (s *SchedulesDomain) CopyClimateProfile(
+	ctx context.Context,
+	srcChannelAddress string, srcProfile int,
+	dstChannelAddress string, dstProfile int,
+) error {
+	if srcProfile < 1 || srcProfile > 6 || dstProfile < 1 || dstProfile > 6 {
+		return ErrScheduleCopyProfileRange
+	}
+	if srcChannelAddress == dstChannelAddress && srcProfile == dstProfile {
+		return ErrScheduleCopyNoOp
+	}
+	srcDevice, srcChannelNo := splitChannelAddress(srcChannelAddress)
+	dstDevice, dstChannelNo := splitChannelAddress(dstChannelAddress)
+
+	src, err := s.GetClimateSchedule(ctx, srcDevice, srcChannelNo)
+	if err != nil {
+		return fmt.Errorf("schedules: copy_profile read source: %w", err)
+	}
+	if src.Kind != "" && src.Kind != "climate" {
+		return fmt.Errorf("schedules: copy_profile source is not a climate schedule (kind=%q)", src.Kind)
+	}
+	srcKey := fmt.Sprintf("P%d", srcProfile)
+	profile, ok := src.Profiles[srcKey]
+	if !ok {
+		return fmt.Errorf("schedules: copy_profile source has no profile %s", srcKey)
+	}
+
+	// Write only the destination profile so unrelated profiles on the
+	// destination channel stay intact.
+	dst := &hmapi.ClimateSchedule{
+		Kind: "climate",
+		Profiles: map[string]hmapi.ClimateProfile{
+			fmt.Sprintf("P%d", dstProfile): profile,
+		},
+	}
+	if err := s.PutClimateSchedule(ctx, dstDevice, dstChannelNo, dst); err != nil {
+		return fmt.Errorf("schedules: copy_profile write destination: %w", err)
+	}
+	return nil
+}
+
+// CopySchedule copies the entire week schedule of the source device to
+// the destination device. The schedule channel is auto-resolved on both
+// sides (mirrors the device-level get/put convenience path), so the
+// caller only supplies device addresses.
+//
+// Mirrors the Python reference's copy_schedule
+// (model/week_profile_data_point.py:548).
+func (s *SchedulesDomain) CopySchedule(
+	ctx context.Context, srcDeviceAddress, dstDeviceAddress string,
+) error {
+	if srcDeviceAddress == dstDeviceAddress {
+		return ErrScheduleCopyNoOp
+	}
+	src, err := s.GetClimateScheduleAuto(ctx, srcDeviceAddress)
+	if err != nil {
+		return fmt.Errorf("schedules: copy read source: %w", err)
+	}
+	// Clear the destination-resolved channel reference; PutClimateScheduleAuto
+	// resolves the destination's own channel and serialises by kind.
+	src.Channel = hmapi.ScheduleChannelRef{}
+	if err := s.PutClimateScheduleAuto(ctx, dstDeviceAddress, src); err != nil {
+		return fmt.Errorf("schedules: copy write destination: %w", err)
+	}
+	return nil
+}
+
 // GetClimateSchedule reads the MASTER paramset of the channel and
 // returns either a climate (P<n>_*) or a simple (NN_WP_*) schedule
 // in the unified DTO. The "kind" field disambiguates.

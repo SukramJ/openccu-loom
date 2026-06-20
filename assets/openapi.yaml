@@ -484,6 +484,31 @@ paths:
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /sysvars/fetch:
+    post:
+      operationId: fetchSysvars
+      summary: Force re-pull the CCU system-variable catalogue into the hub model
+      description: |
+        Re-pulls all system variables from the CCU (SysVar.getAll) and
+        refreshes the hub model. Use the optional `central` query
+        parameter to scope the refresh to one CCU; absent, every
+        registered central is refreshed. Mirrors the reference stack's
+        fetch_system_variables.
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - in: query
+          name: central
+          required: false
+          schema: { type: string }
+      responses:
+        "202": { description: Accepted — sysvar re-pull triggered. }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /sysvars/{name}:
     parameters:
       - name: name
@@ -1687,6 +1712,53 @@ paths:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/schedules/copy:
+    post:
+      operationId: copyDeviceSchedule
+      summary: Copy the whole week schedule to another device
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CopyScheduleRequest" }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/channels/{no}/week_profile/copy:
+    post:
+      operationId: copyClimateProfile
+      summary: Copy a single climate profile to another channel/profile
+      tags: [schedules]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CopyProfileRequest" }
+      responses:
+        "202": { description: Scheduled }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/links:
@@ -5703,6 +5775,24 @@ components:
       description: Selects the active climate profile (P1..P6).
       properties:
         profile: { type: string }
+    CopyScheduleRequest:
+      type: object
+      required: [target_device_address]
+      description: |
+        Copy the whole week schedule from the path device to the named
+        target device. Both schedule channels are auto-resolved.
+      properties:
+        target_device_address: { type: string }
+    CopyProfileRequest:
+      type: object
+      required: [source_profile, target_channel_address, target_profile]
+      description: |
+        Copy a single climate profile from the path channel/source_profile
+        to the named target channel/target_profile.
+      properties:
+        source_profile: { type: integer, minimum: 1, maximum: 6 }
+        target_channel_address: { type: string }
+        target_profile: { type: integer, minimum: 1, maximum: 6 }
     WeekProfileResponse:
       type: object
       required: [address, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]

@@ -391,6 +391,16 @@ func (w *wsHubQuery) SetSysvar(ctx context.Context, name string, value any) erro
 	return s.Set(ctx, pv)
 }
 
+// FetchSystemVariables force re-pulls the sysvar catalogue from the CCU
+// via the SysvarFetchAdapter (which delegates to each central's
+// HubCoordinator.RefreshSysvars). An empty centralName refreshes all.
+func (w *wsHubQuery) FetchSystemVariables(ctx context.Context, centralName string) error {
+	if w.registry == nil {
+		return errors.New("ws: registry not wired")
+	}
+	return adapter.NewSysvarFetchAdapter(w.registry).FetchSystemVariables(ctx, centralName)
+}
+
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
 	h := w.hub.Hub()
 	if h == nil {

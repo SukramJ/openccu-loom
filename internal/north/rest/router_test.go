@@ -114,6 +114,12 @@ func (fakeScheduleService) FindScheduleChannel(_ context.Context, _ string) (int
 	return 1, nil
 }
 
+func (fakeScheduleService) CopySchedule(_ context.Context, _, _ string) error { return nil }
+
+func (fakeScheduleService) CopyClimateProfile(_ context.Context, _ string, _ int, _ string, _ int) error {
+	return nil
+}
+
 type fakeCentralLinksService struct{}
 
 func (fakeCentralLinksService) CreateCentralLinks(_ context.Context, _ string) (handlers.CentralLinksReport, error) {
