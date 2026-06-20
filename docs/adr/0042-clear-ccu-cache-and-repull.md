@@ -122,10 +122,11 @@ implementation, fronted by:
 
 ### 5. Robustness guarantees
 
-- **Transactional**: the multi-store delete is one unit of work; a partial
-  failure is reported, not half-applied.
-- **Idempotent**: clearing already-empty caches is a no-op; re-init is
-  safe to repeat.
+- **Atomic per store, idempotent overall**: each store's scoped delete is a
+  single atomic statement; the service collects any per-store failure into the
+  result and continues clearing the rest rather than aborting. Because clearing
+  an already-empty cache is a no-op, a partial failure is safely recovered by
+  re-running the clear (it is not a single cross-store transaction).
 - **Readiness-gated**: if the CCU is down, the re-pull waits (as at boot)
   and surfaces the "waiting for CCU" health state — it never fails hard or
   trips `/health` to 503.
