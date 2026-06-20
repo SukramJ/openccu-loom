@@ -109,7 +109,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// in the background, gated on CCU readiness. No wiring timeout here — a
 	// co-booting CCU is waited on indefinitely (the bring-up is bounded by the
 	// daemon-lifetime ctx + the teardown closer, not a fixed window).
-	wireTeardown, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
+	bringUpMgr, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
 		Writer:               d.valueWriter,
 		Translations:         d.translations,
 		CallbackServer:       d.callbackSrv,
@@ -189,8 +189,8 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	if wireErr != nil {
 		logger.Warn("wire.partial", slog.String("err", wireErr.Error()))
 	}
-	if wireTeardown != nil {
-		teardowns = append(teardowns, wireTeardown)
+	if bringUpMgr != nil {
+		teardowns = append(teardowns, bringUpMgr.Teardown)
 	}
 
 	// Wire per-central health subscriptions AFTER WireCentrals so
