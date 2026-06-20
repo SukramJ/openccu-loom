@@ -461,6 +461,25 @@ func (s *ValuesCacheStore) DeleteChannel(
 	return nil
 }
 
+// DeleteForInterface removes every cached value for one (central, interface).
+func (s *ValuesCacheStore) DeleteForInterface(ctx context.Context, centralName, interfaceID string) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx, `
+        DELETE FROM values_cache
+         WHERE central_name = ? AND interface_id = ?
+    `, centralName, interfaceID)
+	if err != nil {
+		return 0, fmt.Errorf("values_cache.DeleteForInterface: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("values_cache.DeleteForInterface: %w", err)
+	}
+	return n, nil
+}
+
 // DeleteAll empties the cache. Used by the global Reset endpoint and
 // by tests.
 func (s *ValuesCacheStore) DeleteAll(ctx context.Context) error {

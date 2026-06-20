@@ -545,6 +545,31 @@ func (s *ParamsetStore) DeleteChannel(ctx context.Context, centralName, ifaceID,
 	return nil
 }
 
+// DeleteDevice removes every paramset row for every channel of the device
+// (channel_address = deviceAddress or deviceAddress:<n>) and drops the
+// device from the in-memory address-parameter cache.
+func (s *ParamsetStore) DeleteDevice(ctx context.Context, centralName, ifaceID, deviceAddress string) (int64, error) {
+	prefix := strings.TrimRight(deviceAddress, ":") + ":"
+	res, err := s.db.ExecContext(ctx, `
+        DELETE FROM paramsets
+         WHERE central_name = ? AND interface_id = ?
+           AND (channel_address = ? OR channel_address LIKE ? || '%' ESCAPE '\')
+    `, centralName, ifaceID, deviceAddress, prefix)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: delete paramsets device: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: delete paramsets device: %w", err)
+	}
+	if n > 0 {
+		s.cacheMu.Lock()
+		delete(s.cache, deviceAddress)
+		s.cacheMu.Unlock()
+	}
+	return n, nil
+}
+
 // WipeOutdated removes every paramset row whose schema_version differs from
 // the current [ParamsetCacheSchemaVersion]. Returns the number of rows
 // deleted. Idempotent — safe to call on every daemon start.
