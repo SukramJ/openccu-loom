@@ -18,6 +18,16 @@ import (
 type binrpcCaller struct{ client *binrpc.Client }
 
 func (c *binrpcCaller) Call(ctx context.Context, method string, args ...any) (any, error) {
+	reply, err := c.callRaw(ctx, method, args)
+	if err != nil {
+		return nil, err
+	}
+	return xmlRPCValueToGo(reply), nil
+}
+
+// callRaw encodes the Go args into xmlrpc.Value params (CUxD shares the
+// XML-RPC value set) and returns the decoded reply Value untouched.
+func (c *binrpcCaller) callRaw(ctx context.Context, method string, args []any) (xmlrpc.Value, error) {
 	params := make([]xmlrpc.Value, 0, len(args))
 	for _, arg := range args {
 		v, err := goToXMLRPCValue(arg)
@@ -26,11 +36,7 @@ func (c *binrpcCaller) Call(ctx context.Context, method string, args ...any) (an
 		}
 		params = append(params, v)
 	}
-	reply, err := c.client.Call(ctx, method, params)
-	if err != nil {
-		return nil, err
-	}
-	return xmlRPCValueToGo(reply), nil
+	return c.client.Call(ctx, method, params)
 }
 
 // binrpcAnnouncer sends CUxD init/deinit calls via the outbound

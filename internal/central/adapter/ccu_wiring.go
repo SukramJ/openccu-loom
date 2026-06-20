@@ -540,6 +540,12 @@ func wireInterface(
 	xmlSliceCaller := client.CallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
 		return xmlCaller.Call(ctx, method, params...)
 	})
+	// Order-preserving sibling used only by the device-definition export, which
+	// must reproduce the CCU's wire member order. Same transport, different
+	// reply shape (orderedjson value instead of a flattened map).
+	xmlOrderedCaller := client.OrderedCallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
+		return xmlCaller.CallOrdered(ctx, method, params...)
+	})
 	// Build the session-recorder hook that forwards SetValue
 	// PutParamset call traces to the CacheCoordinator recorder.
 	// The hook is nil-safe on both ends: the IC skips the call
@@ -563,6 +569,7 @@ func wireInterface(
 		Interface:           iface,
 		InitInterfaceID:     initID,
 		Caller:              xmlSliceCaller,
+		OrderedCaller:       xmlOrderedCaller,
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,

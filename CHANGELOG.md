@@ -8,6 +8,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Device-definition export — produce pydevccu / godevccu fixtures straight
+  from a live CCU.** A new `GET /api/v1/devices/{addr}/export-definition`
+  endpoint (plus the `devices.export_definition` WS command and an
+  `hmcli export-def` subcommand) fetches a device's raw description and the
+  descriptions of all its channels and their non-LINK paramsets directly off
+  the CCU, anonymises every address behind a single random `VCU` id, and
+  returns a zip containing `device_descriptions/{model}.json` and
+  `paramset_descriptions/{model}.json`. The JSON members are **byte-for-byte
+  identical** to aiohomematic's `export_device_definition` (a new
+  `internal/orderedjson` package reproduces orjson's member-order-preserving
+  output, including its float repr), so the archive drops straight into
+  pydevccu / godevccu as a device fixture. To preserve the CCU's wire member
+  order the export reads descriptions over a new order-preserving RPC path
+  (`InterfaceClient.CallOrdered`) on the XML-RPC and BIN-RPC transports —
+  descriptions never travel over JSON-RPC, so that transport is intentionally
+  not wired (see `docs/parity/by_design.md`).
+
 - **Persistent login sessions — a daemon restart no longer logs everyone out.**
   Browser auth sessions are now SQLite-backed via a save-through cache: the
   in-memory store stays the hot path for speed, each issued/revoked session is

@@ -39,19 +39,20 @@ import (
 // wireWSCommands function needs. Constructed once in daemonServe so
 // the WS hub and the REST router share the same adapter instances.
 type wsCommandWiring struct {
-	health          *adapter.HealthAdapter
-	devices         *adapter.DevicesAdapter
-	hub             *adapter.HubAdapter
-	linksDomain     *adapter.LinksDomain
-	schedulesDomain *adapter.SchedulesDomain
-	centralLinks    *adapter.CentralLinksDomain
-	deviceAdmin     *adapter.DeviceAdminDomain
-	paramsets       *adapter.ParamsetsDomain
-	customDP        *adapter.CustomDPDispatcher
-	masterProfiles  *masterprofile.Store
-	linkProfiles    *linkprofile.Store
-	valueWriter     *clientpkg.ValueWriter
-	registry        *central.Registry
+	health           *adapter.HealthAdapter
+	devices          *adapter.DevicesAdapter
+	hub              *adapter.HubAdapter
+	linksDomain      *adapter.LinksDomain
+	schedulesDomain  *adapter.SchedulesDomain
+	centralLinks     *adapter.CentralLinksDomain
+	definitionExport *adapter.DefinitionExportDomain
+	deviceAdmin      *adapter.DeviceAdminDomain
+	paramsets        *adapter.ParamsetsDomain
+	customDP         *adapter.CustomDPDispatcher
+	masterProfiles   *masterprofile.Store
+	linkProfiles     *linkprofile.Store
+	valueWriter      *clientpkg.ValueWriter
+	registry         *central.Registry
 	// deviceReloader backs config.reload_device_config and
 	// ccu.reload_device_config
 	deviceReloader *adapter.DeviceReloaderAdapter
@@ -90,10 +91,11 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 
 	deviceQuery := &wsDeviceQuery{devs: w.devices, paramsets: w.paramsets, registry: w.registry, writer: w.valueWriter}
 	ws.RegisterDefaultCommands(router, ws.DefaultCommandsConfig{
-		Health:  w.health, // *adapter.HealthAdapter directly satisfies ws.HealthSnapshotProvider
-		Devices: deviceQuery,
-		Hub:     &wsHubQuery{hub: w.hub, registry: w.registry},
-		Links:   &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
+		Health:           w.health, // *adapter.HealthAdapter directly satisfies ws.HealthSnapshotProvider
+		Devices:          deviceQuery,
+		DefinitionExport: w.definitionExport,
+		Hub:              &wsHubQuery{hub: w.hub, registry: w.registry},
+		Links:            &wsLinkQuery{domain: w.linksDomain, registry: w.registry},
 		// ScheduleQueryAdapter already satisfies ws.ScheduleQuery — no wrapper needed.
 		Schedules: schedQueryAdapter,
 		// Sessions: wired via configui.SessionStore stored in wsCommandWiring.

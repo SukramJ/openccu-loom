@@ -380,6 +380,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	defer matterStop()
 	availClosers = append(availClosers, matterAvailClosers...)
 	centralLinksDomain := adapter.NewCentralLinksDomain(reg, valueWriter)
+	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
@@ -414,19 +415,20 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// every {"op":"call"} frame returns unknown_command — the entire SPA WS
 	// surface is dead.
 	wireWSCommands(wsHub, wsCommandWiring{
-		health:          healthAdapter,
-		devices:         devicesAdapter,
-		hub:             hubAdapter,
-		linksDomain:     linksDomain,
-		schedulesDomain: schedulesDomain,
-		centralLinks:    centralLinksDomain,
-		deviceAdmin:     deviceAdminDomain,
-		paramsets:       paramsetsDomain,
-		customDP:        customDPDispatcher,
-		masterProfiles:  masterProfilesStore,
-		linkProfiles:    linkProfilesStore,
-		valueWriter:     valueWriter,
-		registry:        reg,
+		health:           healthAdapter,
+		devices:          devicesAdapter,
+		hub:              hubAdapter,
+		linksDomain:      linksDomain,
+		schedulesDomain:  schedulesDomain,
+		centralLinks:     centralLinksDomain,
+		definitionExport: definitionExportDomain,
+		deviceAdmin:      deviceAdminDomain,
+		paramsets:        paramsetsDomain,
+		customDP:         customDPDispatcher,
+		masterProfiles:   masterProfilesStore,
+		linkProfiles:     linkProfilesStore,
+		valueWriter:      valueWriter,
+		registry:         reg,
 		// DeviceReloaderAdapter backs config.reload_device_config
 		// and ccu.reload_device_config — re-pulls device descriptions from the
 		// CCU and recreates missing channels/DPs.
@@ -471,6 +473,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		linksDomain:             linksDomain,
 		schedulesDomain:         schedulesDomain,
 		centralLinksDomain:      centralLinksDomain,
+		definitionExportDomain:  definitionExportDomain,
 		backupAdapter:           backupAdapter,
 		cacheResetSvc:           cacheResetReset(cacheResetSvc),
 		auditBuf:                auditBuf,

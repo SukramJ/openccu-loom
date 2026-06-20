@@ -3175,3 +3175,30 @@ that are unjustified by real load data and would differ from the
 reference. The single shared pool is therefore the correct production
 default; the per-class slots remain available for the future tuning
 surface.
+
+### BD-Export-OrderedFetchXMLBINOnly — device-definition export reads descriptions over XML-RPC + BIN-RPC only
+
+The device-definition export (`GET
+/api/v1/devices/{addr}/export-definition`,
+`internal/model/device/definitionexport`) reproduces aiohomematic's
+`export_device_definition` byte-for-byte. aiohomematic emits the raw CCU
+descriptions in **wire member order** via orjson, so the export reads them
+over a dedicated order-preserving path (`InterfaceClient.CallOrdered` →
+`xmlrpcCaller`/`binrpcCaller` `CallOrdered` → `internal/orderedjson`)
+instead of the normal flatten-to-`map[string]any` caller, which discards
+member order.
+
+That ordered path is wired for **XML-RPC and BIN-RPC only**, not JSON-RPC.
+This is deliberate: `getDeviceDescription` / `getParamsetDescription` travel
+over XML-RPC on every radio/wired interface (`CcuBackend`,
+`HomegearBackend`) and over BIN-RPC on CUxD (`CuxdBackend`). The JSON-RPC
+channel carries SysVars, programs, messages, install-mode and device names —
+never descriptions — so a JSON-RPC ordered exporter would be unreachable
+code. If a JSON-only backend that sources descriptions over JSON-RPC is ever
+added, the ordered path extends with a `jsonrpcCaller.CallOrdered` plus an
+order-preserving JSON decoder; until then it stays unwired.
+
+**Rationale:** mirroring aiohomematic's exact bytes requires preserving the
+CCU's wire order, which the existing flatten-to-map caller discards. Adding
+the ordered path to a transport that never carries descriptions would add
+surface with no reachable caller.

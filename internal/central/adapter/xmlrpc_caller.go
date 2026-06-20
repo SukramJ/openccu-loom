@@ -40,6 +40,17 @@ func toXMLRPCInt32(n int64) int32 {
 type xmlrpcCaller struct{ client *xmlrpc.Client }
 
 func (c *xmlrpcCaller) Call(ctx context.Context, method string, args ...any) (any, error) {
+	reply, err := c.callRaw(ctx, method, args)
+	if err != nil {
+		return nil, err
+	}
+	return xmlRPCValueToGo(reply), nil
+}
+
+// callRaw encodes the Go args into xmlrpc.Value params and returns the
+// decoded reply Value untouched, so callers can flatten it to plain Go
+// (Call) or preserve member order (CallOrdered).
+func (c *xmlrpcCaller) callRaw(ctx context.Context, method string, args []any) (xmlrpc.Value, error) {
 	params := make([]xmlrpc.Value, 0, len(args))
 	for _, arg := range args {
 		v, err := goToXMLRPCValue(arg)
@@ -48,11 +59,7 @@ func (c *xmlrpcCaller) Call(ctx context.Context, method string, args ...any) (an
 		}
 		params = append(params, v)
 	}
-	reply, err := c.client.Call(ctx, method, params)
-	if err != nil {
-		return nil, err
-	}
-	return xmlRPCValueToGo(reply), nil
+	return c.client.Call(ctx, method, params)
 }
 
 func goToXMLRPCValue(v any) (xmlrpc.Value, error) {

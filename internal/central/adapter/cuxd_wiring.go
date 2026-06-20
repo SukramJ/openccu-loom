@@ -77,6 +77,11 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	binSliceCaller := client.CallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
 		return binCaller.Call(ctx, method, params...)
 	})
+	// Order-preserving sibling for the device-definition export (CUxD speaks the
+	// XML-RPC value set over BIN-RPC, so member order is recoverable here too).
+	binOrderedCaller := client.OrderedCallerFunc(func(ctx context.Context, method string, params []any) (any, error) {
+		return binCaller.CallOrdered(ctx, method, params...)
+	})
 
 	// Forward CUxD call traces to the session recorder under the BIN-RPC
 	// type so a replay can distinguish them from the XML-RPC interfaces.
@@ -95,6 +100,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		Interface:           iface,
 		InitInterfaceID:     initID,
 		Caller:              binSliceCaller,
+		OrderedCaller:       binOrderedCaller,
 		Enabled:             true,
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,

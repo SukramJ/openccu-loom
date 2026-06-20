@@ -122,6 +122,7 @@
   let renameBusy = $state(false);
   let deleting = $state(false);
   let updatingFw = $state(false);
+  let exportingDef = $state(false);
 
   let editingRooms = $state(false);
   let roomsDraft = $state("");
@@ -260,6 +261,38 @@
       toastStore.error(err instanceof Error ? err.message : String(err));
     } finally {
       updatingFw = false;
+    }
+  }
+
+  async function exportDefinition() {
+    if (!detail) return;
+    exportingDef = true;
+    try {
+      const res = await fetch(
+        `${(await import("$lib/api/base")).apiBase()}/devices/${encodeURIComponent(detail.address)}/export-definition`,
+        { credentials: "same-origin" },
+      );
+      if (!res.ok) {
+        toastStore.error(t("device.export_definition_error"));
+        return;
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition") ?? "";
+      const match = cd.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/i);
+      const filename = match?.[1]?.trim() || `${detail.address}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toastStore.success(t("device.export_definition_success"));
+    } catch {
+      toastStore.error(t("device.export_definition_error"));
+    } finally {
+      exportingDef = false;
     }
   }
 
@@ -515,6 +548,16 @@
                 {updatingFw ? "…" : t("device.firmware_update")}
               </Button>
             {/if}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void exportDefinition()}
+              disabled={exportingDef}
+            >
+              <Icon name="mdi:download" size={14} />
+              {exportingDef ? "…" : t("device.export_definition")}
+            </Button>
             <Button
               type="button"
               variant="destructive"
