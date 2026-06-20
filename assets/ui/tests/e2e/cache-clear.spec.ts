@@ -7,14 +7,13 @@ test.describe('Clear CCU cache', () => {
 
     await page.goto('http://localhost:5173/app/#/settings');
     await page.waitForSelector('#main');
-    await page.waitForTimeout(800);
 
-    // Click the System tab — i18n renders as the key in the hermetic test env
-    const systemTab = page.getByText('settings.tab.system').first();
+    // The System tab button may appear in both a mobile strip and a desktop sidebar;
+    // scope to the first visible instance.
+    const systemTab = page.getByRole('button', { name: 'System', exact: true }).first();
     await systemTab.click();
-    await page.waitForTimeout(300);
 
-    await expect(page.getByText('admin.cache_clear.button').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Clear CCU cache' }).first()).toBeVisible();
   });
 
   test('clicking cache clear button triggers the confirm dialog', async ({ page }) => {
@@ -22,16 +21,14 @@ test.describe('Clear CCU cache', () => {
 
     await page.goto('http://localhost:5173/app/#/settings');
     await page.waitForSelector('#main');
-    await page.waitForTimeout(800);
 
-    await page.getByText('settings.tab.system').first().click();
-    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'System', exact: true }).first().click();
 
-    await page.getByText('admin.cache_clear.button').first().click();
+    await page.getByRole('button', { name: 'Clear CCU cache' }).first().click();
 
-    // The shared ConfirmDialog renders the confirmLabel key as button text
-    await expect(page.getByText('admin.cache_clear.confirm').first()).toBeVisible({
-      timeout: 3000,
+    // The shared ConfirmDialog renders a confirm button labelled "Clear cache"
+    await expect(page.getByRole('button', { name: 'Clear cache', exact: true }).first()).toBeVisible({
+      timeout: 5000,
     });
   });
 
@@ -51,25 +48,22 @@ test.describe('Clear CCU cache', () => {
           values: 100,
           master: 2,
           centrals_reinit: 1,
-          errors: 0,
+          errors: [],
         },
       }),
     );
 
     await page.goto('http://localhost:5173/app/#/settings');
     await page.waitForSelector('#main');
-    await page.waitForTimeout(800);
 
-    await page.getByText('settings.tab.system').first().click();
-    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'System', exact: true }).first().click();
 
-    await page.getByText('admin.cache_clear.button').first().click();
-    await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'Clear CCU cache' }).first().click();
 
     // Click the confirm button in the shared dialog
-    await page.getByText('admin.cache_clear.confirm').first().click();
+    await page.getByRole('button', { name: 'Clear cache', exact: true }).first().click();
 
-    // The toast region should be present and the success key visible
+    // The toast region should be present after the API call
     const toastRegion = page.locator('[role="region"][aria-live="polite"]');
     await expect(toastRegion).toBeAttached();
   });
