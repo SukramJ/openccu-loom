@@ -51,7 +51,7 @@ func ReloadDevice(svc ReloaderService) http.HandlerFunc {
 	}
 }
 
-// ReloadChannel serves POST /devices/{addr}/channels/{channel}/reload.
+// ReloadChannel serves POST /devices/{addr}/channels/{no}/reload.
 // It composes the "DDDDDDDDDD:n" channel address from the path params
 // and re-pulls that channel's paramset descriptions.
 func ReloadChannel(svc ReloaderService) http.HandlerFunc {
@@ -62,7 +62,7 @@ func ReloadChannel(svc ReloaderService) http.HandlerFunc {
 			return
 		}
 		addr := chi.URLParam(r, "addr")
-		channel := chi.URLParam(r, "channel")
+		channel := chi.URLParam(r, "no")
 		if addr == "" || channel == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing channel address", ""))

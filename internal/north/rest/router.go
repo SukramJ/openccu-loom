@@ -61,7 +61,7 @@ type Deps struct {
 	RefreshDevices handlers.RefreshDevicesService
 	// Reloader re-pulls a single device's or channel's config from its
 	// CCU. Optional — nil disables `POST /devices/{addr}/reload` and
-	// `POST /devices/{addr}/channels/{channel}/reload`. The same adapter
+	// `POST /devices/{addr}/channels/{no}/reload`. The same adapter
 	// backs the WS reload commands.
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
@@ -580,7 +580,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.Reloader != nil {
 				pr.With(op).Post("/devices/{addr}/reload", handlers.ReloadDevice(d.Reloader))
-				pr.With(op).Post("/devices/{addr}/channels/{channel}/reload",
+				pr.With(op).Post("/devices/{addr}/channels/{no}/reload",
 					handlers.ReloadChannel(d.Reloader))
 			}
 			if d.CentralLinks != nil {

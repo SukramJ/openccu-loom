@@ -88,7 +88,7 @@ func TestReloadChannel_HappyPath_ComposesChannelAddress(t *testing.T) {
 	t.Parallel()
 	svc := &stubReloaderService{}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
-	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "channel": "3"}))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
 	ReloadChannel(svc).ServeHTTP(w, req)
 
@@ -103,7 +103,7 @@ func TestReloadChannel_HappyPath_ComposesChannelAddress(t *testing.T) {
 func TestReloadChannel_NilService_Returns503(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
-	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "channel": "3"}))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
 	ReloadChannel(nil).ServeHTTP(w, req)
 
@@ -129,7 +129,7 @@ func TestReloadChannel_ReloadError_Returns502(t *testing.T) {
 	t.Parallel()
 	svc := &stubReloaderService{channelErr: errors.New("channel not found")}
 	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
-	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "channel": "3"}))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001", "no": "3"}))
 	w := httptest.NewRecorder()
 	ReloadChannel(svc).ServeHTTP(w, req)
 

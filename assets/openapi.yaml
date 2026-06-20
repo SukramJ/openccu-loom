@@ -1294,7 +1294,7 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
-  /devices/{addr}/channels/{channel}/reload:
+  /devices/{addr}/channels/{no}/reload:
     post:
       operationId: reloadChannel
       summary: Re-pull a single channel's config from its CCU
@@ -1305,7 +1305,7 @@ paths:
         - openIdConnect: [operator]
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
-        - { in: path, name: channel, required: true, schema: { type: string } }
+        - { in: path, name: no, required: true, schema: { type: string } }
       responses:
         "200":
           description: Channel config reloaded
