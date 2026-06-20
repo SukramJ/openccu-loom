@@ -101,6 +101,24 @@ func (a *ScheduleQueryAdapter) SetDeviceActiveProfile(ctx context.Context, devic
 	return a.domain.SetActiveProfileAuto(ctx, deviceAddress, profile)
 }
 
+// CopySchedule delegates to the domain's whole-device schedule copy.
+func (a *ScheduleQueryAdapter) CopySchedule(ctx context.Context, srcDeviceAddress, dstDeviceAddress string) error {
+	if a.domain == nil {
+		return errors.New("schedule_query_adapter: nil domain")
+	}
+	return a.domain.CopySchedule(ctx, srcDeviceAddress, dstDeviceAddress)
+}
+
+// CopyClimateProfile delegates to the domain's single-profile copy.
+func (a *ScheduleQueryAdapter) CopyClimateProfile(
+	ctx context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int,
+) error {
+	if a.domain == nil {
+		return errors.New("schedule_query_adapter: nil domain")
+	}
+	return a.domain.CopyClimateProfile(ctx, srcChannelAddress, srcProfile, dstChannelAddress, dstProfile)
+}
+
 // splitChannelAddress separates "<dev>:<chn>" into its components.
 // Returns (channelAddress, 0) when the suffix is missing.
 func splitChannelAddress(channelAddress string) (device string, channelIdx int) {

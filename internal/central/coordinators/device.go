@@ -569,6 +569,89 @@ func (c *DeviceCoordinator) RefreshDeviceDescriptionsAndCreateMissingDevices(
 	return nil
 }
 
+// ChannelParamsetFetcher is the south-bound contract used by
+// [DeviceCoordinator.ReloadChannelConfig] to re-pull a single channel's
+// paramset descriptions and current MASTER values from the CCU.
+type ChannelParamsetFetcher interface {
+	// GetParamsetDescription reads the descriptor for one paramset on the
+	// given channel (VALUES / MASTER / LINK).
+	GetParamsetDescription(ctx context.Context, channelAddress string, key hmenum.ParamsetKey) (map[string]hmproto.ParameterData, error)
+	// GetParamset reads the current values of one paramset on the channel.
+	GetParamset(ctx context.Context, channelAddress string, key hmenum.ParamsetKey) (map[string]any, error)
+}
+
+// channelReloadParamsetKeys lists the paramset descriptions re-pulled for a
+// channel reload. Mirrors the channel-config refresh in
+// model/device.py:1448 (reload_channel_config → on_config_changed →
+// _reload_paramset_descriptions): VALUES, MASTER and LINK.
+var channelReloadParamsetKeys = []hmenum.ParamsetKey{
+	hmenum.ParamsetKeyValues,
+	hmenum.ParamsetKeyMaster,
+	hmenum.ParamsetKeyLink,
+}
+
+// ReloadChannelConfig re-pulls the paramset descriptions (VALUES, MASTER,
+// LINK) for a single channel from the CCU, re-stores them in the paramset
+// registry (applying device-type patches), and re-reads the channel's
+// current MASTER values. It mirrors model/device.py:1448
+// (Channel.reload_channel_config → on_config_changed), scoped to one
+// channel instead of a whole device.
+//
+// deviceModel carries the device TYPE field so the paramset patches match
+// (see [registry.ParamsetRegistry.Add]); pass "" when the model is unknown.
+//
+// A missing paramset on the channel (e.g. a channel without a LINK set) is
+// logged and skipped, not treated as a fatal error — only a wholesale fetch
+// failure aborts. MASTER values are read after the descriptions so the
+// caller's subsequent data-point refresh sees fresh values.
+func (c *DeviceCoordinator) ReloadChannelConfig(
+	ctx context.Context,
+	fetcher ChannelParamsetFetcher,
+	iface hmenum.Interface,
+	channelAddress string,
+	deviceModel string,
+) error {
+	if fetcher == nil {
+		return errors.New("device_coordinator: reload_channel_config: fetcher is nil")
+	}
+	if channelAddress == "" {
+		return errors.New("device_coordinator: reload_channel_config: empty channel address")
+	}
+
+	var fetched int
+	for _, key := range channelReloadParamsetKeys {
+		desc, err := fetcher.GetParamsetDescription(ctx, channelAddress, key)
+		if err != nil {
+			c.logger.Debug("reload_channel_config: paramset description skipped",
+				"channel", channelAddress,
+				"paramset", string(key),
+				"error", err)
+			continue
+		}
+		ps := make(hmproto.Paramset, len(desc))
+		for name := range desc {
+			ps[name] = desc[name]
+		}
+		if c.paramsets != nil {
+			c.paramsets.Add(iface, channelAddress, key, ps, deviceModel)
+		}
+		fetched++
+	}
+	if fetched == 0 {
+		return fmt.Errorf("device_coordinator: reload_channel_config: no paramset descriptions for %s", channelAddress)
+	}
+
+	// Re-read the current MASTER values so a follow-up data-point refresh
+	// observes fresh master state. A read failure here is non-fatal — the
+	// descriptions were already refreshed.
+	if _, err := fetcher.GetParamset(ctx, channelAddress, hmenum.ParamsetKeyMaster); err != nil {
+		c.logger.Debug("reload_channel_config: master values read skipped",
+			"channel", channelAddress,
+			"error", err)
+	}
+	return nil
+}
+
 // AddNewDevicesManually accepts devices that have been announced via
 // newDevices callbacks but are still in the "delayed" (pending-accept) queue.
 // The caller provides an address→name map; for each address the stored

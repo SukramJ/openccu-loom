@@ -54,7 +54,8 @@ type wsCommandWiring struct {
 	valueWriter      *clientpkg.ValueWriter
 	registry         *central.Registry
 	// deviceReloader backs config.reload_device_config and
-	// ccu.reload_device_config
+	// ccu.reload_device_config. The same adapter also backs
+	// config.reload_channel_config / ccu.reload_channel_config.
 	deviceReloader *adapter.DeviceReloaderAdapter
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
@@ -109,6 +110,10 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// ccu.reload_device_config — re-pulls device descriptions from the
 		// CCU and recreates missing channels/DPs.
 		DeviceReloader: w.deviceReloader,
+		// ChannelReloader backs config.reload_channel_config and
+		// ccu.reload_channel_config — re-pulls a single channel's paramset
+		// descriptions + MASTER values and refreshes its data points.
+		ChannelReloader: w.deviceReloader,
 	})
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{
@@ -117,6 +122,13 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		MasterProfiles: w.masterProfiles,
 		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
 		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),
+		// CentralLinks: wired — *adapter.CentralLinksDomain satisfies
+		// ws.CentralLinksManager directly. Backs central.create_links /
+		// central.remove_links / central.links_status.
+		CentralLinks: w.centralLinks,
+		// SessionRecorder: wired — fans recording.start/stop/status across
+		// every central's session.Recorder via the registry.
+		SessionRecorder: wsSessionRecorderFrom(w.registry),
 		// ChangeHistory, ThrottleStats, DeviceStatistics, FirmwareRefresher,
 		// IncidentClearer, ChangeHistoryClearer, ExtendedHub, Central,
 		// ParamsetReader: all nil — see docs/parity/by_design.md "ws-rest-split".
@@ -377,6 +389,16 @@ func (w *wsHubQuery) SetSysvar(ctx context.Context, name string, value any) erro
 		return fmt.Errorf("ws: set_sysvar value: %w", err)
 	}
 	return s.Set(ctx, pv)
+}
+
+// FetchSystemVariables force re-pulls the sysvar catalogue from the CCU
+// via the SysvarFetchAdapter (which delegates to each central's
+// HubCoordinator.RefreshSysvars). An empty centralName refreshes all.
+func (w *wsHubQuery) FetchSystemVariables(ctx context.Context, centralName string) error {
+	if w.registry == nil {
+		return errors.New("ws: registry not wired")
+	}
+	return adapter.NewSysvarFetchAdapter(w.registry).FetchSystemVariables(ctx, centralName)
 }
 
 func (w *wsHubQuery) ListAlarmMessages(_ context.Context) ([]map[string]any, error) {
@@ -809,6 +831,70 @@ func wsCacheClearerFrom(svc *cachereset.Service) ws.CacheClearer {
 		return nil
 	}
 	return &wsCacheClearer{svc: svc}
+}
+
+// ── wsSessionRecorder ─────────────────────────────────────────────────────────
+
+// wsSessionRecorder adapts every central's [session.Recorder] onto
+// ws.SessionRecorder. Start / Stop fan out across all registered centrals so a
+// single recording.start / recording.stop toggles the diagnostic RPC recorder
+// fleet-wide. IsActive reports true when any central is currently capturing —
+// the recorder is multi-central by design (ADR 0002), so a per-central scope is
+// intentionally not exposed on this minimal diagnostic surface.
+type wsSessionRecorder struct{ registry *central.Registry }
+
+// Start activates recording on every central's recorder.
+func (w *wsSessionRecorder) Start() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil {
+			u.Recorder.StartSession()
+		}
+	}
+	return w.IsActive()
+}
+
+// Stop deactivates recording on every central's recorder.
+func (w *wsSessionRecorder) Stop() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil {
+			u.Recorder.StopSession()
+		}
+	}
+	return w.IsActive()
+}
+
+// IsActive reports whether any central's recorder is currently capturing.
+func (w *wsSessionRecorder) IsActive() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil && u.Recorder.IsActive() {
+			return true
+		}
+	}
+	return false
+}
+
+// wsSessionRecorderFrom returns a ws.SessionRecorder backed by the central
+// registry, or nil when no central exposes a recorder (leaves the recording.*
+// commands unregistered).
+func wsSessionRecorderFrom(reg *central.Registry) ws.SessionRecorder {
+	if reg == nil {
+		return nil
+	}
+	for _, u := range reg.List() {
+		if u != nil && u.Recorder != nil {
+			return &wsSessionRecorder{registry: reg}
+		}
+	}
+	return nil
 }
 
 // deviceAddrFromChannel strips the ":N" channel suffix from a channel

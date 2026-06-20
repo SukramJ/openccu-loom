@@ -458,6 +458,9 @@ type stubHub struct {
 	setValue   any
 	setErr     error
 
+	fetchCentral string
+	fetchErr     error
+
 	alarmMessages   []map[string]any
 	serviceMessages []map[string]any
 	ackedAlarmID    string
@@ -498,6 +501,11 @@ func (h *stubHub) SetSysvar(_ context.Context, name string, value any) error {
 	h.setName = name
 	h.setValue = value
 	return h.setErr
+}
+
+func (h *stubHub) FetchSystemVariables(_ context.Context, centralName string) error {
+	h.fetchCentral = centralName
+	return h.fetchErr
 }
 
 func (h *stubHub) ListAlarmMessages(context.Context) ([]map[string]any, error) {
@@ -793,6 +801,16 @@ type stubSchedules struct {
 	deviceActiveDevice string
 	deviceActiveID     string
 	deviceActiveErr    error
+
+	// Copy tracking.
+	copySrcDevice  string
+	copyDstDevice  string
+	copyErr        error
+	copyProfSrcCh  string
+	copyProfSrcP   int
+	copyProfDstCh  string
+	copyProfDstP   int
+	copyProfileErr error
 }
 
 func (s *stubSchedules) GetClimateSchedule(_ context.Context, _ string) (map[string]any, error) {
@@ -826,6 +844,20 @@ func (s *stubSchedules) SetDeviceActiveProfile(_ context.Context, deviceAddress,
 	s.deviceActiveDevice = deviceAddress
 	s.deviceActiveID = profile
 	return s.deviceActiveErr
+}
+
+func (s *stubSchedules) CopySchedule(_ context.Context, srcDeviceAddress, dstDeviceAddress string) error {
+	s.copySrcDevice = srcDeviceAddress
+	s.copyDstDevice = dstDeviceAddress
+	return s.copyErr
+}
+
+func (s *stubSchedules) CopyClimateProfile(_ context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int) error {
+	s.copyProfSrcCh = srcChannelAddress
+	s.copyProfSrcP = srcProfile
+	s.copyProfDstCh = dstChannelAddress
+	s.copyProfDstP = dstProfile
+	return s.copyProfileErr
 }
 
 func TestLinksListAddRemove(t *testing.T) {
@@ -1225,5 +1257,144 @@ func TestSessionSaveRecordsToChangeLog(t *testing.T) {
 	}
 	if ch.New != true {
 		t.Fatalf("change.New=%v want true", ch.New)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// schedules.copy
+// ---------------------------------------------------------------------------
+
+// TestSchedulesCopy_HappyPath verifies that schedules.copy dispatches both
+// device addresses to the stub's CopySchedule method and reports success.
+func TestSchedulesCopy_HappyPath(t *testing.T) {
+	t.Parallel()
+	sched := &stubSchedules{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: sched})
+
+	args, _ := json.Marshal(map[string]any{
+		"source_device_address": "DEV1",
+		"target_device_address": "DEV2",
+	})
+	res := r.Dispatch(context.Background(), "schedules.copy", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if sched.copySrcDevice != "DEV1" {
+		t.Errorf("copySrcDevice=%q want DEV1", sched.copySrcDevice)
+	}
+	if sched.copyDstDevice != "DEV2" {
+		t.Errorf("copyDstDevice=%q want DEV2", sched.copyDstDevice)
+	}
+	if res.Data.(map[string]any)["copied"] != true {
+		t.Errorf("result does not carry copied=true: %+v", res.Data)
+	}
+}
+
+// TestSchedulesCopy_MissingTarget verifies that an absent target_device_address
+// yields a bad_request error.
+func TestSchedulesCopy_MissingTarget(t *testing.T) {
+	t.Parallel()
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
+
+	args, _ := json.Marshal(map[string]any{"source_device_address": "DEV1"})
+	res := r.Dispatch(context.Background(), "schedules.copy", args)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %+v", res.Error)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// schedules.climate.copy_profile
+// ---------------------------------------------------------------------------
+
+// TestSchedulesClimateCopyProfile_HappyPath verifies that the handler
+// forwards all four arguments to the stub unchanged.
+func TestSchedulesClimateCopyProfile_HappyPath(t *testing.T) {
+	t.Parallel()
+	sched := &stubSchedules{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: sched})
+
+	args, _ := json.Marshal(map[string]any{
+		"source_channel_address": "A:1",
+		"source_profile":         1,
+		"target_channel_address": "B:2",
+		"target_profile":         2,
+	})
+	res := r.Dispatch(context.Background(), "schedules.climate.copy_profile", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if sched.copyProfSrcCh != "A:1" {
+		t.Errorf("copyProfSrcCh=%q want A:1", sched.copyProfSrcCh)
+	}
+	if sched.copyProfDstP != 2 {
+		t.Errorf("copyProfDstP=%d want 2", sched.copyProfDstP)
+	}
+	if res.Data.(map[string]any)["copied"] != true {
+		t.Errorf("result does not carry copied=true: %+v", res.Data)
+	}
+}
+
+// TestSchedulesClimateCopyProfile_InvalidProfile verifies that a source_profile
+// of 0 (below the 1..6 range) yields a bad_request error.
+func TestSchedulesClimateCopyProfile_InvalidProfile(t *testing.T) {
+	t.Parallel()
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
+
+	args, _ := json.Marshal(map[string]any{
+		"source_channel_address": "A:1",
+		"source_profile":         0, // out of range
+		"target_channel_address": "B:2",
+		"target_profile":         2,
+	})
+	res := r.Dispatch(context.Background(), "schedules.climate.copy_profile", args)
+	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request for profile 0, got %+v", res.Error)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// sysvars.fetch
+// ---------------------------------------------------------------------------
+
+// TestSysvarsFetch_WithCentralName verifies that the central_name arg is
+// forwarded to the stub's FetchSystemVariables method.
+func TestSysvarsFetch_WithCentralName(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	args, _ := json.Marshal(map[string]any{"central_name": "ccu-01"})
+	res := r.Dispatch(context.Background(), "sysvars.fetch", args)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if hub.fetchCentral != "ccu-01" {
+		t.Errorf("fetchCentral=%q want ccu-01", hub.fetchCentral)
+	}
+	if res.Data.(map[string]any)["fetched"] != true {
+		t.Errorf("result does not carry fetched=true: %+v", res.Data)
+	}
+}
+
+// TestSysvarsFetch_EmptyBody verifies that an empty body is valid (refreshes
+// all centrals) and that the stub receives an empty central_name.
+func TestSysvarsFetch_EmptyBody(t *testing.T) {
+	t.Parallel()
+	hub := &stubHub{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
+
+	res := r.Dispatch(context.Background(), "sysvars.fetch", nil)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %+v", res.Error)
+	}
+	if hub.fetchCentral != "" {
+		t.Errorf("fetchCentral=%q want empty (refresh-all)", hub.fetchCentral)
 	}
 }

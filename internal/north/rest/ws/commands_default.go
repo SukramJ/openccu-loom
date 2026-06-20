@@ -126,6 +126,15 @@ type ScheduleQuery interface {
 	// SetDeviceActiveProfile selects the active climate profile
 	// ("P1".."P6") on the resolved schedule channel.
 	SetDeviceActiveProfile(ctx context.Context, deviceAddress, profile string) error
+
+	// CopySchedule copies the whole week schedule from the source device
+	// to the destination device (both channels auto-resolved). Mirrors the
+	// Python reference's copy_schedule.
+	CopySchedule(ctx context.Context, srcDeviceAddress, dstDeviceAddress string) error
+	// CopyClimateProfile copies a single climate profile from the source
+	// channel/profile to the destination channel/profile. Mirrors the
+	// Python reference's copy_schedule_profile.
+	CopyClimateProfile(ctx context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int) error
 }
 
 // HubQuery is the read-only / lightly-mutating surface the
@@ -142,6 +151,11 @@ type HubQuery interface {
 	ListSysvars(ctx context.Context) ([]map[string]any, error)
 	// SetSysvar updates a system variable's value.
 	SetSysvar(ctx context.Context, name string, value any) error
+	// FetchSystemVariables force re-pulls the sysvar catalogue from the
+	// CCU and refreshes the hub model. An empty centralName refreshes
+	// every registered central. Mirrors the Python reference's
+	// fetch_system_variables.
+	FetchSystemVariables(ctx context.Context, centralName string) error
 
 	// ListAlarmMessages returns active CCU alarm messages.
 	ListAlarmMessages(ctx context.Context) ([]map[string]any, error)
@@ -197,6 +211,19 @@ type DeviceReloader interface {
 	ReloadDeviceConfig(ctx context.Context, deviceAddress string) error
 }
 
+// ChannelReloader is the write surface for `config.reload_channel_config`
+// and `ccu.reload_channel_config`. Both commands re-pull a single channel's
+// paramset descriptions (VALUES/MASTER/LINK) and MASTER values from the CCU,
+// then re-materialise the channel's data points.
+// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// on_config_changed).
+type ChannelReloader interface {
+	// ReloadChannelConfig re-pulls the channel's paramset descriptions and
+	// MASTER values and refreshes the channel's data points. channelAddress
+	// is the "DDDDDDDDDD:n" form.
+	ReloadChannelConfig(ctx context.Context, channelAddress string) error
+}
+
 // DefaultCommandsConfig bundles the optional providers consumed by
 // [RegisterDefaultCommands]. Any nil field disables the dependent
 // command(s) — useful for tests and for daemons that only wire up a
@@ -215,6 +242,9 @@ type DefaultCommandsConfig struct {
 	// DeviceReloader backs `config.reload_device_config` and
 	// `ccu.reload_device_config`.
 	DeviceReloader DeviceReloader
+	// ChannelReloader backs `config.reload_channel_config` and
+	// `ccu.reload_channel_config`.
+	ChannelReloader ChannelReloader
 	// Constraints backs the cross-validation pass in
 	// `config.session.save`. When nil the save handler
 	// skips cross-validation (backwards-compatible).
@@ -264,6 +294,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("programs.execute", programsExecuteHandler(cfg.Hub))
 		router.Register("sysvars.list", sysvarsListHandler(cfg.Hub))
 		router.Register("sysvars.set", sysvarsSetHandler(cfg.Hub))
+		router.Register("sysvars.fetch", sysvarsFetchHandler(cfg.Hub))
 		router.Register("alarm_messages.list", alarmMessagesListHandler(cfg.Hub))
 		router.Register("alarm_messages.ack", alarmMessagesAckHandler(cfg.Hub))
 		router.Register("service_messages.list", serviceMessagesListHandler(cfg.Hub))
@@ -289,12 +320,7 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 	}
 
 	if cfg.Schedules != nil {
-		router.Register("schedules.climate.get", schedulesClimateGetHandler(cfg.Schedules))
-		router.Register("schedules.climate.set", schedulesClimateSetHandler(cfg.Schedules))
-		router.Register("schedules.active_profile.set", schedulesActiveProfileSetHandler(cfg.Schedules))
-		router.Register("schedules.device.get", schedulesDeviceGetHandler(cfg.Schedules))
-		router.Register("schedules.device.set", schedulesDeviceSetHandler(cfg.Schedules))
-		router.Register("schedules.device.active_profile.set", schedulesDeviceActiveProfileSetHandler(cfg.Schedules))
+		registerScheduleCommands(router, cfg.Schedules)
 	}
 
 	if cfg.Sessions != nil {
@@ -318,6 +344,16 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		// domain action. Mirrors Python `ws_panel_reload_device_config`
 		// (websocket_api.py:2285).
 		router.Register("ccu.reload_device_config", reloadDeviceConfigHandler(cfg.DeviceReloader))
+	}
+
+	if cfg.ChannelReloader != nil {
+		// config.reload_channel_config — re-pull one channel's paramset
+		// descriptions + MASTER values and refresh its data points.
+		// Mirrors Channel.reload_channel_config (model/device.py:1448).
+		router.Register("config.reload_channel_config", reloadChannelConfigHandler(cfg.ChannelReloader))
+		// ccu.reload_channel_config — panel variant with the same domain
+		// action.
+		router.Register("ccu.reload_channel_config", reloadChannelConfigHandler(cfg.ChannelReloader))
 	}
 }
 
@@ -487,6 +523,28 @@ func sysvarsSetHandler(q HubQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "set_sysvar: "+err.Error())
 		}
 		return map[string]any{"saved": true, "name": args.Name}, nil
+	}
+}
+
+// sysvarsFetchArgs is the optional shape for `sysvars.fetch`. An empty
+// central_name refreshes every registered central.
+type sysvarsFetchArgs struct {
+	CentralName string `json:"central_name"`
+}
+
+func sysvarsFetchHandler(q HubQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args sysvarsFetchArgs
+		// Args are optional — an empty/absent body refreshes all centrals.
+		if len(raw) > 0 {
+			if err := json.Unmarshal(raw, &args); err != nil {
+				return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+			}
+		}
+		if err := q.FetchSystemVariables(ctx, args.CentralName); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "fetch_sysvars: "+err.Error())
+		}
+		return map[string]any{"fetched": true, "central_name": args.CentralName}, nil
 	}
 }
 
@@ -829,6 +887,20 @@ type scheduleActiveProfileArgs struct {
 	ProfileIndex   int    `json:"profile_index"`
 }
 
+// registerScheduleCommands wires the schedules.* command family onto
+// router. Extracted from RegisterDefaultCommands to keep that function
+// within the statement-count budget.
+func registerScheduleCommands(router *Router, q ScheduleQuery) {
+	router.Register("schedules.climate.get", schedulesClimateGetHandler(q))
+	router.Register("schedules.climate.set", schedulesClimateSetHandler(q))
+	router.Register("schedules.active_profile.set", schedulesActiveProfileSetHandler(q))
+	router.Register("schedules.device.get", schedulesDeviceGetHandler(q))
+	router.Register("schedules.device.set", schedulesDeviceSetHandler(q))
+	router.Register("schedules.device.active_profile.set", schedulesDeviceActiveProfileSetHandler(q))
+	router.Register("schedules.copy", schedulesCopyHandler(q))
+	router.Register("schedules.climate.copy_profile", schedulesClimateCopyProfileHandler(q))
+}
+
 func schedulesClimateGetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleChannelArgs
@@ -953,6 +1025,68 @@ func schedulesDeviceActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "set_device_active_profile: "+err.Error())
 		}
 		return map[string]any{"saved": true, "device_address": args.DeviceAddress, "profile": args.Profile}, nil
+	}
+}
+
+// scheduleCopyArgs is the shape for `schedules.copy` — both ends are
+// device addresses; the schedule channel is resolved server-side.
+type scheduleCopyArgs struct {
+	SourceDeviceAddress string `json:"source_device_address"`
+	TargetDeviceAddress string `json:"target_device_address"`
+}
+
+// scheduleClimateCopyProfileArgs is the shape for
+// `schedules.climate.copy_profile`. Both ends are channel addresses; the
+// profile indices select which P<n> profile is copied.
+type scheduleClimateCopyProfileArgs struct {
+	SourceChannelAddress string `json:"source_channel_address"`
+	SourceProfile        int    `json:"source_profile"`
+	TargetChannelAddress string `json:"target_channel_address"`
+	TargetProfile        int    `json:"target_profile"`
+}
+
+func schedulesCopyHandler(q ScheduleQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args scheduleCopyArgs
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		}
+		if args.SourceDeviceAddress == "" || args.TargetDeviceAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "source_device_address and target_device_address required")
+		}
+		if err := q.CopySchedule(ctx, args.SourceDeviceAddress, args.TargetDeviceAddress); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "copy_schedule: "+err.Error())
+		}
+		return map[string]any{
+			"copied":                true,
+			"source_device_address": args.SourceDeviceAddress,
+			"target_device_address": args.TargetDeviceAddress,
+		}, nil
+	}
+}
+
+func schedulesClimateCopyProfileHandler(q ScheduleQuery) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args scheduleClimateCopyProfileArgs
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		}
+		if args.SourceChannelAddress == "" || args.TargetChannelAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "source_channel_address and target_channel_address required")
+		}
+		if args.SourceProfile < 1 || args.SourceProfile > 6 || args.TargetProfile < 1 || args.TargetProfile > 6 {
+			return nil, NewCommandError(CommandErrorBadRequest, "source_profile and target_profile must be 1..6")
+		}
+		if err := q.CopyClimateProfile(ctx, args.SourceChannelAddress, args.SourceProfile, args.TargetChannelAddress, args.TargetProfile); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "copy_climate_profile: "+err.Error())
+		}
+		return map[string]any{
+			"copied":                 true,
+			"source_channel_address": args.SourceChannelAddress,
+			"source_profile":         args.SourceProfile,
+			"target_channel_address": args.TargetChannelAddress,
+			"target_profile":         args.TargetProfile,
+		}, nil
 	}
 }
 
@@ -1217,5 +1351,37 @@ func reloadDeviceConfigHandler(r DeviceReloader) CommandHandler {
 			return nil, NewCommandError(CommandErrorInternal, "reload_device_config: "+err.Error())
 		}
 		return map[string]any{"success": true, "device_address": args.DeviceAddress}, nil
+	}
+}
+
+// reloadChannelConfigHandler implements `config.reload_channel_config` and
+// `ccu.reload_channel_config` (both share the same domain action). Re-pulls a
+// single channel's paramset descriptions (VALUES/MASTER/LINK) and MASTER
+// values from the CCU, then refreshes the channel's data points.
+// Mirrors Channel.reload_channel_config (model/device.py:1448 →
+// on_config_changed).
+//
+// Request: { "channel_address": str } (alias: { "address": str })
+// Response: { "success": true, "channel_address": str }
+func reloadChannelConfigHandler(r ChannelReloader) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		var args struct {
+			ChannelAddress string `json:"channel_address"`
+			Address        string `json:"address"`
+		}
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		}
+		channelAddress := args.ChannelAddress
+		if channelAddress == "" {
+			channelAddress = args.Address
+		}
+		if channelAddress == "" {
+			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
+		}
+		if err := r.ReloadChannelConfig(ctx, channelAddress); err != nil {
+			return nil, NewCommandError(CommandErrorInternal, "reload_channel_config: "+err.Error())
+		}
+		return map[string]any{"success": true, "channel_address": channelAddress}, nil
 	}
 }

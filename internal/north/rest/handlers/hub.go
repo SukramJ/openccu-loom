@@ -148,6 +148,9 @@ type SysvarSetRequest struct {
 	Value any `json:"value"`
 }
 
+// SysvarRefreshService is an alias for the canonical interface in pkg/interfaces.
+type SysvarRefreshService = interfaces.SysvarRefreshService
+
 // InstallModeState is the body of `GET/POST /install-mode`.
 type InstallModeState struct {
 	Active  bool `json:"active"`
@@ -487,6 +490,27 @@ func DeleteSysvar(idx HubIndex) http.HandlerFunc {
 		if err := h.DeleteSysvarRemote(r.Context(), name); err != nil {
 			problem.Write(w, http.StatusBadGateway,
 				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar delete failed", err.Error()))
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+// FetchSysvars force re-pulls the CCU sysvar catalogue and refreshes the
+// hub model. The optional `?central=` query parameter scopes the refresh
+// to one central; absent, every registered central is refreshed. Mirrors
+// the Python reference's fetch_system_variables.
+func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if svc == nil {
+			problem.Write(w, http.StatusServiceUnavailable,
+				problem.New(problem.TypeServiceUnready, r, "Sysvar refresh unavailable", "no service wired"))
+			return
+		}
+		central := r.URL.Query().Get("central")
+		if err := svc.FetchSystemVariables(r.Context(), central); err != nil {
+			problem.Write(w, http.StatusBadGateway,
+				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar fetch failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

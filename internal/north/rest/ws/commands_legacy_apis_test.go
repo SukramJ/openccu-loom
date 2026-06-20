@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// Tests for parity-audit items L-7002 and L-7009.
-//
-// L-7002: config.reload_device_config + ccu.reload_device_config WS-Befehle.
-// L-7009: Cross-validation constraints wired into config.session.save.
+// Tests for the reload_device_config, reload_channel_config, and
+// config.session.save WS commands.
 package ws
 
 import (
@@ -131,6 +129,131 @@ func TestBothReloadVariantsRegistered(t *testing.T) {
 		registered[n] = true
 	}
 	for _, cmd := range []string{"config.reload_device_config", "ccu.reload_device_config"} {
+		if !registered[cmd] {
+			t.Errorf("command %q not registered", cmd)
+		}
+	}
+}
+
+// ─── config.reload_channel_config ────────────────────────────────────────────
+
+// stubChannelReloader implements [ChannelReloader].
+type stubChannelReloader struct {
+	calledWith string
+	err        error
+}
+
+func (s *stubChannelReloader) ReloadChannelConfig(_ context.Context, channelAddress string) error {
+	s.calledWith = channelAddress
+	return s.err
+}
+
+func TestReloadChannelConfig_Success(t *testing.T) {
+	stub := &stubChannelReloader{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
+	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error)
+	}
+	out := res.Data.(map[string]any)
+	if out["success"] != true {
+		t.Fatalf("expected success=true, got %v", out)
+	}
+	if out["channel_address"] != "ABC0001:1" {
+		t.Fatalf("expected channel_address=ABC0001:1, got %v", out["channel_address"])
+	}
+	if stub.calledWith != "ABC0001:1" {
+		t.Fatalf("domain not called with correct address: %s", stub.calledWith)
+	}
+}
+
+func TestReloadChannelConfig_AddressAlias(t *testing.T) {
+	stub := &stubChannelReloader{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	// Send only the "address" alias key — channel_address should fall back to it.
+	raw, _ := json.Marshal(map[string]any{"address": "ABC0001:2"})
+	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error using address alias: %v", res.Error)
+	}
+	if stub.calledWith != "ABC0001:2" {
+		t.Fatalf("alias not resolved to domain: got %q", stub.calledWith)
+	}
+}
+
+func TestReloadChannelConfig_MissingAddress(t *testing.T) {
+	stub := &stubChannelReloader{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	raw, _ := json.Marshal(map[string]any{})
+	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	if res.Error == nil {
+		t.Fatal("expected error for missing channel_address")
+	}
+	if res.Error.Code != CommandErrorBadRequest {
+		t.Fatalf("expected bad_request, got %s", res.Error.Code)
+	}
+}
+
+func TestReloadChannelConfig_DomainError(t *testing.T) {
+	stub := &stubChannelReloader{err: errors.New("CCU unreachable")}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
+	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	if res.Error == nil {
+		t.Fatal("expected error from domain")
+	}
+	if res.Error.Code != CommandErrorInternal {
+		t.Fatalf("expected internal error, got %s", res.Error.Code)
+	}
+}
+
+func TestReloadChannelConfig_NotRegisteredWhenNilReloader(t *testing.T) {
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{}) // no ChannelReloader
+
+	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
+	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
+		t.Fatalf("expected unknown_command when reloader not wired, got %v", res.Error)
+	}
+}
+
+// ─── ccu.reload_channel_config (panel variant) ───────────────────────────────
+
+func TestCCUReloadChannelConfig_Success(t *testing.T) {
+	stub := &stubChannelReloader{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	raw, _ := json.Marshal(map[string]any{"channel_address": "DEF0002:3"})
+	res := r.Dispatch(context.Background(), "ccu.reload_channel_config", raw)
+	if res.Error != nil {
+		t.Fatalf("unexpected error: %v", res.Error)
+	}
+	if stub.calledWith != "DEF0002:3" {
+		t.Fatalf("panel variant did not call domain: %s", stub.calledWith)
+	}
+}
+
+func TestBothChannelReloadVariantsRegistered(t *testing.T) {
+	stub := &stubChannelReloader{}
+	r := NewRouter()
+	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
+
+	registered := make(map[string]bool)
+	for _, n := range r.Commands() {
+		registered[n] = true
+	}
+	for _, cmd := range []string{"config.reload_channel_config", "ccu.reload_channel_config"} {
 		if !registered[cmd] {
 			t.Errorf("command %q not registered", cmd)
 		}

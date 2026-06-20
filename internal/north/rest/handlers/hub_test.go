@@ -1445,3 +1445,61 @@ func TestPutSysvar_InvalidValue_Returns422(t *testing.T) {
 		t.Fatalf("expected 422 or 400, got %d body=%s", w.Code, w.Body.String())
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FetchSysvars
+// ---------------------------------------------------------------------------
+
+// stubSysvarRefreshService implements SysvarRefreshService for testing.
+type stubSysvarRefreshService struct {
+	recordedCentral string
+	err             error
+}
+
+func (s *stubSysvarRefreshService) FetchSystemVariables(_ context.Context, centralName string) error {
+	s.recordedCentral = centralName
+	return s.err
+}
+
+// TestFetchSysvars_HappyPath verifies that ?central= is forwarded to the
+// service and the handler returns 202.
+func TestFetchSysvars_HappyPath(t *testing.T) {
+	t.Parallel()
+	svc := &stubSysvarRefreshService{}
+	req := httptest.NewRequest(http.MethodPost, "/?central=ccu-01", http.NoBody)
+	w := httptest.NewRecorder()
+	FetchSysvars(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.recordedCentral != "ccu-01" {
+		t.Errorf("recordedCentral=%q want ccu-01", svc.recordedCentral)
+	}
+}
+
+// TestFetchSysvars_NilService_Returns503 verifies that a nil service yields 503.
+func TestFetchSysvars_NilService_Returns503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	FetchSysvars(nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+}
+
+// TestFetchSysvars_ServiceError_Returns502 verifies that a service error
+// results in 502.
+func TestFetchSysvars_ServiceError_Returns502(t *testing.T) {
+	t.Parallel()
+	svc := &stubSysvarRefreshService{err: errors.New("CCU unreachable")}
+	req := httptest.NewRequest(http.MethodPost, "/", http.NoBody)
+	w := httptest.NewRecorder()
+	FetchSysvars(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}

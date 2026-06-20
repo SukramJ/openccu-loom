@@ -23,6 +23,14 @@ type BackupService interface {
 	Restore(ctx context.Context, id string) (string, error)
 }
 
+// SysvarRefreshService is the facade `POST /sysvars/fetch` depends on.
+// It force re-pulls the CCU system-variable catalogue and refreshes the
+// hub model. An empty centralName refreshes every registered central.
+// Mirrors the Python reference's fetch_system_variables.
+type SysvarRefreshService interface {
+	FetchSystemVariables(ctx context.Context, centralName string) error
+}
+
 // CentralLinksService is the facade `/devices/{addr}/central-links` depends
 // on. The implementation lives in central/adapter and routes the request to
 // the per-CCU client backend.
@@ -184,6 +192,13 @@ type ScheduleService interface {
 	PutClimateScheduleAuto(ctx context.Context, deviceAddress string, schedule *hmapi.ClimateSchedule) error
 	SetActiveProfileAuto(ctx context.Context, deviceAddress, profile string) error
 	FindScheduleChannel(ctx context.Context, deviceAddress string) (int, error)
+
+	// CopySchedule copies the whole week schedule from one device to
+	// another (channels auto-resolved on both sides).
+	CopySchedule(ctx context.Context, srcDeviceAddress, dstDeviceAddress string) error
+	// CopyClimateProfile copies a single climate profile from the source
+	// channel/profile to the destination channel/profile.
+	CopyClimateProfile(ctx context.Context, srcChannelAddress string, srcProfile int, dstChannelAddress string, dstProfile int) error
 }
 
 // UISchemaService produces a renderable UI schema for one channel /

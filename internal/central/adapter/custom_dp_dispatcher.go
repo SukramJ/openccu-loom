@@ -289,6 +289,14 @@ func (d *CustomDPDispatcher) dispatchLight(
 			return l.SetLevel(ctx, level, prio)
 		}
 		return fmt.Errorf("%w: set_level needs state, brightness, or level", hmapi.ErrBadParam)
+	case "set_on_time":
+		// Encodes ON_TIME_VALUE / ON_TIME_UNIT for the next on cycle. The
+		// Light carries the writer + channel address it writes through.
+		dur, err := paramDuration(p, "duration")
+		if err != nil {
+			return err
+		}
+		return l.SetOnTime(ctx, l.Writer, l.Address(), dur, prio)
 	case "set_color", "set_color_temperature", "set_effect":
 		// Valid for the category but not for plain Light.
 		return fmt.Errorf("%w: operation %q not supported by plain Light", hmapi.ErrUnknownOperation, op)
@@ -488,6 +496,28 @@ func (d *CustomDPDispatcher) dispatchClimate(
 			}
 		}
 		return c.SetAway(ctx, until, awayTemp, prio)
+	case "enable_away_by_calendar":
+		// Params: "end" (RFC3339 string or "+<duration>") and "away_temperature".
+		until, err := paramTime(p, "end")
+		if err != nil {
+			return err
+		}
+		awayTemp, err := paramFloat(p, "away_temperature", 0)
+		if err != nil {
+			return err
+		}
+		return c.SetAway(ctx, until, awayTemp, prio)
+	case "enable_away_by_duration":
+		// Params: a duration ("hours" or "duration_seconds") and "away_temperature".
+		dur, err := awayDuration(p)
+		if err != nil {
+			return err
+		}
+		awayTemp, err := paramFloat(p, "away_temperature", 0)
+		if err != nil {
+			return err
+		}
+		return c.SetAwayForDuration(ctx, dur, awayTemp, prio)
 	case "disable_away":
 		return c.DisableAway(ctx, prio)
 	default:
@@ -563,6 +593,18 @@ func (d *CustomDPDispatcher) dispatchBlind(
 			return err
 		}
 		return b.SetTilt(ctx, tilt, prio)
+	case "set_combined":
+		// Drives both axes in a single CCU paramset write. level and tilt
+		// are 0..1 floats.
+		level, err := paramFloat(p, "level", 1)
+		if err != nil {
+			return err
+		}
+		tilt, err := paramFloat(p, "tilt", 1)
+		if err != nil {
+			return err
+		}
+		return b.SetCombined(ctx, level, tilt, prio)
 	case "open_tilt":
 		return b.OpenTilt(ctx, prio)
 	case "close_tilt":
@@ -605,6 +647,12 @@ func (d *CustomDPDispatcher) dispatchSiren(
 				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
 			}
 			cfg.Duration = dur
+		} else if secRaw, ok := p["duration_seconds"]; ok {
+			sec, err := toFloat64(secRaw)
+			if err != nil {
+				return fmt.Errorf("%w: duration_seconds: %w", hmapi.ErrBadParam, err)
+			}
+			cfg.Duration = time.Duration(sec * float64(time.Second))
 		}
 		if acoustic, ok := p["acoustic"]; ok {
 			v, err := toString(acoustic)
@@ -621,7 +669,7 @@ func (d *CustomDPDispatcher) dispatchSiren(
 			cfg.OpticalSelection = &v
 		}
 		return s.TurnOn(ctx, cfg, prio)
-	case "turn_off":
+	case "turn_off", "stop":
 		return s.TurnOff(ctx, prio)
 	default:
 		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
@@ -634,7 +682,7 @@ func (d *CustomDPDispatcher) dispatchTextDisplay(
 	ctx context.Context, t *textdisplay.TextDisplay, op string, p map[string]any, prio hmenum.CommandPriority,
 ) error {
 	switch op {
-	case "write":
+	case "write", "send_text":
 		row, err := extractRow(p)
 		if err != nil {
 			return err
@@ -648,12 +696,15 @@ func (d *CustomDPDispatcher) dispatchTextDisplay(
 			return t.WriteWithSound(ctx, row, opts, prio)
 		}
 		return t.Write(ctx, row, prio)
-	case "clear":
+	case "clear", "clear_text":
 		id, err := paramInt32(p, "id")
 		if err != nil {
 			return err
 		}
 		return t.Clear(ctx, id, prio)
+	case "commit":
+		// Flushes a previously-prepared row to the physical display.
+		return t.Commit(ctx, prio)
 	default:
 		return fmt.Errorf("%w: %s", hmapi.ErrUnknownOperation, op)
 	}
@@ -673,6 +724,14 @@ func (d *CustomDPDispatcher) dispatchIrrigation(
 				return fmt.Errorf("%w: duration: %w", hmapi.ErrBadParam, err)
 			}
 			dur = dur2
+		}
+		return v.Open(ctx, dur, prio)
+	case "set_on_time":
+		// Timed open: ON_TIME + STATE are bundled into one atomic
+		// put_paramset. A duration is required here (unlike "open").
+		dur, err := paramDuration(p, "duration")
+		if err != nil {
+			return err
 		}
 		return v.Open(ctx, dur, prio)
 	case "close":
@@ -713,7 +772,7 @@ func (d *CustomDPDispatcher) dispatchSwitch(
 		return s.Set(ctx, true, prio)
 	case "turn_off":
 		return s.Set(ctx, false, prio)
-	case "turn_on_for":
+	case "turn_on_for", "set_on_time":
 		dur, err := paramDuration(p, "duration")
 		if err != nil {
 			return err
@@ -850,6 +909,29 @@ func paramDuration(params map[string]any, key string) (time.Duration, error) {
 		return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, key, err)
 	}
 	return dur, nil
+}
+
+// awayDuration extracts an away-mode duration from either "hours"
+// (a float number of hours) or "duration_seconds" (a float number of
+// seconds). "hours" takes precedence when both are present. Returns
+// [hmapi.ErrBadParam] when neither key is present or the value has the
+// wrong type.
+func awayDuration(params map[string]any) (time.Duration, error) {
+	if raw, ok := params["hours"]; ok {
+		hours, err := toFloat64(raw)
+		if err != nil {
+			return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, "hours", err)
+		}
+		return time.Duration(hours * float64(time.Hour)), nil
+	}
+	if raw, ok := params["duration_seconds"]; ok {
+		sec, err := toFloat64(raw)
+		if err != nil {
+			return 0, fmt.Errorf("%w: param %q: %w", hmapi.ErrBadParam, "duration_seconds", err)
+		}
+		return time.Duration(sec * float64(time.Second)), nil
+	}
+	return 0, fmt.Errorf("%w: missing required param %q or %q", hmapi.ErrBadParam, "hours", "duration_seconds")
 }
 
 // paramTime extracts a [time.Time] from params[key]. Accepts:

@@ -97,6 +97,7 @@ var knownWSCategories = map[string]bool{
 	"matter":          true,
 	"paramsets":       true,
 	"programs":        true,
+	"recording":       true,
 	"schedules":       true,
 	"system":          true,
 	"sysvars":         true,

@@ -84,6 +84,12 @@
     },
     {
       "category": "ccu",
+      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+      "name": "ccu.reload_channel_config",
+      "args": { "channel_address": "string" }
+    },
+    {
+      "category": "ccu",
       "description": "Trigger a CCU-side device-config reload for the addressed device. Mirrors Python ws_panel_reload_device_config (websocket_api.py:2285). Closes parity_audit gap L-7002.",
       "name": "ccu.reload_device_config",
       "args": { "device_address": "string" }
@@ -99,14 +105,35 @@
       "name": "central.connectivity"
     },
     {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Enable CCU click-event forwarding for a device's press-event channels. Mirrors Python create_central_links.",
+      "name": "central.create_links",
+      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
+    },
+    {
       "category": "central",
       "description": "Return identity and version information for the connected CCU.",
       "name": "central.info"
     },
     {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Report whether a device supports central links and how many channels are eligible.",
+      "name": "central.links_status",
+      "result": { "eligible_channels": "integer?", "reason": "string?", "supported": "boolean" }
+    },
+    {
       "category": "central",
       "description": "Kick off an ad-hoc reconciliation pass against the CCU device registry.",
       "name": "central.reconcile"
+    },
+    {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Tear down CCU click-event forwarding for a device's press-event channels. Mirrors Python remove_central_links.",
+      "name": "central.remove_links",
+      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
     },
     {
       "category": "central",
@@ -130,6 +157,12 @@
       "category": "change_history",
       "description": "List recent paramset-write history entries, optionally filtered by channel address.",
       "name": "change_history.list"
+    },
+    {
+      "category": "config",
+      "description": "Trigger a CCU-side channel-config reload for the addressed channel: re-pull paramset descriptions (VALUES/MASTER/LINK) + MASTER values and refresh the channel's data points. Mirrors Channel.reload_channel_config (model/device.py:1448).",
+      "name": "config.reload_channel_config",
+      "args": { "channel_address": "string" }
     },
     {
       "category": "config",
@@ -467,9 +500,33 @@
       "name": "programs.list"
     },
     {
+      "category": "recording",
+      "description": "Start the diagnostic RPC session recorder across all centrals (clears prior data). Mirrors Python record_session (start).",
+      "name": "recording.start",
+      "result": { "recording": "boolean" }
+    },
+    {
+      "category": "recording",
+      "description": "Report whether the diagnostic RPC session recorder is currently capturing.",
+      "name": "recording.status",
+      "result": { "recording": "boolean" }
+    },
+    {
+      "category": "recording",
+      "description": "Stop the diagnostic RPC session recorder across all centrals. Mirrors Python record_session (stop).",
+      "name": "recording.stop",
+      "result": { "recording": "boolean" }
+    },
+    {
       "category": "schedules",
       "description": "Select the active climate profile (P1..P6) on a thermostat channel.",
       "name": "schedules.active_profile.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Copy a single climate profile from a source channel/profile to a target channel/profile. Mirrors Python copy_schedule_profile.",
+      "name": "schedules.climate.copy_profile",
+      "args": { "source_channel_address": "string", "source_profile": "number", "target_channel_address": "string", "target_profile": "number" }
     },
     {
       "category": "schedules",
@@ -480,6 +537,12 @@
       "category": "schedules",
       "description": "Write a climate week-program back to a thermostat channel.",
       "name": "schedules.climate.set"
+    },
+    {
+      "category": "schedules",
+      "description": "Copy the whole week schedule from a source device to a target device (channels auto-resolved). Mirrors Python copy_schedule.",
+      "name": "schedules.copy",
+      "args": { "source_device_address": "string", "target_device_address": "string" }
     },
     {
       "category": "schedules",
@@ -543,6 +606,12 @@
       "category": "system",
       "description": "Return the effective role and permissions for the authenticated user. Mirrors Python ws_get_user_permissions (websocket_api.py:2727).",
       "name": "system.user_permissions"
+    },
+    {
+      "category": "sysvars",
+      "description": "Force re-pull the CCU system-variable catalogue into the hub model. Optional central_name scopes the refresh to one CCU. Mirrors Python fetch_system_variables.",
+      "name": "sysvars.fetch",
+      "args": { "central_name": "string" }
     },
     {
       "category": "sysvars",

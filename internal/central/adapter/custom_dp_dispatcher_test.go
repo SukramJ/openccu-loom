@@ -495,6 +495,36 @@ func TestDispatchLight_SetBrightness_MissingParam(t *testing.T) {
 	}
 }
 
+func TestDispatchLight_SetOnTime(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	l := buildLightDP(t, "LIGHT007", w)
+	disp, spy := buildDispatcher(t, "LIGHT007", "LEVEL", l)
+
+	params := map[string]any{"duration": "30s"}
+	if err := disp.InvokeCustomDP(context.Background(), "LIGHT007", "LEVEL", "set_on_time", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_on_time: %v", err)
+	}
+	if w.callCount() == 0 {
+		t.Fatal("expected ON_TIME write calls")
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchLight_SetOnTime_MissingDuration(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	l := buildLightDP(t, "LIGHT008", w)
+	disp, _ := buildDispatcher(t, "LIGHT008", "LEVEL", l)
+
+	err := disp.InvokeCustomDP(context.Background(), "LIGHT008", "LEVEL", "set_on_time", nil, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
+	}
+}
+
 func TestDispatchLight_SetColorOnPlainLight_ReturnsUnknownOp(t *testing.T) {
 	t.Parallel()
 	w := &dispatchWriter{}
@@ -685,6 +715,74 @@ func TestDispatchClimate_EnableAway(t *testing.T) {
 	}
 }
 
+func TestDispatchClimate_EnableAwayByCalendar(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildClimateDP(t, "CLM010", w)
+	disp, spy := buildDispatcher(t, "CLM010", "SET_POINT_TEMPERATURE", carrier)
+
+	end := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	params := map[string]any{"end": end, "away_temperature": 15.0}
+	if err := disp.InvokeCustomDP(context.Background(), "CLM010", "SET_POINT_TEMPERATURE", "enable_away_by_calendar", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("enable_away_by_calendar: %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchClimate_EnableAwayByCalendar_MissingTemp(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildClimateDP(t, "CLM011", w)
+	disp, _ := buildDispatcher(t, "CLM011", "SET_POINT_TEMPERATURE", carrier)
+
+	end := time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339)
+	err := disp.InvokeCustomDP(context.Background(), "CLM011", "SET_POINT_TEMPERATURE", "enable_away_by_calendar", map[string]any{"end": end}, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
+	}
+}
+
+func TestDispatchClimate_EnableAwayByDurationHours(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildClimateDP(t, "CLM012", w)
+	disp, spy := buildDispatcher(t, "CLM012", "SET_POINT_TEMPERATURE", carrier)
+
+	params := map[string]any{"hours": 6.0, "away_temperature": 16.0}
+	if err := disp.InvokeCustomDP(context.Background(), "CLM012", "SET_POINT_TEMPERATURE", "enable_away_by_duration", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("enable_away_by_duration (hours): %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchClimate_EnableAwayByDurationSeconds(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildClimateDP(t, "CLM013", w)
+	disp, _ := buildDispatcher(t, "CLM013", "SET_POINT_TEMPERATURE", carrier)
+
+	params := map[string]any{"duration_seconds": 3600.0, "away_temperature": 16.0}
+	if err := disp.InvokeCustomDP(context.Background(), "CLM013", "SET_POINT_TEMPERATURE", "enable_away_by_duration", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("enable_away_by_duration (seconds): %v", err)
+	}
+}
+
+func TestDispatchClimate_EnableAwayByDuration_MissingDuration(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildClimateDP(t, "CLM014", w)
+	disp, _ := buildDispatcher(t, "CLM014", "SET_POINT_TEMPERATURE", carrier)
+
+	err := disp.InvokeCustomDP(context.Background(), "CLM014", "SET_POINT_TEMPERATURE", "enable_away_by_duration", map[string]any{"away_temperature": 16.0}, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
+	}
+}
+
 func TestDispatchClimate_DisableAway(t *testing.T) {
 	t.Parallel()
 	w := &dispatchWriter{}
@@ -803,6 +901,36 @@ func TestDispatchBlind_OpenRoutesToCover(t *testing.T) {
 	}
 }
 
+func TestDispatchBlind_SetCombined(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	b := buildBlindDP(t, "BLD003", w)
+	disp, spy := buildDispatcher(t, "BLD003", "LEVEL", b)
+
+	params := map[string]any{"level": 1.0, "tilt": 0.5}
+	if err := disp.InvokeCustomDP(context.Background(), "BLD003", "LEVEL", "set_combined", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_combined: %v", err)
+	}
+	if w.callCount() == 0 {
+		t.Fatal("expected write calls")
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchBlind_SetCombined_MissingTilt(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	b := buildBlindDP(t, "BLD004", w)
+	disp, _ := buildDispatcher(t, "BLD004", "LEVEL", b)
+
+	err := disp.InvokeCustomDP(context.Background(), "BLD004", "LEVEL", "set_combined", map[string]any{"level": 1.0}, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
+	}
+}
+
 // ============================================================
 // Tests: Lock (via carrier)
 // ============================================================
@@ -897,6 +1025,29 @@ func TestDispatchSiren_TurnOnWithDuration(t *testing.T) {
 	}
 }
 
+func TestDispatchSiren_TurnOnWithDurationSeconds(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildSirenDP("SRN004", w)
+	disp, _ := buildDispatcher(t, "SRN004", "STATE", carrier)
+
+	params := map[string]any{"duration_seconds": 5.0, "optical": "BLINKING_ALTERNATELY_REPEATING"}
+	if err := disp.InvokeCustomDP(context.Background(), "SRN004", "STATE", "turn_on", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("turn_on with duration_seconds: %v", err)
+	}
+}
+
+func TestDispatchSiren_Stop(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildSirenDP("SRN005", w)
+	disp, _ := buildDispatcher(t, "SRN005", "STATE", carrier)
+
+	if err := disp.InvokeCustomDP(context.Background(), "SRN005", "STATE", "stop", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("stop siren: %v", err)
+	}
+}
+
 // ============================================================
 // Tests: TextDisplay (via carrier)
 // ============================================================
@@ -940,6 +1091,47 @@ func TestDispatchTextDisplay_MissingID(t *testing.T) {
 	}
 }
 
+func TestDispatchTextDisplay_SendText(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildTextDisplayDP("TXT004", w)
+	disp, spy := buildDispatcher(t, "TXT004", "STATE", carrier)
+
+	params := map[string]any{"id": float64(1), "text": "hello"}
+	if err := disp.InvokeCustomDP(context.Background(), "TXT004", "STATE", "send_text", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("send_text: %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchTextDisplay_ClearText(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildTextDisplayDP("TXT005", w)
+	disp, _ := buildDispatcher(t, "TXT005", "STATE", carrier)
+
+	params := map[string]any{"id": float64(2)}
+	if err := disp.InvokeCustomDP(context.Background(), "TXT005", "STATE", "clear_text", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("clear_text: %v", err)
+	}
+}
+
+func TestDispatchTextDisplay_Commit(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	_, carrier := buildTextDisplayDP("TXT006", w)
+	disp, _ := buildDispatcher(t, "TXT006", "STATE", carrier)
+
+	if err := disp.InvokeCustomDP(context.Background(), "TXT006", "STATE", "commit", nil, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("commit: %v", err)
+	}
+	if w.callCount() == 0 {
+		t.Fatal("expected DISPLAY_DATA_COMMIT write")
+	}
+}
+
 // ============================================================
 // Tests: Irrigation valve
 // ============================================================
@@ -967,6 +1159,33 @@ func TestDispatchIrrigation_OpenWithDuration(t *testing.T) {
 	params := map[string]any{"duration": "2m"}
 	if err := disp.InvokeCustomDP(context.Background(), "VLV002", "STATE", "open", params, hmenum.CommandPriorityHigh, "test"); err != nil {
 		t.Fatalf("open with duration: %v", err)
+	}
+}
+
+func TestDispatchIrrigation_SetOnTime(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	v := buildIrrigationDP("VLV005", w)
+	disp, spy := buildDispatcher(t, "VLV005", "STATE", v)
+
+	params := map[string]any{"duration": "2m"}
+	if err := disp.InvokeCustomDP(context.Background(), "VLV005", "STATE", "set_on_time", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_on_time: %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+}
+
+func TestDispatchIrrigation_SetOnTime_MissingDuration(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	v := buildIrrigationDP("VLV006", w)
+	disp, _ := buildDispatcher(t, "VLV006", "STATE", v)
+
+	err := disp.InvokeCustomDP(context.Background(), "VLV006", "STATE", "set_on_time", nil, hmenum.CommandPriorityHigh, "test")
+	if !errors.Is(err, hmapi.ErrBadParam) {
+		t.Fatalf("expected ErrBadParam, got %v", err)
 	}
 }
 
@@ -1086,6 +1305,21 @@ func TestDispatchSwitch_TurnOnFor(t *testing.T) {
 	params := map[string]any{"duration": "10s"}
 	if err := disp.InvokeCustomDP(context.Background(), "SW003", "STATE", "turn_on_for", params, hmenum.CommandPriorityHigh, "test"); err != nil {
 		t.Fatalf("turn_on_for: %v", err)
+	}
+}
+
+func TestDispatchSwitch_SetOnTime(t *testing.T) {
+	t.Parallel()
+	w := &dispatchWriter{}
+	s := buildSwitchDP("SW006", w)
+	disp, spy := buildDispatcher(t, "SW006", "STATE", s)
+
+	params := map[string]any{"duration": "10s"}
+	if err := disp.InvokeCustomDP(context.Background(), "SW006", "STATE", "set_on_time", params, hmenum.CommandPriorityHigh, "test"); err != nil {
+		t.Fatalf("set_on_time: %v", err)
+	}
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
 	}
 }
 

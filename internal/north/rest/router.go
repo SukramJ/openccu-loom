@@ -66,11 +66,14 @@ type Deps struct {
 	// (backward-compatible with un-wired call sites). See ADR 0005.
 	DataPointVis filter.VisibilitySet
 	Hub          handlers.HubIndex
-	InstallMode  handlers.InstallModeController
-	Interfaces   handlers.InterfaceIndex
-	Incidents    handlers.IncidentsReader
-	Labels       handlers.ParameterLabeler
-	Metrics      *metrics.Registry
+	// SysvarRefresh backs POST /sysvars/fetch — force re-pull the CCU
+	// sysvar catalogue into the hub model. Nil disables the route (404).
+	SysvarRefresh handlers.SysvarRefreshService
+	InstallMode   handlers.InstallModeController
+	Interfaces    handlers.InterfaceIndex
+	Incidents     handlers.IncidentsReader
+	Labels        handlers.ParameterLabeler
+	Metrics       *metrics.Registry
 	// UISchema produces the data-driven rendering descriptor the SPA
 	// consumes at /api/v1/devices/{addr}/channels/{no}/ui-schema.
 	UISchema handlers.UISchemaService
@@ -546,6 +549,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PutScheduleAuto(d.Schedules))
 				pr.With(op).Post("/devices/{addr}/schedule/active-profile",
 					handlers.PostActiveProfileAuto(d.Schedules))
+				// Copy the whole device schedule to another device
+				// (channels auto-resolved on both sides).
+				pr.With(op).Post("/devices/{addr}/schedules/copy",
+					handlers.PostCopySchedule(d.Schedules))
+				// Copy a single climate profile from the source channel /
+				// profile to a target channel / profile.
+				pr.With(op).Post("/devices/{addr}/channels/{no}/week_profile/copy",
+					handlers.PostCopyProfile(d.Schedules))
 			}
 			if d.Audit != nil {
 				pr.Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
@@ -684,6 +695,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Put("/sysvars/{name}", handlers.PutSysvar(d.Hub))
 				pr.With(op).Patch("/sysvars/{name}", handlers.PatchSysvar(d.Hub))
 				pr.With(op).Delete("/sysvars/{name}", handlers.DeleteSysvar(d.Hub))
+				if d.SysvarRefresh != nil {
+					// Force re-pull the sysvar catalogue from the CCU.
+					pr.With(op).Post("/sysvars/fetch", handlers.FetchSysvars(d.SysvarRefresh))
+				}
 				pr.Get("/inbox", handlers.ListInbox(d.Hub))
 				pr.Get("/alarm-messages", handlers.ListAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))

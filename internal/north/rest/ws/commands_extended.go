@@ -11,6 +11,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/store/masterprofile"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -66,6 +67,34 @@ type CentralInfo interface {
 // missing from the base [HubQuery] contract.
 type ExtendedHub interface {
 	DisableServiceMessage(ctx context.Context, id string) error
+}
+
+// CentralLinksManager is the mutating + read surface for the
+// `central.create_links` / `central.remove_links` / `central.links_status`
+// command family. It toggles the CCU's per-channel click-event forwarding
+// (REPORT_VALUE_USAGE) for a device. Mirrors Python `create_central_links` /
+// `remove_central_links`. The concrete implementation is
+// [adapter.CentralLinksDomain]; the same facade backs the REST
+// `/devices/{addr}/central-links` endpoints.
+type CentralLinksManager interface {
+	CreateCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
+	RemoveCentralLinks(ctx context.Context, deviceAddress string) (hmapi.CentralLinksReport, error)
+	CentralLinksStatus(deviceAddress string) (hmapi.CentralLinksStatus, error)
+}
+
+// SessionRecorder is the diagnostic start/stop/status surface for the
+// `recording.start` / `recording.stop` / `recording.status` command family.
+// It mirrors Python `record_session` (start/stop) and toggles the per-central
+// RPC session recorder used to capture golden-file replay traces. Start clears
+// and arms the recorder; Stop disarms it; IsActive reports whether new RPC
+// calls are being captured.
+type SessionRecorder interface {
+	// Start activates recording and reports the resulting active state.
+	Start() bool
+	// Stop deactivates recording and reports the resulting active state.
+	Stop() bool
+	// IsActive reports whether the recorder is currently capturing.
+	IsActive() bool
 }
 
 // ThrottleStats is the read contract for `ccu.throttle_stats`.
@@ -165,6 +194,12 @@ type ExtendedCommandsConfig struct {
 	// ParamsetReader backs the read half of `paramset.copy`.
 	// When nil, paramset.copy is not registered.
 	ParamsetReader ParamsetReader
+	// CentralLinks backs `central.create_links`, `central.remove_links`,
+	// and `central.links_status`.
+	CentralLinks CentralLinksManager
+	// SessionRecorder backs `recording.start`, `recording.stop`, and
+	// `recording.status`.
+	SessionRecorder SessionRecorder
 }
 
 // RegisterExtendedCommands wires the post-MVP command set onto router.
@@ -244,6 +279,21 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		// from the source channel and writes the writable subset to the
 		// target. Mirrors Python `ws_copy_paramset` (websocket_api.py:916).
 		router.Register("paramset.copy", paramsetCopyHandler(cfg.ParamsetReader, cfg.Paramsets))
+	}
+	if cfg.CentralLinks != nil {
+		// central.create_links / central.remove_links — toggle CCU
+		// click-event forwarding for a device's press-event channels.
+		// Mirrors Python create_central_links / remove_central_links.
+		router.Register("central.create_links", centralCreateLinksHandler(cfg.CentralLinks))
+		router.Register("central.remove_links", centralRemoveLinksHandler(cfg.CentralLinks))
+		router.Register("central.links_status", centralLinksStatusHandler(cfg.CentralLinks))
+	}
+	if cfg.SessionRecorder != nil {
+		// recording.start / recording.stop — toggle the diagnostic RPC
+		// session recorder. Mirrors Python record_session.
+		router.Register("recording.start", recordingStartHandler(cfg.SessionRecorder))
+		router.Register("recording.stop", recordingStopHandler(cfg.SessionRecorder))
+		router.Register("recording.status", recordingStatusHandler(cfg.SessionRecorder))
 	}
 }
 
@@ -703,6 +753,124 @@ func paramsetCopyHandler(r ParamsetReader, w ParamsetWriter) CommandHandler {
 			"source": p.SourceChannel,
 			"target": p.TargetChannel,
 		}, nil
+	}
+}
+
+// centralLinksAddress decodes the device address from either `device_address`
+// or its `address` alias. The two names coexist so SPA and external WS callers
+// can use whichever matches their REST-path convention.
+func centralLinksAddress(raw json.RawMessage) (string, error) {
+	var p struct {
+		DeviceAddress string `json:"device_address"`
+		Address       string `json:"address"`
+	}
+	if err := decodeOrEmpty(raw, &p); err != nil {
+		return "", err
+	}
+	addr := p.DeviceAddress
+	if addr == "" {
+		addr = p.Address
+	}
+	if addr == "" {
+		return "", NewCommandError(CommandErrorBadRequest, "device_address is required")
+	}
+	return addr, nil
+}
+
+// centralCreateLinksHandler implements `central.create_links`.
+// Enables CCU click-event forwarding for every press-event channel of the
+// device. Mirrors Python create_central_links.
+//
+// Request: { "device_address": str } (alias "address").
+// Response: { "touched": int, "skipped": int, "failed": int }
+func centralCreateLinksHandler(m CentralLinksManager) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		addr, err := centralLinksAddress(raw)
+		if err != nil {
+			return nil, err
+		}
+		report, err := m.CreateCentralLinks(ctx, addr)
+		if err != nil {
+			return nil, fmt.Errorf("central.create_links: %w", err)
+		}
+		return report, nil
+	}
+}
+
+// centralRemoveLinksHandler implements `central.remove_links`.
+// Tears down CCU click-event forwarding for the device. Mirrors Python
+// remove_central_links.
+//
+// Request: { "device_address": str } (alias "address").
+// Response: { "touched": int, "skipped": int, "failed": int }
+func centralRemoveLinksHandler(m CentralLinksManager) CommandHandler {
+	return func(ctx context.Context, raw json.RawMessage) (any, error) {
+		addr, err := centralLinksAddress(raw)
+		if err != nil {
+			return nil, err
+		}
+		report, err := m.RemoveCentralLinks(ctx, addr)
+		if err != nil {
+			return nil, fmt.Errorf("central.remove_links: %w", err)
+		}
+		return report, nil
+	}
+}
+
+// centralLinksStatusHandler implements `central.links_status`.
+// Reports whether the device supports central links and how many channels
+// are eligible.
+//
+// Request: { "device_address": str } (alias "address").
+// Response: { "supported": bool, "reason"?: str, "eligible_channels"?: int }
+func centralLinksStatusHandler(m CentralLinksManager) CommandHandler {
+	return func(_ context.Context, raw json.RawMessage) (any, error) {
+		addr, err := centralLinksAddress(raw)
+		if err != nil {
+			return nil, err
+		}
+		status, err := m.CentralLinksStatus(addr)
+		if err != nil {
+			return nil, fmt.Errorf("central.links_status: %w", err)
+		}
+		return status, nil
+	}
+}
+
+// recordingStartHandler implements `recording.start`.
+// Activates the diagnostic RPC session recorder. Mirrors Python
+// record_session (start).
+//
+// Request: {} (no params required).
+// Response: { "recording": bool }
+func recordingStartHandler(r SessionRecorder) CommandHandler {
+	return func(_ context.Context, _ json.RawMessage) (any, error) {
+		r.Start()
+		return map[string]any{"recording": r.IsActive()}, nil
+	}
+}
+
+// recordingStopHandler implements `recording.stop`.
+// Deactivates the diagnostic RPC session recorder. Mirrors Python
+// record_session (stop).
+//
+// Request: {} (no params required).
+// Response: { "recording": bool }
+func recordingStopHandler(r SessionRecorder) CommandHandler {
+	return func(_ context.Context, _ json.RawMessage) (any, error) {
+		r.Stop()
+		return map[string]any{"recording": r.IsActive()}, nil
+	}
+}
+
+// recordingStatusHandler implements `recording.status`.
+// Reports whether the recorder is currently capturing.
+//
+// Request: {} (no params required).
+// Response: { "recording": bool }
+func recordingStatusHandler(r SessionRecorder) CommandHandler {
+	return func(_ context.Context, _ json.RawMessage) (any, error) {
+		return map[string]any{"recording": r.IsActive()}, nil
 	}
 }
 
