@@ -16,6 +16,34 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
+// TestCentralBringUp_ConcurrentReinitIsSerialized guards against two clears
+// racing on the same central: without serialization a second reinit's start()
+// (wg.Add) overlaps the first's teardown() (wg.Wait), which is a WaitGroup
+// misuse that panics, and it leaks a bring-up generation by overwriting the
+// live cancel. parentCtx is pre-cancelled so each generation's gated bring-up
+// returns immediately. Run under -race.
+func TestCentralBringUp_ConcurrentReinitIsSerialized(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // each start()'s gated bring-up exits at once (CCU never "ready")
+
+	unit, err := central.New(central.Config{Name: "ccu-test"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	b := &centralBringUp{logger: slog.Default(), unit: unit, parentCtx: ctx}
+
+	var wg sync.WaitGroup
+	for range 24 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			b.reinit(context.Background())
+		}()
+	}
+	wg.Wait()
+	b.shutdown() // must not panic / leave the handle inconsistent
+}
+
 // TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries is the
 // reproducer for the resurrection gap: clearModel must drop a device's
 // in-memory device-description and paramset entries, not just the model object.

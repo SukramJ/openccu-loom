@@ -32,6 +32,13 @@ type centralBringUp struct {
 
 	parentCtx context.Context //nolint:containedctx // teardown-bounded daemon-lifetime ctx; the handle re-derives a child per (re)start
 
+	// reinitMu serializes a full re-init / shutdown cycle (teardown -> clear ->
+	// start). Two concurrent clears on the same central would otherwise overlap
+	// one start()'s wg.Add with the other's teardown() wg.Wait (a WaitGroup
+	// misuse that panics) and leak a bring-up generation by overwriting the
+	// live cancel. Distinct from mu, which guards the closer stacks + cancel.
+	reinitMu sync.Mutex
+
 	mu sync.Mutex
 	// closers are per-generation: installed during a bring-up and run on every
 	// teardown (including a re-init), then re-installed by the next bring-up.
@@ -112,6 +119,8 @@ func (b *centralBringUp) teardown() {
 // then runs the permanent closers (callback routing). The handle is not
 // expected to be reused afterwards.
 func (b *centralBringUp) shutdown() {
+	b.reinitMu.Lock()
+	defer b.reinitMu.Unlock()
 	b.teardown()
 	b.mu.Lock()
 	perm := slices.Clone(b.permanent)
@@ -135,6 +144,8 @@ func (b *centralBringUp) shutdown() {
 // handle's own teardown-bounded context (it may wait indefinitely for a
 // co-booting CCU, exactly as at first boot).
 func (b *centralBringUp) reinit(ctx context.Context) {
+	b.reinitMu.Lock()
+	defer b.reinitMu.Unlock()
 	b.logger.Info("central.reinit.begin", slog.String("central", b.cc.Name))
 	b.teardown()
 	b.clearModel()
