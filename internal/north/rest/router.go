@@ -59,8 +59,13 @@ type Deps struct {
 	// RefreshDevices triggers a fresh ListDevices sweep across every
 	// backend on demand. Optional — nil disables `POST /devices/refresh`.
 	RefreshDevices handlers.RefreshDevicesService
-	DPWriter       handlers.DataPointWriter
-	Paramsets      handlers.ParamsetService
+	// Reloader re-pulls a single device's or channel's config from its
+	// CCU. Optional — nil disables `POST /devices/{addr}/reload` and
+	// `POST /devices/{addr}/channels/{no}/reload`. The same adapter
+	// backs the WS reload commands.
+	Reloader  handlers.ReloaderService
+	DPWriter  handlers.DataPointWriter
+	Paramsets handlers.ParamsetService
 	// DataPointVis is the outbound visibility filter for the
 	// GET .../data-points endpoint. Nil means "expose everything"
 	// (backward-compatible with un-wired call sites). See ADR 0005.
@@ -572,6 +577,11 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.RefreshDevices != nil {
 				pr.With(op).Post("/devices/refresh", handlers.RefreshDevices(d.RefreshDevices))
+			}
+			if d.Reloader != nil {
+				pr.With(op).Post("/devices/{addr}/reload", handlers.ReloadDevice(d.Reloader))
+				pr.With(op).Post("/devices/{addr}/channels/{no}/reload",
+					handlers.ReloadChannel(d.Reloader))
 			}
 			if d.CentralLinks != nil {
 				pr.Get("/devices/{addr}/central-links", handlers.GetCentralLinksStatus(d.CentralLinks))

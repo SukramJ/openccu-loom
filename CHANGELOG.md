@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1]
+
+### Added
+
+- **REST endpoints for surgical config reload — `POST
+  /api/v1/devices/{addr}/reload` and `POST
+  /api/v1/devices/{addr}/channels/{channel}/reload`.** These expose the
+  existing per-device and per-channel config reload over REST (previously the
+  `config.reload_device_config` / `config.reload_channel_config` commands were
+  WebSocket-only). Closes a parity gap for the REST-only consumers (the Python
+  client and the Home-Assistant loom backend), which could otherwise only
+  trigger the coarse global `POST /devices/refresh`. APIVersion → 1.17.0.
+
 ## [0.7.0]
 
 ### Added

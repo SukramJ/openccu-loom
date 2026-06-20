@@ -42,6 +42,7 @@ type restMountDeps struct {
 	configAdapter          *adapter.ConfigAdapter
 	devicesAdapter         *adapter.DevicesAdapter
 	deviceAdminDomain      *adapter.DeviceAdminDomain
+	deviceReloader         *adapter.DeviceReloaderAdapter
 	dpWriterAdapter        *adapter.DataPointWriterAdapter
 	customDPDispatcher     *adapter.CustomDPDispatcher
 	paramsetsDomain        *adapter.ParamsetsDomain
@@ -128,6 +129,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DeviceAdmin:      d.deviceAdminDomain,
 		DeviceIcons:      newDeviceIconProxy(d.reg, cfg.Centrals),
 		RefreshDevices:   d.devicesAdapter,
+		Reloader:         d.deviceReloader,
 		DPWriter:         d.dpWriterAdapter,
 		CustomDPWriter:   d.customDPDispatcher,
 		Paramsets:        d.paramsetsDomain,

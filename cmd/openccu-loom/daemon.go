@@ -414,6 +414,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// ScheduleQuery, HubQuery, …). Without this the wsHub.Router() is empty and
 	// every {"op":"call"} frame returns unknown_command — the entire SPA WS
 	// surface is dead.
+	// DeviceReloaderAdapter backs config.reload_device_config and
+	// ccu.reload_device_config — re-pulls device descriptions from the CCU
+	// and recreates missing channels/DPs. The same instance is reused for
+	// both the WS reload commands and the REST reload endpoints.
+	deviceReloader := adapter.NewDeviceReloaderAdapter(reg, valueWriter)
 	wireWSCommands(wsHub, wsCommandWiring{
 		health:           healthAdapter,
 		devices:          devicesAdapter,
@@ -429,10 +434,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		linkProfiles:     linkProfilesStore,
 		valueWriter:      valueWriter,
 		registry:         reg,
-		// DeviceReloaderAdapter backs config.reload_device_config
-		// and ccu.reload_device_config — re-pulls device descriptions from the
-		// CCU and recreates missing channels/DPs.
-		deviceReloader: adapter.NewDeviceReloaderAdapter(reg, valueWriter),
+		deviceReloader:   deviceReloader,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
 		logger:        logger,
@@ -461,6 +463,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		configAdapter:           configAdapter,
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
+		deviceReloader:          deviceReloader,
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,
 		paramsetsDomain:         paramsetsDomain,
