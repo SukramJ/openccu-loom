@@ -144,6 +144,12 @@ type Deps struct {
 	// channels. Nil disables the endpoint trio
 	// (`GET|POST|DELETE /api/v1/devices/{addr}/central-links`).
 	CentralLinks handlers.CentralLinksService
+	// DefinitionExport backs the device-definition export endpoint:
+	//   GET /api/v1/devices/{addr}/export-definition
+	// It produces an anonymised zip whose JSON members are byte-compatible
+	// with the Python reference's export_device_definition. Nil disables the endpoint
+	// (returns 503).
+	DefinitionExport handlers.DeviceDefinitionExportService
 	// ConfigExport backs the channel configuration export/import endpoints:
 	//   GET  /api/v1/devices/{addr}/channels/{no}/config/export
 	//   POST /api/v1/devices/{addr}/channels/{no}/config/import
@@ -513,6 +519,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				handlers.ExportChannelConfig(d.ConfigExport, d.ConfigChannelMeta))
 			pr.With(op).Post("/devices/{addr}/channels/{no}/config/import",
 				handlers.ImportChannelConfig(d.ConfigExport))
+			// A nil DefinitionExport makes the handler return 503 via its
+			// internal nil-guard.
+			pr.Get("/devices/{addr}/export-definition",
+				handlers.ExportDeviceDefinition(d.DefinitionExport))
 			if d.Links != nil {
 				pr.Get("/devices/{addr}/links", handlers.ListLinks(d.Links))
 				pr.With(op).Post("/devices/{addr}/links", handlers.AddLink(d.Links))

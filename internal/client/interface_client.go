@@ -15,6 +15,7 @@ package client
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strconv"
 	"sync"
@@ -43,6 +44,24 @@ type CallerFunc func(ctx context.Context, method string, params []any) (any, err
 
 // Call implements Caller.
 func (f CallerFunc) Call(ctx context.Context, method string, params []any) (any, error) {
+	return f(ctx, method, params)
+}
+
+// OrderedCaller is the optional contract a transport satisfies when it can
+// return a reply as an order-preserving [orderedjson] value instead of a
+// flattened map. Only the device-definition export needs it; the transport
+// callers that decode struct member order (XML-RPC, BIN-RPC, JSON-RPC)
+// implement it. When [Config.OrderedCaller] is nil, [InterfaceClient.CallOrdered]
+// reports the capability as unsupported.
+type OrderedCaller interface {
+	CallOrdered(ctx context.Context, method string, params []any) (any, error)
+}
+
+// OrderedCallerFunc adapts a plain function to the [OrderedCaller] interface.
+type OrderedCallerFunc func(ctx context.Context, method string, params []any) (any, error)
+
+// CallOrdered implements OrderedCaller.
+func (f OrderedCallerFunc) CallOrdered(ctx context.Context, method string, params []any) (any, error) {
 	return f(ctx, method, params)
 }
 
@@ -79,6 +98,11 @@ type Config struct {
 
 	// Caller is the underlying transport.
 	Caller Caller
+
+	// OrderedCaller is the optional order-preserving transport used by
+	// [InterfaceClient.CallOrdered] (device-definition export). Left nil for
+	// transports/tests that do not need it; CallOrdered then errors.
+	OrderedCaller OrderedCaller
 
 	// Circuit, Retry, Throttle, Coalescer, PingPong — constructor
 	// defaults apply when left nil.
@@ -373,6 +397,66 @@ func (c *InterfaceClient) Call(
 		c.failureMu.Unlock()
 	}
 	return out, err
+}
+
+// CallOrdered issues a read through the same reliability stack as [Call]
+// (throttle, circuit breaker, retry) but returns the reply as an
+// order-preserving [orderedjson] value via the configured [OrderedCaller].
+// It exists for the device-definition export, which must reproduce the CCU's
+// wire member order. Returns an error when no OrderedCaller is configured.
+//
+// Reads are never coalesced (only setValue is), so this method does not take
+// a coalesce key.
+func (c *InterfaceClient) CallOrdered(
+	ctx context.Context,
+	method string,
+	params []any,
+	priority hmenum.CommandPriority,
+) (any, error) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, errors.New("client: closed")
+	}
+	if !c.enabled {
+		c.mu.Unlock()
+		return nil, errors.New("client: disabled")
+	}
+	oc := c.cfg.OrderedCaller
+	c.mu.Unlock()
+
+	if oc == nil {
+		return nil, fmt.Errorf("client: ordered calls unsupported on interface %s", c.cfg.Interface)
+	}
+
+	c.totalRequests.Add(1)
+	c.pendingRequests.Add(1)
+	defer c.pendingRequests.Add(-1)
+
+	throttle := c.throttleForMethod(method)
+
+	var result any
+	err := c.cfg.Circuit.Do(ctx, method, func(ctx context.Context) error {
+		return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+			c.executedRequests.Add(1)
+			if err := throttle.Acquire(ctx, priority); err != nil {
+				return err
+			}
+			defer throttle.Release()
+			v, err := oc.CallOrdered(ctx, method, params)
+			if err != nil {
+				return err
+			}
+			result = v
+			return nil
+		})
+	})
+	if err != nil {
+		c.failureMu.Lock()
+		c.lastFailureAt = time.Now()
+		c.failureMu.Unlock()
+	}
+	return result, err
 }
 
 // RecordPing notes the outbound ping identifier.

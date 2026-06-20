@@ -209,6 +209,9 @@ type DefaultCommandsConfig struct {
 	Hub            HubQuery
 	Links          LinkQuery
 	Schedules      ScheduleQuery
+	// DefinitionExport backs `devices.export_definition` (an the Python reference-
+	// compatible device-definition zip). Nil skips the command.
+	DefinitionExport DefinitionExporter
 	// DeviceReloader backs `config.reload_device_config` and
 	// `ccu.reload_device_config`.
 	DeviceReloader DeviceReloader
@@ -250,6 +253,10 @@ func RegisterDefaultCommands(router *Router, cfg DefaultCommandsConfig) {
 		router.Register("devices.get", devicesGetHandler(cfg.Devices))
 		router.Register("paramset.description", paramsetDescriptionHandler(cfg.Devices))
 		router.Register("paramset.get", paramsetGetHandler(cfg.Devices))
+	}
+
+	if cfg.DefinitionExport != nil {
+		router.Register("devices.export_definition", definitionExportHandler(cfg.DefinitionExport))
 	}
 
 	if cfg.Hub != nil {

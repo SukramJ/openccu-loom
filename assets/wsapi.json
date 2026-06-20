@@ -249,6 +249,12 @@
     },
     {
       "category": "devices",
+      "description": "Export a device definition as an aiohomematic-compatible zip (device + paramset descriptions, anonymised). Returns model, filename and base64-encoded zip data.",
+      "name": "devices.export_definition",
+      "args": { "address": "string" }
+    },
+    {
+      "category": "devices",
       "description": "Return the full detail record for a single device by address.",
       "name": "devices.get",
       "args": { "address": "string" }

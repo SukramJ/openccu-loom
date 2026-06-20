@@ -38,6 +38,8 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return cmdConfig(args[1:], stdout, stderr)
 	case "cache":
 		return cmdCache(args[1:], stdout, stderr)
+	case "export-def":
+		return cmdExportDef(args[1:], stdout, stderr)
 	case "help", "-h", "--help":
 		printUsage(stdout)
 		return nil
@@ -53,6 +55,8 @@ Usage:
   hmcli version                 print version metadata
   hmcli config validate <file>  validate a openccu-loom YAML config
   hmcli cache clear [flags]     clear CCU-derivable caches (online) or SQLite rows (--offline)
+  hmcli export-def -address <a> [-host URL] [-token T] [-out file]
+                                download a device-definition zip from a daemon
   hmcli help                    print this help
 `, build.Version)
 }

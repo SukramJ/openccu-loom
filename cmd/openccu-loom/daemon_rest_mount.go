@@ -38,24 +38,25 @@ type restMountDeps struct {
 	matter matterWiring
 	reload *reloadDeps
 
-	healthAdapter      *adapter.HealthAdapter
-	configAdapter      *adapter.ConfigAdapter
-	devicesAdapter     *adapter.DevicesAdapter
-	deviceAdminDomain  *adapter.DeviceAdminDomain
-	dpWriterAdapter    *adapter.DataPointWriterAdapter
-	customDPDispatcher *adapter.CustomDPDispatcher
-	paramsetsDomain    *adapter.ParamsetsDomain
-	hubAdapter         *adapter.HubAdapter
-	ifaceAdapter       *adapter.InterfacesAdapter
-	sysStatusBuf       *handlers.SystemStatusBuffer
-	visFilter          filter.VisibilitySet
-	metricsReg         *metrics.Registry
-	uiSchemaAdapter    *adapter.UISchemaAdapter
-	linksDomain        *adapter.LinksDomain
-	schedulesDomain    *adapter.SchedulesDomain
-	centralLinksDomain *adapter.CentralLinksDomain
-	backupAdapter      *adapter.BackupAdapter
-	cacheResetSvc      handlers.CacheResetService
+	healthAdapter          *adapter.HealthAdapter
+	configAdapter          *adapter.ConfigAdapter
+	devicesAdapter         *adapter.DevicesAdapter
+	deviceAdminDomain      *adapter.DeviceAdminDomain
+	dpWriterAdapter        *adapter.DataPointWriterAdapter
+	customDPDispatcher     *adapter.CustomDPDispatcher
+	paramsetsDomain        *adapter.ParamsetsDomain
+	hubAdapter             *adapter.HubAdapter
+	ifaceAdapter           *adapter.InterfacesAdapter
+	sysStatusBuf           *handlers.SystemStatusBuffer
+	visFilter              filter.VisibilitySet
+	metricsReg             *metrics.Registry
+	uiSchemaAdapter        *adapter.UISchemaAdapter
+	linksDomain            *adapter.LinksDomain
+	schedulesDomain        *adapter.SchedulesDomain
+	centralLinksDomain     *adapter.CentralLinksDomain
+	definitionExportDomain *adapter.DefinitionExportDomain
+	backupAdapter          *adapter.BackupAdapter
+	cacheResetSvc          handlers.CacheResetService
 
 	auditBuf  *audit.Buffer
 	auditRec  audit.Recorder
@@ -119,46 +120,47 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	}
 	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
 	deps := rest.Deps{
-		Logger:         logger,
-		StartedAt:      time.Now(),
-		Health:         d.healthAdapter,
-		Config:         d.configAdapter,
-		Devices:        d.devicesAdapter,
-		DeviceAdmin:    d.deviceAdminDomain,
-		DeviceIcons:    newDeviceIconProxy(d.reg, cfg.Centrals),
-		RefreshDevices: d.devicesAdapter,
-		DPWriter:       d.dpWriterAdapter,
-		CustomDPWriter: d.customDPDispatcher,
-		Paramsets:      d.paramsetsDomain,
-		Hub:            d.hubAdapter,
-		InstallMode:    adapter.NewInstallModeAdapter(),
-		Interfaces:     d.ifaceAdapter,
-		Incidents:      adapter.NewIncidentsAdapter(),
-		SystemStatus:   d.sysStatusBuf,
-		Labels:         adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
-		DataPointVis:   d.visFilter,
-		Metrics:        d.metricsReg,
-		UISchema:       d.uiSchemaAdapter,
-		Links:          d.linksDomain,
-		Schedules:      d.schedulesDomain,
-		CentralLinks:   d.centralLinksDomain,
-		Audit:          d.auditBuf,
-		Auth:           d.restAuth,
-		ConfigAdmin:    d.configSvc,
-		RestartPending: restartState,
-		ConfigChanges:  restartState,
-		UserAdmin:      d.userSvc,
-		TokenAdmin:     d.tokenSvc,
-		CentralAdmin:   d.centSvc,
-		MQTTReload:     newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
-		OIDC:           buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:     ui.SPAHandler(),
-		Backup:         d.backupAdapter,
-		CacheReset:     d.cacheResetSvc,
-		EditSessions:   handlers.NewEditSessions(),
-		WSHandler:      d.wsHandler,
-		AuthResolve:    d.restResolve,
-		AuthRequire:    d.authMw.Require,
+		Logger:           logger,
+		StartedAt:        time.Now(),
+		Health:           d.healthAdapter,
+		Config:           d.configAdapter,
+		Devices:          d.devicesAdapter,
+		DeviceAdmin:      d.deviceAdminDomain,
+		DeviceIcons:      newDeviceIconProxy(d.reg, cfg.Centrals),
+		RefreshDevices:   d.devicesAdapter,
+		DPWriter:         d.dpWriterAdapter,
+		CustomDPWriter:   d.customDPDispatcher,
+		Paramsets:        d.paramsetsDomain,
+		Hub:              d.hubAdapter,
+		InstallMode:      adapter.NewInstallModeAdapter(),
+		Interfaces:       d.ifaceAdapter,
+		Incidents:        adapter.NewIncidentsAdapter(),
+		SystemStatus:     d.sysStatusBuf,
+		Labels:           adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
+		DataPointVis:     d.visFilter,
+		Metrics:          d.metricsReg,
+		UISchema:         d.uiSchemaAdapter,
+		Links:            d.linksDomain,
+		Schedules:        d.schedulesDomain,
+		CentralLinks:     d.centralLinksDomain,
+		DefinitionExport: d.definitionExportDomain,
+		Audit:            d.auditBuf,
+		Auth:             d.restAuth,
+		ConfigAdmin:      d.configSvc,
+		RestartPending:   restartState,
+		ConfigChanges:    restartState,
+		UserAdmin:        d.userSvc,
+		TokenAdmin:       d.tokenSvc,
+		CentralAdmin:     d.centSvc,
+		MQTTReload:       newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
+		OIDC:             buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:       ui.SPAHandler(),
+		Backup:           d.backupAdapter,
+		CacheReset:       d.cacheResetSvc,
+		EditSessions:     handlers.NewEditSessions(),
+		WSHandler:        d.wsHandler,
+		AuthResolve:      d.restResolve,
+		AuthRequire:      d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
 			return d.authMw.RequireRole(auth.RoleOperator, next)
 		},

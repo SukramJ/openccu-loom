@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.14.0
+  version: 1.15.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1310,6 +1310,39 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/export-definition:
+    get:
+      operationId: exportDeviceDefinition
+      summary: Export a device definition as an aiohomematic-compatible zip
+      description: |
+        Fetches the device + channel descriptions and their non-LINK paramset
+        descriptions directly off the CCU (preserving wire member order),
+        anonymises every address behind a single random "VCU" id, and returns a
+        zip containing `device_descriptions/{model}.json` and
+        `paramset_descriptions/{model}.json`. The JSON members are byte-for-byte
+        identical to aiohomematic's `export_device_definition`, so the archive
+        drops straight into pydevccu / godevccu as a device fixture.
+      tags: [devices]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Device-definition zip archive
+          headers:
+            Content-Disposition:
+              description: 'attachment; filename="{model}.zip"'
+              schema: { type: string }
+          content:
+            application/zip: { schema: { type: string, format: binary } }
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "502":
+          description: CCU read error
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
   /devices/{addr}/channels/{no}/config/export:
     get:
       operationId: exportChannelConfig
