@@ -4,6 +4,50 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0]
+
+### Added
+
+- **Device-action services — parity with the Home-Assistant integration's
+  service surface.** A batch of operator actions that previously had to be
+  driven by hand via raw parameter writes are now first-class commands. The
+  device-type actions are surfaced through the existing `cdp.invoke` WebSocket
+  command (mapping new operation strings onto the already-present custom
+  data-point domain methods):
+  - **Climate away-mode** — `enable_away_by_calendar` (away until an end
+    timestamp), `enable_away_by_duration` (away for N hours), and
+    `disable_away`.
+  - **On-time** — `set_on_time` for lights, switches and (irrigation) valves
+    ("turn on for a duration", reverting automatically).
+  - **Cover** — `set_combined` to set blind position and slat tilt atomically.
+  - **Siren** — `turn_on` (with acoustic/optical selection and duration) and
+    `stop`.
+  - **Text display** — `send_text`, `clear_text` and `commit` for HmIP-WRCD.
+- **Channel-level config reload — `config.reload_channel_config` /
+  `ccu.reload_channel_config`.** Re-pulls the VALUES/MASTER/LINK paramset
+  descriptions and MASTER values for a single channel and re-materialises its
+  data points, the surgical counterpart to `reload_device_config`. WS-only,
+  mirroring the reference.
+- **Central links — `central.create_links` / `central.remove_links` /
+  `central.links_status`** (WS), wrapping the existing central-links domain;
+  the REST `/devices/{address}/central-links` surface already existed.
+- **Session recording — `recording.start` / `recording.stop` /
+  `recording.status`** (WS) to drive the built-in RPC session recorder across
+  every central (multi-CCU-safe).
+- **Schedule copy — `schedules.copy` / `schedules.climate.copy_profile`** (WS,
+  plus `POST .../schedules/copy` and `POST .../week_profile/copy`): copy a whole
+  device schedule between devices, or one climate profile between
+  channels/profile slots.
+- **Force a system-variable refresh — `sysvars.fetch`** (WS, plus
+  `POST /sysvars/fetch`): re-pull all system variables from the CCU on demand.
+
+### Notes
+
+- These services bring OpenCCU-Loom's command surface in line with the
+  homematicip_local HA-service set; the underlying behaviour is ported 1:1 from
+  the reference. Services that are pure Home-Assistant glue, or that are already
+  covered by the generic value/paramset surface, were intentionally not added.
+
 ## [0.6.0]
 
 ### Added
