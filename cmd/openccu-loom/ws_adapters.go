@@ -122,6 +122,13 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		MasterProfiles: w.masterProfiles,
 		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
 		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),
+		// CentralLinks: wired — *adapter.CentralLinksDomain satisfies
+		// ws.CentralLinksManager directly. Backs central.create_links /
+		// central.remove_links / central.links_status.
+		CentralLinks: w.centralLinks,
+		// SessionRecorder: wired — fans recording.start/stop/status across
+		// every central's session.Recorder via the registry.
+		SessionRecorder: wsSessionRecorderFrom(w.registry),
 		// ChangeHistory, ThrottleStats, DeviceStatistics, FirmwareRefresher,
 		// IncidentClearer, ChangeHistoryClearer, ExtendedHub, Central,
 		// ParamsetReader: all nil — see docs/parity/by_design.md "ws-rest-split".
@@ -814,6 +821,70 @@ func wsCacheClearerFrom(svc *cachereset.Service) ws.CacheClearer {
 		return nil
 	}
 	return &wsCacheClearer{svc: svc}
+}
+
+// ── wsSessionRecorder ─────────────────────────────────────────────────────────
+
+// wsSessionRecorder adapts every central's [session.Recorder] onto
+// ws.SessionRecorder. Start / Stop fan out across all registered centrals so a
+// single recording.start / recording.stop toggles the diagnostic RPC recorder
+// fleet-wide. IsActive reports true when any central is currently capturing —
+// the recorder is multi-central by design (ADR 0002), so a per-central scope is
+// intentionally not exposed on this minimal diagnostic surface.
+type wsSessionRecorder struct{ registry *central.Registry }
+
+// Start activates recording on every central's recorder.
+func (w *wsSessionRecorder) Start() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil {
+			u.Recorder.StartSession()
+		}
+	}
+	return w.IsActive()
+}
+
+// Stop deactivates recording on every central's recorder.
+func (w *wsSessionRecorder) Stop() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil {
+			u.Recorder.StopSession()
+		}
+	}
+	return w.IsActive()
+}
+
+// IsActive reports whether any central's recorder is currently capturing.
+func (w *wsSessionRecorder) IsActive() bool {
+	if w == nil || w.registry == nil {
+		return false
+	}
+	for _, u := range w.registry.List() {
+		if u != nil && u.Recorder != nil && u.Recorder.IsActive() {
+			return true
+		}
+	}
+	return false
+}
+
+// wsSessionRecorderFrom returns a ws.SessionRecorder backed by the central
+// registry, or nil when no central exposes a recorder (leaves the recording.*
+// commands unregistered).
+func wsSessionRecorderFrom(reg *central.Registry) ws.SessionRecorder {
+	if reg == nil {
+		return nil
+	}
+	for _, u := range reg.List() {
+		if u != nil && u.Recorder != nil {
+			return &wsSessionRecorder{registry: reg}
+		}
+	}
+	return nil
 }
 
 // deviceAddrFromChannel strips the ":N" channel suffix from a channel

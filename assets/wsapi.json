@@ -105,14 +105,35 @@
       "name": "central.connectivity"
     },
     {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Enable CCU click-event forwarding for a device's press-event channels. Mirrors Python create_central_links.",
+      "name": "central.create_links",
+      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
+    },
+    {
       "category": "central",
       "description": "Return identity and version information for the connected CCU.",
       "name": "central.info"
     },
     {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Report whether a device supports central links and how many channels are eligible.",
+      "name": "central.links_status",
+      "result": { "eligible_channels": "integer?", "reason": "string?", "supported": "boolean" }
+    },
+    {
       "category": "central",
       "description": "Kick off an ad-hoc reconciliation pass against the CCU device registry.",
       "name": "central.reconcile"
+    },
+    {
+      "args": { "address": "string?", "device_address": "string?" },
+      "category": "central",
+      "description": "Tear down CCU click-event forwarding for a device's press-event channels. Mirrors Python remove_central_links.",
+      "name": "central.remove_links",
+      "result": { "failed": "integer", "skipped": "integer", "touched": "integer" }
     },
     {
       "category": "central",
@@ -477,6 +498,24 @@
       "category": "programs",
       "description": "List all CCU programs.",
       "name": "programs.list"
+    },
+    {
+      "category": "recording",
+      "description": "Start the diagnostic RPC session recorder across all centrals (clears prior data). Mirrors Python record_session (start).",
+      "name": "recording.start",
+      "result": { "recording": "boolean" }
+    },
+    {
+      "category": "recording",
+      "description": "Report whether the diagnostic RPC session recorder is currently capturing.",
+      "name": "recording.status",
+      "result": { "recording": "boolean" }
+    },
+    {
+      "category": "recording",
+      "description": "Stop the diagnostic RPC session recorder across all centrals. Mirrors Python record_session (stop).",
+      "name": "recording.stop",
+      "result": { "recording": "boolean" }
     },
     {
       "category": "schedules",
