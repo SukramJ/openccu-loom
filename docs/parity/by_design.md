@@ -478,6 +478,29 @@ point stays unset until a real measurement arrives. The status gate is not
 expected to suppress that placeholder — by the time a value reaches the gate it
 already carries `STATUS=NORMAL`.
 
+### BD-CCU-ValuesBulkParamsetLoad — the VALUES lazy fallback loads the whole paramset via getParamset, not per-parameter getValue
+
+aiohomematic's `_ValueCache._get_values_for_cache` (`model/device.py`) loads a
+single `VALUES` parameter with `getValue` and only batches `MASTER` via
+`getParamset`. OpenCCU-Loom loads `VALUES` with `getParamset` as well
+(`internal/model/device/value_cache.go`, `runLoadValuesParamset`). The bulk
+`fetch_all_device_data` seed only ships data points that already carry a
+non-zero value (it skips empties — see BD-CCU-StatusUncertainViaTracker), so the
+per-parameter fallback runs for every not-yet-measured parameter; fetching the
+channel's whole `VALUES` paramset in one call warms every still-unloaded sibling
+at once instead of issuing one `getValue` each.
+
+**Rationale:** fewer CCU round-trips on the fallback path, and a value plus its
+paired `<X>_STATUS` arrive from one atomic snapshot. Safety is preserved: the
+singleflight key stays **per-parameter** (a forced refresh of one parameter
+cannot be coalesced away by another's), the explicitly requested parameter is
+always applied, and sibling fills are gated on **not-yet-observed** — a bulk
+read therefore never clobbers a restored / already-known value (restore-first /
+#3228). A not-yet-measured parameter still yields `Fault -5` / an absent key,
+which the existing sentinel path handles without writing a placeholder. Tests:
+`internal/model/device/value_cache_test.go`
+(`TestLoadValueValuesParamsetSiblingGuard`).
+
 ### asyncio idioms → Go concurrency
 
 | ID | Python symbol | File:line | Go idiom | Go path | Rationale | Marked |

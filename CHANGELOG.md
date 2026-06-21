@@ -33,6 +33,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     and `.connectivity.<interface_id>` let the client drop its 30 s hub-refresh
     poll loop.
 
+### Changed
+
+- **The per-parameter `VALUES` fallback now loads the whole channel paramset in
+  one `getParamset` call instead of one `getValue` per parameter.** The bulk
+  `fetch_all_device_data` seed only ships data points that already carry a
+  non-zero value, so the fallback runs for every not-yet-measured parameter;
+  batching the channel's `VALUES` paramset warms every still-unloaded sibling at
+  once. The singleflight key stays per-parameter and sibling fills are gated on
+  not-yet-observed, so a bulk read never clobbers a restored / already-known
+  value (restore-first / reference #3228). See `docs/parity/by_design.md`
+  (BD-CCU-ValuesBulkParamsetLoad). No API change.
+
 ### Notes
 
 - Verification of the original gap catalogue reclassified three items (now

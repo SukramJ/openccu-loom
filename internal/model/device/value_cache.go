@@ -175,9 +175,11 @@ func (d *Device) ValueLoader() ValueLoader {
 // When direct=true the cache is bypassed both on read and write — used by the
 // reconciler for forced refreshes.
 //
-// MASTER loads are batched: a single GetParamset call fills every MASTER
-// parameter on the channel into the cache and overwrites the underlying
-// [ParameterDataPoint]s via OnWireValue when present.
+// Both MASTER and VALUES loads are batched: a single GetParamset call fills
+// every parameter on the channel into the cache and propagates it to the
+// underlying [ParameterDataPoint]s via OnWireValue when present. VALUES sibling
+// fills are gated on not-yet-observed so a bulk read never clobbers a restored
+// value (see [Device.runLoadValuesParamset]).
 //
 // src is logged / surfaced in metrics as the trigger label (HM_INIT /
 // MANUAL_OR_SCHEDULED). It does not change behaviour.
@@ -224,9 +226,12 @@ func (d *Device) LoadValue(ctx context.Context, dpk hmtypes.DataPointKey, src hm
 	return v, obs, nil
 }
 
-// singleflightKey builds the deduplication key for dpk. MASTER loads
-// share one key per channel because GetParamset fetches the whole
-// paramset; VALUES loads are per-parameter.
+// singleflightKey builds the deduplication key for dpk. MASTER loads share one
+// key per channel. VALUES loads stay parameter-scoped even though each one now
+// GetParamsets the whole channel: a direct force-read of a single parameter
+// must refresh exactly that parameter (the requested one is always applied),
+// while sibling fills are gated on not-yet-observed — a per-channel key would
+// let one parameter's forced refresh be coalesced away by another's.
 func singleflightKey(dpk hmtypes.DataPointKey) string {
 	if dpk.ParamsetKey == hmenum.ParamsetKeyMaster {
 		return dpk.ChannelAddress + ":M"
@@ -242,7 +247,7 @@ func (d *Device) runLoad(ctx context.Context, loader ValueLoader, cache *valueCa
 	if dpk.ParamsetKey == hmenum.ParamsetKeyMaster {
 		return d.runLoadMaster(ctx, loader, cache, dpk)
 	}
-	return d.runLoadValuesParam(ctx, loader, cache, dpk)
+	return d.runLoadValuesParamset(ctx, loader, cache, dpk)
 }
 
 // runLoadMaster fetches the entire MASTER paramset for the channel and
@@ -282,21 +287,63 @@ func (d *Device) runLoadMaster(ctx context.Context, loader ValueLoader, cache *v
 	return nil
 }
 
-// runLoadValuesParam fetches a single VALUES parameter and seeds the
-// cache. Wraps GetValue.
-func (d *Device) runLoadValuesParam(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey) error {
-	v, err := loader.GetValue(ctx, dpk.ChannelAddress, hmenum.Parameter(dpk.Parameter))
+// runLoadValuesParamset fetches the whole VALUES paramset for the channel in a
+// single GetParamset call and seeds the cache for every returned parameter —
+// not just the requested one. The CCU's bulk seed (fetch_all_device_data) only
+// ships data points that already carry a non-zero value, so the per-parameter
+// fallback is the path that fills the rest; batching it warms every
+// not-yet-loaded sibling on the channel in one round-trip instead of one
+// GetValue each.
+//
+// Propagation rules keep the restore-first / not-yet-measured guarantees
+// (see docs/caching.md "Restored values and north-bound availability"):
+//
+//   - the explicitly requested parameter is always applied — this preserves the
+//     single-GetValue force-read semantics (a direct refresh of a parameter
+//     refreshes that parameter even if it was already observed);
+//   - a sibling is only applied when it has not been observed yet, so a bulk
+//     fill can never overwrite a restored / already-known value with a fresh
+//     read that may be a not-yet-measured placeholder.
+func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey) error {
+	values, err := loader.GetParamset(ctx, dpk.ChannelAddress, hmenum.ParamsetKeyValues)
 	if err != nil {
+		// Sentinel for the requested parameter so the next read does not
+		// retry-storm.
 		cache.put(dpk, nil, false)
 		return err
 	}
-	cache.put(dpk, v, true)
-	if ch := d.Channel(dpk.ChannelAddress); ch != nil {
-		if dp := ch.Parameter(hmenum.Parameter(dpk.Parameter)); dp != nil {
-			if setter, ok := dp.(interface{ OnWireValue(any) bool }); ok {
-				setter.OnWireValue(v)
+	ch := d.Channel(dpk.ChannelAddress)
+	for name, v := range values {
+		requested := name == dpk.Parameter
+		var setter interface{ OnWireValue(any) bool }
+		observed := false
+		if ch != nil {
+			if dp := ch.Parameter(hmenum.Parameter(name)); dp != nil {
+				setter, _ = dp.(interface{ OnWireValue(any) bool })
+				if rv, ok := dp.(interface{ RawValue() (any, bool) }); ok {
+					_, observed = rv.RawValue()
+				}
 			}
 		}
+		// Never let a sibling bulk-fill clobber an already-observed value.
+		if !requested && observed {
+			continue
+		}
+		entry := hmtypes.DataPointKey{
+			InterfaceID:    dpk.InterfaceID,
+			ChannelAddress: dpk.ChannelAddress,
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      name,
+		}
+		cache.put(entry, v, true)
+		if setter != nil {
+			setter.OnWireValue(v)
+		}
+	}
+	// If the CCU did not include the requested parameter at all, mark it as a
+	// sentinel so callers don't retry forever (e.g. sparse CUxD channels).
+	if _, ok := values[dpk.Parameter]; !ok {
+		cache.put(dpk, nil, false)
 	}
 	return nil
 }
