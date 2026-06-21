@@ -4,8 +4,11 @@
 package ws
 
 import (
+	"time"
+
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	hubmodel "github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
@@ -116,11 +119,17 @@ func (s *HubEventsSubscriber) Start() {
 		return
 	}
 	for _, u := range s.reg.List() {
+		centralName := u.Name()
+		// Hub singletons (alarm / service messages, inbox, metrics,
+		// connectivity) reach the WebSocket via the hub model's own change
+		// hooks — the same OnUpdate surface the MQTT publisher fans on — so
+		// clients can drop their hub-refresh poll loop. This path does not
+		// depend on the event bus, so it runs before the bus guard below.
+		s.subscribeHubModel(centralName, u.HubModel)
 		bus := u.EventBus
 		if bus == nil {
 			continue
 		}
-		centralName := u.Name()
 		hub := s.hub
 		reg := s.reg
 		unsubSv := events.Subscribe(bus, func(e hmevent.SysvarChangedEvent) {
@@ -166,8 +175,155 @@ func (s *HubEventsSubscriber) Start() {
 				},
 			})
 		})
-		s.unsubs = append(s.unsubs, unsubSv, unsubPg, unsubIM)
+		// Per-interface reachability: pushed by the reconciler and the CCU
+		// callback path as ConnectivityChangedEvent. Bus-driven (not a model
+		// hook) because the connectivity tracker is attached lazily — see
+		// subscribeHubModel.
+		unsubConn := events.Subscribe(bus, func(e hmevent.ConnectivityChangedEvent) {
+			hub.Publish(Event{
+				Topic: ConnectivityTopic(centralName, e.InterfaceID),
+				Type:  string(hmevent.EventTypeConnectivityChanged),
+				When:  e.Timestamp(),
+				Payload: HubConnectivityChangedPayload{
+					Central:     centralName,
+					InterfaceID: e.InterfaceID,
+					Reachable:   e.Reachable,
+					LatencyMs:   e.LatencyMs,
+				},
+			})
+		})
+		s.unsubs = append(s.unsubs, unsubSv, unsubPg, unsubIM, unsubConn)
 	}
+}
+
+// Envelope Type labels for the hub-singleton singletons that have no event-bus
+// counterpart. The alarm / service / connectivity flavours reuse the catalogued
+// [hmevent.EventType] strings; inbox and metrics are model-only.
+const (
+	eventTypeInboxChanged   = "hub.inbox_changed"
+	eventTypeMetricsChanged = "hub.metrics_changed"
+)
+
+// HubCountChangedPayload is the broadcast payload for the count-valued hub
+// singletons (alarm / service messages, inbox). Count is the current entry
+// count; clients refresh the full list via REST when they need the entries.
+type HubCountChangedPayload struct {
+	Central string `json:"central"`
+	Count   int    `json:"count"`
+}
+
+// HubMetricChangedPayload is the broadcast payload for a single hub metric
+// observation.
+type HubMetricChangedPayload struct {
+	Central string  `json:"central"`
+	Metric  string  `json:"metric"`
+	Value   float64 `json:"value"`
+	Unit    string  `json:"unit,omitempty"`
+}
+
+// HubConnectivityChangedPayload is the broadcast payload for a per-interface
+// reachability change. LatencyMs carries the probe round-trip when measured.
+type HubConnectivityChangedPayload struct {
+	Central     string  `json:"central"`
+	InterfaceID string  `json:"interface_id"`
+	Reachable   bool    `json:"reachable"`
+	LatencyMs   float64 `json:"latency_ms,omitempty"`
+}
+
+// AlarmMessagesTopic returns the canonical topic for alarm-message changes:
+//
+//	hub.<central>.alarm_messages
+func AlarmMessagesTopic(centralName string) string {
+	return "hub." + centralName + ".alarm_messages"
+}
+
+// ServiceMessagesTopic returns the canonical topic for service-message changes:
+//
+//	hub.<central>.service_messages
+func ServiceMessagesTopic(centralName string) string {
+	return "hub." + centralName + ".service_messages"
+}
+
+// InboxTopic returns the canonical topic for inbox changes:
+//
+//	hub.<central>.inbox
+func InboxTopic(centralName string) string {
+	return "hub." + centralName + ".inbox"
+}
+
+// MetricsTopic returns the canonical topic for hub-metric changes:
+//
+//	hub.<central>.metrics
+func MetricsTopic(centralName string) string {
+	return "hub." + centralName + ".metrics"
+}
+
+// ConnectivityTopic returns the canonical topic for a per-interface
+// reachability change:
+//
+//	hub.<central>.connectivity.<interface_id>
+func ConnectivityTopic(centralName, interfaceID string) string {
+	return "hub." + centralName + ".connectivity." + interfaceID
+}
+
+// subscribeHubModel wires the hub model's change hooks to WebSocket broadcasts
+// so clients receive push updates for the singletons that otherwise force a
+// poll loop. No-op when the model is nil.
+func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel.Hub) {
+	if hm == nil {
+		return
+	}
+	if hm.Messages != nil {
+		s.unsubs = append(s.unsubs, hm.Messages.OnUpdate(func(msgs []hubmodel.AlarmMessage) {
+			s.hub.Publish(Event{
+				Topic:   AlarmMessagesTopic(centralName),
+				Type:    string(hmevent.EventTypeAlarmMessage),
+				When:    time.Now().UTC(),
+				Payload: HubCountChangedPayload{Central: centralName, Count: len(msgs)},
+			})
+		}))
+	}
+	if hm.ServiceMessages != nil {
+		s.unsubs = append(s.unsubs, hm.ServiceMessages.OnUpdate(func(msgs []hubmodel.ServiceMessage) {
+			s.hub.Publish(Event{
+				Topic:   ServiceMessagesTopic(centralName),
+				Type:    string(hmevent.EventTypeServiceMessage),
+				When:    time.Now().UTC(),
+				Payload: HubCountChangedPayload{Central: centralName, Count: len(msgs)},
+			})
+		}))
+	}
+	if hm.Inbox != nil {
+		s.unsubs = append(s.unsubs, hm.Inbox.OnUpdate(func(devices []hubmodel.InboxDevice) {
+			s.hub.Publish(Event{
+				Topic:   InboxTopic(centralName),
+				Type:    eventTypeInboxChanged,
+				When:    time.Now().UTC(),
+				Payload: HubCountChangedPayload{Central: centralName, Count: len(devices)},
+			})
+		}))
+	}
+	if hm.Metrics != nil {
+		s.unsubs = append(s.unsubs, hm.Metrics.OnAny(func(sample hubmodel.MetricSample) {
+			s.hub.Publish(Event{
+				Topic: MetricsTopic(centralName),
+				Type:  eventTypeMetricsChanged,
+				When:  time.Now().UTC(),
+				Payload: HubMetricChangedPayload{
+					Central: centralName,
+					Metric:  string(sample.Kind),
+					Value:   sample.Value,
+					Unit:    hubmodel.MetricSensorUnit(sample.Kind),
+				},
+			})
+		}))
+	}
+	// Connectivity is NOT wired here: the per-interface tracker is attached
+	// lazily via Hub.SetConnectivity during readiness-gated central bring-up,
+	// which can run after this subscriber has already started. Reading the
+	// tracker at wire-time would miss it. Connectivity broadcasts ride the
+	// event bus instead (see the ConnectivityChangedEvent subscription in
+	// Start), mirroring the MQTT publisher's choice.
 }
 
 // Stop drops all event-bus subscriptions.

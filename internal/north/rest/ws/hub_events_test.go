@@ -15,6 +15,224 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
+// --- Hub-model singleton push tests ---
+
+// TestHubEventsSubscriberAlarmMessages verifies that replacing alarm messages
+// fires a broadcast on AlarmMessagesTopic with the correct count.
+func TestHubEventsSubscriberAlarmMessages(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.Messages.Replace([]hub.AlarmMessage{
+		{ID: "1", Name: "Alarm A"},
+		{ID: "2", Name: "Alarm B"},
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == AlarmMessagesTopic("home")
+	})
+	if ev.Type != string(hmevent.EventTypeAlarmMessage) {
+		t.Fatalf("type = %q, want %q", ev.Type, string(hmevent.EventTypeAlarmMessage))
+	}
+	p, ok := ev.Payload.(HubCountChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubCountChangedPayload", ev.Payload)
+	}
+	if p.Central != "home" {
+		t.Fatalf("central = %q, want %q", p.Central, "home")
+	}
+	if p.Count != 2 {
+		t.Fatalf("count = %d, want 2", p.Count)
+	}
+}
+
+// TestHubEventsSubscriberServiceMessages verifies that replacing service
+// messages fires a broadcast on ServiceMessagesTopic with the correct count.
+func TestHubEventsSubscriberServiceMessages(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.ServiceMessages.Replace([]hub.ServiceMessage{
+		{ID: "SM1", Name: "Low battery"},
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == ServiceMessagesTopic("home")
+	})
+	if ev.Type != string(hmevent.EventTypeServiceMessage) {
+		t.Fatalf("type = %q, want %q", ev.Type, string(hmevent.EventTypeServiceMessage))
+	}
+	p, ok := ev.Payload.(HubCountChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubCountChangedPayload", ev.Payload)
+	}
+	if p.Count != 1 {
+		t.Fatalf("count = %d, want 1", p.Count)
+	}
+}
+
+// TestHubEventsSubscriberInbox verifies that replacing inbox devices fires a
+// broadcast on InboxTopic with the correct count.
+func TestHubEventsSubscriberInbox(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.Inbox.Replace([]hub.InboxDevice{
+		{Address: "ADDR1", Name: "New device"},
+		{Address: "ADDR2", Name: "Another device"},
+		{Address: "ADDR3", Name: "Third device"},
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == InboxTopic("home")
+	})
+	if ev.Type != eventTypeInboxChanged {
+		t.Fatalf("type = %q, want %q", ev.Type, eventTypeInboxChanged)
+	}
+	p, ok := ev.Payload.(HubCountChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubCountChangedPayload", ev.Payload)
+	}
+	if p.Count != 3 {
+		t.Fatalf("count = %d, want 3", p.Count)
+	}
+}
+
+// TestHubEventsSubscriberMetrics verifies that observing a metric fires a
+// broadcast on MetricsTopic with the metric kind, value, and unit.
+func TestHubEventsSubscriberMetrics(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.Metrics.Observe(hub.MetricSystemHealth, 95)
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == MetricsTopic("home")
+	})
+	if ev.Type != eventTypeMetricsChanged {
+		t.Fatalf("type = %q, want %q", ev.Type, eventTypeMetricsChanged)
+	}
+	p, ok := ev.Payload.(HubMetricChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubMetricChangedPayload", ev.Payload)
+	}
+	if p.Central != "home" {
+		t.Fatalf("central = %q, want %q", p.Central, "home")
+	}
+	if p.Metric != string(hub.MetricSystemHealth) {
+		t.Fatalf("metric = %q, want %q", p.Metric, string(hub.MetricSystemHealth))
+	}
+	if p.Value != 95 {
+		t.Fatalf("value = %g, want 95", p.Value)
+	}
+	if p.Unit != "%" {
+		t.Fatalf("unit = %q, want %%", p.Unit)
+	}
+}
+
+// TestHubEventsSubscriberConnectivity verifies that a connectivity state change
+// fires a broadcast on ConnectivityTopic with the interface ID and reachability.
+func TestHubEventsSubscriberConnectivity(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	// Connectivity rides the event bus (the tracker is attached lazily, so
+	// the subscriber cannot wire a model hook at Start time).
+	events.Publish(cu.EventBus, hmevent.ConnectivityChangedEvent{
+		CentralName: "home",
+		InterfaceID: "HmIP-RF",
+		Reachable:   true,
+		LatencyMs:   12.5,
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == ConnectivityTopic("home", "HmIP-RF")
+	})
+	if ev.Type != string(hmevent.EventTypeConnectivityChanged) {
+		t.Fatalf("type = %q, want %q", ev.Type, string(hmevent.EventTypeConnectivityChanged))
+	}
+	p, ok := ev.Payload.(HubConnectivityChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubConnectivityChangedPayload", ev.Payload)
+	}
+	if p.Central != "home" {
+		t.Fatalf("central = %q, want %q", p.Central, "home")
+	}
+	if p.InterfaceID != "HmIP-RF" {
+		t.Fatalf("interface_id = %q, want %q", p.InterfaceID, "HmIP-RF")
+	}
+	if !p.Reachable {
+		t.Fatalf("reachable = false, want true")
+	}
+}
+
+// --- Topic-function unit tests ---
+
+func TestAlarmMessagesTopicFormat(t *testing.T) {
+	got := AlarmMessagesTopic("home")
+	if want := "hub.home.alarm_messages"; got != want {
+		t.Fatalf("AlarmMessagesTopic = %q, want %q", got, want)
+	}
+}
+
+func TestServiceMessagesTopicFormat(t *testing.T) {
+	got := ServiceMessagesTopic("home")
+	if want := "hub.home.service_messages"; got != want {
+		t.Fatalf("ServiceMessagesTopic = %q, want %q", got, want)
+	}
+}
+
+func TestInboxTopicFormat(t *testing.T) {
+	got := InboxTopic("home")
+	if want := "hub.home.inbox"; got != want {
+		t.Fatalf("InboxTopic = %q, want %q", got, want)
+	}
+}
+
+func TestMetricsTopicFormat(t *testing.T) {
+	got := MetricsTopic("home")
+	if want := "hub.home.metrics"; got != want {
+		t.Fatalf("MetricsTopic = %q, want %q", got, want)
+	}
+}
+
+func TestConnectivityTopicFormat(t *testing.T) {
+	got := ConnectivityTopic("home", "HmIP-RF")
+	if want := "hub.home.connectivity.HmIP-RF"; got != want {
+		t.Fatalf("ConnectivityTopic = %q, want %q", got, want)
+	}
+}
+
 func TestSysvarTopicFormat(t *testing.T) {
 	got := SysvarTopic("home", "EnergyCounter")
 	if want := "hub.home.sysvars.EnergyCounter"; got != want {

@@ -5,7 +5,9 @@ package textdisplay
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/payload"
@@ -213,5 +215,90 @@ func TestTextDisplayStatePayloadNilReceiverReturnsNil(t *testing.T) {
 	var d *TextDisplay
 	if p := d.State(); p != nil {
 		t.Errorf("nil TextDisplay.State() = %v, want nil", p)
+	}
+}
+
+// TestTextDisplayStatePayloadNewOptionLists verifies that State() includes
+// the five new option-list fields when set via their respective setters.
+func TestTextDisplayStatePayloadNewOptionLists(t *testing.T) {
+	t.Parallel()
+
+	d := New("x", &stubWriter{})
+	d.SetAvailableBackgroundColors([]string{"BLACK", "WHITE"})
+	d.SetAvailableTextColors([]string{"RED", "GREEN", "BLUE"})
+	d.SetAvailableAlignments([]string{"LEFT", "CENTER", "RIGHT"})
+	d.SetAvailableRepetitions([]string{"REPETITIONS_001", "REPETITIONS_003"})
+	d.SetAvailableIntervals([]string{"INTERVAL_SHORT", "INTERVAL_LONG"})
+
+	p, ok := d.State().(*payload.TextDisplayState)
+	if !ok || p == nil {
+		t.Fatal("StatePayload must not be nil")
+	}
+
+	checkList := func(name string, got []any, want []string) {
+		t.Helper()
+		if len(got) != len(want) {
+			t.Errorf("%s: len=%d, want %d", name, len(got), len(want))
+			return
+		}
+		for i, w := range want {
+			if got[i] != w {
+				t.Errorf("%s[%d] = %v, want %q", name, i, got[i], w)
+			}
+		}
+	}
+
+	checkList("available_background_colors", p.AvailableBackgroundColors, []string{"BLACK", "WHITE"})
+	checkList("available_text_colors", p.AvailableTextColors, []string{"RED", "GREEN", "BLUE"})
+	checkList("available_alignments", p.AvailableAlignments, []string{"LEFT", "CENTER", "RIGHT"})
+	checkList("available_repetitions", p.AvailableRepetitions, []string{"REPETITIONS_001", "REPETITIONS_003"})
+	checkList("available_intervals", p.AvailableIntervals, []string{"INTERVAL_SHORT", "INTERVAL_LONG"})
+}
+
+// TestTextDisplayStatePayloadNewOptionListsOmitWhenEmpty verifies that the
+// five new option-list JSON keys are absent when the lists are not set (omitempty).
+func TestTextDisplayStatePayloadNewOptionListsOmitWhenEmpty(t *testing.T) {
+	t.Parallel()
+
+	d := New("x", &stubWriter{})
+	p, ok := d.State().(*payload.TextDisplayState)
+	if !ok || p == nil {
+		t.Fatal("StatePayload must not be nil")
+	}
+
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+	js := string(raw)
+
+	for _, key := range []string{
+		"available_background_colors",
+		"available_text_colors",
+		"available_alignments",
+		"available_repetitions",
+		"available_intervals",
+	} {
+		if strings.Contains(js, `"`+key+`"`) {
+			t.Errorf("JSON must not contain %q when list is empty; got: %s", key, js)
+		}
+	}
+}
+
+// TestStringsToAnyNilForEmpty verifies the stringsToAny helper returns nil
+// for empty and nil inputs so omitempty suppresses the JSON key.
+func TestStringsToAnyNilForEmpty(t *testing.T) {
+	t.Parallel()
+
+	if got := stringsToAny(nil); got != nil {
+		t.Errorf("stringsToAny(nil) = %v, want nil", got)
+	}
+	if got := stringsToAny([]string{}); got != nil {
+		t.Errorf("stringsToAny([]) = %v, want nil", got)
+	}
+
+	got := stringsToAny([]string{"A", "B"})
+	if len(got) != 2 || got[0] != "A" || got[1] != "B" {
+		t.Errorf("stringsToAny([A,B]) = %v, want [A B]", got)
 	}
 }

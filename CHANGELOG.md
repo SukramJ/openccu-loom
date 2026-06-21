@@ -4,6 +4,44 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0]
+
+### Added
+
+- **Close the HA-client wire gaps G2/G4/G5/G6** (see
+  `docs/parity/ha-client-wire-gaps.md`). These unblock the
+  `openccu-loom-client` / Home-Assistant *Homematic(IP) Local* drop-in by
+  serializing already-modelled data into the north-bound contract. APIVersion
+  → 1.18.0.
+  - **G2 — text-display option lists.** The text-display CDP state now carries
+    `available_background_colors`, `available_text_colors`,
+    `available_alignments`, `available_repetitions` and `available_intervals`
+    alongside the existing icon/sound lists, so the notify entity can build its
+    per-option pickers.
+  - **G4 — hub singleton data points — `GET /api/v1/hub/data-points`.** A single
+    aggregating endpoint returns the hub singletons (alarm/service messages,
+    inbox, firmware update, metrics, per-interface connectivity and
+    install-mode) per central, so a client hub coordinator can be built from one
+    fetch (re-enabling its orphan-entity cleanup).
+  - **G5 — per-device event groups —
+    `GET /api/v1/devices/{addr}/channels/{no}/event-groups`.** Projects a
+    channel's keypress/impulse/device-error event groups (`kind`, `event_types`,
+    `parameters`, `available`, `last_triggered_event`) so the `event` platform
+    gets its bootstrap entities.
+  - **G6 — hub-singleton push topics.** New WebSocket broadcasts
+    `hub.<central>.alarm_messages`, `.service_messages`, `.inbox`, `.metrics`
+    and `.connectivity.<interface_id>` let the client drop its 30 s hub-refresh
+    poll loop.
+
+### Notes
+
+- Verification of the original gap catalogue reclassified three items (now
+  documented in `docs/parity/ha-client-wire-gaps.md`): **G1** is an HS-colour
+  shape mismatch fixable client-side (colour-temp/effect read-back already
+  works), **G3** (sysvar `extended` marker) is already implemented end-to-end,
+  and **G7** (generic `set_on_time`) is reachable through the existing generic
+  value route. No daemon change was required for these.
+
 ## [0.7.1]
 
 ### Added

@@ -337,6 +337,46 @@
       "payload": "InstallModeChangedPayload"
     },
     {
+      "category": "hub",
+      "description": "Server-pushed: the central's alarm-message list changed. Payload carries the current count; clients refresh the full list via GET /alarm-messages.",
+      "kind": "broadcast",
+      "name": "hub.alarm_message",
+      "topic": "hub.{central}.alarm_messages",
+      "payload": "HubCountChangedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: the central's service-message list changed. Payload carries the current count; clients refresh the full list via GET /service-messages.",
+      "kind": "broadcast",
+      "name": "hub.service_message",
+      "topic": "hub.{central}.service_messages",
+      "payload": "HubCountChangedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: the central's inbox (pending pairing candidates) changed. Payload carries the current device count; clients refresh via GET /inbox.",
+      "kind": "broadcast",
+      "name": "hub.inbox_changed",
+      "topic": "hub.{central}.inbox",
+      "payload": "HubCountChangedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: a hub metric (system health, connection latency, last-event age) was re-observed. Payload carries the metric name, value and unit.",
+      "kind": "broadcast",
+      "name": "hub.metrics_changed",
+      "topic": "hub.{central}.metrics",
+      "payload": "HubMetricChangedPayload"
+    },
+    {
+      "category": "hub",
+      "description": "Server-pushed: per-interface reachability flipped. Topic is scoped per central and per interface id.",
+      "kind": "broadcast",
+      "name": "connectivity.changed",
+      "topic": "hub.{central}.connectivity.{interface_id}",
+      "payload": "HubConnectivityChangedPayload"
+    },
+    {
       "category": "incidents",
       "description": "Clear all entries from the incident store. Mirrors Python ws_clear_incidents (V8-N17).",
       "name": "incidents.clear"
