@@ -177,11 +177,18 @@ type SwitchState struct {
 
 // --- TextDisplay -----------------------------------------------------
 
-// TextDisplayState carries the available icon / sound lists when the
-// model exposes them.
+// TextDisplayState carries the available option lists (icons, sounds,
+// background / text colours, alignments, repetitions, intervals) when the
+// model exposes them. Consumers build per-option pickers from these lists;
+// each is omitted when the underlying VALUE_LIST was not captured.
 type TextDisplayState struct {
-	AvailableIcons  []any `json:"available_icons,omitempty"`
-	AvailableSounds []any `json:"available_sounds,omitempty"`
+	AvailableIcons            []any `json:"available_icons,omitempty"`
+	AvailableSounds           []any `json:"available_sounds,omitempty"`
+	AvailableBackgroundColors []any `json:"available_background_colors,omitempty"`
+	AvailableTextColors       []any `json:"available_text_colors,omitempty"`
+	AvailableAlignments       []any `json:"available_alignments,omitempty"`
+	AvailableRepetitions      []any `json:"available_repetitions,omitempty"`
+	AvailableIntervals        []any `json:"available_intervals,omitempty"`
 }
 
 // --- Valve (Irrigation / Modulating) --------------------------------

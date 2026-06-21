@@ -46,33 +46,39 @@ func (t *TextDisplay) Config() payload.ConfigPayload {
 // Per-device availability rides on its own MQTT topic
 // (eventbridge.markAvailability), not on the state JSON.
 //
-// available_icons and available_sounds are static device-capability
-// Lists included so that MQTT consumers (e.g.
-// Home Assistant automations) know which icon / sound values the device
-// accepts without a separate capability query. Mirrors the
-// `_hm_payload_state` property.
+// The available_* lists are static device-capability VALUE_LISTs included
+// so that consumers (Home Assistant automations, the notify entity's
+// per-option pickers) know which values the device accepts without a
+// separate capability query. Mirrors the `_hm_payload_state` property.
 // (platforms/text_display.py: `state["available_icons"]` /
 // `state["available_sounds"]`).
 func (t *TextDisplay) State() payload.StatePayload {
 	if t == nil {
 		return nil
 	}
-	st := &payload.TextDisplayState{}
-	if icons := t.AvailableIcons(); len(icons) > 0 {
-		out := make([]any, len(icons))
-		for i, v := range icons {
-			out[i] = v
-		}
-		st.AvailableIcons = out
+	return &payload.TextDisplayState{
+		AvailableIcons:            stringsToAny(t.AvailableIcons()),
+		AvailableSounds:           stringsToAny(t.AvailableSounds()),
+		AvailableBackgroundColors: stringsToAny(t.AvailableBackgroundColors()),
+		AvailableTextColors:       stringsToAny(t.AvailableTextColors()),
+		AvailableAlignments:       stringsToAny(t.AvailableAlignments()),
+		AvailableRepetitions:      stringsToAny(t.AvailableRepetitions()),
+		AvailableIntervals:        stringsToAny(t.AvailableIntervals()),
 	}
-	if sounds := t.AvailableSounds(); len(sounds) > 0 {
-		out := make([]any, len(sounds))
-		for i, v := range sounds {
-			out[i] = v
-		}
-		st.AvailableSounds = out
+}
+
+// stringsToAny converts a label list into the []any the state payload
+// carries, returning nil for an empty list so the `omitempty` field is
+// dropped from the wire shape.
+func stringsToAny(in []string) []any {
+	if len(in) == 0 {
+		return nil
 	}
-	return st
+	out := make([]any, len(in))
+	for i, v := range in {
+		out[i] = v
+	}
+	return out
 }
 
 // HADiscoveryPayload returns the HA Text-platform-specific payload

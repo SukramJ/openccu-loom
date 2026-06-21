@@ -492,6 +492,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/devices/{addr}", handlers.GetDevice(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/channels", handlers.ListChannels(d.Devices, d.Labels))
 				pr.Get("/devices/{addr}/channels/{no}", handlers.GetChannel(d.Devices, d.Labels))
+				pr.Get("/devices/{addr}/channels/{no}/event-groups", handlers.ListEventGroups(d.Devices))
 				pr.Get("/devices/{addr}/channels/{no}/data-points", handlers.ListDataPoints(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/devices/{addr}/channels/{no}/data-points/{param}", handlers.GetDataPoint(d.Devices, d.Labels))
 				pr.With(op).Put("/devices/{addr}/channels/{no}/data-points/{param}/value",
@@ -710,6 +711,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					pr.With(op).Post("/sysvars/fetch", handlers.FetchSysvars(d.SysvarRefresh))
 				}
 				pr.Get("/inbox", handlers.ListInbox(d.Hub))
+				// Aggregated hub-singleton snapshot so a client hub coordinator
+				// can be built from a single fetch (alarm/service messages,
+				// inbox, update, metrics, connectivity, install-mode).
+				pr.Get("/hub/data-points", handlers.GetHubDataPoints(d.Hub))
 				pr.Get("/alarm-messages", handlers.ListAlarmMessages(d.Hub))
 				pr.With(op).Post("/alarm-messages/{id}/ack", handlers.AckAlarmMessage(d.Hub))
 				pr.Get("/service-messages", handlers.ListServiceMessages(d.Hub))

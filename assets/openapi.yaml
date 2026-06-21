@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.17.0
+  version: 1.18.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -253,6 +253,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ChannelSummary" }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /devices/{addr}/channels/{no}/event-groups:
+    get:
+      tags: [devices]
+      summary: List per-Kind event groups for a channel
+      description: |
+        Returns the channel's keypress / impulse / device-error event
+        groups — the bootstrap shape an `event` platform builds its
+        entities from. Empty array when the channel has no event sources.
+      parameters:
+        - $ref: "#/components/parameters/Address"
+        - $ref: "#/components/parameters/ChannelNo"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EventGroupSummary" }
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1929,6 +1951,25 @@ paths:
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   # ---- Hub: inbox, rooms, sysvar/program lifecycle, ACK ----
+  /hub/data-points:
+    get:
+      operationId: getHubDataPoints
+      summary: Aggregated hub-singleton snapshot (one entry per central)
+      description: |
+        Gathers the hub singletons (alarm / service messages, inbox,
+        firmware update, metrics, per-interface connectivity and
+        install-mode) into the coordinator shape a client builds its
+        singleton entities from — so a hub coordinator can be constructed
+        from a single fetch instead of six requests.
+      tags: [hub]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/HubDataPoints" }
   /inbox:
     get:
       operationId: listInbox
@@ -5299,6 +5340,159 @@ components:
         remaining_s:
           type: integer
           description: Seconds remaining before the pairing window closes; 0 when disabled.
+
+    HubCountChangedPayload:
+      type: object
+      description: |
+        Payload of the `hub.alarm_message`, `hub.service_message` and
+        `hub.inbox_changed` broadcasts. Carries the current entry count so
+        clients drop their poll loop; the full list is fetched on demand via
+        the corresponding REST endpoint.
+      required: [central, count]
+      properties:
+        central: { type: string }
+        count: { type: integer }
+
+    HubMetricChangedPayload:
+      type: object
+      description: |
+        Payload of a `hub.metrics_changed` broadcast. Topic pattern
+        `hub.{central}.metrics`. Fires when a hub metric is re-observed.
+      required: [central, metric, value]
+      properties:
+        central: { type: string }
+        metric:
+          type: string
+          description: "Metric kind (system_health, connection_latency_ms, last_event_age_seconds)."
+        value: { type: number }
+        unit:
+          type: string
+          description: 'Unit string ("%", "ms", "s"); omitted when unitless.'
+
+    HubConnectivityChangedPayload:
+      type: object
+      description: |
+        Payload of a `connectivity.changed` broadcast. Topic pattern
+        `hub.{central}.connectivity.{interface_id}`. Fires when per-interface
+        reachability flips.
+      required: [central, interface_id, reachable]
+      properties:
+        central: { type: string }
+        interface_id: { type: string }
+        reachable: { type: boolean }
+        latency_ms:
+          type: number
+          description: Probe round-trip in milliseconds; omitted when not measured.
+
+    TriggeredEventSummary:
+      type: object
+      description: The most recent event fired within an event group.
+      required: [parameter]
+      properties:
+        parameter:
+          type: string
+          description: Lowercased parameter name of the source that fired.
+        value:
+          description: The value carried by the fire; omitted when none.
+        triggered_at:
+          type: string
+          format: date-time
+          description: RFC3339 timestamp of the fire.
+
+    EventGroupSummary:
+      type: object
+      description: |
+        Per-Kind aggregation of a channel's keypress / impulse /
+        device-error event sources — the bootstrap shape an `event`
+        platform builds its entities from.
+      required: [channel_address, kind, event_types, parameters, available]
+      properties:
+        channel_address: { type: string }
+        kind:
+          type: string
+          description: 'Short device-trigger flavour ("keypress", "impulse", "device_error").'
+        event_types:
+          type: array
+          items: { type: string }
+          description: Lowercased member parameter names (event-type identifiers).
+        parameters:
+          type: array
+          items: { type: string }
+          description: Upper-case CCU parameter names of the member sources.
+        available: { type: boolean }
+        last_triggered_event:
+          $ref: "#/components/schemas/TriggeredEventSummary"
+
+    HubCountDataPoint:
+      type: object
+      description: Count-valued hub singleton (alarm / service messages, inbox).
+      required: [legacy_name, value]
+      properties:
+        legacy_name: { type: string }
+        value: { type: integer }
+
+    HubUpdateDataPoint:
+      type: object
+      description: Firmware-update hub singleton.
+      required: [legacy_name, update_available, in_progress]
+      properties:
+        legacy_name: { type: string }
+        update_available: { type: boolean }
+        in_progress: { type: boolean }
+
+    HubMetricDataPoint:
+      type: object
+      description: One hub metric with its unit.
+      required: [legacy_name, value]
+      properties:
+        legacy_name: { type: string }
+        value: { type: number }
+        unit: { type: string }
+
+    HubConnectivityDataPoint:
+      type: object
+      description: Per-interface reachability hub singleton.
+      required: [interface_id, reachable]
+      properties:
+        interface_id: { type: string }
+        reachable: { type: boolean }
+
+    HubInstallModeDataPoint:
+      type: object
+      description: Per-interface install-mode hub singleton.
+      required: [interface_id, enabled, remaining_s, observed]
+      properties:
+        interface_id: { type: string }
+        enabled: { type: boolean }
+        remaining_s:
+          type: integer
+          description: Seconds left while enabled; 0 when disabled.
+        observed:
+          type: boolean
+          description: False until the first state has been read from the CCU.
+
+    HubDataPoints:
+      type: object
+      description: |
+        Aggregated hub-singleton snapshot for one central (returned by
+        `GET /hub/data-points`). Gathers the hub singletons into the
+        coordinator shape a client builds its singleton entities from.
+      required: [alarm_messages, service_messages, inbox, update]
+      properties:
+        central: { type: string }
+        alarm_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
+        service_messages: { $ref: "#/components/schemas/HubCountDataPoint" }
+        inbox: { $ref: "#/components/schemas/HubCountDataPoint" }
+        update: { $ref: "#/components/schemas/HubUpdateDataPoint" }
+        metrics:
+          type: array
+          items: { $ref: "#/components/schemas/HubMetricDataPoint" }
+        connectivity:
+          type: array
+          items: { $ref: "#/components/schemas/HubConnectivityDataPoint" }
+        install_mode:
+          type: array
+          items: { $ref: "#/components/schemas/HubInstallModeDataPoint" }
 
     DeviceCreatedPayload:
       type: object
