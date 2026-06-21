@@ -213,7 +213,7 @@ jobs:
             echo "::warning::TYPES_REPO_DISPATCH_TOKEN not configured — skipping types-repo dispatch"
             exit 0
           fi
-          gh api repos/SukramJ/openccu-loom-types-py/dispatches \
+          gh api repos/SukramJ/openccu-loom-types/dispatches \
             -f event_type=daemon-release \
             -f "client_payload[tag]=${GITHUB_REF_NAME}" \
             -f "client_payload[api_version]=${API_VERSION}" \
