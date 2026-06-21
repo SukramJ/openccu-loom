@@ -198,10 +198,11 @@ func (s *HubEventsSubscriber) Start() {
 
 // Envelope Type labels for the hub-singleton singletons that have no event-bus
 // counterpart. The alarm / service / connectivity flavours reuse the catalogued
-// [hmevent.EventType] strings; inbox and metrics are model-only.
+// [hmevent.EventType] strings; inbox, metrics, and system-update are model-only.
 const (
-	eventTypeInboxChanged   = "hub.inbox_changed"
-	eventTypeMetricsChanged = "hub.metrics_changed"
+	eventTypeInboxChanged        = "hub.inbox_changed"
+	eventTypeMetricsChanged      = "hub.metrics_changed"
+	eventTypeSystemUpdateChanged = "hub.system_update_changed"
 )
 
 // HubCountChangedPayload is the broadcast payload for the count-valued hub
@@ -228,6 +229,19 @@ type HubConnectivityChangedPayload struct {
 	InterfaceID string  `json:"interface_id"`
 	Reachable   bool    `json:"reachable"`
 	LatencyMs   float64 `json:"latency_ms,omitempty"`
+}
+
+// HubSystemUpdateChangedPayload is the broadcast payload for a CCU
+// firmware-update state change. It mirrors the REST `GET /system/update`
+// entry so a client can drop its update-status poll loop and consume the
+// same fields off the push. CurrentFirmware / AvailableFirmware are omitted
+// while empty so an unobserved tracker stays compact.
+type HubSystemUpdateChangedPayload struct {
+	Central           string `json:"central"`
+	CurrentFirmware   string `json:"current_firmware,omitempty"`
+	AvailableFirmware string `json:"available_firmware,omitempty"`
+	UpdateAvailable   bool   `json:"update_available"`
+	InProgress        bool   `json:"in_progress"`
 }
 
 // AlarmMessagesTopic returns the canonical topic for alarm-message changes:
@@ -264,6 +278,14 @@ func MetricsTopic(centralName string) string {
 //	hub.<central>.connectivity.<interface_id>
 func ConnectivityTopic(centralName, interfaceID string) string {
 	return "hub." + centralName + ".connectivity." + interfaceID
+}
+
+// SystemUpdateTopic returns the canonical topic for a CCU firmware-update
+// state change:
+//
+//	hub.<central>.system_update
+func SystemUpdateTopic(centralName string) string {
+	return "hub." + centralName + ".system_update"
 }
 
 // subscribeHubModel wires the hub model's change hooks to WebSocket broadcasts
@@ -314,6 +336,22 @@ func (s *HubEventsSubscriber) subscribeHubModel(centralName string, hm *hubmodel
 					Metric:  string(sample.Kind),
 					Value:   sample.Value,
 					Unit:    hubmodel.MetricSensorUnit(sample.Kind),
+				},
+			})
+		}))
+	}
+	if hm.Update != nil {
+		s.unsubs = append(s.unsubs, hm.Update.OnUpdate(func(info hubmodel.UpdateInfo) {
+			s.hub.Publish(Event{
+				Topic: SystemUpdateTopic(centralName),
+				Type:  eventTypeSystemUpdateChanged,
+				When:  time.Now().UTC(),
+				Payload: HubSystemUpdateChangedPayload{
+					Central:           centralName,
+					CurrentFirmware:   info.CurrentFirmware,
+					AvailableFirmware: info.AvailableFirmware,
+					UpdateAvailable:   info.UpdateAvailable,
+					InProgress:        hm.Update.InProgress(),
 				},
 			})
 		}))

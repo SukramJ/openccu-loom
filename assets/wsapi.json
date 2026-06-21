@@ -377,6 +377,14 @@
       "payload": "HubConnectivityChangedPayload"
     },
     {
+      "category": "hub",
+      "description": "Server-pushed: the central's CCU firmware-/system-update state changed. Payload carries the current/available firmware, whether an update is available, and whether one is installing; clients can drop their update-status poll loop and refresh via GET /system/update if needed.",
+      "kind": "broadcast",
+      "name": "hub.system_update_changed",
+      "topic": "hub.{central}.system_update",
+      "payload": "HubSystemUpdateChangedPayload"
+    },
+    {
       "category": "incidents",
       "description": "Clear all entries from the incident store. Mirrors Python ws_clear_incidents (V8-N17).",
       "name": "incidents.clear"

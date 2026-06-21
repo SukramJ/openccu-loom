@@ -65,6 +65,19 @@ func (a *ParameterLabelAdapter) ChannelTypeLabel(channelType string) string {
 	return a.translations.ChannelType(a.locale, channelType)
 }
 
+// ChannelTypedValueLabel resolves the localised display string for a single
+// ENUM value via the OCCU `parameter_values_<locale>` table. It mirrors
+// `get_value_translation(parameter, channel_type, value, locale)`: the
+// channel-typed lookup is consulted first, then the bare parameter+value, then
+// the value-only fallback. Returns the raw value verbatim when no translation
+// exists, so callers can detect "untranslated" by comparing against the input.
+func (a *ParameterLabelAdapter) ChannelTypedValueLabel(channelType, parameter, value string) string {
+	if a == nil || a.translations == nil {
+		return value
+	}
+	return a.translations.ParameterValue(a.locale, channelType, parameter, value)
+}
+
 // MqttParameterLabelAdapter wraps a [*ParameterLabelAdapter] in the
 // channel-type-aware shape `mqtt.ParameterLabeler` requires. The
 // concrete type stays here so the mqtt package keeps no dependency

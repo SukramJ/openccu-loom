@@ -173,8 +173,8 @@ func TestColorLightStatePayload_HSEmitted(t *testing.T) {
 	if p.Color.H != 120 {
 		t.Errorf("color.h = %v, want 120", p.Color.H)
 	}
-	if p.Color.S != 0.9 {
-		t.Errorf("color.s = %v, want 0.9", p.Color.S)
+	if p.Color.S != 90 {
+		t.Errorf("color.s = %v, want 90", p.Color.S)
 	}
 }
 

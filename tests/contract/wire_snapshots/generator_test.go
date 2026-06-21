@@ -1071,9 +1071,9 @@ func TestGenerateWireSnapshots(t *testing.T) {
 					hue   int32
 					sat   float64
 				}{
-					{"hue=0,sat=1.0", 0, 1.0},
-					{"hue=120,sat=0.8", 120, 0.8},
-					{"hue=240,sat=0.5", 240, 0.5},
+					{"hue=0,sat=100", 0, 100},
+					{"hue=120,sat=80", 120, 80},
+					{"hue=240,sat=50", 240, 50},
 				}
 				var entries []SnapshotEntry
 				for _, c := range colors {
@@ -1218,8 +1218,8 @@ func TestGenerateWireSnapshots(t *testing.T) {
 					hue   int32
 					sat   float64
 				}{
-					{"hue=0,sat=1.0", 0, 1.0},
-					{"hue=180,sat=0.7", 180, 0.7},
+					{"hue=0,sat=100", 0, 100},
+					{"hue=180,sat=70", 180, 70},
 				}
 				var entries []SnapshotEntry
 				for _, c := range colors {

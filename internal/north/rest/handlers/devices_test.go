@@ -1259,3 +1259,116 @@ func TestListChannels_GroupAndRoomFields(t *testing.T) {
 		t.Errorf("vch room = %q, want group-master fallback Galerie", v.Room)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FEATURE D2 — resolvedValueTranslations
+// ---------------------------------------------------------------------------
+
+// fakeValueLabeler implements both ParameterLabeler and ChannelTypedValueLabeler.
+type fakeValueLabeler struct{}
+
+func (f *fakeValueLabeler) ParameterLabel(_ string) string { return "" }
+func (f *fakeValueLabeler) ChannelTypedValueLabel(_, _, value string) string {
+	switch value {
+	case "A":
+		return "Alpha"
+	case "B":
+		return "B" // identity — excluded
+	default:
+		return "" // empty — excluded
+	}
+}
+
+// fakePlainLabeler implements ParameterLabeler but NOT ChannelTypedValueLabeler.
+type fakePlainLabeler struct{}
+
+func (f *fakePlainLabeler) ParameterLabel(_ string) string { return "" }
+
+// TestResolvedValueTranslations_SomeTranslate verifies that only non-empty,
+// non-identity translations are included in the returned map.
+func TestResolvedValueTranslations_SomeTranslate(t *testing.T) {
+	t.Parallel()
+	got := resolvedValueTranslations(&fakeValueLabeler{}, "SWITCH", "STATE", []string{"A", "B", "C"})
+	if len(got) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %v", len(got), got)
+	}
+	if got["A"] != "Alpha" {
+		t.Fatalf(`got["A"] = %q, want "Alpha"`, got["A"])
+	}
+}
+
+// TestResolvedValueTranslations_NilLabeler verifies that a nil labeler
+// returns nil.
+func TestResolvedValueTranslations_NilLabeler(t *testing.T) {
+	t.Parallel()
+	got := resolvedValueTranslations(nil, "SWITCH", "STATE", []string{"A", "B"})
+	if got != nil {
+		t.Fatalf("expected nil, got %v", got)
+	}
+}
+
+// TestResolvedValueTranslations_EmptyList verifies that an empty value list
+// returns nil even with a valid labeler.
+func TestResolvedValueTranslations_EmptyList(t *testing.T) {
+	t.Parallel()
+	got := resolvedValueTranslations(&fakeValueLabeler{}, "SWITCH", "STATE", nil)
+	if got != nil {
+		t.Fatalf("expected nil for empty valueList, got %v", got)
+	}
+}
+
+// TestResolvedValueTranslations_LabelerNotImplementingInterface verifies that a
+// labeler that does not implement ChannelTypedValueLabeler returns nil.
+func TestResolvedValueTranslations_LabelerNotImplementingInterface(t *testing.T) {
+	t.Parallel()
+	got := resolvedValueTranslations(&fakePlainLabeler{}, "SWITCH", "STATE", []string{"A", "B"})
+	if got != nil {
+		t.Fatalf("expected nil for non-implementing labeler, got %v", got)
+	}
+}
+
+// TestResolvedValueTranslations_NothingTranslates verifies that when every
+// label equals the raw value the result is nil.
+func TestResolvedValueTranslations_NothingTranslates(t *testing.T) {
+	t.Parallel()
+	// fakeValueLabeler returns "B" for "B" (identity) and "" for everything
+	// else; pass only "B" so nothing survives the filter.
+	got := resolvedValueTranslations(&fakeValueLabeler{}, "SWITCH", "STATE", []string{"B"})
+	if got != nil {
+		t.Fatalf("expected nil when nothing translates, got %v", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// FEATURE D3 — toChannelSummary.Functions
+// ---------------------------------------------------------------------------
+
+// TestToChannelSummary_FunctionsPopulated verifies that channel Functions are
+// copied into ChannelSummary.Functions.
+func TestToChannelSummary_FunctionsPopulated(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("0001ABCD", "HmIP-BSM")
+	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	ch.Functions = []string{"Licht", "Heizung"}
+
+	s := toChannelSummary(ch, nil)
+	if len(s.Functions) != 2 {
+		t.Fatalf("Functions len = %d, want 2: %v", len(s.Functions), s.Functions)
+	}
+	if s.Functions[0] != "Licht" || s.Functions[1] != "Heizung" {
+		t.Fatalf("Functions = %v, want [Licht Heizung]", s.Functions)
+	}
+}
+
+// TestToChannelSummary_FunctionsOmittedWhenEmpty verifies that a channel with
+// no Functions yields a nil/empty Functions field on the summary.
+func TestToChannelSummary_FunctionsOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
+	d := newTestDevice("0001ABCD", "HmIP-BSM")
+	ch := d.AddChannel("0001ABCD:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+
+	s := toChannelSummary(ch, nil)
+	if len(s.Functions) != 0 {
+		t.Fatalf("expected empty Functions, got %v", s.Functions)
+	}
+}

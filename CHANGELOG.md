@@ -4,6 +4,49 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0]
+
+### Added
+
+- **Close the post-`asks.md` north-bound wire gaps D1–D4** discovered during
+  the `py-openccu-loom-client` integration. APIVersion → 1.19.0.
+  - **D1 — `hub.<central>.system_update` WebSocket broadcast.** The sixth hub
+    singleton now pushes on firmware-/system-update state changes, like the
+    five existing hub topics (`alarm_messages`, `service_messages`, `inbox`,
+    `metrics`, `connectivity`). Wired off the hub model's `Update.OnUpdate`
+    hook with a `HubSystemUpdateChangedPayload{current_firmware,
+    available_firmware, update_available, in_progress}`, so a client can drop
+    its update-status poll loop.
+  - **D2 — `value_translations` on data-point summaries.** ENUM data points in
+    `GET .../data-points` now carry an optional `value_translations` map (raw
+    `VALUE_LIST` entry → localised label, resolved in the request locale via
+    the OCCU `parameter_values_<locale>` table). Only entries that actually
+    translate are included; clients fall back to `value_list` for the rest.
+    Mirrors aiohomematic's per-DP `value_translations`.
+  - **D3 — `functions` on channel summaries.** `ChannelSummary` now serialises
+    `functions[]` (the channel-level twin of `DeviceSummary.functions`), so
+    clients can map "Gewerke" at channel granularity instead of folding up to
+    the device.
+  - **D4 — OpenAPI: document `SchemaField.default`.** The `GET /config/schema`
+    handler already emitted a per-field `default`; the `SchemaField` schema now
+    declares it (optional, `nullable`) so strict validators and generated types
+    accept the real response.
+
+### Changed
+
+- **Light saturation is now HA-canonical 0..100 throughout `custom/light`
+  (D5), matching aiohomematic and the documented `ColorHS` contract.**
+  Previously `ColorLight` (and the `EffectLight` / `RGBW` paths that inherit
+  its state) emitted the raw wire `0..1` SATURATION fraction into the
+  HA-canonical `color.s` field, while `FixedColorLight` and the `combined`
+  HS-colour DP already emitted `0..100` — an internal inconsistency that broke
+  the nested `color:{h,s}` round-trip for external clients. `ColorLight.Color`
+  / `SetColor`, `FixedColorToHS` / `HSToFixedColor`, the Matter
+  saturation↔`CurrentSaturation` conversions and the north-bound `set_color`
+  operation (saturation default now `100`) all speak `0..100`; the wire
+  SATURATION DP is still written as the `0..1` fraction. **External clients
+  that sent `set_color` saturation as `0..1` must switch to `0..100`.**
+
 ## [0.8.0]
 
 ### Added

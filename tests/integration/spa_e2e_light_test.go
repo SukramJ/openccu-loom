@@ -20,7 +20,7 @@ package integration
 //   - HmIP-RGBW on channel 1 → light_rgbw
 //     · turn_on → LEVEL=1.0
 //     · set_brightness {brightness: 0.4} → LEVEL=0.4
-//     · set_color {hue: 120, saturation: 1.0} → HUE=120, SATURATION=1.0
+//     · set_color {hue: 120, saturation: 100} → HUE=120, SATURATION=1.0 (wire)
 //     · set_kelvin {kelvin: 4000} → COLOR_TEMPERATURE=4000
 //     · turn_off → LEVEL=0.0
 //
@@ -135,7 +135,7 @@ func TestSPAE2E_Light_RGBW_HmIPRGBW(t *testing.T) {
 			// A real device would be switched into RGB/RGBW mode first.
 			{
 				op:     "set_color",
-				params: map[string]any{"hue": int32(120), "saturation": 1.0},
+				params: map[string]any{"hue": int32(120), "saturation": 100.0},
 				// Mode 0 = PWM: SetColor returns "current mode does not
 				// support HSV colour". Accept as a known godevccu-only
 				// limitation without failing the test.
