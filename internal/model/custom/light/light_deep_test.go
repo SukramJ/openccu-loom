@@ -717,8 +717,8 @@ func TestRGBWLightCurrentHsColorReturnsValuesInRGBMode(t *testing.T) {
 	if hue != 120 {
 		t.Errorf("hue = %d, want 120", hue)
 	}
-	if sat != 0.75 {
-		t.Errorf("saturation = %.2f, want 0.75", sat)
+	if sat != 75 {
+		t.Errorf("saturation = %.2f, want 75", sat)
 	}
 }
 

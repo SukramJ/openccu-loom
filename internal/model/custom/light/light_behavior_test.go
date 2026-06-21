@@ -325,8 +325,8 @@ func TestColorLightColorObserved(t *testing.T) {
 	if !obs {
 		t.Error("Color() after events must be observed")
 	}
-	if h != 120 || s != 0.8 {
-		t.Errorf("Color() = (%d, %.2f), want (120, 0.80)", h, s)
+	if h != 120 || s != 80 {
+		t.Errorf("Color() = (%d, %.2f), want (120, 80.00)", h, s)
 	}
 }
 
@@ -475,14 +475,14 @@ func TestFixedColorLightChannelHsColor(t *testing.T) {
 		t.Error("ChannelHsColor() before any event must return ok=false")
 	}
 
-	// Known colour: RED maps to hue=0, sat=1.
+	// Known colour: RED maps to hue=0, sat=100.
 	channelColorDP.OnEvent("RED")
 	h, s, ok := l.ChannelHsColor()
 	if !ok {
 		t.Error("ChannelHsColor() after RED event must return ok=true")
 	}
-	if h != 0 || s != 1 {
-		t.Errorf("ChannelHsColor(RED) = (%d, %.2f), want (0, 1.00)", h, s)
+	if h != 0 || s != 100 {
+		t.Errorf("ChannelHsColor(RED) = (%d, %.2f), want (0, 100.00)", h, s)
 	}
 
 	// Unknown name: returns (0, 0, true) — unknown fallback per code.
@@ -503,14 +503,14 @@ func TestHSToFixedColorMapping(t *testing.T) {
 		sat  float64
 		want FixedColor
 	}{
-		{0, 0.01, FixedColorWhite},    // sat < 0.05 → white
-		{0, 1.0, FixedColorRed},       // 0° → red
-		{359, 1.0, FixedColorRed},     // 359° wraps to red band
-		{60, 1.0, FixedColorYellow},   // 60° → yellow
-		{120, 1.0, FixedColorGreen},   // 120° → green
-		{180, 1.0, FixedColorCyan},    // 180° → cyan
-		{240, 1.0, FixedColorBlue},    // 240° → blue
-		{300, 1.0, FixedColorMagenta}, // 300° → magenta
+		{0, 1, FixedColorWhite},       // sat < 5 → white
+		{0, 100, FixedColorRed},       // 0° → red
+		{359, 100, FixedColorRed},     // 359° wraps to red band
+		{60, 100, FixedColorYellow},   // 60° → yellow
+		{120, 100, FixedColorGreen},   // 120° → green
+		{180, 100, FixedColorCyan},    // 180° → cyan
+		{240, 100, FixedColorBlue},    // 240° → blue
+		{300, 100, FixedColorMagenta}, // 300° → magenta
 	}
 	for _, tc := range cases {
 		got := HSToFixedColor(tc.hue, tc.sat)
@@ -528,12 +528,12 @@ func TestFixedColorToHSRoundTrip(t *testing.T) {
 		wantSat float64
 	}{
 		{FixedColorWhite, 0, 0},
-		{FixedColorRed, 0, 1},
-		{FixedColorYellow, 60, 1},
-		{FixedColorGreen, 120, 1},
-		{FixedColorCyan, 180, 1},
-		{FixedColorBlue, 240, 1},
-		{FixedColorMagenta, 300, 1},
+		{FixedColorRed, 0, 100},
+		{FixedColorYellow, 60, 100},
+		{FixedColorGreen, 120, 100},
+		{FixedColorCyan, 180, 100},
+		{FixedColorBlue, 240, 100},
+		{FixedColorMagenta, 300, 100},
 		{FixedColorBlack, 0, 0}, // default case
 	}
 	for _, tc := range cases {
@@ -1100,7 +1100,7 @@ func TestSoundPlayerLEDTurnOnWithHSColor(t *testing.T) {
 	fc := NewFixedColorLight(Config{Channel: ch, Writer: w})
 	led := &SoundPlayerLED{FixedColorLight: fc}
 
-	hs := [2]float64{0, 1.0} // RED
+	hs := [2]float64{0, 100} // RED: hue=0, saturation=100
 	if err := led.TurnOn(context.Background(), LedOnConfig{
 		Brightness:  200,
 		HSColor:     &hs,

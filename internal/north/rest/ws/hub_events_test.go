@@ -431,3 +431,83 @@ func TestHubEventsSubscriberProgramUniqueIDUnresolvable(t *testing.T) {
 		t.Fatalf("unique_id = %q, want empty for unresolvable program", p.UniqueID)
 	}
 }
+
+// --- SystemUpdate tests ---
+
+// TestSystemUpdateTopicFormat verifies the canonical SystemUpdateTopic format.
+func TestSystemUpdateTopicFormat(t *testing.T) {
+	got := SystemUpdateTopic("home")
+	if want := "hub.home.system_update"; got != want {
+		t.Fatalf("SystemUpdateTopic = %q, want %q", got, want)
+	}
+}
+
+// TestHubSystemUpdateChangedPayloadShape verifies that
+// HubSystemUpdateChangedPayload fields round-trip correctly.
+func TestHubSystemUpdateChangedPayloadShape(t *testing.T) {
+	p := HubSystemUpdateChangedPayload{
+		Central:           "home",
+		CurrentFirmware:   "1.2",
+		AvailableFirmware: "1.3",
+		UpdateAvailable:   true,
+		InProgress:        false,
+	}
+	if p.Central != "home" {
+		t.Fatalf("Central = %q, want %q", p.Central, "home")
+	}
+	if p.CurrentFirmware != "1.2" {
+		t.Fatalf("CurrentFirmware = %q, want %q", p.CurrentFirmware, "1.2")
+	}
+	if p.AvailableFirmware != "1.3" {
+		t.Fatalf("AvailableFirmware = %q, want %q", p.AvailableFirmware, "1.3")
+	}
+	if !p.UpdateAvailable {
+		t.Fatalf("UpdateAvailable = false, want true")
+	}
+	if p.InProgress {
+		t.Fatalf("InProgress = true, want false")
+	}
+}
+
+// TestHubEventsSubscriberSystemUpdate verifies that firing UpdateInfo on the
+// hub model's Update tracker publishes a WS event on SystemUpdateTopic with
+// the correct payload fields.
+func TestHubEventsSubscriberSystemUpdate(t *testing.T) {
+	t.Parallel()
+
+	h := NewHub()
+	reg, cu := hubEventsRegistry(t)
+
+	sub := NewHubEventsSubscriber(reg, h)
+	sub.Start()
+	t.Cleanup(sub.Stop)
+
+	cu.HubModel.Update.OnInfo(hub.UpdateInfo{
+		CurrentFirmware:   "1.2",
+		AvailableFirmware: "1.3",
+		UpdateAvailable:   true,
+	})
+
+	ev := pollHub(t, h, func(topic string) bool {
+		return topic == SystemUpdateTopic("home")
+	})
+	if ev.Type != eventTypeSystemUpdateChanged {
+		t.Fatalf("type = %q, want %q", ev.Type, eventTypeSystemUpdateChanged)
+	}
+	p, ok := ev.Payload.(HubSystemUpdateChangedPayload)
+	if !ok {
+		t.Fatalf("payload type %T, want HubSystemUpdateChangedPayload", ev.Payload)
+	}
+	if p.Central != "home" {
+		t.Fatalf("Central = %q, want %q", p.Central, "home")
+	}
+	if p.CurrentFirmware != "1.2" {
+		t.Fatalf("CurrentFirmware = %q, want %q", p.CurrentFirmware, "1.2")
+	}
+	if p.AvailableFirmware != "1.3" {
+		t.Fatalf("AvailableFirmware = %q, want %q", p.AvailableFirmware, "1.3")
+	}
+	if !p.UpdateAvailable {
+		t.Fatalf("UpdateAvailable = false, want true")
+	}
+}

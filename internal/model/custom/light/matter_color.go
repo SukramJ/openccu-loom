@@ -109,24 +109,26 @@ func matterHueToHM(m uint8) int32 {
 	return int32(v + 0.5)
 }
 
-// saturationToMatter encodes an HM saturation (0.0..1.0) into Matter
-// CurrentSaturation (0..254).
+// saturationToMatter encodes an HA-canonical saturation (0..100, as reported
+// by [ColorLight.Color]) into Matter CurrentSaturation (0..254).
 func saturationToMatter(s float64) uint8 {
 	if s < 0 {
 		return 0
 	}
-	if s > 1 {
+	if s > 100 {
 		return uint8(matterHueScale)
 	}
-	return uint8(s*matterHueScale + 0.5)
+	return uint8(s/100*matterHueScale + 0.5)
 }
 
-// matterSaturationToHM is the inverse of [saturationToMatter].
+// matterSaturationToHM is the inverse of [saturationToMatter]: it decodes
+// Matter CurrentSaturation (0..254) into the HA-canonical 0..100 value
+// [ColorLight.SetColor] expects.
 func matterSaturationToHM(m uint8) float64 {
 	if float64(m) >= matterHueScale {
-		return 1.0
+		return 100
 	}
-	return float64(m) / matterHueScale
+	return float64(m) / matterHueScale * 100
 }
 
 // kelvinToMireds converts Kelvin into Matter's reciprocal mireds.

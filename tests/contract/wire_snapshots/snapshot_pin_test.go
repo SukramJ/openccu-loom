@@ -981,7 +981,7 @@ func TestWireSnapshots(t *testing.T) {
 				colors := []struct {
 					hue int32
 					sat float64
-				}{{0, 1.0}, {120, 0.8}, {240, 0.5}}
+				}{{0, 100}, {120, 80}, {240, 50}}
 				out := make([]WireCapture, 0, len(colors))
 				for _, c := range colors {
 					cl := newColorLightFixture(t, w)
@@ -1091,7 +1091,7 @@ func TestWireSnapshots(t *testing.T) {
 				colors := []struct {
 					hue int32
 					sat float64
-				}{{0, 1.0}, {180, 0.7}}
+				}{{0, 100}, {180, 70}}
 				out := make([]WireCapture, 0, len(colors))
 				for _, c := range colors {
 					r := newRGBWLightFixture(t, w)

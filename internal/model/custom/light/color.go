@@ -74,17 +74,28 @@ func (l *ColorLight) Subscribe(ch *device.Channel) func() {
 
 // Color returns the last observed (hue, saturation, observed) triple.
 // observed is true when both underlying data points have been observed.
+//
+// Saturation is reported HA-canonical 0..100, mirroring
+// CeColorDimmer.hs_color reading through _SATURATION_MULTIPLIER=100
+// (model/custom/light.py): the wire SATURATION DP carries a 0..1 fraction,
+// scaled by 100 here so every north-bound consumer (MQTT/REST/WS ColorHS)
+// and the Matter projection share one unit.
 func (l *ColorLight) Color() (hue int32, saturation float64, observed bool) {
 	if l.hue == nil || l.saturation == nil {
 		return 0, 0, false
 	}
 	h, hOK := l.hue.Value()
 	s, sOK := l.saturation.Value()
-	return h, s, hOK && sOK
+	return h, s * 100, hOK && sOK
 }
 
 // SetColor commands a new (hue, saturation) pair. Hue wraps around 360°;
-// saturation is clamped into [0, 1].
+// saturation is HA-canonical 0..100 and is clamped into that range.
+//
+// The incoming saturation is scaled to the wire's 0..1 SATURATION DP before
+// the write, mirroring set_hs_color dividing by
+// _SATURATION_MULTIPLIER=100 (model/custom/light.py). [Color] performs the
+// inverse on read, so a north-bound round-trip is unit-consistent.
 //
 // Returns nil without writing when IsStateChangeFull reports no change for the
 // given HS color — matches the turn_on guard pattern.
@@ -99,10 +110,13 @@ func (l *ColorLight) SetColor(ctx context.Context, hue int32, saturation float64
 	if saturation < 0 {
 		saturation = 0
 	}
-	if saturation > 1 {
-		saturation = 1
+	if saturation > 100 {
+		saturation = 100
 	}
-	hs := HSColor{Hue: float64(hue), Saturation: saturation}
+	// HSColor and the wire SATURATION DP carry the 0..1 fraction; convert the
+	// HA-canonical 0..100 input once here.
+	wireSat := saturation / 100
+	hs := HSColor{Hue: float64(hue), Saturation: wireSat}
 	if !l.IsStateChangeFull(StateChangeArgsFull{HSColor: &hs}) {
 		return nil
 	}
@@ -119,7 +133,7 @@ func (l *ColorLight) SetColor(ctx context.Context, hue int32, saturation float64
 	if err := l.hue.Set(ctx, hue, priority); err != nil {
 		return fmt.Errorf("colorlight: HUE: %w", err)
 	}
-	if err := l.saturation.Set(ctx, saturation, priority); err != nil {
+	if err := l.saturation.Set(ctx, wireSat, priority); err != nil {
 		return fmt.Errorf("colorlight: SATURATION: %w", err)
 	}
 	return nil
@@ -438,15 +452,17 @@ func (l *FixedColorLight) ChannelHsColor() (hue int32, saturation float64, ok bo
 }
 
 // HSToFixedColor maps an (hue, saturation) pair onto the closest FixedColor
-// slot. Saturation < 0.05 collapses to WHITE; otherwise the hue is banded
-// into 6 60° segments around the colour wheel:
+// slot. Saturation is HA-canonical 0..100; values < 5 collapse to WHITE
+// (mirrors hs_color_to_fixed_converter `int(color[1]) < 5`,
+// model/custom/light.py). Otherwise the hue is banded into 6 60° segments
+// around the colour wheel:
 //
 // 0..30°       → RED 30..90°       → YELLOW 90..150°      → GREEN 150..210°
 // → CYAN 210..270°      → BLUE 270..330°      → MAGENTA 330..360°      → RED
 //
 // Hue values are normalised into [0, 360) before banding.
 func HSToFixedColor(hue int32, saturation float64) FixedColor {
-	if saturation < 0.05 {
+	if saturation < 5 {
 		return FixedColorWhite
 	}
 	h := ((int(hue) % 360) + 360) % 360
@@ -467,23 +483,26 @@ func HSToFixedColor(hue int32, saturation float64) FixedColor {
 }
 
 // FixedColorToHS maps a FixedColor onto the canonical (hue, saturation)
-// representation used by HA-style consumers.
+// representation used by HA-style consumers. Saturation is HA-canonical
+// 0..100: every chromatic slot is full saturation (100) and WHITE/BLACK are
+// 0, mirroring FIXED_COLOR_TO_HS_CONVERTER with
+// _MAX_SATURATION=100.0 / _MIN_SATURATION=0 (model/custom/light.py).
 func FixedColorToHS(c FixedColor) (hue int32, saturation float64) {
 	switch c { //nolint:exhaustive // FixedColorBlack maps to (0, 0) same as the default return; no dedicated case needed
 	case FixedColorWhite:
 		return 0, 0
 	case FixedColorRed:
-		return 0, 1
+		return 0, 100
 	case FixedColorYellow:
-		return 60, 1
+		return 60, 100
 	case FixedColorGreen:
-		return 120, 1
+		return 120, 100
 	case FixedColorCyan:
-		return 180, 1
+		return 180, 100
 	case FixedColorBlue:
-		return 240, 1
+		return 240, 100
 	case FixedColorMagenta:
-		return 300, 1
+		return 300, 100
 	}
 	return 0, 0
 }

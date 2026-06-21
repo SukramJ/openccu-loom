@@ -137,6 +137,12 @@ type ChannelSummary struct {
 	// room can be resolved. External clients use it as the
 	// suggested-area of the channel group's sub-device.
 	Room string `json:"room,omitempty"`
+	// Functions are the channel's resolved "Gewerke" (function) labels
+	// ([device.Channel.Functions]) — the channel-level twin of
+	// [DeviceSummary.Functions]. Surfaced so clients can map functions at
+	// channel granularity instead of folding them up to the device. Empty
+	// when the channel carries no function assignment.
+	Functions []string `json:"functions,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
@@ -208,6 +214,14 @@ type DataPointSummary struct {
 	// ordered enum labels (e.g. ["BLACK","BLUE","GREEN",...]). Empty
 	// for non-ENUM parameters.
 	ValueList []string `json:"value_list,omitempty"`
+	// ValueTranslations maps each raw VALUE_LIST entry to its localised
+	// display string, resolved through the OCCU `parameter_values_<locale>`
+	// table in the request locale. Only entries that have an actual
+	// translation are included (an untranslated value is omitted so the
+	// client falls back to the raw `value_list` token), and the map is
+	// absent entirely for non-ENUM parameters or when no value translates.
+	// Mirrors the reference stack's per-DP `value_translations` property.
+	ValueTranslations map[string]string `json:"value_translations,omitempty"`
 	// Unit is the parameter descriptor's UNIT string ("°C", "%",
 	// "mA", "Hz", "Wh", ...) as the CCU declares it. Empty when the
 	// descriptor carries no unit.
@@ -334,6 +348,44 @@ type ParameterLabeler = interfaces.ParameterLabeler
 type ChannelTypedLabeler interface {
 	ChannelTypedParameterLabel(channelType, parameter string) string
 	ChannelTypeLabel(channelType string) string
+}
+
+// ChannelTypedValueLabeler resolves the localised display string for a
+// single ENUM value. Implemented by the request-scoped label adapter
+// ([adapter.ParameterLabelAdapter]); handlers probe for it via
+// type-assertion so an adapter without value translations degrades to no
+// `value_translations` rather than failing.
+type ChannelTypedValueLabeler interface {
+	ChannelTypedValueLabel(channelType, parameter, value string) string
+}
+
+// resolvedValueTranslations builds the `value_translations` map for an ENUM
+// data point: each raw VALUE_LIST entry mapped to its localised label. Only
+// entries that actually translate (the resolved label differs from the raw
+// token) are included, so a client falls back to `value_list` for the rest;
+// the result is nil when the labeler carries no value translations or none of
+// the values resolve, keeping the field absent for non-ENUM DPs. Mirrors the
+// reference stack's per-DP `value_translations` property.
+func resolvedValueTranslations(labels ParameterLabeler, channelType, paramName string, valueList []string) map[string]string {
+	if len(valueList) == 0 || labels == nil {
+		return nil
+	}
+	vl, ok := labels.(ChannelTypedValueLabeler)
+	if !ok {
+		return nil
+	}
+	var out map[string]string
+	for _, v := range valueList {
+		label := vl.ChannelTypedValueLabel(channelType, paramName, v)
+		if label == "" || label == v {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]string, len(valueList))
+		}
+		out[v] = label
+	}
+	return out
 }
 
 // channelTypeLabel is the type-asserted helper that returns the
@@ -540,6 +592,9 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 		}
 	}
 	s.Room = ch.Room()
+	if len(ch.Functions) > 0 {
+		s.Functions = ch.Functions
+	}
 	return s
 }
 
@@ -766,6 +821,7 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 	}
 	if len(pd.ValueList) > 0 {
 		s.ValueList = pd.ValueList
+		s.ValueTranslations = resolvedValueTranslations(labels, channelType, s.Parameter, pd.ValueList)
 	}
 	if len(pd.Min) > 0 {
 		s.Min = pd.Min

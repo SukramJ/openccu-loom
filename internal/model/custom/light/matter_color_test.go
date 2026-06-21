@@ -48,17 +48,17 @@ func TestHueWrapAroundNegativeAndOver360(t *testing.T) {
 	}
 }
 
-// TestSaturationClampsToMatterScale: HM 1.0 must encode to 254 (the
-// non-null max), not 255.
+// TestSaturationClampsToMatterScale: HM 100 (HA-canonical) must encode to
+// 254 (the non-null max), not 255.
 func TestSaturationClampsToMatterScale(t *testing.T) {
-	if got := saturationToMatter(1.0); got != 254 {
-		t.Errorf("saturationToMatter(1.0) = %d, want 254 (Matter null=255)", got)
+	if got := saturationToMatter(100); got != 254 {
+		t.Errorf("saturationToMatter(100) = %d, want 254 (Matter null=255)", got)
 	}
-	if got := saturationToMatter(0.0); got != 0 {
-		t.Errorf("saturationToMatter(0.0) = %d, want 0", got)
+	if got := saturationToMatter(0); got != 0 {
+		t.Errorf("saturationToMatter(0) = %d, want 0", got)
 	}
-	if got := saturationToMatter(1.5); got != 254 {
-		t.Errorf("saturationToMatter(1.5) over-range = %d, want clamped to 254", got)
+	if got := saturationToMatter(150); got != 254 {
+		t.Errorf("saturationToMatter(150) over-range = %d, want clamped to 254", got)
 	}
 }
 

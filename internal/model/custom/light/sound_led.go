@@ -89,8 +89,9 @@ type LedOnConfig struct {
 	// Brightness is the 0–255 brightness value. 0 means "use full
 	// brightness" (1.0).
 	Brightness uint8
-	// HSColor is the [hue, saturation] pair for colour selection.
-	// Nil means "keep current / default to WHITE".
+	// HSColor is the [hue, saturation] pair for colour selection, with
+	// saturation HA-canonical 0..100 (fed to [HSToFixedColor]). Nil means
+	// "keep current / default to WHITE".
 	HSColor *[2]float64
 	// OnTime is the on-duration in seconds (DURATION_VALUE/UNIT).
 	// 0 means "use deferred timer or no timer".

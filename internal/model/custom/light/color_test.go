@@ -162,10 +162,12 @@ func TestColorLightSaturationClamp(t *testing.T) {
 	w := &colorStubWriter{}
 	ch := newColorRig(t, "x", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
 	l := NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
-	if err := l.SetColor(context.Background(), 120, 5, hmenum.CommandPriorityHigh); err != nil {
+	// Over-range input (150 > 100) must clamp to 100; the wire value written to
+	// the SATURATION DP is saturation/100 = 1.0.
+	if err := l.SetColor(context.Background(), 120, 150, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatal(err)
 	}
-	// Saturation clamped to 1: the writer's last SATURATION call records the wire value.
+	// Saturation clamped to 1.0 on wire: the writer's last SATURATION call records the wire value.
 	for _, c := range w.calls {
 		if c.param == hmenum.ParameterSaturation && c.value.(float64) != 1 {
 			t.Fatalf("sat=%v", c.value)

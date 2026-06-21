@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.18.0
+  version: 1.19.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5652,6 +5652,12 @@ components:
         restart_required:
           type: boolean
           description: Whether changing this field requires a daemon restart to take effect.
+        default:
+          nullable: true
+          description: |
+            The consumer-facing default value for this field, as emitted by
+            the schema handler. Type follows the field's `go_type` (string,
+            bool, number, …); absent when the field has no documented default.
 
     SchemaResponse:
       type: object

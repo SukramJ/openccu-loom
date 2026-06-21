@@ -944,19 +944,19 @@ func TestSaturationToMatterAndBack(t *testing.T) {
 	if got := saturationToMatter(-1); got != 0 {
 		t.Errorf("saturationToMatter(-1) = %d, want 0", got)
 	}
-	// >1 → max.
-	if got := saturationToMatter(2); got != uint8(matterHueScale) {
-		t.Errorf("saturationToMatter(2) = %d, want %d", got, uint8(matterHueScale))
+	// >100 → max (over-range clamp).
+	if got := saturationToMatter(150); got != uint8(matterHueScale) {
+		t.Errorf("saturationToMatter(150) = %d, want %d", got, uint8(matterHueScale))
 	}
-	// Normal.
-	got := saturationToMatter(0.5)
+	// Normal: 50 (out of 100) produces a non-zero mid-range value.
+	got := saturationToMatter(50)
 	if got == 0 || got > uint8(matterHueScale) {
-		t.Errorf("saturationToMatter(0.5) = %d out of range", got)
+		t.Errorf("saturationToMatter(50) = %d out of range", got)
 	}
 
-	// matterSaturationToHM at ceiling.
-	if v := matterSaturationToHM(uint8(matterHueScale)); v != 1.0 {
-		t.Errorf("matterSaturationToHM(max) = %.4f, want 1.0", v)
+	// matterSaturationToHM at ceiling → 100 (HA-canonical 0..100).
+	if v := matterSaturationToHM(uint8(matterHueScale)); v != 100.0 {
+		t.Errorf("matterSaturationToHM(max) = %.4f, want 100.0", v)
 	}
 	// matterSaturationToHM at 0.
 	if v := matterSaturationToHM(0); v != 0.0 {

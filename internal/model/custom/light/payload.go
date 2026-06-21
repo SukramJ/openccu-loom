@@ -210,6 +210,9 @@ func (l *ColorLight) State() payload.StatePayload {
 	out := &payload.ColorLightState{LightState: *base}
 	if hue, sat, ok := l.Color(); ok {
 		out.ColorMode = "hs"
+		// Color() reports HA-canonical 0..100 saturation (the wire 0..1
+		// fraction scaled by 100), matching the ColorHS contract and the
+		// reference stack's hs_color — emit verbatim.
 		out.Color = &payload.ColorHS{H: float64(hue), S: sat}
 	}
 	return out
@@ -331,7 +334,9 @@ func (l *FixedColorLight) State() payload.StatePayload {
 	}
 	out := &payload.FixedColorLightState{LightState: *base}
 	if hue, sat, ok := l.ChannelHsColor(); ok {
-		out.Color = &payload.ColorHS{H: float64(hue), S: sat * 100}
+		// ChannelHsColor already reports HA-canonical 0..100 (FixedColorToHS),
+		// matching ColorLight.Color() — emit verbatim.
+		out.Color = &payload.ColorHS{H: float64(hue), S: sat}
 		out.ColorMode = "hs"
 	}
 	if name, ok := l.ColorName(); ok {

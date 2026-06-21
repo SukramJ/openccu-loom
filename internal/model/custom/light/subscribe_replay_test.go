@@ -127,8 +127,8 @@ func TestColorLightSubscribeReplaysColor(t *testing.T) {
 	if h != 120 {
 		t.Fatalf("expected hue=120, got %d", h)
 	}
-	if s < 0.74 || s > 0.76 {
-		t.Fatalf("expected saturation≈0.75, got %f", s)
+	if s < 74 || s > 76 {
+		t.Fatalf("expected saturation≈75, got %f", s)
 	}
 }
 

@@ -314,7 +314,9 @@ func (d *CustomDPDispatcher) dispatchColorLight(
 		if err != nil {
 			return err
 		}
-		sat, err := paramFloat(p, "saturation", 1)
+		// saturation is HA-canonical 0..100 (default full); SetColor scales
+		// it to the wire's 0..1 SATURATION DP.
+		sat, err := paramFloat(p, "saturation", 100)
 		if err != nil {
 			return err
 		}
@@ -360,7 +362,7 @@ func (d *CustomDPDispatcher) dispatchFixedColorLight(
 		if err != nil {
 			return err
 		}
-		sat, err := paramFloat(p, "saturation", 1)
+		sat, err := paramFloat(p, "saturation", 100)
 		if err != nil {
 			return err
 		}
@@ -396,7 +398,7 @@ func (d *CustomDPDispatcher) dispatchEffectLight(
 		if err != nil {
 			return err
 		}
-		sat, err := paramFloat(p, "saturation", 1)
+		sat, err := paramFloat(p, "saturation", 100)
 		if err != nil {
 			return err
 		}
@@ -417,7 +419,7 @@ func (d *CustomDPDispatcher) dispatchRGBWLight(
 		if err != nil {
 			return err
 		}
-		sat, err := paramFloat(p, "saturation", 1)
+		sat, err := paramFloat(p, "saturation", 100)
 		if err != nil {
 			return err
 		}
