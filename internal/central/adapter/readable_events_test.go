@@ -22,6 +22,8 @@ import (
 type stubLoader struct {
 	calls atomic.Int32
 	value any
+	// param keys the bulk VALUES response so the requested DP is seeded.
+	param hmenum.Parameter
 }
 
 func (s *stubLoader) GetValue(_ context.Context, _ string, _ hmenum.Parameter) (any, error) {
@@ -29,8 +31,14 @@ func (s *stubLoader) GetValue(_ context.Context, _ string, _ hmenum.Parameter) (
 	return s.value, nil
 }
 
+// GetParamset is the VALUES load path (per-channel bulk fetch); it records the
+// call and returns the configured value keyed under s.param.
 func (s *stubLoader) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
-	return nil, nil
+	s.calls.Add(1)
+	if s.param == "" {
+		return nil, nil
+	}
+	return map[string]any{string(s.param): s.value}, nil
 }
 
 // TestSeedReadableEventsLoadsButtonsWithoutObservedValue pins the core
@@ -68,7 +76,7 @@ func TestSeedReadableEventsLoadsButtonsWithoutObservedValue(t *testing.T) {
 	ch.Put(btn)
 
 	// Wire a stub loader so LoadValue actually runs.
-	loader := &stubLoader{value: false}
+	loader := &stubLoader{value: false, param: hmenum.ParameterPressShort}
 	d.SetValueLoader(loader)
 	unit.ModelRegistry.Put(d)
 

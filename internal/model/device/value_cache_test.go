@@ -104,6 +104,11 @@ func (f *fakeLoader) GetValue(_ context.Context, address string, parameter hmenu
 func (f *fakeLoader) GetParamset(_ context.Context, address string, key hmenum.ParamsetKey) (map[string]any, error) {
 	f.getParamsetCalls.Add(1)
 
+	// Block if requested (for singleflight tests — shared with GetValue).
+	if f.blockCh != nil {
+		<-f.blockCh
+	}
+
 	if f.getParamsetFn != nil {
 		return f.getParamsetFn(address, key)
 	}
@@ -360,7 +365,7 @@ func TestLoadValueCacheMissTriggersLoader(t *testing.T) {
 
 	const channelAddr = "AABBCCDD:1"
 	const param = hmenum.Parameter("LEVEL")
-	fake.setGetValue(channelAddr, param, 0.8, nil)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 0.8}, nil)
 	d.SetValueLoader(fake)
 
 	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
@@ -375,8 +380,8 @@ func TestLoadValueCacheMissTriggersLoader(t *testing.T) {
 	if v != 0.8 {
 		t.Fatalf("expected 0.8, got %v", v)
 	}
-	if fake.getValueCalls.Load() != 1 {
-		t.Fatalf("GetValue must be called exactly once, got %d", fake.getValueCalls.Load())
+	if fake.getParamsetCalls.Load() != 1 {
+		t.Fatalf("GetParamset must be called exactly once, got %d", fake.getParamsetCalls.Load())
 	}
 
 	// Second call must hit cache — loader not called again.
@@ -384,8 +389,8 @@ func TestLoadValueCacheMissTriggersLoader(t *testing.T) {
 	if err2 != nil {
 		t.Fatalf("second call: %v", err2)
 	}
-	if fake.getValueCalls.Load() != 1 {
-		t.Fatalf("second call must use cache; GetValue calls = %d", fake.getValueCalls.Load())
+	if fake.getParamsetCalls.Load() != 1 {
+		t.Fatalf("second call must use cache; GetParamset calls = %d", fake.getParamsetCalls.Load())
 	}
 }
 
@@ -397,7 +402,7 @@ func TestLoadValueDirectBypassesCache(t *testing.T) {
 
 	const channelAddr = "AABBCCDD:1"
 	const param = hmenum.Parameter("STATE")
-	fake.setGetValue(channelAddr, param, "fresh", nil)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): "fresh"}, nil)
 	d.SetValueLoader(fake)
 
 	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
@@ -416,7 +421,7 @@ func TestLoadValueDirectBypassesCache(t *testing.T) {
 	if v != "fresh" {
 		t.Fatalf("expected %q, got %v", "fresh", v)
 	}
-	if fake.getValueCalls.Load() != 1 {
+	if fake.getParamsetCalls.Load() != 1 {
 		t.Fatal("loader must be called for direct=true")
 	}
 }
@@ -502,7 +507,7 @@ func TestLoadValueMasterMissingParameterCachedAsSentinel(t *testing.T) {
 	}
 }
 
-func TestLoadValueGetValueErrorCachesSentinel(t *testing.T) {
+func TestLoadValueValuesParamsetErrorCachesSentinel(t *testing.T) {
 	t.Parallel()
 
 	d := makeTestDevice()
@@ -511,24 +516,24 @@ func TestLoadValueGetValueErrorCachesSentinel(t *testing.T) {
 	const channelAddr = "AABBCCDD:1"
 	const param = hmenum.Parameter("LEVEL")
 	loaderErr := errors.New("transport error")
-	fake.setGetValue(channelAddr, param, nil, loaderErr)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, nil, loaderErr)
 	d.SetValueLoader(fake)
 
 	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
 
-	// First call: loader returns error.
+	// First call: GetParamset returns error → sentinel cached for requested param.
 	_, _, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
 	if err == nil {
 		t.Fatal("expected error from loader")
 	}
 
-	firstCalls := fake.getValueCalls.Load()
+	firstCalls := fake.getParamsetCalls.Load()
 	if firstCalls != 1 {
 		t.Fatalf("expected 1 loader call, got %d", firstCalls)
 	}
 
 	// Sentinel should be in cache — change loader to succeed for the next call.
-	fake.setGetValue(channelAddr, param, 42.0, nil)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 42.0}, nil)
 
 	// Second call within sentinelCacheTTL: must hit sentinel cache, not call loader.
 	v2, obs2, err2 := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
@@ -541,7 +546,7 @@ func TestLoadValueGetValueErrorCachesSentinel(t *testing.T) {
 	if v2 != nil {
 		t.Fatalf("sentinel hit must return nil value, got %v", v2)
 	}
-	if fake.getValueCalls.Load() != firstCalls {
+	if fake.getParamsetCalls.Load() != firstCalls {
 		t.Fatal("second call within sentinel TTL must NOT invoke loader again")
 	}
 }
@@ -555,10 +560,10 @@ func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 	const channelAddr = "AABBCCDD:1"
 	const param = hmenum.Parameter("LEVEL")
 
-	// blockCh blocks GetValue until we release it.
+	// blockCh blocks GetParamset until we release it (VALUES path uses GetParamset).
 	blockCh := make(chan struct{})
 	fake.blockCh = blockCh
-	fake.setGetValue(channelAddr, param, 99.0, nil)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 99.0}, nil)
 	d.SetValueLoader(fake)
 
 	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
@@ -589,9 +594,9 @@ func TestLoadValueSingleflightDeduplicatesConcurrentLoads(t *testing.T) {
 	close(blockCh) // release the single loader call
 	wg.Wait()
 
-	// GetValue must have been called exactly once.
-	if calls := fake.getValueCalls.Load(); calls != 1 {
-		t.Fatalf("GetValue must be called exactly once under singleflight, got %d", calls)
+	// GetParamset must have been called exactly once — singleflight deduplicated all 50 goroutines.
+	if calls := fake.getParamsetCalls.Load(); calls != 1 {
+		t.Fatalf("GetParamset must be called exactly once under singleflight, got %d", calls)
 	}
 
 	// Every goroutine must have gotten 99.0.
@@ -609,8 +614,10 @@ func TestLoadValueSingleflightSeparatesByChannel(t *testing.T) {
 	fake := newFakeLoader()
 
 	const param = hmenum.Parameter("LEVEL")
-	fake.setGetValue("AABBCCDD:1", param, 1.0, nil)
-	fake.setGetValue("AABBCCDD:2", param, 2.0, nil)
+	// VALUES singleflight key is per-parameter (channel+":V:"+param), so each
+	// channel address produces its own key → two independent GetParamset calls.
+	fake.setGetParamset("AABBCCDD:1", hmenum.ParamsetKeyValues, map[string]any{string(param): 1.0}, nil)
+	fake.setGetParamset("AABBCCDD:2", hmenum.ParamsetKeyValues, map[string]any{string(param): 2.0}, nil)
 	d.SetValueLoader(fake)
 
 	dpk1 := makeDPKey("HmIP-RF", "AABBCCDD:1", hmenum.ParamsetKeyValues, string(param))
@@ -630,9 +637,9 @@ func TestLoadValueSingleflightSeparatesByChannel(t *testing.T) {
 
 	wg.Wait()
 
-	// Each channel address is a separate singleflight key → 2 calls.
-	if calls := fake.getValueCalls.Load(); calls != 2 {
-		t.Fatalf("expected 2 GetValue calls (one per channel), got %d", calls)
+	// Each (channel, param) pair has a distinct singleflight key → 2 GetParamset calls.
+	if calls := fake.getParamsetCalls.Load(); calls != 2 {
+		t.Fatalf("expected 2 GetParamset calls (one per channel), got %d", calls)
 	}
 }
 
@@ -709,7 +716,7 @@ func TestLoadValueValuesPushesToDataPoint(t *testing.T) {
 	ch.Put(floatDP)
 
 	fake := newFakeLoader()
-	fake.setGetValue(channelAddr, param, 42.5, nil)
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{string(param): 42.5}, nil)
 	d.SetValueLoader(fake)
 
 	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(param))
@@ -759,5 +766,100 @@ func TestLoadValueMasterPushesToMasterDataPoint(t *testing.T) {
 	}
 	if raw != 2.5 {
 		t.Fatalf("Master Float DP RawValue = %v, want 2.5", raw)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cluster D — VALUES sibling-guard (bulk fill must not clobber observed DPs)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TestLoadValueValuesParamsetSiblingGuard verifies that runLoadValuesParamset
+// respects the not-yet-observed gate when bulk-filling siblings from a single
+// GetParamset(VALUES) call:
+//
+//   - REQUESTED param is always applied (even when previously observed).
+//   - SIBLING_A, which was already observed with a known value, is NOT
+//     overwritten by the bulk response.
+//   - SIBLING_B, which has never been observed, is filled from the bulk
+//     response (gap-fill behaviour).
+//   - The entire operation issues exactly one GetParamset call.
+func TestLoadValueValuesParamsetSiblingGuard(t *testing.T) {
+	t.Parallel()
+
+	d := makeTestDevice()
+
+	const channelAddr = "AABBCCDD:1"
+	ch := d.AddChannel(channelAddr, 1, "", hmenum.ParamsetKeyValues)
+
+	// Register three DPs on the channel so the production code can look them
+	// up via ch.Parameter and apply OnWireValue / read RawValue.
+	const (
+		requested = hmenum.Parameter("LEVEL")
+		siblingA  = hmenum.Parameter("STATE")
+		siblingB  = hmenum.Parameter("LOWBAT")
+	)
+	reqDP := makeFloatDP(channelAddr, requested)
+	sibADP := makeFloatDP(channelAddr, siblingA)
+	sibBDP := makeFloatDP(channelAddr, siblingB)
+	ch.Put(reqDP)
+	ch.Put(sibADP)
+	ch.Put(sibBDP)
+
+	// Mark SIBLING_A as already-observed with value 7.0 by calling OnWireValue
+	// directly on the DP (same path the event-bus uses on a push event).
+	sibADP.OnWireValue(7.0)
+	if _, obs := sibADP.RawValue(); !obs {
+		t.Fatal("test setup: sibADP must be observed before the loader call")
+	}
+
+	fake := newFakeLoader()
+	// GetParamset(VALUES) returns all three params; SIBLING_A carries a
+	// different value (99.0) that must NOT be written into the DP.
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{
+		string(requested): 0.5,
+		string(siblingA):  99.0,
+		string(siblingB):  1.0,
+	}, nil)
+	d.SetValueLoader(fake)
+
+	dpk := makeDPKey("HmIP-RF", channelAddr, hmenum.ParamsetKeyValues, string(requested))
+
+	_, _, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// (a) REQUESTED must be applied and observed.
+	rawReq, obsReq := reqDP.RawValue()
+	if !obsReq {
+		t.Fatal("(a) REQUESTED DP must be observed after LoadValue")
+	}
+	if rawReq != 0.5 {
+		t.Fatalf("(a) REQUESTED DP value = %v, want 0.5", rawReq)
+	}
+
+	// (b) SIBLING_A must retain its pre-existing observed value (7.0), not be
+	// overwritten by the bulk response value (99.0).
+	rawA, obsA := sibADP.RawValue()
+	if !obsA {
+		t.Fatal("(b) SIBLING_A must still be observed after bulk fill")
+	}
+	if rawA != 7.0 {
+		t.Fatalf("(b) SIBLING_A value = %v, want 7.0 (must not be overwritten)", rawA)
+	}
+
+	// (c) SIBLING_B was not observed before the call; the bulk fill must
+	// have applied the value from the paramset response.
+	rawB, obsB := sibBDP.RawValue()
+	if !obsB {
+		t.Fatal("(c) SIBLING_B must be observed after gap-fill")
+	}
+	if rawB != 1.0 {
+		t.Fatalf("(c) SIBLING_B value = %v, want 1.0", rawB)
+	}
+
+	// (d) Exactly one GetParamset call for the whole operation.
+	if calls := fake.getParamsetCalls.Load(); calls != 1 {
+		t.Fatalf("(d) expected exactly 1 GetParamset call, got %d", calls)
 	}
 }

@@ -24,6 +24,10 @@ import (
 type recordingLoader struct {
 	calls atomic.Int32
 	value any
+	// param is the VALUES parameter the bulk GetParamset response is keyed
+	// under, so the requested data point is actually filled. Empty means the
+	// response carries no parameter (the load still counts as a call).
+	param hmenum.Parameter
 	err   error
 }
 
@@ -35,8 +39,17 @@ func (l *recordingLoader) GetValue(_ context.Context, _ string, _ hmenum.Paramet
 	return l.value, nil
 }
 
+// GetParamset is the VALUES load path (per-channel bulk fetch). It records the
+// call and returns the configured value keyed under l.param.
 func (l *recordingLoader) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
-	return nil, nil
+	l.calls.Add(1)
+	if l.err != nil {
+		return nil, l.err
+	}
+	if l.param == "" {
+		return nil, nil
+	}
+	return map[string]any{string(l.param): l.value}, nil
 }
 
 // makeUnreachDP builds a Channel-0 UNREACH DP fixture (the canonical
@@ -77,7 +90,7 @@ func TestUnobservedSweepLoadsRelevantInitParameter(t *testing.T) {
 	ch0 := d.AddChannel("0001ABCD:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	// Unobserved UNREACH — sweep MUST load.
 	ch0.Put(makeUnreachDP("0001ABCD:0", wireID, false))
-	loader := &recordingLoader{value: false}
+	loader := &recordingLoader{value: false, param: hmenum.ParameterUnreach}
 	d.SetValueLoader(loader)
 	unit.ModelRegistry.Put(d)
 
@@ -189,7 +202,7 @@ func TestUnobservedSweepLoadsReadableEvents(t *testing.T) {
 	})
 	ch.Put(btn)
 
-	loader := &recordingLoader{value: false}
+	loader := &recordingLoader{value: false, param: hmenum.ParameterPressShort}
 	d.SetValueLoader(loader)
 	unit.ModelRegistry.Put(d)
 

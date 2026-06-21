@@ -35,7 +35,7 @@ func TestStartUnobservedSweepLoopFiresAtInterval(t *testing.T) {
 	ch0 := d.AddChannel("0001ABCD:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
 	ch0.Put(makeUnreachDP("0001ABCD:0", wireID, false))
 
-	loader := &recordingLoader{value: false}
+	loader := &recordingLoader{value: false, param: hmenum.ParameterUnreach}
 	d.SetValueLoader(loader)
 	unit.ModelRegistry.Put(d)
 
