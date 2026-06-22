@@ -43,6 +43,12 @@ type wsSchemaCommand struct {
 	// router.Register; they are emitted via hub.Publish from the
 	// daemon).
 	Kind string `json:"kind,omitempty"`
+	// Payload names the broadcast's push-payload schema (a key under
+	// `components.schemas` in assets/openapi.yaml). Set only on
+	// `kind: "broadcast"` entries. Generated client type packages
+	// resolve it from the OpenAPI components, so it must have a matching
+	// schema — see TestWSBroadcastPayloadsHaveOpenAPISchema.
+	Payload string `json:"payload,omitempty"`
 	// Args is the optional argument schema documented in
 	// assets/wsapi.json under the `command_schemas` header. Keys are
 	// argument names; values are typed strings like `"string"`,
