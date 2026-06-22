@@ -94,8 +94,10 @@ type ProgramSummary struct {
 	// UniqueID is the canonical loom-namespaced routing key for this program
 	// (the [hub.Program.CanonicalUniqueID] result) — identical to the value on
 	// the WS `hub.program_executed` payload. Lets a client seed its entity
-	// registry from the summary without recomputing the algorithm.
-	UniqueID    string `json:"unique_id,omitempty"`
+	// registry from the summary without recomputing the algorithm. Always
+	// present and non-empty (the central's serial is resolved before any
+	// entity is served — see [DataPointSummary.UniqueID]).
+	UniqueID    string `json:"unique_id"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -120,7 +122,9 @@ type SysvarSummary struct {
 	// variable (the [hub.Sysvar.CanonicalUniqueID] result) — identical to the
 	// value on the WS `hub.sysvar_changed` payload. Lets a client seed its
 	// entity registry from the summary without recomputing the algorithm.
-	UniqueID    string   `json:"unique_id,omitempty"`
+	// Always present and non-empty (the central's serial is resolved before any
+	// entity is served — see [DataPointSummary.UniqueID]).
+	UniqueID    string   `json:"unique_id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Unit        string   `json:"unit,omitempty"`

@@ -40,9 +40,11 @@ type SysvarChangedPayload struct {
 	Name      string              `json:"name"`
 	ValueType hmenum.HubValueType `json:"value_type,omitempty"`
 	// UniqueID is the canonical loom-namespaced routing key for this
-	// sysvar (loom_<serial10>_sysvar_<hub-slug>). Optional; see
+	// sysvar (loom_<serial10>_sysvar_<hub-slug>). Always present and
+	// non-empty — it resolves from the (gated) central serial plus the
+	// sysvar name, both always carried by the change event. See
 	// [DataPointValueChangedPayload.UniqueID].
-	UniqueID string `json:"unique_id,omitempty"`
+	UniqueID string `json:"unique_id"`
 	Value    any    `json:"value"`
 	Previous any    `json:"previous,omitempty"`
 }
@@ -56,9 +58,12 @@ type ProgramExecutedPayload struct {
 	Trigger   hmenum.ProgramTrigger `json:"trigger,omitempty"`
 	Success   bool                  `json:"success"`
 	// UniqueID is the canonical loom-namespaced routing key for this
-	// program (loom_<serial10>_program_<hub-slug(name)>). Optional and
-	// empty when the program name cannot be resolved; see
-	// [DataPointValueChangedPayload.UniqueID].
+	// program (loom_<serial10>_program_<hub-slug(name)>). Deliberately
+	// optional — unlike the sysvar / value-changed payloads it keys on the
+	// program *name*, but the execution event carries only the program id,
+	// so the name is resolved from the hub model (programUniqueID) and the
+	// key is empty for a program not yet loaded. The REST ProgramSummary,
+	// which iterates resolved Program objects, always carries it.
 	UniqueID string `json:"unique_id,omitempty"`
 }
 

@@ -41,7 +41,9 @@ type CustomDPSummary struct {
 	// primary channel address + parameter) — identical to the value on the
 	// WS `custom_data_point.state_changed` payload. Lets a client seed its
 	// entity registry from the summary without recomputing the algorithm.
-	UniqueID            string   `json:"unique_id,omitempty"`
+	// Always present and non-empty (the central's serial is resolved before
+	// any entity is served — see [DataPointSummary.UniqueID]).
+	UniqueID            string   `json:"unique_id"`
 	Category            string   `json:"category"`
 	ChannelNo           int      `json:"channel_no"`
 	SupportedOperations []string `json:"supported_operations"`

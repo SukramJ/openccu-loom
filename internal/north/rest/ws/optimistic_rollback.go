@@ -27,8 +27,10 @@ type OptimisticRollbackPayload struct {
 	// UniqueID is the canonical loom-namespaced routing key for the data
 	// point that rolled back; it matches the value-changed entity's key
 	// (the rollback rides the same DP topic and routes to the same HA
-	// entity). Optional; see [DataPointValueChangedPayload.UniqueID].
-	UniqueID string `json:"unique_id,omitempty"`
+	// entity). Always present and non-empty — it resolves from the (gated)
+	// central serial plus the data-point key, both always carried by a
+	// rollback event. See [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id"`
 	// Sent is the optimistic value that was rolled back; Present is the
 	// value the DP reverted to (the last CCU-confirmed value).
 	Sent    any `json:"sent,omitempty"`

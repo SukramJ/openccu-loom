@@ -14,14 +14,25 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
 
 ### Added
 
-- **J1 — `unique_id` on every REST summary + the snapshot.** The canonical loom
-  routing key (the `routingkey.CanonicalUniqueID` result, identical to the WS
-  payloads) now rides `DataPointSummary`, `CustomDPSummary`, `ProgramSummary`,
-  `SysvarSummary`, `CalculatedDPSummary`, `EventGroupSummary` and the nested
-  snapshot data points. A client builds its entity registry straight from the
-  snapshot/summary instead of recomputing the key. The owning central's serial
-  suffix reaches the handlers through a new `SerialSuffix(central)` method on
-  the `DeviceIndex` / `HubIndex` facades.
+- **J1 — `unique_id` on every REST summary + the snapshot, guaranteed
+  non-empty.** The canonical loom routing key (the `routingkey.CanonicalUniqueID`
+  result, identical to the WS payloads) now rides `DataPointSummary`,
+  `CustomDPSummary`, `ProgramSummary`, `SysvarSummary`, `CalculatedDPSummary`,
+  `EventGroupSummary` and the nested snapshot data points. The owning central's
+  serial suffix reaches the handlers through a new `SerialSuffix(central)` method
+  on the `DeviceIndex` / `HubIndex` facades. The field is now `required` (REST +
+  the two core WS payloads) and **guaranteed non-empty** by a serial-readiness
+  gate: `WireHub`/`resolveCCUSerial` resolves the CCU serial — the central-id
+  slot of every hub/internal/virtual-remote key — with a bounded retry before any
+  device is loaded; if it cannot be resolved the bring-up gate re-waits, so a
+  central never serves entities with an unresolved serial. A client can now drop
+  its own key-recomputation fallback.
+- **J2 — automatic Go↔Python routing-key parity check.** `script/routing_key_parity.py`
+  (`make routing-key-parity`) runs aiohomematic's current `generate_unique_id` /
+  `generate_channel_unique_id` over the shared golden-fixture inputs and fails on
+  any mismatch. Combined with the existing Go golden test (Go == fixtures), this
+  pins Python == fixtures ⇒ automatic cross-repo parity, closing the previous
+  manually-synced-fixtures gap.
 - **J3 — `unique_id` on calculated data points and event groups.** Calculated
   DPs carry the same canonical key as generic DPs; a new
   `event.Group.CanonicalUniqueID` keeps the event-group key convention in Go.

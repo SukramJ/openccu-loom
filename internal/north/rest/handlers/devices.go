@@ -163,11 +163,13 @@ type DataPointSummary struct {
 	Parameter string `json:"parameter"`
 	// UniqueID is the canonical loom-namespaced routing key for this data
 	// point (the [routingkey.CanonicalUniqueID] result) — identical to the
-	// value on the WS `data_point.value_changed` payload. Lets a client
-	// build its entity registry straight from the snapshot/summary instead
-	// of recomputing the key. Empty only when the owning central's serial
-	// suffix is not yet known.
-	UniqueID       string `json:"unique_id,omitempty"`
+	// value on the WS `data_point.value_changed` payload. Lets a client build
+	// its entity registry straight from the snapshot/summary instead of
+	// recomputing the key. Always present and non-empty: a central does not
+	// serve any entity until its CCU serial — the central-id slot of the
+	// canonical key — is resolved (the bring-up readiness gate, see
+	// `internal/central/adapter/hub_wiring.go`).
+	UniqueID       string `json:"unique_id"`
 	ParameterLabel string `json:"parameter_label,omitempty"`
 	Value          any    `json:"value"`
 	Observed       bool   `json:"observed"`

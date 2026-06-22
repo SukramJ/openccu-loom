@@ -64,6 +64,9 @@ jobs:
           # and expose it explicitly for aiohomematic_snapshot.py's re-exec.
           echo "$RUNNER_TEMP/refstack/bin" >> "$GITHUB_PATH"
 
+      - name: "routing-key parity (aiohomematic == Go-pinned golden fixtures)"
+        run: make routing-key-parity
+
       - name: "step 1/4 — datasource diff (pydevccu vs godevccu wire data)"
         run: make datasource-diff
 

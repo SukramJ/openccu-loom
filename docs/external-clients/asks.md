@@ -1,6 +1,6 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Welle **K** (CCU-Domänen-Ableitung, „dümmerer Client") umgesetzt; die Feld-Parameter-Komposition (K1) ist ein bewusstes Non-Goal (`docs/parity/by_design.md`). Welle **J** (`unique_id`-Ownership) **größtenteils umgesetzt, aber noch nicht abgeschlossen** — Nacharbeit Daemon: **J1** liefert `unique_id` nur **konditional** aus (`omitempty` + nur `if serialSuffix != ""`, OpenAPI `Optional`), der Client kann `canonical.py` daher **noch nicht** streichen; **J2** ist ein Go-**Golden**-Test, keine automatische aiohomematic-Parität. Code liegt in `main` unter der In-Tree-Version **0.10.0 (noch nicht getaggt/released)**. Offen: J1-Garantie + J2-Labeling sowie F2 (bewusst).
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") **vollständig umgesetzt** (In-Tree **0.10.0**). Die J1-Nacharbeit ist erledigt: `unique_id` ist jetzt **garantiert nicht-leer** (Serial-Readiness-Gate, `hub_wiring.go` `resolveCCUSerial` — ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist) und im Schema `required` (REST + WS) — der Client kann `canonical.py` streichen. J2 hat jetzt einen echten Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`) zusätzlich zum Go-Golden-Test. Bewusste Non-Goals: K1-Feld-Parameter-Komposition (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
 **Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
@@ -33,8 +33,8 @@ die schnelle Übersicht, was wann landete:
 | H1 — Streaming /snapshot (NDJSON) | Umgesetzt | OpenAPI |
 | H2 — Strukturiertes /diagnostics | Umgesetzt (Doku des bestehenden JSON-Surface, Prometheus-Trennung) | OpenAPI |
 | Sektion I — Rate-Limiting / Timezone / Heartbeat / Token-Rotation / Multi-Central / Idempotency | Umgesetzt (alle dokumentiert/verdrahtet) | siehe Body |
-| J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | ⚠️ **Teilweise (Nacharbeit)** — Feld existiert auf allen Summaries + Snapshot + WS, aber `omitempty` + nur gesetzt `if serialSuffix != ""` (`devices.go:825`) + OpenAPI `Optional` (`openapi.yaml:4569,5265`). **Solange nicht garantiert nicht-leer, behält der Client `canonical.py`.** | Sektion J |
-| J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | ⚠️ **Teilweise** — `routing_key_contract_test.go` ist ein Go-**Golden**-Test gegen byte-fixierte Fixtures (manuell aus aiohomematic nachgezogen), **keine** automatische Cross-Sprach-Parität wie der `enums.json`-Lockstep (C1) | Sektion J |
+| J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | Umgesetzt — Feld auf allen Summaries + Snapshot + WS, `omitempty` entfernt + `required` (REST + WS); **garantiert nicht-leer** über das Serial-Readiness-Gate (`hub_wiring.go` `resolveCCUSerial`: ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist). Client kann `canonical.py` streichen. | Sektion J |
+| J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt — Go-Golden-Test (`routing_key_contract_test.go`) **plus** automatischer Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`), der die Fixtures gegen aiohomematics aktuellen `generate_unique_id`-Output prüft (schließt die manuelle-Sync-Lücke) | Sektion J |
 | J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1) — week_profile-Aggregat siehe Body | Sektion J |
 | J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot | Umgesetzt (war bereits vorhanden: nested Snapshot bettet `ChannelSummary` ein) | Sektion J |
 | K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Umgesetzt (Primärkanal-Marker + `ClimateMode`/`ClimateProfile`-Enum); Feld-Param-Komposition bewusst Non-Goal (`docs/parity/by_design.md`) | Sektion K |
@@ -42,7 +42,7 @@ die schnelle Übersicht, was wann landete:
 | K3 — Firmware-Update-Status als abgeleitetes Feld | Umgesetzt (0.10.0) | Sektion K |
 | K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen | Umgesetzt (0.10.0) | Sektion K |
 
-Was bleibt offen (verifiziert gegen den Code, Stand 0.10.0-in-tree):
+Stand 0.10.0-in-tree (verifiziert gegen den Code):
 
 **Welle K ist umgesetzt** (verifiziert): K1 mit Primärkanal-Marker
 `is_custom_dp_primary` (`ChannelSummary`, `devices.go:158`) + `ClimateMode`/
@@ -58,29 +58,27 @@ Consumer-Stelle braucht sie (Schreib-Fan-out läuft server-seitig über
 **nicht** als benanntes OpenAPI-Schema (reitet dort auf `config.hvac_modes` als
 freie Strings) — Symmetrie-Lücke, kein Blocker.
 
-**Welle J ist größtenteils umgesetzt, aber NICHT abgeschlossen** — hier braucht
-der Daemon Nacharbeit:
+**Welle J ist vollständig umgesetzt** — die zuvor offene Nacharbeit ist erledigt:
 
-- **J1 (Nacharbeit nötig):** Das `unique_id`-Feld liegt zwar auf allen vier
-  Summaries, im nested Snapshot und auf den WS-Payloads — aber **konditional**:
-  `toDataPointSummary` setzt es nur `if serialSuffix != ""` (`devices.go:825`),
-  es ist `omitempty`, und OpenAPI führt es **nicht** als `required`
-  (Beschreibung: „omitted when the central serial is not yet known",
-  `openapi.yaml:4569`; WS-Payload „Optional", `:5265`). **Solange der Key fehlen
-  kann, MUSS der Client `canonical.py` als Fallback behalten — aiohomematic
-  fällt also NOCH NICHT aus dem Client-Kern.** _Ask:_ den Serial vor dem
-  Ausliefern garantiert auflösen (oder dokumentieren, dass er post-bootstrap
-  immer bekannt ist) **und** `unique_id` als `required`/immer-nicht-leer im
-  Schema verankern. Erst dann ist J1 „done" im Sinne der Welle.
-- **J2 (ehrlicher labeln):** `routing_key_contract_test.go` ist ein Go-**Golden**-
-  Test gegen byte-fixierte Fixtures, die **manuell** aus aiohomematics Output
-  nachgezogen werden (Test-Kommentar: „Re-pin by copying the upstream golden
-  files"). Das fängt **keine** automatische Go-vs-Python-Drift — anders als der
-  `enums.json`-Lockstep (C1), der gegen die Go-Konstanten _automatisch_ prüft.
-  Für den Endzustand (Client konsumiert nur noch) genügt der Golden-Test; für
-  die **Übergangsphase** (Client nutzt `canonical.py` _und_ Daemon-Key parallel)
-  deckt er die Parität nicht ab. _Ask:_ entweder als „Golden, manuell synced"
-  labeln **oder** einen echten Cross-Repo-Paritäts-Check ergänzen.
+- **J1 (erledigt):** Das `unique_id`-Feld liegt auf allen Summaries, im nested
+  Snapshot und auf den WS-Payloads, ist **nicht mehr `omitempty`** und im Schema
+  `required` (REST-Summaries + die beiden Kern-WS-Payloads). Die
+  **Nicht-Leer-Garantie** liefert das Serial-Readiness-Gate:
+  `WireHub`/`resolveCCUSerial` (`hub_wiring.go`) löst den CCU-Serial — den
+  Central-ID-Slot jedes Hub/INT/Virtual-Remote-Keys — mit bounded Retry **vor**
+  dem Geräte-Load auf; schlägt das fehl, scheitert die Bring-up und das Gate
+  re-wartet, sodass ein Central **nie** Entities mit unaufgelöstem Serial
+  ausliefert (gleiche Philosophie wie `ccu_readiness.go`: lieber eine Central
+  zurückhalten als identitäts-kaputte Entities publizieren). Damit kann der
+  Client `canonical.py` aus dem Kern streichen.
+- **J2 (erledigt):** Zusätzlich zum Go-Golden-Test gibt es jetzt einen echten
+  Cross-Repo-Parity-Check (`script/routing_key_parity.py`, `make
+  routing-key-parity`): er führt aiohomematics aktuellen `generate_unique_id`/
+  `generate_channel_unique_id` über dieselben Fixture-Inputs aus und vergleicht
+  gegen die `expected`-Werte. Go-Test pinnt Go==Fixtures, der Parity-Check pinnt
+  Python==Fixtures ⇒ automatische Go↔Python-Parität (schließt die zuvor manuelle
+  Sync-Lücke). Der Test-Kommentar verweist jetzt auf den Parity-Check statt auf
+  „copy upstream".
 - **J3 (Rest by-design):** calculated DPs + event_groups tragen `unique_id`,
   sysvar/program via J1. Offen-by-design: `WeekProfileResponse` ist ein
   per-Kanal-Aggregat ohne 1:1-Entity, die `schedule_channel_switch`-Keys bleiben
@@ -88,14 +86,14 @@ der Daemon Nacharbeit:
 - **J4 ist voll umgesetzt** (verifiziert): der nested Snapshot bettet die
   komplette `ChannelSummary` ein (`snapshot.go:53`) — das N+1 ist real weg.
 
-**Netto:** J löst `canonical.py`/`generate_unique_id` **erst nach der
-J1-Garantie**; K4 löst den `aiohomematic.const`-Rest. Die größte verbleibende
+**Netto:** J löst `canonical.py`/`generate_unique_id` (Serial-Garantie steht),
+K4 löst den `aiohomematic.const`-Rest. Die größte verbleibende
 aiohomematic-Laufzeitkopplung (`DeviceProfileRegistry`) ist client-seitig auf
 **eine** kosmetische Stelle reduziert (`naming.py:161`, `ch`/`vch`-Marker) —
 ablösbar über den daemon-seitigen `usage`-Verdikt, **keine** Daemon-Nacharbeit
 nötig. Alle übrigen 22 Asks aus A–I sind entweder als Runtime-Feature gelandet
-oder als Vertrags-Erweiterung verankert; **außer F2 (bewusst) bleibt also nur
-die J1-Garantie + das J2-Labeling als Daemon-Nacharbeit.**
+oder als Vertrags-Erweiterung verankert; **außer F2 (bewusst) bleibt nichts
+mehr als Daemon-Nacharbeit offen.**
 
 ## Zweck
 

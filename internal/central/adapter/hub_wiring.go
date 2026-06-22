@@ -61,6 +61,54 @@ type HubData struct {
 // Failures during program / sysvar / name / room / function load are
 // logged but do not abort wiring — an empty hub view is preferable
 // to a dead daemon when only the hub endpoint misbehaves.
+// serialResolveAttempts bounds how many times [resolveCCUSerial] retries the
+// CCU serial fetch before giving up and letting the bring-up gate re-wait. The
+// CCU has already passed the readiness probe, so a non-empty serial is expected
+// almost immediately; the retries only absorb a transient JSON-RPC blip.
+const serialResolveAttempts = 5
+
+// serialResolveBackoff is the wait between serial-fetch attempts.
+const serialResolveBackoff = time.Second
+
+// resolveCCUSerial fetches the CCU hardware serial with a bounded retry. It
+// returns the resolved serial — the central-id slot of every hub / internal /
+// virtual-remote canonical unique_id — or an error when it stays empty/unknown
+// across every attempt (or ctx is cancelled). An empty serial is a failure on
+// purpose: serving entities with an unresolved serial produces broken
+// `loom__…` keys the client cannot rely on.
+func resolveCCUSerial(ctx context.Context, runner *rega.Runner, logger *slog.Logger) (string, error) {
+	var lastErr error
+	for attempt := 1; attempt <= serialResolveAttempts; attempt++ {
+		serial, err := runner.GetSerial(ctx)
+		switch {
+		case err != nil:
+			lastErr = err
+			logger.Warn("hub.serial.fetch_failed",
+				slog.Int("attempt", attempt), slog.String("err", err.Error()))
+		case serial == "" || serial == "unknown":
+			lastErr = errors.New("CCU returned an empty serial")
+			logger.Warn("hub.serial.empty", slog.Int("attempt", attempt))
+		default:
+			return serial, nil
+		}
+		if attempt < serialResolveAttempts {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(serialResolveBackoff):
+			}
+		}
+	}
+	return "", lastErr
+}
+
+// WireHub establishes the central's JSON-RPC hub session, stamps its
+// SystemInformation (URL, backend info, and the readiness-gated CCU serial via
+// [resolveCCUSerial]), initialises the hub model and its remote operations, and
+// loads the initial sysvar / program / name / room / function data. It returns
+// the live ReGa runner, the loaded hub data, a closer that tears the session
+// down, and an error when any prerequisite (including serial resolution) fails —
+// in which case the bring-up gate re-waits.
 func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	ctx context.Context,
 	cc config.CentralConfig,
@@ -138,12 +186,6 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	// configuration URL (MQTT-Discovery `configuration_url`; without it
 	// HA's "Visit device" link disappears), model / version / hostname
 	// (get_backend_info.fn) and the hardware serial (get_serial.fn).
-	// The serial is the central-id slot of every canonical HA routing
-	// key for hub / internal / virtual-remote data points — clients read
-	// it off `GET /system/ccu` (SystemCCUEntry.Serial); an empty serial
-	// makes them emit broken `loom__…` unique_ids. Failures are logged
-	// but non-fatal: an incomplete identity block is preferable to a
-	// dead daemon.
 	si := unit.SystemInformation()
 	si.URL = ccuBaseURLFor(cc)
 	if info, infoErr := runner.GetBackendInfo(ctx); infoErr != nil {
@@ -154,11 +196,23 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 		si.Hostname = info.Hostname
 		si.IsHaApp = info.IsHAApp
 	}
-	if serial, serialErr := runner.GetSerial(ctx); serialErr != nil {
-		logger.Warn("hub.serial.fetch_failed", slog.String("err", serialErr.Error()))
-	} else if serial != "" && serial != "unknown" {
-		si.Serial = serial
+	// The serial is the central-id slot of every canonical HA routing key for
+	// hub / internal / virtual-remote data points; an empty serial yields broken
+	// `loom__…` unique_ids. It is therefore a hard prerequisite of bring-up: we
+	// resolve it (with a bounded retry for transient JSON-RPC blips — the CCU has
+	// already passed the readiness probe) before any device is loaded into the
+	// registry and served. If it cannot be resolved, WireHub fails and the
+	// bring-up gate re-waits, so a central never serves entities with an
+	// unresolved serial. Mirrors the readiness-gating philosophy
+	// (ccu_readiness.go): availability of one central is held back rather than
+	// publishing identity-broken entities the client cannot key on.
+	serial, serialErr := resolveCCUSerial(ctx, runner, logger)
+	if serialErr != nil {
+		//nolint:contextcheck // error path cleanup: detached logout closes the session regardless of ctx state
+		_ = jc.Logout(context.Background())
+		return nil, HubData{}, nil, fmt.Errorf("hub serial unresolved (central-id slot of every hub/internal/virtual-remote unique_id): %w", serialErr)
 	}
+	si.Serial = serial
 	unit.SetSystemInformation(si)
 
 	// InitHub must run before the first refresh cycle so stale state from a

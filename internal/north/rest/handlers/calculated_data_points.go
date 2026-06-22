@@ -25,8 +25,10 @@ type CalculatedDPSummary struct {
 	// calculated data point (the [routingkey.CanonicalUniqueID] result over
 	// its channel address + parameter) — the same canonical key generic DPs
 	// carry. Lets a client seed its entity registry from the summary without
-	// recomputing the algorithm.
-	UniqueID string `json:"unique_id,omitempty"`
+	// recomputing the algorithm. Always present and non-empty (the central's
+	// serial is resolved before any entity is served — see
+	// [DataPointSummary.UniqueID]).
+	UniqueID string `json:"unique_id"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value"`
 	Observed bool   `json:"observed"`
