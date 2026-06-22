@@ -501,6 +501,36 @@ which the existing sentinel path handles without writing a placeholder. Tests:
 `internal/model/device/value_cache_test.go`
 (`TestLoadValueValuesParamsetSiblingGuard`).
 
+### BD-North-CustomDPCompositionMap — the Custom-DP field→parameter composition map is deliberately not on the wire
+
+External-client ask **K1** (`docs/external-clients/asks.md`) proposed exposing,
+per Custom-DP, the full **field→parameter composition** — which wire parameter
+on which field-channel composes a Cover/Climate/Light CDP — so a client could
+retire `aiohomematic.model.custom.DeviceProfileRegistry`. OpenCCU-Loom exposes
+the **channel-level** composition (`CustomDPSummary.channels`,
+`ChannelSummary.custom_dp_name`, `ChannelSummary.is_custom_dp_primary`) and the
+normalised semantic state (`CustomDPSummary.state`, the typed
+`payload.StatePayload`), but **not** the finer per-parameter wiring map. This is
+a deliberate non-goal.
+
+**Rationale.** Exposing the parameter-level composition would re-surface exactly
+the paramset-level wiring the normalised Custom-DP state
+(see [BD-CCU-StatusUncertainViaTracker](#bd-ccu-statusuncertainviatracker--x_status-drives-the-optimistic-tracker-not-a-status_value-enum)
+and the typed `StatePayload`) is designed to hide — the two pull in opposite
+directions. It would also trade one tight coupling for another: instead of the
+client depending on the reference registry, it would depend on the daemon's
+**internal profile-graph shape** mirrored 1:1 on the wire, so every profile
+change becomes a wire-contract change. The need K1 actually serves —
+entity-grouping ("which channels belong to this CDP, which is primary") — is
+already met by the channel-level fields above, and a client that wants the raw
+parameter inventory of a channel can enumerate it through the existing
+`GET …/channels/{no}/data-points` endpoint. Dropping the reference registry does
+**not** require this map: after the primary-channel marker and the
+`ClimateMode` / `ClimateProfile` enums (`pkg/hmenum/climate.go`, exported into
+`assets/schemas/enums.json`), every *output* the registry provided is covered.
+The per-parameter composition is therefore additional internal detail with no
+client on its critical path, and is intentionally withheld.
+
 ### asyncio idioms → Go concurrency
 
 | ID | Python symbol | File:line | Go idiom | Go path | Rationale | Marked |

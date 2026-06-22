@@ -34,13 +34,36 @@ var virtualRemoteRoots = map[string]struct{}{
 	"HmIP-RCV-1": {},
 }
 
+// Hub-level pseudo-addresses. These occupy the address slot of the routing
+// key for entities that have no real CCU device address — the hub singletons,
+// install-mode, programs and system variables. They are the central-slot
+// fillers external clients otherwise import from the reference stack's
+// constants; exporting them as named constants (surfaced through the generated
+// schemas, see script/export_schemas.go) lets a wire client consume them from
+// the daemon contract instead. The canonical key namespaces them by central.
+const (
+	// HubAddress is the pseudo-address for hub-singleton data points.
+	HubAddress = "hub"
+	// InstallModeAddress is the pseudo-address for the per-interface
+	// install-mode entities.
+	InstallModeAddress = "install_mode"
+	// ProgramAddress is the pseudo-address for CCU program entities.
+	ProgramAddress = "program"
+	// SysvarAddress is the pseudo-address for system-variable entities.
+	SysvarAddress = "sysvar"
+)
+
+// PseudoAddresses lists every hub-level pseudo-address in stable order, for
+// the schema exporter and any client that needs to enumerate them.
+var PseudoAddresses = []string{HubAddress, InstallModeAddress, ProgramAddress, SysvarAddress}
+
 // centralPrefixAddresses are the hub-level pseudo-addresses whose key is
 // namespaced by the central.
 var centralPrefixAddresses = map[string]struct{}{
-	"hub":          {},
-	"install_mode": {},
-	"program":      {},
-	"sysvar":       {},
+	HubAddress:         {},
+	InstallModeAddress: {},
+	ProgramAddress:     {},
+	SysvarAddress:      {},
 }
 
 // foldAddress folds the two address separators (":" and "-") to "_".

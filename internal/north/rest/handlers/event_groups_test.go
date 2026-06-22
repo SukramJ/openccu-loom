@@ -29,7 +29,7 @@ func TestToEventGroupSummary_KeypressGroup(t *testing.T) {
 	g.Add(short)
 	g.Add(long)
 
-	s := toEventGroupSummary(g)
+	s := toEventGroupSummary(g, "")
 
 	if s.Kind != "keypress" {
 		t.Errorf("Kind = %q, want %q", s.Kind, "keypress")
@@ -78,7 +78,7 @@ func TestToEventGroupSummary_LastTriggeredEvent_SetAfterFire(t *testing.T) {
 	src.Fire(true)
 	after := time.Now().UTC().Add(time.Second)
 
-	s := toEventGroupSummary(g)
+	s := toEventGroupSummary(g, "")
 
 	if s.LastTriggeredEvent == nil {
 		t.Fatal("LastTriggeredEvent must not be nil after fire")
@@ -103,7 +103,7 @@ func TestToEventGroupSummary_NoFire_LastTriggeredEventNil(t *testing.T) {
 	src := modevent.NewSource("0001ABCD:1", hmenum.ParameterPressShort)
 	g.Add(src)
 
-	s := toEventGroupSummary(g)
+	s := toEventGroupSummary(g, "")
 	if s.LastTriggeredEvent != nil {
 		t.Errorf("LastTriggeredEvent must be nil before any fire, got %+v", s.LastTriggeredEvent)
 	}
@@ -113,7 +113,7 @@ func TestToEventGroupSummary_EmptyGroup_EventTypesIsEmptySlice(t *testing.T) {
 	t.Parallel()
 
 	g := modevent.NewGroup("0001ABCD:1", modevent.KindKeypress)
-	s := toEventGroupSummary(g)
+	s := toEventGroupSummary(g, "")
 
 	if s.EventTypes == nil {
 		t.Error("EventTypes must not be nil — handler marshals it as []")
@@ -220,4 +220,47 @@ func TestListEventGroups_UnknownDevice_Returns404(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestToEventGroupSummary_UniqueID verifies that toEventGroupSummary stamps a
+// loom_-prefixed unique_id, and that Group.CanonicalUniqueID is non-empty
+// for a non-nil group. The group address is device-bound and unique, so no
+// serial prefix is needed for collision avoidance — any non-nil group returns
+// a loom_ key regardless of serialSuffix.
+func TestToEventGroupSummary_UniqueID(t *testing.T) {
+	t.Parallel()
+	g := modevent.NewGroup("0001ABCD:1", modevent.KindKeypress)
+	src := modevent.NewSource("0001ABCD:1", hmenum.ParameterPressShort)
+	g.Add(src)
+
+	t.Run("with serialSuffix produces loom_ prefix", func(t *testing.T) {
+		t.Parallel()
+		s := toEventGroupSummary(g, "vccu0000000")
+		if s.UniqueID == "" {
+			t.Fatal("UniqueID must not be empty when serialSuffix is set")
+		}
+		if !strings.HasPrefix(s.UniqueID, "loom_") {
+			t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+		}
+	})
+
+	t.Run("CanonicalUniqueID on non-nil group returns non-empty loom_ key", func(t *testing.T) {
+		t.Parallel()
+		got := g.CanonicalUniqueID("vccu0000000")
+		if got == "" {
+			t.Fatal("CanonicalUniqueID must not be empty for a non-nil group")
+		}
+		if !strings.HasPrefix(got, "loom_") {
+			t.Errorf("CanonicalUniqueID = %q, want loom_ prefix", got)
+		}
+	})
+
+	t.Run("CanonicalUniqueID on nil group returns empty string", func(t *testing.T) {
+		t.Parallel()
+		var nilGroup *modevent.Group
+		got := nilGroup.CanonicalUniqueID("vccu0000000")
+		if got != "" {
+			t.Errorf("CanonicalUniqueID on nil group = %q, want empty string", got)
+		}
+	})
 }

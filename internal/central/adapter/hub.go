@@ -62,3 +62,13 @@ func (a *HubAdapter) HubFor(centralName string) *hub.Hub {
 	}
 	return c.HubModel
 }
+
+// SerialSuffix delegates to the registry's central → serial-suffix mapping so
+// the hub endpoints can stamp the canonical `unique_id` onto sysvar / program
+// / singleton summaries. Empty string when the central is unknown.
+func (a *HubAdapter) SerialSuffix(centralName string) string {
+	if a.registry == nil {
+		return ""
+	}
+	return a.registry.SerialSuffix(centralName)
+}

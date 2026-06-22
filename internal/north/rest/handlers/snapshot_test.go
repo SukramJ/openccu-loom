@@ -592,6 +592,13 @@ func (m *multiCentralSnapshotIndex) CentralOf(address string) string {
 	return m.centrals[address]
 }
 
+func (m *multiCentralSnapshotIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 // TestSnapshot_CentralScope verifies that ?central=<name> scopes devices (and
 // device_channels when included) plus the hub entities (programs, sysvars,
 // which carry their owning central) to the named central, while rooms and

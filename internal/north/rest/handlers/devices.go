@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/parameter"
 	"github.com/SukramJ/openccu-loom/internal/restapi"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmui"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -61,9 +62,14 @@ type DeviceSummary struct {
 	// actually pending — the gated latest version differs from the installed
 	// one (image already delivered for HmIP-RF / available for BidCos). The
 	// UI flags "update available" on this, not on Updatable.
-	UpdateAvailable bool     `json:"update_available"`
-	Rooms           []string `json:"rooms,omitempty"`
-	Functions       []string `json:"functions,omitempty"`
+	UpdateAvailable bool `json:"update_available"`
+	// UpdateStatus is the daemon-derived firmware-update verdict
+	// (`up_to_date` | `update_available` | `installing`), collapsing the raw
+	// CCU firmware phase + UpdateAvailable signal so a client renders the
+	// update entity without carrying the phase-classification sets itself.
+	UpdateStatus string   `json:"update_status,omitempty"`
+	Rooms        []string `json:"rooms,omitempty"`
+	Functions    []string `json:"functions,omitempty"`
 	// MasterPushesConfigPending is true when the device's interface
 	// delivers reliable CONFIG_PENDING events on MASTER writes — the
 	// SPA then waits for the true→false transition before refreshing
@@ -143,11 +149,27 @@ type ChannelSummary struct {
 	// channel granularity instead of folding them up to the device. Empty
 	// when the channel carries no function assignment.
 	Functions []string `json:"functions,omitempty"`
+	// IsCustomDpPrimary is true when this channel both owns a Custom-DP and is
+	// the primary (group-master) channel of its group
+	// ([device.Channel.IsCustomDPPrimaryChannel]). It is the daemon-derived
+	// "which channel is the device's primary" marker a client otherwise
+	// reconstructs from the device profile — the entity that should carry the
+	// device-level name. False for secondary / non-CDP channels.
+	IsCustomDpPrimary bool `json:"is_custom_dp_primary,omitempty"`
 }
 
 // DataPointSummary is one entry in `GET .../data-points`.
 type DataPointSummary struct {
-	Parameter      string `json:"parameter"`
+	Parameter string `json:"parameter"`
+	// UniqueID is the canonical loom-namespaced routing key for this data
+	// point (the [routingkey.CanonicalUniqueID] result) — identical to the
+	// value on the WS `data_point.value_changed` payload. Lets a client build
+	// its entity registry straight from the snapshot/summary instead of
+	// recomputing the key. Always present and non-empty: a central does not
+	// serve any entity until its CCU serial — the central-id slot of the
+	// canonical key — is resolved (the bring-up readiness gate, see
+	// `internal/central/adapter/hub_wiring.go`).
+	UniqueID       string `json:"unique_id"`
 	ParameterLabel string `json:"parameter_label,omitempty"`
 	Value          any    `json:"value"`
 	Observed       bool   `json:"observed"`
@@ -595,6 +617,7 @@ func toChannelSummary(ch *device.Channel, labels ParameterLabeler) ChannelSummar
 	if len(ch.Functions) > 0 {
 		s.Functions = ch.Functions
 	}
+	s.IsCustomDpPrimary = ch.IsCustomDPPrimaryChannel()
 	return s
 }
 
@@ -618,6 +641,7 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 		if d := ch.Device(); d != nil {
 			model = d.Model
 		}
+		serial := serialSuffixForChannel(idx, ch)
 		out := make([]DataPointSummary, 0, len(dps))
 		for _, dp := range dps {
 			// ch.Number is available — use VisibleForChannel for precise
@@ -625,7 +649,7 @@ func ListDataPoints(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibil
 			if !includeAll && vis != nil && !vis.VisibleForChannel(model, ch.Type, ch.Number, ch.ParamsetIn, dp.Parameter()) {
 				continue
 			}
-			out = append(out, toDataPointSummary(dp, labels, ch))
+			out = append(out, toDataPointSummary(dp, labels, ch, serial))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -646,7 +670,7 @@ func GetDataPoint(idx DeviceIndex, labels ParameterLabeler) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Parameter not found", string(param)))
 			return
 		}
-		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch))
+		JSON(w, http.StatusOK, toDataPointSummary(dp, labels, ch, serialSuffixForChannel(idx, ch)))
 	}
 }
 
@@ -739,6 +763,21 @@ func lookupChannel(idx DeviceIndex, r *http.Request) (*device.Channel, error) {
 	return ch, nil
 }
 
+// serialSuffixForChannel resolves the routing-key serial suffix of the central
+// owning ch's device, so the data-point converters can stamp the canonical
+// unique_id. Returns "" when idx, the channel, its device or the central are
+// unknown — callers then emit the omitempty field absent.
+func serialSuffixForChannel(idx DeviceIndex, ch *device.Channel) string {
+	if idx == nil || ch == nil {
+		return ""
+	}
+	dev := ch.Device()
+	if dev == nil {
+		return ""
+	}
+	return idx.SerialSuffix(idx.CentralOf(dev.Address))
+}
+
 func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	return DeviceSummary{
 		Address:                   d.Address,
@@ -757,6 +796,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 		ChannelsCount:             len(d.Channels()),
 		Updatable:                 d.Updatable,
 		UpdateAvailable:           d.UpdateAvailable(),
+		UpdateStatus:              string(hmenum.DeriveDeviceUpdateStatus(d.Firmware().Info().UpdateState, d.UpdateAvailable())),
 		Rooms:                     d.Rooms,
 		Functions:                 d.Functions,
 		MasterPushesConfigPending: hmenum.PushesConfigPendingFor(d.Interface, d.ProductGroup),
@@ -764,7 +804,7 @@ func toDeviceSummary(d *device.Device, centralName string) DeviceSummary {
 	}
 }
 
-func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, ch *device.Channel) DataPointSummary {
+func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, ch *device.Channel, serialSuffix string) DataPointSummary {
 	channelType := ""
 	if ch != nil {
 		channelType = ch.Type
@@ -779,6 +819,14 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 			Write: pd.IsWritable(),
 			Event: pd.IsEvent(),
 		},
+	}
+	// Stamp the canonical loom routing key — identical to the WS
+	// value-changed payload — so a client builds its entity registry from the
+	// summary/snapshot without recomputing the algorithm. Empty serialSuffix
+	// (central serial not yet known) leaves the omitempty field absent.
+	if serialSuffix != "" {
+		k := dp.DataPointKey()
+		s.UniqueID = routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, string(dp.Parameter()), "")
 	}
 	// Channel-typed lookup wins when the labeler supports it — so e.g.
 	// `POWER` on `ENERGIE_METER_TRANSMITTER` resolves to "Wirkleistung"

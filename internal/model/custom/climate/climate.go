@@ -46,33 +46,37 @@ const (
 	HeatingValveTypeNormallyOpen HeatingValveType = "NORMALLY_OPEN"
 )
 
-// Mode enumerates the high-level climate modes every backend supports.
-type Mode string
+// Mode enumerates the high-level climate modes every backend supports. It is a
+// type alias of [hmenum.ClimateMode] — the canonical, codegen-exported home of
+// the vocabulary — so the closed mode set lives in one place and the schema
+// exporter (which scans pkg/hmenum) picks it up automatically.
+type Mode = hmenum.ClimateMode
 
-// Mode values.
+// Mode values (re-exported from hmenum for the climate package's call sites).
 const (
-	ModeAuto Mode = "auto"
-	ModeHeat Mode = "heat"
-	ModeCool Mode = "cool"
-	ModeOff  Mode = "off"
+	ModeAuto = hmenum.ClimateModeAuto
+	ModeHeat = hmenum.ClimateModeHeat
+	ModeCool = hmenum.ClimateModeCool
+	ModeOff  = hmenum.ClimateModeOff
 )
 
-// Profile enumerates the thermostat profile slots.
-type Profile string
+// Profile enumerates the thermostat profile slots. Type alias of
+// [hmenum.ClimateProfile]; see [Mode].
+type Profile = hmenum.ClimateProfile
 
-// Profile values.
+// Profile values (re-exported from hmenum for the climate package's call sites).
 const (
-	ProfileNone         Profile = "none"
-	ProfileAway         Profile = "away"
-	ProfileBoost        Profile = "boost"
-	ProfileComfort      Profile = "comfort"
-	ProfileEco          Profile = "eco"
-	ProfileWeekProgram1 Profile = "week_program_1"
-	ProfileWeekProgram2 Profile = "week_program_2"
-	ProfileWeekProgram3 Profile = "week_program_3"
-	ProfileWeekProgram4 Profile = "week_program_4"
-	ProfileWeekProgram5 Profile = "week_program_5"
-	ProfileWeekProgram6 Profile = "week_program_6"
+	ProfileNone         = hmenum.ClimateProfileNone
+	ProfileAway         = hmenum.ClimateProfileAway
+	ProfileBoost        = hmenum.ClimateProfileBoost
+	ProfileComfort      = hmenum.ClimateProfileComfort
+	ProfileEco          = hmenum.ClimateProfileEco
+	ProfileWeekProgram1 = hmenum.ClimateProfileWeekProgram1
+	ProfileWeekProgram2 = hmenum.ClimateProfileWeekProgram2
+	ProfileWeekProgram3 = hmenum.ClimateProfileWeekProgram3
+	ProfileWeekProgram4 = hmenum.ClimateProfileWeekProgram4
+	ProfileWeekProgram5 = hmenum.ClimateProfileWeekProgram5
+	ProfileWeekProgram6 = hmenum.ClimateProfileWeekProgram6
 )
 
 // ProfilePrefix is the string prefix shared by all week-program profile keys

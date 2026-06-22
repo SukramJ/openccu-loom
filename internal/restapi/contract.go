@@ -37,6 +37,11 @@ type HubIndex interface {
 	Hubs() []NamedHub
 	// HubFor returns the named central's hub, or nil when unknown.
 	HubFor(centralName string) *hub.Hub
+	// SerialSuffix returns the routing-key central-id discriminator for the
+	// named central — the input to [routingkey.CanonicalUniqueID] when
+	// stamping hub-singleton, sysvar and program `unique_id`s onto the
+	// REST surfaces. Empty string when the central is unknown.
+	SerialSuffix(central string) string
 }
 
 // DeviceIndex is the narrow facade the device endpoints depend on.
@@ -49,6 +54,11 @@ type DeviceIndex interface {
 	// device. Empty string when the device is unknown — handlers
 	// surface that as an empty `central` field rather than an error.
 	CentralOf(address string) string
+	// SerialSuffix returns the routing-key central-id discriminator for the
+	// named central — the input to [routingkey.CanonicalUniqueID] when
+	// stamping `unique_id`s onto data-point / channel / custom-DP summaries.
+	// Empty string when the central is unknown.
+	SerialSuffix(central string) string
 }
 
 // HealthReader is the narrow facade `GET /api/v1/health` needs.

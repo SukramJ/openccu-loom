@@ -288,6 +288,10 @@ snapshot: snapshot-go snapshot-py snapshot-diff ## full snapshot-verification pi
 datasource-diff: ## verify pydevccu and godevccu carry the identical wire data (399 devices × 12 attrs)
 	@python3 script/datasource_diff.py >/dev/null && echo "datasource layer: 0 drift" || (echo "datasource drift detected" && exit 1)
 
+.PHONY: routing-key-parity
+routing-key-parity: ## verify aiohomematic == the Go-pinned routing-key golden fixtures (closes the manual-copy drift gap)
+	@python3 script/routing_key_parity.py
+
 .PHONY: bench
 bench: ## run benchmarks (requires -tags=bench)
 	@if [ -d tests/bench ]; then \

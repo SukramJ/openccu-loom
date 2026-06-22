@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -335,4 +336,41 @@ func TestCalculatedDPTranslatedName_CombinedDuration(t *testing.T) {
 	if out.TranslatedName != "Duration" {
 		t.Fatalf("TranslatedName = %q, want Duration", out.TranslatedName)
 	}
+}
+
+// TestToCalculatedDPSummary_UniqueID verifies that a non-empty serialSuffix
+// stamps a loom_-prefixed unique_id on the calculated DP summary, and that an
+// empty suffix yields an empty field.
+func TestToCalculatedDPSummary_UniqueID(t *testing.T) {
+	t.Parallel()
+	dp := &stubCalculatedDP{
+		key: hmtypes.DataPointKey{
+			ChannelAddress: "DEV0030:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "DEW_POINT",
+		},
+		category: hmenum.DataPointCategorySensor,
+		rawValue: 12.5,
+		hasValue: true,
+	}
+	ch := &device.Channel{Type: "SENSOR"}
+
+	t.Run("with serialSuffix produces loom_ prefix", func(t *testing.T) {
+		t.Parallel()
+		s := toCalculatedDPSummary(dp, ch, nil, "vccu0000000")
+		if s.UniqueID == "" {
+			t.Fatal("UniqueID must not be empty when serialSuffix is set")
+		}
+		if !strings.HasPrefix(s.UniqueID, "loom_") {
+			t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+		}
+	})
+
+	t.Run("empty serialSuffix yields empty UniqueID", func(t *testing.T) {
+		t.Parallel()
+		s := toCalculatedDPSummary(dp, ch, nil, "")
+		if s.UniqueID != "" {
+			t.Errorf("UniqueID = %q, want empty string when serialSuffix is empty", s.UniqueID)
+		}
+	})
 }

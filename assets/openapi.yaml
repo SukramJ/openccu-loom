@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.19.0
+  version: 1.20.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3892,7 +3892,7 @@ components:
           enum: [critical, high, default, low]
     CustomDPSummary:
       type: object
-      required: [name, category, channel_no, supported_operations]
+      required: [name, unique_id, category, channel_no, supported_operations]
       properties:
         name:
           type: string
@@ -3956,6 +3956,13 @@ components:
             (`is_locked`, `hvac_mode`, `brightness`, …). Lets clients
             seed entity state at bootstrap without one extra
             round-trip per CDP.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this Custom-DP — the same
+            value the WS `custom_data_point.state_changed` payload
+            carries. Lets a client build its entity registry from the
+            summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
     Problem:
       type: object
       description: |
@@ -4195,6 +4202,14 @@ components:
         available: { type: boolean }
         channels_count: { type: integer }
         updatable: { type: boolean }
+        update_status:
+          type: string
+          enum: [up_to_date, update_available, installing]
+          description: |
+            Daemon-derived firmware-update verdict collapsing the raw CCU
+            firmware phase and update_available signal, so a client renders
+            the update entity without carrying the phase-classification sets.
+            Omitted when the device reports no firmware information.
         rooms:
           type: array
           items: { type: string }
@@ -4311,6 +4326,13 @@ components:
             map functions at channel granularity instead of folding them
             up to the device. Omitted when the channel carries no function
             assignment.
+        is_custom_dp_primary:
+          type: boolean
+          description: |
+            True when the channel owns a Custom-DP AND is the primary
+            (group-master) channel of its group — the daemon-derived
+            "device primary channel" marker. Omitted when neither
+            condition holds.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]
@@ -4371,7 +4393,7 @@ components:
 
     DataPointSummary:
       type: object
-      required: [parameter, observed, operations]
+      required: [parameter, unique_id, observed, operations]
       properties:
         parameter: { type: string }
         parameter_label:
@@ -4537,6 +4559,13 @@ components:
                 Named threshold rule the SPA looks up in its rule
                 registry to colour the readout (e.g. "temp_heat",
                 "alarm_active", "signal_weak"). Empty when no rule.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key for this data point —
+            the same value the WS `datapoint.value_changed` payload
+            carries. Lets a client build its entity registry from the
+            summary or snapshot without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
     UIEventRequest:
       type: object
       description: |
@@ -4563,7 +4592,7 @@ components:
           enum: [critical, high, default, low]
     ProgramSummary:
       type: object
-      required: [id, name]
+      required: [id, unique_id, name]
       properties:
         central:
           type: string
@@ -4587,9 +4616,16 @@ components:
             True when the program matched a configured description marker, so
             clients enable its entity by default. Absent/false when no markers
             are configured: the entry is included but disabled by default.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this program — the same value
+            the WS `hub.program_executed` event carries. Lets clients
+            build their entity registry from the summary without
+            recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
     SysvarSummary:
       type: object
-      required: [name, value_type, observed]
+      required: [name, unique_id, value_type, observed]
       properties:
         central:
           type: string
@@ -4634,6 +4670,13 @@ components:
             True when the variable matched a configured description marker, so
             clients enable its entity by default. Absent/false when no markers
             are configured: the entry is included but disabled by default.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this system variable — the
+            same value the WS `hub.sysvar_changed` event carries. Lets
+            clients build their entity registry from the summary without
+            recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
     SysvarSetRequest:
       type: object
       required: [value]
@@ -5207,7 +5250,7 @@ components:
       description: |
         Payload of a `datapoint.value_changed` broadcast. Topic
         pattern `device.{address}.channels.{channel}.data_points.{parameter}`.
-      required: [central, device_address, channel, parameter, paramset_key, value, modified_at]
+      required: [central, device_address, channel, parameter, paramset_key, unique_id, value, modified_at]
       properties:
         central: { type: string }
         interface: { type: string }
@@ -5219,10 +5262,12 @@ components:
           type: string
           description: |
             Canonical loom-namespaced routing key (`loom_<routing-key>`)
-            for this data point. Optional — omitted when the producer
-            cannot resolve it. Clients consume it directly instead of
-            rebuilding from raw fields; see
-            docs/external-clients/ha-unique-id-migration.md.
+            for this data point. Always present: the daemon owns the key and a
+            central emits no events until its CCU serial (the central-id slot of
+            the key) is resolved by the bring-up readiness gate, so the value is
+            non-empty in normal operation (an empty string would signal an
+            unresolved serial). Clients consume it directly instead of rebuilding
+            from raw fields; see docs/external-clients/ha-unique-id-migration.md.
         value:
           description: New value in its native CCU type (bool/int/float/string/list/null).
         previous:
@@ -5241,7 +5286,7 @@ components:
         Payload of a `custom_data_point.state_changed` broadcast. Topic
         pattern `device.{address}.cdps.{name}`. Aggregates a CDP's
         composed state (one event per CDP rather than one per wire-DP).
-      required: [central, device_address, channel, name, state]
+      required: [central, device_address, channel, name, unique_id, state]
       properties:
         central: { type: string }
         device_address: { type: string }
@@ -5254,7 +5299,7 @@ components:
           type: string
           description: |
             Canonical loom-namespaced routing key (`loom_<routing-key>`)
-            for this custom data point. Optional — see
+            for this custom data point. Always present and non-empty — see
             DataPointValueChangedPayload.unique_id.
         state:
           type: object
@@ -5306,7 +5351,7 @@ components:
       description: |
         Payload of a `hub.sysvar_changed` broadcast. Topic pattern
         `hub.{central}.sysvars.{name}`.
-      required: [central, name, value]
+      required: [central, name, unique_id, value]
       properties:
         central: { type: string }
         name: { type: string }
@@ -5317,8 +5362,8 @@ components:
           type: string
           description: |
             Canonical loom-namespaced routing key
-            (`loom_<serial10>_sysvar_<hub-slug>`) for this sysvar.
-            Optional — see DataPointValueChangedPayload.unique_id.
+            (`loom_<serial10>_sysvar_<hub-slug>`) for this sysvar. Always
+            present and non-empty — see DataPointValueChangedPayload.unique_id.
         value:
           description: New sysvar value in its native CCU type.
         previous:
@@ -5443,7 +5488,7 @@ components:
         Per-Kind aggregation of a channel's keypress / impulse /
         device-error event sources — the bootstrap shape an `event`
         platform builds its entities from.
-      required: [channel_address, kind, event_types, parameters, available]
+      required: [channel_address, unique_id, kind, event_types, parameters, available]
       properties:
         channel_address: { type: string }
         kind:
@@ -5460,6 +5505,13 @@ components:
         available: { type: boolean }
         last_triggered_event:
           $ref: "#/components/schemas/TriggeredEventSummary"
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this event group — the same
+            value the WS `hub.program_executed`-family event carries for
+            event groups. Lets clients build their entity registry from
+            the summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
 
     HubCountDataPoint:
       type: object
@@ -5571,7 +5623,7 @@ components:
         topic as `datapoint.value_changed`; subscribers route by the
         envelope `type` field. Fires when an optimistic write is rolled
         back — the CCU never confirmed it within the TTL, or rejected it.
-      required: [central, device_address, channel, parameter, paramset_key, reason]
+      required: [central, device_address, channel, parameter, paramset_key, unique_id, reason]
       properties:
         central: { type: string }
         device_address: { type: string }
@@ -5584,8 +5636,8 @@ components:
           description: |
             Canonical loom-namespaced routing key (`loom_<routing-key>`)
             for the rolled-back data point; matches the
-            `datapoint.value_changed` entity key. Optional — see
-            DataPointValueChangedPayload.unique_id.
+            `datapoint.value_changed` entity key. Always present and
+            non-empty — see DataPointValueChangedPayload.unique_id.
         sent:
           description: The optimistic value that was rolled back. Omitted when not tracked.
         present:
@@ -5600,7 +5652,7 @@ components:
         event (keypress, impulse, device error). The `event_type` /
         `parameter` fields disambiguate which trigger fired; distinct
         from `datapoint.value_changed`.
-      required: [central, interface_id, device_address, channel, event_type, parameter]
+      required: [central, interface_id, device_address, channel, event_type, parameter, unique_id]
       properties:
         central: { type: string }
         interface_id: { type: string }
@@ -5614,8 +5666,8 @@ components:
             Canonical loom-namespaced routing key (`loom_<routing-key>`)
             for the data point this trigger fires on; matches the
             `datapoint.value_changed` entity key (a trigger and a value
-            change on the same DP route to the same entity). Optional —
-            see DataPointValueChangedPayload.unique_id.
+            change on the same DP route to the same entity). Always present
+            and non-empty — see DataPointValueChangedPayload.unique_id.
         value:
           description: Optional value carried by the trigger event in its native CCU type. Omitted when absent.
 
@@ -6149,7 +6201,7 @@ components:
     # ---- Calculated data points ----
     CalculatedDPSummary:
       type: object
-      required: [name, value, observed]
+      required: [name, unique_id, value, observed]
       description: A derived/calculated data point on a channel.
       properties:
         name: { type: string }
@@ -6165,6 +6217,13 @@ components:
             clients spawn calculated/combined entities with the same
             names the reference stack generates.
         modified_at: { type: string, format: date-time }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this calculated data point —
+            the same canonical key generic data points carry. Lets
+            clients build their entity registry from the summary without
+            recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
     CalculatedDPDetail:
       allOf:
         - $ref: "#/components/schemas/CalculatedDPSummary"

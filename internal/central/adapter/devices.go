@@ -111,6 +111,16 @@ func (a *DevicesAdapter) CentralOf(address string) string {
 	return ""
 }
 
+// SerialSuffix delegates to the registry's central → serial-suffix mapping
+// so the device endpoints can stamp the canonical `unique_id` onto their
+// summaries. Empty string when the central is unknown.
+func (a *DevicesAdapter) SerialSuffix(centralName string) string {
+	if a.registry == nil {
+		return ""
+	}
+	return a.registry.SerialSuffix(centralName)
+}
+
 // DataPointWriterAdapter routes SetValue calls to the right
 // central's InterfaceClient via [ValueWriter] per central.
 type DataPointWriterAdapter struct {

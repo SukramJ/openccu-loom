@@ -16,8 +16,18 @@ import (
 // shared cross-backend routing-key golden fixtures. Every consumer of
 // the contract replays the same cases so the key format cannot silently
 // drift between backends; see
-// docs/external-clients/ha-drop-in-identity-and-scoping.md. Re-pin by
-// copying the upstream *_golden.json files when the contract bumps.
+// docs/external-clients/ha-drop-in-identity-and-scoping.md.
+//
+// The fixtures' `expected` values are no longer trusted blindly: they are
+// verified automatically against the Python reference implementation by
+// script/routing_key_parity.py (run via `make routing-key-parity`), which
+// replays every case through the reference generate_unique_id /
+// generate_channel_unique_id and python-slugify's slugify(). The tests
+// below pin Go == fixtures; the parity script pins Python == fixtures;
+// together they form the cross-repo guard Go == Python. When the contract
+// bumps, re-pin the *_golden.json files and re-run the parity script so
+// the new `expected` values stay reference-verified — do not hand-edit
+// them away from the upstream output.
 
 func loadRoutingKeyFixture(t *testing.T, name string, into any) {
 	t.Helper()

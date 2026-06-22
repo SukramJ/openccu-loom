@@ -56,6 +56,8 @@ func (b *benchDeviceIndex) Device(address string) (*device.Device, bool) {
 
 func (b *benchDeviceIndex) CentralOf(string) string { return "ccu" }
 
+func (b *benchDeviceIndex) SerialSuffix(string) string { return "vccu000bench" }
+
 // benchFleet builds a fleet of `devices` devices, each with `channels`
 // channels carrying `dps` BinarySensor data points. Kind is set so each
 // DP reports a real Category(), exercising the classification lookup the

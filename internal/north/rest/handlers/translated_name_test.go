@@ -51,7 +51,7 @@ func TestToDataPointSummary_TranslatedName(t *testing.T) {
 		t.Parallel()
 		dp := newCategorisedDP(t, "000ABC:1", hmenum.ParameterState, generic.KindBinarySensor)
 		lab := translatorLabeler{entries: map[string]string{"SWITCH|STATE": "Status"}}
-		s := toDataPointSummary(dp, lab, chanWithDevice(t))
+		s := toDataPointSummary(dp, lab, chanWithDevice(t), "")
 		if s.TranslatedName != "Status" || s.LabelOmitted {
 			t.Fatalf("TranslatedName=%q LabelOmitted=%v, want (%q, false)", s.TranslatedName, s.LabelOmitted, "Status")
 		}
@@ -61,7 +61,7 @@ func TestToDataPointSummary_TranslatedName(t *testing.T) {
 		t.Parallel()
 		dp := newCategorisedDP(t, "000ABC:1", hmenum.ParameterState, generic.KindBinarySensor)
 		lab := translatorLabeler{entries: map[string]string{"SWITCH|STATE": ""}}
-		s := toDataPointSummary(dp, lab, chanWithDevice(t))
+		s := toDataPointSummary(dp, lab, chanWithDevice(t), "")
 		if s.TranslatedName != "" || !s.LabelOmitted {
 			t.Fatalf("TranslatedName=%q LabelOmitted=%v, want (%q, true)", s.TranslatedName, s.LabelOmitted, "")
 		}
@@ -71,7 +71,7 @@ func TestToDataPointSummary_TranslatedName(t *testing.T) {
 		t.Parallel()
 		dp := newCategorisedDP(t, "000ABC:1", hmenum.ParameterState, generic.KindBinarySensor)
 		lab := translatorLabeler{entries: map[string]string{}}
-		s := toDataPointSummary(dp, lab, chanWithDevice(t))
+		s := toDataPointSummary(dp, lab, chanWithDevice(t), "")
 		if s.TranslatedName != "State" || s.LabelOmitted {
 			t.Fatalf("TranslatedName=%q LabelOmitted=%v, want (%q, false)", s.TranslatedName, s.LabelOmitted, "State")
 		}
@@ -81,7 +81,7 @@ func TestToDataPointSummary_TranslatedName(t *testing.T) {
 		t.Parallel()
 		dp := newCategorisedDP(t, "000ABC:1", hmenum.ParameterState, generic.KindBinarySensor)
 		// nil labels → the TranslatedName branch is skipped entirely.
-		s := toDataPointSummary(dp, nil, chanWithDevice(t))
+		s := toDataPointSummary(dp, nil, chanWithDevice(t), "")
 		if s.TranslatedName != "" || s.LabelOmitted {
 			t.Fatalf("TranslatedName=%q LabelOmitted=%v, want empty/false", s.TranslatedName, s.LabelOmitted)
 		}

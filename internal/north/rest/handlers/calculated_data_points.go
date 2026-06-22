@@ -20,7 +20,15 @@ import (
 
 // CalculatedDPSummary is one entry in GET .../calc-dps.
 type CalculatedDPSummary struct {
-	Name     string `json:"name"`
+	Name string `json:"name"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// calculated data point (the [routingkey.CanonicalUniqueID] result over
+	// its channel address + parameter) — the same canonical key generic DPs
+	// carry. Lets a client seed its entity registry from the summary without
+	// recomputing the algorithm. Always present and non-empty (the central's
+	// serial is resolved before any entity is served — see
+	// [DataPointSummary.UniqueID]).
+	UniqueID string `json:"unique_id"`
 	Category string `json:"category,omitempty"`
 	Value    any    `json:"value"`
 	Observed bool   `json:"observed"`
@@ -44,10 +52,11 @@ type CalculatedDPDetail struct {
 // toCalculatedDPSummary renders an AttachableDataPoint as a CalculatedDPSummary.
 // ch and labels feed the translated-name resolution; both are
 // nil-tolerant (the field is simply omitted then).
-func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, labels ParameterLabeler) CalculatedDPSummary {
+func toCalculatedDPSummary(dp device.AttachableDataPoint, ch *device.Channel, labels ParameterLabeler, serialSuffix string) CalculatedDPSummary {
 	key := dp.DataPointKey()
 	s := CalculatedDPSummary{
-		Name: key.Parameter,
+		Name:     key.Parameter,
+		UniqueID: cdpUniqueID(dp, serialSuffix),
 	}
 	s.TranslatedName = CalculatedDPTranslatedName(ch, key.Parameter, labels)
 	if cdp, ok := dp.(device.CategorisedDataPoint); ok {
@@ -157,9 +166,10 @@ func ListCalculatedDataPoints(idx DeviceIndex, labels ParameterLabeler) http.Han
 		}
 		_ = chNo
 		dps := ch.CalculatedDataPoints()
+		serial := serialSuffixForChannel(idx, ch)
 		out := make([]CalculatedDPSummary, 0, len(dps))
 		for _, dp := range dps {
-			out = append(out, toCalculatedDPSummary(dp, ch, labels))
+			out = append(out, toCalculatedDPSummary(dp, ch, labels, serial))
 		}
 		JSON(w, http.StatusOK, out)
 	}
@@ -191,7 +201,7 @@ func GetCalculatedDataPoint(idx DeviceIndex, labels ParameterLabeler) http.Handl
 				problem.New(problem.TypeNotFound, r, "Calculated data point not found", name))
 			return
 		}
-		summary := toCalculatedDPSummary(dp, ch, labels)
+		summary := toCalculatedDPSummary(dp, ch, labels, serialSuffixForChannel(idx, ch))
 		detail := CalculatedDPDetail{
 			CalculatedDPSummary: summary,
 			DependsOn:           dependsOnForKey(dp.DataPointKey()),

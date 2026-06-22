@@ -48,6 +48,13 @@ func (t *testHubIndex) HubFor(centralName string) *hub.Hub {
 	return nil
 }
 
+func (t *testHubIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 func newTestHubWithProgram(t *testing.T) (*testHubIndex, *hub.Hub) {
 	t.Helper()
 	h := hub.NewHub("test-ccu")
@@ -1365,6 +1372,13 @@ func (m *multiHubIndex) HubFor(centralName string) *hub.Hub {
 	return nil
 }
 
+func (m *multiHubIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 // TestGetSysvar_SingleCentralUnambiguous verifies that GetSysvar resolves
 // the correct hub without ?central= when exactly one central owns the sysvar.
 func TestGetSysvar_SingleCentralUnambiguous(t *testing.T) {
@@ -1501,5 +1515,39 @@ func TestFetchSysvars_ServiceError_Returns502(t *testing.T) {
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestToSysvarSummary_UniqueID verifies that toSysvarSummary stamps a
+// loom_-prefixed unique_id. The sysvar's CanonicalUniqueID always
+// produces a loom_ key (even with an empty serialSuffix) because the sysvar
+// address is stable; the serialSuffix differentiates identical sysvar names
+// across CCUs.
+func TestToSysvarSummary_UniqueID(t *testing.T) {
+	t.Parallel()
+	sv := hub.NewSysvar("ccu01", "AussenTemp", "", hmenum.HubValueTypeFloat, nil)
+
+	s := toSysvarSummary(sv, "vccu0000000")
+	if s.UniqueID == "" {
+		t.Fatal("UniqueID must not be empty when serialSuffix is set")
+	}
+	if !strings.HasPrefix(s.UniqueID, "loom_") {
+		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+	}
+}
+
+// TestToProgramSummary_UniqueID verifies that toProgramSummary stamps a
+// loom_-prefixed unique_id. The program's CanonicalUniqueID always produces
+// a loom_ key; the serialSuffix disambiguates same-named programs across CCUs.
+func TestToProgramSummary_UniqueID(t *testing.T) {
+	t.Parallel()
+	p := hub.NewProgram("ccu01", "P1", "Morning Routine", "", false, nil)
+
+	s := toProgramSummary(p, "ccu01", "vccu0000000")
+	if s.UniqueID == "" {
+		t.Fatal("UniqueID must not be empty when serialSuffix is set")
+	}
+	if !strings.HasPrefix(s.UniqueID, "loom_") {
+		t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
 	}
 }

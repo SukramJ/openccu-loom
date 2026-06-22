@@ -42,6 +42,13 @@ func (f *fakeDeviceIndex) CentralOf(addr string) string {
 	return ""
 }
 
+func (f *fakeDeviceIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 // fakeChannelWriter satisfies [device.ChannelWriter] and records every
 // SetValue / PutParamset call made through the channel's installed writer.
 type fakeChannelWriter struct {
