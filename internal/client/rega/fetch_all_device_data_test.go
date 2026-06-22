@@ -11,13 +11,31 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// TestFetchAllDeviceDataSkipsEmptyValue guards against re-introducing the
-// empty-value -> "0" coercion (reference issue #3228). A not-yet-measured
-// numeric data point (e.g. ACTUAL_TEMPERATURE right after a CCU restart)
-// reports an empty value over the ReGa object model; the bulk-load script must
-// SKIP it (yielding a cache miss so the value stays unset) instead of emitting
-// a literal 0 that consumers record as a real reading (e.g. 0 degrees).
-func TestFetchAllDeviceDataSkipsEmptyValue(t *testing.T) {
+// TestFetchAllDeviceDataLoads verifies the bulk-load script is embedded and
+// non-empty. The script runs on the CCU and cannot be executed in Go.
+func TestFetchAllDeviceDataLoads(t *testing.T) {
+	t.Parallel()
+
+	body, err := loadScript(hmenum.RegaScriptFetchAllDeviceData)
+	if err != nil {
+		t.Fatalf("loadScript: %v", err)
+	}
+	if body == "" {
+		t.Fatal("fetch_all_device_data.fn must not be empty")
+	}
+}
+
+// TestFetchAllDeviceDataV25Safeguards pins the two v2.5 source-level safeguards
+// against the post-restart "0" placeholder (reference issue #3228):
+//
+//  1. VirtualDevices data points are gated on a valid LastTimestamp(), so heating
+//     groups that expose a Timestamp() but no real reading after a CCU restart
+//     stay out of the bulk result instead of emitting a placeholder 0.
+//  2. An empty value is coerced to 0 only when it is a genuine string script
+//     variable (VarType() == 4); a real numeric 0 has a numeric VarType and is
+//     preserved, so legitimate zero readings are not conflated with not-yet-
+//     measured ones (the flaw of the bare vDPValue == "" check).
+func TestFetchAllDeviceDataV25Safeguards(t *testing.T) {
 	t.Parallel()
 
 	body, err := loadScript(hmenum.RegaScriptFetchAllDeviceData)
@@ -26,10 +44,13 @@ func TestFetchAllDeviceDataSkipsEmptyValue(t *testing.T) {
 	}
 	norm := regexp.MustCompile(`\s+`).ReplaceAllString(body, " ")
 
-	if strings.Contains(norm, `if (vDPValue == "") { sValue = "0"`) {
-		t.Fatal(`fetch_all_device_data.fn must not coerce an empty numeric value to "0" (#3228)`)
+	if !strings.Contains(norm, `(!oDP.LastTimestamp()) && (sUse_Interface == "VirtualDevices")`) {
+		t.Fatal("VirtualDevices data points must be gated on a valid LastTimestamp() (#3228)")
 	}
-	if !strings.Contains(norm, `if (vDPValue == "") { bHasValue = false`) {
-		t.Fatal("fetch_all_device_data.fn must skip an empty numeric value (bHasValue = false)")
+	if !strings.Contains(norm, "vDP_Value.VarType()") {
+		t.Fatal("empty-value detection must use VarType() (#3228)")
+	}
+	if !strings.Contains(norm, `(iDP_Value_VarType == 4) && (vDP_Value == "")`) {
+		t.Fatal("an empty value must be coerced to 0 only for a string VarType (#3228)")
 	}
 }
