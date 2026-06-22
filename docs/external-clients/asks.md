@@ -1,7 +1,7 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs) — verbleibende offene Punkte unten markiert
-**Letzte Aktualisierung:** 2026-05-24
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs) — neue Wellen **J** (`unique_id`-Ownership) + **K** (CCU-Domänen-Ableitung in den Daemon, „dümmerer Client") offen
+**Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
 
@@ -33,10 +33,23 @@ die schnelle Übersicht, was wann landete:
 | H1 — Streaming /snapshot (NDJSON) | Umgesetzt | OpenAPI |
 | H2 — Strukturiertes /diagnostics | Umgesetzt (Doku des bestehenden JSON-Surface, Prometheus-Trennung) | OpenAPI |
 | Sektion I — Rate-Limiting / Timezone / Heartbeat / Token-Rotation / Multi-Central / Idempotency | Umgesetzt (alle dokumentiert/verdrahtet) | siehe Body |
+| **J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS)** | **Offen (neu 2026-06-22)** | Sektion J |
+| **J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard** | **Offen (neu 2026-06-22)** | Sektion J |
+| **J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern** | **Offen (neu 2026-06-22)** | Sektion J |
+| **J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot** | **Offen (neu 2026-06-22)** | Sektion J |
+| **K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab)** | **Offen (neu 2026-06-22)** | Sektion K |
+| **K2 — Normalisierter Custom-DP-Gerätezustand** | **Offen (neu 2026-06-22)** | Sektion K |
+| **K3 — Firmware-Update-Status als abgeleitetes Feld** | **Offen (neu 2026-06-22)** | Sektion K |
+| **K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen** | **Offen (neu 2026-06-22)** | Sektion K |
 
-Was bleibt offen: nur F2 (bewusste Entscheidung). Alle übrigen 22
-Asks sind entweder als Runtime-Feature gelandet oder als
-Vertrags-Erweiterung in OpenAPI / wsapi.json / docs/ verankert.
+Was bleibt offen: F2 (bewusste Entscheidung) sowie die neuen **Wellen J**
+(J1–J4, `unique_id`-Ownership) und **K** (K1–K4, CCU-Domänen-Ableitung in den
+Daemon). J+K zusammen machen den Loom-Pfad in `homematicip_local` /
+`py-openccu-loom-client` vollständig **aiohomematic-frei** (J löst
+`canonical.py`/`generate_unique_id`, K1 löst `DeviceProfileRegistry`, K4 den
+`aiohomematic.const`-Rest). Alle übrigen 22 Asks aus A–I sind entweder als
+Runtime-Feature gelandet oder als Vertrags-Erweiterung in OpenAPI /
+wsapi.json / docs/ verankert.
 
 ## Zweck
 
@@ -492,6 +505,194 @@ Time-Series. Ein Endpoint pro Klasse.
 
 ---
 
+## J. Loom-native Identität — `unique_id`-Ownership (höchste neue Priorität)
+
+**Kontext.** Der Daemon besitzt den Routing-Key-Algorithmus bereits in Go
+(`internal/routingkey/uniqueid.go:89 GenerateUniqueID`,
+`:107 GenerateChannelUniqueID`, `canonical.go:49 CanonicalUniqueID`) und
+emittiert `unique_id` auf den WS-Payloads
+(`internal/north/rest/ws/payloads.go:45`). **Trotzdem rechnet der
+Python-Client den Key heute ein zweites Mal nach** — in `canonical.py`, das
+an `aiohomematic.model.support.generate_unique_id` delegiert. Das ist die
+**einzige verbleibende harte aiohomematic-Laufzeitkopplung** im Loom-Pfad von
+`homematicip_local`. Welle J schließt sie: liefert der Daemon den Key überall
+mit, **konsumiert** der Client ihn nur noch und `aiohomematic` fällt aus dem
+gesamten Loom-Pfad (nicht nur dem Compat-Shim, sondern auch dem Client-Kern).
+
+Hintergrund + Architektur: das Konzept
+`openccu-loom-client/docs/homematicip-loom-konzept.md` (§6.3, §10) und die
+Migrations-Spezifikation
+[`ha-unique-id-migration.md`](./ha-unique-id-migration.md).
+
+### J1. `unique_id` auf die REST-Surfaces (Summaries + Snapshot)
+
+**Befund:** `unique_id` liegt heute **nur** auf den WS-Payloads
+(`payloads.go:45`) — und dort als `omitempty`, der Daemon darf ihn also
+weglassen. Die REST-Summaries tragen ihn **gar nicht**:
+
+| DTO (Go-Handler) | `unique_id` heute |
+|---|---|
+| `DataPointSummary` (`internal/north/rest/handlers/devices.go`) | nein |
+| `CustomDataPointSummary` (`handlers/custom_data_points.go`) | nein |
+| Sysvar-/Program-Summary (`handlers/hub.go`) | nein |
+| nested Snapshot `device_channels[].channels[].data_points` (`handlers/snapshot*.go`) | nein |
+| WS-Payloads (`ws/payloads.go:45`) | ja, aber `omitempty` |
+
+Konsequenz: Für die **Entity-Anlage** (Bootstrap aus dem Snapshot, nicht aus
+einem Push) muss der Client den Key selbst rechnen → `canonical.py` →
+`aiohomematic`.
+
+**Ask:** `unique_id` (das `CanonicalUniqueID`-Ergebnis) auf
+`DataPointSummary`, `CustomDataPointSummary`, die Sysvar-/Program-Summaries
+**und** die genesteten Snapshot-Datenpunkte legen, sowie auf den WS-Payloads
+`omitempty` entfernen (immer befüllen). Der Algorithmus existiert bereits
+(`routingkey/`); es ist ein zusätzliches Feld, **kein** Verhaltensbruch.
+Danach ist `event.payload.unique_id` der Normalfall statt des
+Fallback-Rebuilds, und der Client braucht den Algorithmus nicht mehr.
+
+### J2. Daemon als alleinige `unique_id`-Quelle + Drift-Guard
+
+**Befund:** Solange der Client den Key nachrechnet, existieren **zwei**
+bit-identische Implementierungen — `internal/routingkey/` (Go) und
+`aiohomematic.generate_unique_id` (Python). Driften sie auseinander (z. B.
+geänderte Slug-Regel, anderer Serial-Suffix), bricht das **still** die
+HA-Entity-Registry: Entities verwaisen, Historie/Automationen gehen verloren.
+
+**Ask:** Einen Contract-Test (`tests/contract/`) etablieren, der
+`routingkey.CanonicalUniqueID` gegen ein eingefrorenes Referenz-Korpus
+(generic / custom / sysvar / program / hub-singleton / calculated /
+week_profile / schedule_channel_switch) bit-identisch hält — analog zum
+`enums.json`-Lockstep aus C1. Sobald J1 steht und der Client nur noch
+konsumiert, **ist der Daemon-Key der Vertrag**; der Drift-Guard sichert ihn
+über Releases. Das Migrations-Doc `ha-unique-id-migration.md` wird damit zur
+verbindlichen, getesteten Spezifikation.
+
+### J3. Hub-/Schedule-/Calculated-`unique_id`s mitliefern
+
+**Befund:** Nicht nur die generischen DPs tragen Keys. Der Client
+synthetisiert heute auch die Keys für Install-Mode, `week_profile`,
+`schedule_channel_switch`, `calculated` und die kombinierte Dauer-Number —
+über eine **Prefix-Konvention** (`loom_calculated_…`, `loom_week_profile_…`,
+`loom_schedule_channel_switch_…`). Diese Prefix-Logik lebt damit doppelt
+(Go + Python).
+
+**Ask:** Auch diese Keys auf den jeweiligen REST-Surfaces mitliefern —
+`handlers/calculated_data_points.go`, `handlers/week_profile.go`,
+`handlers/event_groups.go`, `handlers/hub.go` (Sysvar/Program + Singletons).
+Dann lebt die **gesamte** Key-Konvention an einer Stelle (Go), und J2s
+Drift-Guard deckt sie vollständig ab.
+
+### J4. Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot
+
+**Befund:** Der nested Snapshot (`device_channels`, Welle „nested snapshot")
+hat das per-**Channel**-Datenpunkt-Fetch (`M`) bereits eliminiert — der
+Client liest die DPs direkt aus `device_channels[].channels[].data_points`.
+Übrig bleibt das per-**Device** `GET /devices/{addr}` für die
+Channel-**Metadaten** (`group_no`, `room`, `functions`, `is_group_master`,
+…). Bei großen CCUs sind das wieder `N` Roundtrips beim Bootstrap.
+
+**Ask:** Die Channel-Metadaten in die genesteten Snapshot-Channel-Einträge
+aufnehmen (dieselben Felder, die `GET /devices/{addr}` heute liefert), sodass
+der Bootstrap mit **einem** Snapshot-Call auskommt statt `N+1`. Der bestehende
+Detail-Endpoint bleibt für gezielte Einzelabfragen/Repair-Flows erhalten.
+
+---
+
+## K. „Dümmerer Client" — CCU-Domänen-Ableitung in den Daemon verlagern
+
+**Prinzip.** Je mehr CCU-Domänen-Wissen der Daemon besitzt und fertig
+ausliefert, desto dünner der Client — und desto weniger
+Mehrfach-Implementierung über die Wire-Sprachen (Python, TS, Rust, Java)
+hinweg. Welle J adressiert die `unique_id`; Welle K adressiert die **restliche
+Ableitung**, die der `py-openccu-loom-client` heute noch selbst macht und dafür
+`aiohomematic` zur Laufzeit zieht. Nach J+K ist der Loom-Pfad
+**vollständig aiohomematic-frei**.
+
+**Wichtige Abgrenzung (gilt für alle K-Asks):** verlagert wird nur
+**generische CCU-Domänen-Ableitung** — Wissen, das _jeder_ Wire-Client sonst
+neu baut (Geräteprofile, Kanal-Komposition, normalisierter Gerätezustand,
+Firmware-Status-Klassifikation). **HA-spezifisches** bleibt im Client:
+Kategorie→HA-Plattform-Mapping, HA-Einheiten-Skalierung (Helligkeit 0–255,
+HS 0–100), HA-Entity-Namenskonventionen. Der Daemon liefert die
+CCU-Wahrheit, der Client die HA-Übersetzung.
+
+**Konkrete Restkopplung (Quelle: `compat/aiohomematic/_upstream.py` — der eine
+Seam, über den der Client noch `aiohomematic` zieht):**
+
+### K1. Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab)
+
+**Befund:** Nach `canonical.py` ist `aiohomematic.model.custom.DeviceProfileRegistry`
+die **größte verbleibende aiohomematic-Laufzeitkopplung**. Der Client nutzt sie
+in `model/device.py`, `compat/.../model/custom/__init__.py` und
+`compat/.../model/naming.py`, um **CCU-Geräteprofil-Wissen** abzuleiten:
+welcher Kanal der **Primärkanal** eines Geräts ist, welche Feld-Kanäle einen
+Custom-DP (Cover/Climate/Light) **komponieren**, und das Climate-Mode-/
+Profile-Vokabular (`ClimateMode`, `ClimateProfile`). Das ist reines
+CCU-Domänen-Wissen — der Daemon spricht ohnehin mit der CCU und kennt die
+Profile.
+
+**Ask:** Auf den Geräte-/Custom-DP-Surfaces mitliefern:
+- ein **Primärkanal-Marker** pro Gerät/Custom-DP
+  (`handlers/devices.go`, `handlers/custom_data_points.go`),
+- die **Kanal-Komposition** eines Custom-DP (welche Feld-Kanäle/-Parameter ihn
+  bilden) — heute leitet der Client das aus dem Profil ab,
+- das **Climate-Mode-/Profile-Vokabular** als Enum in den generierten Typen
+  (analog `enums.json`, C1).
+
+Danach kann der Client `DeviceProfileRegistry` streichen.
+
+### K2. Normalisierter Custom-DP-Gerätezustand
+
+**Befund:** `CustomDataPointSummary.state` liefert heute einen Zustands-Dict,
+aber **halb-roh** — der Client interpretiert/skaliert ihn noch selbst
+(`custom/__init__.py`: `hs_color` aus `color:{h,s}`, `current_position`,
+`hvac_mode`, `target_temperature`, `brightness`, `is_locked` …, ~1100 LOC).
+Die **CCU-seitige Normalisierung** (welcher Parameter ist Soll/Ist, welcher
+Zustand ist „verriegelt", die Cover-Richtungslogik) ist generisch.
+
+**Ask:** Den Custom-DP-State **CCU-normalisiert** ausliefern (Cover-Level
+[0..1], Climate Soll/Ist/Mode, Light an/Level/Farbe, Lock-Zustand) — als
+stabile, benannte Felder statt eines paramset-nahen Dicts. Der Client macht
+dann nur noch die **HA-Einheiten-Skalierung**, nicht mehr die
+Paramset-Interpretation. (Vorbild: die **berechneten Datenpunkte**, die der
+Daemon bereits aus Kanal-Generics ableitet — dasselbe Muster für Custom-DPs.)
+
+### K3. Firmware-Update-Status als abgeleitetes Feld
+
+**Befund:** Der Client klassifiziert den rohen Geräte-Firmware-Zustand über
+die Konstanten-Mengen `HMIP_FIRMWARE_UPDATE_IN_PROGRESS_STATES` /
+`HMIP_FIRMWARE_UPDATE_READY_STATES` (aus `aiohomematic.const`, via `_upstream.py`),
+um daraus den HA-Update-Entity-Zustand zu bauen (`compat/.../model/update.py`).
+Die State-Mengen sind CCU-Domäne.
+
+**Ask:** Ein abgeleitetes `update_status`-Feld auf dem Geräte-/Update-Surface
+(`up_to_date | update_available | installing | …`) statt der rohen Zustände,
+sodass der Client die Klassifikations-Mengen nicht mehr trägt.
+
+### K4. CCU-Domänen-Konstanten aus den generierten Typen, nicht aus aiohomematic
+
+**Befund:** Der Client importiert aus `aiohomematic.const` noch die
+Pseudo-Adressen (`HUB_ADDRESS`, `INSTALL_MODE_ADDRESS`, `PROGRAM_ADDRESS`,
+`SYSVAR_ADDRESS` — die den Central-Slot der `unique_id` füllen) sowie die
+Dispatch-relevanten Enums `DataPointCategory`, `DataPointKey`, `ParamsetKey`,
+`DeviceTriggerEventType`, `CCUType`, `CentralState`. Diese sind CCU-Domäne und
+sollten aus dem **Daemon-generierten** `openccu-loom-types` (bzw.
+`enums.json`, C1) kommen, nicht aus `aiohomematic`.
+
+**Ask:** Sicherstellen, dass alle dispatch-/identitätsrelevanten Enums und
+Pseudo-Adress-Konstanten im generierten Typenpaket vollständig vorhanden sind
+(C1 deckt `DataPointCategory` bereits als Breaking-Change-Achse ab — die
+Lücke sind die übrigen Enums + die vier Pseudo-Adressen). Dann fällt der
+`aiohomematic.const`-Import im Client weg.
+
+**Reihenfolge / Abhängigkeit:** K baut auf J auf. Sinnvolle Folge:
+J1 (Keys auf REST) → J2 (Drift-Guard) → K4 (Konstanten/Enums) → K1
+(Geräteprofile, der große Hebel) → K2/K3 (State-/Status-Normalisierung).
+Nach J+K1+K4 ist der **Compat-Shim** auf reine HA-Adaption reduziert und der
+**Client-Kern** aiohomematic-frei.
+
+---
+
 ## I. Geprüft, bewusst zurückgestellt
 
 Die folgenden Themen wurden gegen typische blinde Flecken externer
@@ -510,6 +711,7 @@ promoviert werden.
 | Token-Rotation auf langlebigen WS-Verbindungen | Nicht spezifiziert. Eher Loom-Auth-Reife als Wire-Client-Thema; relevant sobald langlebige Geräte-Tokens im Spiel sind. |
 | Multi-Central-Semantik in `wsapi.json` | Payloads tragen `central:`-Feld (gut). HA-Use-Case ist heute single-central pro Config-Entry — kein HA-Regression-Risiko. Wird erst akut, wenn HA Multi-Central in einem Entry erlauben will. |
 | Idempotency-Keys auf `PUT …/value` | Nicht vorhanden — `aiohomematic` hat es aber auch nicht, also keine Regression durch den Cutover. |
+| `GET /data-points/{unique_id}` (Lookup-by-unique_id) | Geprüft, **geringer Mehrwert**: der Store des `py-openccu-loom-client` IST bereits der `unique_id`→DP-Index (O(1) lokal). Ein REST-Lookup hilft nur einem **stateless, snapshot-losen** Client; die HA-Integration hält immer den Store. Promovierbar, sobald dünne REST-only-Clients ein realer Use-Case werden. |
 
 ---
 
