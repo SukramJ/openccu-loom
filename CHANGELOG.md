@@ -4,6 +4,59 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0]
+
+Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
+(CCU-domain derivation into the daemon, "dumber client") from
+`docs/external-clients/asks.md`. Together they let the Loom path in
+`py-openccu-loom-client` drop its `aiohomematic` runtime coupling. APIVersion →
+1.20.0.
+
+### Added
+
+- **J1 — `unique_id` on every REST summary + the snapshot.** The canonical loom
+  routing key (the `routingkey.CanonicalUniqueID` result, identical to the WS
+  payloads) now rides `DataPointSummary`, `CustomDPSummary`, `ProgramSummary`,
+  `SysvarSummary`, `CalculatedDPSummary`, `EventGroupSummary` and the nested
+  snapshot data points. A client builds its entity registry straight from the
+  snapshot/summary instead of recomputing the key. The owning central's serial
+  suffix reaches the handlers through a new `SerialSuffix(central)` method on
+  the `DeviceIndex` / `HubIndex` facades.
+- **J3 — `unique_id` on calculated data points and event groups.** Calculated
+  DPs carry the same canonical key as generic DPs; a new
+  `event.Group.CanonicalUniqueID` keeps the event-group key convention in Go.
+- **K3 — derived `update_status` on `DeviceSummary`.** A new
+  `up_to_date | update_available | installing` field
+  (`hmenum.DeriveDeviceUpdateStatus`) collapses the raw CCU firmware phases, so
+  a client renders the update entity without carrying the phase-classification
+  sets itself. The `DeviceUpdateStatus` enum is exported via `enums.json`.
+- **K4 — hub pseudo-addresses as named constants + schema export.**
+  `HubAddress` / `InstallModeAddress` / `ProgramAddress` / `SysvarAddress` are
+  now named constants in `internal/routingkey` and ship in a `pseudo_addresses`
+  block of `assets/schemas/enums.json`, so a wire client reads them from the
+  daemon contract instead of `aiohomematic.const`.
+- **K1 (partial) — primary-channel marker.** `ChannelSummary.is_custom_dp_primary`
+  surfaces `device.Channel.IsCustomDPPrimaryChannel`, the daemon-derived "device
+  primary channel" marker. Custom-DP channel composition (`channels`) and the
+  per-device climate vocabulary (`config.hvac_modes` / `preset_modes`) were
+  already on the wire; the finer field→parameter composition map and a global
+  climate-mode enum remain open (see `docs/external-clients/asks.md` §K1).
+
+### Changed
+
+- **WS `unique_id` is now always present.** `DataPointValueChangedPayload` and
+  `CustomDataPointStateChangedPayload` dropped `omitempty` on `unique_id` — the
+  daemon is the sole owner of the key, so clients consume it unconditionally (an
+  empty string signals an unresolved central serial, not "field absent").
+
+### Notes
+
+- Asks **J2** (routing-key drift-guard contract test), **J4** (channel metadata
+  in the nested snapshot) and **K2** (normalised typed Custom-DP state) were
+  already satisfied in the codebase and are re-marked as such in `asks.md`; this
+  release adds no code for them beyond `event.Group.CanonicalUniqueID` extending
+  the J2 key-convention coverage.
+
 ## [0.9.1]
 
 ### Fixed

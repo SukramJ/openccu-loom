@@ -20,6 +20,10 @@ import (
 // ChannelEventGroup.
 type EventGroupSummary struct {
 	ChannelAddress string `json:"channel_address"`
+	// UniqueID is the canonical loom-namespaced routing key for this event
+	// group (the [event.Group.CanonicalUniqueID] result). Lets a client seed
+	// its event-entity registry from the summary without recomputing the key.
+	UniqueID string `json:"unique_id,omitempty"`
 	// Kind is the short device-trigger flavour ("keypress", "impulse",
 	// "device_error"), matching the group's translation key rather than the
 	// fully-qualified internal Kind ("homematic.keypress").
@@ -54,15 +58,16 @@ func ListEventGroups(idx DeviceIndex) http.HandlerFunc {
 			return
 		}
 		groups := ch.EventGroups()
+		serial := serialSuffixForChannel(idx, ch)
 		out := make([]EventGroupSummary, 0, len(groups))
 		for _, g := range groups {
-			out = append(out, toEventGroupSummary(g))
+			out = append(out, toEventGroupSummary(g, serial))
 		}
 		JSON(w, http.StatusOK, out)
 	}
 }
 
-func toEventGroupSummary(g *modevent.Group) EventGroupSummary {
+func toEventGroupSummary(g *modevent.Group, serialSuffix string) EventGroupSummary {
 	params := g.Parameters()
 	ps := make([]string, len(params))
 	for i, p := range params {
@@ -74,6 +79,7 @@ func toEventGroupSummary(g *modevent.Group) EventGroupSummary {
 	}
 	s := EventGroupSummary{
 		ChannelAddress: g.ChannelAddress,
+		UniqueID:       g.CanonicalUniqueID(serialSuffix),
 		Kind:           g.TranslationKey(),
 		EventTypes:     eventTypes,
 		Parameters:     ps,

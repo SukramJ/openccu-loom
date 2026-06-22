@@ -38,6 +38,13 @@ func (f *fakeHubIndex) HubFor(centralName string) *hub.Hub {
 	return nil
 }
 
+func (f *fakeHubIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 type fakeProgramWriter struct {
 	calls atomic.Int32
 	id    atomic.Value

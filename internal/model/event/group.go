@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -68,6 +69,20 @@ func NewGroupWithCentral(centralName, channelAddress string, k Kind) *Group {
 // Category returns [hmenum.DataPointCategoryEventGroup].
 func (g *Group) Category() hmenum.DataPointCategory {
 	return hmenum.DataPointCategoryEventGroup
+}
+
+// CanonicalUniqueID returns the loom-namespaced routing key for this event
+// group — the external HA-entity identity. The serialSuffix (the CCU serial's
+// last-10 lower suffix) is supplied by the north boundary; the group
+// contributes its channel address and `event_group/<kind>` key name, so the
+// canonical key stays in lockstep with the promoted
+// [datapoint.BaseDataPointFields.UniqueID]. Mirrors
+// [generic.DataPoint.CanonicalUniqueID]. Returns "" for a nil group.
+func (g *Group) CanonicalUniqueID(serialSuffix string) string {
+	if g == nil || serialSuffix == "" {
+		return ""
+	}
+	return routingkey.CanonicalUniqueID(serialSuffix, g.ChannelAddress, g.KeyName(), "")
 }
 
 // TranslationKey returns the slugified i18n lookup key for this group. It is

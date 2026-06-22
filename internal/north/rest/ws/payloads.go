@@ -39,10 +39,11 @@ type DataPointValueChangedPayload struct {
 	ParamsetKey   string `json:"paramset_key"`
 	// UniqueID is the canonical loom-namespaced routing key for this
 	// data point (loom_<routing-key>), supplied so a client consumes it
-	// directly instead of rebuilding it from the raw fields. Optional and
-	// backward-compatible: omitted (empty) when the producer cannot
-	// resolve it. See docs/external-clients/ha-unique-id-migration.md.
-	UniqueID   string `json:"unique_id,omitempty"`
+	// directly instead of rebuilding it from the raw fields. Always present:
+	// the daemon is the sole owner of the key, so clients consume it
+	// unconditionally (an empty string signals an unresolved central serial,
+	// not "field absent"). See docs/external-clients/ha-unique-id-migration.md.
+	UniqueID   string `json:"unique_id"`
 	Value      any    `json:"value"`
 	Previous   any    `json:"previous,omitempty"`
 	ModifiedAt string `json:"modified_at"`
@@ -67,9 +68,9 @@ type CustomDataPointStateChangedPayload struct {
 	Name          string `json:"name"`
 	Kind          string `json:"kind,omitempty"`
 	// UniqueID is the canonical loom-namespaced routing key for the
-	// custom data point this snapshot describes. Optional; see
+	// custom data point this snapshot describes. Always present; see
 	// [DataPointValueChangedPayload.UniqueID].
-	UniqueID string         `json:"unique_id,omitempty"`
+	UniqueID string         `json:"unique_id"`
 	State    map[string]any `json:"state"`
 }
 

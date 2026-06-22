@@ -1,6 +1,6 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs) — neue Wellen **J** (`unique_id`-Ownership) + **K** (CCU-Domänen-Ableitung in den Daemon, „dümmerer Client") offen
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Welle **J** (`unique_id`-Ownership) vollständig umgesetzt (0.10.0); Welle **K** (CCU-Domänen-Ableitung, „dümmerer Client") umgesetzt bis auf den K1-Rest (Feld-Parameter-Komposition + globales Climate-Enum). Offen: F2 (bewusst) + K1-Rest.
 **Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
@@ -33,22 +33,29 @@ die schnelle Übersicht, was wann landete:
 | H1 — Streaming /snapshot (NDJSON) | Umgesetzt | OpenAPI |
 | H2 — Strukturiertes /diagnostics | Umgesetzt (Doku des bestehenden JSON-Surface, Prometheus-Trennung) | OpenAPI |
 | Sektion I — Rate-Limiting / Timezone / Heartbeat / Token-Rotation / Multi-Central / Idempotency | Umgesetzt (alle dokumentiert/verdrahtet) | siehe Body |
-| **J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS)** | **Offen (neu 2026-06-22)** | Sektion J |
-| **J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard** | **Offen (neu 2026-06-22)** | Sektion J |
-| **J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern** | **Offen (neu 2026-06-22)** | Sektion J |
-| **J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot** | **Offen (neu 2026-06-22)** | Sektion J |
-| **K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab)** | **Offen (neu 2026-06-22)** | Sektion K |
-| **K2 — Normalisierter Custom-DP-Gerätezustand** | **Offen (neu 2026-06-22)** | Sektion K |
-| **K3 — Firmware-Update-Status als abgeleitetes Feld** | **Offen (neu 2026-06-22)** | Sektion K |
-| **K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen** | **Offen (neu 2026-06-22)** | Sektion K |
+| J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | Umgesetzt (0.10.0) | Sektion J |
+| J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt (war bereits vorhanden: `tests/contract/routing_key_contract_test.go`) | Sektion J |
+| J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1) — week_profile-Aggregat siehe Body | Sektion J |
+| J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot | Umgesetzt (war bereits vorhanden: nested Snapshot bettet `ChannelSummary` ein) | Sektion J |
+| K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Teilweise (Primärkanal-Marker + Komposition/Vokabular am Wire) — Body | Sektion K |
+| K2 — Normalisierter Custom-DP-Gerätezustand | Umgesetzt (war bereits vorhanden: typisierte `StatePayload`) | Sektion K |
+| K3 — Firmware-Update-Status als abgeleitetes Feld | Umgesetzt (0.10.0) | Sektion K |
+| K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen | Umgesetzt (0.10.0) | Sektion K |
 
-Was bleibt offen: F2 (bewusste Entscheidung) sowie die neuen **Wellen J**
-(J1–J4, `unique_id`-Ownership) und **K** (K1–K4, CCU-Domänen-Ableitung in den
-Daemon). J+K zusammen machen den Loom-Pfad in `homematicip_local` /
-`py-openccu-loom-client` vollständig **aiohomematic-frei** (J löst
-`canonical.py`/`generate_unique_id`, K1 löst `DeviceProfileRegistry`, K4 den
-`aiohomematic.const`-Rest). Alle übrigen 22 Asks aus A–I sind entweder als
-Runtime-Feature gelandet oder als Vertrags-Erweiterung in OpenAPI /
+Was bleibt offen: F2 (bewusste Entscheidung) sowie der **K1-Rest**
+(Feld-Parameter-Komposition je Custom-DP + ein globales Climate-Mode-Enum —
+das per-Gerät-Vokabular liegt bereits über `Config.hvac_modes`/`preset_modes`
+am Wire). **Welle J ist vollständig umgesetzt** (0.10.0): der Daemon liefert
+`unique_id` jetzt auf allen REST-Summaries + im Snapshot mit und garantiert ihn
+auf den WS-Payloads (`omitempty` entfernt); J2 (Drift-Guard) und J4
+(Channel-Metadaten im Snapshot) waren bereits vorhanden und wurden nur falsch
+als „offen" geführt. **Welle K** ist bis auf den K1-Rest umgesetzt: K2
+(normalisierter State) war bereits vorhanden, K3 (`update_status`) und K4
+(Pseudo-Adressen als benannte Konstanten im Export) sind neu. Damit löst J
+`canonical.py`/`generate_unique_id` und K4 den `aiohomematic.const`-Rest; die
+größte verbleibende aiohomematic-Kopplung (`DeviceProfileRegistry`, K1) ist auf
+die Feld-Parameter-Komposition reduziert. Alle übrigen 22 Asks aus A–I sind
+entweder als Runtime-Feature gelandet oder als Vertrags-Erweiterung in OpenAPI /
 wsapi.json / docs/ verankert.
 
 ## Zweck
@@ -524,6 +531,28 @@ Hintergrund + Architektur: das Konzept
 Migrations-Spezifikation
 [`ha-unique-id-migration.md`](./ha-unique-id-migration.md).
 
+> **Status Welle J (0.10.0): vollständig umgesetzt.**
+> - **J1** ✅ `unique_id` (das `CanonicalUniqueID`-Ergebnis) liegt jetzt auf
+>   `DataPointSummary`, `CustomDPSummary`, `ProgramSummary`, `SysvarSummary`,
+>   `CalculatedDPSummary`, `EventGroupSummary` und den nested
+>   Snapshot-Datenpunkten; auf den WS-Value-Changed-Payloads wurde `omitempty`
+>   entfernt (immer befüllt). Der Serial-Suffix kommt über die um
+>   `SerialSuffix(central)` erweiterten `DeviceIndex`/`HubIndex`-Facades.
+> - **J2** ✅ war bereits vorhanden: `tests/contract/routing_key_contract_test.go`
+>   hält `GenerateUniqueID`/`GenerateChannelUniqueID` gegen ein eingefrorenes
+>   Golden-Korpus — exakt das geforderte C1-Lockstep-Muster. Neu ergänzt:
+>   `event.Group.CanonicalUniqueID`, sodass auch Event-Gruppen-Keys an einer
+>   Stelle (Go) leben.
+> - **J3** ✅ calculated DPs + event_groups tragen `unique_id`; sysvar/program
+>   via J1. **Offen-by-design:** die `WeekProfileResponse` ist ein
+>   per-Kanal-Aggregat (kein Entity-1:1), trägt daher keinen einzelnen
+>   `unique_id`; die `schedule_channel_switch`-Entities bräuchten erst eine
+>   eigene REST-Entity-Fläche.
+> - **J4** ✅ war bereits vorhanden: der nested Snapshot bettet `ChannelSummary`
+>   ein (`SnapshotChannelEntry`), trägt also `group_no`/`room`/`functions`/
+>   `is_group_master`/`sub_device_name` in **einem** Call — das N+1-Problem
+>   existiert nicht mehr.
+
 ### J1. `unique_id` auf die REST-Surfaces (Summaries + Snapshot)
 
 **Befund:** `unique_id` liegt heute **nur** auf den WS-Payloads
@@ -618,6 +647,33 @@ CCU-Wahrheit, der Client die HA-Übersetzung.
 
 **Konkrete Restkopplung (Quelle: `compat/aiohomematic/_upstream.py` — der eine
 Seam, über den der Client noch `aiohomematic` zieht):**
+
+> **Status Welle K (0.10.0): bis auf den K1-Rest umgesetzt.**
+> - **K1** ⚠️ teilweise: der **Primärkanal-Marker** liegt jetzt als
+>   `is_custom_dp_primary` auf `ChannelSummary`
+>   (`device.Channel.IsCustomDPPrimaryChannel`); die **Kanal-Komposition** eines
+>   Custom-DP ist über `CustomDPSummary.channels` am Wire, das **Climate-/
+>   Preset-Vokabular** per Gerät über `CustomDPSummary.config`
+>   (`hvac_modes`/`preset_modes`). **Offen:** die feinere
+>   **Feld-→Parameter-Komposition** je Custom-DP und ein **globales**
+>   Climate-Mode-Enum (das per-Gerät-Vokabular reicht den meisten Clients) —
+>   beides bräuchte das `RebasedChannelGroupConfig` am Wire bzw. ein
+>   kanonisches Mode-Set.
+> - **K2** ✅ war bereits vorhanden: `CustomDPSummary.state` ist die typisierte
+>   `payload.StatePayload` (`is_locked`, `hvac_mode`, `brightness`,
+>   `current_position`, …), kein roher Paramset-Dict. Die HA-Einheiten-Skalierung
+>   bleibt — wie in der K-Abgrenzung gewollt — Client-seitig.
+> - **K3** ✅ neues abgeleitetes `update_status`-Feld
+>   (`up_to_date`|`update_available`|`installing`) auf `DeviceSummary`, gespeist
+>   aus `hmenum.DeriveDeviceUpdateStatus` (kollabiert die rohen
+>   `DeviceFirmwareState`-Phasen). Das `DeviceUpdateStatus`-Enum wird über
+>   `enums.json` mitexportiert.
+> - **K4** ✅ die vier Pseudo-Adressen sind jetzt benannte Konstanten in
+>   `internal/routingkey` (`HubAddress`/`InstallModeAddress`/`ProgramAddress`/
+>   `SysvarAddress`) und werden als `pseudo_addresses`-Block nach
+>   `assets/schemas/enums.json` exportiert; `DataPointKey` lag bereits in
+>   `types.json`, die fünf Dispatch-Enums in `enums.json`. Der
+>   `aiohomematic.const`-Import des Clients entfällt damit.
 
 ### K1. Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab)
 

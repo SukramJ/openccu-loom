@@ -90,7 +90,12 @@ func resolveHubForRead(idx HubIndex, centralName string, resourceOnHub func(*hub
 // ProgramSummary is one entry in `GET /api/v1/programs`.
 type ProgramSummary struct {
 	// Central is the CCU this program belongs to (multi-CCU grouping).
-	Central     string `json:"central,omitempty"`
+	Central string `json:"central,omitempty"`
+	// UniqueID is the canonical loom-namespaced routing key for this program
+	// (the [hub.Program.CanonicalUniqueID] result) — identical to the value on
+	// the WS `hub.program_executed` payload. Lets a client seed its entity
+	// registry from the summary without recomputing the algorithm.
+	UniqueID    string `json:"unique_id,omitempty"`
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
@@ -110,7 +115,12 @@ type ProgramSummary struct {
 // SysvarSummary is one entry in `GET /api/v1/sysvars`.
 type SysvarSummary struct {
 	// Central is the CCU this system variable belongs to.
-	Central     string   `json:"central,omitempty"`
+	Central string `json:"central,omitempty"`
+	// UniqueID is the canonical loom-namespaced routing key for this system
+	// variable (the [hub.Sysvar.CanonicalUniqueID] result) — identical to the
+	// value on the WS `hub.sysvar_changed` payload. Lets a client seed its
+	// entity registry from the summary without recomputing the algorithm.
+	UniqueID    string   `json:"unique_id,omitempty"`
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
 	Unit        string   `json:"unit,omitempty"`
@@ -252,8 +262,9 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 			if nh.Hub == nil {
 				continue
 			}
+			serial := idx.SerialSuffix(nh.Central)
 			for _, p := range nh.Hub.Programs() {
-				out = append(out, toProgramSummary(p, nh.Central))
+				out = append(out, toProgramSummary(p, nh.Central, serial))
 			}
 		}
 		if out == nil {
@@ -267,10 +278,11 @@ func ListPrograms(idx HubIndex) http.HandlerFunc {
 // toProgramSummary maps a hub program onto its REST DTO, tagging it with the
 // owning central. Shared by the list endpoint and the single-program GET so
 // both render identical shapes.
-func toProgramSummary(p *hub.Program, central string) ProgramSummary {
+func toProgramSummary(p *hub.Program, central, serialSuffix string) ProgramSummary {
 	active, observed := p.Active()
 	e := ProgramSummary{
 		Central:     central,
+		UniqueID:    p.CanonicalUniqueID(serialSuffix),
 		ID:          p.ID,
 		Name:        p.Name,
 		Description: p.Description,
@@ -317,7 +329,7 @@ func GetProgram(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Program not found", id))
 			return
 		}
-		JSON(w, http.StatusOK, toProgramSummary(p, h.CentralName))
+		JSON(w, http.StatusOK, toProgramSummary(p, h.CentralName, idx.SerialSuffix(h.CentralName)))
 	}
 }
 
@@ -565,8 +577,9 @@ func ListSysvars(idx HubIndex) http.HandlerFunc {
 			if nh.Hub == nil {
 				continue
 			}
+			serial := idx.SerialSuffix(nh.Central)
 			for _, s := range nh.Hub.Sysvars() {
-				sum := toSysvarSummary(s)
+				sum := toSysvarSummary(s, serial)
 				sum.Central = nh.Central
 				out = append(out, sum)
 			}
@@ -606,7 +619,7 @@ func GetSysvar(idx HubIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Sysvar not found", name))
 			return
 		}
-		JSON(w, http.StatusOK, toSysvarSummary(s))
+		JSON(w, http.StatusOK, toSysvarSummary(s, idx.SerialSuffix(h.CentralName)))
 	}
 }
 
@@ -653,10 +666,11 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 	}
 }
 
-func toSysvarSummary(s *hub.Sysvar) SysvarSummary {
+func toSysvarSummary(s *hub.Sysvar, serialSuffix string) SysvarSummary {
 	v, ok := s.Value()
 	sum := SysvarSummary{
 		Central:        s.Central(),
+		UniqueID:       s.CanonicalUniqueID(serialSuffix),
 		Name:           s.Name,
 		Description:    s.Description,
 		Unit:           s.Unit,

@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 	"github.com/SukramJ/openccu-loom/internal/payload"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -34,7 +35,13 @@ var ErrBadParam = hmapi.ErrBadParam
 
 // CustomDPSummary is one entry in GET .../cdps.
 type CustomDPSummary struct {
-	Name                string   `json:"name"`
+	Name string `json:"name"`
+	// UniqueID is the canonical loom-namespaced routing key for this
+	// Custom-DP (the [routingkey.CanonicalUniqueID] result over the CDP's
+	// primary channel address + parameter) — identical to the value on the
+	// WS `custom_data_point.state_changed` payload. Lets a client seed its
+	// entity registry from the summary without recomputing the algorithm.
+	UniqueID            string   `json:"unique_id,omitempty"`
 	Category            string   `json:"category"`
 	ChannelNo           int      `json:"channel_no"`
 	SupportedOperations []string `json:"supported_operations"`
@@ -118,6 +125,19 @@ func supportedOperationsFor(cat hmenum.DataPointCategory) []string { //nolint:ex
 		// required array, and clients (the HA drop-in) reject a null.
 		return []string{}
 	}
+}
+
+// cdpUniqueID stamps the canonical loom routing key for a Custom-DP from its
+// primary channel address + parameter — identical to the WS
+// custom_data_point.state_changed payload (see eventbridge). Empty serial
+// suffix (central serial not yet known) yields "" so the omitempty field stays
+// absent.
+func cdpUniqueID(dp device.AttachableDataPoint, serialSuffix string) string {
+	if dp == nil || serialSuffix == "" {
+		return ""
+	}
+	k := dp.DataPointKey()
+	return routingkey.CanonicalUniqueID(serialSuffix, k.ChannelAddress, k.Parameter, "")
 }
 
 // customDPConfig returns the Custom-DP's static configuration block
@@ -209,6 +229,7 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 				problem.New(problem.TypeNotFound, r, "Device not found", addr))
 			return
 		}
+		serial := idx.SerialSuffix(idx.CentralOf(d.Address))
 		out := make([]CustomDPSummary, 0)
 		for _, ch := range d.Channels() {
 			dp := ch.CustomDataPoint()
@@ -227,6 +248,7 @@ func ListCustomDataPoints(idx DeviceIndex) http.HandlerFunc {
 			}
 			out = append(out, CustomDPSummary{
 				Name:                customDPWireName(d, dp, ch.Number),
+				UniqueID:            cdpUniqueID(dp, serial),
 				Category:            string(cat),
 				ChannelNo:           ch.Number,
 				SupportedOperations: supportedOperationsFor(cat),

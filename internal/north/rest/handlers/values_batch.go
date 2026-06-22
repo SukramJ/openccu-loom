@@ -107,7 +107,7 @@ func ValuesBatch(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibility
 				results = append(results, res)
 				continue
 			}
-			summary := toDataPointSummary(dp, labels, ch)
+			summary := toDataPointSummary(dp, labels, ch, serialSuffixForChannel(idx, ch))
 			res.Summary = &summary
 			results = append(results, res)
 		}

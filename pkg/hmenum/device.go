@@ -39,6 +39,42 @@ func (s DeviceFirmwareState) IsFirmwareUpdateReady() bool {
 		s == DeviceFirmwareStatePerformingUpdate
 }
 
+// DeviceUpdateStatus is the daemon-derived, client-facing firmware-update
+// verdict. It collapses the raw [DeviceFirmwareState] phases (and the
+// update-available signal) into the three states an update entity needs, so a
+// wire client renders the entity without carrying the CCU phase-classification
+// sets itself.
+type DeviceUpdateStatus string
+
+// DeviceUpdateStatus values.
+const (
+	// DeviceUpdateStatusUpToDate means no installable update is pending.
+	DeviceUpdateStatusUpToDate DeviceUpdateStatus = "up_to_date"
+	// DeviceUpdateStatusUpdateAvailable means a newer firmware is ready to
+	// install but no install is running.
+	DeviceUpdateStatusUpdateAvailable DeviceUpdateStatus = "update_available"
+	// DeviceUpdateStatusInstalling means a firmware install is in flight.
+	DeviceUpdateStatusInstalling DeviceUpdateStatus = "installing"
+)
+
+// String returns the wire representation.
+func (s DeviceUpdateStatus) String() string { return string(s) }
+
+// DeriveDeviceUpdateStatus collapses the raw firmware phase + update-available
+// signal into the client-facing [DeviceUpdateStatus]. An in-flight install
+// wins over availability; otherwise an available/ready update reports
+// update_available; everything else is up_to_date.
+func DeriveDeviceUpdateStatus(state DeviceFirmwareState, updateAvailable bool) DeviceUpdateStatus {
+	switch {
+	case state.IsFirmwareUpdateInProgress():
+		return DeviceUpdateStatusInstalling
+	case updateAvailable || state.IsFirmwareUpdateReady():
+		return DeviceUpdateStatusUpdateAvailable
+	default:
+		return DeviceUpdateStatusUpToDate
+	}
+}
+
 // ForcedDeviceAvailability overrides a device's auto-detected availability
 // for testing or operator intervention.
 type ForcedDeviceAvailability string

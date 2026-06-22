@@ -173,7 +173,7 @@ func buildSnapshotEnvelope(deps SnapshotDeps, inc snapshotInclude, centralName s
 			env.Devices = append(env.Devices, toDeviceSummary(d, deps.Devices.CentralOf(d.Address)))
 		}
 		if inc.channels {
-			env.DeviceChannels = snapshotDeviceChannels(devs, deps.Labels, inc.dataPoints)
+			env.DeviceChannels = snapshotDeviceChannels(deps.Devices, devs, deps.Labels, inc.dataPoints)
 		}
 		env.Rooms = snapshotRooms(deps.Devices)
 		env.Functions = snapshotFunctions(deps.Devices)
@@ -374,9 +374,15 @@ func anonToken(kind, value string) string {
 // withDataPoints is set, their data points) using the same projection
 // helpers the per-channel REST endpoints use. devs is expected pre-sorted
 // by the caller so the output ordering is deterministic.
-func snapshotDeviceChannels(devs []*device.Device, labels ParameterLabeler, withDataPoints bool) []SnapshotDeviceChannels {
+func snapshotDeviceChannels(idx DeviceIndex, devs []*device.Device, labels ParameterLabeler, withDataPoints bool) []SnapshotDeviceChannels {
 	out := make([]SnapshotDeviceChannels, 0, len(devs))
 	for _, d := range devs {
+		// Resolve the canonical-unique_id serial suffix once per device — all
+		// its channels share the same owning central.
+		serial := ""
+		if idx != nil {
+			serial = idx.SerialSuffix(idx.CentralOf(d.Address))
+		}
 		chans := d.Channels()
 		entries := make([]SnapshotChannelEntry, 0, len(chans))
 		for _, ch := range chans {
@@ -385,7 +391,7 @@ func snapshotDeviceChannels(devs []*device.Device, labels ParameterLabeler, with
 				dps := ch.DataPoints()
 				entry.DataPoints = make([]DataPointSummary, 0, len(dps))
 				for _, dp := range dps {
-					entry.DataPoints = append(entry.DataPoints, toDataPointSummary(dp, labels, ch))
+					entry.DataPoints = append(entry.DataPoints, toDataPointSummary(dp, labels, ch, serial))
 				}
 			}
 			entries = append(entries, entry)
@@ -441,7 +447,13 @@ func snapshotPrograms(idx HubIndex) []ProgramSummary {
 	out := make([]ProgramSummary, 0, len(progs))
 	for _, p := range progs {
 		active, observed := p.Active()
-		entry := ProgramSummary{ID: p.ID, Name: p.Name, Description: p.Description, Central: p.Central()}
+		entry := ProgramSummary{
+			ID:          p.ID,
+			Name:        p.Name,
+			Description: p.Description,
+			Central:     p.Central(),
+			UniqueID:    p.CanonicalUniqueID(idx.SerialSuffix(p.Central())),
+		}
 		if observed {
 			v := active
 			entry.Active = &v
@@ -461,7 +473,7 @@ func snapshotSysvars(idx HubIndex) []SysvarSummary {
 	vars := idx.Hub().Sysvars()
 	out := make([]SysvarSummary, 0, len(vars))
 	for _, s := range vars {
-		out = append(out, toSysvarSummary(s))
+		out = append(out, toSysvarSummary(s, idx.SerialSuffix(s.Central())))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out

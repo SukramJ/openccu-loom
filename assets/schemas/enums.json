@@ -739,6 +739,23 @@
       ]
     },
     {
+      "name": "DeviceUpdateStatus",
+      "values": [
+        {
+          "go_name": "DeviceUpdateStatusInstalling",
+          "wire_value": "installing"
+        },
+        {
+          "go_name": "DeviceUpdateStatusUpToDate",
+          "wire_value": "up_to_date"
+        },
+        {
+          "go_name": "DeviceUpdateStatusUpdateAvailable",
+          "wire_value": "update_available"
+        }
+      ]
+    },
+    {
       "name": "FailureReason",
       "values": [
         {
@@ -2949,6 +2966,24 @@
           "wire_value": "WEDNESDAY"
         }
       ]
+    }
+  ],
+  "pseudo_addresses": [
+    {
+      "address": "hub",
+      "go_name": "HubAddress"
+    },
+    {
+      "address": "install_mode",
+      "go_name": "InstallModeAddress"
+    },
+    {
+      "address": "program",
+      "go_name": "ProgramAddress"
+    },
+    {
+      "address": "sysvar",
+      "go_name": "SysvarAddress"
     }
   ]
 }

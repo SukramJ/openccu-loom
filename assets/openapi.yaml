@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.19.0
+  version: 1.20.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -3956,6 +3956,14 @@ components:
             (`is_locked`, `hvac_mode`, `brightness`, …). Lets clients
             seed entity state at bootstrap without one extra
             round-trip per CDP.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this Custom-DP — the same
+            value the WS `custom_data_point.state_changed` payload
+            carries. Lets a client build its entity registry from the
+            summary without recomputing the key. Omitted when the
+            central serial is not yet known.
     Problem:
       type: object
       description: |
@@ -4195,6 +4203,14 @@ components:
         available: { type: boolean }
         channels_count: { type: integer }
         updatable: { type: boolean }
+        update_status:
+          type: string
+          enum: [up_to_date, update_available, installing]
+          description: |
+            Daemon-derived firmware-update verdict collapsing the raw CCU
+            firmware phase and update_available signal, so a client renders
+            the update entity without carrying the phase-classification sets.
+            Omitted when the device reports no firmware information.
         rooms:
           type: array
           items: { type: string }
@@ -4311,6 +4327,13 @@ components:
             map functions at channel granularity instead of folding them
             up to the device. Omitted when the channel carries no function
             assignment.
+        is_custom_dp_primary:
+          type: boolean
+          description: |
+            True when the channel owns a Custom-DP AND is the primary
+            (group-master) channel of its group — the daemon-derived
+            "device primary channel" marker. Omitted when neither
+            condition holds.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]
@@ -4537,6 +4560,14 @@ components:
                 Named threshold rule the SPA looks up in its rule
                 registry to colour the readout (e.g. "temp_heat",
                 "alarm_active", "signal_weak"). Empty when no rule.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key for this data point —
+            the same value the WS `datapoint.value_changed` payload
+            carries. Lets a client build its entity registry from the
+            summary or snapshot without recomputing the key. Omitted
+            when the central serial is not yet known.
     UIEventRequest:
       type: object
       description: |
@@ -4587,6 +4618,14 @@ components:
             True when the program matched a configured description marker, so
             clients enable its entity by default. Absent/false when no markers
             are configured: the entry is included but disabled by default.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this program — the same value
+            the WS `hub.program_executed` event carries. Lets clients
+            build their entity registry from the summary without
+            recomputing the key. Omitted when the central serial is
+            not yet known.
     SysvarSummary:
       type: object
       required: [name, value_type, observed]
@@ -4634,6 +4673,14 @@ components:
             True when the variable matched a configured description marker, so
             clients enable its entity by default. Absent/false when no markers
             are configured: the entry is included but disabled by default.
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this system variable — the
+            same value the WS `hub.sysvar_changed` event carries. Lets
+            clients build their entity registry from the summary without
+            recomputing the key. Omitted when the central serial is
+            not yet known.
     SysvarSetRequest:
       type: object
       required: [value]
@@ -5460,6 +5507,14 @@ components:
         available: { type: boolean }
         last_triggered_event:
           $ref: "#/components/schemas/TriggeredEventSummary"
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this event group — the same
+            value the WS `hub.program_executed`-family event carries for
+            event groups. Lets clients build their entity registry from
+            the summary without recomputing the key. Omitted when the
+            central serial is not yet known.
 
     HubCountDataPoint:
       type: object
@@ -6165,6 +6220,14 @@ components:
             clients spawn calculated/combined entities with the same
             names the reference stack generates.
         modified_at: { type: string, format: date-time }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom routing key for this calculated data point —
+            the same canonical key generic data points carry. Lets
+            clients build their entity registry from the summary without
+            recomputing the key. Omitted when the central serial is
+            not yet known.
     CalculatedDPDetail:
       allOf:
         - $ref: "#/components/schemas/CalculatedDPSummary"

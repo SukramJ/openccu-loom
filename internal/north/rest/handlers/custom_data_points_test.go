@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -471,4 +472,69 @@ func TestCustomDPState_FallbackMap(t *testing.T) {
 	if m["parameter"] != "STATE" {
 		t.Errorf("parameter: got %v", m["parameter"])
 	}
+}
+
+// TestCdpUniqueID_UniqueID verifies that cdpUniqueID stamps a loom_-prefixed
+// key when serialSuffix is non-empty, and returns "" for empty serial.
+func TestCdpUniqueID_UniqueID(t *testing.T) {
+	t.Parallel()
+	dp := &stubCustomDP{
+		key: hmtypes.DataPointKey{
+			ChannelAddress: "DEV0200:1",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      "STATE",
+		},
+		category: hmenum.DataPointCategorySwitch,
+	}
+
+	t.Run("with serialSuffix produces loom_ prefix", func(t *testing.T) {
+		t.Parallel()
+		got := cdpUniqueID(dp, "vccu0000000")
+		if got == "" {
+			t.Fatal("cdpUniqueID must not return empty when serialSuffix is set")
+		}
+		if !strings.HasPrefix(got, "loom_") {
+			t.Errorf("cdpUniqueID = %q, want loom_ prefix", got)
+		}
+	})
+
+	t.Run("empty serialSuffix yields empty string", func(t *testing.T) {
+		t.Parallel()
+		got := cdpUniqueID(dp, "")
+		if got != "" {
+			t.Errorf("cdpUniqueID = %q, want empty string when serialSuffix is empty", got)
+		}
+	})
+
+	t.Run("list handler populates unique_id when serial is known", func(t *testing.T) {
+		t.Parallel()
+		d := newTestDevice("DEV0201", "HmIP-BSM")
+		addCustomDP(d, "DEV0201", "STATE", 1, hmenum.DataPointCategorySwitch)
+		idx := &stubDeviceIndex{devices: map[string]*device.Device{"DEV0201": d}}
+
+		req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+		req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV0201"}))
+		w := httptest.NewRecorder()
+		ListCustomDataPoints(idx).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var out []CustomDPSummary
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(out) != 1 {
+			t.Fatalf("expected 1 custom DP, got %d", len(out))
+		}
+		// stubDeviceIndex.SerialSuffix returns "vccu0000000" for non-empty central.
+		// stubDeviceIndex.CentralOf returns "ccu-01" for known addresses, so
+		// the handler will supply a non-empty suffix and unique_id should be set.
+		if out[0].UniqueID == "" {
+			t.Error("unique_id must be set when the central serial is known")
+		}
+		if !strings.HasPrefix(out[0].UniqueID, "loom_") {
+			t.Errorf("unique_id = %q, want loom_ prefix", out[0].UniqueID)
+		}
+	})
 }

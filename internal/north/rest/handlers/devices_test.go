@@ -46,6 +46,13 @@ func (s *stubDeviceIndex) CentralOf(address string) string {
 	return ""
 }
 
+func (s *stubDeviceIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 func newTestDevice(addr, model string) *device.Device {
 	return device.New(device.Config{
 		Address:     addr,
@@ -692,6 +699,13 @@ func (m *multiCentralDeviceIndex) CentralOf(address string) string {
 	return m.centrals[address]
 }
 
+func (m *multiCentralDeviceIndex) SerialSuffix(central string) string {
+	if central != "" {
+		return "vccu0000000"
+	}
+	return ""
+}
+
 func TestListDevices_CentralFilter(t *testing.T) {
 	t.Parallel()
 
@@ -1016,7 +1030,7 @@ func newCategorisedDP(t *testing.T, chAddr string, param hmenum.Parameter, kind 
 func TestToDataPointSummary_CategoryAndType(t *testing.T) {
 	t.Parallel()
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"}, "")
 
 	if s.Category == "" {
 		t.Error("category must not be empty for a CategorisedDataPoint")
@@ -1044,7 +1058,7 @@ func TestToDataPointSummary_NoCategory_FieldsAbsent(t *testing.T) {
 	// To get a DP that truly does NOT implement CategorisedDataPoint we use
 	// a minimal inline stub — not a generic.DataPoint subtype.
 	dp := &minimalDP{param: hmenum.ParameterState}
-	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"}, "")
 
 	if s.Category != "" {
 		t.Errorf("category must be empty for a non-categorised DP, got %q", s.Category)
@@ -1060,7 +1074,7 @@ func TestToDataPointSummary_NoCategory_FieldsAbsent(t *testing.T) {
 func TestToDataPointSummary_TypeFieldDistinctFromDataPointType(t *testing.T) {
 	t.Parallel()
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"}, "")
 
 	// descriptor type is "BOOL" (ParameterTypeBool)
 	if s.Type == "" {
@@ -1167,7 +1181,7 @@ func TestToDataPointSummary_ParameterLabel_TitleCasedWhenUntranslated(t *testing
 		paramLabel: "",
 	}
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"}, "")
 
 	// "STATE" → "State"
 	if s.ParameterLabel != "State" {
@@ -1184,7 +1198,7 @@ func TestToDataPointSummary_ParameterLabel_UsesChannelTypedLabel(t *testing.T) {
 		paramLabel: "State",
 	}
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, lab, &device.Channel{Type: "SWITCH"}, "")
 
 	if s.ParameterLabel != "Schaltzustand" {
 		t.Errorf("ParameterLabel = %q, want %q (channel-typed label)", s.ParameterLabel, "Schaltzustand")
@@ -1197,7 +1211,7 @@ func TestToDataPointSummary_ParameterLabel_UsesChannelTypedLabel(t *testing.T) {
 func TestToDataPointSummary_ParameterLabel_NilLabeler_TitleCasedFallback(t *testing.T) {
 	t.Parallel()
 	dp := newCategorisedDP(t, "ADDR:1", hmenum.ParameterState, generic.KindBinarySensor)
-	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"})
+	s := toDataPointSummary(dp, nil, &device.Channel{Type: "SWITCH"}, "")
 
 	if s.ParameterLabel != "State" {
 		t.Errorf("ParameterLabel = %q with nil labeler, want %q (title-case fallback)", s.ParameterLabel, "State")
@@ -1371,4 +1385,152 @@ func TestToChannelSummary_FunctionsOmittedWhenEmpty(t *testing.T) {
 	if len(s.Functions) != 0 {
 		t.Fatalf("expected empty Functions, got %v", s.Functions)
 	}
+}
+
+// TestToDataPointSummary_UniqueID verifies that a non-empty serialSuffix
+// produces a loom_-prefixed unique_id, and that an empty suffix yields no id.
+func TestToDataPointSummary_UniqueID(t *testing.T) {
+	t.Parallel()
+	dp := newCategorisedDP(t, "0001ABCD:1", hmenum.ParameterState, generic.KindBinarySensor)
+	ch := &device.Channel{Type: "SWITCH"}
+
+	t.Run("with serialSuffix produces loom_ prefix", func(t *testing.T) {
+		t.Parallel()
+		s := toDataPointSummary(dp, nil, ch, "vccu0000000")
+		if s.UniqueID == "" {
+			t.Fatal("UniqueID must not be empty when serialSuffix is set")
+		}
+		if !strings.HasPrefix(s.UniqueID, "loom_") {
+			t.Errorf("UniqueID = %q, want loom_ prefix", s.UniqueID)
+		}
+	})
+
+	t.Run("empty serialSuffix yields empty UniqueID", func(t *testing.T) {
+		t.Parallel()
+		s := toDataPointSummary(dp, nil, ch, "")
+		if s.UniqueID != "" {
+			t.Errorf("UniqueID = %q, want empty string when serialSuffix is empty", s.UniqueID)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// K3 — toDeviceSummary UpdateStatus field
+// ---------------------------------------------------------------------------
+
+// newTestDeviceWithFirmware builds a Device whose firmware tracker is seeded
+// with the given FirmwareInfo so toDeviceSummary can derive UpdateStatus.
+func newTestDeviceWithFirmware(addr string, fw device.FirmwareInfo) *device.Device {
+	return device.New(device.Config{
+		Address:     addr,
+		Model:       "HmIP-BSM",
+		Interface:   hmenum.InterfaceHmIPRF,
+		InterfaceID: "HmIP-RF@CCU",
+		Name:        "Test Device",
+		Firmware:    fw,
+	})
+}
+
+// TestToDeviceSummary_UpdateStatus verifies that toDeviceSummary populates
+// UpdateStatus with the correct derived verdict for a range of firmware
+// states. The default / zero state must produce "up_to_date".
+func TestToDeviceSummary_UpdateStatus(t *testing.T) {
+	t.Parallel()
+
+	valid := map[string]struct{}{
+		string(hmenum.DeviceUpdateStatusUpToDate):        {},
+		string(hmenum.DeviceUpdateStatusUpdateAvailable): {},
+		string(hmenum.DeviceUpdateStatusInstalling):      {},
+	}
+
+	cases := []struct {
+		name string
+		fw   device.FirmwareInfo
+		want hmenum.DeviceUpdateStatus
+	}{
+		{
+			name: "zero firmware info yields up_to_date",
+			fw:   device.FirmwareInfo{},
+			want: hmenum.DeviceUpdateStatusUpToDate,
+		},
+		{
+			name: "UpToDate state yields up_to_date",
+			fw:   device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateUpToDate},
+			want: hmenum.DeviceUpdateStatusUpToDate,
+		},
+		{
+			name: "PerformingUpdate state yields installing",
+			fw:   device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStatePerformingUpdate},
+			want: hmenum.DeviceUpdateStatusInstalling,
+		},
+		{
+			name: "DoUpdatePending state yields installing",
+			fw:   device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateDoUpdatePending},
+			want: hmenum.DeviceUpdateStatusInstalling,
+		},
+		{
+			// ReadyForUpdate is in IsFirmwareUpdateReady, so HmIP-RF gating
+			// surfaces it as update_available even without updateAvailable==true.
+			name: "ReadyForUpdate state yields update_available",
+			fw:   device.FirmwareInfo{UpdateState: hmenum.DeviceFirmwareStateReadyForUpdate},
+			want: hmenum.DeviceUpdateStatusUpdateAvailable,
+		},
+	}
+
+	for _, tc := range cases {
+		d := newTestDeviceWithFirmware("0001ABCD", tc.fw)
+		s := toDeviceSummary(d, "")
+		if _, ok := valid[s.UpdateStatus]; !ok {
+			t.Errorf("%s: UpdateStatus = %q is not a valid DeviceUpdateStatus value", tc.name, s.UpdateStatus)
+		}
+		if s.UpdateStatus != string(tc.want) {
+			t.Errorf("%s: UpdateStatus = %q, want %q", tc.name, s.UpdateStatus, tc.want)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// K1 — toChannelSummary IsCustomDpPrimary field
+// ---------------------------------------------------------------------------
+
+// fakeCustomDP is a minimal AttachableDataPoint for use in the handlers
+// package test — it satisfies the interface without depending on any
+// custom-DP implementation package.
+type fakeCustomDP struct{ key hmtypes.DataPointKey }
+
+func (f *fakeCustomDP) DataPointKey() hmtypes.DataPointKey { return f.key }
+
+// TestToChannelSummary_IsCustomDpPrimary verifies that a channel carrying a
+// custom DP and sitting outside any group (GroupNo==0, treated as primary)
+// yields IsCustomDpPrimary==true, and a plain channel without a custom DP
+// yields false.
+func TestToChannelSummary_IsCustomDpPrimary(t *testing.T) {
+	t.Parallel()
+
+	d := newTestDevice("PRIM0001", "HmIP-BSM")
+
+	// Channel with a custom DP, no group — IsCustomDPPrimaryChannel() → true.
+	chPrimary := d.AddChannel("PRIM0001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	chPrimary.SetCustomDataPoint(&fakeCustomDP{
+		key: hmtypes.DataPointKey{ChannelAddress: "PRIM0001:1", Parameter: "COVER"},
+	})
+
+	// Plain channel — no custom DP → IsCustomDPPrimaryChannel() → false.
+	chPlain := d.AddChannel("PRIM0001:0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+
+	t.Run("primary channel with custom DP yields is_custom_dp_primary=true", func(t *testing.T) {
+		t.Parallel()
+		s := toChannelSummary(chPrimary, nil)
+		if !s.IsCustomDpPrimary {
+			t.Error("expected IsCustomDpPrimary=true for channel with custom DP (no group, treated as primary)")
+		}
+	})
+
+	t.Run("plain channel without custom DP yields is_custom_dp_primary=false", func(t *testing.T) {
+		t.Parallel()
+		s := toChannelSummary(chPlain, nil)
+		if s.IsCustomDpPrimary {
+			t.Error("expected IsCustomDpPrimary=false for channel without custom DP")
+		}
+	})
 }
