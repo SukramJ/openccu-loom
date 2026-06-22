@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1]
+
+Rework the `fetch_all_device_data.fn` ReGa bulk seeder (v2.5) to stop the
+post-CCU-restart `0`/`0.0` placeholder at the source (reference issue #3228), and
+revert the flawed `#149` interim fix.
+
+### Fixed
+
+- **Bulk seeder no longer drops legitimate zero readings; placeholders are kept
+  out at the source.** The `#149` change skipped empty values via
+  `if (vDPValue == "") { bHasValue = false }`. In ReGa an operation's type is
+  determined by the left operand and an empty string coerces to `0`, so
+  `vDPValue == ""` is also true for every numeric `0`/`0.0` — that skip therefore
+  dropped *all* legitimate zero readings from the bulk result, not just
+  not-yet-measured ones. The seeder (v2.5) now (a) gates `VirtualDevices` data
+  points on a valid `LastTimestamp()` so heating groups that carry a `Timestamp()`
+  but no real reading after a restart stay out of the bulk result entirely, and
+  (b) coerces an empty value to `0` only when it is a genuine string script
+  variable (`VarType() == 4`), preserving real numeric zeros. The north-bound
+  `IsValid()` availability gating introduced in `#149` is unchanged and keeps
+  placeholders out on the consumer side.
+
 ## [0.10.0]
 
 Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
