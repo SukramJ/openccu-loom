@@ -1,6 +1,6 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Welle **J** (`unique_id`-Ownership) vollständig umgesetzt (0.10.0); Welle **K** (CCU-Domänen-Ableitung, „dümmerer Client") umgesetzt bis auf den K1-Rest (Feld-Parameter-Komposition + globales Climate-Enum). Offen: F2 (bewusst) + K1-Rest.
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") vollständig umgesetzt (0.10.0); die Feld-Parameter-Komposition (K1) ist ein bewusstes Non-Goal (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
 **Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
@@ -37,15 +37,19 @@ die schnelle Übersicht, was wann landete:
 | J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt (war bereits vorhanden: `tests/contract/routing_key_contract_test.go`) | Sektion J |
 | J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1) — week_profile-Aggregat siehe Body | Sektion J |
 | J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot | Umgesetzt (war bereits vorhanden: nested Snapshot bettet `ChannelSummary` ein) | Sektion J |
-| K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Teilweise (Primärkanal-Marker + Komposition/Vokabular am Wire) — Body | Sektion K |
+| K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Umgesetzt (Primärkanal-Marker + `ClimateMode`/`ClimateProfile`-Enum); Feld-Param-Komposition bewusst Non-Goal (`docs/parity/by_design.md`) | Sektion K |
 | K2 — Normalisierter Custom-DP-Gerätezustand | Umgesetzt (war bereits vorhanden: typisierte `StatePayload`) | Sektion K |
 | K3 — Firmware-Update-Status als abgeleitetes Feld | Umgesetzt (0.10.0) | Sektion K |
 | K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen | Umgesetzt (0.10.0) | Sektion K |
 
-Was bleibt offen: F2 (bewusste Entscheidung) sowie der **K1-Rest**
-(Feld-Parameter-Komposition je Custom-DP + ein globales Climate-Mode-Enum —
-das per-Gerät-Vokabular liegt bereits über `Config.hvac_modes`/`preset_modes`
-am Wire). **Welle J ist vollständig umgesetzt** (0.10.0): der Daemon liefert
+Was bleibt offen: nur noch F2 (bewusste Entscheidung). **Welle K ist umgesetzt**:
+K1 ist mit dem Primärkanal-Marker und den `ClimateMode`/`ClimateProfile`-Enums
+(`pkg/hmenum/climate.go`, nach `enums.json` exportiert) abgeschlossen; die
+feinere Feld-Parameter-Komposition je Custom-DP ist ein **bewusstes Non-Goal**
+(`docs/parity/by_design.md` → `BD-North-CustomDPCompositionMap`: sie würde die
+K2-Normalisierung konterkarieren und die interne Profil-Struktur am Wire
+leaken, ohne einen Client freizuschalten). **Welle J ist vollständig umgesetzt**
+(0.10.0): der Daemon liefert
 `unique_id` jetzt auf allen REST-Summaries + im Snapshot mit und garantiert ihn
 auf den WS-Payloads (`omitempty` entfernt); J2 (Drift-Guard) und J4
 (Channel-Metadaten im Snapshot) waren bereits vorhanden und wurden nur falsch
@@ -649,16 +653,19 @@ CCU-Wahrheit, der Client die HA-Übersetzung.
 Seam, über den der Client noch `aiohomematic` zieht):**
 
 > **Status Welle K (0.10.0): bis auf den K1-Rest umgesetzt.**
-> - **K1** ⚠️ teilweise: der **Primärkanal-Marker** liegt jetzt als
+> - **K1** ✅ umgesetzt: der **Primärkanal-Marker** liegt als
 >   `is_custom_dp_primary` auf `ChannelSummary`
 >   (`device.Channel.IsCustomDPPrimaryChannel`); die **Kanal-Komposition** eines
->   Custom-DP ist über `CustomDPSummary.channels` am Wire, das **Climate-/
->   Preset-Vokabular** per Gerät über `CustomDPSummary.config`
->   (`hvac_modes`/`preset_modes`). **Offen:** die feinere
->   **Feld-→Parameter-Komposition** je Custom-DP und ein **globales**
->   Climate-Mode-Enum (das per-Gerät-Vokabular reicht den meisten Clients) —
->   beides bräuchte das `RebasedChannelGroupConfig` am Wire bzw. ein
->   kanonisches Mode-Set.
+>   Custom-DP über `CustomDPSummary.channels`; das **Climate-/Preset-Vokabular**
+>   als geschlossenes `ClimateMode`/`ClimateProfile`-Enum
+>   (`pkg/hmenum/climate.go`, nach `enums.json` exportiert — `climate.Mode`/
+>   `Profile` sind jetzt Aliase darauf, Single-Source) plus per Gerät über
+>   `CustomDPSummary.config` (`hvac_modes`/`preset_modes`). **Bewusstes
+>   Non-Goal:** die feinere **Feld-→Parameter-Komposition** je Custom-DP —
+>   `docs/parity/by_design.md` → `BD-North-CustomDPCompositionMap`
+>   (konterkariert die K2-Normalisierung, leakt die interne Profil-Struktur,
+>   schaltet keinen Client frei: nach Primärkanal-Marker + Climate-Enum sind
+>   alle Registry-*Outputs* gedeckt).
 > - **K2** ✅ war bereits vorhanden: `CustomDPSummary.state` ist die typisierte
 >   `payload.StatePayload` (`is_locked`, `hvac_mode`, `brightness`,
 >   `current_position`, …), kein roher Paramset-Dict. Die HA-Einheiten-Skalierung

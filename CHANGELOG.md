@@ -35,12 +35,19 @@ Close the external-client backlog waves **J** (`unique_id`-ownership) and **K**
   now named constants in `internal/routingkey` and ship in a `pseudo_addresses`
   block of `assets/schemas/enums.json`, so a wire client reads them from the
   daemon contract instead of `aiohomematic.const`.
-- **K1 (partial) — primary-channel marker.** `ChannelSummary.is_custom_dp_primary`
-  surfaces `device.Channel.IsCustomDPPrimaryChannel`, the daemon-derived "device
-  primary channel" marker. Custom-DP channel composition (`channels`) and the
-  per-device climate vocabulary (`config.hvac_modes` / `preset_modes`) were
-  already on the wire; the finer field→parameter composition map and a global
-  climate-mode enum remain open (see `docs/external-clients/asks.md` §K1).
+- **K1 — primary-channel marker + climate vocabulary enum.**
+  `ChannelSummary.is_custom_dp_primary` surfaces
+  `device.Channel.IsCustomDPPrimaryChannel`, the daemon-derived "device primary
+  channel" marker. New `ClimateMode` (`auto|heat|cool|off`) and `ClimateProfile`
+  (`none|away|boost|comfort|eco|week_program_1..6`) enums in `pkg/hmenum`
+  (exported into `enums.json`) publish the closed climate vocabulary for typed
+  client dispatch; `climate.Mode` / `climate.Profile` are now aliases of them
+  (single source). Custom-DP channel composition (`channels`) and the per-device
+  available subset (`config.hvac_modes` / `preset_modes`) were already on the
+  wire. The finer field→parameter composition map is a **deliberate non-goal**
+  (`docs/parity/by_design.md` → `BD-North-CustomDPCompositionMap`): it would
+  contradict the K2 state normalisation and leak the internal profile graph onto
+  the wire without unblocking any client.
 
 ### Changed
 

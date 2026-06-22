@@ -252,6 +252,76 @@
       ]
     },
     {
+      "name": "ClimateMode",
+      "values": [
+        {
+          "go_name": "ClimateModeAuto",
+          "wire_value": "auto"
+        },
+        {
+          "go_name": "ClimateModeCool",
+          "wire_value": "cool"
+        },
+        {
+          "go_name": "ClimateModeHeat",
+          "wire_value": "heat"
+        },
+        {
+          "go_name": "ClimateModeOff",
+          "wire_value": "off"
+        }
+      ]
+    },
+    {
+      "name": "ClimateProfile",
+      "values": [
+        {
+          "go_name": "ClimateProfileAway",
+          "wire_value": "away"
+        },
+        {
+          "go_name": "ClimateProfileBoost",
+          "wire_value": "boost"
+        },
+        {
+          "go_name": "ClimateProfileComfort",
+          "wire_value": "comfort"
+        },
+        {
+          "go_name": "ClimateProfileEco",
+          "wire_value": "eco"
+        },
+        {
+          "go_name": "ClimateProfileNone",
+          "wire_value": "none"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram1",
+          "wire_value": "week_program_1"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram2",
+          "wire_value": "week_program_2"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram3",
+          "wire_value": "week_program_3"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram4",
+          "wire_value": "week_program_4"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram5",
+          "wire_value": "week_program_5"
+        },
+        {
+          "go_name": "ClimateProfileWeekProgram6",
+          "wire_value": "week_program_6"
+        }
+      ]
+    },
+    {
       "name": "CommandRxMode",
       "values": [
         {
