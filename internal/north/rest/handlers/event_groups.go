@@ -23,7 +23,9 @@ type EventGroupSummary struct {
 	// UniqueID is the canonical loom-namespaced routing key for this event
 	// group (the [event.Group.CanonicalUniqueID] result). Lets a client seed
 	// its event-entity registry from the summary without recomputing the key.
-	UniqueID string `json:"unique_id,omitempty"`
+	// Always present and non-empty (the central's serial is resolved before any
+	// entity is served — see [DataPointSummary.UniqueID]).
+	UniqueID string `json:"unique_id"`
 	// Kind is the short device-trigger flavour ("keypress", "impulse",
 	// "device_error"), matching the group's translation key rather than the
 	// fully-qualified internal Kind ("homematic.keypress").

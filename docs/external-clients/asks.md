@@ -1,6 +1,6 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") vollständig umgesetzt (0.10.0); die Feld-Parameter-Komposition (K1) ist ein bewusstes Non-Goal (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") **vollständig umgesetzt** (In-Tree **0.10.0**). Die J1-Nacharbeit ist erledigt: `unique_id` ist jetzt **garantiert nicht-leer** (Serial-Readiness-Gate, `hub_wiring.go` `resolveCCUSerial` — ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist) und im Schema `required` (REST + WS) — der Client kann `canonical.py` streichen. J2 hat jetzt einen echten Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`) zusätzlich zum Go-Golden-Test. Bewusste Non-Goals: K1-Feld-Parameter-Komposition (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
 **Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
@@ -33,8 +33,8 @@ die schnelle Übersicht, was wann landete:
 | H1 — Streaming /snapshot (NDJSON) | Umgesetzt | OpenAPI |
 | H2 — Strukturiertes /diagnostics | Umgesetzt (Doku des bestehenden JSON-Surface, Prometheus-Trennung) | OpenAPI |
 | Sektion I — Rate-Limiting / Timezone / Heartbeat / Token-Rotation / Multi-Central / Idempotency | Umgesetzt (alle dokumentiert/verdrahtet) | siehe Body |
-| J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | Umgesetzt (0.10.0) | Sektion J |
-| J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt (war bereits vorhanden: `tests/contract/routing_key_contract_test.go`) | Sektion J |
+| J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | Umgesetzt — Feld auf allen Summaries + Snapshot + WS, `omitempty` entfernt + `required` (REST + WS); **garantiert nicht-leer** über das Serial-Readiness-Gate (`hub_wiring.go` `resolveCCUSerial`: ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist). Client kann `canonical.py` streichen. | Sektion J |
+| J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt — Go-Golden-Test (`routing_key_contract_test.go`) **plus** automatischer Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`), der die Fixtures gegen aiohomematics aktuellen `generate_unique_id`-Output prüft (schließt die manuelle-Sync-Lücke) | Sektion J |
 | J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1) — week_profile-Aggregat siehe Body | Sektion J |
 | J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot | Umgesetzt (war bereits vorhanden: nested Snapshot bettet `ChannelSummary` ein) | Sektion J |
 | K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Umgesetzt (Primärkanal-Marker + `ClimateMode`/`ClimateProfile`-Enum); Feld-Param-Komposition bewusst Non-Goal (`docs/parity/by_design.md`) | Sektion K |
@@ -42,25 +42,58 @@ die schnelle Übersicht, was wann landete:
 | K3 — Firmware-Update-Status als abgeleitetes Feld | Umgesetzt (0.10.0) | Sektion K |
 | K4 — CCU-Domänen-Konstanten/Enums aus den generierten Typen | Umgesetzt (0.10.0) | Sektion K |
 
-Was bleibt offen: nur noch F2 (bewusste Entscheidung). **Welle K ist umgesetzt**:
-K1 ist mit dem Primärkanal-Marker und den `ClimateMode`/`ClimateProfile`-Enums
-(`pkg/hmenum/climate.go`, nach `enums.json` exportiert) abgeschlossen; die
-feinere Feld-Parameter-Komposition je Custom-DP ist ein **bewusstes Non-Goal**
-(`docs/parity/by_design.md` → `BD-North-CustomDPCompositionMap`: sie würde die
-K2-Normalisierung konterkarieren und die interne Profil-Struktur am Wire
-leaken, ohne einen Client freizuschalten). **Welle J ist vollständig umgesetzt**
-(0.10.0): der Daemon liefert
-`unique_id` jetzt auf allen REST-Summaries + im Snapshot mit und garantiert ihn
-auf den WS-Payloads (`omitempty` entfernt); J2 (Drift-Guard) und J4
-(Channel-Metadaten im Snapshot) waren bereits vorhanden und wurden nur falsch
-als „offen" geführt. **Welle K** ist bis auf den K1-Rest umgesetzt: K2
-(normalisierter State) war bereits vorhanden, K3 (`update_status`) und K4
-(Pseudo-Adressen als benannte Konstanten im Export) sind neu. Damit löst J
-`canonical.py`/`generate_unique_id` und K4 den `aiohomematic.const`-Rest; die
-größte verbleibende aiohomematic-Kopplung (`DeviceProfileRegistry`, K1) ist auf
-die Feld-Parameter-Komposition reduziert. Alle übrigen 22 Asks aus A–I sind
-entweder als Runtime-Feature gelandet oder als Vertrags-Erweiterung in OpenAPI /
-wsapi.json / docs/ verankert.
+Stand 0.10.0-in-tree (verifiziert gegen den Code):
+
+**Welle K ist umgesetzt** (verifiziert): K1 mit Primärkanal-Marker
+`is_custom_dp_primary` (`ChannelSummary`, `devices.go:158`) + `ClimateMode`/
+`ClimateProfile`-Enums (`pkg/hmenum/climate.go`, nach `enums.json` exportiert);
+K2 typisierter `StatePayload` (`internal/payload/state.go` — benannte Felder,
+kein Paramset-Dict); K3 `update_status` (`devices.go:70`); K4 Pseudo-Adressen +
+Dispatch-Enums in `enums.json`. Die feinere **Feld-Parameter-Komposition** je
+Custom-DP ist ein **bewusstes Non-Goal** (`docs/parity/by_design.md` →
+`BD-North-CustomDPCompositionMap`) — client-seitig bestätigt: **keine**
+Consumer-Stelle braucht sie (Schreib-Fan-out läuft server-seitig über
+`invoke(operation=…)`, Member-DP-Unterdrückung über den daemon-seitigen
+`usage`-Verdikt). _Kleiner Rest:_ `ClimateMode` ist nur im `enums.json`-Export,
+**nicht** als benanntes OpenAPI-Schema (reitet dort auf `config.hvac_modes` als
+freie Strings) — Symmetrie-Lücke, kein Blocker.
+
+**Welle J ist vollständig umgesetzt** — die zuvor offene Nacharbeit ist erledigt:
+
+- **J1 (erledigt):** Das `unique_id`-Feld liegt auf allen Summaries, im nested
+  Snapshot und auf den WS-Payloads, ist **nicht mehr `omitempty`** und im Schema
+  `required` (REST-Summaries + die beiden Kern-WS-Payloads). Die
+  **Nicht-Leer-Garantie** liefert das Serial-Readiness-Gate:
+  `WireHub`/`resolveCCUSerial` (`hub_wiring.go`) löst den CCU-Serial — den
+  Central-ID-Slot jedes Hub/INT/Virtual-Remote-Keys — mit bounded Retry **vor**
+  dem Geräte-Load auf; schlägt das fehl, scheitert die Bring-up und das Gate
+  re-wartet, sodass ein Central **nie** Entities mit unaufgelöstem Serial
+  ausliefert (gleiche Philosophie wie `ccu_readiness.go`: lieber eine Central
+  zurückhalten als identitäts-kaputte Entities publizieren). Damit kann der
+  Client `canonical.py` aus dem Kern streichen.
+- **J2 (erledigt):** Zusätzlich zum Go-Golden-Test gibt es jetzt einen echten
+  Cross-Repo-Parity-Check (`script/routing_key_parity.py`, `make
+  routing-key-parity`): er führt aiohomematics aktuellen `generate_unique_id`/
+  `generate_channel_unique_id` über dieselben Fixture-Inputs aus und vergleicht
+  gegen die `expected`-Werte. Go-Test pinnt Go==Fixtures, der Parity-Check pinnt
+  Python==Fixtures ⇒ automatische Go↔Python-Parität (schließt die zuvor manuelle
+  Sync-Lücke). Der Test-Kommentar verweist jetzt auf den Parity-Check statt auf
+  „copy upstream".
+- **J3 (Rest by-design):** calculated DPs + event_groups tragen `unique_id`,
+  sysvar/program via J1. Offen-by-design: `WeekProfileResponse` ist ein
+  per-Kanal-Aggregat ohne 1:1-Entity, die `schedule_channel_switch`-Keys bleiben
+  daher **client-synthetisiert**, bis es eine eigene REST-Entity-Fläche gibt.
+- **J4 ist voll umgesetzt** (verifiziert): der nested Snapshot bettet die
+  komplette `ChannelSummary` ein (`snapshot.go:53`) — das N+1 ist real weg.
+
+**Netto:** J löst `canonical.py`/`generate_unique_id` (Serial-Garantie steht),
+K4 löst den `aiohomematic.const`-Rest. Die größte verbleibende
+aiohomematic-Laufzeitkopplung (`DeviceProfileRegistry`) ist client-seitig auf
+**eine** kosmetische Stelle reduziert (`naming.py:161`, `ch`/`vch`-Marker) —
+ablösbar über den daemon-seitigen `usage`-Verdikt, **keine** Daemon-Nacharbeit
+nötig. Alle übrigen 22 Asks aus A–I sind entweder als Runtime-Feature gelandet
+oder als Vertrags-Erweiterung verankert; **außer F2 (bewusst) bleibt nichts
+mehr als Daemon-Nacharbeit offen.**
 
 ## Zweck
 
@@ -535,18 +568,30 @@ Hintergrund + Architektur: das Konzept
 Migrations-Spezifikation
 [`ha-unique-id-migration.md`](./ha-unique-id-migration.md).
 
-> **Status Welle J (0.10.0): vollständig umgesetzt.**
-> - **J1** ✅ `unique_id` (das `CanonicalUniqueID`-Ergebnis) liegt jetzt auf
->   `DataPointSummary`, `CustomDPSummary`, `ProgramSummary`, `SysvarSummary`,
->   `CalculatedDPSummary`, `EventGroupSummary` und den nested
->   Snapshot-Datenpunkten; auf den WS-Value-Changed-Payloads wurde `omitempty`
->   entfernt (immer befüllt). Der Serial-Suffix kommt über die um
->   `SerialSuffix(central)` erweiterten `DeviceIndex`/`HubIndex`-Facades.
-> - **J2** ✅ war bereits vorhanden: `tests/contract/routing_key_contract_test.go`
->   hält `GenerateUniqueID`/`GenerateChannelUniqueID` gegen ein eingefrorenes
->   Golden-Korpus — exakt das geforderte C1-Lockstep-Muster. Neu ergänzt:
->   `event.Group.CanonicalUniqueID`, sodass auch Event-Gruppen-Keys an einer
->   Stelle (Go) leben.
+> **Status Welle J (0.10.0-in-tree, noch nicht getaggt): größtenteils umgesetzt —
+> J1-Garantie + J2-Labeling offen (Daemon-Nacharbeit).**
+> - **J1** ⚠️ **Feld da, aber nicht garantiert.** `unique_id` (das
+>   `CanonicalUniqueID`-Ergebnis) liegt auf `DataPointSummary`, `CustomDPSummary`,
+>   `ProgramSummary`, `SysvarSummary`, `CalculatedDPSummary`, `EventGroupSummary`
+>   und den nested Snapshot-Datenpunkten; auf den WS-Value-Changed-Payloads wurde
+>   `omitempty` entfernt. **Aber:** `toDataPointSummary` setzt es nur
+>   `if serialSuffix != ""` (`devices.go:825`), REST-Feld ist `omitempty`, und
+>   OpenAPI führt es **nicht** als `required` (`openapi.yaml:4569` „omitted when
+>   the central serial is not yet known"; WS „Optional", `:5265`). **Nacharbeit:**
+>   Serial vor Auslieferung garantiert auflösen + `unique_id` als
+>   `required`/immer-nicht-leer verankern — sonst behält der Client `canonical.py`
+>   und aiohomematic fällt **nicht** aus dem Kern. (Serial-Suffix kommt über die um
+>   `SerialSuffix(central)` erweiterten `DeviceIndex`/`HubIndex`-Facades.)
+> - **J2** ⚠️ **Golden-Test, keine aiohomematic-Parität.**
+>   `tests/contract/routing_key_contract_test.go` hält `GenerateUniqueID`/
+>   `GenerateChannelUniqueID` gegen ein **byte-fixiertes Golden-Korpus**, das
+>   **manuell** aus aiohomematics Output nachgezogen wird (Test-Kommentar:
+>   „Re-pin by copying the upstream golden files") — **kein** automatischer
+>   Cross-Sprach-Check wie der `enums.json`-Lockstep (C1). Genügt für den
+>   Endzustand, deckt die Übergangsphase (Client nutzt beides parallel) aber
+>   nicht. **Nacharbeit:** als „Golden, manuell synced" labeln oder echten
+>   Cross-Repo-Paritätscheck ergänzen. Neu ergänzt: `event.Group.CanonicalUniqueID`
+>   (Event-Gruppen-Keys an einer Stelle, Go).
 > - **J3** ✅ calculated DPs + event_groups tragen `unique_id`; sysvar/program
 >   via J1. **Offen-by-design:** die `WeekProfileResponse` ist ein
 >   per-Kanal-Aggregat (kein Entity-1:1), trägt daher keinen einzelnen
@@ -556,6 +601,10 @@ Migrations-Spezifikation
 >   ein (`SnapshotChannelEntry`), trägt also `group_no`/`room`/`functions`/
 >   `is_group_master`/`sub_device_name` in **einem** Call — das N+1-Problem
 >   existiert nicht mehr.
+
+> _Die folgenden Unterabschnitte J1–J4 sind der **ursprüngliche Ask** (Stand vor
+> Umsetzung, im Präsens formuliert). Der aktuelle Stand — inkl. der offenen
+> J1-/J2-Nacharbeit — steht im **Status-Blockquote oben**._
 
 ### J1. `unique_id` auf die REST-Surfaces (Summaries + Snapshot)
 
@@ -681,6 +730,9 @@ Seam, über den der Client noch `aiohomematic` zieht):**
 >   `assets/schemas/enums.json` exportiert; `DataPointKey` lag bereits in
 >   `types.json`, die fünf Dispatch-Enums in `enums.json`. Der
 >   `aiohomematic.const`-Import des Clients entfällt damit.
+
+> _Die folgenden Unterabschnitte K1–K4 sind der **ursprüngliche Ask** (Stand vor
+> Umsetzung, im Präsens). Der aktuelle Stand steht im **Status-Blockquote oben**._
 
 ### K1. Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab)
 

@@ -27,8 +27,11 @@ type DeviceTriggerPayload struct {
 	// UniqueID is the canonical loom-namespaced routing key for the data
 	// point this trigger fires on; it matches the value-changed entity's
 	// key (a trigger and a value change on the same DP route to the same
-	// HA entity). Optional; see [DataPointValueChangedPayload.UniqueID].
-	UniqueID string `json:"unique_id,omitempty"`
+	// HA entity). Always present and non-empty — it resolves from the
+	// (gated) central serial plus the channel address + parameter, both
+	// always carried by a trigger event. See
+	// [DataPointValueChangedPayload.UniqueID].
+	UniqueID string `json:"unique_id"`
 	Value    any    `json:"value,omitempty"`
 }
 
