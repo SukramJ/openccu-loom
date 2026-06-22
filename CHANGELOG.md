@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1]
+
+### Fixed
+
+- **Complete the published contract for the 0.9.0 wire gaps (openapi.yaml
+  drift).** D1–D3 shipped in the Go implementation and `wsapi.json` but their
+  schemas were never added to `assets/openapi.yaml`, so generated client type
+  packages (`openccu-loom-types`) could not see them — and the types
+  regeneration broke outright on D1 (`gen_ws` could not resolve the broadcast
+  payload). The daemon binary already emitted these fields at runtime; this
+  release only corrects the published contract + schema digest.
+  - **D1** — added the `HubSystemUpdateChangedPayload` schema (referenced by the
+    `hub.system_update_changed` broadcast in `wsapi.json`).
+  - **D2** — added `value_translations` (object) to `DataPointSummary`.
+  - **D3** — added `functions` (array) to `ChannelSummary`.
+  - Regenerated the contract `SchemaDigest`; APIVersion stays `1.19.0` (no
+    surface change — these fields were already served, just undocumented).
+
 ## [0.9.0]
 
 ### Added
