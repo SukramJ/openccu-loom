@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -27,7 +28,16 @@ import (
 //   - has_climate_schedule: true when a ClimateProfile backend is bound;
 //     false otherwise (hint only — does not trigger a Load call)
 type WeekProfileResponse struct {
-	Address                 string                          `json:"address"`
+	Address string `json:"address"`
+	// UniqueID is the canonical loom-namespaced routing key for the
+	// device-level week-profile sensor entity
+	// (`loom_week_profile_<device-addr>_week_profile`). It is bit-identical to
+	// the key a client otherwise synthesises, so the client consumes it instead
+	// of recomputing it. Built over the owning *device* address (not this
+	// channel address) + parameter "WEEK_PROFILE" + prefix "week_profile",
+	// mirroring the reference WeekProfileDataPoint. Always present and
+	// non-empty (the serial-readiness gate guarantees the central-id slot).
+	UniqueID                string                          `json:"unique_id"`
 	ScheduleType            string                          `json:"schedule_type"`
 	MinTemp                 float64                         `json:"min_temp"`
 	MaxTemp                 float64                         `json:"max_temp"`
@@ -50,6 +60,14 @@ type TargetChannelSummary struct {
 	Name           string `json:"name"`
 	// ChannelType is "primary" or "secondary".
 	ChannelType string `json:"channel_type"`
+	// UniqueID is the canonical loom-namespaced routing key for the
+	// schedule-channel-switch entity this target maps to
+	// (`loom_schedule_channel_switch_<device-addr>_schedule_channel_lock_<channel_key>`).
+	// Bit-identical to the client-synthesised key: built over the owning
+	// *device* address + parameter "SCHEDULE_CHANNEL_LOCK_<channel_key>"
+	// (the map key, e.g. "1_1") + prefix "schedule_channel_switch", mirroring
+	// the reference ScheduleChannelSwitch. Always present and non-empty.
+	UniqueID string `json:"unique_id"`
 }
 
 // GetWeekProfile returns the week-profile metadata descriptor for one
@@ -90,6 +108,16 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 			enabled = nil
 		}
 
+		// The week-profile sensor and the schedule-channel-switches are
+		// device-level entities (mirroring the reference stack), so their
+		// canonical keys are built over the owning device address — not this
+		// channel address — with the serial from the owning central.
+		serial := serialSuffixForChannel(idx, ch)
+		deviceAddr := ch.Address
+		if dev := ch.Device(); dev != nil {
+			deviceAddr = dev.Address
+		}
+
 		// Surface the channel-lock key -> target channel mapping so consumers
 		// can name a per-channel schedule switch after the actuator channel.
 		var targets map[string]TargetChannelSummary
@@ -101,12 +129,16 @@ func GetWeekProfile(idx DeviceIndex) http.HandlerFunc {
 					ChannelAddress: info.ChannelAddress,
 					Name:           info.Name,
 					ChannelType:    info.ChannelType,
+					UniqueID: routingkey.CanonicalUniqueID(
+						serial, deviceAddr, "SCHEDULE_CHANNEL_LOCK_"+key, "schedule_channel_switch",
+					),
 				}
 			}
 		}
 
 		resp := WeekProfileResponse{
 			Address:                 ch.Address,
+			UniqueID:                routingkey.CanonicalUniqueID(serial, deviceAddr, "WEEK_PROFILE", "week_profile"),
 			ScheduleType:            schedType,
 			MinTemp:                 wp.MinTemp(),
 			MaxTemp:                 wp.MaxTemp(),
