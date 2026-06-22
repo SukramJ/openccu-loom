@@ -19,6 +19,8 @@
     {"central_id": "ccu3", "address": "program", "parameter": "my_prog", "prefix": null, "expected": "ccu3_program_my_prog"},
     {"central_id": "ccu3", "address": "sysvar", "parameter": "aussen-temperatur", "prefix": null, "expected": "ccu3_sysvar_aussen-temperatur"},
     {"central_id": "1234", "address": "VCU1234567:3", "parameter": null, "prefix": null, "expected": "vcu1234567_3"},
-    {"central_id": "1234", "address": "INT0001234:2", "parameter": "LEVEL", "prefix": null, "expected": "1234_int0001234_2_level"}
+    {"central_id": "1234", "address": "INT0001234:2", "parameter": "LEVEL", "prefix": null, "expected": "1234_int0001234_2_level"},
+    {"central_id": "1234", "address": "VCU1234567", "parameter": "WEEK_PROFILE", "prefix": "week_profile", "expected": "week_profile_vcu1234567_week_profile"},
+    {"central_id": "1234", "address": "VCU1234567", "parameter": "SCHEDULE_CHANNEL_LOCK_1_1", "prefix": "schedule_channel_switch", "expected": "schedule_channel_switch_vcu1234567_schedule_channel_lock_1_1"}
   ]
 }

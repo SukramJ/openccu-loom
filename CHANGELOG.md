@@ -4,6 +4,25 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0]
+
+### Added
+
+- **J5 — `unique_id` on the week-profile / schedule-channel-switch surfaces.**
+  `WeekProfileResponse` now carries a top-level `unique_id` for the device-level
+  week-profile sensor entity
+  (`loom_week_profile_<device-addr>_week_profile`), and every
+  `available_target_channels` (`TargetChannelSummary`) entry carries a
+  `unique_id` for its schedule-channel-switch entity
+  (`loom_schedule_channel_switch_<device-addr>_schedule_channel_lock_<channel_key>`).
+  Both keys are built over the owning **device** address (not the channel
+  address), `required`, and **bit-identical** to the keys a client otherwise
+  synthesises — verified by two new routing-key golden-fixture cases that the Go
+  golden test and the `make routing-key-parity` Go↔Python check both pin
+  (21/21). This closes the last schedule-path `unique_id` gap from J3, so a
+  client drops its own key recomputation (`canonical.py`) from the schedule
+  path too. APIVersion → 1.21.0.
+
 ## [0.10.1]
 
 Rework the `fetch_all_device_data.fn` ReGa bulk seeder (v2.5) to stop the

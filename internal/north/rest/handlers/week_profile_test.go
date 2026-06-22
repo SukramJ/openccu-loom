@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/device"
@@ -164,6 +165,93 @@ func TestGetWeekProfile_UnknownDevice(t *testing.T) {
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestGetWeekProfile_UniqueID verifies that GetWeekProfile sets unique_id on
+// the top-level WeekProfileResponse using the owning device address (not the
+// channel address), and that each available_target_channels entry carries a
+// correctly-formed unique_id keyed by its map key.
+//
+// Regression guard: the top-level unique_id must NOT embed the channel suffix
+// (e.g. "_1_week_profile") — only the bare device address root may appear.
+func TestGetWeekProfile_UniqueID(t *testing.T) {
+	t.Parallel()
+
+	// Device address "0001ABCD", channel "0001ABCD:1".
+	// stubDeviceIndex.SerialSuffix returns "vccu0000000" for any non-empty
+	// central; "0001ABCD" is a normal device (no INT/virtual-remote prefix)
+	// so the serial does not appear in the key.
+	d, wp := newWeekProfileFixture()
+
+	// Attach one target channel under key "1_1" so available_target_channels
+	// is populated and the TargetChannelSummary.UniqueID path is exercised.
+	wp.SetAvailableTargetChannels(map[string]weekprofile.TargetChannelInfo{
+		"1_1": {
+			ChannelNo:      1,
+			ChannelAddress: "0001ABCD:1",
+			Name:           "Actuator 1",
+			ChannelType:    "primary",
+		},
+	})
+
+	idx := newWeekProfileIndex(d)
+
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
+	w := httptest.NewRecorder()
+	GetWeekProfile(idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var resp WeekProfileResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	// --- top-level unique_id ---
+	uid := resp.UniqueID
+	if uid == "" {
+		t.Fatal("unique_id must not be empty")
+	}
+	if !strings.HasPrefix(uid, "loom_week_profile_") {
+		t.Errorf("unique_id must start with %q, got %q", "loom_week_profile_", uid)
+	}
+	if !strings.HasSuffix(uid, "_week_profile") {
+		t.Errorf("unique_id must end with %q, got %q", "_week_profile", uid)
+	}
+	// Device address root (lowercased, no channel suffix).
+	if !strings.Contains(uid, "0001abcd") {
+		t.Errorf("unique_id must contain device address root %q, got %q", "0001abcd", uid)
+	}
+	// Regression guard: channel suffix "_1" must NOT appear — the key is
+	// built from the device address, not the channel address "0001ABCD:1".
+	if strings.Contains(uid, "0001abcd_1") {
+		t.Errorf("unique_id must use device address (not channel address); got %q which contains channel suffix", uid)
+	}
+
+	// --- available_target_channels unique_id ---
+	if len(resp.AvailableTargetChannels) == 0 {
+		t.Fatal("expected at least one entry in available_target_channels")
+	}
+	tcs, ok := resp.AvailableTargetChannels["1_1"]
+	if !ok {
+		t.Fatal("expected key \"1_1\" in available_target_channels")
+	}
+	tcUID := tcs.UniqueID
+	if tcUID == "" {
+		t.Fatal("available_target_channels[\"1_1\"].unique_id must not be empty")
+	}
+	if !strings.HasPrefix(tcUID, "loom_schedule_channel_switch_") {
+		t.Errorf("target unique_id must start with %q, got %q", "loom_schedule_channel_switch_", tcUID)
+	}
+	if !strings.Contains(tcUID, "0001abcd") {
+		t.Errorf("target unique_id must contain device address root %q, got %q", "0001abcd", tcUID)
+	}
+	if !strings.HasSuffix(tcUID, "_schedule_channel_lock_1_1") {
+		t.Errorf("target unique_id must end with %q, got %q", "_schedule_channel_lock_1_1", tcUID)
 	}
 }
 

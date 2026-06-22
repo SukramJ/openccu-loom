@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.20.0
+  version: 1.21.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6120,10 +6120,20 @@ components:
         target_profile: { type: integer, minimum: 1, maximum: 6 }
     WeekProfileResponse:
       type: object
-      required: [address, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]
+      required: [address, unique_id, schedule_type, min_temp, max_temp, profile_count, has_climate_schedule]
       description: Week-profile descriptor for a thermostat channel.
       properties:
         address: { type: string }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key for the device-level
+            week-profile sensor entity
+            (`loom_week_profile_<device-addr>_week_profile`), built over the
+            owning device address + parameter "WEEK_PROFILE" + prefix
+            "week_profile". Bit-identical to the client-synthesised key so the
+            client consumes it instead of recomputing it. Always present and
+            non-empty (the serial-readiness gate guarantees the central-id slot).
         schedule_type: { type: string, enum: [default, climate] }
         min_temp: { type: number }
         max_temp: { type: number }
@@ -6147,13 +6157,23 @@ components:
 
     TargetChannelSummary:
       type: object
-      required: [channel_no, channel_address, name, channel_type]
+      required: [channel_no, channel_address, name, channel_type, unique_id]
       description: Schedule-controllable target channel a channel-lock key maps to.
       properties:
         channel_no: { type: integer }
         channel_address: { type: string }
         name: { type: string }
         channel_type: { type: string, enum: [primary, secondary] }
+        unique_id:
+          type: string
+          description: |
+            Canonical loom-namespaced routing key for the schedule-channel-switch
+            entity this target maps to
+            (`loom_schedule_channel_switch_<device-addr>_schedule_channel_lock_<channel_key>`),
+            built over the owning device address + parameter
+            "SCHEDULE_CHANNEL_LOCK_<channel_key>" (the map key, e.g. "1_1") +
+            prefix "schedule_channel_switch". Bit-identical to the
+            client-synthesised key; always present and non-empty.
 
     # ---- Direct + central links ----
     Link:

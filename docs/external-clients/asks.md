@@ -1,6 +1,6 @@
 # External-Client Integration — Backlog & Vertragslücken
 
-**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") **vollständig umgesetzt** (In-Tree **0.10.0**). Die J1-Nacharbeit ist erledigt: `unique_id` ist jetzt **garantiert nicht-leer** (Serial-Readiness-Gate, `hub_wiring.go` `resolveCCUSerial` — ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist) und im Schema `required` (REST + WS) — der Client kann `canonical.py` streichen. J2 hat jetzt einen echten Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`) zusätzlich zum Go-Golden-Test. Bewusste Non-Goals: K1-Feld-Parameter-Komposition (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
+**Status:** Substantiell umgesetzt (5 Wellen + 3 ADRs). Wellen **J** (`unique_id`-Ownership) und **K** (CCU-Domänen-Ableitung, „dümmerer Client") **vollständig umgesetzt** (In-Tree **0.10.0**). Die J1-Nacharbeit ist erledigt: `unique_id` ist jetzt **garantiert nicht-leer** (Serial-Readiness-Gate, `hub_wiring.go` `resolveCCUSerial` — ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist) und im Schema `required` (REST + WS) — der Client kann `canonical.py` aus dem Entity-/Key-Pfad streichen — inkl. **J5** (Week-Profile-/Schedule-Channel-Switch-`unique_id`s, jetzt umgesetzt). J2 hat jetzt einen echten Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`) zusätzlich zum Go-Golden-Test (deckt auch die J5-Key-Formate bit-identisch ab). Bewusste Non-Goals: K1-Feld-Parameter-Komposition (`docs/parity/by_design.md`). Offen: nur noch F2 (bewusst).
 **Letzte Aktualisierung:** 2026-06-22
 
 ## Closure Index
@@ -35,8 +35,9 @@ die schnelle Übersicht, was wann landete:
 | Sektion I — Rate-Limiting / Timezone / Heartbeat / Token-Rotation / Multi-Central / Idempotency | Umgesetzt (alle dokumentiert/verdrahtet) | siehe Body |
 | J1 — `unique_id` auf REST-Summaries + Snapshot (garantiert auf WS) | Umgesetzt — Feld auf allen Summaries + Snapshot + WS, `omitempty` entfernt + `required` (REST + WS); **garantiert nicht-leer** über das Serial-Readiness-Gate (`hub_wiring.go` `resolveCCUSerial`: ein Central liefert keine Entity aus, bevor sein CCU-Serial aufgelöst ist). Client kann `canonical.py` streichen. | Sektion J |
 | J2 — Daemon als alleinige `unique_id`-Quelle + Drift-Guard | Umgesetzt — Go-Golden-Test (`routing_key_contract_test.go`) **plus** automatischer Go↔Python-Parity-Check (`script/routing_key_parity.py`, `make routing-key-parity`), der die Fixtures gegen aiohomematics aktuellen `generate_unique_id`-Output prüft (schließt die manuelle-Sync-Lücke) | Sektion J |
-| J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1) — week_profile-Aggregat siehe Body | Sektion J |
+| J3 — Hub-/Schedule-/Calculated-`unique_id`s mitliefern | Umgesetzt (calculated + event_groups; sysvar/program via J1; der week_profile/schedule-Rest über **J5**) | Sektion J |
 | J4 — Bootstrap-Rest-N×M: Channel-Metadaten in den Snapshot | Umgesetzt (war bereits vorhanden: nested Snapshot bettet `ChannelSummary` ein) | Sektion J |
+| J5 — Week-Profile- / Schedule-Channel-Switch-`unique_id`s | Umgesetzt — `WeekProfileResponse.unique_id` (`loom_week_profile_<device-addr>_week_profile`) + `unique_id` je `available_target_channels`-Eintrag (`loom_schedule_channel_switch_<device-addr>_schedule_channel_lock_<key>`), beide über die **Geräte**-Adresse, `required`; bit-identisch verifiziert (Go-Golden + Python-Parity 21/21). Schließt den letzten Schedule-Pfad-Rest. | Sektion J |
 | K1 — Geräteprofil-Komposition daemon-seitig (löst `DeviceProfileRegistry` ab) | Umgesetzt (Primärkanal-Marker + `ClimateMode`/`ClimateProfile`-Enum); Feld-Param-Komposition bewusst Non-Goal (`docs/parity/by_design.md`) | Sektion K |
 | K2 — Normalisierter Custom-DP-Gerätezustand | Umgesetzt (war bereits vorhanden: typisierte `StatePayload`) | Sektion K |
 | K3 — Firmware-Update-Status als abgeleitetes Feld | Umgesetzt (0.10.0) | Sektion K |
@@ -92,8 +93,9 @@ aiohomematic-Laufzeitkopplung (`DeviceProfileRegistry`) ist client-seitig auf
 **eine** kosmetische Stelle reduziert (`naming.py:161`, `ch`/`vch`-Marker) —
 ablösbar über den daemon-seitigen `usage`-Verdikt, **keine** Daemon-Nacharbeit
 nötig. Alle übrigen 22 Asks aus A–I sind entweder als Runtime-Feature gelandet
-oder als Vertrags-Erweiterung verankert; **außer F2 (bewusst) bleibt nichts
-mehr als Daemon-Nacharbeit offen.**
+oder als Vertrags-Erweiterung verankert; offen bleiben **F2** (bewusst) und das
+neue **J5** (Week-Profile-/Schedule-Channel-Switch-`unique_id`s — schließt den
+letzten client-seitig synthetisierten Schedule-Key-Pfad).
 
 ## Zweck
 
@@ -677,6 +679,58 @@ Channel-**Metadaten** (`group_no`, `room`, `functions`, `is_group_master`,
 aufnehmen (dieselben Felder, die `GET /devices/{addr}` heute liefert), sodass
 der Bootstrap mit **einem** Snapshot-Call auskommt statt `N+1`. Der bestehende
 Detail-Endpoint bleibt für gezielte Einzelabfragen/Repair-Flows erhalten.
+
+### J5. Week-Profile- / Schedule-Channel-Switch-`unique_id`s (der J3-Rest) ✅ UMGESETZT
+
+> **Umsetzung:** `WeekProfileResponse.unique_id` und ein `unique_id` je
+> `TargetChannelSummary` (`week_profile.go`), beide `required`. **Wichtige
+> Korrektur gegen die Ground Truth (aiohomematic
+> `week_profile_data_point.py:223,121`):** beide Keys werden über die
+> **Geräte-Adresse** (`ch.Device().Address`) gebaut, nicht über
+> `WeekProfileResponse.Address` (= Kanal-Adresse) — sonst verwaisen die
+> HA-Entities. Formate (`routingkey.CanonicalUniqueID`):
+> `…, deviceAddr, "WEEK_PROFILE", "week_profile"` bzw.
+> `…, deviceAddr, "SCHEDULE_CHANNEL_LOCK_<key>", "schedule_channel_switch"`.
+> Bit-Identität verifiziert: zwei neue Golden-Fixture-Fälle, Go-Golden grün
+> **und** Python-Parity 21/21 (`make routing-key-parity`). Hinweis: die
+> daemon-interne `ProfileDataPoint`-Identität nutzt keyName `WEEKPROFILE` +
+> Kanal-Adresse — das ist die *interne* Identität (MQTT/SQL), nicht der
+> kanonische HA-Key; der hier emittierte kanonische Key folgt der
+> Referenz-Konvention.
+
+**Befund:** J3 ließ die Schedule-Keys bewusst offen: `WeekProfileResponse`
+(`internal/north/rest/handlers/week_profile.go:29`) ist ein per-Gerät/Kanal-
+**Aggregat** ohne 1:1-Entity, trägt also keine einzelnen `unique_id`. Der Client
+(`py-openccu-loom-client`) leitet daraus **zwei** HA-Entity-Arten ab und
+**synthetisiert deren Keys selbst** über `canonical.py` — die **letzte**
+aiohomematic-Laufzeitkopplung im Schedule-Pfad (nach dem Abschluss von J1/K1/K3
+client-seitig, PR openccu-loom-client #36):
+
+| Entity (Client) | Quelle im Aggregat | synthetisierter Key |
+|---|---|---|
+| **ein** `WeekProfileDp`-Sensor pro Gerät | `WeekProfileResponse` (Top-Level) | `loom_week_profile_<addr>_week_profile` |
+| **ein** `ScheduleChannelSwitch` je Ziel-Kanal | jeder Eintrag in `available_target_channels` (keyed `channel_key`, z. B. `1_1`) | `loom_schedule_channel_switch_<addr>_schedule_channel_lock_<channel_key>` |
+
+(Client-Belege: `compat/aiohomematic/model/week_profile.py:125` bzw. `:299`.)
+
+**Ask:** Die beiden Keys auf der `WeekProfileResponse` mitliefern, damit der
+Client sie **konsumiert** statt sie zu rechnen:
+
+- ein Top-Level-`unique_id` für den Week-Profile-Sensor —
+  `routingkey.CanonicalUniqueID(serialSuffix, address, "WEEK_PROFILE", "week_profile")`;
+- ein `unique_id` je `TargetChannelSummary` in `available_target_channels` für
+  den jeweiligen Schedule-Channel-Switch —
+  `routingkey.CanonicalUniqueID(serialSuffix, address, "SCHEDULE_CHANNEL_LOCK_<channel_key>", "schedule_channel_switch")`.
+
+Die Formate müssen **bit-identisch** zu den heute client-synthetisierten sein
+(sonst verwaisen die HA-Entities bei der Migration) — der `routingkey`-Parity-
+Guard (J2) deckt sie nach Aufnahme mit ab. Der Serial-Readiness-Gate aus J1
+garantiert auch hier den nicht-leeren Central-ID-Slot. Danach kann der Client
+`canonical.py` aus dem **Schedule-Pfad** streichen; als bewusste client-seitige
+Synthese-Reste verbleiben dann nur noch die **kombinierte Dauer-Number**
+(client-only Merge zweier DPs), die **per-Trigger-Typ-Event-Gruppen** (eine
+`EventGroupSummary` → N HA-Entities) und der **Install-Mode**-Hub-Singleton —
+keiner davon hat eine 1:1-Daemon-Entity.
 
 ---
 
