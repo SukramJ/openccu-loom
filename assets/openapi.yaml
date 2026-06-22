@@ -4302,6 +4302,15 @@ components:
             fallback applied. Empty when no unique room can be
             resolved. External clients use it as the suggested area of
             the channel group's sub-device.
+        functions:
+          type: array
+          items: { type: string }
+          description: |
+            The channel's resolved "Gewerke" (function) labels — the
+            channel-level twin of `DeviceSummary.functions`. Lets clients
+            map functions at channel granularity instead of folding them
+            up to the device. Omitted when the channel carries no function
+            assignment.
     MQTTReloadResponse:
       type: object
       required: [reloaded, took_ms]
@@ -4484,6 +4493,16 @@ components:
             Ordered enum labels for ENUM-typed parameters
             (e.g. ["BLACK","BLUE","GREEN","TURQUOISE","RED","PURPLE",
             "YELLOW","WHITE"] on HmIP-BSL COLOR). Empty for non-ENUM.
+        value_translations:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Maps each raw `value_list` entry to its localised display
+            string, resolved through the OCCU `parameter_values_<locale>`
+            table in the request locale. Only entries with an actual
+            translation are included (an untranslated value is omitted so
+            the client falls back to the raw `value_list` token); absent
+            entirely for non-ENUM parameters or when no value translates.
         unit:
           type: string
           description: |
@@ -5383,6 +5402,25 @@ components:
         latency_ms:
           type: number
           description: Probe round-trip in milliseconds; omitted when not measured.
+
+    HubSystemUpdateChangedPayload:
+      type: object
+      description: |
+        Payload of a `hub.system_update_changed` broadcast. Topic pattern
+        `hub.{central}.system_update`. Mirrors the `GET /system/update` entry
+        so a client can drop its update-status poll loop and consume the same
+        fields off the push.
+      required: [central, update_available, in_progress]
+      properties:
+        central: { type: string }
+        current_firmware:
+          type: string
+          description: Installed firmware version; omitted while unobserved.
+        available_firmware:
+          type: string
+          description: Firmware version offered for install; omitted while unobserved.
+        update_available: { type: boolean }
+        in_progress: { type: boolean }
 
     TriggeredEventSummary:
       type: object
