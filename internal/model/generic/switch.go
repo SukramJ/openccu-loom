@@ -119,8 +119,15 @@ func (s *Switch) turnOnWithTimer(ctx context.Context, explicit *time.Duration, p
 			string(hmenum.ParameterOnTime):            seconds,
 			string(hmenum.Parameter(s.Key.Parameter)): true,
 		}
-		_ = s.ApplyOptimistic(true)
+		rb := s.ApplyOptimistic(true)
 		if err := pw.PutParamset(ctx, s.Key.ChannelAddress, hmenum.ParamsetKeyValues, values, priority); err != nil {
+			// Wire failed → roll back the optimistic STATE immediately so the
+			// user-visible value stays truthful, instead of lingering until the
+			// optimistic-update timeout (#3238). Mirrors the direct-send path in
+			// sendAndObserve and the Channel.Set collector path.
+			if rb != nil {
+				rb()
+			}
 			return fmt.Errorf("switch: turn-on with timer: %w", err)
 		}
 		return nil
