@@ -4,6 +4,25 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.1]
+
+### Fixed
+
+- **`VirtualDevices` no longer report an implausible `0` after a CCU restart via
+  the per-parameter VALUES fallback (#3228).** The `0.10.1` seeder rework (v2.5)
+  fixed the bulk path, but on a cache-miss `runLoadValuesParamset` still issued a
+  `GetParamset(VALUES)` fallback. A virtual heating group's `ACTUAL_TEMPERATURE`
+  is aggregated by the CCU and has **no physical device** behind it, so that
+  fallback can only ever return the CCU-internal default (`0`) — reported with
+  `*_STATUS = NORMAL`, so the status cannot be used to reject it. Because
+  `GetParamset`/`GetValue` cannot deliver a device-fresh value for an interface
+  without a backing device, the VALUES fallback is now **skipped entirely for
+  `VirtualDevices`**: the bulk seeder — which already gates these data points on a
+  valid `LastTimestamp()` — is the single source of truth, and the data point
+  stays unobserved (sentinel) until a real reading arrives via the event callback.
+  Physical interfaces are unaffected: there `GetParamset` can read the device, so
+  the fallback is retained.
+
 ## [0.11.0]
 
 ### Added
