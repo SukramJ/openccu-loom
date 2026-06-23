@@ -305,6 +305,19 @@ func (d *Device) runLoadMaster(ctx context.Context, loader ValueLoader, cache *v
 //     fill can never overwrite a restored / already-known value with a fresh
 //     read that may be a not-yet-measured placeholder.
 func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey) error {
+	// VirtualDevices (e.g. heating groups) have no physical device behind them;
+	// their VALUES are aggregated by the CCU. A GetParamset/GetValue fallback can
+	// therefore never return a device-fresh reading — only the CCU-internal default
+	// (e.g. 0 for a not-yet-measured ACTUAL_TEMPERATURE right after a CCU restart),
+	// reported with *_STATUS = NORMAL so the status cannot be used to reject it. The
+	// bulk seeder already gates these data points on a valid LastTimestamp() and is
+	// the only trustworthy source for this interface, so skip the per-parameter
+	// fallback entirely. The data point stays unobserved (sentinel) until a real
+	// value arrives via the event callback (#3228).
+	if d.Interface == hmenum.InterfaceVirtualDevices {
+		cache.put(dpk, nil, false)
+		return nil
+	}
 	values, err := loader.GetParamset(ctx, dpk.ChannelAddress, hmenum.ParamsetKeyValues)
 	if err != nil {
 		// Sentinel for the requested parameter so the next read does not
