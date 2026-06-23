@@ -409,6 +409,40 @@ func TestCollectorBurstSkipDoesNotInflateRollback(t *testing.T) {
 	}
 }
 
+// TestCollectorRollsBackPreStagedOptimisticOnSendError pins the #3238 fix for
+// the collector "Path A": a generic setter routes through sendAndObserve WHILE
+// a CallParameterCollector is present in ctx. sendAndObserve stages the
+// optimistic value (and arms the 30s timeout) and hands the dispatch to the
+// collector. When the collector's batched Send fails, the pre-staged optimistic
+// value must roll back immediately — not linger until the timeout. Before the
+// fix the collector's re-entrant ApplyOptimistic burst-skipped and returned a
+// no-op rollback, so rollbackAll() did nothing for this DP.
+func TestCollectorRollsBackPreStagedOptimisticOnSendError(t *testing.T) {
+	b := &recordingBackend{failOnSet: errors.New("wire down")}
+	c := NewCollector(b)
+	dp := dpForCollector(t, "0001:1", "LEVEL")
+	// A non-nil writer so sendAndObserve proceeds; the actual dispatch is
+	// routed through the collector backend, not this writer.
+	dp.Writer = &stubWriter{}
+	dp.OnEvent(0.0) // last CCU-confirmed value
+
+	ctx := ContextWithCollector(context.Background(), c)
+	// Mirrors what a typed setter (Float.Set etc.) does internally.
+	if err := dp.sendAndObserve(ctx, 0.7, 0.7, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("sendAndObserve (collector add) unexpected err: %v", err)
+	}
+
+	if err := c.Send(ctx); err == nil {
+		t.Fatal("expected wire error from collector Send")
+	}
+	if dp.IsOptimistic() {
+		t.Fatal("collector send error must roll back the pre-staged optimistic value immediately (#3238)")
+	}
+	if v, _ := dp.Value(); v != 0.0 {
+		t.Fatalf("value must revert to last confirmed 0.0, got %v", v)
+	}
+}
+
 // --- concurrency ---------------------------------------------------
 
 func TestCollectorConcurrentAddAndSend(t *testing.T) {
@@ -565,20 +599,35 @@ func TestApplyOptimisticReturnsNopOnUnsupportedType(t *testing.T) {
 	}
 }
 
-func TestApplyOptimisticIsBurstSkippedWithSameValue(t *testing.T) {
+func TestApplyOptimisticBurstSkipKeepsWorkingRollback(t *testing.T) {
 	dp := dpForCollector(t, "A:1", "LEVEL")
 	dp.OnEvent(0.0)
 
 	rb1 := dp.ApplyOptimistic(0.5)
-	rb2 := dp.ApplyOptimistic(0.5) // burst-skip: returns a no-op rollback
+	rb2 := dp.ApplyOptimistic(0.5) // burst-skip: same value already staged
 	if rb1 == nil || rb2 == nil {
 		t.Fatal("both calls must return non-nil rollbacks")
 	}
+	// Burst-skip must NOT re-Apply: PendingSends stays at 1 so a single CCU
+	// echo settles the tracker (no spurious timeout rollback — issue #3049).
 	if dp.PendingSends() != 1 {
 		t.Fatalf("burst-skip must keep counter at 1, got %d", dp.PendingSends())
 	}
-	rb2() // no-op
 	if !dp.IsOptimistic() {
-		t.Fatal("no-op rollback must not clear tracker")
+		t.Fatal("tracker must be active before rollback")
 	}
+	// ...but the burst-skip rollback must still revert the active optimistic
+	// state — a failed batched send through a collector relies on this to undo
+	// the value (#3238). A no-op here would leave the value lingering until the
+	// 30s timeout.
+	rb2()
+	if dp.IsOptimistic() {
+		t.Fatal("burst-skip rollback must revert the active optimistic state (#3238)")
+	}
+	if v, _ := dp.Value(); v != 0.0 {
+		t.Fatalf("value must roll back to previous confirmed 0.0, got %v", v)
+	}
+	// rollback is idempotent — firing the first closure after a completed
+	// rollback is a safe no-op.
+	rb1()
 }

@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2]
+
+### Fixed
+
+- **Optimistic values now roll back immediately when a batched / timer write is
+  rejected by the CCU, instead of lingering for the full 30 s optimistic-update
+  timeout (#3238).** Two send paths staged an optimistic value but did not
+  revert it when the wire call failed (e.g. an XML-RPC `RESPONSE_NAK` after all
+  retries were exhausted): (1) the atomic `ON_TIME` + `STATE` switch turn-on
+  (`turnOnWithTimer`) discarded the rollback closure returned by
+  `ApplyOptimistic`, and (2) the `CallParameterCollector` rollback fired a no-op
+  for any data point that had already been staged via `sendAndObserve` before
+  being added to the collector (the re-entrant `ApplyOptimistic` burst-skipped
+  and returned a no-op rollback). Both now roll back on send error with
+  `reason=send_error`, matching the direct-send path and `Channel.Set`. The
+  burst-skip still does not inflate `PendingSends`, so a single CCU echo settles
+  the tracker without a spurious timeout rollback (#3049).
+
 ## [0.11.1]
 
 ### Fixed

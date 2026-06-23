@@ -5,6 +5,7 @@ package generic
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -192,4 +193,46 @@ func (s *switchParamsetWriter) SetValue(_ context.Context, _ string, _ hmenum.Pa
 func (s *switchParamsetWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority) error {
 	s.calls++
 	return nil
+}
+
+// failingParamsetWriter satisfies Writer + ParamsetWriter and fails its
+// PutParamset call — used to exercise the optimistic-rollback-on-send-error
+// path of the atomic ON_TIME+STATE turn-on.
+type failingParamsetWriter struct {
+	putErr error
+}
+
+func (w *failingParamsetWriter) SetValue(_ context.Context, _ string, _ hmenum.Parameter, _ any, _ hmenum.CommandPriority) error {
+	return nil
+}
+
+func (w *failingParamsetWriter) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any, _ hmenum.CommandPriority) error {
+	return w.putErr
+}
+
+// TestSwitchTurnOnWithTimerRollsBackOptimisticOnPutParamsetError pins the
+// #3238 fix on the switch side: the atomic ON_TIME+STATE put_paramset stages
+// STATE optimistically, so when the CCU rejects the write (e.g. RESPONSE_NAK
+// after retries are exhausted) the optimistic value must roll back immediately
+// — not linger until the 30s optimistic-update timeout.
+func TestSwitchTurnOnWithTimerRollsBackOptimisticOnPutParamsetError(t *testing.T) {
+	t.Parallel()
+	// EVENT bit required so the optimistic tracker actually stages (a
+	// parameter with no CCU echo skips optimistic by design).
+	cfg := baseCfg(hmenum.ParameterState, hmenum.ParameterTypeBool,
+		hmenum.OperationsRead|hmenum.OperationsWrite|hmenum.OperationsEvent)
+	cfg.Writer = &failingParamsetWriter{putErr: errors.New("RESPONSE_NAK")}
+	s := NewSwitch(cfg)
+	s.OnEvent(false) // last CCU-confirmed value
+
+	err := s.TurnOnWithTimer(context.Background(), 5*time.Second, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("expected wire error from PutParamset")
+	}
+	if s.IsOptimistic() {
+		t.Fatal("optimistic STATE must roll back immediately on PutParamset error (#3238), not linger until timeout")
+	}
+	if v, _ := s.Value(); v != false {
+		t.Fatalf("value must revert to last confirmed false, got %v", v)
+	}
 }

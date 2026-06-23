@@ -1610,7 +1610,15 @@ func (d *DataPoint[T]) ApplyOptimistic(value any) func() {
 	}
 
 	if snap := d.optimistic.Snapshot(); snap.Active && valuesClose(snap.Value, typed) {
-		return func() {} // burst-skip: nothing to roll back.
+		// Burst-skip: the tracker already holds this value, so do NOT re-Apply
+		// (that would double-count PendingSends and provoke a spurious timeout
+		// rollback — issue #3049). But an optimistic value IS active, so the
+		// caller (e.g. a CallParameterCollector batching a write that was first
+		// staged via sendAndObserve) must still be able to roll it back when the
+		// batched send fails — otherwise the value lingers until the 30s timeout
+		// (#3238). Return a real send-error rollback, not a no-op. rollback is
+		// idempotent, so firing it more than once is safe.
+		return func() { d.rollback(RollbackReasonSendError) }
 	}
 
 	d.mu.RLock()
