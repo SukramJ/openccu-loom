@@ -17,6 +17,9 @@
     "e2e": "playwright test",
     "e2e:update": "playwright test --update-snapshots"
   },
+  "overrides": {
+    "js-yaml": "^4.2.0"
+  },
   "devDependencies": {
     "@fontsource/inter": "^5.2.8",
     "@playwright/test": "^1.61.0",
