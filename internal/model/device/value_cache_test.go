@@ -863,3 +863,55 @@ func TestLoadValueValuesParamsetSiblingGuard(t *testing.T) {
 		t.Fatalf("(d) expected exactly 1 GetParamset call, got %d", calls)
 	}
 }
+
+// TestLoadValueValuesParamsetSkippedForVirtualDevices pins the #3228 fix: a
+// VirtualDevice (heating group) has no physical device behind it, so a VALUES
+// fallback can only return the CCU-internal default (e.g. 0 for a not-yet-measured
+// ACTUAL_TEMPERATURE right after a CCU restart). The fallback must be skipped so
+// the data point stays unobserved until a real value arrives via event — instead
+// of being written with a spurious 0.
+func TestLoadValueValuesParamsetSkippedForVirtualDevices(t *testing.T) {
+	t.Parallel()
+
+	d := New(Config{
+		InterfaceID: "VirtualDevices",
+		Interface:   hmenum.InterfaceVirtualDevices,
+		Address:     "INT0000001",
+		Model:       "HmIP-HEATING",
+		Name:        "Heating Group",
+	})
+
+	const channelAddr = "INT0000001:1"
+	ch := d.AddChannel(channelAddr, 1, "", hmenum.ParamsetKeyValues)
+	const actualTemp = hmenum.Parameter("ACTUAL_TEMPERATURE")
+	dp := makeFloatDP(channelAddr, actualTemp)
+	ch.Put(dp)
+
+	fake := newFakeLoader()
+	// The CCU returns the default 0 for a heating group's ACTUAL_TEMPERATURE that
+	// has not been measured yet. This must never reach the data point.
+	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{
+		string(actualTemp): 0.0,
+	}, nil)
+	d.SetValueLoader(fake)
+
+	dpk := makeDPKey("VirtualDevices", channelAddr, hmenum.ParamsetKeyValues, string(actualTemp))
+
+	_, obs, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// (a) No fallback RPC is issued for VirtualDevices VALUES.
+	if calls := fake.getParamsetCalls.Load(); calls != 0 {
+		t.Fatalf("(a) expected 0 GetParamset calls for VirtualDevices, got %d", calls)
+	}
+	// (b) LoadValue returns the sentinel (observed=false).
+	if obs {
+		t.Fatal("(b) expected observed=false (sentinel) for VirtualDevices VALUES fallback")
+	}
+	// (c) The data point stays unobserved — no spurious 0 placeholder is written.
+	if _, dpObs := dp.RawValue(); dpObs {
+		t.Fatal("(c) ACTUAL_TEMPERATURE data point must stay unobserved (no 0 placeholder)")
+	}
+}
