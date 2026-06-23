@@ -486,9 +486,14 @@ single `VALUES` parameter with `getValue` and only batches `MASTER` via
 (`internal/model/device/value_cache.go`, `runLoadValuesParamset`). The bulk
 `fetch_all_device_data` seed only ships data points that already carry a
 non-zero value (it skips empties — see BD-CCU-StatusUncertainViaTracker), so the
-per-parameter fallback runs for every not-yet-measured parameter; fetching the
-channel's whole `VALUES` paramset in one call warms every still-unloaded sibling
-at once instead of issuing one `getValue` each.
+per-parameter fallback runs for every not-yet-measured parameter — except on the
+`VirtualDevices` interface, where the fallback is skipped entirely (aggregated
+heating-group VALUES have no backing device, so `getValue` returns only the
+CCU-internal default `0`/`STATUS=NORMAL`; this mirrors aiohomematic
+`_ValueCache._get_values_for_cache`, so it is parity, not a divergence — #3228).
+For all other interfaces, fetching the channel's whole `VALUES` paramset in one
+call warms every still-unloaded sibling at once instead of issuing one `getValue`
+each.
 
 **Rationale:** fewer CCU round-trips on the fallback path, and a value plus its
 paired `<X>_STATUS` arrive from one atomic snapshot. Safety is preserved: the
