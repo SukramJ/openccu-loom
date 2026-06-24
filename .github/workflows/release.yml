@@ -22,7 +22,7 @@ env:
   # ghcr.io/sukramj/openccu-loom-ha-<arch>). Same flag pattern as the CCU
   # add-on — flip here or override via the BUILD_HA_ADDON repository variable.
   # Default off until validated on real Home Assistant hardware.
-  BUILD_HA_ADDON: "false"
+  BUILD_HA_ADDON: "true"
 
 jobs:
   goreleaser:

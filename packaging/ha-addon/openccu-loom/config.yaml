@@ -1,15 +1,15 @@
 # version MUST equal the release tag and is bumped in the release commit.
 name: OpenCCU-Loom
-version: "0.4.0"
+version: "0.13.0"
 slug: openccu-loom
 description: >-
   Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket
   API, and a built-in Config UI — with optional Matter support.
 url: https://github.com/SukramJ/openccu-loom
+# Restricted to amd64 for dev to save resources. Re-add aarch64 + armv7
+# (build.yaml already lists their base images) to restore the multi-arch add-on.
 arch:
   - amd64
-  - aarch64
-  - armv7
 
 # The add-on image follows the HA convention of one tag per arch.
 # The base image is pulled from the pre-built multi-arch release image.

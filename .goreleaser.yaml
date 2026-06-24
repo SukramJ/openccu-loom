@@ -22,16 +22,13 @@ builds:
       - -X github.com/SukramJ/openccu-loom/internal/build.Version={{.Version}}
       - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
       - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
-    goos: [linux, darwin, windows]
+    # Dev builds drop darwin/windows to save resources. The three linux
+    # arches stay: the CCU/RaspberryMatic add-on (build_ccu_addon.sh) bundles
+    # amd64 + arm64 + armv7 and must not be changed. Re-add darwin/windows
+    # here to restore the full release matrix.
+    goos: [linux]
     goarch: [amd64, arm64, arm]
     goarm: ["7"]
-    ignore:
-      - goos: darwin
-        goarch: arm
-      - goos: windows
-        goarch: arm
-      - goos: windows
-        goarch: arm64
 
   - id: hmcli
     main: ./cmd/hmcli
@@ -45,8 +42,9 @@ builds:
       - -X github.com/SukramJ/openccu-loom/internal/build.Version={{.Version}}
       - -X github.com/SukramJ/openccu-loom/internal/build.Commit={{.ShortCommit}}
       - -X github.com/SukramJ/openccu-loom/internal/build.BuildDate={{.Date}}
-    goos: [linux, darwin, windows]
-    goarch: [amd64, arm64]
+    # Restricted to linux/amd64 for dev (see the openccu-loom build above).
+    goos: [linux]
+    goarch: [amd64]
 
 archives:
   - id: openccu-loom
@@ -101,55 +99,21 @@ dockers:
       - "--label=org.opencontainers.image.licenses=MIT"
     extra_files:
       - assets/openapi.yaml
-  - id: arm64
-    ids: [openccu-loom]
-    goos: linux
-    goarch: arm64
-    dockerfile: Dockerfile.goreleaser
-    use: buildx
-    image_templates:
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
-    build_flag_templates:
-      - "--platform=linux/arm64"
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
-      - "--label=org.opencontainers.image.licenses=MIT"
-    extra_files:
-      - assets/openapi.yaml
-  - id: armv7
-    ids: [openccu-loom]
-    goos: linux
-    goarch: arm
-    goarm: "7"
-    dockerfile: Dockerfile.goreleaser
-    use: buildx
-    image_templates:
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
-    build_flag_templates:
-      - "--platform=linux/arm/v7"
-      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
-      - "--label=org.opencontainers.image.source=https://github.com/SukramJ/openccu-loom"
-      - "--label=org.opencontainers.image.licenses=MIT"
-    extra_files:
-      - assets/openapi.yaml
 
+# Dev builds are restricted to linux/amd64 — the arm64 + armv7 image blocks
+# were removed here to save resources. The manifests below carry the single
+# amd64 image so the unsuffixed `:{{ .Version }}` / `:latest` tags (which the
+# HA add-on and users pull) keep working. Re-add the arm blocks + their
+# manifest entries to restore the multi-arch release.
 docker_manifests:
   - name_template: "ghcr.io/sukramj/openccu-loom:{{ .Version }}"
     image_templates:
       - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-amd64"
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
   # `latest` only for stable releases — skip_push: auto skips prereleases.
   - name_template: "ghcr.io/sukramj/openccu-loom:latest"
     skip_push: auto
     image_templates:
       - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-amd64"
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-arm64"
-      - "ghcr.io/sukramj/openccu-loom:{{ .Version }}-armv7"
 
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
