@@ -134,10 +134,14 @@ jobs:
       # ghcr login above is shared via the docker config the builder mounts.
       - name: build & publish Home Assistant add-on
         if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
-        # NB: must be a version TAG, not a commit SHA — the builder action
-        # derives its builder-image tag from the action ref, so a SHA pin makes
-        # it pull a non-existent amd64-builder:<sha> ("manifest unknown").
-        uses: home-assistant/builder@2026.06.0
+        # Pin to a version TAG whose matching builder IMAGE actually exists on
+        # ghcr (ghcr.io/home-assistant/<arch>-builder:<ref>). The action derives
+        # its builder-image tag from its own ref, so: a SHA pin pulls a
+        # non-existent amd64-builder:<sha>, AND a tag whose builder image was
+        # never published (e.g. 2026.06.0) also 404s ("manifest unknown").
+        # 2026.02.1 is the latest action version with a published builder image
+        # (it is also the action's own hard-coded fallback).
+        uses: home-assistant/builder@2026.02.1
         with:
           args: |
             --all
