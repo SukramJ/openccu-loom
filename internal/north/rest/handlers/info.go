@@ -16,18 +16,23 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "1.22.0"
+const APIVersion = "1.23.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
 // tokens rather than on [APIVersion] alone — capabilities can be
 // added before a major bump.
 const (
-	CapabilityREST           = "rest.v1"
-	CapabilityWSBroadcasts   = "ws.broadcasts.v1"
-	CapabilityMQTTDiscovery  = "mqtt.discovery.v1"
-	CapabilityMatterBridge   = "matter.bridge.v1"
-	CapabilityOIDC           = "auth.oidc.v1"
+	CapabilityREST          = "rest.v1"
+	CapabilityWSBroadcasts  = "ws.broadcasts.v1"
+	CapabilityMQTTDiscovery = "mqtt.discovery.v1"
+	CapabilityMatterBridge  = "matter.bridge.v1"
+	CapabilityOIDC          = "auth.oidc.v1"
+	// CapabilityCCUAuth is surfaced when login delegation to the CCU's
+	// own user database is enabled (ADR 0043). The SPA may show a
+	// "sign in with your CCU account" hint; the credential shape is
+	// unchanged.
+	CapabilityCCUAuth        = "auth.ccu.v1"
 	CapabilityProblemDetails = "errors.problem_details.v1"
 	// CapabilitySupervisedRestart is surfaced when the daemon
 	// detects that something (systemd, Docker, k8s) will bring it
@@ -65,6 +70,7 @@ type CapabilityDetector interface {
 	HasMQTTDiscovery() bool
 	HasMatterBridge() bool
 	HasOIDC() bool
+	HasCCUAuth() bool
 	HasSupervisedRestart() bool
 	// HasMCP reports whether the MCP server is enabled; HasMCPWrite
 	// whether its write tools are permitted. HasMCPWrite implies HasMCP.
@@ -111,6 +117,9 @@ func capabilities(d CapabilityDetector) []string {
 	}
 	if d.HasOIDC() {
 		out = append(out, CapabilityOIDC)
+	}
+	if d.HasCCUAuth() {
+		out = append(out, CapabilityCCUAuth)
 	}
 	if d.HasSupervisedRestart() {
 		out = append(out, CapabilitySupervisedRestart)

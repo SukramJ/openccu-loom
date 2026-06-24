@@ -1,11 +1,24 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { authStore } from "$lib/stores/auth.svelte";
+  import { api } from "$lib/api/client";
   import BrandMark from "$lib/components/ui/BrandMark.svelte";
   import { t } from "$lib/i18n";
 
   let username = $state("");
   let password = $state("");
   let submitting = $state(false);
+  // Whether the daemon delegates login to the CCU user database
+  // (ADR 0043). Drives an optional hint — the credential fields are the
+  // same either way.
+  let ccuAuth = $state(false);
+
+  onMount(() => {
+    api
+      .info()
+      .then((i) => (ccuAuth = i.capabilities.includes("auth.ccu.v1")))
+      .catch(() => {});
+  });
 
   async function onSubmit(e: SubmitEvent) {
     e.preventDefault();
@@ -87,5 +100,11 @@
         {t("login.sso")}
       </a>
     </div>
+
+    {#if ccuAuth}
+      <p class="mt-3 text-center text-xs text-slate-500 dark:text-slate-400">
+        {t("login.ccu_hint")}
+      </p>
+    {/if}
   </form>
 </section>

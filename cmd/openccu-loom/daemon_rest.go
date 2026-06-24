@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -26,6 +27,7 @@ import (
 type restWiringDeps struct {
 	cfg           *config.Config
 	logger        *slog.Logger
+	reg           *central.Registry
 	auditBuf      *audit.Buffer
 	auditDB       *gosql.DB
 	healthTracker *health.Tracker
@@ -84,6 +86,11 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	authMw := d.authMw
 	restResolve := d.restResolve
 
+	// Optional CCU authentication provider (ADR 0043). When enabled it
+	// becomes the LAST link of the login chain — local users are tried
+	// first so a CCU outage never locks out a break-glass admin.
+	ccuStore := buildCCUAuthStore(cfg, d.reg, logger)
+
 	servers := newServerGroup(logger)
 	if d.auditDB != nil && d.healthTracker != nil {
 		stopProbe := sqlitestore.StartHealthProbe(ctx, d.auditDB, d.healthTracker, sqlitestore.DefaultProbeInterval)
@@ -137,7 +144,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 		// users both resolve. The chain prefers SQLite; falls back
 		// to Memory only on a clean "unauthenticated" miss.
 		authMw = auth.NewMiddleware(
-			auth.ChainedUserStore{Primary: d.sqUsers, Secondary: d.users},
+			loginChainWithCCU(d.sqUsers, d.users, ccuStore),
 			auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens},
 		)
 		// Re-bind the resolver after swapping the middleware so the
@@ -175,7 +182,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	// authenticate. The legacy /auth/users read path continues to
 	// hit the in-memory snapshot via AuthDeps.Users.
 	if d.sqUsers != nil {
-		restAuth.LoginUsers = auth.ChainedUserStore{Primary: d.sqUsers, Secondary: d.users}
+		restAuth.LoginUsers = loginChainWithCCU(d.sqUsers, d.users, ccuStore)
 	}
 
 	// Wave-C admin services backed by the SQLite stores opened

@@ -42,6 +42,19 @@ type FunctionAdmin interface {
 	DeleteFunction(ctx context.Context, name string) error
 }
 
+// UserLevelReader reads a CCU user's permission level (UserLevel) via a
+// privileged ReGa script. Used by the CCU authentication provider to map
+// a CCU user to a Loom role. The wired RoomMutator may also satisfy it.
+type UserLevelReader interface {
+	// GetUserLevel returns the user's UserLevel (8/2/1/0) or -1 when the
+	// user does not exist. username must be pre-sanitised by the caller.
+	GetUserLevel(ctx context.Context, username string) (int, error)
+}
+
+// ErrNoUserLevelReader is returned by UserLevelRemote when no CCU-side
+// reader is wired (e.g. the central has no JSON-RPC writer yet).
+var ErrNoUserLevelReader = errors.New("hub: no user-level reader configured")
+
 // ErrRoomExists / ErrFunctionExists signal a name collision on create.
 var (
 	ErrRoomExists     = errors.New("hub: room already exists")
@@ -547,6 +560,17 @@ func (h *Hub) DeleteFunctionRemote(ctx context.Context, name string) error {
 		return ErrNoFunctionMutator
 	}
 	return a.DeleteFunction(ctx, name)
+}
+
+// UserLevelRemote reads a CCU user's permission level via the wired
+// RoomMutator when it also satisfies UserLevelReader. Requires the
+// privileged service session (the mutator's JSON-RPC client).
+func (h *Hub) UserLevelRemote(ctx context.Context, username string) (int, error) {
+	r, ok := h.roomMut().(UserLevelReader)
+	if !ok {
+		return -1, ErrNoUserLevelReader
+	}
+	return r.GetUserLevel(ctx, username)
 }
 
 // TriggerBackupRemote runs the CCU backup script.

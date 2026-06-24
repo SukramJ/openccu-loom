@@ -866,6 +866,26 @@ type AuthConfig struct {
 	Users          map[string]string `yaml:"users" json:"users" cfg:"secret"`   // username → bcrypt hash (MVP: plaintext)
 	Tokens         map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
 	OIDC           OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
+	CCU            CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
+}
+
+// CCUAuthConfig delegates login to a CCU's own user database (see
+// ADR 0043). When Enabled, the login chain — after the local stores —
+// validates credentials against the named central via Session.login and
+// maps the CCU UserLevel to a Loom role. Carries no secret: the
+// credentials come from the login form, not the config.
+type CCUAuthConfig struct {
+	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+	// Central names the CentralConfig whose user database authenticates
+	// logins. Empty selects the first configured central.
+	Central string `yaml:"central" json:"central" cfg:"basic"`
+	// MinUserLevel rejects users below this CCU UserLevel (0 = UPL_NONE
+	// is always denied). Default 1 (guest) admits any real user.
+	MinUserLevel int `yaml:"min_user_level" json:"min_user_level" cfg:"expert"`
+	// RoleMapping overrides the default UserLevel → Loom-role mapping.
+	// Keys are the CCU UserLevel as a string ("8","2","1"); values are
+	// "admin" / "operator" / "viewer". Empty uses the ADR 0043 defaults.
+	RoleMapping map[string]string `yaml:"role_mapping" json:"role_mapping" cfg:"expert"`
 }
 
 // OIDCConfig describes one OpenID Connect provider. Empty Issuer

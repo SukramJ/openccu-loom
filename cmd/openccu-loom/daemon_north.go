@@ -390,6 +390,7 @@ type runtimeCapabilityDetector struct {
 	mqtt              bool
 	matter            bool
 	oidc              bool
+	ccuAuth           bool
 	supervisedRestart bool
 	mcp               bool
 	mcpWrite          bool
@@ -398,6 +399,7 @@ type runtimeCapabilityDetector struct {
 func (r runtimeCapabilityDetector) HasMQTTDiscovery() bool     { return r.mqtt }
 func (r runtimeCapabilityDetector) HasMatterBridge() bool      { return r.matter }
 func (r runtimeCapabilityDetector) HasOIDC() bool              { return r.oidc }
+func (r runtimeCapabilityDetector) HasCCUAuth() bool           { return r.ccuAuth }
 func (r runtimeCapabilityDetector) HasSupervisedRestart() bool { return r.supervisedRestart }
 func (r runtimeCapabilityDetector) HasMCP() bool               { return r.mcp }
 func (r runtimeCapabilityDetector) HasMCPWrite() bool          { return r.mcp && r.mcpWrite }

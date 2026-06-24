@@ -109,6 +109,21 @@ north:
       # bootstrap, manage users via the SPA's Users tab.
       users:
         admin: "change-me"
+      # Delegate login to the CCU's own user database (ADR 0043).
+      # Useful when running as a CCU add-on: operators sign in with
+      # their existing CCU accounts instead of a separate Loom user
+      # list. Local users above are still tried FIRST (break-glass),
+      # so a CCU outage never locks out the local admin.
+      # ccu:
+      #   enabled: true
+      #   central: ""          # CentralConfig name to authenticate against
+      #                        # (empty = the first configured CCU)
+      #   min_user_level: 1    # reject users below this CCU UserLevel
+      #                        # (0=none always denied, 1=guest, 2=user, 8=admin)
+      #   role_mapping:        # optional override of the CCU-level -> role map
+      #     "8": admin         # defaults: 8->admin, 2->operator, 1->viewer
+      #     "2": operator
+      #     "1": viewer
   ui:
     listen: ":8081"
   # MCP server (Model Context Protocol) — exposes the daemon to LLM

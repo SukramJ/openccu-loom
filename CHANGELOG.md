@@ -8,6 +8,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **CCU as an authentication provider (ADR 0043).** Optional: when
+  `north.rest.auth.ccu.enabled` is set, logins are validated against the
+  CCU's own user database (a transient `Session.login`) and the CCU
+  `UserLevel` is mapped to a Loom role (8→admin, 2→operator, 1→viewer).
+  Local users are tried first (break-glass), so a CCU outage never locks
+  out the local admin; the CCU is only contacted at login (the issued Loom
+  session carries the rest). Surfaced as the `auth.ccu.v1` capability.
 - **Config-UI parity push toward the legacy CCU WebUI.** Six gaps the SPA had
   against the CCU WebUI are now closed:
   - **Rooms & functions (Gewerke) management.** Create / rename / delete rooms

@@ -335,6 +335,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	rw := wireREST(ctx, restWiringDeps{
 		cfg:            cfg,
 		logger:         logger,
+		reg:            reg,
 		auditBuf:       auditBuf,
 		auditDB:        auditDB,
 		healthTracker:  healthTracker,
