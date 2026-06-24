@@ -5,6 +5,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import LogLevelsPanel from "$lib/components/settings/LogLevelsPanel.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -22,6 +23,7 @@
   let expandedSeqs = $state<Set<number>>(new Set());
   let expandedGroups = $state<Set<string>>(new Set());
   let downloadLimit = $state(500);
+  let showLevels = $state(false);
 
   let scrollEl = $state<HTMLDivElement | null>(null);
   let eventSource: EventSource | null = null;
@@ -388,6 +390,23 @@
         ↪ {t("diagnostics.capture")}…
       </a>
     </div>
+  </div>
+
+  <!-- Log-level overrides (collapsible) -->
+  <div class="mb-3">
+    <button
+      type="button"
+      class="text-xs text-[var(--ha-secondary-text-color)] hover:text-brand-700"
+      aria-expanded={showLevels}
+      onclick={() => (showLevels = !showLevels)}
+    >
+      {showLevels ? "▾" : "▸"} {t("loglevels.title")}
+    </button>
+    {#if showLevels}
+      <div class="mt-2">
+        <LogLevelsPanel />
+      </div>
+    {/if}
   </div>
 
   <!-- Error state -->

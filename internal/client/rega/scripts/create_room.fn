@@ -1,0 +1,32 @@
+!# openccu-loom — create_room
+!# Params: ##name## (new room name)
+!# Output: new object ID on success, -1 on failure, -2 if a room with
+!#         that name already exists.
+!#
+!# Mirrors the CCU WebUI's ::createRoomRetId (rega/esp/rooms.fn): a room
+!# is an OT_ENUM object of EnumType etRoom, registered in the ID_ROOMS
+!# enum. The caller refreshes the device list afterwards to pick up the
+!# canonical state.
+
+string sName = "##name##";
+integer iResult = -1;
+if (sName != "") {
+    object oList = dom.GetObject(ID_ROOMS);
+    object oExisting = oList.Get(sName);
+    if (oExisting) {
+        iResult = -2;
+    } else {
+        object o = dom.CreateObject(OT_ENUM, sName);
+        if (o) {
+            o.EnumType(etRoom);
+            boolean res = oList.Add(o);
+            if (res) {
+                iResult = o.ID();
+            } else {
+                dom.DeleteObject(o.ID());
+                iResult = -1;
+            }
+        }
+    }
+}
+Write(iResult);

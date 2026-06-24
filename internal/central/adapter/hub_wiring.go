@@ -1396,6 +1396,99 @@ func (w *hubJSONRPCWriter) SetDeviceFunctions(
 	return err
 }
 
+// CreateRoom creates a room entity on the CCU via the create_room Rega
+// script. Returns the new object ID, or hub.ErrRoomExists when a room
+// with that name already exists.
+func (w *hubJSONRPCWriter) CreateRoom(ctx context.Context, name string) (int, error) {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptCreateRoom, map[string]string{"name": name})
+	if err != nil {
+		return 0, err
+	}
+	return parseCreateResult(out, hub.ErrRoomExists)
+}
+
+// RenameRoom renames a room entity via the rename_room Rega script.
+func (w *hubJSONRPCWriter) RenameRoom(ctx context.Context, oldName, newName string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptRenameRoom, map[string]string{
+		"oldname": oldName,
+		"newname": newName,
+	})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrRoomNotFound)
+}
+
+// DeleteRoom deletes a room entity via the delete_room Rega script.
+func (w *hubJSONRPCWriter) DeleteRoom(ctx context.Context, name string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptDeleteRoom, map[string]string{"name": name})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrRoomNotFound)
+}
+
+// CreateFunction creates a function (Gewerk) entity via create_function.
+func (w *hubJSONRPCWriter) CreateFunction(ctx context.Context, name string) (int, error) {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptCreateFunction, map[string]string{"name": name})
+	if err != nil {
+		return 0, err
+	}
+	return parseCreateResult(out, hub.ErrFunctionExists)
+}
+
+// RenameFunction renames a function entity via rename_function.
+func (w *hubJSONRPCWriter) RenameFunction(ctx context.Context, oldName, newName string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptRenameFunction, map[string]string{
+		"oldname": oldName,
+		"newname": newName,
+	})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrFunctionNotFound)
+}
+
+// DeleteFunction deletes a function entity via delete_function.
+func (w *hubJSONRPCWriter) DeleteFunction(ctx context.Context, name string) error {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptDeleteFunction, map[string]string{"name": name})
+	if err != nil {
+		return err
+	}
+	return parseMutateResult(out, hub.ErrFunctionNotFound)
+}
+
+// parseCreateResult maps a create script's integer output to (id, err):
+// >0 is the new object ID, -2 maps to existsErr, anything else is a
+// generic failure.
+func parseCreateResult(out string, existsErr error) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return 0, fmt.Errorf("rega: unexpected create output %q: %w", out, err)
+	}
+	switch {
+	case n > 0:
+		return n, nil
+	case n == -2:
+		return 0, existsErr
+	default:
+		return 0, errors.New("rega: create failed")
+	}
+}
+
+// parseMutateResult maps a rename/delete script's integer output: 1 is
+// success, 0 maps to notFoundErr.
+func parseMutateResult(out string, notFoundErr error) error {
+	n, err := strconv.Atoi(strings.TrimSpace(out))
+	if err != nil {
+		return fmt.Errorf("rega: unexpected output %q: %w", out, err)
+	}
+	if n == 1 {
+		return nil
+	}
+	return notFoundErr
+}
+
 // TriggerBackup kicks off the OpenCCU backup script. The .sbk file
 // lands at /usr/local/tmp/last_backup.sbk; status is polled via
 // `create_backup_status`.

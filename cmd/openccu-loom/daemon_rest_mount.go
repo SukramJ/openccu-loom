@@ -57,15 +57,19 @@ type restMountDeps struct {
 	centralLinksDomain     *adapter.CentralLinksDomain
 	definitionExportDomain *adapter.DefinitionExportDomain
 	backupAdapter          *adapter.BackupAdapter
+	roomFunctionAdmin      *adapter.RoomFunctionAdminDomain
 	cacheResetSvc          handlers.CacheResetService
 
-	auditBuf  *audit.Buffer
-	auditRec  audit.Recorder
-	restAuth  *handlers.AuthDeps
-	configSvc handlers.ConfigAdminService
-	userSvc   handlers.UserAdminService
-	tokenSvc  handlers.TokenAdminService
-	centSvc   handlers.CentralAdminService
+	auditBuf    *audit.Buffer
+	auditRead   handlers.AuditService
+	auditRec    audit.Recorder
+	restAuth    *handlers.AuthDeps
+	configSvc   handlers.ConfigAdminService
+	userSvc     handlers.UserAdminService
+	passwordSvc handlers.SelfPasswordService
+	prefSvc     handlers.UserPreferencesService
+	tokenSvc    handlers.TokenAdminService
+	centSvc     handlers.CentralAdminService
 
 	translations *ccudata.Translations
 
@@ -120,50 +124,68 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		bootBaseline = eff.Config
 	}
 	restartState := newRestartPendingProvider(bootBaseline, d.configSvc)
+	// TLS: when cert+key are configured, build a hot-reloading cert
+	// provider. A load failure logs and falls back to plain HTTP rather
+	// than refusing to boot, so a bad cert never locks the operator out.
+	var tlsReloader *rest.CertReloader
+	var tlsCertSvc handlers.TLSCertService
+	if cfg.North.REST.TLSEnabled() {
+		if rl, err := rest.NewCertReloader(cfg.North.REST.TLSCertFile, cfg.North.REST.TLSKeyFile, logger); err != nil {
+			logger.Error("rest.tls.disabled", slog.String("err", err.Error()))
+		} else {
+			tlsReloader = rl
+			tlsCertSvc = rl
+		}
+	}
 	deps := rest.Deps{
-		Logger:           logger,
-		StartedAt:        time.Now(),
-		Health:           d.healthAdapter,
-		Config:           d.configAdapter,
-		Devices:          d.devicesAdapter,
-		DeviceAdmin:      d.deviceAdminDomain,
-		DeviceIcons:      newDeviceIconProxy(d.reg, cfg.Centrals),
-		RefreshDevices:   d.devicesAdapter,
-		Reloader:         d.deviceReloader,
-		DPWriter:         d.dpWriterAdapter,
-		CustomDPWriter:   d.customDPDispatcher,
-		Paramsets:        d.paramsetsDomain,
-		Hub:              d.hubAdapter,
-		SysvarRefresh:    adapter.NewSysvarFetchAdapter(d.reg),
-		InstallMode:      adapter.NewInstallModeAdapter(),
-		Interfaces:       d.ifaceAdapter,
-		Incidents:        adapter.NewIncidentsAdapter(),
-		SystemStatus:     d.sysStatusBuf,
-		Labels:           adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
-		DataPointVis:     d.visFilter,
-		Metrics:          d.metricsReg,
-		UISchema:         d.uiSchemaAdapter,
-		Links:            d.linksDomain,
-		Schedules:        d.schedulesDomain,
-		CentralLinks:     d.centralLinksDomain,
-		DefinitionExport: d.definitionExportDomain,
-		Audit:            d.auditBuf,
-		Auth:             d.restAuth,
-		ConfigAdmin:      d.configSvc,
-		RestartPending:   restartState,
-		ConfigChanges:    restartState,
-		UserAdmin:        d.userSvc,
-		TokenAdmin:       d.tokenSvc,
-		CentralAdmin:     d.centSvc,
-		MQTTReload:       newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
-		OIDC:             buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
-		SPAHandler:       ui.SPAHandler(),
-		Backup:           d.backupAdapter,
-		CacheReset:       d.cacheResetSvc,
-		EditSessions:     handlers.NewEditSessions(),
-		WSHandler:        d.wsHandler,
-		AuthResolve:      d.restResolve,
-		AuthRequire:      d.authMw.Require,
+		Logger:            logger,
+		StartedAt:         time.Now(),
+		Health:            d.healthAdapter,
+		Config:            d.configAdapter,
+		Devices:           d.devicesAdapter,
+		DeviceAdmin:       d.deviceAdminDomain,
+		DeviceInstallMode: d.deviceAdminDomain,
+		DeviceIcons:       newDeviceIconProxy(d.reg, cfg.Centrals),
+		RefreshDevices:    d.devicesAdapter,
+		Reloader:          d.deviceReloader,
+		DPWriter:          d.dpWriterAdapter,
+		CustomDPWriter:    d.customDPDispatcher,
+		Paramsets:         d.paramsetsDomain,
+		Hub:               d.hubAdapter,
+		SysvarRefresh:     adapter.NewSysvarFetchAdapter(d.reg),
+		InstallMode:       adapter.NewInstallModeAdapter(),
+		Interfaces:        d.ifaceAdapter,
+		Incidents:         adapter.NewIncidentsAdapter(),
+		SystemStatus:      d.sysStatusBuf,
+		Labels:            adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
+		DataPointVis:      d.visFilter,
+		Metrics:           d.metricsReg,
+		UISchema:          d.uiSchemaAdapter,
+		Links:             d.linksDomain,
+		Schedules:         d.schedulesDomain,
+		CentralLinks:      d.centralLinksDomain,
+		DefinitionExport:  d.definitionExportDomain,
+		Audit:             d.auditRead,
+		Auth:              d.restAuth,
+		ConfigAdmin:       d.configSvc,
+		RestartPending:    restartState,
+		ConfigChanges:     restartState,
+		UserAdmin:         d.userSvc,
+		SelfPassword:      d.passwordSvc,
+		Preferences:       d.prefSvc,
+		RoomFunctionAdmin: d.roomFunctionAdmin,
+		TLSCert:           tlsCertSvc,
+		TokenAdmin:        d.tokenSvc,
+		CentralAdmin:      d.centSvc,
+		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
+		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
+		SPAHandler:        ui.SPAHandler(),
+		Backup:            d.backupAdapter,
+		CacheReset:        d.cacheResetSvc,
+		EditSessions:      handlers.NewEditSessions(),
+		WSHandler:         d.wsHandler,
+		AuthResolve:       d.restResolve,
+		AuthRequire:       d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
 			return d.authMw.RequireRole(auth.RoleOperator, next)
 		},
@@ -253,7 +275,11 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if cfg.North.MCP.Enabled {
 		topHandler = mountMCP(cfg, d, router, logger)
 	}
-	servers.add("rest", rest.NewServer(cfg.North.REST.Listen, topHandler, logger))
+	restServer := rest.NewServer(cfg.North.REST.Listen, topHandler, logger)
+	if tlsReloader != nil {
+		restServer.EnableTLS(tlsReloader)
+	}
+	servers.add("rest", restServer)
 
 	if cfg.North.Discovery.MDNS.IsEnabled() {
 		if adv, err := startMDNSAdvertiser(ctx, cfg, len(d.reg.Names()), logger); err != nil {

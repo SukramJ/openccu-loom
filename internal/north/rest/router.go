@@ -50,6 +50,9 @@ type Deps struct {
 	Config      handlers.ConfigReader
 	Devices     handlers.DeviceIndex
 	DeviceAdmin handlers.DeviceAdmin
+	// DeviceInstallMode opens a targeted (per-device / serial) pairing
+	// window at POST /devices/{addr}/install-mode. Nil disables the route.
+	DeviceInstallMode handlers.DeviceInstallModePort
 	// DeviceIcons proxies device-type icon images from the CCU for the
 	// device list. Optional — nil answers 404 (SPA uses a glyph).
 	DeviceIcons handlers.DeviceIconProxy
@@ -123,6 +126,23 @@ type Deps struct {
 	// UserAdmin backs the SQLite-backed `/users` CRUD. Nil keeps
 	// the legacy in-memory `/auth/users` read-only path active.
 	UserAdmin handlers.UserAdminService
+
+	// SelfPassword backs the self-service password change at
+	// PATCH /auth/me/password. Nil disables the route.
+	SelfPassword handlers.SelfPasswordService
+
+	// Preferences backs per-user UI state (favorites, dashboard) at
+	// /me/preferences/{key}. Nil disables those routes.
+	Preferences handlers.UserPreferencesService
+
+	// RoomFunctionAdmin backs room/function entity CRUD at /rooms and
+	// /functions (create/rename/delete). Nil disables those routes;
+	// the read-only GET /rooms + GET /functions stay available.
+	RoomFunctionAdmin handlers.RoomFunctionAdmin
+
+	// TLSCert backs the runtime certificate upload at
+	// POST /admin/tls/certificate. Nil when TLS is not enabled.
+	TLSCert handlers.TLSCertService
 
 	// TokenAdmin backs the SQLite-backed `/auth/tokens` CRUD.
 	TokenAdmin handlers.TokenAdminService
@@ -484,6 +504,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// UI telemetry — anonymous fire-and-forget endpoint the
 			// SPA uses to log toggle / view-selector events (ADR 0016).
 			pr.Post("/ui/event", handlers.PostUIEvent())
+			// Self-service password change for the logged-in local user.
+			// Any authenticated role; the handler verifies the current
+			// password and preserves the role.
+			if d.SelfPassword != nil {
+				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder))
+			}
+			// Per-user preferences (favorites / dashboard). Any
+			// authenticated role; scoped to the caller's subject.
+			if d.Preferences != nil {
+				pr.Get("/me/preferences/{key}", handlers.GetPreference(d.Preferences))
+				pr.Put("/me/preferences/{key}", handlers.PutPreference(d.Preferences))
+				pr.Delete("/me/preferences/{key}", handlers.DeletePreference(d.Preferences))
+			}
 			if d.Devices != nil {
 				pr.Post("/devices/values:batch", handlers.ValuesBatch(d.Devices, d.Labels, d.DataPointVis))
 				pr.Get("/rooms", handlers.ListRooms(d.Devices))
@@ -575,6 +608,24 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.With(op).Patch("/devices/{addr}", handlers.PatchDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/accept", handlers.AcceptInboxDevice(d.DeviceAdmin))
 				pr.With(op).Post("/devices/{addr}/firmware/update", handlers.UpdateDeviceFirmware(d.DeviceAdmin))
+			}
+			if d.DeviceInstallMode != nil {
+				pr.With(op).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))
+			}
+			// Always mounted (admin): when TLS is not configured the
+			// handler returns the documented 503 "TLS not enabled" via its
+			// nil-service guard, rather than a 404 from an absent route.
+			pr.With(admin).Post("/admin/tls/certificate", handlers.UploadTLSCertificate(d.TLSCert, d.AuditRecorder))
+			// Room / function (Gewerk) entity CRUD. CCU writes, so
+			// operator-gated; the read-only GET /rooms + /functions
+			// stay open above.
+			if d.RoomFunctionAdmin != nil {
+				pr.With(op).Post("/rooms", handlers.CreateRoom(d.RoomFunctionAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/rooms/{name}", handlers.RenameRoom(d.RoomFunctionAdmin, d.AuditRecorder))
+				pr.With(op).Delete("/rooms/{name}", handlers.DeleteRoom(d.RoomFunctionAdmin, d.AuditRecorder))
+				pr.With(op).Post("/functions", handlers.CreateFunction(d.RoomFunctionAdmin, d.AuditRecorder))
+				pr.With(op).Patch("/functions/{name}", handlers.RenameFunction(d.RoomFunctionAdmin, d.AuditRecorder))
+				pr.With(op).Delete("/functions/{name}", handlers.DeleteFunction(d.RoomFunctionAdmin, d.AuditRecorder))
 			}
 			if d.RefreshDevices != nil {
 				pr.With(op).Post("/devices/refresh", handlers.RefreshDevices(d.RefreshDevices))

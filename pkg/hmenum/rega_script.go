@@ -32,6 +32,12 @@ const (
 	RegaScriptUpdateSystemVariable  RegaScript = "update_system_variable"
 	RegaScriptSetDeviceRooms        RegaScript = "set_device_rooms"
 	RegaScriptSetDeviceFunctions    RegaScript = "set_device_functions"
+	RegaScriptCreateRoom            RegaScript = "create_room"
+	RegaScriptRenameRoom            RegaScript = "rename_room"
+	RegaScriptDeleteRoom            RegaScript = "delete_room"
+	RegaScriptCreateFunction        RegaScript = "create_function"
+	RegaScriptRenameFunction        RegaScript = "rename_function"
+	RegaScriptDeleteFunction        RegaScript = "delete_function"
 	RegaScriptAcceptDeviceInInbox   RegaScript = "accept_device_in_inbox"
 	RegaScriptGetInboxDevices       RegaScript = "get_inbox_devices"
 	RegaScriptTriggerFirmwareUpdate RegaScript = "trigger_firmware_update"
@@ -60,6 +66,12 @@ var AllRegaScripts = []RegaScript{
 	RegaScriptUpdateSystemVariable,
 	RegaScriptSetDeviceRooms,
 	RegaScriptSetDeviceFunctions,
+	RegaScriptCreateRoom,
+	RegaScriptRenameRoom,
+	RegaScriptDeleteRoom,
+	RegaScriptCreateFunction,
+	RegaScriptRenameFunction,
+	RegaScriptDeleteFunction,
 	RegaScriptAcceptDeviceInInbox,
 	RegaScriptGetInboxDevices,
 	RegaScriptTriggerFirmwareUpdate,

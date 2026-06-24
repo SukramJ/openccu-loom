@@ -9,6 +9,7 @@
   } from "$lib/stores/preferences.svelte";
   import DeviceList from "./routes/DeviceList.svelte";
   import DeviceDetail from "./routes/DeviceDetail.svelte";
+  import Favorites from "./routes/Favorites.svelte";
   import Login from "./routes/Login.svelte";
   import BackupList from "./routes/BackupList.svelte";
   import SysvarList from "./routes/SysvarList.svelte";
@@ -104,6 +105,7 @@
 
   type Route =
     | { kind: "list" }
+    | { kind: "favorites" }
     | { kind: "detail"; address: string; channel?: number }
     | { kind: "backups" }
     | { kind: "sysvars" }
@@ -121,6 +123,7 @@
 
   const route = $derived.by<Route>(() => {
     if (!path || path === "/" || path === "/devices") return { kind: "list" };
+    if (path === "/favorites") return { kind: "favorites" };
     if (path === "/backups") return { kind: "backups" };
     if (path === "/sysvars") return { kind: "sysvars" };
     if (path === "/programs") return { kind: "programs" };
@@ -233,6 +236,8 @@
       <main id="main">
         {#if route.kind === "list"}
           <DeviceList />
+        {:else if route.kind === "favorites"}
+          <Favorites />
         {:else if route.kind === "detail"}
           <DeviceDetail
             address={route.address}

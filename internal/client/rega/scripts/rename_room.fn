@@ -1,0 +1,19 @@
+!# openccu-loom — rename_room
+!# Params: ##oldname## (current room name), ##newname## (new name)
+!# Output: 1 on success, 0 when the room was not found.
+!#
+!# Mirrors the CCU WebUI's ::changeRoomName (rega/esp/rooms.fn): finds
+!# the room by name in the ID_ROOMS enum and renames it.
+
+string sOld = "##oldname##";
+string sNew = "##newname##";
+integer iResult = 0;
+if (sNew != "") {
+    object oList = dom.GetObject(ID_ROOMS);
+    object o = oList.Get(sOld);
+    if (o) {
+        o.Name(sNew);
+        iResult = 1;
+    }
+}
+Write(iResult);

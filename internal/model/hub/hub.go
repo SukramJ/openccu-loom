@@ -24,6 +24,41 @@ type FunctionMutator interface {
 	SetDeviceFunctions(ctx context.Context, deviceAddress string, functions []string) error
 }
 
+// RoomAdmin is the optional CCU-side write-path for room *entity*
+// lifecycle (create / rename / delete), as opposed to per-device
+// assignment. Implementations dispatch Rega scripts. The wired
+// RoomMutator may also satisfy this; Hub type-asserts for it.
+type RoomAdmin interface {
+	// CreateRoom creates a room and returns its new CCU object ID.
+	CreateRoom(ctx context.Context, name string) (int, error)
+	RenameRoom(ctx context.Context, oldName, newName string) error
+	DeleteRoom(ctx context.Context, name string) error
+}
+
+// FunctionAdmin is the subsection (Gewerk) counterpart of RoomAdmin.
+type FunctionAdmin interface {
+	CreateFunction(ctx context.Context, name string) (int, error)
+	RenameFunction(ctx context.Context, oldName, newName string) error
+	DeleteFunction(ctx context.Context, name string) error
+}
+
+// ErrRoomExists / ErrFunctionExists signal a name collision on create.
+var (
+	ErrRoomExists     = errors.New("hub: room already exists")
+	ErrFunctionExists = errors.New("hub: function already exists")
+	// ErrRoomNotFound / ErrFunctionNotFound signal a missing target on
+	// rename / delete.
+	ErrRoomNotFound     = errors.New("hub: room not found")
+	ErrFunctionNotFound = errors.New("hub: function not found")
+	// ErrCentralAmbiguous / ErrCentralNotFound are raised by the
+	// room/function admin path when a multi-CCU operation omits the
+	// central name, or names an unknown one. They live here (not in the
+	// adapter) so the REST handler can map them without importing the
+	// adapter package (which would cycle through the ws bridge).
+	ErrCentralAmbiguous = errors.New("hub: central name required (multiple CCUs)")
+	ErrCentralNotFound  = errors.New("hub: central not found")
+)
+
 // SysvarMutator is the optional CCU-side write-path for sysvars.
 // Implementations dispatch ReGa scripts; nil leaves the hub in
 // in-memory-only mode (Create/Delete return ErrNoSysvarMutator).
@@ -457,6 +492,61 @@ func (h *Hub) SetDeviceFunctionsRemote(
 		return ErrNoFunctionMutator
 	}
 	return m.SetDeviceFunctions(ctx, deviceAddress, functions)
+}
+
+// CreateRoomRemote creates a room entity on the CCU and returns its new
+// object ID. Requires the wired RoomMutator to also satisfy RoomAdmin.
+func (h *Hub) CreateRoomRemote(ctx context.Context, name string) (int, error) {
+	a, ok := h.roomMut().(RoomAdmin)
+	if !ok {
+		return 0, ErrNoRoomMutator
+	}
+	return a.CreateRoom(ctx, name)
+}
+
+// RenameRoomRemote renames a room entity on the CCU.
+func (h *Hub) RenameRoomRemote(ctx context.Context, oldName, newName string) error {
+	a, ok := h.roomMut().(RoomAdmin)
+	if !ok {
+		return ErrNoRoomMutator
+	}
+	return a.RenameRoom(ctx, oldName, newName)
+}
+
+// DeleteRoomRemote deletes a room entity on the CCU.
+func (h *Hub) DeleteRoomRemote(ctx context.Context, name string) error {
+	a, ok := h.roomMut().(RoomAdmin)
+	if !ok {
+		return ErrNoRoomMutator
+	}
+	return a.DeleteRoom(ctx, name)
+}
+
+// CreateFunctionRemote creates a function (Gewerk) entity on the CCU.
+func (h *Hub) CreateFunctionRemote(ctx context.Context, name string) (int, error) {
+	a, ok := h.funcMut().(FunctionAdmin)
+	if !ok {
+		return 0, ErrNoFunctionMutator
+	}
+	return a.CreateFunction(ctx, name)
+}
+
+// RenameFunctionRemote renames a function entity on the CCU.
+func (h *Hub) RenameFunctionRemote(ctx context.Context, oldName, newName string) error {
+	a, ok := h.funcMut().(FunctionAdmin)
+	if !ok {
+		return ErrNoFunctionMutator
+	}
+	return a.RenameFunction(ctx, oldName, newName)
+}
+
+// DeleteFunctionRemote deletes a function entity on the CCU.
+func (h *Hub) DeleteFunctionRemote(ctx context.Context, name string) error {
+	a, ok := h.funcMut().(FunctionAdmin)
+	if !ok {
+		return ErrNoFunctionMutator
+	}
+	return a.DeleteFunction(ctx, name)
 }
 
 // TriggerBackupRemote runs the CCU backup script.

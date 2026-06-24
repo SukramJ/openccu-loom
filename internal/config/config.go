@@ -695,6 +695,21 @@ type NorthREST struct {
 	// Tracing configures span export to an external OTLP collector.
 	// Disabled by default (empty OTLPEndpoint).
 	Tracing TracingConfig `yaml:"tracing" json:"tracing" cfg:"expert"`
+	// TLSCertFile / TLSKeyFile, when both set, switch the REST + SPA
+	// listener to HTTPS. The same port serves the API and the SPA, so
+	// enabling TLS here secures both. PEM-encoded; the certificate is
+	// hot-reloaded on file change (and after an upload via
+	// POST /admin/tls/certificate) without a daemon restart. Empty
+	// (the default) keeps plain HTTP — correct behind a TLS-terminating
+	// reverse proxy (see PublicURL / CSRFSecure).
+	TLSCertFile string `yaml:"tls_cert_file" json:"tls_cert_file" cfg:"basic"`
+	TLSKeyFile  string `yaml:"tls_key_file" json:"tls_key_file" cfg:"basic"`
+}
+
+// TLSEnabled reports whether both the certificate and key paths are set,
+// i.e. the listener should serve HTTPS.
+func (n NorthREST) TLSEnabled() bool {
+	return n.TLSCertFile != "" && n.TLSKeyFile != ""
 }
 
 // NorthRESTWS tunes the WebSocket subsystem.

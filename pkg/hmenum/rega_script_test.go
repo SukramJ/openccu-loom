@@ -13,11 +13,12 @@ func TestAllRegaScriptsUnique(t *testing.T) {
 		}
 		seen[s] = struct{}{}
 	}
-	// 20 = MVP subset + fetch_all_device_data + lifecycle scripts.
+	// 26 = MVP subset + fetch_all_device_data + lifecycle scripts +
+	// room/function entity CRUD (create/rename/delete × 2).
 	// delete_system_variable was dropped in favor of the JSON-RPC
 	// SysVar.deleteSysVarByName call.
-	if len(AllRegaScripts) != 20 {
-		t.Errorf("AllRegaScripts has %d entries, want 20", len(AllRegaScripts))
+	if len(AllRegaScripts) != 26 {
+		t.Errorf("AllRegaScripts has %d entries, want 26", len(AllRegaScripts))
 	}
 }
 

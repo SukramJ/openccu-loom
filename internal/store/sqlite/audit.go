@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -125,6 +126,102 @@ VALUES (
 	return nil
 }
 
+// Query returns audit entries matching q, newest first, filtered and
+// paginated at the SQL layer so the full retained history is reachable
+// without loading it all into memory. Device is matched as a
+// case-insensitive prefix; Since/Until bound the timestamp; Limit/Offset
+// page the result. Limit <= 0 (or above the cap) clamps to
+// maxAuditListRows. Action-substring and CCU filters stay in the handler
+// because they are not first-class SQL columns.
+func (s *AuditStore) Query(ctx context.Context, q audit.Query) ([]audit.Entry, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	limit := q.Limit
+	if limit <= 0 || limit > maxAuditListRows {
+		limit = maxAuditListRows
+	}
+	offset := q.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var (
+		where []string
+		args  []any
+	)
+	if q.Device != "" {
+		where = append(where, `device_address LIKE ? ESCAPE '\'`)
+		args = append(args, escapeLikePrefix(q.Device)+"%")
+	}
+	if !q.Since.IsZero() {
+		where = append(where, "timestamp >= ?")
+		args = append(args, q.Since.UTC().Format("2006-01-02 15:04:05"))
+	}
+	if !q.Until.IsZero() {
+		where = append(where, "timestamp < ?")
+		args = append(args, q.Until.UTC().Format("2006-01-02 15:04:05"))
+	}
+
+	sqlStr := `SELECT timestamp, COALESCE(user, ''), action, COALESCE(device_address, ''),
+            COALESCE(channel_no, 0), COALESCE(paramset, ''), COALESCE(peer, ''),
+            COALESCE(parameter, ''), COALESCE(note, ''), COALESCE(changes_json, '')
+          FROM audit_log`
+	if len(where) > 0 {
+		// The joined fragments are fixed literals ("device_address LIKE ?",
+		// "timestamp >= ?", …); every value travels as a bound parameter
+		// in args, never via concatenation. Safe against injection.
+		sqlStr += " WHERE " + strings.Join(where, " AND ") //nolint:gosec // G202: static fragments; values are parameterized
+	}
+	sqlStr += " ORDER BY id DESC LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: query audit: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanAuditRows(rows)
+}
+
+// escapeLikePrefix escapes LIKE wildcards in a user-supplied prefix so an
+// address containing `%` or `_` matches literally (paired with ESCAPE '\').
+func escapeLikePrefix(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+// scanAuditRows decodes the standard audit column projection into entries.
+func scanAuditRows(rows *sql.Rows) ([]audit.Entry, error) {
+	var out []audit.Entry
+	for rows.Next() {
+		var (
+			ts      time.Time
+			entry   audit.Entry
+			action  string
+			changes string
+		)
+		if err := rows.Scan(
+			&ts, &entry.User, &action, &entry.DeviceAddress,
+			&entry.ChannelNo, &entry.Paramset, &entry.Peer,
+			&entry.Parameter, &entry.Note, &changes,
+		); err != nil {
+			return nil, fmt.Errorf("sqlite: scan audit row: %w", err)
+		}
+		entry.Timestamp = ts.UTC()
+		entry.Action = audit.Action(action)
+		if changes != "" {
+			if err := json.Unmarshal([]byte(changes), &entry.Changes); err != nil {
+				return nil, fmt.Errorf("sqlite: decode audit changes: %w", err)
+			}
+		}
+		out = append(out, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // List returns the most-recent audit entries. limit <= 0 means "all", but
 // the result is capped at maxAuditListRows to prevent unbounded scans on
 // long-running installs. Pass an explicit positive limit to retrieve fewer.
@@ -156,33 +253,5 @@ func (s *AuditStore) List(ctx context.Context, deviceAddress string, limit int) 
 		return nil, fmt.Errorf("sqlite: list audit: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-
-	var out []audit.Entry
-	for rows.Next() {
-		var (
-			ts      time.Time
-			entry   audit.Entry
-			action  string
-			changes string
-		)
-		if err := rows.Scan(
-			&ts, &entry.User, &action, &entry.DeviceAddress,
-			&entry.ChannelNo, &entry.Paramset, &entry.Peer,
-			&entry.Parameter, &entry.Note, &changes,
-		); err != nil {
-			return nil, fmt.Errorf("sqlite: scan audit row: %w", err)
-		}
-		entry.Timestamp = ts.UTC()
-		entry.Action = audit.Action(action)
-		if changes != "" {
-			if err := json.Unmarshal([]byte(changes), &entry.Changes); err != nil {
-				return nil, fmt.Errorf("sqlite: decode audit changes: %w", err)
-			}
-		}
-		out = append(out, entry)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return scanAuditRows(rows)
 }

@@ -1,0 +1,31 @@
+!# openccu-loom — create_function
+!# Params: ##name## (new function / Gewerk name)
+!# Output: new object ID on success, -1 on failure, -2 if a function
+!#         with that name already exists.
+!#
+!# A function (Gewerk) is an OT_ENUM object of EnumType etSubsection,
+!# registered in the ID_FUNCTIONS enum — the subsection counterpart to
+!# create_room.
+
+string sName = "##name##";
+integer iResult = -1;
+if (sName != "") {
+    object oList = dom.GetObject(ID_FUNCTIONS);
+    object oExisting = oList.Get(sName);
+    if (oExisting) {
+        iResult = -2;
+    } else {
+        object o = dom.CreateObject(OT_ENUM, sName);
+        if (o) {
+            o.EnumType(etSubsection);
+            boolean res = oList.Add(o);
+            if (res) {
+                iResult = o.ID();
+            } else {
+                dom.DeleteObject(o.ID());
+                iResult = -1;
+            }
+        }
+    }
+}
+Write(iResult);

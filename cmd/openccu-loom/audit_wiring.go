@@ -17,6 +17,21 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
+// auditReadService combines the in-memory audit buffer (List, for the
+// recent ring) with the durable SQLite store (Query, for the full
+// retained history). The REST audit handler type-asserts for the
+// AuditQuerier method to unlock SQL-side filtering, pagination and CSV
+// export; without the store it serves the buffer alone.
+type auditReadService struct {
+	*audit.Buffer
+	store *sqlite.AuditStore
+}
+
+// Query satisfies handlers.AuditQuerier by delegating to the durable store.
+func (a auditReadService) Query(ctx context.Context, q audit.Query) ([]audit.Entry, error) {
+	return a.store.Query(ctx, q)
+}
+
 // buildBackupAdapter wires the BackupAdapter against a filesystem-
 // backed BackupStorage. The directory lives under cfg.DataDir/backups
 // and is auto-created on first use. When the directory cannot be

@@ -4,6 +4,35 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Config-UI parity push toward the legacy CCU WebUI.** Six gaps the SPA had
+  against the CCU WebUI are now closed:
+  - **Rooms & functions (Gewerke) management.** Create / rename / delete rooms
+    and functions from a new Settings → "Groups" tab, on top of the existing
+    device-assignment path. CCU-side via new ReGa scripts
+    (`create_room`/`rename_room`/`delete_room` + function equivalents), exposed
+    as `POST/PATCH/DELETE /rooms` and `/functions` (operator-gated, per-CCU).
+  - **Favorites / start page.** Pin devices (and system variables) to a new
+    Favorites view; persisted server-side per user via a generic
+    `/me/preferences/{key}` store so they follow the operator across browsers.
+  - **Direct-link sender side.** The link editor now renders the sender-side
+    LINK paramset in addition to the receiver side, when the sender channel
+    carries one.
+  - **Self-service password change** (`PATCH /auth/me/password`) and a runtime
+    **log-level override** UI (per-subsystem, admin-gated).
+  - **Audit export.** The change-history view gains a date-range filter, server
+    pagination over the full SQLite history, and CSV export
+    (`GET /audit?format=csv`).
+  - **Targeted teach-in.** Interface-selective install mode plus pairing a
+    device by serial (`POST /devices/{addr}/install-mode`).
+- **HTTPS for the daemon's own listener.** Set `north.rest.tls_cert_file` +
+  `tls_key_file` to serve the REST API and SPA over TLS on the same port. The
+  certificate hot-reloads on change or after an admin upload
+  (`POST /admin/tls/certificate`) without a daemon restart.
+
 ## [0.11.3]
 
 ### Fixed

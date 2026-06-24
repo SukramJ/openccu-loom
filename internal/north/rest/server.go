@@ -23,6 +23,17 @@ type Server struct {
 	// real port when listen was `:0`). atomic so Addr() can race-safely
 	// observe the assignment from a different goroutine.
 	addr atomic.Value
+	// tls is non-nil when the listener serves HTTPS. The certificate is
+	// resolved per-handshake through the reloader so it can rotate
+	// without a restart.
+	tls *CertReloader
+}
+
+// EnableTLS switches the listener to HTTPS, resolving the certificate
+// through r on every handshake. Call before Start.
+func (s *Server) EnableTLS(r *CertReloader) {
+	s.tls = r
+	s.srv.TLSConfig = r.TLSConfig()
 }
 
 // NewServer constructs a Server bound to listen. handler is typically
@@ -55,7 +66,16 @@ func (s *Server) Start() error {
 	bound := ln.Addr().String()
 	s.addr.Store(bound)
 	s.srv.Addr = bound
-	s.logger.Info("rest.listen", slog.String("addr", bound))
+	if s.tls != nil {
+		s.logger.Info("rest.listen", slog.String("addr", bound), slog.String("scheme", "https"))
+		// Cert + key are supplied through TLSConfig.GetCertificate, so
+		// the file arguments stay empty.
+		if err := s.srv.ServeTLS(ln, "", ""); !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	}
+	s.logger.Info("rest.listen", slog.String("addr", bound), slog.String("scheme", "http"))
 	if err := s.srv.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

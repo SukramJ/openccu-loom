@@ -4,6 +4,9 @@
 package handlers
 
 import (
+	"context"
+	"encoding/csv"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +21,15 @@ type AuditService interface {
 	List(limit int) []audit.Entry
 }
 
+// AuditQuerier is the optional durable read path. When the wired
+// [AuditService] also implements it, ListAudit pushes the device /
+// timestamp / pagination filters down to SQL so the full retained
+// history (not just the in-memory ring buffer) is reachable, and CSV
+// export and offset-based paging work over all of it.
+type AuditQuerier interface {
+	Query(ctx context.Context, q audit.Query) ([]audit.Entry, error)
+}
+
 // auditFilter holds parsed query-parameter values for GET /audit.
 type auditFilter struct {
 	device      string    // device address prefix (case-insensitive)
@@ -26,6 +38,8 @@ type auditFilter struct {
 	since       time.Time // inclusive lower bound (zero = no bound)
 	until       time.Time // exclusive upper bound (zero = no bound)
 	limit       int       // max entries, default 1000
+	offset      int       // pagination offset (durable path only)
+	format      string    // "" (JSON) or "csv"
 }
 
 // AuditEntryDTO is one entry in `GET /api/v1/audit`. It embeds the change-log
@@ -51,6 +65,12 @@ func parseAuditFilter(r *http.Request) (f auditFilter, errMsg string) { //nolint
 		op:          q.Get("op"),
 		centralName: q.Get("central"),
 		limit:       auditDefaultLimit,
+		format:      strings.ToLower(q.Get("format")),
+	}
+	if oq := q.Get("offset"); oq != "" {
+		if n, err := strconv.Atoi(oq); err == nil && n > 0 {
+			f.offset = n
+		}
 	}
 	if lq := q.Get("limit"); lq != "" {
 		if n, err := strconv.Atoi(lq); err == nil {
@@ -149,9 +169,90 @@ func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 		if idx != nil {
 			centralOf = idx.CentralOf
 		}
-		// Fetch generously from the buffer; the filter pass narrows it
-		// down to the requested limit.
-		entries := svc.List(auditMaxLimit)
-		JSON(w, http.StatusOK, applyAuditFilter(entries, f, centralOf))
+
+		var out []AuditEntryDTO
+		if querier, ok := svc.(AuditQuerier); ok {
+			// Durable path: SQL applies device / since / until / limit /
+			// offset; the in-memory pass then layers the op + central
+			// filters (not first-class SQL columns) without re-capping.
+			entries, err := querier.Query(r.Context(), audit.Query{
+				Device: f.device,
+				Since:  f.since,
+				Until:  f.until,
+				Limit:  f.limit,
+				Offset: f.offset,
+			})
+			if err != nil {
+				problem.Write(w, http.StatusInternalServerError,
+					problem.New(problem.TypeInternal, r, "Audit query failed", err.Error()))
+				return
+			}
+			out = applyAuditPostFilter(entries, f, centralOf)
+		} else {
+			// Fallback: fetch generously from the buffer and narrow the
+			// whole filter set (incl. limit) in memory.
+			out = applyAuditFilter(svc.List(auditMaxLimit), f, centralOf)
+		}
+
+		if f.format == "csv" {
+			writeAuditCSV(w, out)
+			return
+		}
+		JSON(w, http.StatusOK, out)
 	}
+}
+
+// applyAuditPostFilter layers the op + central filters over rows the
+// durable query already narrowed by device / time / pagination. It does
+// not re-apply device/since/until or re-cap to limit — SQL did that.
+func applyAuditPostFilter(entries []audit.Entry, f auditFilter, centralOf func(address string) string) []AuditEntryDTO {
+	opLo := strings.ToLower(f.op)
+	out := make([]AuditEntryDTO, 0, len(entries))
+	for i := range entries {
+		e := &entries[i]
+		if opLo != "" && !strings.Contains(strings.ToLower(string(e.Action)), opLo) {
+			continue
+		}
+		centralName := ""
+		if centralOf != nil && e.DeviceAddress != "" {
+			centralName = centralOf(e.DeviceAddress)
+		}
+		if f.centralName != "" && centralName != f.centralName {
+			continue
+		}
+		out = append(out, AuditEntryDTO{Entry: *e, Central: centralName})
+	}
+	return out
+}
+
+// writeAuditCSV streams the entries as CSV with a download disposition.
+// Changes are JSON-encoded into a single column so the row shape stays
+// flat and spreadsheet-friendly.
+func writeAuditCSV(w http.ResponseWriter, entries []AuditEntryDTO) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="audit-log.csv"`)
+	cw := csv.NewWriter(w)
+	_ = cw.Write([]string{
+		"timestamp", "user", "action", "central", "device_address",
+		"channel_no", "paramset", "peer", "parameter", "note", "changes",
+	})
+	for i := range entries {
+		e := &entries[i]
+		changes := ""
+		if len(e.Changes) > 0 {
+			if raw, err := json.Marshal(e.Changes); err == nil {
+				changes = string(raw)
+			}
+		}
+		channel := ""
+		if e.ChannelNo != 0 {
+			channel = strconv.Itoa(e.ChannelNo)
+		}
+		_ = cw.Write([]string{
+			e.Timestamp.UTC().Format(time.RFC3339), e.User, string(e.Action),
+			e.Central, e.DeviceAddress, channel, e.Paramset, e.Peer,
+			e.Parameter, e.Note, changes,
+		})
+	}
+	cw.Flush()
 }

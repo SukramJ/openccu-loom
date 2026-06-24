@@ -1,0 +1,19 @@
+!# openccu-loom — rename_function
+!# Params: ##oldname## (current function name), ##newname## (new name)
+!# Output: 1 on success, 0 when the function was not found.
+!#
+!# Subsection counterpart to rename_room: finds the function by name in
+!# the ID_FUNCTIONS enum and renames it.
+
+string sOld = "##oldname##";
+string sNew = "##newname##";
+integer iResult = 0;
+if (sNew != "") {
+    object oList = dom.GetObject(ID_FUNCTIONS);
+    object o = oList.Get(sOld);
+    if (o) {
+        o.Name(sNew);
+        iResult = 1;
+    }
+}
+Write(iResult);

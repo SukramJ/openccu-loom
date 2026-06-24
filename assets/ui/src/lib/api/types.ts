@@ -568,6 +568,16 @@ export type RpcRecordingStatus = {
   randomize?: boolean;
 };
 
+// InstallModeInterfaceEntry: one radio's install-mode state from
+// `GET /install-mode/interfaces`. Not in the generated schema yet.
+export type InstallModeInterfaceEntry = {
+  central?: string;
+  interface: string;
+  active: boolean;
+  seconds: number;
+  observed: boolean;
+};
+
 // LogRecord: not in generated schema components. Keep hand-written.
 export type LogRecord = {
   seq: number;

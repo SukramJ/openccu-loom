@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.21.0
+  version: 1.22.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1105,6 +1105,95 @@ paths:
               schema: { $ref: "#/components/schemas/Identity" }
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /auth/me/password:
+    patch:
+      operationId: changeOwnPassword
+      summary: Change the logged-in user's own password
+      description: >
+        Self-service password change for the authenticated local user.
+        Requires the current password; the role is preserved. Accounts
+        without a local password (OIDC / bearer-token identities) return
+        409.
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string }
+      responses:
+        "204": { description: Password changed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/preferences/{key}:
+    parameters:
+      - { in: path, name: key, required: true, schema: { type: string } }
+    get:
+      operationId: getPreference
+      summary: Read the caller's UI preference for {key}
+      description: >
+        Per-user UI state (e.g. key `favorites`). The value is opaque
+        JSON owned by the SPA. Scoped to the authenticated subject.
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      responses:
+        "200":
+          description: Preference value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+                  value: {}
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: putPreference
+      summary: Store the caller's UI preference for {key}
+      description: >
+        The request body is stored verbatim and must be valid JSON
+        within 256 KiB.
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "204": { description: Stored }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "413": { description: Preference too large }
+    delete:
+      operationId: deletePreference
+      summary: Delete the caller's UI preference for {key}
+      tags: [auth]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: []
+      responses:
+        "204": { description: Deleted (or already absent) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /auth/users:
     get:
       operationId: listUsers
@@ -1371,6 +1460,35 @@ paths:
       responses:
         "202":
           description: Update scheduled
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /devices/{addr}/install-mode:
+    post:
+      operationId: deviceInstallMode
+      summary: Open a targeted pairing window for one device
+      description: |
+        Opens install mode bound to a single device address (serial),
+        mirroring the CCU WebUI's serial-targeted teach-in. The owning
+        backend is resolved by address.
+      tags: [devices]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: path, name: addr, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                seconds: { type: integer, minimum: 0, default: 60 }
+      responses:
+        "202":
+          description: Pairing window opened
+        "400": { $ref: "#/components/responses/BadRequest" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/channels/{no}/ui-schema:
@@ -1982,12 +2100,140 @@ paths:
       summary: Aggregated room index with device counts
       tags: [hub]
       responses: { "200": { description: Room list } }
+    post:
+      operationId: createRoom
+      summary: Create a room on the CCU (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                central: { type: string, description: "Target CCU (required when more than one is configured)." }
+      responses:
+        "201": { description: Created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /rooms/{name}:
+    parameters:
+      - { in: path, name: name, required: true, schema: { type: string } }
+    patch:
+      operationId: renameRoom
+      summary: Rename a room (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_name]
+              properties:
+                new_name: { type: string }
+                central: { type: string }
+      responses:
+        "204": { description: Renamed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+    delete:
+      operationId: deleteRoom
+      summary: Delete a room (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /functions:
     get:
       operationId: listFunctions
       summary: Aggregated function-group index with device counts
       tags: [hub]
       responses: { "200": { description: Function list } }
+    post:
+      operationId: createFunction
+      summary: Create a function/Gewerk on the CCU (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                central: { type: string }
+      responses:
+        "201": { description: Created }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /functions/{name}:
+    parameters:
+      - { in: path, name: name, required: true, schema: { type: string } }
+    patch:
+      operationId: renameFunction
+      summary: Rename a function/Gewerk (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_name]
+              properties:
+                new_name: { type: string }
+                central: { type: string }
+      responses:
+        "204": { description: Renamed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
+    delete:
+      operationId: deleteFunction
+      summary: Delete a function/Gewerk (operator)
+      tags: [hub]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      parameters:
+        - { in: query, name: central, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
@@ -2228,6 +2474,18 @@ paths:
           description: >
             Maximum entries to return. 0 or absent uses the default (1000).
             Values above 10000 are capped to 10000.
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+          description: >
+            Pagination offset over the durable history (SQLite path).
+            Ignored on the in-memory fallback.
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv] }
+          description: >
+            When `csv`, returns the entries as a downloadable
+            `text/csv` attachment instead of JSON.
       responses:
         "200":
           description: Filtered list of audit entries (newest first).
@@ -2714,6 +2972,35 @@ paths:
         "503":
           description: cache feature disabled or store unwired.
 
+  /admin/tls/certificate:
+    post:
+      operationId: uploadTLSCertificate
+      summary: Replace the TLS server certificate at runtime (admin-only)
+      description: |
+        Uploads a PEM certificate + key as multipart/form-data (`cert`
+        and `key` parts). The pair is validated, persisted to the
+        configured paths, and hot-reloaded — the REST API and the SPA
+        (same port) are re-secured without a daemon restart. Available
+        only when TLS is enabled (north.rest.tls_cert_file/tls_key_file).
+      tags: [admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [cert, key]
+              properties:
+                cert: { type: string, format: binary }
+                key: { type: string, format: binary }
+      responses:
+        "204": { description: Certificate replaced and reloaded }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /admin/mqtt/reload:
     post:
       operationId: reloadMQTT
