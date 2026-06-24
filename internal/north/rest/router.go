@@ -612,12 +612,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.DeviceInstallMode != nil {
 				pr.With(op).Post("/devices/{addr}/install-mode", handlers.PostDeviceInstallMode(d.DeviceInstallMode, d.AuditRecorder))
 			}
+			// Always mounted (admin): when TLS is not configured the
+			// handler returns the documented 503 "TLS not enabled" via its
+			// nil-service guard, rather than a 404 from an absent route.
+			pr.With(admin).Post("/admin/tls/certificate", handlers.UploadTLSCertificate(d.TLSCert, d.AuditRecorder))
 			// Room / function (Gewerk) entity CRUD. CCU writes, so
 			// operator-gated; the read-only GET /rooms + /functions
 			// stay open above.
-			if d.TLSCert != nil {
-				pr.With(admin).Post("/admin/tls/certificate", handlers.UploadTLSCertificate(d.TLSCert, d.AuditRecorder))
-			}
 			if d.RoomFunctionAdmin != nil {
 				pr.With(op).Post("/rooms", handlers.CreateRoom(d.RoomFunctionAdmin, d.AuditRecorder))
 				pr.With(op).Patch("/rooms/{name}", handlers.RenameRoom(d.RoomFunctionAdmin, d.AuditRecorder))

@@ -2122,6 +2122,7 @@ paths:
         "201": { description: Created }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /rooms/{name}:
     parameters:
@@ -2148,6 +2149,7 @@ paths:
         "204": { description: Renamed }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
     delete:
       operationId: deleteRoom
       summary: Delete a room (operator)
@@ -2161,6 +2163,7 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /functions:
     get:
       operationId: listFunctions
@@ -2189,6 +2192,7 @@ paths:
         "201": { description: Created }
         "400": { $ref: "#/components/responses/BadRequest" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /functions/{name}:
     parameters:
@@ -2215,6 +2219,7 @@ paths:
         "204": { description: Renamed }
         "400": { $ref: "#/components/responses/BadRequest" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
     delete:
       operationId: deleteFunction
       summary: Delete a function/Gewerk (operator)
@@ -2228,6 +2233,7 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+        "502": { $ref: "#/components/responses/BadGateway" }
   /programs/{id}:
     parameters:
       - { in: path, name: id, required: true, schema: { type: string } }
