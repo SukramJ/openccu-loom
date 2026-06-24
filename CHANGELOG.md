@@ -4,17 +4,32 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2]
+
+### Fixed
+
+- **The Home Assistant add-on image now publishes.** Pinning the
+  `home-assistant/builder` action by version tag (0.13.1) was necessary but not
+  sufficient: the action derives its builder-image tag from its own ref, and the
+  builder image `ghcr.io/home-assistant/amd64-builder:2026.06.0` was never
+  published (`manifest unknown`), so the add-on still failed to build. Pinned the
+  action to **`@2026.02.1`** — the latest action version with a matching
+  published builder image (and the action's own hard-coded fallback). The daemon
+  binaries, Docker image, and CCU/RaspberryMatic add-on were unaffected
+  throughout.
+
 ## [0.13.1]
 
 ### Fixed
 
-- **The Home Assistant add-on image now publishes.** The `home-assistant/builder`
-  action was pinned by commit SHA; the action derives its builder-image tag from
-  the action ref, so the SHA pin made it pull a non-existent
-  `amd64-builder:<sha>` ("manifest unknown") and the 0.13.0 release shipped
-  without the HA add-on image. Pinned the action by its version tag
-  (`@2026.06.0`) so the builder image resolves. The 0.13.0 daemon binaries,
-  Docker image, and CCU/RaspberryMatic add-on were unaffected.
+- **Attempted to publish the Home Assistant add-on image** (completed in 0.13.2).
+  The `home-assistant/builder` action was pinned by commit SHA; the action
+  derives its builder-image tag from its own ref, so the SHA pin pulled a
+  non-existent `amd64-builder:<sha>` ("manifest unknown") and the 0.13.0 release
+  shipped without the HA add-on image. Re-pinned the action by version tag — but
+  that version's builder image was itself unpublished, so the fix only landed in
+  0.13.2. The 0.13.0 daemon binaries, Docker image, and CCU/RaspberryMatic
+  add-on were unaffected.
 
 ## [0.13.0]
 
