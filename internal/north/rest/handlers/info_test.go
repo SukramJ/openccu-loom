@@ -68,6 +68,7 @@ type fakeCapDetector struct {
 func (f fakeCapDetector) HasMQTTDiscovery() bool     { return f.mqtt }
 func (f fakeCapDetector) HasMatterBridge() bool      { return f.matter }
 func (f fakeCapDetector) HasOIDC() bool              { return f.oidc }
+func (f fakeCapDetector) HasCCUAuth() bool           { return false }
 func (f fakeCapDetector) HasSupervisedRestart() bool { return false }
 func (f fakeCapDetector) HasMCP() bool               { return false }
 func (f fakeCapDetector) HasMCPWrite() bool          { return false }

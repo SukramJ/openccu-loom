@@ -1458,6 +1458,21 @@ func (w *hubJSONRPCWriter) DeleteFunction(ctx context.Context, name string) erro
 	return parseMutateResult(out, hub.ErrFunctionNotFound)
 }
 
+// GetUserLevel reads a CCU user's UserLevel via the get_user_level Rega
+// script, run on this writer's privileged service session. username must
+// be pre-sanitised by the caller (it is interpolated into the script).
+func (w *hubJSONRPCWriter) GetUserLevel(ctx context.Context, username string) (int, error) {
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptGetUserLevel, map[string]string{"username": username})
+	if err != nil {
+		return -1, err
+	}
+	n, perr := strconv.Atoi(strings.TrimSpace(out))
+	if perr != nil {
+		return -1, fmt.Errorf("rega: unexpected user-level output %q: %w", out, perr)
+	}
+	return n, nil
+}
+
 // parseCreateResult maps a create script's integer output to (id, err):
 // >0 is the new object ID, -2 maps to existsErr, anything else is a
 // generic failure.

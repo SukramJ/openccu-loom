@@ -198,6 +198,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 			mqtt:              d.mqttAvailable,
 			matter:            cfg.North.Matter.Enabled,
 			oidc:              cfg.North.REST.Auth.OIDC.Enabled && cfg.North.REST.Auth.OIDC.Issuer != "",
+			ccuAuth:           cfg.North.REST.Auth.CCU.Enabled,
 			supervisedRestart: detectSupervisedRestart(),
 			mcp:               cfg.North.MCP.Enabled,
 			mcpWrite:          cfg.North.MCP.AllowWrites,

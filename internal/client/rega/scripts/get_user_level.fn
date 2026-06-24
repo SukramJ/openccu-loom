@@ -1,0 +1,18 @@
+!# openccu-loom — get_user_level
+!# Params: ##username## (CCU user name; the caller MUST sanitise this to a
+!#         safe character set before substitution — it is interpolated into
+!#         the script body)
+!# Output: the user's UserLevel as an integer (8=Admin, 2=User, 1=Guest,
+!#         0=None), or -1 when no such user exists.
+!#
+!# Reads the permission level of a CCU user object from the ID_USERS enum,
+!# the same UserLevel() the CCU WebUI uses to gate admin actions. Run with
+!# the daemon's privileged service session — enumerating ID_USERS requires
+!# admin rights, which the service account holds.
+
+object oUser = dom.GetObject(ID_USERS).Get("##username##");
+if (oUser) {
+    Write(oUser.UserLevel());
+} else {
+    Write(-1);
+}
