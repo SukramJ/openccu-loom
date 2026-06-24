@@ -330,6 +330,11 @@ Operators with commercial use-cases can swap the embedded archives
 out via `cfg.CCUData.{translations_path,easymode_path}` for
 self-licensed equivalents — the daemon degrades gracefully.
 
+Third-party prior art (the reference projects this port is built on and the
+Go module dependencies, with their licenses and verbatim copyright notices)
+is recorded in [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md). Full
+license texts live under [`licenses/`](./licenses/).
+
 ## Documentation
 
 - [`SPECIFICATION.md`](./SPECIFICATION.md) — design intent, hard
@@ -358,8 +363,26 @@ the wire layer or the device profile catalogue.
 
 ## Acknowledgements
 
-- [aiohomematic](https://github.com/SukramJ/aiohomematic) — the
-  reference implementation this Go port follows for wire behaviour
-  and the device profile catalogue.
-- The Homematic / HomematicIP community and eQ-3 for the devices
-  and protocol knowledge that make any of this possible.
+OpenCCU-Loom stands on the prior art of several other projects. The full
+list with licenses and verbatim copyright notices is in
+[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md); the narrative credits
+are in [`docs/attribution.md`](./docs/attribution.md). With particular thanks:
+
+- [aiohomematic](https://github.com/SukramJ/aiohomematic) (MIT) — the
+  reference implementation this Go port follows for wire behaviour and the
+  device profile catalogue. Authored by **SukramJ** and **Daniel Perna**.
+- [aiohomematic-config](https://github.com/SukramJ/aiohomematic-config) (MIT)
+  — the form-schema, grouping and label logic ported into the Config UI.
+- [pydevccu](https://github.com/danielperna84/pydevccu) (MIT, Daniel Perna &
+  SukramJ) — the CCU simulator that
+  [godevccu](https://github.com/SukramJ/godevccu) (and thus the integration
+  test suite) is a Go port of.
+- [matter.js](https://github.com/project-chip/matter.js) (Apache-2.0) — the
+  gold standard for the entire Matter bridge; cluster schema, defaults and
+  wire shape are mirrored from it.
+- [homematicip-local-frontend](https://github.com/SukramJ/homematicip-local-frontend)
+  (MIT) and the [Home Assistant frontend](https://github.com/home-assistant/frontend)
+  (Apache-2.0) — the UI interaction and control-primitive references for the
+  Svelte SPA.
+- The Homematic / HomematicIP community and eQ-3 for the devices and protocol
+  knowledge that make any of this possible.

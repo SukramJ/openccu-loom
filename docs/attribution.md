@@ -8,6 +8,50 @@ copied verbatim into the OpenCCU-Loom source tree; we cite them in
 file-top comments wherever a Svelte primitive or Go type mirrors an
 external counterpart so the lineage stays auditable.
 
+The license obligations and verbatim copyright notices for every upstream
+project — plus the Go module dependencies — live in
+[`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md); full license texts are
+under [`licenses/`](../licenses/). This page is the narrative companion to that
+machine-oriented list.
+
+## aiohomematic — MIT
+
+- Source: <https://github.com/SukramJ/aiohomematic> (local mirror
+  `../aiohomematic/`)
+- Authored by **SukramJ** and **Daniel Perna**.
+- Used as: the reference implementation this whole project is a Go port of —
+  transports, devices, paramsets, custom-DP composition, enumerations and
+  their string values, interface classification, paramset normalization and
+  patches, and the device-profile registration shape. The device profiles are
+  *generated* from the aiohomematic registry by `script/generate_profiles.py`.
+
+Compliance: MIT, same as OpenCCU-Loom. No Python source is reproduced verbatim;
+the Go code is a from-scratch semantic port that cites the aiohomematic file +
+function it mirrors. The CCU side of the project follows aiohomematic as its
+gold standard (see CLAUDE.md §"aiohomematic as a Reference").
+
+## aiohomematic-config — MIT
+
+- Source: <https://github.com/SukramJ/aiohomematic-config> (local mirror
+  `../aiohomematic-config/`)
+- Used as: reference for the configuration-panel logic ported into
+  `internal/configui` — form schemas, parameter grouping, label resolution,
+  visibility filters, preset selection.
+
+Compliance: MIT. Same provenance rules as aiohomematic above.
+
+## pydevccu / godevccu — MIT
+
+- Sources: <https://github.com/danielperna84/pydevccu> (authors: **Daniel
+  Perna**, **SukramJ**) and the Go port
+  <https://github.com/SukramJ/godevccu>, consumed as a regular module
+  dependency for the integration tests.
+- Used as: the in-process HomeMatic CCU simulator that the hermetic
+  `tests/integration/` suite runs against — `godevccu` is a pure-Go port of
+  `pydevccu`, so no Python toolchain is needed.
+
+Compliance: both MIT.
+
 ## Home Assistant Frontend — Apache-2.0
 
 - Source: <https://github.com/home-assistant/frontend> (local mirror
@@ -76,8 +120,30 @@ binary are addressed separately by ADR 0003 + `internal/ccudata/embedded/NOTICE`
 
 - Source: <https://github.com/project-chip/matter.js> (local mirror
   `../matter.js/`)
-- Already covered in CLAUDE.md §"matter.js as the Matter Gold Standard".
-  Listed here for completeness.
+- Copyright: © Project CHIP / the matter.js Authors.
+- Used as: the gold standard for the entire Matter side. Everything under
+  `internal/north/matter/` is a semantic port of matter.js HEAD — cluster IDs,
+  revisions, attribute IDs, constraints, defaults and wire shape are mirrored
+  from it, and 170+ Go files cite the matter.js `path:function` they mirror.
+  See CLAUDE.md §"matter.js as the Matter Gold Standard".
+
+Compliance: Apache-2.0 is MIT-compatible. No matter.js source is reproduced
+verbatim; the Go code is written from scratch. The Apache-2.0 license text is
+kept at [`licenses/Apache-2.0.txt`](../licenses/Apache-2.0.txt) and the
+matter.js schema pin used for parity at
+`docs/parity/matter/matter-schema-snapshot.json`.
+
+## home-assistant-matter-bridge — Apache-2.0
+
+- Source: <https://github.com/Nabu-Casa/home-assistant-matter-bridge> (local
+  mirror `../home-assistant-matter-bridge/`)
+- Copyright: © Nabu Casa, Inc. and the home-assistant-matter-bridge authors.
+- Used as: a supplementary reference for end-to-end bridge composition
+  (Aggregator + bridged devices). Not a gold standard — it carries
+  Home-Assistant-specific shims — but useful when wiring the bridge.
+
+Compliance: Apache-2.0, see [`licenses/Apache-2.0.txt`](../licenses/Apache-2.0.txt).
+No source is reproduced verbatim.
 
 ## Reverse direction
 
