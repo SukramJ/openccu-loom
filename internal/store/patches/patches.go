@@ -208,6 +208,7 @@ func (r *Registry) HasPatches() bool {
 
 // builtIns returns the factory-shipped patches. They.
 func builtIns() []Patch {
+	ch0 := 0
 	ch1 := 1
 	return []Patch{
 		// ENERGY_COUNTER on HM-ES-PMSw1-Pl loses the UNIT annotation on
@@ -260,6 +261,26 @@ func builtIns() []Patch {
 					changed = true
 				}
 				return changed
+			},
+		},
+		// HmIP-FWI fingerprint reader: the CCU declares MAX=21 for CODE_ID, but the
+		// device reports CODE_ID=31 in idle/standby (5-bit field, 31 = no active
+		// code). The too-low MAX dropped the idle value, so the entity never
+		// returned to 31 after a recognized code. Widen MAX to 31; MIN stays.
+		{
+			Model:     "HmIP-FWI",
+			Parameter: hmenum.ParameterCodeID,
+			Paramset:  hmenum.ParamsetKeyValues,
+			ChannelNo: &ch0,
+			Reason:    "CCU declares MAX=21 but device reports idle CODE_ID=31",
+			Ticket:    "#3238",
+			Apply: func(pd *hmproto.ParameterData) bool {
+				wantMax := json.RawMessage(`31`)
+				if string(pd.Max) != string(wantMax) {
+					pd.Max = wantMax
+					return true
+				}
+				return false
 			},
 		},
 	}
