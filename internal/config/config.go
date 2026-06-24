@@ -870,12 +870,24 @@ type AuthConfig struct {
 }
 
 // CCUAuthConfig delegates login to a CCU's own user database (see
-// ADR 0043). When Enabled, the login chain — after the local stores —
-// validates credentials against the named central via Session.login and
-// maps the CCU UserLevel to a Loom role. Carries no secret: the
-// credentials come from the login form, not the config.
+// ADR 0043). When enabled, the login chain validates credentials against
+// the named central via Session.login and maps the CCU UserLevel to a
+// Loom role. Carries no secret: the credentials come from the login
+// form, not the config.
 type CCUAuthConfig struct {
-	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+	// Enabled is tri-state: nil (unset) defaults to the build's add-on
+	// flag — true in the CCU add-on, false otherwise — so the add-on
+	// ships with CCU login on and a plain build keeps it off. An
+	// explicit true/false overrides. Resolved by the composition root
+	// (it depends on the build stamp, which config must not import).
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
+	// Primary is tri-state: nil defaults to true (when CCU auth is on,
+	// the CCU is the primary source; local users are the break-glass
+	// fallback). false flips to local-first / CCU-last. Break-glass-safe
+	// either way — the CCU store maps every failure (wrong credentials
+	// or outage) to "unauthenticated", so a local admin always falls
+	// through to the local store. See ADR 0043.
+	Primary *bool `yaml:"primary,omitempty" json:"primary,omitempty" cfg:"basic"`
 	// Central names the CentralConfig whose user database authenticates
 	// logins. Empty selects the first configured central.
 	Central string `yaml:"central" json:"central" cfg:"basic"`

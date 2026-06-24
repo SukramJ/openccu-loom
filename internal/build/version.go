@@ -11,9 +11,18 @@ package build
 // and .goreleaser.yaml for the wiring; unset at `go run` time.
 var (
 	// Version is the SemVer tag or `git describe` output.
-	Version = "0.11.3"
+	Version = "0.12.0"
 	// Commit is the short git SHA the binary was built from.
 	Commit = "none"
 	// BuildDate is the UTC RFC3339 timestamp of the build.
 	BuildDate = "unknown"
+	// AddonBuild is "true" only in the CCU/RaspberryMatic add-on build
+	// (stamped by script/build_ccu_addon.sh). It flips defaults that
+	// only make sense when the daemon runs on the CCU itself — chiefly
+	// CCU-delegated authentication (ADR 0043). Default "false" so a
+	// plain `go build` / Docker image keeps the standalone behaviour.
+	AddonBuild = "false"
 )
+
+// IsAddon reports whether this binary was built as the CCU add-on.
+func IsAddon() bool { return AddonBuild == "true" }

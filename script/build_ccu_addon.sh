@@ -47,7 +47,7 @@ build_bin() {
   echo "  build linux/${goarch}${goarm:+v$goarm} -> $(basename "$out")"
   ( cd "$ROOT" && CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" GOARM="$goarm" \
     go build -trimpath \
-      -ldflags "-s -w -X github.com/SukramJ/openccu-loom/internal/build.Version=${VERSION}" \
+      -ldflags "-s -w -X github.com/SukramJ/openccu-loom/internal/build.Version=${VERSION} -X github.com/SukramJ/openccu-loom/internal/build.AddonBuild=true" \
       -o "$out" ./cmd/openccu-loom )
 }
 

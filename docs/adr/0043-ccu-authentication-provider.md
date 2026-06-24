@@ -146,7 +146,12 @@ north:
   rest:
     auth:
       ccu:
-        enabled: false            # opt-in
+        enabled: ~                # tri-state: unset ⇒ the build's add-on
+                                  # stamp (on in the CCU add-on, off
+                                  # otherwise); true/false overrides
+        primary: ~                # tri-state: unset ⇒ true (CCU first,
+                                  # local break-glass fallback);
+                                  # false ⇒ local first / CCU last
         central: ""               # CentralConfig name to authenticate against
                                   # (empty ⇒ the first configured central)
         min_user_level: 1         # reject users below this UPL (0 = UPL_NONE always denied)
@@ -286,3 +291,31 @@ These were settled during the design review (2026-06-24):
 - **Multi-CCU scope**: a *single configured `central`* is the user source
   (empty ⇒ first central). Authenticating against several CCUs at once is
   out of scope; revisit only if operators ask for it.
+
+## Revision — 0.12.0: CCU-primary by default + build-stamped enable
+
+The initial decision (local-first, CCU opt-in `false`) was revised once the
+add-on use case was made concrete. Two changes, both honouring the
+break-glass property:
+
+- **Enable defaults to the build.** `auth.ccu.enabled` becomes tri-state:
+  unset resolves to the build's add-on stamp (`internal/build.AddonBuild`,
+  set by `script/build_ccu_addon.sh`). The CCU add-on therefore ships with
+  CCU login **on**; a plain `go build` / Docker image keeps it **off**. An
+  explicit `true`/`false` (YAML or SPA) always wins. The default is resolved
+  in the composition root — `config` must not import `build`.
+- **CCU is primary by default.** New tri-state `auth.ccu.primary` (unset ⇒
+  `true`): the CCU is tried first, with the local stores as a break-glass
+  fallback; `false` restores local-first / CCU-last. This is safe in both
+  orders **because the CCU store maps every failure — wrong credentials AND
+  CCU-unreachable — to `ErrUnauthenticated`**, so a local admin always falls
+  through to the local store even when the CCU is primary. The "CCU-primary
+  rejected" alternative above is thus reframed: it is rejected as a
+  *hard-coded* mode, but offered as the *default, overridable* order. The
+  only cost is that a local login first incurs one failing CCU round-trip
+  (bounded by the validation semaphore).
+- **SPA-editable.** The block is a normal config section
+  (`north.rest.auth.ccu`) edited through the SPA's "CCU login" tab. Because
+  the login chain is wired once at boot, the block is registered in
+  `RestartRequiredDiff`, so the SPA shows the restart-pending banner after a
+  change.

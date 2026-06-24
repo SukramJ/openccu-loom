@@ -194,6 +194,7 @@
     { id: "discovery", label: t("settings.tab.discovery") },
     { id: "rest", label: t("settings.tab.rest") },
     { id: "oidc", label: t("settings.tab.oidc") },
+    { id: "ccu_auth", label: t("settings.tab.ccu_auth") },
     { id: "callback", label: t("settings.tab.callback"), expertOnly: true },
     { id: "reliability", label: t("settings.tab.reliability"), expertOnly: true },
     { id: "persistence", label: t("settings.tab.persistence"), expertOnly: true },
@@ -216,7 +217,7 @@
     { id: "general", tabIds: ["general", "system"] },
     { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
-    { id: "security", tabIds: ["oidc", "users", "groups", "tokens"] },
+    { id: "security", tabIds: ["oidc", "ccu_auth", "users", "groups", "tokens"] },
     { id: "advanced", tabIds: ["reliability", "persistence"] },
   ];
 
@@ -541,6 +542,22 @@
         {:else}
           <SectionEditor
             section="north.rest.auth.oidc"
+            {schemaFields}
+            {sources}
+            allSections={schemaSections}
+            {effectiveConfig}
+          />
+        {/if}
+
+      {:else if activeTab === "ccu_auth"}
+        {#if schemaLoading}
+          <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
+        {:else}
+          <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">
+            {t("settings.ccu_auth.hint")}
+          </p>
+          <SectionEditor
+            section="north.rest.auth.ccu"
             {schemaFields}
             {sources}
             allSections={schemaSections}
