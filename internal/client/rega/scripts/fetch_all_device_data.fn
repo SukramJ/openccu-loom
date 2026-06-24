@@ -1,13 +1,23 @@
-!# openccu-loom — fetch_all_device_data
-!# Params: ##interface## (interface id, e.g. "HmIP-RF")
-!# Output: {"<DP.Name-uri-encoded>": <value>, ...}
+!# name: fetch_all_device_data.fn
+!# param: "##interface##"
 !#
-!# Returns every data point of the given interface that has a valid
-!# timestamp. The JSON keys are the CCU's dot-separated DP names
-!# (e.g. "HmIP-RF.0001ABCD:1.LEVEL"), URL-encoded; values are either
-!# bare `true`/`false`, a bare number, or a double-quoted string
-!# depending on the ValueType. Based on iobroker.hm-rega datapoints.fn
-!# (hobbyquaker, MIT) and aiohomematic's fetch_all_device_data.fn.
+!# This script fetches all device data required to initialize the entities without affecting the duty cycle.
+!#
+!# Original script: https://github.com/ioBroker/ioBroker.hm-rega/blob/master/regascripts/datapoints.fn
+!# datapoints.fn 1.9
+!# 3'2013-9'2014 hobbyquaker https://github.com/hobbyquaker
+!#
+!# Dieses Homematic-Script gibt eine Liste aller Datenpunkte, die zur Laufzeit einen validen Zeitstempel haben, als JSON String aus.
+!#
+!# modified by: SukramJ https://github.com/SukramJ && Baxxy13 https://github.com/Baxxy13
+!# v2.5 - 06/2026
+!#
+!# Das Interface wird durch die Integration an 'sUse_Interface' übergeben.
+!# Nutzbare Interfaces: BidCos-RF, BidCos-Wired, HmIP-RF, VirtualDevices, CUxD, CCU-Jack
+!# Zum Testen direkt auf der Homematic-Zentrale muss das Interface wie folgt eingetragen werden: sUse_Interface = "HmIP-RF";
+!#
+!# Params for session recorder
+!#
 
 string sUse_Interface = "##interface##";
 string sDevId; string sChnId; string sDPId; string sAllDevices; string sDP_Namestring;

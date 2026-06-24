@@ -31,6 +31,7 @@ const (
 	ParameterChannelColor                  Parameter = "CHANNEL_COLOR"
 	ParameterChannelLock                   Parameter = "CHANNEL_LOCK"
 	ParameterChannelOperationMode          Parameter = "CHANNEL_OPERATION_MODE"
+	ParameterCodeID                        Parameter = "CODE_ID"
 	ParameterColor                         Parameter = "COLOR"
 	ParameterColorBehaviour                Parameter = "COLOR_BEHAVIOUR"
 	ParameterColorTemperature              Parameter = "COLOR_TEMPERATURE"

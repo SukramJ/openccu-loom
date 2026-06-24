@@ -30,7 +30,8 @@ var ErrParamsetNotFound = errors.New("sqlite: paramset not found")
 //
 // 0: pre-versioning (rows written before migration 003 are tagged 0 and wiped
 // on first run with this binary) 1: initial versioned schema
-const ParamsetCacheSchemaVersion = 1
+// 2: HmIP-FWI CODE_ID MAX patch — cached bounds rebuilt from the CCU (#3238)
+const ParamsetCacheSchemaVersion = 2
 
 // ParamsetRecord persists a paramset description.
 type ParamsetRecord struct {

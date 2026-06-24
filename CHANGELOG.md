@@ -4,6 +4,20 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.3]
+
+### Fixed
+
+- **`HmIP-FWI` `CODE_ID` no longer drops the idle value `31` (#3238).** The CCU
+  declares `MAX=21` for the fingerprint reader's `CODE_ID`, but the device
+  reports `CODE_ID=31` in idle/standby (5-bit field, `31` = no active code). The
+  too-low maximum dropped the idle value at ingestion, so the data point kept the
+  last recognized code and never returned to `31`. A paramset patch now widens
+  `CODE_ID` `MAX` to `31` for `HmIP-FWI` on channel 0 (`MIN` stays at `1`). This
+  fixes the event-driven flow (device-reported codes); it is unrelated to the
+  optimistic send/rollback path addressed in `0.11.2`. The paramset cache schema
+  version was bumped to `2` so the corrected bounds are rebuilt from the CCU.
+
 ## [0.11.2]
 
 ### Fixed
