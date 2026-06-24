@@ -9,7 +9,6 @@ package adapter
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -484,24 +483,6 @@ func TestIncidentsAdapterReturnsNil(t *testing.T) {
 	a := NewIncidentsAdapter()
 	if got := a.Incidents(); got != nil {
 		t.Errorf("Incidents() = %v, want nil", got)
-	}
-}
-
-func TestInstallModeAdapterStateOff(t *testing.T) {
-	t.Parallel()
-	a := NewInstallModeAdapter()
-	on, dur := a.InstallModeState()
-	if on || dur != 0 {
-		t.Errorf("InstallModeState() = (%v, %v), want (false, 0)", on, dur)
-	}
-}
-
-func TestInstallModeAdapterSetReturnsUnimplemented(t *testing.T) {
-	t.Parallel()
-	a := NewInstallModeAdapter()
-	err := a.SetInstallMode(context.Background(), true, time.Minute)
-	if err == nil {
-		t.Fatal("expected ErrUnimplemented")
 	}
 }
 

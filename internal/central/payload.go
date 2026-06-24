@@ -63,19 +63,6 @@ func (u *Unit) State() payload.StatePayload {
 // onto the embedded ServiceRegistry. Called once from [New] after the
 // Unit is fully constructed.
 func (u *Unit) registerCentralServices() {
-	u.RegisterService("set_install_mode", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
-		on, err := payload.ParamBool(params, "on")
-		if err != nil {
-			return err
-		}
-		seconds := 60
-		if v, ok := params["time"]; ok {
-			if f, ok := v.(float64); ok {
-				seconds = int(f)
-			}
-		}
-		return u.SetInstallMode(ctx, on, seconds)
-	})
 	u.RegisterService("rename_device", func(ctx context.Context, params map[string]any, _ hmenum.CommandPriority) error {
 		address, err := payload.ParamString(params, "address")
 		if err != nil {

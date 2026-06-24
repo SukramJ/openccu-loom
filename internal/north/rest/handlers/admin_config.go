@@ -141,6 +141,14 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.mcp.allow_writes": {},
 	"north.mcp.path":         {},
 	"centrals":               {},
+	// CCU-delegated login: the login chain (incl. the CCU auth provider)
+	// is wired once at boot, so any field in the block is restart-required.
+	// Mirrors config.RestartRequiredDiff's whole-block diff.
+	"north.rest.auth.ccu.enabled":        {},
+	"north.rest.auth.ccu.primary":        {},
+	"north.rest.auth.ccu.central":        {},
+	"north.rest.auth.ccu.min_user_level": {},
+	"north.rest.auth.ccu.role_mapping":   {},
 }
 
 // GetConfigSchema renders the typed schema for the SPA editor. No
@@ -526,6 +534,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 	case configstore.SectionOIDC:
 		var v config.OIDCConfig
 		return strictUnmarshal(raw, &v)
+	case configstore.SectionCCUAuth:
+		var v config.CCUAuthConfig
+		return strictUnmarshal(raw, &v)
 	case configstore.SectionUI:
 		var v config.NorthUI
 		return strictUnmarshal(raw, &v)
@@ -567,7 +578,8 @@ func sectionRestartRequired(section configstore.Section) bool {
 	switch section {
 	case configstore.SectionCallback,
 		configstore.SectionMatter,
-		configstore.SectionMCP:
+		configstore.SectionMCP,
+		configstore.SectionCCUAuth:
 		return true
 	}
 	return false

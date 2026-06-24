@@ -219,20 +219,3 @@ func (a *BackupAdapter) Restore(ctx context.Context, id string) (string, error) 
 	defer func() { _ = rc.Close() }()
 	return a.restorer.Restore(ctx, id, rc)
 }
-
-// --- InstallMode stub ---
-
-// InstallModeAdapter is the MVP stub. It reports "off" and rejects
-// writes until the client wiring lands.
-type InstallModeAdapter struct{}
-
-// NewInstallModeAdapter constructs the stub.
-func NewInstallModeAdapter() *InstallModeAdapter { return &InstallModeAdapter{} }
-
-// InstallModeState implements handlers.InstallModeController.
-func (a *InstallModeAdapter) InstallModeState() (bool, time.Duration) { return false, 0 }
-
-// SetInstallMode implements handlers.InstallModeController.
-func (a *InstallModeAdapter) SetInstallMode(context.Context, bool, time.Duration) error {
-	return ErrUnimplemented
-}

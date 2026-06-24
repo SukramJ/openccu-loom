@@ -165,12 +165,6 @@ type SysvarSetRequest struct {
 // SysvarRefreshService is an alias for the canonical interface in pkg/interfaces.
 type SysvarRefreshService = interfaces.SysvarRefreshService
 
-// InstallModeState is the body of `GET/POST /install-mode`.
-type InstallModeState struct {
-	Active  bool `json:"active"`
-	Seconds int  `json:"seconds,omitempty"`
-}
-
 // InboxDeviceDTO is one entry in `GET /api/v1/inbox`.
 type InboxDeviceDTO struct {
 	// Central is the CCU that reported this pending device.
@@ -219,9 +213,6 @@ type ServiceMessageDTO struct {
 	Counter   int       `json:"counter"`
 	Quittable bool      `json:"quittable"`
 }
-
-// InstallModeController is an alias for the canonical interface in pkg/interfaces.
-type InstallModeController = interfaces.InstallModeController
 
 // applyHubPagination slices items according to optional `page` / `per_page`
 // query parameters and writes X-Total-Count with the full pre-slice count.
@@ -865,49 +856,6 @@ func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 		if err := h.ServiceMessages.Acknowledge(r.Context(), id); err != nil {
 			problem.Write(w, http.StatusBadGateway,
 				problem.New(problem.TypeUpstreamUnavailable, r, "Acknowledge failed", err.Error()))
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-	}
-}
-
-// --- Install mode ---
-
-// GetInstallMode returns the current install-mode state.
-func GetInstallMode(ctrl InstallModeController) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if ctrl == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Install mode unavailable", "no controller wired"))
-			return
-		}
-		active, remaining := ctrl.InstallModeState()
-		JSON(w, http.StatusOK, InstallModeState{Active: active, Seconds: int(remaining.Seconds())})
-	}
-}
-
-// PostInstallMode toggles install mode.
-func PostInstallMode(ctrl InstallModeController) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if ctrl == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Install mode unavailable", "no controller wired"))
-			return
-		}
-		var req InstallModeState
-		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
-			return
-		}
-		if req.Seconds < 0 {
-			problem.Write(w, http.StatusUnprocessableEntity,
-				problem.New(problem.TypeValidation, r, "seconds must be >= 0", ""))
-			return
-		}
-		if err := ctrl.SetInstallMode(r.Context(), req.Active, time.Duration(req.Seconds)*time.Second); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Install mode write failed", err.Error()))
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

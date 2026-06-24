@@ -296,6 +296,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return json.Unmarshal(raw, &cfg.North.REST)
 	case SectionOIDC:
 		return json.Unmarshal(raw, &cfg.North.REST.Auth.OIDC)
+	case SectionCCUAuth:
+		return json.Unmarshal(raw, &cfg.North.REST.Auth.CCU)
 	case SectionUI:
 		return json.Unmarshal(raw, &cfg.North.UI)
 	case SectionCallback:
@@ -344,6 +346,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 	case SectionOIDC:
 		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027); see #20
 		raw, err = json.Marshal(cfg.North.REST.Auth.OIDC)
+	case SectionCCUAuth:
+		raw, err = json.Marshal(cfg.North.REST.Auth.CCU)
 	case SectionUI:
 		raw, err = json.Marshal(cfg.North.UI)
 	case SectionCallback:

@@ -4,6 +4,7 @@
   import type { ConfigSchemaField, ConfigFieldSource } from "$lib/api/client";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Select from "$lib/components/ui/Select.svelte";
   import SourceBadge from "$lib/components/ui/SourceBadge.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -324,10 +325,22 @@
     // *bool ValuesCache.Enabled, which is nil in the struct but
     // defaults to true at runtime). Without it the operator
     // would see an empty checkbox and assume "disabled".
-    if (f.go_type === "bool" || f.go_type === "*bool") {
+    if (f.go_type === "bool") {
       if (typeof raw === "boolean") return raw;
       if (typeof def === "boolean") return def;
       return false;
+    }
+    if (f.go_type === "*bool") {
+      // Tri-state: a *bool is nil / true / false. Preserve the unset
+      // state as null instead of collapsing it to false — the daemon
+      // resolves nil to its own default, which can be true (e.g.
+      // north.rest.auth.ccu.primary: CCU-primary by default) or
+      // build-stamp dependent (e.g. ccu.enabled in the add-on). The
+      // tri-state widget renders null as "Default"; a plain checkbox
+      // could only ever send true/false and would silently overwrite
+      // the nil default on save.
+      if (typeof raw === "boolean") return raw;
+      return null;
     }
     if (
       f.go_type.startsWith("int") ||
@@ -356,6 +369,41 @@
     if (raw !== undefined && raw !== null) return raw;
     if (def !== undefined && def !== null) return def;
     return "";
+  }
+
+  // Tri-state (*bool) widget helpers. A *bool field carries three
+  // distinct states — null ("Default", let the daemon decide), true,
+  // false — that a plain checkbox cannot express. We map them onto the
+  // shared Select's string values.
+  const TRISTATE_DEFAULT = "default";
+  const TRISTATE_TRUE = "true";
+  const TRISTATE_FALSE = "false";
+
+  function triStateValue(v: unknown): string {
+    if (v === true) return TRISTATE_TRUE;
+    if (v === false) return TRISTATE_FALSE;
+    return TRISTATE_DEFAULT;
+  }
+
+  function triStateParse(s: string): boolean | null {
+    if (s === TRISTATE_TRUE) return true;
+    if (s === TRISTATE_FALSE) return false;
+    return null;
+  }
+
+  // Options for a *bool Select. The "Default" label annotates the
+  // resolved default (when known) so the operator still sees what nil
+  // evaluates to — the same information the old checkbox conveyed.
+  function triStateOptions(f: ConfigSchemaField): { value: string; label: string }[] {
+    const def = resolveDefault(f);
+    let defaultLabel = t("settings.tristate.default");
+    if (def === true) defaultLabel += ` (${t("settings.tristate.on")})`;
+    else if (def === false) defaultLabel += ` (${t("settings.tristate.off")})`;
+    return [
+      { value: TRISTATE_DEFAULT, label: defaultLabel },
+      { value: TRISTATE_TRUE, label: t("settings.tristate.on") },
+      { value: TRISTATE_FALSE, label: t("settings.tristate.off") },
+    ];
   }
 
   // Go duration helpers — mirror time.ParseDuration / String().
@@ -627,12 +675,19 @@
     </div>
     <div class="flex w-full min-w-0 flex-col items-stretch gap-1 sm:w-auto sm:items-end">
       <SourceBadge source={sources[f.path] ?? "default"} />
-      {#if f.go_type === "bool" || f.go_type === "*bool"}
+      {#if f.go_type === "bool"}
         <input
           type="checkbox"
           checked={!!v}
           onchange={(e) => (working = setIn(working, rel, (e.target as HTMLInputElement).checked))}
           class="h-4 w-4"
+        />
+      {:else if f.go_type === "*bool"}
+        <Select
+          options={triStateOptions(f)}
+          value={triStateValue(v)}
+          onValueChange={(s) => (working = setIn(working, rel, triStateParse(s)))}
+          class="sm:w-44"
         />
       {:else if f.go_type.startsWith("int") || f.go_type.startsWith("uint") || f.go_type.startsWith("float")}
         <input

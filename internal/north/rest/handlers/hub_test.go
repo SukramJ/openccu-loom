@@ -214,29 +214,6 @@ func TestCreateSysvar_NilHub_Returns503(t *testing.T) {
 	}
 }
 
-func TestGetInstallMode_NilController_Returns503(t *testing.T) {
-	t.Parallel()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/install-mode", http.NoBody)
-	w := httptest.NewRecorder()
-	GetInstallMode(nil).ServeHTTP(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", w.Code)
-	}
-}
-
-func TestPostInstallMode_NilController_Returns503(t *testing.T) {
-	t.Parallel()
-	body := strings.NewReader(`{"active":true,"seconds":60}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/install-mode", body)
-	w := httptest.NewRecorder()
-	PostInstallMode(nil).ServeHTTP(w, req)
-
-	if w.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d", w.Code)
-	}
-}
-
 func TestListInterfaces_NilIndex_ReturnsEmptyArray(t *testing.T) {
 	t.Parallel()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/interfaces", http.NoBody)
@@ -730,79 +707,6 @@ func TestListInbox_WithEntries(t *testing.T) {
 }
 
 // --- GetInstallMode happy path ---
-
-// stubInstallModeController is a test stub for InstallModeController.
-type stubInstallModeController struct {
-	active    bool
-	remaining time.Duration
-	setErr    error
-}
-
-func (s *stubInstallModeController) InstallModeState() (bool, time.Duration) {
-	return s.active, s.remaining
-}
-
-func (s *stubInstallModeController) SetInstallMode(_ context.Context, _ bool, _ time.Duration) error {
-	return s.setErr
-}
-
-func TestGetInstallMode_HappyPath(t *testing.T) {
-	t.Parallel()
-	ctrl := &stubInstallModeController{active: true, remaining: 90 * time.Second}
-	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
-	w := httptest.NewRecorder()
-	GetInstallMode(ctrl).ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
-	}
-	var state InstallModeState
-	if err := json.Unmarshal(w.Body.Bytes(), &state); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if !state.Active {
-		t.Error("expected active=true")
-	}
-	if state.Seconds != 90 {
-		t.Errorf("expected seconds=90, got %d", state.Seconds)
-	}
-}
-
-func TestPostInstallMode_HappyPath(t *testing.T) {
-	t.Parallel()
-	ctrl := &stubInstallModeController{}
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"active":true,"seconds":60}`))
-	w := httptest.NewRecorder()
-	PostInstallMode(ctrl).ServeHTTP(w, req)
-
-	if w.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
-	}
-}
-
-func TestPostInstallMode_NegativeSeconds_Returns422(t *testing.T) {
-	t.Parallel()
-	ctrl := &stubInstallModeController{}
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"active":false,"seconds":-5}`))
-	w := httptest.NewRecorder()
-	PostInstallMode(ctrl).ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnprocessableEntity {
-		t.Fatalf("expected 422, got %d body=%s", w.Code, w.Body.String())
-	}
-}
-
-func TestPostInstallMode_ControllerError_Returns502(t *testing.T) {
-	t.Parallel()
-	ctrl := &stubInstallModeController{setErr: errors.New("CCU unreachable")}
-	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"active":true,"seconds":30}`))
-	w := httptest.NewRecorder()
-	PostInstallMode(ctrl).ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadGateway {
-		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
-	}
-}
 
 // --- GetInterface happy path ---
 

@@ -81,6 +81,46 @@ func TestCUxDIsBINRPCOnly(t *testing.T) {
 	}
 }
 
+// TestInstallModeClassification pins the exact set of interfaces that support
+// install (pairing) mode: HmIP-RF, BidCos-RF, and BidCos-Wired. VirtualDevices
+// and CUxD must not be members — they cannot pair physical devices.
+func TestInstallModeClassification(t *testing.T) {
+	t.Parallel()
+
+	wantTrue := []hmenum.Interface{
+		hmenum.InterfaceHmIPRF,
+		hmenum.InterfaceBidCosRF,
+		hmenum.InterfaceBidCosWired,
+	}
+	wantFalse := []hmenum.Interface{
+		hmenum.InterfaceVirtualDevices,
+		hmenum.InterfaceCUxD,
+	}
+
+	// The set must contain exactly the three pairing-capable radios.
+	if got := len(hmenum.InterfacesSupportingInstallMode); got != 3 {
+		t.Fatalf("InterfacesSupportingInstallMode len=%d, want 3", got)
+	}
+
+	for _, iface := range wantTrue {
+		if _, ok := hmenum.InterfacesSupportingInstallMode[iface]; !ok {
+			t.Errorf("%s missing from InterfacesSupportingInstallMode", iface)
+		}
+		if !iface.SupportsInstallMode() {
+			t.Errorf("%s.SupportsInstallMode() = false, want true", iface)
+		}
+	}
+
+	for _, iface := range wantFalse {
+		if _, ok := hmenum.InterfacesSupportingInstallMode[iface]; ok {
+			t.Errorf("%s must not be in InterfacesSupportingInstallMode", iface)
+		}
+		if iface.SupportsInstallMode() {
+			t.Errorf("%s.SupportsInstallMode() = true, want false", iface)
+		}
+	}
+}
+
 // TestCategoryToTypeCovers ensures every real DataPointCategory maps to
 // a DataPointType. UNDEFINED is intentionally omitted.
 func TestCategoryToTypeCovers(t *testing.T) {

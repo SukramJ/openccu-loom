@@ -33,8 +33,8 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200, json: { status: 'ok', at: new Date().toISOString() } }),
   );
 
-  // Install mode
-  await page.route('**/api/v1/install-mode', (route) =>
+  // Install mode (per-interface only; no CCU-wide endpoint)
+  await page.route('**/api/v1/install-mode/interfaces', (route) =>
     route.fulfill({ json: fixture('install-mode.json') }),
   );
 

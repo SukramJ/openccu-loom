@@ -31,6 +31,12 @@ func sectionTarget(sec Section) any {
 		return new(config.NorthREST)
 	case SectionOIDC:
 		return new(config.OIDCConfig)
+	case SectionCCUAuth:
+		// No secret fields (credentials come from the login form, not
+		// config), so secretPaths is empty and TransformSectionJSON
+		// no-ops — the target is returned only to keep the config-backed
+		// sections symmetric with applySection/marshalSection.
+		return new(config.CCUAuthConfig)
 	case SectionUI:
 		return new(config.NorthUI)
 	case SectionCallback:

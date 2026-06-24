@@ -67,7 +67,7 @@ func TestOpenAPIDeclaresMVPEndpoints(t *testing.T) {
 		"/alarm-messages",
 		"/service-messages",
 		"/hub/data-points",
-		"/install-mode",
+		"/install-mode/interfaces",
 		"/interfaces",
 		"/interfaces/{id}",
 		"/interfaces/{id}/reconnect",

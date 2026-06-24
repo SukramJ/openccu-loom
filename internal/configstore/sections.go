@@ -24,6 +24,10 @@ const (
 	SectionREST Section = "north.rest"
 	// SectionOIDC carries [config.OIDCConfig].
 	SectionOIDC Section = "north.rest.auth.oidc"
+	// SectionCCUAuth carries [config.CCUAuthConfig] — the CCU-delegated
+	// login provider (ADR 0043). Restart-required: the login chain is
+	// wired once at boot.
+	SectionCCUAuth Section = "north.rest.auth.ccu"
 	// SectionUI carries [config.NorthUI] (enabled toggle only —
 	// bind address is bootstrap).
 	SectionUI Section = "north.ui"
@@ -55,6 +59,7 @@ func AllSections() []Section {
 		SectionDiscovery,
 		SectionREST,
 		SectionOIDC,
+		SectionCCUAuth,
 		SectionUI,
 		SectionCallback,
 		SectionCCUData,

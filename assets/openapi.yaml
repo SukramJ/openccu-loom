@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 1.24.0
+  version: 2.0.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -667,34 +667,6 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ServiceMessage" }
-
-  /install-mode:
-    get:
-      tags: [hub]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/InstallModeState" }
-    post:
-      tags: [hub]
-      security:
-        - basicAuth: []
-        - bearerAuth: []
-        - openIdConnect: [admin]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/InstallModeState" }
-      responses:
-        "202":
-          description: Accepted
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "422": { $ref: "#/components/responses/UnprocessableEntity" }
-        "502": { $ref: "#/components/responses/BadGateway" }
-        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /install-mode/interfaces:
     get:
@@ -5135,12 +5107,6 @@ components:
         enabled:
           type: boolean
           description: Include (true) / exclude (false) the channel from the week-program schedule.
-    InstallModeState:
-      type: object
-      required: [active]
-      properties:
-        active: { type: boolean }
-        seconds: { type: integer, minimum: 0 }
     InterfaceState:
       type: object
       required: [id, name, connected, interface]
