@@ -205,3 +205,56 @@ func TestRestartRequiredDiff_MultipleChanges(t *testing.T) {
 		}
 	}
 }
+
+func ptrBoolConfig(b bool) *bool { return &b }
+
+// TestRestartRequiredDiff_CCUAuth verifies that a change in the CCU-auth
+// block surfaces "north.rest.auth.ccu" in the diff.
+func TestRestartRequiredDiff_CCUAuth(t *testing.T) {
+	t.Parallel()
+
+	t.Run("enabled_pointer_changes", func(t *testing.T) {
+		t.Parallel()
+		boot := baseConfig()
+		eff := clone(boot)
+		eff.North.REST.Auth.CCU.Enabled = ptrBoolConfig(true)
+
+		got := RestartRequiredDiff(boot, eff)
+		if !slices.Contains(got, "north.rest.auth.ccu") {
+			t.Errorf("expected \"north.rest.auth.ccu\" in diff %v", got)
+		}
+	})
+
+	t.Run("primary_pointer_changes", func(t *testing.T) {
+		t.Parallel()
+		boot := baseConfig()
+		boot.North.REST.Auth.CCU.Primary = ptrBoolConfig(true)
+		eff := clone(boot)
+		eff.North.REST.Auth.CCU.Primary = ptrBoolConfig(false)
+
+		got := RestartRequiredDiff(boot, eff)
+		if !slices.Contains(got, "north.rest.auth.ccu") {
+			t.Errorf("expected \"north.rest.auth.ccu\" in diff %v", got)
+		}
+	})
+}
+
+// TestRestartRequiredDiff_CCUAuth_Identical verifies that identical
+// CCU-auth configs produce no "north.rest.auth.ccu" diff entry.
+func TestRestartRequiredDiff_CCUAuth_Identical(t *testing.T) {
+	t.Parallel()
+
+	boot := baseConfig()
+	enabled := true
+	boot.North.REST.Auth.CCU.Enabled = &enabled
+	boot.North.REST.Auth.CCU.Central = "ccu1"
+	eff := clone(boot)
+	// CCU auth Enabled pointer must be deep-copied; clone only shallow-copies.
+	enabledCopy := enabled
+	eff.North.REST.Auth.CCU.Enabled = &enabledCopy
+
+	got := RestartRequiredDiff(boot, eff)
+	if slices.Contains(got, "north.rest.auth.ccu") {
+		t.Errorf("unexpected \"north.rest.auth.ccu\" in diff %v for identical configs", got)
+	}
+}

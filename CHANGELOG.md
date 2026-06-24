@@ -4,17 +4,23 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0] - 2026-06-24
 
 ### Added
 
-- **CCU as an authentication provider (ADR 0043).** Optional: when
-  `north.rest.auth.ccu.enabled` is set, logins are validated against the
-  CCU's own user database (a transient `Session.login`) and the CCU
-  `UserLevel` is mapped to a Loom role (8→admin, 2→operator, 1→viewer).
-  Local users are tried first (break-glass), so a CCU outage never locks
-  out the local admin; the CCU is only contacted at login (the issued Loom
-  session carries the rest). Surfaced as the `auth.ccu.v1` capability.
+- **CCU as an authentication provider (ADR 0043).** Logins are validated
+  against the CCU's own user database (a transient `Session.login`) and the
+  CCU `UserLevel` is mapped to a Loom role (8→admin, 2→operator, 1→viewer).
+  The CCU is only contacted at login (the issued Loom session carries the
+  rest). Configurable via `north.rest.auth.ccu` (also editable in the SPA's
+  "CCU login" tab; restart-required) and surfaced as `auth.ccu.v1`:
+  - **`enabled`** is tri-state — unset defaults to the build stamp, so the
+    CCU add-on ships with CCU login **on** and a plain build keeps it off.
+  - **`primary`** is tri-state — unset defaults to **true** (the CCU is the
+    primary source, local users are the break-glass fallback); `false`
+    flips to local-first. Break-glass holds in both orders because every CCU
+    failure (wrong password **or** CCU down) falls through to the local
+    store.
 - **Config-UI parity push toward the legacy CCU WebUI.** Six gaps the SPA had
   against the CCU WebUI are now closed:
   - **Rooms & functions (Gewerke) management.** Create / rename / delete rooms

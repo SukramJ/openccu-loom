@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/build"
+	"github.com/SukramJ/openccu-loom/internal/config"
 )
 
 // ── parseCCURoleMapping ───────────────────────────────────────────────────────
@@ -97,7 +99,7 @@ func TestLoginChainWithCCU_NoCCU_LocalChainOnly(t *testing.T) {
 		username: "bob",
 		identity: auth.Identity{Subject: "bob", Scheme: auth.SchemeBasic, Role: auth.RoleOperator},
 	}
-	chain := loginChainWithCCU(sqUsers, memUsers, nil)
+	chain := loginChainWithCCU(sqUsers, memUsers, nil, false)
 
 	id, err := chain.AuthenticateBasic(context.Background(), "alice", "pass")
 	if err != nil || id.Subject != "alice" {
@@ -131,7 +133,7 @@ func TestLoginChainWithCCU_WithCCU_LocalTakesPrecedence(t *testing.T) {
 		username: "alice",
 		identity: auth.Identity{Subject: "alice", Scheme: auth.SchemeBasic, Role: auth.RoleViewer},
 	}
-	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore)
+	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore, false)
 
 	id, err := chain.AuthenticateBasic(context.Background(), "alice", "pass")
 	if err != nil {
@@ -159,7 +161,7 @@ func TestLoginChainWithCCU_WithCCU_FallsThroughToCCU(t *testing.T) {
 		username: "carol",
 		identity: auth.Identity{Subject: "carol", Scheme: auth.SchemeBasic, Role: auth.RoleViewer},
 	}
-	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore)
+	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore, false)
 
 	id, err := chain.AuthenticateBasic(context.Background(), "carol", "pass")
 	if err != nil {
@@ -178,10 +180,132 @@ func TestLoginChainWithCCU_WithCCU_UnknownUserDenied(t *testing.T) {
 	sqUsers := &stubUserStore{name: "sqlite", username: "alice"}
 	memUsers := &stubUserStore{name: "mem", username: "bob"}
 	ccuStore := &stubUserStore{name: "ccu", username: "carol"}
-	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore)
+	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore, false)
 
 	_, err := chain.AuthenticateBasic(context.Background(), "dave", "pass")
 	if !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Errorf("unknown user: got %v, want ErrUnauthenticated", err)
+	}
+}
+
+// ── ccuAuthEnabled ────────────────────────────────────────────────────────────
+
+func ptrBool(b bool) *bool { return &b }
+
+func TestCCUAuthEnabled_ExplicitTrue(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Enabled: ptrBool(true)}
+	if !ccuAuthEnabled(cc) {
+		t.Error("expected true when Enabled=&true")
+	}
+}
+
+func TestCCUAuthEnabled_ExplicitFalse(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Enabled: ptrBool(false)}
+	if ccuAuthEnabled(cc) {
+		t.Error("expected false when Enabled=&false")
+	}
+}
+
+func TestCCUAuthEnabled_NilFallsBackToBuildStamp(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Enabled: nil}
+	got := ccuAuthEnabled(cc)
+	if got != build.IsAddon() {
+		t.Errorf("nil Enabled: got %v, want %v (build.IsAddon())", got, build.IsAddon())
+	}
+}
+
+// ── ccuAuthPrimary ────────────────────────────────────────────────────────────
+
+func TestCCUAuthPrimary_NilDefaultsToTrue(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Primary: nil}
+	if !ccuAuthPrimary(cc) {
+		t.Error("expected true when Primary=nil")
+	}
+}
+
+func TestCCUAuthPrimary_ExplicitFalse(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Primary: ptrBool(false)}
+	if ccuAuthPrimary(cc) {
+		t.Error("expected false when Primary=&false")
+	}
+}
+
+func TestCCUAuthPrimary_ExplicitTrue(t *testing.T) {
+	t.Parallel()
+	cc := config.CCUAuthConfig{Primary: ptrBool(true)}
+	if !ccuAuthPrimary(cc) {
+		t.Error("expected true when Primary=&true")
+	}
+}
+
+// ── loginChainWithCCU primary=true ────────────────────────────────────────────
+
+func TestLoginChainWithCCU_Primary_CCUWinsForSharedUser(t *testing.T) {
+	t.Parallel()
+	// Both stores know "alice" but return different roles.
+	sqUsers := &stubUserStore{
+		name:     "sqlite",
+		username: "alice",
+		identity: auth.Identity{Subject: "alice-local", Scheme: auth.SchemeBasic, Role: auth.RoleAdmin},
+	}
+	memUsers := &stubUserStore{name: "mem", username: "nobody"}
+	ccuStore := &stubUserStore{
+		name:     "ccu",
+		username: "alice",
+		identity: auth.Identity{Subject: "alice-ccu", Scheme: auth.SchemeBasic, Role: auth.RoleViewer},
+	}
+	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore, true)
+
+	id, err := chain.AuthenticateBasic(context.Background(), "alice", "pass")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if id.Subject != "alice-ccu" {
+		t.Errorf("primary=true: subject = %q, want %q (CCU wins)", id.Subject, "alice-ccu")
+	}
+}
+
+func TestLoginChainWithCCU_Primary_LocalBreakGlassWhenCCURejectsUser(t *testing.T) {
+	t.Parallel()
+	// Only the local store knows "alice"; CCU returns ErrUnauthenticated.
+	sqUsers := &stubUserStore{
+		name:     "sqlite",
+		username: "alice",
+		identity: auth.Identity{Subject: "alice", Scheme: auth.SchemeBasic, Role: auth.RoleAdmin},
+	}
+	memUsers := &stubUserStore{name: "mem", username: "nobody"}
+	ccuStore := &stubUserStore{name: "ccu", username: "nobody"}
+	chain := loginChainWithCCU(sqUsers, memUsers, ccuStore, true)
+
+	id, err := chain.AuthenticateBasic(context.Background(), "alice", "pass")
+	if err != nil {
+		t.Fatalf("break-glass fallback failed: %v", err)
+	}
+	if id.Subject != "alice" {
+		t.Errorf("subject = %q, want %q", id.Subject, "alice")
+	}
+}
+
+func TestLoginChainWithCCU_Primary_NilCCUPureLoca(t *testing.T) {
+	t.Parallel()
+	sqUsers := &stubUserStore{
+		name:     "sqlite",
+		username: "alice",
+		identity: auth.Identity{Subject: "alice", Scheme: auth.SchemeBasic, Role: auth.RoleAdmin},
+	}
+	memUsers := &stubUserStore{name: "mem", username: "nobody"}
+	chain := loginChainWithCCU(sqUsers, memUsers, nil, true)
+
+	id, err := chain.AuthenticateBasic(context.Background(), "alice", "pass")
+	if err != nil {
+		t.Fatalf("unexpected error with nil CCU: %v", err)
+	}
+	if id.Subject != "alice" {
+		t.Errorf("subject = %q, want %q", id.Subject, "alice")
 	}
 }

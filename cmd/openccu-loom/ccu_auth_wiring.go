@@ -9,17 +9,37 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/auth/ccuauth"
+	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
+
+// ccuAuthEnabled resolves the tri-state enable flag: an explicit value
+// wins; unset defaults to the build's add-on stamp (on in the CCU
+// add-on, off otherwise).
+func ccuAuthEnabled(cc config.CCUAuthConfig) bool {
+	if cc.Enabled != nil {
+		return *cc.Enabled
+	}
+	return build.IsAddon()
+}
+
+// ccuAuthPrimary resolves the tri-state primary flag: explicit value
+// wins; unset defaults to true (CCU is the primary source when on).
+func ccuAuthPrimary(cc config.CCUAuthConfig) bool {
+	if cc.Primary != nil {
+		return *cc.Primary
+	}
+	return true
+}
 
 // buildCCUAuthStore returns an [auth.UserStore] that validates logins
 // against the CCU's own user database (ADR 0043), or nil when the
 // feature is disabled or no central registry is available.
 func buildCCUAuthStore(cfg *config.Config, reg *central.Registry, logger *slog.Logger) auth.UserStore {
 	cc := cfg.North.REST.Auth.CCU
-	if !cc.Enabled || reg == nil {
+	if !ccuAuthEnabled(cc) || reg == nil {
 		return nil
 	}
 	domain := adapter.NewCCUAuthDomain(reg, cfg.Centrals, logger)
@@ -29,16 +49,25 @@ func buildCCUAuthStore(cfg *config.Config, reg *central.Registry, logger *slog.L
 		RoleMapping:  parseCCURoleMapping(cc.RoleMapping, logger),
 	}, logger)
 	logger.Info("auth.ccu.enabled",
-		slog.String("central", cc.Central), slog.Int("min_user_level", cc.MinUserLevel))
+		slog.String("central", cc.Central),
+		slog.Bool("primary", ccuAuthPrimary(cc)),
+		slog.Int("min_user_level", cc.MinUserLevel))
 	return store
 }
 
-// loginChainWithCCU builds the login chain in the ADR-0043 order: local
-// stores first (SQLite, then the in-memory fallback), CCU last. With no
-// CCU store it degrades to the plain local chain.
-func loginChainWithCCU(sqUsers, memUsers, ccu auth.UserStore) auth.UserStore {
+// loginChainWithCCU builds the login chain (ADR 0043). When primary is
+// true the CCU is tried first (local users are the break-glass
+// fallback); when false the local stores come first and the CCU last.
+// With no CCU store it degrades to the plain local chain. Break-glass
+// holds in both orders because the CCU store maps every failure to
+// "unauthenticated", so a local admin always falls through.
+func loginChainWithCCU(sqUsers, memUsers, ccu auth.UserStore, primary bool) auth.UserStore {
+	local := auth.ChainedUserStore{Primary: sqUsers, Secondary: memUsers}
 	if ccu == nil {
-		return auth.ChainedUserStore{Primary: sqUsers, Secondary: memUsers}
+		return local
+	}
+	if primary {
+		return auth.ChainedUserStore{Primary: ccu, Secondary: local}
 	}
 	return auth.ChainedUserStore{
 		Primary:   sqUsers,

@@ -110,12 +110,15 @@ north:
       users:
         admin: "change-me"
       # Delegate login to the CCU's own user database (ADR 0043).
-      # Useful when running as a CCU add-on: operators sign in with
-      # their existing CCU accounts instead of a separate Loom user
-      # list. Local users above are still tried FIRST (break-glass),
-      # so a CCU outage never locks out the local admin.
+      # Operators sign in with their existing CCU accounts instead of a
+      # separate Loom user list. Local users above remain a break-glass
+      # fallback in every order, because a CCU failure (wrong password OR
+      # CCU down) falls through to the local store.
       # ccu:
-      #   enabled: true
+      #   enabled: true        # tri-state: omit to use the build default
+      #                        # (ON in the CCU add-on build, OFF otherwise)
+      #   primary: true        # tri-state: omit -> true (CCU tried first,
+      #                        # local as fallback). false -> local first.
       #   central: ""          # CentralConfig name to authenticate against
       #                        # (empty = the first configured CCU)
       #   min_user_level: 1    # reject users below this CCU UserLevel

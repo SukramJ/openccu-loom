@@ -37,5 +37,8 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(boot.North.MCP.AllowWrites != eff.North.MCP.AllowWrites, "north.mcp.allow_writes")
 	add(boot.North.MCP.Path != eff.North.MCP.Path, "north.mcp.path")
 	add(!reflect.DeepEqual(boot.Centrals, eff.Centrals), "centrals")
+	// The login chain (incl. the CCU auth provider) is wired once at
+	// boot, so any change to the CCU-auth block is restart-required.
+	add(!reflect.DeepEqual(boot.North.REST.Auth.CCU, eff.North.REST.Auth.CCU), "north.rest.auth.ccu")
 	return out
 }
