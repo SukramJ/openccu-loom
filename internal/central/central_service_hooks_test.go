@@ -101,51 +101,6 @@ func TestCreateBackupCallsWiredFn(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SetInstallMode / InitInstallMode
-// ---------------------------------------------------------------------------
-
-func TestSetInstallModeUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	if err := c.SetInstallMode(context.Background(), true, 60); err == nil {
-		t.Fatal("expected error when fn not wired")
-	}
-}
-
-func TestSetInstallModeCallsWiredFn(t *testing.T) {
-	c := newTestCentral(t)
-	var got struct {
-		on   bool
-		secs int
-	}
-	c.SetSetInstallModeFn(func(_ context.Context, on bool, seconds int) error {
-		got.on = on
-		got.secs = seconds
-		return nil
-	})
-	if err := c.SetInstallMode(context.Background(), true, 30); err != nil {
-		t.Fatal(err)
-	}
-	if !got.on || got.secs != 30 {
-		t.Fatalf("unexpected args on=%v secs=%d", got.on, got.secs)
-	}
-}
-
-func TestInitInstallModeDefaultDuration(t *testing.T) {
-	c := newTestCentral(t)
-	var gotSecs int
-	c.SetSetInstallModeFn(func(_ context.Context, _ bool, seconds int) error {
-		gotSecs = seconds
-		return nil
-	})
-	if err := c.InitInstallMode(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if gotSecs != 60 {
-		t.Fatalf("expected 60s default, got %d", gotSecs)
-	}
-}
-
-// ---------------------------------------------------------------------------
 // LoadAndRefresh
 // ---------------------------------------------------------------------------
 
@@ -239,7 +194,6 @@ func TestServiceWiringCompleteOnlyAfterAllWired(t *testing.T) {
 	noop := func(_ context.Context) error { return nil }
 	c.SetAcceptInboxFn(func(_ context.Context, _ string) error { return nil })
 	c.SetCreateBackupFn(func(_ context.Context) ([]byte, error) { return nil, nil })
-	c.SetSetInstallModeFn(func(_ context.Context, _ bool, _ int) error { return nil })
 	c.SetRenameDeviceFn(func(_ context.Context, _, _ string) error { return nil })
 	c.SetLoadAndRefreshFn(noop)
 	c.SetSaveFilesFn(noop)
@@ -486,42 +440,6 @@ func TestOnStateTransitionNilBusReturnsNoopUnsub(t *testing.T) {
 // ---------------------------------------------------------------------------
 // registerCentralServices — invoke the registered service lambdas directly
 // ---------------------------------------------------------------------------
-
-func TestRegisterCentralServiceSetInstallModeMissingParamErrors(t *testing.T) {
-	c := newTestCentral(t)
-	// "set_install_mode" was registered in New → registerCentralServices.
-	// Calling Invoke with an empty param map should return a ParamBool error
-	// (missing "on").
-	err := c.Invoke(context.Background(), "set_install_mode", map[string]any{}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error for missing 'on' param")
-	}
-}
-
-func TestRegisterCentralServiceSetInstallModeUnwiredReturnsError(t *testing.T) {
-	c := newTestCentral(t)
-	// No SetInstallModeFn wired → SetInstallMode returns "not wired".
-	err := c.Invoke(context.Background(), "set_install_mode", map[string]any{"on": true}, hmenum.CommandPriorityHigh)
-	if err == nil {
-		t.Fatal("expected error when SetInstallMode fn is not wired")
-	}
-}
-
-func TestRegisterCentralServiceSetInstallModeWithTimeParam(t *testing.T) {
-	c := newTestCentral(t)
-	var gotSecs int
-	c.SetSetInstallModeFn(func(_ context.Context, _ bool, seconds int) error {
-		gotSecs = seconds
-		return nil
-	})
-	err := c.Invoke(context.Background(), "set_install_mode", map[string]any{"on": true, "time": float64(120)}, hmenum.CommandPriorityHigh)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if gotSecs != 120 {
-		t.Fatalf("expected 120s, got %d", gotSecs)
-	}
-}
 
 func TestRegisterCentralServiceRenameDeviceMissingAddressErrors(t *testing.T) {
 	c := newTestCentral(t)

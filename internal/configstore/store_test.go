@@ -531,3 +531,80 @@ func (e *errSectionLoader) Delete(_ context.Context, _ string) error {
 func (e *errSectionLoader) List(_ context.Context) ([]sqlite.SectionRow, error) {
 	return nil, e.err
 }
+
+// boolPtr is a small helper used by tests that need to construct *bool
+// values inline. Reuse this whenever a *bool field must be checked.
+func boolPtr(b bool) *bool { return &b }
+
+// TestStoreEffectiveAppliesSectionCCUAuth verifies that a
+// north.rest.auth.ccu row in the section loader is applied to
+// cfg.North.REST.Auth.CCU and attributed to SourceDB — the persistence
+// path behind the SPA's CCU-auth settings tab.
+func TestStoreEffectiveAppliesSectionCCUAuth(t *testing.T) {
+	t.Parallel()
+	sl := newFakeSectionLoader()
+
+	ccuAuth := config.CCUAuthConfig{
+		Enabled:      boolPtr(true),
+		Primary:      boolPtr(false),
+		Central:      "ccu1",
+		MinUserLevel: 2,
+		RoleMapping:  map[string]string{"8": "admin"},
+	}
+	raw, _ := json.Marshal(ccuAuth)
+	sl.rows[string(SectionCCUAuth)] = sqlite.SectionRow{
+		Section:   string(SectionCCUAuth),
+		ValueJSON: raw,
+	}
+
+	s := New(defaultBootstrap(), sl, nil)
+	res, err := s.Effective(context.Background())
+	if err != nil {
+		t.Fatalf("Effective: %v", err)
+	}
+	got := res.Config.North.REST.Auth.CCU
+	if got.Enabled == nil {
+		t.Fatal("North.REST.Auth.CCU.Enabled: want non-nil")
+	}
+	if !*got.Enabled {
+		t.Error("North.REST.Auth.CCU.Enabled: want true")
+	}
+	if got.Primary == nil {
+		t.Fatal("North.REST.Auth.CCU.Primary: want non-nil")
+	}
+	if *got.Primary {
+		t.Error("North.REST.Auth.CCU.Primary: want false")
+	}
+	if got.Central != "ccu1" {
+		t.Errorf("North.REST.Auth.CCU.Central=%q want ccu1", got.Central)
+	}
+	if got.MinUserLevel != 2 {
+		t.Errorf("North.REST.Auth.CCU.MinUserLevel=%d want 2", got.MinUserLevel)
+	}
+	if got.RoleMapping["8"] != "admin" {
+		t.Errorf("North.REST.Auth.CCU.RoleMapping[8]=%q want admin", got.RoleMapping["8"])
+	}
+	if res.Sources[string(SectionCCUAuth)] != SourceDB {
+		t.Errorf("Sources[north.rest.auth.ccu]=%q want db", res.Sources[string(SectionCCUAuth)])
+	}
+}
+
+// TestApplyMarshalCoverAllSections is an anti-regression guard that
+// ensures every section in AllSections() has a corresponding case in
+// both applySection and marshalSection. An empty object must apply
+// without error; ok may be false only for SectionSecurity (no
+// config.Config target), so we do not assert ok.
+func TestApplyMarshalCoverAllSections(t *testing.T) {
+	t.Parallel()
+	for _, sec := range AllSections() {
+		t.Run(string(sec), func(t *testing.T) {
+			t.Parallel()
+			if err := applySection(sec, []byte("{}"), &config.Config{}); err != nil {
+				t.Errorf("applySection(%q, {}) returned error (missing case?): %v", sec, err)
+			}
+			if _, _, err := marshalSection(sec, &config.Config{}); err != nil {
+				t.Errorf("marshalSection(%q) returned error (missing case?): %v", sec, err)
+			}
+		})
+	}
+}

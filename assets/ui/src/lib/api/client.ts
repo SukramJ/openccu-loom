@@ -957,33 +957,10 @@ export const api = {
     );
   },
   // --- Install mode --------------------------------------------
-  async getInstallMode() {
-    const r = await request<{ active: boolean; seconds?: number }>(
-      `/install-mode`,
-    );
-    return {
-      active: r.active,
-      remaining_seconds: r.seconds ?? null,
-    };
-  },
-  async setInstallMode(active: boolean, seconds?: number) {
-    // The handler acks with 202 and no body; the caller re-reads
-    // state via getInstallMode(). We expose a unified return shape.
-    await request<void>(`/install-mode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        active,
-        ...(seconds ? { seconds } : {}),
-      }),
-    });
-    return api.getInstallMode();
-  },
-  // Per-interface install mode. Lets the operator open teach-in on a
-  // single radio (BidCos-RF / HmIP-RF / HmIP-Wired) instead of all at
-  // once, mirroring the CCU WebUI's interface-selective pairing.
-  // `deviceAddress` requests targeted pairing (e.g. by serial); the
-  // backend ignores it until that path is wired.
+  // Install mode on the CCU is per-interface only (there is no CCU-wide
+  // toggle). The operator opens teach-in on a single radio (BidCos-RF /
+  // HmIP-RF, etc.), mirroring the CCU WebUI's interface-selective pairing.
+  // `deviceAddress` requests targeted pairing (e.g. by serial).
   async listInstallModeInterfaces() {
     return request<InstallModeInterfaceEntry[]>(`/install-mode/interfaces`);
   },

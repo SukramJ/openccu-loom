@@ -4,6 +4,46 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0]
+
+### Fixed
+
+- **The SPA "CCU login" tab can now actually save.** The CCU-auth provider
+  (`north.rest.auth.ccu`) was wired into the SPA — tab, editor, i18n — but the
+  section was never registered in the backend's section registry, so a save
+  was rejected at the allow-list gate with `API 400 …: north.rest.auth.ccu`
+  ("Unknown section"). The section is now registered everywhere its OIDC
+  sibling is (`configstore.AllSections`, `applySection`/`marshalSection`,
+  `sectionTarget`, and the REST `validateSection`) and flagged
+  restart-required. Registering it also lets the editor's longest-prefix guard
+  attach the `north.rest.auth.ccu.*` fields to the "CCU login" tab only,
+  instead of double-rendering them under the REST tab.
+- **Tri-state config toggles no longer collapse their "unset" default.** The
+  SPA section editor rendered every `*bool` field (e.g.
+  `north.rest.auth.ccu.primary`, whose documented default is "CCU-primary")
+  as a plain checkbox, so saving silently wrote `false` for a field the
+  operator never touched — overriding the daemon's nil default. `*bool` fields
+  now render as a "Default / On / Off" select that preserves the unset state
+  (persisted as `null`, letting the daemon apply its own default). Concrete
+  `true`/`false` values still round-trip unchanged.
+- **Install mode (teach-in for new devices) now works.** Starting pairing from
+  the SPA inbox failed with `API 502 /install-mode: adapter: not implemented in
+  MVP`. Two gaps combined: the per-interface install-mode data points were
+  never constructed in production (so `GET /install-mode/interfaces` was always
+  empty and the SPA fell back to a CCU-wide toggle), and that CCU-wide toggle
+  was an unimplemented stub. There is no CCU-wide install mode on a CCU — it is
+  always per-interface — so one install-mode data point is now wired per
+  pairing-capable radio (HmIP-RF, BidCos-RF, BidCos-Wired), each writing to its
+  own interface backend. The SPA inbox now lists the radios and opens pairing on
+  the selected one.
+
+### Removed
+
+- **The CCU-wide `GET`/`POST /install-mode` endpoints.** They modelled a
+  CCU-wide pairing toggle that does not exist on the CCU (install mode is
+  per-interface) and were never functional. Use `GET`/`POST
+  /install-mode/interfaces` instead. API version bumped to `2.0.0`.
+
 ## [0.12.0] - 2026-06-24
 
 ### Added

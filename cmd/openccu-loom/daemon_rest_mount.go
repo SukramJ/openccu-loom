@@ -153,7 +153,6 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Paramsets:         d.paramsetsDomain,
 		Hub:               d.hubAdapter,
 		SysvarRefresh:     adapter.NewSysvarFetchAdapter(d.reg),
-		InstallMode:       adapter.NewInstallModeAdapter(),
 		Interfaces:        d.ifaceAdapter,
 		Incidents:         adapter.NewIncidentsAdapter(),
 		SystemStatus:      d.sysStatusBuf,

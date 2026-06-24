@@ -15107,28 +15107,6 @@ func TestBackupAdapterRestoreNilStorage(t *testing.T) {
 }
 
 // ============================================================
-// InstallModeAdapter stubs
-// ============================================================
-
-func TestInstallModeAdapterState(t *testing.T) {
-	t.Parallel()
-	a := NewInstallModeAdapter()
-	on, dur := a.InstallModeState()
-	if on || dur != 0 {
-		t.Errorf("InstallModeState = (%v, %v), want (false, 0)", on, dur)
-	}
-}
-
-func TestInstallModeAdapterSetInstallMode(t *testing.T) {
-	t.Parallel()
-	a := NewInstallModeAdapter()
-	err := a.SetInstallMode(context.Background(), true, 60)
-	if err == nil {
-		t.Fatal("SetInstallMode stub must return ErrUnimplemented")
-	}
-}
-
-// ============================================================
 // DevicePipeline builder methods (pure setters)
 // ============================================================
 

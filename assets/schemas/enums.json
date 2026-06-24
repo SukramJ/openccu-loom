@@ -1581,6 +1581,10 @@
           "wire_value": "CHANNEL_OPERATION_MODE"
         },
         {
+          "go_name": "ParameterCodeID",
+          "wire_value": "CODE_ID"
+        },
+        {
           "go_name": "ParameterColor",
           "wire_value": "COLOR"
         },
@@ -2698,8 +2702,24 @@
           "wire_value": "create_backup_status"
         },
         {
+          "go_name": "RegaScriptCreateFunction",
+          "wire_value": "create_function"
+        },
+        {
+          "go_name": "RegaScriptCreateRoom",
+          "wire_value": "create_room"
+        },
+        {
           "go_name": "RegaScriptCreateSystemVariable",
           "wire_value": "create_system_variable"
+        },
+        {
+          "go_name": "RegaScriptDeleteFunction",
+          "wire_value": "delete_function"
+        },
+        {
+          "go_name": "RegaScriptDeleteRoom",
+          "wire_value": "delete_room"
         },
         {
           "go_name": "RegaScriptFetchAllDeviceData",
@@ -2736,6 +2756,18 @@
         {
           "go_name": "RegaScriptGetSystemVariableDescriptions",
           "wire_value": "get_system_variable_descriptions"
+        },
+        {
+          "go_name": "RegaScriptGetUserLevel",
+          "wire_value": "get_user_level"
+        },
+        {
+          "go_name": "RegaScriptRenameFunction",
+          "wire_value": "rename_function"
+        },
+        {
+          "go_name": "RegaScriptRenameRoom",
+          "wire_value": "rename_room"
         },
         {
           "go_name": "RegaScriptSetDeviceFunctions",

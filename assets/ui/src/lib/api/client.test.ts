@@ -74,7 +74,7 @@ describe("api request — 401 session-expiry hook", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: "no creds" }, 401));
     const onUnauth = vi.fn();
     setUnauthorizedHandler(onUnauth);
-    await expect(api.getInstallMode()).rejects.toBeTruthy();
+    await expect(api.listInstallModeInterfaces()).rejects.toBeTruthy();
     expect(onUnauth).toHaveBeenCalledOnce();
   });
 

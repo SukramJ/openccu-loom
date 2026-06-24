@@ -520,7 +520,7 @@ docker: ## build multi-arch Docker images (requires buildx)
 		echo "Dockerfile not present yet (Phase 0 follow-up)"; exit 1; \
 	fi
 	docker buildx build \
-		--platform=linux/amd64,linux/arm64,linux/arm/v7 \
+		--platform=linux/amd64 \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
 		--build-arg BUILD_DATE=$(BUILD_DATE) \

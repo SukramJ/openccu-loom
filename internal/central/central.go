@@ -783,34 +783,6 @@ func (u *Unit) SetCreateBackupFn(fn func(ctx context.Context) ([]byte, error)) {
 	u.services.mu.Unlock()
 }
 
-// SetInstallMode toggles the CCU's "install mode" (a.k.a. learning
-// mode). When enabled the CCU briefly accepts new device pairings.
-func (u *Unit) SetInstallMode(ctx context.Context, on bool, seconds int) error {
-	u.services.mu.RLock()
-	fn := u.services.setInstallModeFn
-	u.services.mu.RUnlock()
-	if fn == nil {
-		return errors.New("central: SetInstallMode not wired")
-	}
-	return fn(ctx, on, seconds)
-}
-
-// SetSetInstallModeFn wires the install-mode handler.
-func (u *Unit) SetSetInstallModeFn(fn func(ctx context.Context, on bool, seconds int) error) {
-	u.services.mu.Lock()
-	u.services.setInstallModeFn = fn
-	u.services.mu.Unlock()
-}
-
-// SetInstallModeForInterfaceFn wires the per-interface install-mode handler.
-// When wired, [SetInstallModeForInterface] uses this instead of the plain handler
-// so interfaceID and deviceAddress are actually forwarded to the backend.
-func (u *Unit) SetInstallModeForInterfaceFn(fn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error) {
-	u.services.mu.Lock()
-	u.services.setInstallModeForInterfaceFn = fn
-	u.services.mu.Unlock()
-}
-
 // SetLoadAndRefreshForInterfaceFn wires the per-interface reload handler.
 // When wired, [LoadAndRefreshDataPointDataForInterface] uses this instead of
 // the plain handler so interfaceID and paramset are actually forwarded.
@@ -818,15 +790,6 @@ func (u *Unit) SetLoadAndRefreshForInterfaceFn(fn func(ctx context.Context, inte
 	u.services.mu.Lock()
 	u.services.loadAndRefreshForInterfaceFn = fn
 	u.services.mu.Unlock()
-}
-
-// InitInstallMode is a convenience for `SetInstallMode(ctx, true,
-// DefaultDuration)`.
-// (`central_unit.py:453`). The default duration follows
-// (60 seconds).
-func (u *Unit) InitInstallMode(ctx context.Context) error {
-	const defaultInstallModeSeconds = 60
-	return u.SetInstallMode(ctx, true, defaultInstallModeSeconds)
 }
 
 // RenameDevice changes the operator-visible name of a device.
@@ -974,7 +937,6 @@ func (u *Unit) ServiceWiringStatus() map[string]bool {
 	return map[string]bool{
 		"accept_inbox":     u.services.acceptInboxFn != nil,
 		"create_backup":    u.services.createBackupFn != nil,
-		"set_install_mode": u.services.setInstallModeFn != nil,
 		"rename_device":    u.services.renameDeviceFn != nil,
 		"load_and_refresh": u.services.loadAndRefreshFn != nil,
 		"save_files":       u.services.saveFilesFn != nil,
@@ -1181,27 +1143,6 @@ func (u *Unit) LoadAndRefreshDataPointDataForInterface(
 		return fn(ctx, interfaceID, paramset, directCall)
 	}
 	return u.LoadAndRefreshDataPointData(ctx)
-}
-
-// SetInstallModeForInterface enables or disables install mode for a specific
-// interface, optionally scoped to a single device address. Wire the extended
-// hook via [SetInstallModeForInterfaceFn] to forward interfaceID and
-// deviceAddress to the backend; without it the call falls back to the global
-// [SetInstallMode] (all interfaces, no device filter).
-func (u *Unit) SetInstallModeForInterface(
-	ctx context.Context,
-	interfaceID string,
-	mode bool,
-	deviceAddress string,
-	seconds int,
-) error {
-	u.services.mu.RLock()
-	fn := u.services.setInstallModeForInterfaceFn
-	u.services.mu.RUnlock()
-	if fn != nil {
-		return fn(ctx, interfaceID, mode, deviceAddress, seconds)
-	}
-	return u.SetInstallMode(ctx, mode, seconds)
 }
 
 // ReadableGenericDataPoints returns every VALUES-paramset data point across

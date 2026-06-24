@@ -54,6 +54,17 @@ func (i Interface) SupportsFirmwareUpdates() bool {
 	return ok
 }
 
+// SupportsInstallMode reports whether pairing/install mode can be opened
+// on this interface. Only the pairing-capable radios qualify: the backend
+// setInstallMode call is meaningful for HmIP-RF and BidCos-* but not for
+// VirtualDevices (aggregated groups, no radio) or CUxD (synchronous,
+// returns ErrUnsupported). HmIP-Wired has no own interface — it rides the
+// HmIP-RF service, so it is covered transitively.
+func (i Interface) SupportsInstallMode() bool {
+	_, ok := InterfacesSupportingInstallMode[i]
+	return ok
+}
+
 // PushesConfigPending reports whether this interface — taken on its
 // own — delivers reliable CONFIG_PENDING events on MASTER writes.
 // True for HmIP-*; false for BidCos-* (CONFIG_PENDING is unreliable;
@@ -128,6 +139,15 @@ var (
 	// LinkableInterfaces is an alias for the firmware-updatable set;
 	// the CCU uses the same membership for both concepts.
 	LinkableInterfaces = InterfacesSupportingFirmwareUpdates
+
+	// InterfacesSupportingInstallMode lists the interfaces on which a
+	// pairing/install-mode window can be opened. Matches the firmware-update
+	// radios — VirtualDevices and CUxD cannot pair new physical devices.
+	InterfacesSupportingInstallMode = map[Interface]struct{}{
+		InterfaceBidCosRF:    {},
+		InterfaceBidCosWired: {},
+		InterfaceHmIPRF:      {},
+	}
 
 	// InterfacesPushingConfigPending lists the interfaces that emit
 	// reliable CONFIG_PENDING events on a MASTER write. HmIP devices

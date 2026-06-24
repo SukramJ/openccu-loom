@@ -20,14 +20,9 @@ import (
 type serviceBundle struct {
 	mu sync.RWMutex
 
-	acceptInboxFn    func(ctx context.Context, address string) error
-	createBackupFn   func(ctx context.Context) ([]byte, error)
-	setInstallModeFn func(ctx context.Context, on bool, seconds int) error
-	// setInstallModeForInterfaceFn is the extended hook that accepts an
-	// interfaceID and deviceAddress. When nil, [Unit.SetInstallModeForInterface]
-	// falls back to [Unit.SetInstallMode].
-	setInstallModeForInterfaceFn func(ctx context.Context, interfaceID string, on bool, deviceAddress string, seconds int) error
-	renameDeviceFn               func(ctx context.Context, address, name string) error
+	acceptInboxFn  func(ctx context.Context, address string) error
+	createBackupFn func(ctx context.Context) ([]byte, error)
+	renameDeviceFn func(ctx context.Context, address, name string) error
 	// loadAndRefreshForInterfaceFn is the extended hook that scopes the
 	// reload to a single interface + paramset. When nil,
 	// [Unit.LoadAndRefreshDataPointDataForInterface] falls back to

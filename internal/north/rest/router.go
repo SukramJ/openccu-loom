@@ -77,7 +77,6 @@ type Deps struct {
 	// SysvarRefresh backs POST /sysvars/fetch — force re-pull the CCU
 	// sysvar catalogue into the hub model. Nil disables the route (404).
 	SysvarRefresh handlers.SysvarRefreshService
-	InstallMode   handlers.InstallModeController
 	Interfaces    handlers.InterfaceIndex
 	Incidents     handlers.IncidentsReader
 	Labels        handlers.ParameterLabeler
@@ -779,10 +778,6 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 				pr.Get("/system/metrics", handlers.GetHubMetrics(d.Hub))
 				pr.Get("/install-mode/interfaces", handlers.GetInstallModeInterfaces(d.Hub))
 				pr.With(op).Post("/install-mode/interfaces", handlers.PostInstallModeInterface(d.Hub))
-			}
-			if d.InstallMode != nil {
-				pr.Get("/install-mode", handlers.GetInstallMode(d.InstallMode))
-				pr.With(admin).Post("/install-mode", handlers.PostInstallMode(d.InstallMode))
 			}
 			if d.Interfaces != nil {
 				pr.Get("/interfaces", handlers.ListInterfaces(d.Interfaces))

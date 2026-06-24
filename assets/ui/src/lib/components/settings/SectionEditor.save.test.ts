@@ -290,3 +290,162 @@ describe("SectionEditor.save — invalid JSON in a non-secret complex field", ()
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test 3 — Tri-state *bool field round-trips
+//
+// Go *bool fields are tri-state (nil/true/false). The SectionEditor must:
+//   - treat an ABSENT key in the server payload as null ("Default"), NOT false
+//   - persist null when the operator has not changed the *bool field
+//   - persist true/false unchanged when the field was stored with a value
+//
+// The tri-state widget is a Select (trigger button), never a checkbox.
+// ---------------------------------------------------------------------------
+
+const CSRF_ENABLED_FIELD: ConfigSchemaField = {
+  path: "north.rest.csrf_enabled",
+  class: "basic",
+  go_type: "*bool",
+};
+
+describe("SectionEditor.save — tri-state *bool field", () => {
+  it("persists an unset *bool as null, not false", async () => {
+    // Payload has public_url but NO csrf_enabled key — *bool is unset/nil.
+    mockGetConfigSectionResult = {
+      public_url: "https://example.com",
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container } = renderEditor([PUBLIC_URL_FIELD, CSRF_ENABLED_FIELD]);
+
+    // Wait for onMount / getConfigSection to complete.
+    await waitFor(() => {
+      expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+    });
+
+    // Wait for the text input (public_url) to be rendered.
+    await waitFor(() => {
+      const inputs = container.querySelectorAll('input[type="text"]');
+      expect(inputs.length).toBeGreaterThan(0);
+    });
+
+    // Dirty the form by changing public_url.
+    const publicUrlInput = container.querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(publicUrlInput, {
+      target: { value: "https://changed.example.com" },
+    });
+
+    // Wait for Save button to become enabled.
+    await waitFor(() => {
+      const saveBtn = (
+        Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+      ).find((b) => b.textContent?.trim().includes("common.save"));
+      expect(saveBtn).toBeDefined();
+      expect(saveBtn!.disabled).toBe(false);
+    });
+
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"))!;
+
+    await fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockPutConfigSection).toHaveBeenCalledTimes(1);
+    });
+
+    // The PUT section must be "north.rest".
+    expect(mockPutConfigSection.mock.calls[0][0]).toBe("north.rest");
+
+    // Core assertion: the unset *bool must arrive as null, not false.
+    // parseValue() maps an absent key to null for *bool fields.
+    const payload = mockPutConfigSection.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.csrf_enabled).toBeNull();
+  });
+
+  it("round-trips a stored true unchanged", async () => {
+    // Payload has csrf_enabled explicitly set to true.
+    mockGetConfigSectionResult = {
+      public_url: "https://example.com",
+      csrf_enabled: true,
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container } = renderEditor([PUBLIC_URL_FIELD, CSRF_ENABLED_FIELD]);
+
+    await waitFor(() => {
+      expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+    });
+
+    await waitFor(() => {
+      const inputs = container.querySelectorAll('input[type="text"]');
+      expect(inputs.length).toBeGreaterThan(0);
+    });
+
+    // Dirty the form by changing public_url.
+    const publicUrlInput = container.querySelector(
+      'input[type="text"]',
+    ) as HTMLInputElement;
+    await fireEvent.input(publicUrlInput, {
+      target: { value: "https://changed.example.com" },
+    });
+
+    await waitFor(() => {
+      const saveBtn = (
+        Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+      ).find((b) => b.textContent?.trim().includes("common.save"));
+      expect(saveBtn).toBeDefined();
+      expect(saveBtn!.disabled).toBe(false);
+    });
+
+    const saveBtn = (
+      Array.from(container.querySelectorAll("button")) as HTMLButtonElement[]
+    ).find((b) => b.textContent?.trim().includes("common.save"))!;
+
+    await fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(mockPutConfigSection).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockPutConfigSection.mock.calls[0][0]).toBe("north.rest");
+
+    // Core assertion: stored true must round-trip as true, not as null or false.
+    const payload = mockPutConfigSection.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload.csrf_enabled).toBe(true);
+  });
+
+  it("renders a *bool as a select trigger, not a checkbox", async () => {
+    mockGetConfigSectionResult = {
+      public_url: "https://example.com",
+    };
+    mockGetConfigSection.mockResolvedValue(mockGetConfigSectionResult);
+
+    const { container } = renderEditor([PUBLIC_URL_FIELD, CSRF_ENABLED_FIELD]);
+
+    await waitFor(() => {
+      expect(mockGetConfigSection).toHaveBeenCalledWith("north.rest");
+    });
+
+    // Wait for loading to finish (inputs should appear).
+    await waitFor(() => {
+      const inputs = container.querySelectorAll('input[type="text"]');
+      expect(inputs.length).toBeGreaterThan(0);
+    });
+
+    // The *bool field must NOT render as a plain checkbox.
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+    expect(checkboxes).toHaveLength(0);
+
+    // The tri-state Select renders a trigger button containing the
+    // current option label. With the t() mock returning the key
+    // verbatim the default option label is "settings.tristate.default".
+    const buttons = Array.from(container.querySelectorAll("button")) as HTMLButtonElement[];
+    const triggerBtn = buttons.find((b) =>
+      b.textContent?.includes("settings.tristate.default"),
+    );
+    expect(triggerBtn).toBeDefined();
+  });
+});

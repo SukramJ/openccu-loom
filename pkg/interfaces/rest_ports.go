@@ -6,7 +6,6 @@ package interfaces
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -117,12 +116,6 @@ type DiagnosticsIntrospectService interface {
 // IncidentsReader is the narrow facade `/incidents` depends on.
 type IncidentsReader interface {
 	Incidents() []hmapi.Incident
-}
-
-// InstallModeController is the facade `install-mode` endpoints use.
-type InstallModeController interface {
-	InstallModeState() (active bool, remaining time.Duration)
-	SetInstallMode(ctx context.Context, on bool, duration time.Duration) error
 }
 
 // LinksService is the narrow facade the /links endpoints depend on.

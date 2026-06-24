@@ -6,13 +6,11 @@ package rest
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -75,31 +73,6 @@ func (f *fakeSysvarWriter) SetSysvar(_ context.Context, name string, v any) erro
 	return nil
 }
 
-type fakeInstallMode struct {
-	active    atomic.Bool
-	remaining atomic.Int64
-	writeErr  error
-	lastDur   atomic.Int64
-}
-
-func (f *fakeInstallMode) InstallModeState() (bool, time.Duration) {
-	return f.active.Load(), time.Duration(f.remaining.Load())
-}
-
-func (f *fakeInstallMode) SetInstallMode(_ context.Context, on bool, dur time.Duration) error {
-	if f.writeErr != nil {
-		return f.writeErr
-	}
-	f.active.Store(on)
-	f.lastDur.Store(int64(dur))
-	if on {
-		f.remaining.Store(int64(dur))
-	} else {
-		f.remaining.Store(0)
-	}
-	return nil
-}
-
 type fakeInterfaceIndex struct {
 	states     map[string]handlers.InterfaceState
 	reconnects atomic.Int32
@@ -128,7 +101,6 @@ type hubHarness struct {
 	hub      *hub.Hub
 	programs *fakeProgramWriter
 	sysvars  *fakeSysvarWriter
-	install  *fakeInstallMode
 	ifaces   *fakeInterfaceIndex
 }
 
@@ -140,16 +112,14 @@ func newHubRouter(t *testing.T) *hubHarness {
 	h.PutProgram(&hub.Program{HubDataPoint: hub.HubDataPoint{Name: "Morning"}, ID: "P1", Writer: pw})
 	h.PutSysvar(&hub.Sysvar{HubDataPoint: hub.HubDataPoint{Name: "PartyMode"}, ValueType: hmenum.HubValueTypeLogic, Writer: sw})
 
-	im := &fakeInstallMode{}
 	iface := &fakeInterfaceIndex{states: map[string]handlers.InterfaceState{
 		"HmIP-RF": {ID: "HmIP-RF", Name: "HmIP radio", Connected: true, Interface: "HmIP-RF"},
 	}}
 	r := NewRouter(Deps{
-		Hub:         &fakeHubIndex{h: h},
-		InstallMode: im,
-		Interfaces:  iface,
+		Hub:        &fakeHubIndex{h: h},
+		Interfaces: iface,
 	})
-	return &hubHarness{handler: r, hub: h, programs: pw, sysvars: sw, install: im, ifaces: iface}
+	return &hubHarness{handler: r, hub: h, programs: pw, sysvars: sw, ifaces: iface}
 }
 
 func TestListPrograms(t *testing.T) {
@@ -230,53 +200,6 @@ func TestGetSysvarReturnsObservedValue(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &sum)
 	if !sum.Observed || sum.Value != true {
 		t.Fatalf("sum=%+v", sum)
-	}
-}
-
-func TestGetInstallMode(t *testing.T) {
-	h := newHubRouter(t)
-	r := h.handler
-	im := h.install
-	im.active.Store(true)
-	im.remaining.Store(int64(42 * time.Second))
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/install-mode", http.NoBody)
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	if rr.Code != 200 {
-		t.Fatalf("status=%d", rr.Code)
-	}
-	var body handlers.InstallModeState
-	_ = json.Unmarshal(rr.Body.Bytes(), &body)
-	if !body.Active || body.Seconds != 42 {
-		t.Fatalf("body=%+v", body)
-	}
-}
-
-func TestPostInstallMode(t *testing.T) {
-	h := newHubRouter(t)
-	r := h.handler
-	im := h.install
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/install-mode",
-		strings.NewReader(`{"active":true,"seconds":60}`))
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusAccepted {
-		t.Fatalf("status=%d", rr.Code)
-	}
-	if !im.active.Load() || im.lastDur.Load() != int64(60*time.Second) {
-		t.Fatalf("state=%v dur=%v", im.active.Load(), time.Duration(im.lastDur.Load()))
-	}
-}
-
-func TestPostInstallModeErrorMaps502(t *testing.T) {
-	im := &fakeInstallMode{writeErr: errors.New("boom")}
-	r := NewRouter(Deps{InstallMode: im})
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/install-mode", strings.NewReader(`{"active":true}`))
-	rr := httptest.NewRecorder()
-	r.ServeHTTP(rr, req)
-	if rr.Code != http.StatusBadGateway {
-		t.Fatalf("status=%d", rr.Code)
 	}
 }
 

@@ -24,26 +24,25 @@
   let centralFilter = $state("");
   let accepting = $state<string | null>(null);
 
-  // Teach-in scope: "" opens install mode on every radio (the global
-  // endpoint); a non-empty value targets one interface so the operator
-  // can pair on BidCos-RF / HmIP-RF / HmIP-Wired independently — the
-  // interface-selective pairing the CCU WebUI offers.
+  // Teach-in scope: install mode on the CCU is per-interface only, so the
+  // operator always pairs on a specific radio (BidCos-RF / HmIP-RF, …) —
+  // the interface-selective pairing the CCU WebUI offers. selectedInterface
+  // defaults to the first available radio (see the $effect below).
   let selectedInterface = $state("");
+  // Keep the selection valid: default to the first interface once the list
+  // loads, and recover if the selected interface disappears.
+  $effect(() => {
+    const list = installModeStore.interfaces;
+    if (list.length === 0) return;
+    if (!list.some((i) => i.interface === selectedInterface)) {
+      selectedInterface = list[0].interface;
+    }
+  });
   const scopeEntry = $derived(
-    selectedInterface
-      ? installModeStore.interfaces.find(
-          (i) => i.interface === selectedInterface,
-        )
-      : undefined,
+    installModeStore.interfaces.find((i) => i.interface === selectedInterface),
   );
-  const scopeActive = $derived(
-    selectedInterface ? (scopeEntry?.active ?? false) : installModeStore.active,
-  );
-  const scopeRemaining = $derived(
-    selectedInterface
-      ? (scopeEntry?.seconds ?? null)
-      : installModeStore.remainingSeconds,
-  );
+  const scopeActive = $derived(scopeEntry?.active ?? false);
+  const scopeRemaining = $derived(scopeEntry?.seconds ?? null);
 
   // Active-pairing tick: while the install mode is running on the CCU,
   // the inbox should reflect freshly-discovered candidates without the
@@ -183,7 +182,6 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title={t("inbox.install_mode_interface_label")}
         >
-          <option value="">{t("inbox.install_mode_all_interfaces")}</option>
           {#each installModeStore.interfaces as iface (iface.central + "/" + iface.interface)}
             <option value={iface.interface}>
               {iface.interface}{iface.active ? " ●" : ""}
@@ -194,11 +192,8 @@
       <Button
         type="button"
         variant={scopeActive ? "default" : "outline"}
-        onclick={() =>
-          void installModeStore.toggle(
-            selectedInterface ? { interface: selectedInterface } : {},
-          )}
-        disabled={installModeStore.busy}
+        onclick={() => void installModeStore.toggle({ interface: selectedInterface })}
+        disabled={installModeStore.busy || installModeStore.interfaces.length === 0}
         title={scopeActive
           ? t("inbox.install_mode_active_title")
           : t("inbox.install_mode_start_title")}
