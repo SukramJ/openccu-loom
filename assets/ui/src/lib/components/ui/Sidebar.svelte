@@ -35,6 +35,7 @@
 
   type RouteKind =
     | "list"
+    | "favorites"
     | "detail"
     | "backups"
     | "sysvars"
@@ -116,6 +117,12 @@
           icon: "mdi:home",
           label: t("nav.devices"),
           matches: ["list", "detail"],
+        },
+        {
+          href: "#/favorites",
+          icon: "mdi:star",
+          label: t("nav.favorites"),
+          matches: ["favorites"],
         },
         {
           href: "#/inbox",

@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 
 	// Side-effect import: aggregator package whose blank-imports
 	// trigger every custom-DP sub-package's `init()` so the global
@@ -68,6 +69,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	auditBuf := ov.buf
 	auditRec := ov.rec
 	auditDB := ov.db
+	// Audit read service: the in-memory buffer alone, or — when the
+	// durable DB is present — combined with the SQLite store so the SPA
+	// can page / filter / CSV-export over the full retained history.
+	var auditRead handlers.AuditService = auditBuf
+	if auditDB != nil {
+		auditRead = auditReadService{Buffer: auditBuf, store: sqlitestore.NewAuditStore(auditDB)}
+	}
 	auditDurableStats := ov.durableStats
 	sqUsers := ov.sqUsers
 	sqTokens := ov.sqTokens
@@ -347,6 +355,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	restAuth := rw.auth
 	configAdminSvc := rw.configAdmin
 	userAdminSvc := rw.userAdmin
+	// Self-service password change needs the concrete SQLite store
+	// (verify current password + write). Keep a true nil interface when
+	// the store is absent so the handler's nil-guard fires.
+	var selfPasswordSvc handlers.SelfPasswordService
+	if sqUsers != nil {
+		selfPasswordSvc = sqUsers
+	}
+	// Per-user preferences (favorites / dashboard) live in the main app
+	// DB. Nil interface when persistence is disabled so the routes drop.
+	var prefSvc handlers.UserPreferencesService
+	if auditDB != nil {
+		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
+	}
 	tokenAdminSvc := rw.tokenAdmin
 	centralAdminSvc := rw.centralAdmin
 	authMw = rw.authMw
@@ -384,6 +405,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	deviceAdminDomain := adapter.NewDeviceAdminDomain(reg, valueWriter)
 	dpWriterAdapter := adapter.NewDataPointWriterAdapter(reg, valueWriter)
 	customDPDispatcher := adapter.NewCustomDPDispatcher(reg).SetAuditRecorder(auditRec)
+	roomFunctionAdmin := adapter.NewRoomFunctionAdminDomain(reg)
 	uiSchemaAdapter := adapter.NewUISchemaAdapter(reg, valueWriter, translations, easymode, profiles)
 	masterProfilesStore := masterprofile.New()
 	// linkProfilesStore holds easymode link profiles, loaded lazily from the
@@ -478,12 +500,16 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		centralLinksDomain:      centralLinksDomain,
 		definitionExportDomain:  definitionExportDomain,
 		backupAdapter:           backupAdapter,
+		roomFunctionAdmin:       roomFunctionAdmin,
 		cacheResetSvc:           cacheResetReset(cacheResetSvc),
 		auditBuf:                auditBuf,
+		auditRead:               auditRead,
 		auditRec:                auditRec,
 		restAuth:                restAuth,
 		configSvc:               configAdminSvc,
 		userSvc:                 userAdminSvc,
+		passwordSvc:             selfPasswordSvc,
+		prefSvc:                 prefSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
 		translations:            translations,

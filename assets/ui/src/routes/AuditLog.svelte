@@ -30,11 +30,33 @@
   let searchFilter = $state<string>("");
   let centralFilter = $state<string>("");
 
+  // Server-side filters (durable audit path): date range + pagination.
+  // `since`/`until` are bound to datetime-local inputs and converted to
+  // RFC3339 for the API; offset = page * pageSize walks the full history.
+  const PAGE_SIZE = 200;
+  let sinceLocal = $state<string>("");
+  let untilLocal = $state<string>("");
+  let page = $state(0);
+
+  // datetime-local has no timezone; interpret it as local time and emit
+  // an ISO/RFC3339 instant. Empty input → undefined (no bound).
+  function toRFC3339(local: string): string | undefined {
+    if (!local) return undefined;
+    const d = new Date(local);
+    return isNaN(d.getTime()) ? undefined : d.toISOString();
+  }
+
   async function load() {
     loading = true;
     loadError = null;
     try {
-      entries = await api.listAudit(500);
+      entries = await api.listAudit({
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        device: deviceFilter,
+        since: toRFC3339(sinceLocal),
+        until: toRFC3339(untilLocal),
+      });
     } catch (err) {
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
@@ -42,6 +64,39 @@
     }
   }
   onMount(load);
+
+  // Reload whenever the server-side filters or page change. The date
+  // inputs and pagination buttons mutate these; client-side
+  // action/search/central filters do not trigger a refetch.
+  let firstRun = true;
+  $effect(() => {
+    // Track the server-side inputs.
+    void [sinceLocal, untilLocal, page];
+    if (firstRun) {
+      firstRun = false;
+      return;
+    }
+    void load();
+  });
+
+  function applyDateFilter() {
+    page = 0;
+    // $effect picks up the page reset / date change and reloads.
+  }
+  function nextPage() {
+    if (entries.length === PAGE_SIZE) page += 1;
+  }
+  function prevPage() {
+    if (page > 0) page -= 1;
+  }
+
+  const downloadUrl = $derived(
+    api.auditDownloadUrl({
+      device: deviceFilter,
+      since: toRFC3339(sinceLocal),
+      until: toRFC3339(untilLocal),
+    }),
+  );
 
   function actionLabel(action: string): string {
     const known = new Set([
@@ -91,7 +146,8 @@
     const q = searchFilter.trim().toLowerCase();
     return entries.filter((e) => {
       if (actionFilter && e.action !== actionFilter) return false;
-      if (deviceFilter && e.device_address !== deviceFilter) return false;
+      // Device scoping is applied server-side (prefix match) via the
+      // `device` query param, so no client-side device filter here.
       // centralFilter="" means show all (including global entries).
       // centralFilter="__global__" shows only global (empty-central) entries.
       // Otherwise filter to the selected central (non-empty entries only).
@@ -166,6 +222,31 @@
         <option value="__global__">{t("audit.filter.global")}</option>
       </select>
     {/if}
+    <label class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+      {t("audit.from")}
+      <input
+        type="datetime-local"
+        bind:value={sinceLocal}
+        onchange={applyDateFilter}
+        class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      />
+    </label>
+    <label class="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+      {t("audit.to")}
+      <input
+        type="datetime-local"
+        bind:value={untilLocal}
+        onchange={applyDateFilter}
+        class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      />
+    </label>
+    <a
+      href={downloadUrl}
+      class="rounded-md border border-slate-300 px-3 py-1.5 text-xs shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+      download="audit-log.csv"
+    >
+      {t("audit.export_csv")}
+    </a>
     <span class="text-xs text-slate-500 dark:text-slate-400">
       {filteredEntries.length} / {entries.length}
     </span>
@@ -247,5 +328,29 @@
         </li>
       {/each}
     </ul>
+
+    <div class="mt-4 flex items-center justify-center gap-3">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={prevPage}
+        disabled={page === 0 || loading}
+      >
+        ← {t("audit.prev")}
+      </Button>
+      <span class="text-xs text-slate-500 dark:text-slate-400">
+        {t("audit.page", { page: page + 1 })}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={nextPage}
+        disabled={entries.length < PAGE_SIZE || loading}
+      >
+        {t("audit.next")} →
+      </Button>
+    </div>
   {/if}
 </section>

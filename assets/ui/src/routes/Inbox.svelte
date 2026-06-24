@@ -24,6 +24,27 @@
   let centralFilter = $state("");
   let accepting = $state<string | null>(null);
 
+  // Teach-in scope: "" opens install mode on every radio (the global
+  // endpoint); a non-empty value targets one interface so the operator
+  // can pair on BidCos-RF / HmIP-RF / HmIP-Wired independently — the
+  // interface-selective pairing the CCU WebUI offers.
+  let selectedInterface = $state("");
+  const scopeEntry = $derived(
+    selectedInterface
+      ? installModeStore.interfaces.find(
+          (i) => i.interface === selectedInterface,
+        )
+      : undefined,
+  );
+  const scopeActive = $derived(
+    selectedInterface ? (scopeEntry?.active ?? false) : installModeStore.active,
+  );
+  const scopeRemaining = $derived(
+    selectedInterface
+      ? (scopeEntry?.seconds ?? null)
+      : installModeStore.remainingSeconds,
+  );
+
   // Active-pairing tick: while the install mode is running on the CCU,
   // the inbox should reflect freshly-discovered candidates without the
   // user having to hit reload. 3 s is fast enough that the operator
@@ -51,6 +72,30 @@
       loadError = err instanceof ApiError ? err.message : String(err);
     } finally {
       loading = false;
+    }
+  }
+
+  // Targeted teach-in by serial / device address. Opens a pairing
+  // window for exactly one device (CCU WebUI "Gerät per Seriennummer
+  // anlernen"). The auto-poll on installModeStore.active surfaces the
+  // device in the list once it reports in.
+  let serial = $state("");
+  let pairBusy = $state(false);
+  async function pairBySerial() {
+    const addr = serial.trim();
+    if (!addr) return;
+    pairBusy = true;
+    try {
+      await api.pairDeviceInstallMode(addr, 60);
+      toastStore.success(t("inbox.pair_serial_started", { addr }));
+      serial = "";
+      installModeStore.refresh();
+    } catch (err) {
+      toastStore.error(
+        err instanceof ApiError ? `${err.status}: ${err.message}` : String(err),
+      );
+    } finally {
+      pairBusy = false;
     }
   }
 
@@ -132,17 +177,34 @@
           {/each}
         </select>
       {/if}
+      {#if installModeStore.interfaces.length > 0}
+        <select
+          bind:value={selectedInterface}
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          title={t("inbox.install_mode_interface_label")}
+        >
+          <option value="">{t("inbox.install_mode_all_interfaces")}</option>
+          {#each installModeStore.interfaces as iface (iface.central + "/" + iface.interface)}
+            <option value={iface.interface}>
+              {iface.interface}{iface.active ? " ●" : ""}
+            </option>
+          {/each}
+        </select>
+      {/if}
       <Button
         type="button"
-        variant={installModeStore.active ? "default" : "outline"}
-        onclick={() => void installModeStore.toggle()}
+        variant={scopeActive ? "default" : "outline"}
+        onclick={() =>
+          void installModeStore.toggle(
+            selectedInterface ? { interface: selectedInterface } : {},
+          )}
         disabled={installModeStore.busy}
-        title={installModeStore.active
+        title={scopeActive
           ? t("inbox.install_mode_active_title")
           : t("inbox.install_mode_start_title")}
       >
-        {#if installModeStore.active}
-          {t("inbox.install_mode_pairing", { seconds: installModeStore.remainingSeconds ?? "…" })}
+        {#if scopeActive}
+          {t("inbox.install_mode_pairing", { seconds: scopeRemaining ?? "…" })}
         {:else}
           {t("inbox.install_mode")}
         {/if}
@@ -152,6 +214,30 @@
       </Button>
     </div>
   </header>
+
+  <!-- Targeted teach-in by serial / device address -->
+  <form
+    class="mb-4 flex flex-wrap items-center gap-2"
+    onsubmit={(e) => {
+      e.preventDefault();
+      void pairBySerial();
+    }}
+  >
+    <label class="text-xs text-slate-500 dark:text-slate-400" for="inbox-serial">
+      {t("inbox.pair_serial_label")}
+    </label>
+    <input
+      id="inbox-serial"
+      type="text"
+      bind:value={serial}
+      placeholder={t("inbox.pair_serial_placeholder")}
+      class="w-56 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+      disabled={pairBusy}
+    />
+    <Button type="submit" variant="outline" disabled={pairBusy || serial.trim() === ""}>
+      {t("inbox.pair_serial_submit")}
+    </Button>
+  </form>
 
   {#if installModeStore.active}
     <div class="mb-4 flex items-center gap-2 rounded border border-brand-300 bg-brand-50 p-3 text-sm text-brand-900 dark:border-brand-800 dark:bg-brand-950 dark:text-brand-200">

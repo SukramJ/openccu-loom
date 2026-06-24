@@ -27,6 +27,19 @@ const (
 	ActionActiveProfile     Action = "active_profile"
 	ActionDataPointWrite    Action = "data_point_write"
 
+	// ActionDeviceInstallMode records a targeted pairing window opened
+	// for one device. The Entry's DeviceAddress carries the target.
+	ActionDeviceInstallMode Action = "device_install_mode"
+
+	// ActionRoomFunction records room / function (Gewerk) entity
+	// lifecycle changes (create / rename / delete). The Note carries
+	// the operation and target name.
+	ActionRoomFunction Action = "room_function"
+
+	// ActionTLSCertUpload records a runtime replacement of the daemon's
+	// TLS server certificate.
+	ActionTLSCertUpload Action = "tls_cert_upload"
+
 	// Matter bridge mutations (per docs/matter-ui-concept.md §6).
 	ActionMatterExposureUpdate Action = "matter_exposure_update"
 	ActionMatterExposureBulk   Action = "matter_exposure_bulk"
@@ -83,6 +96,19 @@ type Entry struct {
 	// Note carries free-form context (e.g. profile id when an
 	// active_profile change happened).
 	Note string `json:"note,omitempty"`
+}
+
+// Query is a filtered, paginated audit read request used by the
+// durable read path (SQLite). Zero-value time bounds mean "unbounded";
+// Limit <= 0 lets the store apply its own cap. Offset enables
+// page-by-page retrieval over the full history rather than a fixed
+// in-memory window.
+type Query struct {
+	Device string    // device-address prefix (case-insensitive)
+	Since  time.Time // inclusive lower bound (zero = no bound)
+	Until  time.Time // exclusive upper bound (zero = no bound)
+	Limit  int
+	Offset int
 }
 
 // Change is one parameter delta within an Entry.

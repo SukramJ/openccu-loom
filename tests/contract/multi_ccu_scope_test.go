@@ -509,10 +509,12 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// per-CCU. The auth realm and section snapshots are one
 		// authority per daemon; centrals reach into the runtime config
 		// via [config.Config.Centrals]. See Wave-B SQL migration 017.
-		"UserStore:Delete":          "reason: users table is daemon-global; subject is the natural key",
-		"TokenStore:Delete":         "reason: tokens table is daemon-global; fingerprint is the natural key",
-		"ConfigSectionStore:Get":    "reason: config_sections is daemon-global; section is the natural key",
-		"ConfigSectionStore:Delete": "reason: config_sections is daemon-global; section is the natural key",
+		"UserStore:Delete":            "reason: users table is daemon-global; subject is the natural key",
+		"TokenStore:Delete":           "reason: tokens table is daemon-global; fingerprint is the natural key",
+		"UserPreferencesStore:Get":    "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
+		"UserPreferencesStore:Delete": "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
+		"ConfigSectionStore:Get":      "reason: config_sections is daemon-global; section is the natural key",
+		"ConfigSectionStore:Delete":   "reason: config_sections is daemon-global; section is the natural key",
 		// auth_sessions is daemon-global, not per-CCU: a login session
 		// belongs to a user in the single auth realm, never to a CCU.
 		// DeleteSession's natural key is the session id; the purge sweep

@@ -19,6 +19,7 @@
   import type { IconName } from "$lib/icons";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { maintenanceStore } from "$lib/stores/maintenance.svelte";
+  import { favoritesStore } from "$lib/stores/favorites.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -148,6 +149,27 @@
   }
 
   onMount(load);
+
+  onMount(() => {
+    if (!favoritesStore.loaded) void favoritesStore.load();
+  });
+
+  // Pin / unpin this device as a favorite. The label is cached so the
+  // favorites view renders without a re-fetch.
+  async function togglePin(label: string) {
+    try {
+      const pinned = await favoritesStore.toggle({
+        type: "device",
+        id: address,
+        label,
+      });
+      toastStore.success(
+        pinned ? t("favorites.added", { label }) : t("favorites.removed", { label }),
+      );
+    } catch (err) {
+      toastStore.error(err instanceof Error ? err.message : String(err));
+    }
+  }
 
   // Channels arrive sorted by string from the REST handler; resort
   // numerically and strip channels that exist purely for week-profile
@@ -531,6 +553,25 @@
             >
               <Icon name="mdi:pencil" size={14} />
               {t("device.rename")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void togglePin(detail?.name || address)}
+              title={favoritesStore.isPinned("device", address)
+                ? t("favorites.unpin")
+                : t("favorites.pin")}
+            >
+              <Icon
+                name={favoritesStore.isPinned("device", address)
+                  ? "mdi:star"
+                  : "mdi:star-outline"}
+                size={14}
+              />
+              {favoritesStore.isPinned("device", address)
+                ? t("favorites.pinned")
+                : t("favorites.pin")}
             </Button>
             {#if detail.update_available}
               <Button

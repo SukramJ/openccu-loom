@@ -95,6 +95,7 @@ import {
   Wind,
   X,
   XCircle,
+  Star,
   Zap,
 } from "@lucide/svelte";
 
@@ -177,6 +178,8 @@ export type IconName =
   | "mdi:smoke-detector-variant"
   | "mdi:water-alert"
   | "mdi:weather-windy"
+  | "mdi:star"
+  | "mdi:star-outline"
   | "mdi:zap";
 
 const REGISTRY: Record<IconName, Component> = {
@@ -246,6 +249,8 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:waveform": Activity,
   "mdi:text-box-search-outline": List,
   "mdi:zap": Zap,
+  "mdi:star": Star,
+  "mdi:star-outline": Star,
   // Device-type + view-toggle glyphs (also present in LOOSE_REGISTRY,
   // promoted here so the strict <Icon> component renders them instead of
   // falling back to Info).

@@ -59,6 +59,14 @@
      * unconditionally.
      */
     pushesConfigPending?: boolean;
+    /**
+     * Fired after every (re)load with the number of rendered parameters
+     * and whether the load failed. Lets a parent decide whether to show
+     * the panel at all — e.g. a LINK sender side that carries no
+     * paramset for the given peer reports `{ count: 0 }` and can be
+     * hidden. Optional; omit when the panel is always shown.
+     */
+    onLoaded?: (info: { count: number; error: boolean }) => void;
   };
 
   let {
@@ -68,6 +76,7 @@
     peer,
     locale,
     pushesConfigPending = false,
+    onLoaded,
   }: Props = $props();
 
   const channelAddress = $derived(`${address}:${channel}`);
@@ -128,8 +137,10 @@
       values = { ...seed };
       stack = emptyStack();
       lockedParams = new Set();
+      onLoaded?.({ count: next.parameters.length, error: false });
     } catch (err) {
       loadError = friendlyError(err, t);
+      onLoaded?.({ count: 0, error: true });
     } finally {
       loading = false;
     }

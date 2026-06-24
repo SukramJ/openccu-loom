@@ -1,0 +1,19 @@
+!# openccu-loom — delete_room
+!# Params: ##name## (room name to delete)
+!# Output: 1 on success, 0 when the room was not found.
+!#
+!# Removes the room from the ID_ROOMS enum and deletes the object.
+!# Channel memberships referencing the room drop with it; the caller
+!# refreshes the device list afterwards to pick up the canonical state.
+
+string sName = "##name##";
+integer iResult = 0;
+object oList = dom.GetObject(ID_ROOMS);
+object o = oList.Get(sName);
+if (o) {
+    string sId = o.ID();
+    oList.Remove(sId);
+    dom.DeleteObject(sId);
+    iResult = 1;
+}
+Write(iResult);

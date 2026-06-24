@@ -1,0 +1,19 @@
+!# openccu-loom — delete_function
+!# Params: ##name## (function / Gewerk name to delete)
+!# Output: 1 on success, 0 when the function was not found.
+!#
+!# Removes the function from the ID_FUNCTIONS enum and deletes the
+!# object. Channel memberships drop with it; the caller refreshes the
+!# device list afterwards to pick up the canonical state.
+
+string sName = "##name##";
+integer iResult = 0;
+object oList = dom.GetObject(ID_FUNCTIONS);
+object o = oList.Get(sName);
+if (o) {
+    string sId = o.ID();
+    oList.Remove(sId);
+    dom.DeleteObject(sId);
+    iResult = 1;
+}
+Write(iResult);

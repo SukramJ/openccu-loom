@@ -8,6 +8,7 @@ import type {
   EditSessionResponse,
   FunctionEntry,
   InboxDevice,
+  InstallModeInterfaceEntry,
   RoomEntry,
   TokenListEntry,
   UserListEntry,
@@ -218,6 +219,18 @@ export const api = {
   },
   me() {
     return request<Identity>(`/auth/me`);
+  },
+  // Self-service password change for the logged-in local user. Requires
+  // the current password; the role is preserved server-side.
+  changeOwnPassword(currentPassword: string, newPassword: string) {
+    return request<void>(`/auth/me/password`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
+    });
   },
   info() {
     return request<DaemonInfo>(`/info`);
@@ -489,8 +502,74 @@ export const api = {
     );
   },
   // --- Audit log -----------------------------------------------
-  listAudit(limit = 200) {
-    return request<AuditEntry[]>(`/audit?limit=${limit}`);
+  listAudit(
+    p: {
+      limit?: number;
+      offset?: number;
+      device?: string;
+      since?: string;
+      until?: string;
+    } = {},
+  ) {
+    const qs = new URLSearchParams({ limit: String(p.limit ?? 200) });
+    if (p.offset) qs.set("offset", String(p.offset));
+    if (p.device) qs.set("device", p.device);
+    if (p.since) qs.set("since", p.since);
+    if (p.until) qs.set("until", p.until);
+    return request<AuditEntry[]>(`/audit?${qs.toString()}`);
+  },
+  auditDownloadUrl(p: {
+    limit?: number;
+    device?: string;
+    since?: string;
+    until?: string;
+  }): string {
+    const qs = new URLSearchParams({
+      format: "csv",
+      limit: String(p.limit ?? 10000),
+    });
+    if (p.device) qs.set("device", p.device);
+    if (p.since) qs.set("since", p.since);
+    if (p.until) qs.set("until", p.until);
+    return `${apiBase()}/audit?${qs.toString()}`;
+  },
+  // --- Per-user preferences (favorites / dashboard) -----------
+  // Values are opaque JSON owned by the SPA. getPreference resolves to
+  // null when the key is unset (404).
+  async getPreference<T = unknown>(key: string): Promise<T | null> {
+    try {
+      const r = await request<{ key: string; value: T }>(
+        `/me/preferences/${encodeURIComponent(key)}`,
+      );
+      return r.value;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null;
+      throw err;
+    }
+  },
+  async putPreference(key: string, value: unknown): Promise<void> {
+    await request<void>(`/me/preferences/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    });
+  },
+  async deletePreference(key: string): Promise<void> {
+    await request<void>(`/me/preferences/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+    });
+  },
+  // Replace the daemon's TLS certificate at runtime (admin). The PEM
+  // cert + key are sent as multipart/form-data; the certificate
+  // hot-reloads so the API and SPA are re-secured without a restart.
+  async uploadTLSCertificate(certPEM: File | Blob, keyPEM: File | Blob) {
+    const form = new FormData();
+    form.append("cert", certPEM);
+    form.append("key", keyPEM);
+    await request<void>(`/admin/tls/certificate`, {
+      method: "POST",
+      body: form,
+    });
   },
   // --- Refresh devices (CCU re-pull) ---------------------------
   refreshDevices() {
@@ -538,6 +617,48 @@ export const api = {
   },
   listFunctions() {
     return request<FunctionEntry[]>(`/functions`);
+  },
+  // Room / function entity CRUD (CCU-side). `central` is required when
+  // more than one CCU is configured.
+  createRoom(name: string, central?: string) {
+    return request<{ id: number; name: string }>(`/rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, ...(central ? { central } : {}) }),
+    });
+  },
+  renameRoom(name: string, newName: string, central?: string) {
+    return request<void>(`/rooms/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName, ...(central ? { central } : {}) }),
+    });
+  },
+  deleteRoom(name: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/rooms/${encodeURIComponent(name)}${qs}`, {
+      method: "DELETE",
+    });
+  },
+  createFunction(name: string, central?: string) {
+    return request<{ id: number; name: string }>(`/functions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, ...(central ? { central } : {}) }),
+    });
+  },
+  renameFunction(name: string, newName: string, central?: string) {
+    return request<void>(`/functions/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_name: newName, ...(central ? { central } : {}) }),
+    });
+  },
+  deleteFunction(name: string, central?: string) {
+    const qs = central ? `?central=${encodeURIComponent(central)}` : "";
+    return request<void>(`/functions/${encodeURIComponent(name)}${qs}`, {
+      method: "DELETE",
+    });
   },
   setDeviceFunctions(address: string, functions: string[]) {
     return request<void>(`/devices/${encodeURIComponent(address)}`, {
@@ -857,6 +978,41 @@ export const api = {
       }),
     });
     return api.getInstallMode();
+  },
+  // Per-interface install mode. Lets the operator open teach-in on a
+  // single radio (BidCos-RF / HmIP-RF / HmIP-Wired) instead of all at
+  // once, mirroring the CCU WebUI's interface-selective pairing.
+  // `deviceAddress` requests targeted pairing (e.g. by serial); the
+  // backend ignores it until that path is wired.
+  async listInstallModeInterfaces() {
+    return request<InstallModeInterfaceEntry[]>(`/install-mode/interfaces`);
+  },
+  async setInstallModeInterface(
+    iface: string,
+    active: boolean,
+    seconds?: number,
+    deviceAddress?: string,
+  ) {
+    await request<void>(`/install-mode/interfaces`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        interface: iface,
+        active,
+        ...(seconds ? { seconds } : {}),
+        ...(deviceAddress ? { device_address: deviceAddress } : {}),
+      }),
+    });
+    return api.listInstallModeInterfaces();
+  },
+  // Open a targeted pairing window for a single device address (serial),
+  // mirroring the CCU WebUI's serial-targeted teach-in.
+  async pairDeviceInstallMode(address: string, seconds?: number) {
+    await request<void>(`/devices/${encodeURIComponent(address)}/install-mode`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(seconds ? { seconds } : {}),
+    });
   },
   // --- Matter bridge -------------------------------------------
   matterStatus() {

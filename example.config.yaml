@@ -93,6 +93,12 @@ north:
     #                       # endpoints. Default: true. Set to false only for
     #                       # pure API-token deployments without browser sessions.
     # csrf_secure: true     # set Secure flag on CSRF cookie (requires HTTPS)
+    # tls_cert_file: "/etc/openccu-loom/tls/cert.pem"
+    # tls_key_file:  "/etc/openccu-loom/tls/key.pem"
+    #                       # Set BOTH to serve the REST API + SPA over HTTPS on the
+    #                       # listen port. PEM-encoded; the certificate hot-reloads on
+    #                       # change or after POST /admin/tls/certificate — no restart.
+    #                       # Leave unset behind a TLS-terminating reverse proxy.
     # tracing:
     #   otlp_endpoint: ""   # OTLP/HTTP collector base URL, e.g. http://collector:4318.
     #                       # When non-empty, finished spans are batched and POSTed to

@@ -4,13 +4,17 @@
 package handlers
 
 import (
+	"context"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 )
 
 // stubAuditService is an inline stub for AuditService.
@@ -342,5 +346,237 @@ func TestAuditFilterZeroLimitUsesDefault(t *testing.T) {
 	}
 	if len(body) != 3 {
 		t.Fatalf("expected 3 entries with limit=0 (default), got %d", len(body))
+	}
+}
+
+// --- Durable-path (AuditQuerier) tests ---
+
+// stubAuditQuerier implements both AuditService and AuditQuerier so the
+// handler takes the durable code path.
+type stubAuditQuerier struct {
+	entries     []audit.Entry
+	queryCalled bool
+	lastQuery   audit.Query
+	err         error
+}
+
+func (s *stubAuditQuerier) List(limit int) []audit.Entry {
+	if limit >= len(s.entries) {
+		return s.entries
+	}
+	return s.entries[:limit]
+}
+
+func (s *stubAuditQuerier) Query(_ context.Context, q audit.Query) ([]audit.Entry, error) {
+	s.queryCalled = true
+	s.lastQuery = q
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.entries, nil
+}
+
+// stubCentralIndex is a minimal DeviceIndex that only wires CentralOf.
+// Unused methods satisfy the interface and return zero values.
+type stubCentralIndex struct {
+	centralOf map[string]string
+}
+
+func (s *stubCentralIndex) Devices() []*device.Device            { return nil }
+func (s *stubCentralIndex) Device(string) (*device.Device, bool) { return nil, false }
+func (s *stubCentralIndex) SerialSuffix(string) string           { return "" }
+func (s *stubCentralIndex) CentralOf(addr string) string         { return s.centralOf[addr] }
+
+func TestListAudit_DurablePath_QueryCalledNotList(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditQuerier{
+		entries: []audit.Entry{
+			{Action: audit.ActionParamsetWrite, DeviceAddress: "D1"},
+			{Action: audit.ActionLinkAdd, DeviceAddress: "D2"},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !svc.queryCalled {
+		t.Fatal("Query was not called; handler should use durable path when svc implements AuditQuerier")
+	}
+	var body []AuditEntryDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(body))
+	}
+}
+
+func TestListAudit_DurablePath_OpPostFilterApplied(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditQuerier{
+		entries: []audit.Entry{
+			{Action: audit.ActionParamsetWrite, DeviceAddress: "D1"},
+			{Action: audit.ActionLinkAdd, DeviceAddress: "D2"},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit?op=paramset", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []AuditEntryDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("op post-filter: expected 1 entry, got %d", len(body))
+	}
+	if body[0].Action != audit.ActionParamsetWrite {
+		t.Fatalf("wrong action after op filter: %q", body[0].Action)
+	}
+}
+
+func TestListAudit_DurablePath_CentralPostFilterApplied(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditQuerier{
+		entries: []audit.Entry{
+			{Action: audit.ActionDataPointWrite, DeviceAddress: "DEV001"},
+			{Action: audit.ActionDataPointWrite, DeviceAddress: "OTHER001"},
+		},
+	}
+	idx := &stubCentralIndex{centralOf: map[string]string{
+		"DEV001":   "ccu1",
+		"OTHER001": "ccu2",
+	}}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit?central=ccu1", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, idx).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []AuditEntryDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("central post-filter: expected 1 entry for ccu1, got %d", len(body))
+	}
+	if body[0].Central != "ccu1" {
+		t.Fatalf("wrong central: %q", body[0].Central)
+	}
+}
+
+func TestListAudit_DurablePath_OffsetPassedToQuery(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditQuerier{}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit?offset=42", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if svc.lastQuery.Offset != 42 {
+		t.Fatalf("offset not forwarded to Query: got %d, want 42", svc.lastQuery.Offset)
+	}
+}
+
+func TestListAudit_DurablePath_QueryError_Returns500(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditQuerier{err: context.DeadlineExceeded}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestListAudit_CSV_ContentTypeAndBody(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditService{
+		entries: []audit.Entry{
+			{
+				Action:        audit.ActionParamsetWrite,
+				DeviceAddress: "DEV001",
+				User:          "alice",
+				Timestamp:     time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+			},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit?format=csv", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "text/csv") {
+		t.Fatalf("Content-Type: want text/csv, got %q", ct)
+	}
+	cd := w.Header().Get("Content-Disposition")
+	if !strings.Contains(cd, "attachment") {
+		t.Fatalf("Content-Disposition: want attachment, got %q", cd)
+	}
+
+	records, err := csv.NewReader(w.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("csv parse: %v", err)
+	}
+	if len(records) < 2 {
+		t.Fatalf("expected header + 1 data row, got %d rows", len(records))
+	}
+	header := records[0]
+	if header[0] != "timestamp" || header[2] != "action" {
+		t.Fatalf("unexpected CSV header: %v", header)
+	}
+	dataRow := records[1]
+	found := false
+	for _, col := range dataRow {
+		if strings.Contains(col, "paramset_write") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("data row missing paramset_write: %v", dataRow)
+	}
+}
+
+func TestListAudit_InMemoryStubStillWorksWithoutQuerier(t *testing.T) {
+	t.Parallel()
+	svc := &stubAuditService{
+		entries: []audit.Entry{
+			{Action: audit.ActionDataPointWrite, DeviceAddress: "D1"},
+		},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody)
+	w := httptest.NewRecorder()
+	ListAudit(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var body []AuditEntryDTO
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("in-memory path: expected 1 entry, got %d", len(body))
 	}
 }

@@ -7,7 +7,10 @@
   import SectionEditor from "$lib/components/settings/SectionEditor.svelte";
   import UsersAdmin from "$lib/components/settings/UsersAdmin.svelte";
   import TokensAdmin from "$lib/components/settings/TokensAdmin.svelte";
+  import ChangePasswordCard from "$lib/components/settings/ChangePasswordCard.svelte";
   import CentralsAdmin from "$lib/components/settings/CentralsAdmin.svelte";
+  import RoomsFunctionsAdmin from "$lib/components/settings/RoomsFunctionsAdmin.svelte";
+  import TlsCertCard from "$lib/components/settings/TlsCertCard.svelte";
   import SystemUpdatePanel from "$lib/components/settings/SystemUpdatePanel.svelte";
   import ChangesOverview from "$lib/components/settings/ChangesOverview.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
@@ -195,6 +198,7 @@
     { id: "reliability", label: t("settings.tab.reliability"), expertOnly: true },
     { id: "persistence", label: t("settings.tab.persistence"), expertOnly: true },
     { id: "users", label: t("settings.tab.users") },
+    { id: "groups", label: t("settings.tab.groups") },
     { id: "tokens", label: t("settings.tab.tokens") },
     { id: "system", label: t("settings.tab.system") },
   ];
@@ -212,7 +216,7 @@
     { id: "general", tabIds: ["general", "system"] },
     { id: "bridges", tabIds: ["mqtt", "matter", "mcp", "rest", "discovery"] },
     { id: "ccus", tabIds: ["ccus", "callback"] },
-    { id: "security", tabIds: ["oidc", "users", "tokens"] },
+    { id: "security", tabIds: ["oidc", "users", "groups", "tokens"] },
     { id: "advanced", tabIds: ["reliability", "persistence"] },
   ];
 
@@ -415,6 +419,10 @@
           </div>
         </div>
 
+        <div class="mt-4">
+          <ChangePasswordCard />
+        </div>
+
       {:else if activeTab === "changes"}
         {#if schemaLoading}
           <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
@@ -522,6 +530,9 @@
             allSections={schemaSections}
             {effectiveConfig}
           />
+          <div class="mt-4">
+            <TlsCertCard />
+          </div>
         {/if}
 
       {:else if activeTab === "oidc"}
@@ -584,6 +595,9 @@
 
       {:else if activeTab === "users"}
         <UsersAdmin />
+
+      {:else if activeTab === "groups"}
+        <RoomsFunctionsAdmin />
 
       {:else if activeTab === "tokens"}
         <TokensAdmin />
