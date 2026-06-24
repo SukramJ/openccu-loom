@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1]
+
+### Fixed
+
+- **The Home Assistant add-on image now publishes.** The `home-assistant/builder`
+  action was pinned by commit SHA; the action derives its builder-image tag from
+  the action ref, so the SHA pin made it pull a non-existent
+  `amd64-builder:<sha>` ("manifest unknown") and the 0.13.0 release shipped
+  without the HA add-on image. Pinned the action by its version tag
+  (`@2026.06.0`) so the builder image resolves. The 0.13.0 daemon binaries,
+  Docker image, and CCU/RaspberryMatic add-on were unaffected.
+
 ## [0.13.0]
 
 ### Fixed
