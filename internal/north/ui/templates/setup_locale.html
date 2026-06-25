@@ -3,7 +3,7 @@
   <p class="step-progress">{{t "setup.step.progress" "current" .Data.Step "total" .Data.Total}}</p>
   <h1>{{t "setup.step2.title"}}</h1>
   {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
-  <form method="post" action="/setup/locale">
+  <form method="post" action="setup/locale">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <label>{{t "setup.locale.label"}}
       <select name="locale">

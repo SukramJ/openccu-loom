@@ -4,6 +4,20 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.2]
+
+### Fixed
+
+- **Onboarding works behind HA Ingress.** Folding the server-rendered bootstrap
+  surface (login / setup / about) onto the Ingress port in 0.14.0 exposed its
+  absolute URLs to the Ingress prefix: form POSTs (e.g. `/setup/admin`) and
+  links (`/app/`, `/login`) resolved against the Home Assistant origin instead
+  of the add-on's Ingress path — so the setup wizard could not be submitted (you
+  stayed stuck on it) and the footer `/app/` link reloaded the whole HA page
+  inside the panel. The bootstrap pages now emit Ingress-prefix-aware URLs (a
+  `<base href>` derived from `X-Ingress-Path` plus relative links), and every
+  server-side redirect carries the prefix.
+
 ## [0.14.1]
 
 ### Fixed

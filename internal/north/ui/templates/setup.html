@@ -2,7 +2,7 @@
 <section class="card">
   <h1>{{t "setup.title"}}</h1>
   <p>{{t "setup.intro"}}</p>
-  <form method="post" action="/setup">
+  <form method="post" action="setup">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <label>{{t "setup.username"}}<input type="text" name="username" required autofocus></label>
     <label>{{t "setup.password"}}<input type="password" name="password" required minlength="8"></label>

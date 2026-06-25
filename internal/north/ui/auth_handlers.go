@@ -43,7 +43,7 @@ func handleLoginPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 				slog.String("subject", user),
 				slog.String("remote", r.RemoteAddr),
 				slog.String("err", err.Error()))
-			http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
+			uiRedirect(w, r, "/login?error=1")
 			return
 		}
 		sess, err := ad.Sessions.Issue(id) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
@@ -59,7 +59,7 @@ func handleLoginPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 			slog.String("role", string(id.Role)),
 			slog.String("remote", r.RemoteAddr))
 		auth.WriteSessionCookie(w, sess, ad.Secure)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		uiRedirect(w, r, "/")
 	}
 }
 
@@ -73,7 +73,7 @@ func handleLogoutPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 				slog.String("remote", r.RemoteAddr))
 		}
 		auth.ClearSessionCookie(w)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		uiRedirect(w, r, "/login")
 	}
 }
 
@@ -95,18 +95,18 @@ func handleSetupPost(_ Deps, ad *AuthDeps) http.HandlerFunc {
 		pass := r.FormValue("password")
 		confirm := r.FormValue("confirm")
 		if user == "" || pass == "" || pass != confirm {
-			http.Redirect(w, r, "/setup?error=1", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?error=1")
 			return
 		}
 		hashed, err := auth.HashPassword(pass)
 		if err != nil {
-			http.Redirect(w, r, "/setup?error=1", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?error=1")
 			return
 		}
 		ad.Users.Put(user, hashed, auth.RoleAdmin)
 		slog.InfoContext(r.Context(), "auth.setup.admin_created",
 			slog.String("subject", user),
 			slog.String("remote", r.RemoteAddr))
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		uiRedirect(w, r, "/login")
 	}
 }

@@ -3,7 +3,7 @@
   <h1>{{t "login.title"}}</h1>
   {{if .Data.SetupDone}}<p class="success">{{t "setup.done.message"}}</p>{{end}}
   {{if .Data.Error}}<p class="error">{{t "login.invalid"}}</p>{{end}}
-  <form method="post" action="/login">
+  <form method="post" action="login">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <label>{{t "login.username"}}<input type="text" name="username" required autofocus></label>
     <label>{{t "login.password"}}<input type="password" name="password" required></label>
@@ -11,7 +11,7 @@
   </form>
   {{if .Data.OIDCEnabled}}
   <hr>
-  <p><a href="/login/oidc/start" class="oidc-login">{{t "login.oidc"}}</a></p>
+  <p><a href="login/oidc/start" class="oidc-login">{{t "login.oidc"}}</a></p>
   {{end}}
 </section>
 {{end}}

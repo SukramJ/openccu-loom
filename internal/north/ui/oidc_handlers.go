@@ -172,7 +172,7 @@ func handleOIDCCallback(d Deps) http.HandlerFunc {
 			slog.String("role", string(identity.Role)),
 			slog.String("remote", r.RemoteAddr))
 		auth.WriteSessionCookie(w, sess, d.Auth.Secure)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		uiRedirect(w, r, "/")
 	}
 }
 
@@ -181,7 +181,7 @@ func redirectError(w http.ResponseWriter, r *http.Request, reason string) {
 	// user-controlled URL. The redirect target is the static
 	// same-origin path "/login"; reason is URL-encoded as a query value
 	// so it cannot escape to a host segment.
-	http.Redirect(w, r, "/login?error="+url.QueryEscape(reason), http.StatusSeeOther)
+	uiRedirect(w, r, "/login?error="+url.QueryEscape(reason))
 }
 
 func ifLogger(d Deps) *slog.Logger {
