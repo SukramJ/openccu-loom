@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0]
+
+### Added
+
+- **`firmware.refresh` WebSocket command is now wired.** It re-pulls device
+  descriptions (and with them the firmware-version fields) from the CCU across
+  every central and interface. Previously the command was registered only as a
+  no-op stub (the `FirmwareRefresher` was left nil). Mirrors aiohomematic
+  `ws_refresh_firmware_data`.
+
+### Changed
+
+- **A manual device reload now also refreshes link-peer addresses.**
+  `config.reload_device_config` / `ccu.reload_device_config` re-pull the device's
+  link peers as part of the (already RPC-bound) reload, keeping link data current
+  on demand — without adding a boot-time per-device RPC sweep across the whole
+  fleet.
+
 ## [0.14.6]
 
 ### Fixed

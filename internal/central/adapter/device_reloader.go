@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -61,7 +62,16 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 			return fmt.Errorf("device_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
 		fetcher := &backendDescFetcher{ops: b}
-		return unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface)
+		if err := unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface); err != nil {
+			return err
+		}
+		// Also re-pull link-peer addresses on demand. Folding this into the
+		// (already RPC-bound) reload keeps a manually-reloaded device's link
+		// data current without a boot-time per-device RPC sweep over the whole
+		// fleet. RefreshDeviceLinkPeers logs+skips per-channel errors and never
+		// returns one, so it cannot fail the reload.
+		unit.Devices.RefreshDeviceLinkPeers(ctx, &backendLinkPeerFetcher{ops: b}, dev.Interface, deviceAddress)
+		return nil
 	}
 	return fmt.Errorf("device_reloader: device not found: %s", deviceAddress)
 }
@@ -125,3 +135,18 @@ type backendDescFetcher struct {
 func (f *backendDescFetcher) ListDevices(ctx context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
 	return f.ops.ListDevices(ctx)
 }
+
+// backendLinkPeerFetcher wraps a [backends.Operations] as a
+// coordinators.LinkPeerFetcher. The backend's GetLinkPeers is already
+// interface-scoped (one backend per interface), so the iface parameter is
+// accepted but not forwarded.
+type backendLinkPeerFetcher struct {
+	ops backends.Operations
+}
+
+// GetLinkPeers satisfies coordinators.LinkPeerFetcher.
+func (f *backendLinkPeerFetcher) GetLinkPeers(ctx context.Context, _ hmenum.Interface, channelAddress string) ([]string, error) {
+	return f.ops.GetLinkPeers(ctx, channelAddress)
+}
+
+var _ coordinators.LinkPeerFetcher = (*backendLinkPeerFetcher)(nil)

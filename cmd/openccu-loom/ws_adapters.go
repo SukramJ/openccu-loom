@@ -77,9 +77,9 @@ type wsCommandWiring struct {
 // wireWSCommands registers every WS command set onto hub.
 //
 // Adapters that cannot yet be bridged (ChangeHistory, ThrottleStats,
-// CacheClearer, DeviceStatistics, FirmwareRefresher, IncidentClearer) are
-// left nil — the corresponding command families are simply not registered,
-// which is safe: the client receives "unknown_command" rather than a panic.
+// DeviceStatistics, IncidentClearer) are left nil — the corresponding command
+// families are simply not registered, which is safe: the client receives
+// "unknown_command" rather than a panic.
 func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	router := hub.Router()
 	// Install the cross-cutting boundary so every WS command emits the
@@ -129,11 +129,15 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 		// SessionRecorder: wired — fans recording.start/stop/status across
 		// every central's session.Recorder via the registry.
 		SessionRecorder: wsSessionRecorderFrom(w.registry),
-		// ChangeHistory, ThrottleStats, DeviceStatistics, FirmwareRefresher,
-		// IncidentClearer, ChangeHistoryClearer, ExtendedHub, Central,
-		// ParamsetReader: all nil — see docs/parity/by_design.md "ws-rest-split".
-		// The in-tree Svelte SPA uses REST + WS event-stream; these command
-		// families remain dormant until an external WS bridge wires them.
+		// FirmwareRefresher: wired — re-pulls device descriptions (incl.
+		// firmware versions) across every central + interface. Backs
+		// firmware.refresh (mirrors the Python ws_refresh_firmware_data).
+		FirmwareRefresher: adapter.NewFirmwareDomain(w.registry, w.valueWriter),
+		// ChangeHistory, ThrottleStats, DeviceStatistics, IncidentClearer,
+		// ChangeHistoryClearer, ExtendedHub, Central, ParamsetReader: all nil —
+		// see docs/parity/by_design.md "ws-rest-split". The in-tree Svelte SPA
+		// uses REST + WS event-stream; these families remain dormant until an
+		// external WS bridge wires them.
 	})
 
 	ws.RegisterCustomDPCommands(router, ws.CustomDPCommandsConfig{
