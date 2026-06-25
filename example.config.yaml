@@ -132,10 +132,12 @@ north:
       # its TCP peer address in trusted_proxy_cidr AND the X-Ingress-Path
       # header) is accepted as the configured role WITHOUT a local credential.
       # Safe only because the add-on's config.yaml keeps panel_admin: true,
-      # which restricts Ingress to HA admins. Default off — opt in explicitly.
-      # A real Bearer token / session always wins over passthrough.
+      # which restricts Ingress to HA admins. A real Bearer token / session
+      # always wins over passthrough.
+      # enabled is tri-state: unset = ON in the HA add-on (supervised), OFF in a
+      # plain build / Docker image. Set true/false to override (false opts out).
       # ha_ingress:
-      #   enabled: false                  # opt-in; default false
+      #   enabled: false                  # unset → on in the HA add-on; false opts out
       #   trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
       #   role: admin                     # granted role: admin | operator | viewer
   # DEPRECATED since 0.14.0: the bootstrap surface (login, /setup, OIDC

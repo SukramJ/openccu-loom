@@ -31,11 +31,18 @@ func buildIngressTrust(cfg *config.Config, logger *slog.Logger) auth.IngressTrus
 		logger = slog.Default()
 	}
 	hc := cfg.North.REST.Auth.HAIngress
-	if !hc.Enabled {
+	supervised := isSupervised()
+	// Tri-state: nil defaults to the supervised stamp — ON in the HA add-on
+	// (Ingress is admin-only via panel_admin: true), OFF elsewhere. An explicit
+	// value overrides.
+	enabled := supervised
+	if hc.Enabled != nil {
+		enabled = *hc.Enabled
+	}
+	if !enabled {
 		return auth.IngressTrust{}
 	}
 
-	supervised := isSupervised()
 	cidrStr := hc.TrustedProxyCIDR
 	if cidrStr == "" {
 		cidrStr = defaultSupervisorCIDR

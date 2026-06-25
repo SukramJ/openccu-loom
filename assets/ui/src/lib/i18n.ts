@@ -560,7 +560,7 @@ const EN: Catalog = {
   "config.help.north.rest.auth.ccu.role_mapping":
     "Override the default CCU UserLevel→Loom-role mapping. Keys are the UserLevel as a string (\"8\", \"2\", \"1\"); values are \"admin\" / \"operator\" / \"viewer\". Empty uses the defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
   "config.help.north.rest.auth.ha_ingress.enabled":
-    "Trust Home Assistant Ingress: when running as the supervised add-on, a request proxied by the Supervisor counts as an authenticated admin — no login. OFF by default; only safe with the add-on's panel_admin: true (admins-only Ingress). Real tokens/sessions still win. Restart required.",
+    "Trust Home Assistant Ingress: a request proxied by the Supervisor counts as an authenticated admin — no login. Default (unset) = on in the HA add-on, off in a plain build; set On/Off to override. Safe only with the add-on's panel_admin: true (admins-only Ingress); real tokens/sessions still win. Restart required.",
   "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Network the Ingress request's real peer must come from. Empty uses the HA Supervisor default 172.30.32.0/23. X-Forwarded-For is never trusted.",
   "config.help.north.rest.auth.ha_ingress.role":
@@ -2301,7 +2301,7 @@ const DE: Catalog = {
   "config.help.north.rest.auth.ccu.role_mapping":
     "Standard-Zuordnung CCU-UserLevel→Loom-Rolle überschreiben. Schlüssel sind das UserLevel als String (\"8\", \"2\", \"1\"); Werte \"admin\" / \"operator\" / \"viewer\". Leer = Defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
   "config.help.north.rest.auth.ha_ingress.enabled":
-    "Home Assistant Ingress vertrauen: läuft der Daemon als Supervised-Add-on, gilt eine vom Supervisor geproxyte Anfrage als authentifizierter Admin — ohne Login. Standard AUS; nur sicher mit panel_admin: true des Add-ons (nur HA-Admins erreichen Ingress). Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
+    "Home Assistant Ingress vertrauen: eine vom Supervisor geproxyte Anfrage gilt als authentifizierter Admin — ohne Login. Standard (nicht gesetzt) = an im HA-Add-on, aus im normalen Build; An/Aus überschreibt. Nur sicher mit panel_admin: true des Add-ons (nur HA-Admins erreichen Ingress); echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
   "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
     "Netz, aus dem der echte Peer der Ingress-Anfrage stammen muss. Leer nutzt den HA-Supervisor-Standard 172.30.32.0/23. X-Forwarded-For wird nie vertraut.",
   "config.help.north.rest.auth.ha_ingress.role":

@@ -180,3 +180,21 @@ north:
   layer of the trust chain (disabled, wrong subnet, missing header, creds-win),
   and a contract test pinning that `X-Forwarded-For` is never used for the
   subnet check.
+
+## Update (0.14.3): passthrough default-on in the HA add-on
+
+The original decision shipped `ha_ingress.enabled` as a plain `false` default
+(opt-in everywhere). In practice the HA add-on has no local admin and CCU auth
+is off there (the HA add-on binary is not stamped `AddonBuild=true`), so every
+add-on user hit the first-run `/setup` wizard through Ingress instead of simply
+landing in the app — the friction this ADR set out to remove.
+
+`ha_ingress.enabled` is therefore now **tri-state** (`*bool`): unset defaults to
+the supervised stamp — **on** in the HA add-on (which pins `panel_admin: true`,
+so Ingress is admin-only), **off** in a plain build / Docker image. An explicit
+`true`/`false` still overrides. The trust chain is unchanged (supervised + real
+`RemoteAddr` in the subnet + `X-Ingress-Path`; a real token/session still wins),
+so it remains inert outside genuine Supervisor traffic — including the
+CCU/RaspberryMatic add-on, which is supervised but not reached through Ingress.
+Net effect: opening the add-on via the HA panel logs the operator straight in as
+admin, with no setup or login page, and the first-run redirect never triggers.
