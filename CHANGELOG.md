@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.6]
+
+### Fixed
+
+- **CLI tools now honor `OPENCCU_LOOM_DATA_DIR` without `--config` too.**
+  Completing the 0.14.5 daemon fix: `hmcli` subcommands (`backup`, `config`)
+  resolved their data directory via the bootstrap default `./var` when run
+  without `--config`, so a containerised CLI run could open the wrong (empty)
+  database instead of the daemon's `/data` store. `BootstrapConfig` now applies
+  the bootstrap-tier env overlay (`OverlayFromEnv`), and `loadBootstrapForCLI`
+  calls it (and validates), so the CLI and daemon resolve the same data
+  directory.
+
 ## [0.14.5]
 
 ### Fixed
