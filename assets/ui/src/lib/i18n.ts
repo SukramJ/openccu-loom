@@ -366,6 +366,9 @@ const EN: Catalog = {
   "config.field.north.discovery.mdns.instance_name": "mDNS instance name",
   "config.field.north.rest.enabled": "REST API enabled",
   "config.field.north.rest.listen": "REST listen address",
+  "config.field.north.rest.public_url": "Public URL",
+  "config.field.north.rest.tls_cert_file": "TLS certificate file",
+  "config.field.north.rest.tls_key_file": "TLS private-key file",
   "config.field.north.rest.cors": "Allowed CORS origins",
   "config.field.north.rest.auth.basic_enabled": "HTTP Basic auth",
   "config.field.north.rest.auth.bearer_enabled": "Bearer-token auth",
@@ -519,6 +522,12 @@ const EN: Catalog = {
   "config.help.north.discovery.mdns.instance_name": "Leftmost label of the mDNS SRV / TXT record. Empty falls back to the OS hostname.",
   "config.help.north.rest.enabled": "Master switch for the REST + WebSocket server. Disabling it leaves the daemon with no operator-facing surface.",
   "config.help.north.rest.listen": "Bind address for REST + WebSocket. :8080 listens on every interface; tighten with a host: prefix when needed.",
+  "config.help.north.rest.public_url":
+    "Externally-reachable base URL of this daemon (scheme + host [+ port]), e.g. https://loom.example.com. Used to build absolute links such as the OIDC redirect URL and to derive secure-cookie behaviour. Leave empty to infer it per request — set it when running behind a reverse proxy or under a custom domain.",
+  "config.help.north.rest.tls_cert_file":
+    "Path to the PEM certificate (chain). Set this together with the key file to serve the API + SPA over HTTPS on the same port; leave both empty for plain HTTP behind a TLS-terminating proxy. An uploaded certificate is written to this path and watched for hot-reload — the upload replaces the file's contents, it does not remove the need to pick a location.",
+  "config.help.north.rest.tls_key_file":
+    "Path to the PEM private key that matches the certificate file. Required together with the certificate to enable HTTPS; an uploaded key is written here and hot-reloaded on change.",
   "config.help.north.rest.cors": "Whitelisted browser origins for cross-origin REST calls. Empty disables CORS entirely; use [\"*\"] only for development.",
   "config.help.north.rest.auth.basic_enabled": "Accept HTTP Basic credentials on protected routes. Useful for curl + CI.",
   "config.help.north.rest.auth.bearer_enabled": "Accept Bearer tokens via Authorization header. Use for automation.",
@@ -2111,6 +2120,9 @@ const DE: Catalog = {
   "config.field.north.discovery.mdns.instance_name": "mDNS-Instanzname",
   "config.field.north.rest.enabled": "REST-API aktiv",
   "config.field.north.rest.listen": "REST-Bind-Adresse",
+  "config.field.north.rest.public_url": "Öffentliche URL",
+  "config.field.north.rest.tls_cert_file": "TLS-Zertifikatsdatei",
+  "config.field.north.rest.tls_key_file": "TLS-Schlüsseldatei",
   "config.field.north.rest.cors": "Erlaubte CORS-Origins",
   "config.field.north.rest.auth.basic_enabled": "HTTP-Basic-Auth",
   "config.field.north.rest.auth.bearer_enabled": "Bearer-Token-Auth",
@@ -2260,6 +2272,12 @@ const DE: Catalog = {
   "config.help.north.discovery.mdns.instance_name": "Linkester Label des mDNS-SRV/TXT-Records. Leer = OS-Hostname.",
   "config.help.north.rest.enabled": "Hauptschalter des REST-/WebSocket-Servers. Aus = Daemon hat keine Operator-Oberfläche.",
   "config.help.north.rest.listen": "Bind-Adresse von REST + WebSocket. :8080 lauscht auf allen Interfaces; mit host:-Präfix einschränken.",
+  "config.help.north.rest.public_url":
+    "Von außen erreichbare Basis-URL dieses Daemons (Schema + Host [+ Port]), z. B. https://loom.example.com. Dient zum Bilden absoluter Links wie der OIDC-Redirect-URL und zur Ableitung des Secure-Cookie-Verhaltens. Leer lassen, um sie pro Anfrage abzuleiten — setzen, wenn hinter einem Reverse Proxy oder unter eigener Domain.",
+  "config.help.north.rest.tls_cert_file":
+    "Pfad zur PEM-Zertifikatskette. Zusammen mit der Schlüsseldatei setzen, um API + SPA über HTTPS auf demselben Port auszuliefern; beide leer lassen für reines HTTP hinter einem TLS-terminierenden Proxy. Ein hochgeladenes Zertifikat wird in diesen Pfad geschrieben und für Hot-Reload überwacht — der Upload ersetzt den Dateiinhalt, nicht die Wahl des Speicherorts.",
+  "config.help.north.rest.tls_key_file":
+    "Pfad zum PEM-Privatschlüssel passend zur Zertifikatsdatei. Zusammen mit dem Zertifikat erforderlich, um HTTPS zu aktivieren; ein hochgeladener Schlüssel wird hierher geschrieben und bei Änderung neu geladen.",
   "config.help.north.rest.cors": "Erlaubte Browser-Origins für Cross-Origin-REST-Aufrufe. Leer = CORS aus; [\"*\"] nur für Entwicklung.",
   "config.help.north.rest.auth.basic_enabled": "Akzeptiere HTTP-Basic-Credentials auf geschützten Routen. Nützlich für curl + CI.",
   "config.help.north.rest.auth.bearer_enabled": "Akzeptiere Bearer-Tokens via Authorization-Header. Für Automation.",

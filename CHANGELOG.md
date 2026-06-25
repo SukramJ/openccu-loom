@@ -4,6 +4,25 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4]
+
+### Fixed
+
+- **Config fields without a description / translation.** The REST `public_url`,
+  `tls_cert_file` and `tls_key_file` fields rendered with a machine-humanised,
+  untranslated label and no help text. They now have proper labels and inline
+  help in English and German (the TLS help also explains that the cert/key paths
+  are both the HTTPS on/off switch and the location an uploaded certificate is
+  written to and hot-reloaded from).
+
+### Added
+
+- **Guard against undescribed config fields.** `TestConfigFieldsHaveLabelsAndHelp`
+  (in `tests/contract/`) walks every `cfg`-tagged config field and fails the
+  build unless each has a `config.field.<path>` label AND a `config.help.<path>`
+  description in both the EN and DE catalogues of `assets/ui/src/lib/i18n.ts`. A
+  matching Critical Rule was added to `CLAUDE.md`.
+
 ## [0.14.3]
 
 ### Changed

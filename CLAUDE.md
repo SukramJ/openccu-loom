@@ -212,6 +212,20 @@ changed carries a non-sentinel value and persists normally. When you add
 a `cfg:"secret"` field, keep this round-trip intact and extend the
 masked-secret tests under `internal/north/rest/handlers/`.
 
+### Every config field needs a label AND a help text in en + de
+
+The SPA section editor renders one field per `cfg:`-tagged config leaf (the
+list `config.ClassifyFields` feeds `GET /api/v1/config/schema`). Each field
+**must** have BOTH an explicit label (`config.field.<path>`) and an inline-help
+description (`config.help.<path>`) in **both** locales of
+`assets/ui/src/lib/i18n.ts` (the `EN` and `DE` catalogues). Without the label
+key the editor shows a machine-humanised, untranslated string; without the help
+key the hint row is dropped silently — both read to operators as "field without
+a description". When you add or rename a `cfg:` field, add all four entries.
+This is enforced by `TestConfigFieldsHaveLabelsAndHelp` (in `tests/contract/`),
+which fails the build listing every missing `EN`/`DE` × `field`/`help` entry —
+so `make test` is the safety net, not manual review.
+
 ### Interfaces in the consumer package, except for cross-cutting protocols
 
 Standard Go convention. The one exception: protocol interfaces used
