@@ -4,10 +4,12 @@
 package ui
 
 import (
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -163,11 +165,24 @@ func mustParseTemplates(catalogs *i18n.Catalogs, lang string) *templateSet {
 			}
 			return *b
 		},
-		"t": func(key string) string {
-			if catalogs == nil {
-				return key
+		// t translates key and optionally substitutes {name} placeholders from
+		// trailing (name, value) argument pairs, e.g.
+		//   {{t "setup.step.progress" "current" .Data.Step "total" .Data.Total}}
+		// turns "Step {current} of {total}" into "Step 1 of 4". Calls with no
+		// pairs behave as before.
+		"t": func(key string, args ...any) string {
+			s := key
+			if catalogs != nil {
+				s = catalogs.T(lang, key)
 			}
-			return catalogs.T(lang, key)
+			for i := 0; i+1 < len(args); i += 2 {
+				name, ok := args[i].(string)
+				if !ok {
+					continue
+				}
+				s = strings.ReplaceAll(s, "{"+name+"}", fmt.Sprint(args[i+1]))
+			}
+			return s
 		},
 	}
 	layoutBuf, err := fs.ReadFile(templateFS, "templates/layout.html")
