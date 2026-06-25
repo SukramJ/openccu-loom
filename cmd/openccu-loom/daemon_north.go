@@ -191,19 +191,40 @@ func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps
 		AuthResolve: auth.SessionMiddleware(d.sessions),
 		AuthRequire: nil, // UI is browser-facing, wizard runs unauthenticated
 	})
-	// First-run probe: no admin in SQLite AND none pinned in YAML → onboarding
-	// has not happened, so the SPA entrypoint should land on /setup.
+	// First-run probe: only force the /setup wizard when there is genuinely no
+	// way to authenticate yet (see firstRunNeedsSetup).
 	noUsers = func(ctx context.Context) bool {
-		if len(cfg.North.REST.Auth.Users) > 0 {
-			return false
-		}
 		if d.sqUsers == nil {
 			return false // no durable store → wizard can't run; don't trap the user
 		}
 		n, err := d.sqUsers.Count(ctx)
-		return err == nil && n == 0
+		if err != nil {
+			return false
+		}
+		return firstRunNeedsSetup(cfg, n)
 	}
 	return uiRouter, noUsers
+}
+
+// firstRunNeedsSetup reports whether the operator must be redirected to the
+// /setup wizard: ONLY when there is no way to authenticate yet — no local admin
+// AND no alternative provider. In the add-on CCU auth is on by default, so most
+// operators log in with their CCU account and never create a local admin;
+// treating that as "first run" would trap them on /setup (regression fixed in
+// 0.14.1).
+func firstRunNeedsSetup(cfg *config.Config, localUserCount int) bool {
+	switch {
+	case localUserCount > 0:
+		return false // a persisted local admin exists
+	case len(cfg.North.REST.Auth.Users) > 0:
+		return false // a YAML-pinned local user exists
+	case ccuAuthEnabled(cfg.North.REST.Auth.CCU):
+		return false // CCU-delegated login is available (ADR 0043)
+	case cfg.North.REST.Auth.OIDC.Enabled:
+		return false // OIDC SSO is available
+	default:
+		return true
+	}
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful

@@ -1,6 +1,6 @@
 {{define "body"}}
 <section class="card">
-  <p class="step-progress">{{t "setup.step.progress"}}</p>
+  <p class="step-progress">{{t "setup.step.progress" "current" .Data.Step "total" .Data.Total}}</p>
   <h1>{{t "setup.step3.title"}}</h1>
   {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
   <form method="post" action="/setup/ccu">

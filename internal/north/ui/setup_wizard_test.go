@@ -436,3 +436,76 @@ func TestSetupSessionStoreLookupMissing(t *testing.T) {
 		t.Fatal("Lookup must return nil for unknown token")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Fix: wizard step progress placeholder substitution (0.14.1)
+// ---------------------------------------------------------------------------
+
+// TestWizardStep1RendersSubstitutedProgress verifies that GET /setup renders
+// step 1 with the progress text "Step 1 of 4" and does NOT emit the raw
+// placeholders "{current}" or "{total}". This exercises the variadic t func
+// with (name, value) pairs wired through the template.
+func TestWizardStep1RendersSubstitutedProgress(t *testing.T) {
+	users := openWizardDB(t)
+	sessions := NewSetupSessionStore()
+	wd := SetupWizardDeps{Users: users, Sessions: sessions}
+	h := newWizardRouter(t, wd)
+
+	rr := getPage(t, h, "/setup", "")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("GET /setup: status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, "Step 1 of 4") {
+		t.Errorf("expected substituted progress text %q in body; got:\n%s", "Step 1 of 4", body)
+	}
+	if strings.Contains(body, "{current}") {
+		t.Errorf("raw placeholder {current} must not appear in rendered body")
+	}
+	if strings.Contains(body, "{total}") {
+		t.Errorf("raw placeholder {total} must not appear in rendered body")
+	}
+}
+
+// TestTemplateFuncTSubstitutesPlaceholders is a focused unit test of the
+// t FuncMap entry built by mustParseTemplates. It renders the setup_admin.html
+// template with known Step/Total data and asserts the expected substitution.
+// It also confirms that a key with no args (setup.step1.title) still returns
+// the plain translated string without noise.
+func TestTemplateFuncTSubstitutesPlaceholders(t *testing.T) {
+	cats, err := i18n.NewCatalogs()
+	if err != nil {
+		t.Fatalf("i18n.NewCatalogs: %v", err)
+	}
+	tpl := mustParseTemplates(cats, "en")
+
+	var buf strings.Builder
+	data := pageData{
+		Title: "Setup",
+		Lang:  "en",
+		Data: setupWizardPageData{
+			Step:  2,
+			Total: 4,
+		},
+	}
+	if err := tpl.pages["setup_admin.html"].ExecuteTemplate(&buf, "layout", data); err != nil {
+		t.Fatalf("ExecuteTemplate: %v", err)
+	}
+	out := buf.String()
+
+	// Placeholder substitution: step 2.
+	if !strings.Contains(out, "Step 2 of 4") {
+		t.Errorf("expected %q in rendered output; got:\n%s", "Step 2 of 4", out)
+	}
+	if strings.Contains(out, "{current}") {
+		t.Errorf("raw placeholder {current} must not appear after substitution")
+	}
+	if strings.Contains(out, "{total}") {
+		t.Errorf("raw placeholder {total} must not appear after substitution")
+	}
+
+	// No-args call: step title must appear as plain text.
+	if !strings.Contains(out, "Create administrator account") {
+		t.Errorf("expected step1.title translation in output")
+	}
+}

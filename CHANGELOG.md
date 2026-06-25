@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1]
+
+### Fixed
+
+- **First-run redirect no longer traps CCU/OIDC users on `/setup`.** 0.14.0
+  redirected the SPA entrypoint to the setup wizard whenever no *local* admin
+  existed — but in the HA add-on CCU-delegated login (ADR 0043) is on by
+  default, so operators authenticate with their CCU account and never create a
+  local admin. They landed on the "Create administrator account" wizard after
+  updating. The redirect now fires only when there is genuinely no way to
+  authenticate: no local user (YAML or DB) AND no CCU auth AND no OIDC.
+- **Setup wizard step indicator showed `Step {current} of {total}` literally.**
+  The server-rendered `t` template helper could not substitute placeholders. It
+  now accepts `(name, value)` pairs and the wizard passes the step numbers, so
+  it reads e.g. "Step 1 of 4".
+
 ## [0.14.0]
 
 ### Added
