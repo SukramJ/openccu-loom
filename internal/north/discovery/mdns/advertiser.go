@@ -161,19 +161,59 @@ func (m *Multicast) Start(_ context.Context) error {
 	if m.server != nil {
 		return ErrAlreadyStarted
 	}
-	server, err := zeroconf.Register(
-		m.svc.resolvedInstanceName(),
-		ServiceType,
-		Domain,
-		m.svc.Port,
-		m.svc.TXT,
-		nil, // nil → all multicast-capable interfaces
+
+	// Advertise only routable LAN addresses in the A/AAAA records, but keep
+	// broadcasting on every multicast interface (ifaces=nil) so peers on a
+	// container bridge — e.g. Home Assistant Core on the `hassio` network —
+	// still receive the packet. Without this, zeroconf.Register would put the
+	// daemon's container-bridge address (e.g. the hassio gateway 172.30.232.1)
+	// into the A-record and a discovering client would resolve the daemon to an
+	// address it cannot reach (a 404/connection failure). See routableAdvertiseIPs.
+	var (
+		server *zeroconf.Server
+		err    error
 	)
+	if ips := routableAdvertiseIPs(); len(ips) > 0 {
+		server, err = zeroconf.RegisterProxy(
+			m.svc.resolvedInstanceName(),
+			ServiceType,
+			Domain,
+			m.svc.Port,
+			m.proxyHost(),
+			ips,
+			m.svc.TXT,
+			nil, // nil → broadcast on all multicast interfaces
+		)
+	} else {
+		// No routable address survived the filter (host with only container
+		// interfaces, or enumeration failed) — fall back to library
+		// auto-detection so discovery still works rather than going silent.
+		server, err = zeroconf.Register(
+			m.svc.resolvedInstanceName(),
+			ServiceType,
+			Domain,
+			m.svc.Port,
+			m.svc.TXT,
+			nil,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("mdns: zeroconf register: %w", err)
 	}
 	m.server = server
 	return nil
+}
+
+// proxyHost returns the host label for the SRV/A records. RegisterProxy
+// (unlike Register) requires a non-empty host, so fall back to the
+// resolved instance name when the OS hostname is unavailable.
+func (m *Multicast) proxyHost() string {
+	if h, err := os.Hostname(); err == nil {
+		if h = strings.TrimSuffix(h, ".local"); h != "" {
+			return h
+		}
+	}
+	return m.svc.resolvedInstanceName()
 }
 
 // Stop tears down the published record. Idempotent.

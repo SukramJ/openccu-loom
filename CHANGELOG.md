@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **mDNS discovery no longer advertises container-internal addresses.** When the
+  daemon runs as a Home Assistant add-on with host networking, the zeroconf
+  advertiser put every host interface IP into the A-record — including the
+  `hassio`/Docker bridge addresses (e.g. `172.30.232.1`). A discovering client
+  (homematicip_local) resolved the daemon to that internal address and failed to
+  connect (`[404] GET http://172.30.232.1:8080/api/v1/info`). The advertiser now
+  publishes only routable LAN addresses (interfaces named like `docker*`, `br-*`,
+  `veth*`, `hassio`, `virbr*`, … are excluded, as are loopback/link-local IPs)
+  while still broadcasting on every interface so peers on a container bridge
+  still receive the announcement. If no routable address survives the filter it
+  falls back to the previous all-interfaces behaviour rather than going silent.
 - **Config fields without a description / translation.** The REST `public_url`,
   `tls_cert_file` and `tls_key_file` fields rendered with a machine-humanised,
   untranslated label and no help text. They now have proper labels and inline
