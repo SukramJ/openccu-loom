@@ -158,13 +158,18 @@ type uiMountDeps struct {
 	sqSections    *sqlitestore.ConfigSectionStore
 }
 
-// mountUIServer stands up the browser-facing UI router + server when the UI is
-// enabled (no-op otherwise). The first-run setup wizard is wired only when the
-// SQLite stores are available; otherwise the wizard stays disabled and the UI
-// serves the login/SPA surface alone.
-func mountUIServer(cfg *config.Config, logger *slog.Logger, servers *serverGroup, d uiMountDeps) {
+// buildBootstrapRouter builds the server-rendered HTMX bootstrap surface
+// (login, first-run setup wizard, about, OIDC HTMX flow). Since ADR 0044 it is
+// folded onto the REST listener (:8080) instead of a stand-alone :8081 server,
+// so the whole onboarding works through one port / HA Ingress. It returns the
+// router and a first-run probe (no admin user yet) for the SPA root redirect.
+//
+// Returns (nil, nil) when the UI is disabled. The setup wizard is wired only
+// when the SQLite stores are available; otherwise the bootstrap serves the
+// login surface alone (the wizard refuses without a durable store).
+func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps) (router http.Handler, noUsers func(context.Context) bool) {
 	if !cfg.North.UI.IsEnabled() {
-		return
+		return nil, nil
 	}
 	var setupDeps *ui.SetupWizardDeps
 	if d.sqUsers != nil {
@@ -186,7 +191,19 @@ func mountUIServer(cfg *config.Config, logger *slog.Logger, servers *serverGroup
 		AuthResolve: auth.SessionMiddleware(d.sessions),
 		AuthRequire: nil, // UI is browser-facing, wizard runs unauthenticated
 	})
-	servers.add("ui", rest.NewServer(cfg.North.UI.Listen, uiRouter, logger))
+	// First-run probe: no admin in SQLite AND none pinned in YAML → onboarding
+	// has not happened, so the SPA entrypoint should land on /setup.
+	noUsers = func(ctx context.Context) bool {
+		if len(cfg.North.REST.Auth.Users) > 0 {
+			return false
+		}
+		if d.sqUsers == nil {
+			return false // no durable store → wizard can't run; don't trap the user
+		}
+		n, err := d.sqUsers.Count(ctx)
+		return err == nil && n == 0
+	}
+	return uiRouter, noUsers
 }
 
 // awaitShutdown blocks until ctx is cancelled, then runs the graceful

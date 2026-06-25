@@ -1,6 +1,6 @@
 # version MUST equal the release tag and is bumped in the release commit.
 name: OpenCCU-Loom
-version: "0.13.3"
+version: "0.14.0"
 slug: openccu-loom
 description: >-
   Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket
@@ -23,6 +23,10 @@ init: false
 
 ingress: true
 ingress_port: 8080
+# Ingress is restricted to Home Assistant administrators. The HA Ingress
+# auth-passthrough (north.rest.auth.ha_ingress, ADR 0044) trusts that, so
+# panel_admin MUST stay true — the add-on cannot verify it at runtime.
+panel_admin: true
 panel_icon: mdi:home-assistant
 panel_title: "OpenCCU-Loom"
 
@@ -30,12 +34,10 @@ ports:
   8080/tcp: 8080
   8120/tcp: 8120
   8129/tcp: 8129
-  8081/tcp: 8081
 ports_description:
-  8080/tcp: "REST API + Config UI (SPA)"
+  8080/tcp: "REST API + Config UI (SPA + onboarding)"
   8120/tcp: "XML-RPC callback — CCU pushes events to the daemon on this port"
   8129/tcp: "BIN-RPC callback — CUxD pushes events to the daemon on this port"
-  8081/tcp: "Pre-auth bootstrap (login page, OIDC callback, /health, /about)"
 
 map:
   - addon_config:rw

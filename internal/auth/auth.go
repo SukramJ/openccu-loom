@@ -23,6 +23,7 @@ const (
 	SchemeBasic   Scheme = "basic"
 	SchemeBearer  Scheme = "bearer"
 	SchemeSession Scheme = "session" // reserved for future session auth
+	SchemeIngress Scheme = "ingress" // HA Ingress auth passthrough (ADR 0044)
 )
 
 // Role is the coarse-grained permission level.

@@ -37,6 +37,10 @@ func sectionTarget(sec Section) any {
 		// no-ops — the target is returned only to keep the config-backed
 		// sections symmetric with applySection/marshalSection.
 		return new(config.CCUAuthConfig)
+	case SectionHAIngress:
+		// No secret fields — trust is by network + build stamp, not a
+		// stored credential. Returned only for section symmetry.
+		return new(config.HAIngressConfig)
 	case SectionUI:
 		return new(config.NorthUI)
 	case SectionCallback:

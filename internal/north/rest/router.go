@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -166,7 +167,17 @@ type Deps struct {
 	// cross-origin requests would need CORS gymnastics. Mounting here
 	// keeps the auth boundary simple.
 	SPAHandler http.Handler
-	Backup     handlers.BackupService
+	// Bootstrap serves the server-rendered HTMX bootstrap surface (login,
+	// first-run /setup wizard, /about, OIDC HTMX flow) on the SAME listener
+	// as the SPA, so the whole onboarding works through one port / HA Ingress
+	// (ADR 0044). Nil disables those routes. Folded in from the former
+	// stand-alone :8081 UI listener.
+	Bootstrap http.Handler
+	// NoUsers reports whether no admin user exists yet (first run). When true
+	// and the request carries no resolved identity, the root handler redirects
+	// the SPA entrypoint to /setup instead of /app/. Nil ⇒ never first-run.
+	NoUsers func(context.Context) bool
+	Backup  handlers.BackupService
 	// CentralLinks toggles CCU click-event forwarding for press-event
 	// channels. Nil disables the endpoint trio
 	// (`GET|POST|DELETE /api/v1/devices/{addr}/central-links`).
@@ -413,8 +424,21 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		// <prefix>/app/. A bare "/app/" would resolve against the Home
 		// Assistant origin and bypass the Ingress proxy.
 		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+			prefix := safeIngressPrefix(req)
+			// First run: no admin user exists yet and the request carries no
+			// resolved identity → send the operator to the setup wizard
+			// (served by d.Bootstrap on this same listener) instead of the
+			// SPA. A resolved identity (real login or HA Ingress passthrough)
+			// means setup is done → fall through to the SPA. prefix is "" or a
+			// validated local path (safeIngressPrefix rejects scheme/host).
+			if d.NoUsers != nil && d.NoUsers(req.Context()) {
+				if _, ok := auth.IdentityFrom(req.Context()); !ok {
+					http.Redirect(w, req, prefix+"/setup", http.StatusSeeOther) //nolint:gosec // G710: prefix validated to a local path
+					return
+				}
+			}
 			target := "/app/"
-			if prefix := safeIngressPrefix(req); prefix != "" {
+			if prefix != "" {
 				target = prefix + "/app/"
 			}
 			// target is either the constant "/app/" or a validated local
@@ -424,6 +448,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		})
 		r.Handle("/app", http.RedirectHandler("/app/", http.StatusMovedPermanently))
 		r.Handle("/app/*", http.StripPrefix("/app/", d.SPAHandler))
+	}
+
+	// Server-rendered bootstrap surface (login / first-run setup / about /
+	// server-rendered /health diagnosis / OIDC HTMX / its /ui/assets CSS)
+	// folded onto this listener from the former :8081 UI server, so the whole
+	// onboarding + SPA-down diagnosis works through one port (HA Ingress). None
+	// of these overlap with /api/v1, /app or the root / — and they run
+	// unauthenticated by design (the wizard guards itself on the user count).
+	if d.Bootstrap != nil {
+		for _, p := range []string{"/login", "/logout", "/setup", "/about", "/health", "/ui"} {
+			r.Handle(p, d.Bootstrap)
+			r.Handle(p+"/*", d.Bootstrap)
+		}
 	}
 
 	r.NotFound(func(w http.ResponseWriter, req *http.Request) {

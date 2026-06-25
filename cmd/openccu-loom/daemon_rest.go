@@ -151,9 +151,13 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 			auth.ChainedTokenStore{Primary: d.sqTokens, Secondary: d.tokens},
 		)
 		// Re-bind the resolver after swapping the middleware so the
-		// REST chain picks up the chained stores.
+		// REST chain picks up the chained stores. The HA Ingress
+		// passthrough (ADR 0044) is the INNERMOST resolver so real
+		// credentials (bearer/session/basic) always win — it only
+		// injects an admin identity when nothing else resolved.
+		ingressMW := auth.IngressPassthrough(buildIngressTrust(cfg, logger), logger)
 		restResolve = func(next http.Handler) http.Handler {
-			return authMw.Resolve(d.sessionResolve(next))
+			return authMw.Resolve(d.sessionResolve(ingressMW(next)))
 		}
 	}
 
