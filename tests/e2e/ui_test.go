@@ -162,13 +162,14 @@ func TestUISPAHashedAssetCacheable(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// HTMX bootstrap surface (UI listener)
+// HTMX bootstrap surface (folded onto the REST listener — ADR 0044)
 // ─────────────────────────────────────────────────────────────────
 
-// TestUIHTMXRootRedirectsToHealth asserts that GET / on the UI
-// listener 303-redirects to /health. The SPA-down diagnosis page is
-// the canonical landing-page for the bootstrap surface.
-func TestUIHTMXRootRedirectsToHealth(t *testing.T) {
+// TestUIRootRedirectsToOnboarding asserts that GET / redirects into the SPA
+// (/app/), or to the first-run setup wizard (/setup) when no admin user exists
+// yet. Since 0.14.0 the bootstrap shares the REST listener and the root is
+// owned by the SPA/onboarding flow — the old /→/health redirect is gone.
+func TestUIRootRedirectsToOnboarding(t *testing.T) {
 	t.Parallel()
 	h := harness.Start(t, harness.Options{})
 
@@ -182,11 +183,11 @@ func TestUIHTMXRootRedirectsToHealth(t *testing.T) {
 		t.Fatalf("GET /: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("GET /: status=%d, want 303", resp.StatusCode)
+	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+		t.Fatalf("GET /: status=%d, want a 3xx redirect", resp.StatusCode)
 	}
-	if loc := resp.Header.Get("Location"); loc != "/health" {
-		t.Errorf("Location=%q, want /health", loc)
+	if loc := resp.Header.Get("Location"); loc != "/app/" && loc != "/setup" {
+		t.Errorf("Location=%q, want /app/ or /setup", loc)
 	}
 }
 

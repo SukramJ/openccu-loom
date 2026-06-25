@@ -451,12 +451,13 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	}
 
 	// Server-rendered bootstrap surface (login / first-run setup / about /
-	// OIDC HTMX) folded onto this listener from the former :8081 UI server, so
-	// the whole onboarding works through one port (HA Ingress). The paths do
-	// not overlap with /api/v1, /app or / — and they run unauthenticated by
-	// design (the wizard guards itself on the user count).
+	// server-rendered /health diagnosis / OIDC HTMX / its /ui/assets CSS)
+	// folded onto this listener from the former :8081 UI server, so the whole
+	// onboarding + SPA-down diagnosis works through one port (HA Ingress). None
+	// of these overlap with /api/v1, /app or the root / — and they run
+	// unauthenticated by design (the wizard guards itself on the user count).
 	if d.Bootstrap != nil {
-		for _, p := range []string{"/login", "/logout", "/setup", "/about"} {
+		for _, p := range []string{"/login", "/logout", "/setup", "/about", "/health", "/ui"} {
 			r.Handle(p, d.Bootstrap)
 			r.Handle(p+"/*", d.Bootstrap)
 		}

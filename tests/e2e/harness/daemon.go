@@ -109,7 +109,6 @@ type Harness struct {
 
 	// Effective listener addresses, populated before Start returns.
 	restAddr     string // 127.0.0.1:<port>
-	uiAddr       string
 	callbackPort int
 	binPort      int
 	mqttBroker   string // tcp://127.0.0.1:<port>, "" if MQTT disabled
@@ -162,7 +161,6 @@ func Start(t *testing.T, opts Options) *Harness {
 	h.callbackPort = pickFreePort(t)
 	h.binPort = pickFreePort(t)
 	h.restAddr = loopbackAddr(restPort)
-	h.uiAddr = loopbackAddr(uiPort)
 
 	h.dataDir = t.TempDir()
 	h.cfgPath = filepath.Join(h.dataDir, "config.yaml")
@@ -272,8 +270,11 @@ func (h *Harness) CCU() *MockCCU { return h.ccu }
 // "http://127.0.0.1:53122".
 func (h *Harness) RESTBase() string { return "http://" + h.restAddr }
 
-// UIBase returns the daemon's UI base URL.
-func (h *Harness) UIBase() string { return "http://" + h.uiAddr }
+// UIBase returns the base URL of the server-rendered bootstrap surface
+// (login / setup / about / health / OIDC). Since 0.14.0 it is folded onto the
+// REST listener (ADR 0044) — there is no separate UI listener anymore — so
+// this returns the REST base.
+func (h *Harness) UIBase() string { return "http://" + h.restAddr }
 
 // locateDaemonBinary resolves the path to ./bin/openccu-loom relative
 // to the repo root. Tests fail with a clear message if the binary
