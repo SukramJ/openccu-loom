@@ -80,7 +80,7 @@ func NewRouter(d Deps) *chi.Mux {
 			pr.Use(d.AuthRequire)
 		}
 		pr.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			http.Redirect(w, r, "/health", http.StatusSeeOther)
+			uiRedirect(w, r, "/health")
 		})
 		pr.Get("/health", handleHealth(d, tpl))
 		pr.Get("/about", handleAbout(d, tpl))
@@ -141,9 +141,13 @@ func handleSetup(d Deps, tpl *templateSet) http.HandlerFunc {
 
 // pageData is the common top-level envelope every page renders.
 type pageData struct {
-	Title     string
-	Version   string
-	Lang      string
+	Title   string
+	Version string
+	Lang    string
+	// BasePath is the HA Ingress prefix (or "" for direct access). It backs
+	// the layout's <base href> so every relative URL in the bootstrap pages
+	// resolves through the Ingress proxy rather than the HA origin.
+	BasePath  string
 	CSRFToken string
 	Identity  auth.Identity
 	Data      any
@@ -216,6 +220,7 @@ func mustParseTemplates(catalogs *i18n.Catalogs, lang string) *templateSet {
 
 func render(set *templateSet, w http.ResponseWriter, r *http.Request, bodyFile string, data pageData) {
 	data.Version = build.Version
+	data.BasePath = ingressPrefix(r)
 	data.CSRFToken = auth.CSRFToken(r.Context())
 	if id, ok := auth.IdentityFrom(r.Context()); ok {
 		data.Identity = id

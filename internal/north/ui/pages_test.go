@@ -74,7 +74,7 @@ func TestUILayoutLinksToSPA(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/about", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
-	if !strings.Contains(rr.Body.String(), `href="/app/"`) {
+	if !strings.Contains(rr.Body.String(), `href="app/"`) {
 		t.Fatalf("SPA link missing in layout")
 	}
 }

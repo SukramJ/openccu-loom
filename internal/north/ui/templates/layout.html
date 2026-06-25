@@ -3,31 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {{/* <base> makes every relative URL below resolve through the HA Ingress
+       prefix (or "/" for direct access), so the bootstrap surface works on the
+       shared listener behind Ingress. Keep all URLs in the bootstrap
+       templates relative (no leading slash). */}}
+  <base href="{{.BasePath}}/">
   <meta name="csrf-token" content="{{.CSRFToken}}">
   <meta name="theme-color" content="#1E40AF">
   <title>{{.Title}} · openccu-loom</title>
-  <link rel="stylesheet" href="/ui/assets/app.css">
-  <link rel="icon" href="/ui/assets/logo/favicon.svg" type="image/svg+xml">
-  <link rel="icon" href="/ui/assets/logo/favicon-32.png" type="image/png" sizes="32x32">
-  <link rel="icon" href="/ui/assets/logo/favicon-16.png" type="image/png" sizes="16x16">
-  <link rel="apple-touch-icon" href="/ui/assets/logo/apple-touch-icon-180.png">
+  <link rel="stylesheet" href="ui/assets/app.css">
+  <link rel="icon" href="ui/assets/logo/favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="ui/assets/logo/favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="ui/assets/logo/favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="ui/assets/logo/apple-touch-icon-180.png">
 </head>
 <body>
   <header>
     <nav>
-      <a href="/health" class="brand" aria-label="openccu-loom">
-        <img src="/ui/assets/logo/wordmark.svg" alt="openccu-loom" height="28">
+      <a href="health" class="brand" aria-label="openccu-loom">
+        <img src="ui/assets/logo/wordmark.svg" alt="openccu-loom" height="28">
       </a>
       <span class="spacer"></span>
-      <a href="/health">{{t "nav.health"}}</a>
-      <a href="/about">{{t "nav.about"}}</a>
+      <a href="health">{{t "nav.health"}}</a>
+      <a href="about">{{t "nav.about"}}</a>
       {{if .Identity.Subject}}
-        <form method="post" action="/logout" class="inline">
+        <form method="post" action="logout" class="inline">
           <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
           <button type="submit" class="linklike">{{t "nav.logout"}} ({{.Identity.Subject}})</button>
         </form>
       {{else}}
-        <a href="/login">{{t "nav.login"}}</a>
+        <a href="login">{{t "nav.login"}}</a>
       {{end}}
     </nav>
   </header>
@@ -35,7 +40,7 @@
     {{block "body" .}}{{end}}
   </main>
   <footer>
-    <small>openccu-loom · v{{.Version}} · {{t "layout.spa_hint"}} <a href="/app/">/app/</a></small>
+    <small>openccu-loom · v{{.Version}} · {{t "layout.spa_hint"}} <a href="app/">/app/</a></small>
   </footer>
 </body>
 </html>{{end}}

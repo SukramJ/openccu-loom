@@ -50,7 +50,7 @@ func handleSetupWizard(d Deps, tpl *templateSet, wd SetupWizardDeps) http.Handle
 		}
 		// Single-shot guarantee: redirect to /login when any user already exists.
 		if count, err := wd.Users.Count(r.Context()); err == nil && count > 0 {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			uiRedirect(w, r, "/login")
 			return
 		}
 		sess := resolveOrIssueSession(w, r, wd.Sessions)
@@ -77,7 +77,7 @@ func handleSetupAdmin(wd SetupWizardDeps) http.HandlerFunc {
 			return
 		}
 		if count, err := wd.Users.Count(r.Context()); err == nil && count > 0 {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			uiRedirect(w, r, "/login")
 			return
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
@@ -89,7 +89,7 @@ func handleSetupAdmin(wd SetupWizardDeps) http.HandlerFunc {
 		pass := r.FormValue("password")
 		confirm := r.FormValue("confirm")
 		if user == "" || len(pass) < 8 || pass != confirm {
-			http.Redirect(w, r, "/setup?wzerr=admin", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?wzerr=admin")
 			return
 		}
 		sess := resolveOrIssueSession(w, r, wd.Sessions)
@@ -100,7 +100,7 @@ func handleSetupAdmin(wd SetupWizardDeps) http.HandlerFunc {
 		wd.Sessions.Save(sess.ID, state)
 		slog.InfoContext(r.Context(), "setup.wizard.step1.ok",
 			slog.String("subject", user))
-		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		uiRedirect(w, r, "/setup")
 	}
 }
 
@@ -121,11 +121,11 @@ func handleSetupLocale(wd SetupWizardDeps) http.HandlerFunc {
 		locale := r.FormValue("locale")
 		theme := r.FormValue("theme")
 		if locale != "de" && locale != "en" {
-			http.Redirect(w, r, "/setup?wzerr=locale", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?wzerr=locale")
 			return
 		}
 		if theme != "light" && theme != "dark" && theme != "system" {
-			http.Redirect(w, r, "/setup?wzerr=theme", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?wzerr=theme")
 			return
 		}
 		sess := resolveOrIssueSession(w, r, wd.Sessions)
@@ -136,7 +136,7 @@ func handleSetupLocale(wd SetupWizardDeps) http.HandlerFunc {
 		wd.Sessions.Save(sess.ID, state)
 		slog.InfoContext(r.Context(), "setup.wizard.step2.ok",
 			slog.String("locale", locale), slog.String("theme", theme))
-		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		uiRedirect(w, r, "/setup")
 	}
 }
 
@@ -160,14 +160,14 @@ func handleSetupCCU(wd SetupWizardDeps) http.HandlerFunc {
 			state.SkipCCU = true
 			state.Step = 4
 			wd.Sessions.Save(sess.ID, state)
-			http.Redirect(w, r, "/setup", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup")
 			return
 		}
 		name := strings.TrimSpace(r.FormValue("ccu_name"))
 		host := strings.TrimSpace(r.FormValue("ccu_host"))
 		ifaces := r.Form["ccu_interfaces"]
 		if name == "" || host == "" || len(ifaces) == 0 {
-			http.Redirect(w, r, "/setup?wzerr=ccu", http.StatusSeeOther)
+			uiRedirect(w, r, "/setup?wzerr=ccu")
 			return
 		}
 		state.CCUName = name
@@ -180,7 +180,7 @@ func handleSetupCCU(wd SetupWizardDeps) http.HandlerFunc {
 		wd.Sessions.Save(sess.ID, state)
 		slog.InfoContext(r.Context(), "setup.wizard.step3.ok",
 			slog.String("ccu_name", name), slog.String("ccu_host", host))
-		http.Redirect(w, r, "/setup", http.StatusSeeOther)
+		uiRedirect(w, r, "/setup")
 	}
 }
 
@@ -206,7 +206,7 @@ func handleSetupMQTT(d Deps, wd SetupWizardDeps) http.HandlerFunc {
 			enabled := r.FormValue("mqtt_enabled") == "1"
 			broker := strings.TrimSpace(r.FormValue("mqtt_broker_url"))
 			if enabled && broker == "" {
-				http.Redirect(w, r, "/setup?wzerr=mqtt", http.StatusSeeOther)
+				uiRedirect(w, r, "/setup?wzerr=mqtt")
 				return
 			}
 			state.MQTTEnabled = enabled
@@ -227,7 +227,7 @@ func handleSetupMQTT(d Deps, wd SetupWizardDeps) http.HandlerFunc {
 		wd.Sessions.Drop(sess.ID)
 		slog.InfoContext(r.Context(), "setup.wizard.complete",
 			slog.String("subject", state.AdminUsername))
-		http.Redirect(w, r, "/login?setup_done=1", http.StatusSeeOther)
+		uiRedirect(w, r, "/login?setup_done=1")
 	}
 }
 

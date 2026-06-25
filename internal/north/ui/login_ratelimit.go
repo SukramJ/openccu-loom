@@ -95,7 +95,7 @@ func (l *loginRateLimiter) guard(next http.HandlerFunc) http.HandlerFunc {
 		ok, retry := l.allow(clientIP(r))
 		if !ok {
 			w.Header().Set("Retry-After", strconv.Itoa(retry))
-			http.Redirect(w, r, "/login?error=1", http.StatusSeeOther)
+			uiRedirect(w, r, "/login?error=1")
 			return
 		}
 		next(w, r)

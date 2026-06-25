@@ -3,7 +3,7 @@
   <p class="step-progress">{{t "setup.step.progress" "current" .Data.Step "total" .Data.Total}}</p>
   <h1>{{t "setup.step4.title"}}</h1>
   {{if .Data.Error}}<p class="error">{{t "setup.error"}}</p>{{end}}
-  <form method="post" action="/setup/mqtt">
+  <form method="post" action="setup/mqtt">
     <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
     <label>
       <input type="checkbox" name="mqtt_enabled" value="1"{{if .Data.State.MQTTEnabled}} checked{{end}}>
