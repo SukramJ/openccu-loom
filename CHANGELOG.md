@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.14.5]
+## [0.14.4]
 
 ### Fixed
 
@@ -19,11 +19,6 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   while still broadcasting on every interface so peers on a container bridge
   still receive the announcement. If no routable address survives the filter it
   falls back to the previous all-interfaces behaviour rather than going silent.
-
-## [0.14.4]
-
-### Fixed
-
 - **Config fields without a description / translation.** The REST `public_url`,
   `tls_cert_file` and `tls_key_file` fields rendered with a machine-humanised,
   untranslated label and no help text. They now have proper labels and inline
