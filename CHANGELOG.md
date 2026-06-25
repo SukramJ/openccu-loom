@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.5]
+
+### Fixed
+
+- **Critical: configuration and database were lost on every restart / add-on
+  update.** When the daemon started without a config file — the standard HA
+  add-on case — it used `config.Default()`, which ignored the environment
+  overlay and therefore `OPENCCU_LOOM_DATA_DIR`. The add-on sets that to `/data`
+  (the only persistent location), but the daemon fell back to the default
+  `./var` inside the ephemeral container, so the SQLite database lived there and
+  every restart/update started on an empty database — losing configured CCUs,
+  users and all SPA-edited config. The no-config-file path now applies the env
+  overlay (`config.DefaultWithEnv`), so `OPENCCU_LOOM_DATA_DIR` is honoured and
+  state persists under `/data`. **After updating, re-create your CCU and admin
+  user once more; from then on they survive restarts and updates.**
+
 ## [0.14.4]
 
 ### Fixed

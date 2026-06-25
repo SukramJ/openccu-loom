@@ -98,7 +98,14 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 
 	var cfg *config.Config
 	if effectiveConfig == "" {
-		cfg = config.Default()
+		// No config file: still apply the env overlay so OPENCCU_LOOM_* (above
+		// all OPENCCU_LOOM_DATA_DIR, which the HA add-on sets to /data) takes
+		// effect. A bare config.Default() here would pin DataDir to the
+		// ephemeral "./var" and lose the database on every restart/update.
+		cfg = config.DefaultWithEnv()
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
 		_, _ = fmt.Fprintln(stderr, "openccu-loom: no config file found, running with defaults")
 	} else {
 		if autoDiscovered {

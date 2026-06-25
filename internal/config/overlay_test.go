@@ -82,3 +82,23 @@ func TestOverlayFromEnvIgnoresEmptyAndInvalid(t *testing.T) {
 type mapEnv map[string]string
 
 func (m mapEnv) Get(k string) string { return m[k] }
+
+// TestDefaultWithEnvAppliesDataDir is the regression guard for the data-loss
+// bug: a daemon with no config file must still place its data dir where
+// OPENCCU_LOOM_DATA_DIR points (the HA add-on sets it to /data) instead of the
+// ephemeral "./var" default. See DefaultWithEnv.
+func TestDefaultWithEnvAppliesDataDir(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_DATA_DIR", "/data")
+	if got := DefaultWithEnv().DataDir; got != "/data" {
+		t.Errorf("DefaultWithEnv().DataDir = %q, want /data (OPENCCU_LOOM_DATA_DIR must apply without a config file)", got)
+	}
+}
+
+// TestDefaultWithEnvKeepsDefaultWhenUnset confirms the overlay is a no-op for an
+// empty/unset variable, so the documented "./var" default still applies.
+func TestDefaultWithEnvKeepsDefaultWhenUnset(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_DATA_DIR", "")
+	if got := DefaultWithEnv().DataDir; got != "./var" {
+		t.Errorf("DefaultWithEnv().DataDir = %q, want ./var (default preserved when env unset)", got)
+	}
+}
