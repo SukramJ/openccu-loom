@@ -54,6 +54,22 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) {
 	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
 }
 
+// DefaultWithEnv returns [Default] with the environment overlay applied.
+//
+// A daemon started without any config file (no --config, none discovered —
+// the standard HA add-on / minimal Docker case) MUST still honour the
+// OPENCCU_LOOM_* overrides, above all OPENCCU_LOOM_DATA_DIR: it decides where
+// the SQLite database and all writable state live. Without the overlay the
+// daemon silently falls back to the "./var" default inside the (ephemeral)
+// container, so every restart/update starts on an empty database and loses the
+// operator's CCUs, users and config. Always go through this constructor for the
+// no-config-file path; never use a bare [Default] there.
+func DefaultWithEnv() *Config {
+	cfg := Default()
+	cfg.OverlayFromEnv(nil)
+	return cfg
+}
+
 // LoadWithEnv combines [Load] + [Config.OverlayFromEnv] in one call.
 // The env layer wins over the YAML; defaults still apply for fields
 // neither YAML nor env populates.
