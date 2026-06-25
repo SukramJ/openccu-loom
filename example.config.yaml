@@ -127,8 +127,23 @@ north:
       #     "8": admin         # defaults: 8->admin, 2->operator, 1->viewer
       #     "2": operator
       #     "1": viewer
+      # HA Ingress auth passthrough — supervised HA add-on only (ADR 0044).
+      # When enabled, a request proxied by the HA Supervisor (identified by
+      # its TCP peer address in trusted_proxy_cidr AND the X-Ingress-Path
+      # header) is accepted as the configured role WITHOUT a local credential.
+      # Safe only because the add-on's config.yaml keeps panel_admin: true,
+      # which restricts Ingress to HA admins. Default off — opt in explicitly.
+      # A real Bearer token / session always wins over passthrough.
+      # ha_ingress:
+      #   enabled: false                  # opt-in; default false
+      #   trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
+      #   role: admin                     # granted role: admin | operator | viewer
+  # DEPRECATED since 0.14.0: the bootstrap surface (login, /setup, OIDC
+  # callback, /health, /about) is now served on the REST listener (:8080).
+  # north.ui.listen is silently ignored; the daemon logs a startup warning
+  # when it is set. Remove this key — it has no effect.
   ui:
-    listen: ":8081"
+    listen: ":8081"  # deprecated — ignored since 0.14.0; safe to remove
   # MCP server (Model Context Protocol) — exposes the daemon to LLM
   # agents as tools over Streamable HTTP, mounted on the REST listener
   # behind the same auth chain. Disabled by default. Read-only even when
@@ -161,7 +176,7 @@ env_file: .env
 # Settings tab.
 #
 # Leave the lists empty if you want to bootstrap a fresh install
-# entirely through the /setup wizard at http://<host>:8081/setup.
+# entirely through the /setup wizard at http://<host>:8080/setup.
 
 centrals: []
 #  - name: Home

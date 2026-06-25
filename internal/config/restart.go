@@ -40,5 +40,7 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	// The login chain (incl. the CCU auth provider) is wired once at
 	// boot, so any change to the CCU-auth block is restart-required.
 	add(!reflect.DeepEqual(boot.North.REST.Auth.CCU, eff.North.REST.Auth.CCU), "north.rest.auth.ccu")
+	// The HA Ingress auth-passthrough middleware is also wired once at boot.
+	add(!reflect.DeepEqual(boot.North.REST.Auth.HAIngress, eff.North.REST.Auth.HAIngress), "north.rest.auth.ha_ingress")
 	return out
 }

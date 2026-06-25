@@ -118,6 +118,10 @@ func csrfSchemeExempt(s Scheme) bool {
 	switch s {
 	case SchemeBasic, SchemeBearer:
 		return true
+	case SchemeIngress:
+		// Per-request, proxy-trusted (network + X-Ingress-Path), not a
+		// browser-ambient cookie — the double-submit defence does not apply.
+		return true
 	case SchemeSession:
 		return false
 	}

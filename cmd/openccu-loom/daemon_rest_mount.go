@@ -38,6 +38,12 @@ type restMountDeps struct {
 	matter matterWiring
 	reload *reloadDeps
 
+	// bootstrap is the server-rendered HTMX onboarding surface (login / setup
+	// / about), folded onto the REST listener (ADR 0044). noUsers reports the
+	// first-run state for the SPA→/setup redirect. Both may be nil (UI off).
+	bootstrap http.Handler
+	noUsers   func(context.Context) bool
+
 	healthAdapter          *adapter.HealthAdapter
 	configAdapter          *adapter.ConfigAdapter
 	devicesAdapter         *adapter.DevicesAdapter
@@ -179,6 +185,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
 		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:        ui.SPAHandler(),
+		Bootstrap:         d.bootstrap,
+		NoUsers:           d.noUsers,
 		Backup:            d.backupAdapter,
 		CacheReset:        d.cacheResetSvc,
 		EditSessions:      handlers.NewEditSessions(),

@@ -28,6 +28,10 @@ const (
 	// login provider (ADR 0043). Restart-required: the login chain is
 	// wired once at boot.
 	SectionCCUAuth Section = "north.rest.auth.ccu"
+	// SectionHAIngress carries [config.HAIngressConfig] — the opt-in HA
+	// Ingress auth passthrough (ADR 0044). Restart-required: the auth
+	// middleware is wired once at boot.
+	SectionHAIngress Section = "north.rest.auth.ha_ingress"
 	// SectionUI carries [config.NorthUI] (enabled toggle only —
 	// bind address is bootstrap).
 	SectionUI Section = "north.ui"
@@ -60,6 +64,7 @@ func AllSections() []Section {
 		SectionREST,
 		SectionOIDC,
 		SectionCCUAuth,
+		SectionHAIngress,
 		SectionUI,
 		SectionCallback,
 		SectionCCUData,

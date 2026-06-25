@@ -390,6 +390,14 @@ const EN: Catalog = {
   "config.field.north.rest.auth.tokens": "Bootstrap API tokens",
   "config.field.north.rest.auth.oidc.client_secret": "OIDC client secret",
   "config.field.north.rest.auth.oidc.role_claim": "OIDC role claim",
+  "config.field.north.rest.auth.ccu.enabled": "CCU login enabled",
+  "config.field.north.rest.auth.ccu.primary": "CCU is primary",
+  "config.field.north.rest.auth.ccu.central": "Central (CCU)",
+  "config.field.north.rest.auth.ccu.min_user_level": "Minimum user level",
+  "config.field.north.rest.auth.ccu.role_mapping": "Role mapping",
+  "config.field.north.rest.auth.ha_ingress.enabled": "HA Ingress passthrough",
+  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr": "Trusted proxy CIDR",
+  "config.field.north.rest.auth.ha_ingress.role": "Granted role",
   "config.field.north.rest.openapi_spec_path": "OpenAPI spec path",
   "config.field.north.rest.openapi_validate": "Validate requests against OpenAPI spec",
   "config.field.north.rest.ws.replay_capacity": "WebSocket replay ring-buffer size",
@@ -541,6 +549,22 @@ const EN: Catalog = {
     "Confidential client secret registered with the IdP. Leave empty for public clients (PKCE-only). Prefer setting via environment variable.",
   "config.help.north.rest.auth.oidc.role_claim":
     "JWT claim name the daemon reads to determine the user role (admin / user). Defaults to \"role\".",
+  "config.help.north.rest.auth.ccu.enabled":
+    "Delegate login to the named CCU's user database. Users sign in with their CCU accounts; local users remain as a break-glass fallback. Restart required.",
+  "config.help.north.rest.auth.ccu.primary":
+    "When on, the CCU is tried first and local users are the break-glass fallback. Off makes local users primary and the CCU the last resort. Break-glass holds either way.",
+  "config.help.north.rest.auth.ccu.central":
+    "Name of the configured central whose user database authenticates logins. Empty selects the first configured central.",
+  "config.help.north.rest.auth.ccu.min_user_level":
+    "Reject CCU users below this UserLevel (8 admin, 2 operator, 1 guest; 0 is always denied). Default 1 admits any real user.",
+  "config.help.north.rest.auth.ccu.role_mapping":
+    "Override the default CCU UserLevel→Loom-role mapping. Keys are the UserLevel as a string (\"8\", \"2\", \"1\"); values are \"admin\" / \"operator\" / \"viewer\". Empty uses the defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
+  "config.help.north.rest.auth.ha_ingress.enabled":
+    "Trust Home Assistant Ingress: when running as the supervised add-on, a request proxied by the Supervisor counts as an authenticated admin — no login. OFF by default; only safe with the add-on's panel_admin: true (admins-only Ingress). Real tokens/sessions still win. Restart required.",
+  "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
+    "Network the Ingress request's real peer must come from. Empty uses the HA Supervisor default 172.30.32.0/23. X-Forwarded-For is never trusted.",
+  "config.help.north.rest.auth.ha_ingress.role":
+    "Loom role granted to a trusted Ingress request: \"admin\" (default), \"operator\" or \"viewer\".",
   "config.help.north.rest.openapi_spec_path":
     "Override path for the OpenAPI YAML. Defaults to the copy embedded in the binary at build time. Expert: set only when hot-patching the spec during development.",
   "config.help.north.rest.openapi_validate":
@@ -2111,6 +2135,14 @@ const DE: Catalog = {
   "config.field.north.rest.auth.tokens": "Bootstrap-API-Tokens",
   "config.field.north.rest.auth.oidc.client_secret": "OIDC Client-Secret",
   "config.field.north.rest.auth.oidc.role_claim": "OIDC-Rollen-Claim",
+  "config.field.north.rest.auth.ccu.enabled": "CCU-Anmeldung aktiv",
+  "config.field.north.rest.auth.ccu.primary": "CCU ist primär",
+  "config.field.north.rest.auth.ccu.central": "Zentrale (CCU)",
+  "config.field.north.rest.auth.ccu.min_user_level": "Minimales User-Level",
+  "config.field.north.rest.auth.ccu.role_mapping": "Rollen-Zuordnung",
+  "config.field.north.rest.auth.ha_ingress.enabled": "HA-Ingress-Passthrough",
+  "config.field.north.rest.auth.ha_ingress.trusted_proxy_cidr": "Vertrauenswürdiges Proxy-CIDR",
+  "config.field.north.rest.auth.ha_ingress.role": "Gewährte Rolle",
   "config.field.north.rest.openapi_spec_path": "OpenAPI-Spec-Pfad",
   "config.field.north.rest.openapi_validate": "Anfragen gegen OpenAPI-Spec prüfen",
   "config.field.north.rest.ws.replay_capacity": "WebSocket-Replay-Ringpuffer-Größe",
@@ -2258,6 +2290,22 @@ const DE: Catalog = {
     "Vertrauliches Client-Secret des IdP. Leer für Public Clients (PKCE-only). Bevorzugt per Umgebungsvariable setzen.",
   "config.help.north.rest.auth.oidc.role_claim":
     "JWT-Claim-Name, aus dem der Daemon die Benutzerrolle (admin / user) liest. Default \"role\".",
+  "config.help.north.rest.auth.ccu.enabled":
+    "Anmeldung an die Benutzerdatenbank der genannten CCU delegieren. Nutzer melden sich mit ihren CCU-Konten an; lokale Nutzer bleiben als Break-Glass-Fallback. Neustart erforderlich.",
+  "config.help.north.rest.auth.ccu.primary":
+    "Wenn aktiv, wird zuerst die CCU geprüft, lokale Nutzer sind der Break-Glass-Fallback. Aus macht lokale Nutzer primär und die CCU zum letzten Mittel. Break-Glass gilt in beiden Richtungen.",
+  "config.help.north.rest.auth.ccu.central":
+    "Name der konfigurierten Zentrale, deren Benutzerdatenbank die Anmeldung prüft. Leer wählt die erste konfigurierte Zentrale.",
+  "config.help.north.rest.auth.ccu.min_user_level":
+    "CCU-Nutzer unterhalb dieses UserLevels ablehnen (8 Admin, 2 Operator, 1 Gast; 0 wird immer abgelehnt). Default 1 lässt jeden echten Nutzer zu.",
+  "config.help.north.rest.auth.ccu.role_mapping":
+    "Standard-Zuordnung CCU-UserLevel→Loom-Rolle überschreiben. Schlüssel sind das UserLevel als String (\"8\", \"2\", \"1\"); Werte \"admin\" / \"operator\" / \"viewer\". Leer = Defaults (≥8 admin, ≥2 operator, ≥1 viewer).",
+  "config.help.north.rest.auth.ha_ingress.enabled":
+    "Home Assistant Ingress vertrauen: läuft der Daemon als Supervised-Add-on, gilt eine vom Supervisor geproxyte Anfrage als authentifizierter Admin — ohne Login. Standard AUS; nur sicher mit panel_admin: true des Add-ons (nur HA-Admins erreichen Ingress). Echte Tokens/Sessions gewinnen weiterhin. Neustart erforderlich.",
+  "config.help.north.rest.auth.ha_ingress.trusted_proxy_cidr":
+    "Netz, aus dem der echte Peer der Ingress-Anfrage stammen muss. Leer nutzt den HA-Supervisor-Standard 172.30.32.0/23. X-Forwarded-For wird nie vertraut.",
+  "config.help.north.rest.auth.ha_ingress.role":
+    "Loom-Rolle für eine vertrauenswürdige Ingress-Anfrage: \"admin\" (Standard), \"operator\" oder \"viewer\".",
   "config.help.north.rest.openapi_spec_path":
     "Override-Pfad für die OpenAPI-YAML. Standard ist die zur Build-Zeit eingebettete Kopie. Expert: nur setzen, um die Spec während der Entwicklung ohne Neubau zu patchen.",
   "config.help.north.rest.openapi_validate":

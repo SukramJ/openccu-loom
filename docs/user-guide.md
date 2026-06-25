@@ -19,7 +19,7 @@ their own pages — linked below.
 
 ```sh
 docker run -d \
-  -p 8080:8080 -p 8081:8081 -p 8120:8120 -p 8129:8129 \
+  -p 8080:8080 -p 8120:8120 -p 8129:8129 \
   -v $(pwd)/config.yaml:/app/config.yaml:ro \
   -v openccu-loom-data:/app/var \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
@@ -49,11 +49,16 @@ Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 
 | Port | Purpose | Direction |
 | --- | --- | --- |
-| `8080` | REST + WebSocket API (the MCP route mounts here too) | inbound from clients |
-| `8081` | Config UI (Svelte SPA + HTMX bootstrap) | inbound from browsers |
+| `8080` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route | inbound from clients and browsers |
 | `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) | inbound from the CCU |
 | `8129` | BIN-RPC push callback server (CUxD) | inbound from the CCU |
 | `5540` | Matter bridge (UDP; **off by default**) | inbound from controllers |
+
+Since 0.14.0 the REST API, Svelte SPA, and HTMX bootstrap surface (login,
+`/setup`, OIDC callback, `/health`, `/about`) all share port `8080`. The
+separate `:8081` listener has been removed. The `north.ui.listen` config
+key is deprecated and silently ignored (a startup warning is emitted when
+it is set).
 
 The two callback ports are how the CCU pushes value changes back to
 the daemon, so they must be reachable **from** the CCU. The Matter
@@ -84,8 +89,6 @@ callback:
 north:
   rest:
     listen: ":8080"
-  ui:
-    listen: ":8081"
 
 centrals:
   - name: ccu-01
@@ -119,9 +122,24 @@ key, see:
 ## First-run setup
 
 1. Start the daemon with the bootstrap config (no users yet).
-2. Open `http://localhost:8081/setup` — create the first admin account.
+2. Open `http://localhost:8080/` — the SPA redirects automatically to
+   `/setup` when no admin user exists. Create the first admin account.
 3. Sign in at `/login`. OIDC is supported when configured (see
    [Authentication](admin/auth.md)).
+
+**HA add-on users**: the Ingress panel in the HA sidebar opens the same
+`http://…:8080/` entrypoint. On a fresh install the redirect to `/setup`
+works through Ingress — no SSH access is required. After the first admin
+is created, the SPA loads normally through the panel.
+
+**Optional HA Ingress auto-login**: when running as the supervised HA
+add-on you can enable `north.rest.auth.ha_ingress.enabled: true` so that
+requests arriving through the HA Supervisor are automatically accepted as
+an authenticated admin — no separate Loom credential is needed. This
+relies on `panel_admin: true` in the add-on's `config.yaml` to ensure
+the Supervisor only forwards requests from HA admins. See
+[ADR 0044](adr/0044-single-port-onboarding-and-ha-ingress-auth.md)
+for the full security model.
 
 ## API quickstart
 

@@ -298,6 +298,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return json.Unmarshal(raw, &cfg.North.REST.Auth.OIDC)
 	case SectionCCUAuth:
 		return json.Unmarshal(raw, &cfg.North.REST.Auth.CCU)
+	case SectionHAIngress:
+		return json.Unmarshal(raw, &cfg.North.REST.Auth.HAIngress)
 	case SectionUI:
 		return json.Unmarshal(raw, &cfg.North.UI)
 	case SectionCallback:
@@ -348,6 +350,8 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 		raw, err = json.Marshal(cfg.North.REST.Auth.OIDC)
 	case SectionCCUAuth:
 		raw, err = json.Marshal(cfg.North.REST.Auth.CCU)
+	case SectionHAIngress:
+		raw, err = json.Marshal(cfg.North.REST.Auth.HAIngress)
 	case SectionUI:
 		raw, err = json.Marshal(cfg.North.UI)
 	case SectionCallback:

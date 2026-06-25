@@ -149,6 +149,11 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.rest.auth.ccu.central":        {},
 	"north.rest.auth.ccu.min_user_level": {},
 	"north.rest.auth.ccu.role_mapping":   {},
+	// HA Ingress auth passthrough: the auth middleware is wired once at
+	// boot (ADR 0044), so any field in the block is restart-required.
+	"north.rest.auth.ha_ingress.enabled":            {},
+	"north.rest.auth.ha_ingress.trusted_proxy_cidr": {},
+	"north.rest.auth.ha_ingress.role":               {},
 }
 
 // GetConfigSchema renders the typed schema for the SPA editor. No
@@ -537,6 +542,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 	case configstore.SectionCCUAuth:
 		var v config.CCUAuthConfig
 		return strictUnmarshal(raw, &v)
+	case configstore.SectionHAIngress:
+		var v config.HAIngressConfig
+		return strictUnmarshal(raw, &v)
 	case configstore.SectionUI:
 		var v config.NorthUI
 		return strictUnmarshal(raw, &v)
@@ -579,7 +587,8 @@ func sectionRestartRequired(section configstore.Section) bool {
 	case configstore.SectionCallback,
 		configstore.SectionMatter,
 		configstore.SectionMCP,
-		configstore.SectionCCUAuth:
+		configstore.SectionCCUAuth,
+		configstore.SectionHAIngress:
 		return true
 	}
 	return false

@@ -64,9 +64,14 @@ interfaces:
   parallel)
 - **REST + WebSocket** API
 - **Web-based Config UI** — Svelte 5 SPA (primary). A minimal
-  HTMX bootstrap surface (login, first-run setup, OIDC callback,
-  server-rendered /health and /about) covers what the SPA cannot
-  reach: pre-auth flows and SPA-down diagnosis.
+  HTMX bootstrap surface (login, first-run `/setup` wizard, OIDC
+  callback, server-rendered `/health` and `/about`) covers what the
+  SPA cannot reach: pre-auth flows and SPA-down diagnosis. Since
+  0.14.0 this surface is served on the **same listener** as the REST
+  API and SPA (`:8080`); the separate `:8081` listener is removed.
+  On first start, `GET /` redirects to `/setup` until an admin user
+  exists — onboarding works through a single port and through HA
+  Ingress. See [ADR 0044](./docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md).
 - **Matter Bridge**
 
 Feature parity with `aiohomematic` on the **south-bound** side (CCU

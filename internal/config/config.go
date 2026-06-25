@@ -867,6 +867,35 @@ type AuthConfig struct {
 	Tokens         map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
 	OIDC           OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
 	CCU            CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
+	HAIngress      HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+}
+
+// HAIngressConfig opts into trusting Home Assistant Ingress: when the daemon
+// runs as the supervised HA add-on behind Ingress, a request proxied by the
+// Supervisor is treated as an authenticated admin without a local login (see
+// ADR 0044). It is a deliberate auth bypass, so it is OFF by default and
+// guarded by several independent conditions resolved by the composition root:
+//   - the build must be supervised (the add-on build stamp / OPENCCU_LOOM_SUPERVISOR),
+//   - the request's real TCP peer (RemoteAddr, never X-Forwarded-For) must fall
+//     inside TrustedProxyCIDR (the Supervisor's Docker subnet), and
+//   - the request must carry the Supervisor's X-Ingress-Path header.
+//
+// It maps to a single admin identity only — HA does not pass the user's name
+// or role to the add-on, so the safety contract is that the add-on's
+// config.yaml keeps `panel_admin: true` (only HA admins reach Ingress). A
+// genuine Bearer token or session always wins over the passthrough, so a
+// scoped token is never silently elevated.
+type HAIngressConfig struct {
+	// Enabled turns the passthrough on. Default false (explicit opt-in) — an
+	// auth bypass is never enabled implicitly, not even in the add-on build.
+	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+	// TrustedProxyCIDR is the network the Ingress request must originate from
+	// (the request's real RemoteAddr). Empty uses the HA Supervisor default
+	// (172.30.32.0/23). Only the loopback / this CIDR are ever trusted.
+	TrustedProxyCIDR string `yaml:"trusted_proxy_cidr" json:"trusted_proxy_cidr" cfg:"expert"`
+	// Role is the Loom role granted to a trusted Ingress request: "admin"
+	// (default), "operator" or "viewer".
+	Role string `yaml:"role" json:"role" cfg:"expert"`
 }
 
 // CCUAuthConfig delegates login to a CCU's own user database (see

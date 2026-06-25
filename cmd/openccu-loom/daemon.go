@@ -475,11 +475,27 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// --- REST --------------------------------------------------
 	// Build + mount the REST router/server (and optional mDNS advertiser).
+	// Build the server-rendered HTMX bootstrap surface (login / first-run
+	// setup / about / OIDC) once and fold it onto the REST listener instead of
+	// a separate :8081 server (ADR 0044), so onboarding works through one port
+	// / HA Ingress. noUsers drives the first-run SPA→/setup redirect.
+	bootstrapRouter, noUsers := buildBootstrapRouter(cfg, logger, uiMountDeps{ //nolint:contextcheck // buildOIDC uses its own timeout; matches the prior mountUIServer call
+		healthAdapter: healthAdapter,
+		catalogs:      catalogs,
+		users:         users,
+		sessions:      sessions,
+		sqUsers:       sqUsers,
+		sqCentrals:    sqCentrals,
+		sqSections:    sqSections,
+	})
+
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
 	restMountTeardown := mountRESTServer(ctx, cfg, logger, servers, restMountDeps{
 		reg:                     reg,
+		bootstrap:               bootstrapRouter,
+		noUsers:                 noUsers,
 		matter:                  matter,
 		reload:                  deps,
 		healthAdapter:           healthAdapter,
@@ -530,18 +546,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	})
 	defer restMountTeardown()
 
-	// --- UI ---------------------------------------------------
-	// Build + mount the browser-facing UI router/server (no-op when UI is
-	// disabled). Extracted into mountUIServer (daemon_north.go).
-	mountUIServer(cfg, logger, servers, uiMountDeps{ //nolint:contextcheck // mountUIServer's OIDC discovery (buildOIDC) uses its own timeout; test callers outside the owned set prevent threading the daemon ctx
-		healthAdapter: healthAdapter,
-		catalogs:      catalogs,
-		users:         users,
-		sessions:      sessions,
-		sqUsers:       sqUsers,
-		sqCentrals:    sqCentrals,
-		sqSections:    sqSections,
-	})
+	// The browser-facing bootstrap surface is folded into the REST server
+	// above (ADR 0044) — no separate UI listener. north.ui.listen is
+	// deprecated; warn if an operator still pins it.
+	if l := cfg.North.UI.Listen; l != "" && l != cfg.North.REST.Listen {
+		logger.Warn("config.north.ui.listen.deprecated — the bootstrap UI now shares the REST listener; this setting is ignored",
+			slog.String("north.ui.listen", l))
+	}
 
 	if err := servers.startAll(); err != nil { //nolint:contextcheck // startAll has no ctx parameter; individual servers manage their own lifecycle
 		return fmt.Errorf("server start: %w", err)

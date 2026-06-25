@@ -4,6 +4,39 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0]
+
+### Added
+
+- **Opt-in Home Assistant Ingress auth passthrough (`north.rest.auth.ha_ingress`,
+  ADR 0044).** When running as the supervised HA add-on, a request proxied by
+  the HA Supervisor can be accepted as an authenticated admin without a local
+  login. OFF by default; it only activates when all of these hold: the build is
+  supervised, the request's real peer (`RemoteAddr`, never `X-Forwarded-For`)
+  is inside `trusted_proxy_cidr` (default `172.30.32.0/23`), and the
+  Supervisor's `X-Ingress-Path` header is present. A real Bearer token or
+  session always wins (the passthrough is a fallback). Security contract: the
+  add-on keeps `panel_admin: true`, so only HA admins reach Ingress. Audited as
+  scheme `ingress`, subject `ha-ingress`.
+
+### Changed
+
+- **Single-port onboarding.** The server-rendered bootstrap surface (login,
+  first-run `/setup` wizard, about, OIDC) is now served on the REST/SPA
+  listener (`:8080`) instead of a separate `:8081` server, so the entire
+  onboarding works through one port / HA Ingress. On first run (no admin user)
+  the SPA entrypoint redirects to `/setup`. The HA add-on no longer exposes
+  `8081/tcp` and pins `panel_admin: true`. **`north.rest.listen` is unchanged;
+  `north.ui.listen` is deprecated** — it is ignored (with a startup warning);
+  the UI shares the REST listener.
+
+### Fixed
+
+- **Missing config-field descriptions in the SPA.** The CCU-auth fields
+  (`north.rest.auth.ccu.*`) rendered without a description because their
+  `config.help.*` i18n keys were absent. Added labels + descriptions (en + de)
+  for every CCU-auth and HA-Ingress field.
+
 ## [0.13.3]
 
 ### Fixed
