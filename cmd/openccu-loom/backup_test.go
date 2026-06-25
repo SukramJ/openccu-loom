@@ -272,3 +272,17 @@ func TestBackupCreateJSONOutput(t *testing.T) {
 		t.Errorf("expected 64-char hex sha256, got %q", res.SHA256)
 	}
 }
+
+// TestLoadBootstrapForCLIHonorsDataDirEnv guards that a CLI subcommand run
+// without --config still resolves DataDir from OPENCCU_LOOM_DATA_DIR (the
+// add-on /data), not the ephemeral "./var" bootstrap default.
+func TestLoadBootstrapForCLIHonorsDataDirEnv(t *testing.T) {
+	t.Setenv("OPENCCU_LOOM_DATA_DIR", "/data")
+	bc, err := loadBootstrapForCLI("", io.Discard)
+	if err != nil {
+		t.Fatalf("loadBootstrapForCLI: %v", err)
+	}
+	if bc.DataDir != "/data" {
+		t.Errorf("DataDir=%q, want /data (OPENCCU_LOOM_DATA_DIR must apply without --config)", bc.DataDir)
+	}
+}

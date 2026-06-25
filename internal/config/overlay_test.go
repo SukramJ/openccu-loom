@@ -102,3 +102,34 @@ func TestDefaultWithEnvKeepsDefaultWhenUnset(t *testing.T) {
 		t.Errorf("DefaultWithEnv().DataDir = %q, want ./var (default preserved when env unset)", got)
 	}
 }
+
+// TestBootstrapOverlayFromEnv guards that the CLI/bootstrap tier honours the
+// OPENCCU_LOOM_* overrides — above all OPENCCU_LOOM_DATA_DIR, so a containerised
+// hmcli opens the same /data store the daemon uses instead of "./var".
+func TestBootstrapOverlayFromEnv(t *testing.T) {
+	bc := DefaultBootstrap()
+	bc.OverlayFromEnv(mapEnv{
+		"OPENCCU_LOOM_DATA_DIR":    "/data",
+		"OPENCCU_LOOM_LOG_LEVEL":   "debug",
+		"OPENCCU_LOOM_REST_LISTEN": "0.0.0.0:9090",
+	}.Get)
+	if bc.DataDir != "/data" {
+		t.Errorf("DataDir=%q want /data", bc.DataDir)
+	}
+	if bc.Logging.Level != "debug" {
+		t.Errorf("Logging.Level=%q want debug", bc.Logging.Level)
+	}
+	if bc.Listen.REST != "0.0.0.0:9090" {
+		t.Errorf("Listen.REST=%q want 0.0.0.0:9090", bc.Listen.REST)
+	}
+}
+
+// TestBootstrapOverlayFromEnvKeepsDefaults confirms an unset variable is a
+// no-op, so DefaultBootstrap's "./var" default survives.
+func TestBootstrapOverlayFromEnvKeepsDefaults(t *testing.T) {
+	bc := DefaultBootstrap()
+	bc.OverlayFromEnv(mapEnv{}.Get)
+	if bc.DataDir != "./var" {
+		t.Errorf("DataDir=%q want ./var (default preserved)", bc.DataDir)
+	}
+}

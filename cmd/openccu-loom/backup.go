@@ -471,13 +471,25 @@ func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:goc
 // loadBootstrapForCLI loads the bootstrap config for CLI subcommands.
 // When configPath is empty, DefaultBootstrap is used.
 func loadBootstrapForCLI(configPath string, stderr io.Writer) (*config.BootstrapConfig, error) {
+	var bc *config.BootstrapConfig
 	if configPath == "" {
-		_, _ = fmt.Fprintln(stderr, "openccu-loom: no --config given, using defaults (DataDir=./var)")
-		return config.DefaultBootstrap(), nil
+		bc = config.DefaultBootstrap()
+	} else {
+		loaded, err := config.LoadBootstrap(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("load config: %w", err)
+		}
+		bc = loaded
 	}
-	bc, err := config.LoadBootstrap(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("load config: %w", err)
+	// Honor OPENCCU_LOOM_DATA_DIR (and the other bootstrap-tier env vars) so a
+	// containerised CLI run without --config opens the same /data store the
+	// daemon uses, not the ephemeral "./var" default.
+	bc.OverlayFromEnv(nil)
+	if err := bc.Validate(); err != nil {
+		return nil, fmt.Errorf("config: %w", err)
+	}
+	if configPath == "" {
+		_, _ = fmt.Fprintf(stderr, "openccu-loom: no --config given, using defaults (DataDir=%s)\n", bc.DataDir)
 	}
 	return bc, nil
 }

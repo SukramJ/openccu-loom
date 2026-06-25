@@ -142,6 +142,24 @@ func (b *BootstrapConfig) applyDefaults() {
 	}
 }
 
+// OverlayFromEnv applies the bootstrap-tier subset of the OPENCCU_LOOM_*
+// environment overrides, mirroring [Config.OverlayFromEnv] for the fields that
+// exist at the bootstrap tier. Any pre-database load path — chiefly the CLI
+// subcommands that open the SQLite store directly — must call this so
+// OPENCCU_LOOM_DATA_DIR is honoured even without a config file. Otherwise a
+// containerised `hmcli` resolves DataDir to the default "./var" and misses the
+// real /data store the daemon uses (see [DefaultWithEnv] for the daemon side).
+func (b *BootstrapConfig) OverlayFromEnv(getenv func(string) string) {
+	if getenv == nil {
+		getenv = os.Getenv
+	}
+	overlayString(getenv, "OPENCCU_LOOM_DATA_DIR", &b.DataDir)
+	overlayString(getenv, "OPENCCU_LOOM_LOG_LEVEL", &b.Logging.Level)
+	overlayString(getenv, "OPENCCU_LOOM_LOG_FORMAT", &b.Logging.Format)
+	overlayString(getenv, "OPENCCU_LOOM_REST_LISTEN", &b.Listen.REST)
+	overlayString(getenv, "OPENCCU_LOOM_UI_LISTEN", &b.Listen.UI)
+}
+
 // EnvFileEnabled reports whether the env-file loader should run.
 // The sentinel paths "-" and "/dev/null" disable loading entirely
 // so an operator can hard-pin the behaviour from YAML without
