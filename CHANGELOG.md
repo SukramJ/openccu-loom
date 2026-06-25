@@ -4,19 +4,31 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.3]
+
+### Fixed
+
+- **The Home Assistant add-on image now publishes.** The `home-assistant/builder`
+  action proved too fragile across the 0.13.0–0.13.2 attempts: it derives its
+  builder-image tag from the action ref, so SHA pins and unpublished
+  builder-image versions both 404'd, and once that was resolved the pinned
+  version had dropped the `--all` flag the step relied on. Switched to building
+  the add-on image with plain `docker/build-push-action` (buildx) — the same
+  approach the working `go-daikin2mqtt` add-on uses. The add-on Dockerfile still
+  COPYs the daemon binary out of the published release image; `provenance: false`
+  keeps it a plain image the HA Supervisor can pull. amd64 only (matching the
+  amd64-restricted daemon image).
+
 ## [0.13.2]
 
 ### Fixed
 
-- **The Home Assistant add-on image now publishes.** Pinning the
-  `home-assistant/builder` action by version tag (0.13.1) was necessary but not
-  sufficient: the action derives its builder-image tag from its own ref, and the
-  builder image `ghcr.io/home-assistant/amd64-builder:2026.06.0` was never
-  published (`manifest unknown`), so the add-on still failed to build. Pinned the
-  action to **`@2026.02.1`** — the latest action version with a matching
-  published builder image (and the action's own hard-coded fallback). The daemon
-  binaries, Docker image, and CCU/RaspberryMatic add-on were unaffected
-  throughout.
+- **Attempted to publish the Home Assistant add-on image** (completed in 0.13.3).
+  Pinned the `home-assistant/builder` action to `@2026.02.1` so its builder image
+  resolves, but that version had removed the `--all` flag the step passed, so the
+  build still aborted — superseded by dropping the builder action entirely in
+  0.13.3. Daemon binaries, Docker image, and CCU/RaspberryMatic add-on were
+  unaffected.
 
 ## [0.13.1]
 

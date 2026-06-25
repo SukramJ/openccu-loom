@@ -129,24 +129,33 @@ jobs:
             echo "Bump packaging/ha-addon/openccu-loom/config.yaml in the release commit." >&2
             exit 1
           fi
-      # The official builder reads config.yaml/build.yaml, builds each arch from
-      # the matching HA base image, and pushes ghcr.io/sukramj/openccu-loom-ha-<arch>:<version>.
-      # ghcr login above is shared via the docker config the builder mounts.
+          echo "HA_VERSION=${TAG}" >> "$GITHUB_ENV"
+      # Build the HA add-on image with plain buildx (same approach as the
+      # working ../go-daikin2mqtt add-on) instead of the home-assistant/builder
+      # action. That action is fragile: it derives its builder-image tag from
+      # its own ref (so a SHA pin or a version whose builder image was never
+      # published 404s), and recent versions dropped the --all flag. buildx
+      # avoids all of that. The add-on Dockerfile COPYs the daemon binary out of
+      # the release image goreleaser just pushed (ghcr.io/sukramj/openccu-loom:
+      # <version>). provenance:false keeps it a plain image — the HA Supervisor
+      # cannot pull an OCI index with attestations. amd64 only (the daemon image
+      # is amd64-only; see .goreleaser.yaml).
       - name: build & publish Home Assistant add-on
         if: ${{ vars.BUILD_HA_ADDON != 'false' && env.BUILD_HA_ADDON == 'true' }}
-        # Pin to a version TAG whose matching builder IMAGE actually exists on
-        # ghcr (ghcr.io/home-assistant/<arch>-builder:<ref>). The action derives
-        # its builder-image tag from its own ref, so: a SHA pin pulls a
-        # non-existent amd64-builder:<sha>, AND a tag whose builder image was
-        # never published (e.g. 2026.06.0) also 404s ("manifest unknown").
-        # 2026.02.1 is the latest action version with a published builder image
-        # (it is also the action's own hard-coded fallback).
-        uses: home-assistant/builder@2026.02.1
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.0.0
         with:
-          args: |
-            --all
-            --target /data/packaging/ha-addon/openccu-loom
-            --docker-hub ghcr.io/sukramj
+          context: packaging/ha-addon/openccu-loom
+          file: packaging/ha-addon/openccu-loom/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          build-args: |
+            BUILD_FROM=ghcr.io/home-assistant/amd64-base:3.19
+            OPENCCU_LOOM_IMAGE=ghcr.io/sukramj/openccu-loom
+            BUILD_VERSION=${{ env.HA_VERSION }}
+          tags: |
+            ghcr.io/sukramj/openccu-loom-ha-amd64:${{ env.HA_VERSION }}
+            ghcr.io/sukramj/openccu-loom-ha-amd64:latest
       # CycloneDX SBOM for the daemon module graph, attached to the run.
       - name: generate SBOM
         run: make sbom
