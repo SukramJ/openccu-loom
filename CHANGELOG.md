@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.3]
+
+### Changed
+
+- **The HA Ingress auth passthrough is now ON by default in the HA add-on.**
+  `north.rest.auth.ha_ingress.enabled` became tri-state: unset → on when the
+  build is supervised (the HA add-on, where `panel_admin: true` restricts
+  Ingress to HA admins), off in a plain build / Docker image; an explicit
+  true/false still overrides. Opening the add-on through the Home Assistant
+  panel now logs you straight in as admin — no setup, no login page — which
+  also avoids the first-run `/setup` redirect. All the gates are unchanged
+  (supervised + real RemoteAddr in `trusted_proxy_cidr` + `X-Ingress-Path`; a
+  real token/session still wins), so it stays inert outside genuine Supervisor
+  traffic (e.g. the CCU/RaspberryMatic add-on, which is not behind Ingress).
+  Set `enabled: false` to opt out and use local/CCU login instead.
+
 ## [0.14.2]
 
 ### Fixed

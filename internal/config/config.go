@@ -886,9 +886,13 @@ type AuthConfig struct {
 // genuine Bearer token or session always wins over the passthrough, so a
 // scoped token is never silently elevated.
 type HAIngressConfig struct {
-	// Enabled turns the passthrough on. Default false (explicit opt-in) — an
-	// auth bypass is never enabled implicitly, not even in the add-on build.
-	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+	// Enabled is tri-state: nil defaults to the supervised stamp — ON in the
+	// HA add-on (where Ingress is admin-only via panel_admin: true), OFF in a
+	// plain build / Docker image. An explicit true/false overrides. Resolved by
+	// the composition root (it depends on the supervised/build stamp, which
+	// config must not import). Even when ON the passthrough only ever fires for
+	// a genuine Supervisor-proxied request (see the gates above).
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 	// TrustedProxyCIDR is the network the Ingress request must originate from
 	// (the request's real RemoteAddr). Empty uses the HA Supervisor default
 	// (172.30.32.0/23). Only the loopback / this CIDR are ever trusted.
