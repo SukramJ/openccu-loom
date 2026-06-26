@@ -29,8 +29,8 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 - [x] **Manual device add** — done; `POST /devices/{addr}/accept` + adapter + coordinator.
 - [x] **`firmware.refresh` WS command** — done (0.15.0); `FirmwareDomain` wired.
 - [x] **Link-peer refresh** — done (0.15.0); folded into `config.reload_device_config` (on demand, no boot RPC sweep).
-- [ ] **OpenAPI ↔ TypeScript reconciliation** — hand-written types in `assets/ui/src/lib/api/types.ts` diverge from the generated spec types (optional `central`, capitalised keys). Align the SPA to the spec (source of truth) + guard composite-key call sites. `[gap]` P2 M.
-- [ ] **SPA schedule editor add/edit/delete-slot UI** — REST/WS paths exist; verify whether the Svelte slot-editor is wired (BD-HubDataPoint-EmptySimpleEntry). `[gap]` P2 M — verify first.
+- [x] **OpenAPI ↔ TypeScript reconciliation** — done (0.15.0, #192); `openapi.yaml` corrected to the server JSON, generated types regenerated, SPA overrides removed, REST APIVersion → 2.1.0.
+- [x] **SPA schedule editor add/edit/delete-slot UI** — done; the Svelte slot editor is wired (verified, by_design A1-BD03). The Go `EmptySimpleEntry` helper stays uncalled (minor, noted in by_design).
 
 ## 3. Matter bridge (config-flag-gated, default OFF — no pairing risk)
 

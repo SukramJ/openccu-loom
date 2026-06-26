@@ -52,8 +52,15 @@ wire side into the standard-protocol side.
 
 ## Status
 
-**0.2.0.** All four north-bound bridges work end-to-end against a real
-CCU and the `godevccu` simulator. 0.2.0 builds on the 0.1.0 baseline
+**0.15.0** (in development; latest release tag **v0.14.5**). All four
+north-bound bridges work end-to-end against a real CCU and the `godevccu`
+simulator. The 0.14.x line added CCU-delegated authentication (ADR 0043),
+single-port onboarding + opt-in HA Ingress auth passthrough (ADR 0044), and a
+critical HA-add-on data-persistence fix (`OPENCCU_LOOM_DATA_DIR` honoured
+without a config file); 0.15.0 reconciles the OpenAPI contract with the server
+(REST `APIVersion` 2.1.0), wires the `firmware.refresh` command + on-reload
+link-peer refresh, and adds a flag-gated Matter TimeSynchronization cluster.
+The earlier 0.2.0 baseline built on 0.1.0
 with deeper Home Assistant parity (MQTT discovery for the hub layer —
 system variables, programs, per-interface install-mode and
 virtual-remote buttons — usage-gated per-parameter discovery, and

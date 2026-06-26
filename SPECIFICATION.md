@@ -4,8 +4,8 @@
 
 # OpenCCU-Loom — Specification
 
-**Status**: Living reference — last refresh 2026-05-05.
-**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.5.1; 0.6.0 in development).
+**Status**: Living reference — last refresh 2026-06-26.
+**Scope**: Goals, constraints, and resolved decisions for OpenCCU-Loom (shipped through v0.14.5; 0.15.0 in development, REST APIVersion 2.1.0).
 
 ## What this document is — and what it is not
 
