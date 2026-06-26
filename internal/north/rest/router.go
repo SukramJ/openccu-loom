@@ -324,6 +324,9 @@ type Deps struct {
 	// (`GET /diagnostics/reliability`, `GET /diagnostics/eventbus/tap`).
 	// Read-only; nil disables them.
 	Introspect handlers.DiagnosticsIntrospectService
+	// RSSIInfo backs `GET /diagnostics/rssi` — the CCU's pairwise RF
+	// reception matrix. Read-only; nil disables the endpoint.
+	RSSIInfo handlers.RSSIMatrixService
 	// AuditRecorder is the daemon-wide audit sink the diagnostics
 	// endpoints append override / capture events to. Same buffer as
 	// [Deps.MatterAuditRecorder] in production wiring; the separate
@@ -703,6 +706,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.Introspect != nil {
 				pr.With(admin).Get("/diagnostics/reliability", handlers.DiagnosticsReliability(d.Introspect))
 				pr.With(admin).Get("/diagnostics/eventbus/tap", handlers.DiagnosticsEventBusTap(d.Introspect))
+			}
+			if d.RSSIInfo != nil {
+				pr.With(admin).Get("/diagnostics/rssi", handlers.DiagnosticsRSSI(d.RSSIInfo))
 			}
 			// Composite diagnostics dump — single artefact for support /
 			// agent escalation. Anonymises by default; pass

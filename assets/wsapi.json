@@ -79,6 +79,11 @@
     },
     {
       "category": "ccu",
+      "description": "Return the CCU's pairwise RF reception matrix (device ↔ communication-partner RSSI pairs) across every central and RF interface. Backs the CCU's Interface.rssiInfo; the 65536 no-data sentinel is normalised to null.",
+      "name": "ccu.get_rssi_info"
+    },
+    {
+      "category": "ccu",
       "description": "Return RSSI, reachability, and low-battery state for every known device. Mirrors Python ws_get_signal_quality (websocket_api.py:2158).",
       "name": "ccu.get_signal_quality"
     },

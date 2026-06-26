@@ -220,9 +220,11 @@ func NewRetrier(cfg RetryConfig) *Retrier {
 // NonRetryable lists the error sentinels that short-circuit retry.
 // Auth failures and circuit-breaker-open are not worth hammering;
 // unsupported and validation errors are caller-input bugs that
-// retries cannot fix.
+// retries cannot fix. A permission denial (CCU code 400) is a
+// deterministic privilege-level mismatch — retrying never lifts it.
 var nonRetryable = []error{
 	hmerr.ErrAuthFailure,
+	hmerr.ErrPermissionDenied,
 	hmerr.ErrCircuitBreakerOpen,
 	hmerr.ErrUnsupported,
 	hmerr.ErrValidation,

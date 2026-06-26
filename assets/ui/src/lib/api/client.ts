@@ -28,6 +28,7 @@ import type {
   Paginated,
   ProgramEntry,
   LogRecord,
+  RSSIMatrix,
   RpcRecordingStatus,
   ServiceMessage,
   SysvarEntry,
@@ -686,6 +687,9 @@ export const api = {
   diagnostics(anonymize: boolean = true) {
     const q = anonymize ? "?anonymize=1" : "?anonymize=0";
     return request<DiagnosticsEnvelope>(`/diagnostics${q}`);
+  },
+  rssiInfo() {
+    return request<RSSIMatrix>(`/diagnostics/rssi`);
   },
   listLogLevels() {
     return request<LogLevelsResponse>(`/diagnostics/log-levels`);

@@ -1,7 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
-## 0.15.1
+## 0.16.0
 
+- **RF reception matrix.** The CCU's pairwise device ↔ partner RSSI matrix is
+  now available for RF diagnostics — as a new on-demand "Signal / RSSI matrix"
+  section on the Diagnostics page, plus a REST endpoint and WebSocket command —
+  alongside the existing per-device signal-quality view.
+- **Regex search in the config UI lists.** The device, system-variable, and
+  program lists now accept regular expressions (e.g. `BidCos-RF\.MEQ`,
+  `MEQ|HEQ`) and fall back to a plain substring match otherwise.
+- **Favorites are now a quick-control surface.** Pinned system variables can be
+  changed inline (toggle / number / select) right on the start page, and
+  inactive programs are dimmed in the program list for easier scanning.
 - Removed the obsolete `north.ui.listen` setting — the bootstrap UI has shared
   the same listener (and HA Ingress port) since 0.14.0, so it had no effect. No
   action needed unless you set it by hand; if so, just delete the key.

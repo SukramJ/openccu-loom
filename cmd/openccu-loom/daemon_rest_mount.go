@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
@@ -34,9 +35,10 @@ import (
 // REST phase out keeps the composition root's statement count under the funlen
 // budget.
 type restMountDeps struct {
-	reg    *central.Registry
-	matter matterWiring
-	reload *reloadDeps
+	reg         *central.Registry
+	valueWriter *clientpkg.ValueWriter
+	matter      matterWiring
+	reload      *reloadDeps
 
 	// bootstrap is the server-rendered HTMX onboarding surface (login / setup
 	// / about), folded onto the REST listener (ADR 0044). noUsers reports the
@@ -262,6 +264,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		LogDefaultLevel: d.levels,
 		RPCRecorder:     rpcRecorder,
 		Introspect:      adapter.NewIntrospectAdapter(d.reg),
+		RSSIInfo:        adapter.NewRSSIInfoDomain(d.reg, d.valueWriter),
 		AuditRecorder:   d.auditRec,
 		StatusMetrics:   d.restStatusMetrics,
 		KnownCentrals:   d.reg.Names(),

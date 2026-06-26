@@ -150,6 +150,19 @@ eQ-3 HomeMatic Software License — see ADR 0003.
 - **No Homegear depth-parity** (full). The backend abstraction exists
   and sysvars work; full programs/rooms/functions parity is a
   post-1.0 milestone.
+- **No embedded static device/parameter database.** The CCU firmware
+  ships static type descriptors (`firmware/rftypes/*.xml`,
+  `hs485types/*.xml`) with paramset min/max/default/unit/flags, and it
+  is tempting to extract them into the binary for offline parameter
+  validation. We deliberately do **not** — paramset shapes, value
+  ranges, and the device set vary by firmware version and by the
+  concrete CCU an operator runs, so a baked-in snapshot would drift
+  from the connected CCU and validate against the wrong contract.
+  Device descriptions, paramset descriptions, and value bounds are
+  loaded **dynamically from the connected CCU** (and cached per
+  central — see `docs/caching.md`). Only firmware-stable *metadata*
+  (translations, easymodes, link profiles) is embedded via
+  `openccu-data`.
 
 ### 2.3 Success Criteria (MVP — shipped as 0.1.0)
 

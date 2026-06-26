@@ -29,6 +29,15 @@ var (
 	// at a south-bound transport (XML-RPC, BIN-RPC, JSON-RPC).
 	ErrAuthFailure = errors.New("authentication failed")
 
+	// ErrPermissionDenied signals that the request authenticated
+	// successfully but the session's privilege level is too low for the
+	// invoked method. The CCU reports this as JSON-RPC error code 400
+	// ("access denied"); it is distinct from ErrAuthFailure (bad
+	// credentials / expired session) so callers and logs can tell a
+	// mis-configured user level apart from a genuine auth failure and
+	// must not respond by re-logging-in (the credentials are valid).
+	ErrPermissionDenied = errors.New("permission denied")
+
 	// ErrNoConnection signals that the transport could not reach the
 	// remote at all (DNS, TCP, TLS). Distinct from ErrAuthFailure.
 	ErrNoConnection = errors.New("no connection")
@@ -431,11 +440,22 @@ func (e *JSONRPCError) Error() string {
 	return fmt.Sprintf("json-rpc error %d: %s", e.Code, e.Message)
 }
 
-// Is maps -32603 to ErrInternalBackendException, everything else to
-// ErrClientException.
+// Is maps -32603 to ErrInternalBackendException and the CCU's code 400
+// ("access denied" — authenticated but privilege level too low) to
+// ErrPermissionDenied, everything else to ErrClientException.
+//
+// Code 400 deliberately matches ErrPermissionDenied *and*
+// ErrClientException: the former lets callers and logs single out a
+// mis-configured user level (and short-circuit retry, see
+// reliability.nonRetryable), the latter preserves the existing
+// broad-classification behaviour for boundary/severity consumers.
 func (e *JSONRPCError) Is(target error) bool {
-	if e.Code == -32603 {
+	switch e.Code {
+	case -32603:
 		return errors.Is(target, ErrInternalBackendException)
+	case 400:
+		return errors.Is(target, ErrPermissionDenied) || errors.Is(target, ErrClientException)
+	default:
+		return errors.Is(target, ErrClientException)
 	}
-	return errors.Is(target, ErrClientException)
 }

@@ -50,6 +50,21 @@ type ScheduleDevicesProvider interface {
 	AllDevices() []*device.Device
 }
 
+// RSSIMatrixProvider is the read surface for `ccu.get_rssi_info`. It
+// returns the CCU's per-interface reception-strength matrix
+// (device ↔ communication-partner RSSI pairs), already shaped for the
+// wire. Backs the CCU's own `Interface.rssiInfo` JSON-RPC method, which
+// the OpenCCU WebUI uses for its RSSI diagnostics view. Unlike
+// `ccu.get_signal_quality` (a flat per-device list aggregated from
+// channel state), this exposes the pairwise RF link matrix the CCU
+// reports directly.
+type RSSIMatrixProvider interface {
+	// RSSIInfo returns { "devices": [...] } across every central /
+	// RF interface. Implementations resolve names and normalise the
+	// CCU's 65536 "no data" sentinel to null.
+	RSSIInfo(ctx context.Context) (map[string]any, error)
+}
+
 // HubDataProvider is the minimal read surface for `ccu.get_hub_data`.
 // Returns service-message count and alarm-message count from the hub.
 // Mirrors Python `ws_get_hub_data` (websocket_api.py:2052).
@@ -110,6 +125,9 @@ type UserPermissionsProvider interface {
 type MissingCommandsConfig struct {
 	// SignalQuality backs `ccu.get_signal_quality` (wired).
 	SignalQuality SignalQualityProvider
+	// RSSIInfo backs `ccu.get_rssi_info` (wired). Nil leaves the command
+	// unregistered.
+	RSSIInfo RSSIMatrixProvider
 	// ScheduleDevices backs `schedules.list_devices` (wired).
 	ScheduleDevices ScheduleDevicesProvider
 	// HubData backs `ccu.get_hub_data` (wired).
@@ -136,6 +154,10 @@ func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 	if cfg.SignalQuality != nil {
 		// V8-M1: ccu.get_signal_quality — RSSI + reachability per device.
 		router.Register("ccu.get_signal_quality", ccuGetSignalQualityHandler(cfg.SignalQuality))
+	}
+	if cfg.RSSIInfo != nil {
+		// ccu.get_rssi_info — pairwise RF reception matrix (CCU rssiInfo).
+		router.Register("ccu.get_rssi_info", ccuGetRSSIInfoHandler(cfg.RSSIInfo))
 	}
 	if cfg.ScheduleDevices != nil {
 		// V8-M2: schedules.list_devices — devices that expose a week-profile.
@@ -217,6 +239,23 @@ func ccuGetSignalQualityHandler(p SignalQualityProvider) CommandHandler {
 			out = append(out, entry)
 		}
 		return map[string]any{"devices": out}, nil
+	}
+}
+
+// ccuGetRSSIInfoHandler implements `ccu.get_rssi_info`. Returns the CCU's
+// pairwise RF reception matrix across every central / RF interface.
+// Backs the CCU's own `Interface.rssiInfo` JSON-RPC method (the pairwise
+// matrix, as opposed to the per-channel RSSI data points surfaced
+// elsewhere).
+//
+// Request: {} (no params required).
+// Response: { "devices": [ { "address", "name", "interface_id",
+//
+//	"central", "partners": [ { "address", "name", "rssi_device",
+//	"rssi_peer" } ] }, … ] }
+func ccuGetRSSIInfoHandler(p RSSIMatrixProvider) CommandHandler {
+	return func(ctx context.Context, _ json.RawMessage) (any, error) {
+		return p.RSSIInfo(ctx)
 	}
 }
 

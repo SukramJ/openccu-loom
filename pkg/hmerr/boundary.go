@@ -109,6 +109,7 @@ func LogBoundaryError(
 // defined in this package (recoverable, expected errors).
 func isDomainError(err error) bool {
 	return errors.Is(err, ErrAuthFailure) ||
+		errors.Is(err, ErrPermissionDenied) ||
 		errors.Is(err, ErrNoConnection) ||
 		errors.Is(err, ErrCircuitBreakerOpen) ||
 		errors.Is(err, ErrClientException) ||

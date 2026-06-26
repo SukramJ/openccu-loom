@@ -401,6 +401,59 @@ func TestMissingParamsetDetermine_WiredPath(t *testing.T) {
 		"required")
 }
 
+// ─── ccu.get_rssi_info ──────────────────────────────────────────────────────
+
+// stubRSSIMatrix implements [RSSIMatrixProvider] for tests.
+type stubRSSIMatrix struct {
+	result map[string]any
+	err    error
+}
+
+func (s *stubRSSIMatrix) RSSIInfo(_ context.Context) (map[string]any, error) {
+	return s.result, s.err
+}
+
+func TestMissingCCUGetRSSIInfo_WithProvider(t *testing.T) {
+	t.Parallel()
+	payload := map[string]any{
+		"devices": []any{
+			map[string]any{
+				"address":      "ABC0001",
+				"name":         "Lamp",
+				"interface_id": "HmIP-RF",
+				"central":      "ccu-01",
+				"partners":     []any{},
+			},
+		},
+	}
+	p := &stubRSSIMatrix{result: payload}
+	r := newMissingRouter(MissingCommandsConfig{RSSIInfo: p})
+	out := dispatchMissing(t, r, "ccu.get_rssi_info", nil)
+	devs, ok := out["devices"].([]any)
+	if !ok {
+		t.Fatalf("expected devices array, got %T", out["devices"])
+	}
+	if len(devs) != 1 {
+		t.Fatalf("expected 1 device, got %d", len(devs))
+	}
+	d, ok := devs[0].(map[string]any)
+	if !ok {
+		t.Fatal("device entry is not a map")
+	}
+	if d["address"] != "ABC0001" {
+		t.Errorf("address: got %v", d["address"])
+	}
+}
+
+func TestMissingCCUGetRSSIInfo_NotRegisteredWhenNilProvider(t *testing.T) {
+	t.Parallel()
+	r := newMissingRouter(MissingCommandsConfig{})
+	res := r.Dispatch(context.Background(), "ccu.get_rssi_info", nil)
+	if res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
+		t.Fatalf("expected unknown_command when provider is nil, got %v", res.Error)
+	}
+}
+
 // ─── all 9 commands registered ───────────────────────────────────────────────
 
 func TestMissingAllNineCommandsRegistered(t *testing.T) {

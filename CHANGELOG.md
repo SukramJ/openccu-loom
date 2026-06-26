@@ -4,7 +4,37 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.15.1]
+## [0.16.0]
+
+### Added
+
+- **RF reception matrix — WS command, REST endpoint, and Config-UI view.**
+  Exposes the CCU's pairwise RF reception matrix (device ↔ communication-
+  partner RSSI pairs) read from `Interface.rssiInfo`, across every central
+  and RF interface; the CCU's 65536 "no data" sentinel is normalised to
+  `null`. Reachable via the `ccu.get_rssi_info` WebSocket command, the
+  admin-only `GET /diagnostics/rssi` REST endpoint, and an on-demand
+  "Signal / RSSI matrix" section on the Config-UI Diagnostics page.
+  Complements `ccu.get_signal_quality` (a flat per-device list) with the
+  link-level matrix the CCU reports directly. Bumps the north-bound API
+  contract version to 2.2.0.
+
+### Changed
+
+- **JSON-RPC permission errors are now distinguishable from generic
+  failures.** A CCU JSON-RPC `error.code 400` ("access denied" —
+  authenticated but the session's privilege level is too low) maps to the
+  new `ErrPermissionDenied` sentinel and short-circuits retry, instead of
+  being retried as a generic client exception. Surfaces a mis-configured
+  user level instead of silently hammering the CCU.
+- **SPA list search accepts regular expressions.** The device, system-
+  variable, and program list filters now match by regex when the term is a
+  valid pattern (e.g. `BidCos-RF\.MEQ`, `MEQ|HEQ`), and fall back to a
+  case-insensitive substring match otherwise.
+- **SPA favorites became a quick-control surface.** Pinned system variables
+  can now be changed inline (toggle / number / select) directly on the
+  start page instead of only linking back to the sysvar list. Inactive
+  programs are visually dimmed in the program list for faster scanning.
 
 ### Removed
 

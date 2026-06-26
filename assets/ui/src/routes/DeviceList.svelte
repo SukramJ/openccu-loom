@@ -6,6 +6,7 @@
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
+  import { makeTextMatcher } from "$lib/utils";
   import { prefs, setDeviceView } from "$lib/stores/preferences.svelte";
   import { deviceListFilters as saved } from "$lib/stores/deviceListFilters.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
@@ -183,16 +184,17 @@
     }
   }
 
+  const nameMatch = $derived(makeTextMatcher(filter));
+
   const filtered = $derived(
     deviceStore.items
       .filter((d) => {
         if (filter) {
-          const q = filter.toLowerCase();
           const m =
-            d.address.toLowerCase().includes(q) ||
-            (d.name ?? "").toLowerCase().includes(q) ||
-            d.model.toLowerCase().includes(q) ||
-            (d.model_label ?? "").toLowerCase().includes(q);
+            nameMatch(d.address) ||
+            nameMatch(d.name ?? "") ||
+            nameMatch(d.model) ||
+            nameMatch(d.model_label ?? "");
           if (!m) return false;
         }
         if (availability === "available" && !d.available) return false;

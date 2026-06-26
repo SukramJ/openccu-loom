@@ -107,6 +107,24 @@ export async function mockAllApis(page: Page): Promise<void> {
   await page.route('**/api/v1/diagnostics/logs', (route) =>
     route.fulfill({ json: { last_seq: 0, records: [] } }),
   );
+  await page.route('**/api/v1/diagnostics/rssi', (route) =>
+    route.fulfill({
+      json: {
+        devices: [
+          {
+            address: 'OEQ0123456',
+            name: 'Living Room Switch',
+            interface_id: 'BidCos-RF',
+            central: 'ccu',
+            partners: [
+              { address: 'BidCoS-RF', name: '', rssi_device: -72, rssi_peer: -68 },
+              { address: 'MEQ0987654', name: 'Hallway Sensor', rssi_device: null, rssi_peer: -80 },
+            ],
+          },
+        ],
+      },
+    }),
+  );
   await page.route(/\/api\/v1\/diagnostics(\?.*)?$/, (route) =>
     route.fulfill({ json: fixture('diagnostics.json') }),
   );

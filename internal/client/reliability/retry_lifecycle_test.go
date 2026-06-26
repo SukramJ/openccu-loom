@@ -498,6 +498,8 @@ func TestRetrierIsRetryableTable(t *testing.T) {
 		nonRetryable bool
 	}{
 		{"auth failure not retryable", hmerr.ErrAuthFailure, true},
+		{"permission denied not retryable", hmerr.ErrPermissionDenied, true},
+		{"json-rpc code 400 not retryable", &hmerr.JSONRPCError{Code: 400, Message: "access denied"}, true},
 		{"circuit breaker not retryable (without waiter)", hmerr.ErrCircuitBreakerOpen, true},
 		{"unsupported not retryable", hmerr.ErrUnsupported, true},
 		{"unreach fault retryable", &hmerr.XMLRPCFault{Code: -1}, false},

@@ -12,6 +12,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
+  import { makeTextMatcher } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -200,15 +201,11 @@
   });
 
   const filtered = $derived.by(() => {
-    const q = search.trim().toLowerCase();
+    const match = makeTextMatcher(search);
     const list = [...sysvars].sort((a, b) => a.name.localeCompare(b.name));
-    const bySearch = !q
-      ? list
-      : list.filter(
-          (s) =>
-            s.name.toLowerCase().includes(q) ||
-            (s.description ?? "").toLowerCase().includes(q),
-        );
+    const bySearch = list.filter(
+      (s) => match(s.name) || match(s.description ?? ""),
+    );
     if (!centralFilter) return bySearch;
     return bySearch.filter((s) => s.central === centralFilter);
   });
