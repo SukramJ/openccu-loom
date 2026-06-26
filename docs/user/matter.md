@@ -43,7 +43,7 @@ To pair, your phone app needs either the **setup QR code** or the **11-digit man
 - **In the web UI:** open the **Matter** view, which shows the QR code and the manual code ready to scan or type.
 - **Via the API:** `GET /api/v1/matter/setup-payload` returns the QR payload and the manual code. (It returns "not configured" if no passcode is set.)
 
-<!-- TODO screenshot: Matter view showing QR + manual pairing code -->
+![The Matter view's Pair tab with an open commissioning window: a countdown ring, the setup QR code to scan, and the manual pairing code below it.](img/matter-pairing.png)
 
 !!! tip
     Keep the passcode private — anyone with the code can add your bridge to their own home.
