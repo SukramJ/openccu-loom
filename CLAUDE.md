@@ -51,9 +51,10 @@ the spec; when in doubt about *implementation*, read the code.
    side under `../` on the developer's
    machine. See §[aiohomematic as a Reference](#aiohomematic-as-a-reference)
    for the mapping and when to consult which.
-4. The project has shipped through **v0.5.1** (latest git tag) with
-   **0.6.0 in development** (`internal/build/version.go`); the
-   authoritative release history is `CHANGELOG.md`. Phases 0–10 are
+4. The project has shipped through **v0.14.5** (latest git tag) with
+   **0.15.0 in development** (`internal/build/version.go`, not yet tagged;
+   REST `APIVersion` 2.1.0); the authoritative release history is
+   `CHANGELOG.md`. Phases 0–10 are
    complete. Approximate code size as of the 0.1.0 snapshot (kept as a
    rough baseline, not re-counted each release):
    ~547 k Go LOC across
@@ -1100,7 +1101,8 @@ file — left side mirrors aiohomematic, right side mirrors matter.js.
 
 ## Implementation Policy
 
-The project is at 0.2.0; release history is in `CHANGELOG.md`.
+The project is at 0.15.0 (in development; latest tag v0.14.5); release
+history is in `CHANGELOG.md`.
 
 ### Completion checklist (per change)
 

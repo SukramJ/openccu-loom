@@ -29,8 +29,8 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 - [x] **Manual device add** — done; `POST /devices/{addr}/accept` + adapter + coordinator.
 - [x] **`firmware.refresh` WS command** — done (0.15.0); `FirmwareDomain` wired.
 - [x] **Link-peer refresh** — done (0.15.0); folded into `config.reload_device_config` (on demand, no boot RPC sweep).
-- [ ] **OpenAPI ↔ TypeScript reconciliation** — hand-written types in `assets/ui/src/lib/api/types.ts` diverge from the generated spec types (optional `central`, capitalised keys). Align the SPA to the spec (source of truth) + guard composite-key call sites. `[gap]` P2 M.
-- [ ] **SPA schedule editor add/edit/delete-slot UI** — REST/WS paths exist; verify whether the Svelte slot-editor is wired (BD-HubDataPoint-EmptySimpleEntry). `[gap]` P2 M — verify first.
+- [x] **OpenAPI ↔ TypeScript reconciliation** — done (0.15.0, #192); `openapi.yaml` corrected to the server JSON, generated types regenerated, SPA overrides removed, REST APIVersion → 2.1.0.
+- [x] **SPA schedule editor add/edit/delete-slot UI** — done; the Svelte slot editor is wired (verified, by_design A1-BD03). The Go `EmptySimpleEntry` helper stays uncalled (minor, noted in by_design).
 
 ## 3. Matter bridge (config-flag-gated, default OFF — no pairing risk)
 
@@ -43,6 +43,17 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 - [x] **Cluster-revision parity tests** — already present in `parityCases()` (TimeSync, AccessControl, GroupKeyManagement, PowerSource, ICD…).
 - [ ] **AccessRestrictionList (ARL, 0x002B)** — intentionally deferred: no Managed-Aggregator use-case; a full matter.js-grade port (fabric store + AddNOC review + enforcement) is weeks of sensitive work. `[planned]` P3 L.
 - [ ] **Actions (0x0025)** — intentionally deferred: the bridge has no scene/action surface to model. `[planned]` P3 M.
+
+## 4. Southbound — Homegear — CONCLUDED (at parity)
+
+- [x] **Homegear backend** — concluded (2026-06). At parity with the defined
+  target (aiohomematic's Homegear support): the `HomegearBackend` implements the
+  full operations surface (devices, paramsets, get/set value, links, sysvars,
+  metadata, device name, `determineParameter`); ReGa-only ops (programs, rooms,
+  functions, inbox, system-update, sysvar-create) return `ErrUnsupported`,
+  matching aiohomematic. Going beyond (full CCU-like depth, non-HomeMatic
+  families, live-Homegear validation) is the explicit non-goal in
+  `SPECIFICATION.md` §2.2 — not planned. See `docs/roadmap.md` Phase 3.
 
 ## 5. Persistence / Config
 

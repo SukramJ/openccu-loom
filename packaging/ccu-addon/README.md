@@ -39,7 +39,7 @@ installed to `/usr/local/addons/openccu-loom/` per `uname -m`.
 
 ## Ports & data
 
-- `:8080` REST API + Config UI (SPA) · `:8081` pre-auth bootstrap
+- `:8080` REST API + Config UI (SPA) + bootstrap surface (login, `/setup`, `/health`, `/about`)
 - `:8120` XML-RPC callback · `:8129` BIN-RPC callback
 - Persistent state (SQLite DB + filesystem): `/usr/local/addons/openccu-loom/var`
 
