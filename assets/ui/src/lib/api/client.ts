@@ -407,7 +407,7 @@ export const api = {
   getSysvar(name: string) {
     return request<SysvarEntry>(`/sysvars/${encodeURIComponent(name)}`);
   },
-  setSysvar(name: string, value: unknown, central: string) {
+  setSysvar(name: string, value: unknown, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/sysvars/${encodeURIComponent(name)}${qs}`, {
       method: "PUT",
@@ -442,7 +442,7 @@ export const api = {
       value_list?: string[];
       description?: string;
     },
-    central: string,
+    central?: string,
   ) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/sysvars/${encodeURIComponent(name)}${qs}`, {
@@ -451,7 +451,7 @@ export const api = {
       body: JSON.stringify(body),
     });
   },
-  deleteSysvar(name: string, central: string) {
+  deleteSysvar(name: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(`/sysvars/${encodeURIComponent(name)}${qs}`, {
       method: "DELETE",
@@ -467,14 +467,14 @@ export const api = {
   listPrograms() {
     return request<ProgramEntry[]>(`/programs`);
   },
-  executeProgram(id: string, central: string) {
+  executeProgram(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(
       `/programs/${encodeURIComponent(id)}/execute${qs}`,
       { method: "POST" },
     );
   },
-  setProgramEnabled(id: string, active: boolean, central: string) {
+  setProgramEnabled(id: string, active: boolean, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(
       `/programs/${encodeURIComponent(id)}${qs}`,
@@ -835,14 +835,14 @@ export const api = {
     return request<void>(`/system/update/install${qs}`, { method: "POST" });
   },
   // --- Messages: ack / clear -----------------------------------
-  ackAlarm(id: string, central: string) {
+  ackAlarm(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(
       `/alarm-messages/${encodeURIComponent(id)}/ack${qs}`,
       { method: "POST" },
     );
   },
-  ackService(id: string, central: string) {
+  ackService(id: string, central?: string) {
     const qs = central ? `?central=${encodeURIComponent(central)}` : "";
     return request<void>(
       `/service-messages/${encodeURIComponent(id)}/ack${qs}`,

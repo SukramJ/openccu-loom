@@ -10,6 +10,7 @@ function dp(parameter: string, control?: string): DataPointSummary {
     observed: true,
     operations: { read: true, write: true, event: true },
     control,
+    unique_id: `dp-${parameter}`,
   };
 }
 

@@ -277,6 +277,26 @@ export interface paths {
         patch: operations["patchDevice"];
         trace?: never;
     };
+    "/devices/{addr}/icon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Device-type icon image (proxied from the CCU)
+         * @description Returns the device's model-icon PNG, proxied from the owning CCU's web server (`/config/img/devices/250/<file>`). Unauthenticated, like /health — it exposes only non-sensitive device model artwork and must resolve from an <img> tag regardless of auth scheme. Responds 404 when the device, its central, or the upstream image is unavailable; the SPA then falls back to a generic glyph.
+         */
+        get: operations["getDeviceIcon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/channels": {
         parameters: {
             query?: never;
@@ -341,6 +361,51 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ChannelSummary"];
+                    };
+                };
+                404: components["responses"]["NotFound"];
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/event-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List per-Kind event groups for a channel
+         * @description Returns the channel's keypress / impulse / device-error event
+         *     groups — the bootstrap shape an `event` platform builds its
+         *     entities from. Empty array when the channel has no event sources.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    addr: components["parameters"]["Address"];
+                    no: components["parameters"]["ChannelNo"];
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EventGroupSummary"][];
                     };
                 };
                 404: components["responses"]["NotFound"];
@@ -579,7 +644,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    page?: components["parameters"]["Page"];
+                    per_page?: components["parameters"]["PerPage"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -589,6 +657,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description Total number of programs before pagination. */
+                        "X-Total-Count"?: number;
                         [name: string]: unknown;
                     };
                     content: {
@@ -671,7 +741,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    page?: components["parameters"]["Page"];
+                    per_page?: components["parameters"]["PerPage"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -681,6 +754,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description Total number of sysvars before pagination. */
+                        "X-Total-Count"?: number;
                         [name: string]: unknown;
                     };
                     content: {
@@ -692,6 +767,30 @@ export interface paths {
         put?: never;
         /** Create sysvar on the CCU (Rega create_system_variable) */
         post: operations["createSysvar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sysvars/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Force re-pull the CCU system-variable catalogue into the hub model
+         * @description Re-pulls all system variables from the CCU (SysVar.getAll) and
+         *     refreshes the hub model. Use the optional `central` query
+         *     parameter to scope the refresh to one CCU; absent, every
+         *     registered central is refreshed. Mirrors the reference stack's
+         *     fetch_system_variables.
+         */
+        post: operations["fetchSysvars"];
         delete?: never;
         options?: never;
         head?: never;
@@ -756,7 +855,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    page?: components["parameters"]["Page"];
+                    per_page?: components["parameters"]["PerPage"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -766,6 +868,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description Total number of alarm messages before pagination. */
+                        "X-Total-Count"?: number;
                         [name: string]: unknown;
                     };
                     content: {
@@ -791,7 +895,10 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    page?: components["parameters"]["Page"];
+                    per_page?: components["parameters"]["PerPage"];
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -801,6 +908,8 @@ export interface paths {
                 /** @description OK */
                 200: {
                     headers: {
+                        /** @description Total number of service messages before pagination. */
+                        "X-Total-Count"?: number;
                         [name: string]: unknown;
                     };
                     content: {
@@ -811,66 +920,6 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/install-mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["InstallModeState"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["InstallModeState"];
-                };
-            };
-            responses: {
-                /** @description Accepted */
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-                400: components["responses"]["BadRequest"];
-                422: components["responses"]["UnprocessableEntity"];
-                502: components["responses"]["BadGateway"];
-                503: components["responses"]["ServiceUnavailable"];
-            };
-        };
         delete?: never;
         options?: never;
         head?: never;
@@ -1202,6 +1251,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system/restart-pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether a saved config change needs a daemon restart
+         * @description Reports whether any restart-required config field has a persisted value the running daemon has not yet adopted (computed on demand: persisted config vs. the running boot config). The SPA shows a persistent banner while `pending` is true; it clears once the values are reverted or the daemon restarts.
+         */
+        get: operations["getRestartPending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/config-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config fields changed since the daemon started
+         * @description Lists the config field paths whose persisted value differs from the running boot config — i.e. what was edited since start, not what differs from the built-in default. Empty right after a clean start; an entry drops out when its value is reverted. Backs the SPA's "Changed settings" overview.
+         */
+        get: operations["getConfigChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/status": {
         parameters: {
             query?: never;
@@ -1429,6 +1518,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the logged-in user's own password
+         * @description Self-service password change for the authenticated local user. Requires the current password; the role is preserved. Accounts without a local password (OIDC / bearer-token identities) return 409.
+         */
+        patch: operations["changeOwnPassword"];
+        trace?: never;
+    };
+    "/me/preferences/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the caller's UI preference for {key}
+         * @description Per-user UI state (e.g. key `favorites`). The value is opaque JSON owned by the SPA. Scoped to the authenticated subject.
+         */
+        get: operations["getPreference"];
+        /**
+         * Store the caller's UI preference for {key}
+         * @description The request body is stored verbatim and must be valid JSON within 256 KiB.
+         */
+        put: operations["putPreference"];
+        post?: never;
+        /** Delete the caller's UI preference for {key} */
+        delete: operations["deletePreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/users": {
         parameters: {
             query?: never;
@@ -1577,6 +1713,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-pull a single device's config from its CCU */
+        post: operations["reloadDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-pull a single channel's config from its CCU */
+        post: operations["reloadChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/accept": {
         parameters: {
             query?: never;
@@ -1618,6 +1788,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/install-mode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open a targeted pairing window for one device
+         * @description Opens install mode bound to a single device address (serial),
+         *     mirroring the CCU WebUI's serial-targeted teach-in. The owning
+         *     backend is resolved by address.
+         */
+        post: operations["deviceInstallMode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/channels/{no}/ui-schema": {
         parameters: {
             query?: never;
@@ -1627,6 +1819,32 @@ export interface paths {
         };
         /** Renderable form descriptor for a channel paramset */
         get: operations["getUiSchema"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/export-definition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a device definition as an aiohomematic-compatible zip
+         * @description Fetches the device + channel descriptions and their non-LINK paramset
+         *     descriptions directly off the CCU (preserving wire member order),
+         *     anonymises every address behind a single random "VCU" id, and returns a
+         *     zip containing `device_descriptions/{model}.json` and
+         *     `paramset_descriptions/{model}.json`. The JSON members are byte-for-byte
+         *     identical to aiohomematic's `export_device_definition`, so the archive
+         *     drops straight into pydevccu / godevccu as a device fixture.
+         */
+        get: operations["exportDeviceDefinition"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1926,6 +2144,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/devices/{addr}/schedules/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy the whole week schedule to another device */
+        post: operations["copyDeviceSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/devices/{addr}/channels/{no}/week_profile/copy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a single climate profile to another channel/profile */
+        post: operations["copyClimateProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/devices/{addr}/links": {
         parameters: {
             query?: never;
@@ -1982,6 +2234,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hub/data-points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Aggregated hub-singleton snapshot (one entry per central)
+         * @description Gathers the hub singletons (alarm / service messages, inbox,
+         *     firmware update, metrics, per-interface connectivity and
+         *     install-mode) into the coordinator shape a client builds its
+         *     singleton entities from — so a hub coordinator can be constructed
+         *     from a single fetch instead of six requests.
+         */
+        get: operations["getHubDataPoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/inbox": {
         parameters: {
             query?: never;
@@ -2009,11 +2285,32 @@ export interface paths {
         /** Aggregated room index with device counts */
         get: operations["listRooms"];
         put?: never;
-        post?: never;
+        /** Create a room on the CCU (operator) */
+        post: operations["createRoom"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/rooms/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a room (operator) */
+        delete: operations["deleteRoom"];
+        options?: never;
+        head?: never;
+        /** Rename a room (operator) */
+        patch: operations["renameRoom"];
         trace?: never;
     };
     "/functions": {
@@ -2026,11 +2323,32 @@ export interface paths {
         /** Aggregated function-group index with device counts */
         get: operations["listFunctions"];
         put?: never;
-        post?: never;
+        /** Create a function/Gewerk on the CCU (operator) */
+        post: operations["createFunction"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/functions/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a function/Gewerk (operator) */
+        delete: operations["deleteFunction"];
+        options?: never;
+        head?: never;
+        /** Rename a function/Gewerk (operator) */
+        patch: operations["renameFunction"];
         trace?: never;
     };
     "/programs/{id}": {
@@ -2042,7 +2360,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** Fetch a single program by id */
+        get: operations["getProgram"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2199,6 +2518,26 @@ export interface paths {
         };
         /** Recent change history (FIFO buffer) */
         get: operations["listAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bucketed measurement history for one data point
+         * @description Server-side-bucketed view of one numeric data point's recorded measurement history, sized for charting. Requires the opt-in history feature (persistence.history.enabled); the route is absent and returns 404 when disabled. The half-open range [from,to) is aggregated into at most `buckets` evenly spaced buckets, each carrying avg/min/max/count; empty buckets are omitted.
+         */
+        get: operations["getHistory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2487,6 +2826,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/tls/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace the TLS server certificate at runtime (admin-only)
+         * @description Uploads a PEM certificate + key as multipart/form-data (`cert`
+         *     and `key` parts). The pair is validated, persisted to the
+         *     configured paths, and hot-reloaded — the REST API and the SPA
+         *     (same port) are re-secured without a daemon restart. Available
+         *     only when TLS is enabled (north.rest.tls_cert_file/tls_key_file).
+         */
+        post: operations["uploadTLSCertificate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/mqtt/reload": {
         parameters: {
             query?: never;
@@ -2549,6 +2912,35 @@ export interface paths {
         put?: never;
         /** Drop the VALUES-cache rows for one device (admin-only) */
         post: operations["resetValuesCacheDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/cache/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear CCU-derivable caches and re-pull them fresh (admin-only)
+         * @description Clears only CCU-derivable persisted state for the requested
+         *     scope — device descriptions, paramset descriptions, the
+         *     persistent VALUES cache and persisted MASTER values, plus the
+         *     in-memory value cache — then re-initializes the owning
+         *     central(s) through the boot path so the data is re-pulled fresh
+         *     from the CCU (ADR 0042).
+         *
+         *     It never touches operator-authored or system state (visibility
+         *     rules, config, auth, Matter pairing, audit/incident history).
+         *     The clear is idempotent and recorded into the audit log.
+         */
+        post: operations["clearCache"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2927,6 +3319,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/config/fields/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dotted config field path, e.g. "north.rest.rate_limit.enabled". */
+                path: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset one config field to its default (admin)
+         * @description Removes the override for a single field from its owning section (pruning empty parent objects, dropping the section row when nothing is left), so the field falls back to the built-in default. Idempotent.
+         */
+        delete: operations["resetConfigField"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -3166,6 +3581,13 @@ export interface components {
             state?: {
                 [key: string]: unknown;
             };
+            /**
+             * @description Canonical loom routing key for this Custom-DP — the same
+             *     value the WS `custom_data_point.state_changed` payload
+             *     carries. Lets a client build its entity registry from the
+             *     summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
         };
         /**
          * @description RFC 9457 problem detail. The `type` URI selects one of the
@@ -3340,8 +3762,13 @@ export interface components {
         };
         DeviceSummary: {
             address: string;
+            /**
+             * @description CCU this device belongs to (multi-central grouping). Omitted
+             *     for backends that report no owning central.
+             */
+            central?: string;
             interface: string;
-            interface_id?: string;
+            interface_id: string;
             /**
              * @description CCU-internal numeric device id. Lets clients that address
              *     devices by ISE_ID (e.g. the HA rename-by-ise_id path) map back
@@ -3349,14 +3776,58 @@ export interface components {
              */
             ise_id?: number;
             model: string;
+            /**
+             * @description Localised, human-readable device-type label. Empty when no
+             *     translation exists; consumers fall back to the raw `model`.
+             */
+            model_label?: string;
+            /** @description Icon identifier for the device model. Empty when none. */
+            model_icon?: string;
             sub_model?: string;
             name: string;
             manufacturer?: string;
             product_group?: string;
             available: boolean;
             channels_count: number;
-            updatable?: boolean;
+            /**
+             * @description Device *supports* firmware updates (CCU UPDATABLE capability) —
+             *     NOT whether one is pending. Use update_available for the
+             *     "update available" indicator.
+             */
+            updatable: boolean;
+            /**
+             * @description An installable firmware update is actually pending: the gated
+             *     latest version differs from the installed one (image already
+             *     delivered for HmIP-RF / available for BidCos). A newer firmware
+             *     the CCU merely knows about but has not delivered does NOT set this.
+             */
+            update_available: boolean;
+            /**
+             * @description Daemon-derived firmware-update verdict collapsing the raw CCU
+             *     firmware phase and update_available signal, so a client renders
+             *     the update entity without carrying the phase-classification sets.
+             *     Omitted when the device reports no firmware information.
+             * @enum {string}
+             */
+            update_status?: "up_to_date" | "update_available" | "installing";
             rooms?: string[];
+            /** @description Resolved "Gewerke" (function) labels for the device. */
+            functions?: string[];
+            /**
+             * @description True when the device's interface delivers reliable CONFIG_PENDING
+             *     events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
+             *     for the true→false transition before refreshing MASTER. False for
+             *     BidCos-*, VirtualDevices, CUxD — those rely on the save-path
+             *     reload because CONFIG_PENDING never fires (or fires unreliably).
+             */
+            master_pushes_config_pending: boolean;
+            /**
+             * @description True when the device should be split into multiple logical
+             *     sub-devices for northbound presentation. The SPA's CdpTilesPanel
+             *     uses this flag to switch from a flat tile grid to per-group
+             *     sections.
+             */
+            has_sub_devices: boolean;
         };
         DeviceList: {
             items: components["schemas"]["DeviceSummary"][];
@@ -3365,13 +3836,13 @@ export interface components {
             total: number;
         };
         DeviceDetail: components["schemas"]["DeviceSummary"] & {
-            firmware?: {
+            firmware: {
                 Current?: string;
                 Available?: string;
                 Updatable?: boolean;
                 UpdateState?: string;
             };
-            availability?: {
+            availability: {
                 IsReachable?: boolean;
                 /** Format: date-time */
                 LastUpdated?: string;
@@ -3379,7 +3850,7 @@ export interface components {
                 LowBattery?: boolean | null;
                 SignalStrength?: number | null;
             };
-            channels?: components["schemas"]["ChannelSummary"][];
+            channels: components["schemas"]["ChannelSummary"][];
         };
         ChannelSummary: {
             address: string;
@@ -3446,6 +3917,21 @@ export interface components {
              *     the channel group's sub-device.
              */
             room?: string;
+            /**
+             * @description The channel's resolved "Gewerke" (function) labels — the
+             *     channel-level twin of `DeviceSummary.functions`. Lets clients
+             *     map functions at channel granularity instead of folding them
+             *     up to the device. Omitted when the channel carries no function
+             *     assignment.
+             */
+            functions?: string[];
+            /**
+             * @description True when the channel owns a Custom-DP AND is the primary
+             *     (group-master) channel of its group — the daemon-derived
+             *     "device primary channel" marker. Omitted when neither
+             *     condition holds.
+             */
+            is_custom_dp_primary?: boolean;
         };
         MQTTReloadResponse: {
             /** @description Always true on success; the 503 path returns a problem+json document instead. */
@@ -3455,6 +3941,53 @@ export interface components {
              * @description Wall-clock duration of the swap in milliseconds.
              */
             took_ms: number;
+        };
+        CacheClearRequest: {
+            /**
+             * @description Breadth of the clear. `central`/`interface`/`device` require
+             *     the matching identifier fields at or below their level.
+             * @enum {string}
+             */
+            kind: "global" | "central" | "interface" | "device";
+            /** @description Central name. Required for kind central/interface/device. */
+            central?: string;
+            /** @description Interface id. Required for kind interface/device. */
+            interface?: string;
+            /** @description Device address. Required for kind device. */
+            device?: string;
+        };
+        CacheClearReport: {
+            /** @description The resolved scope the clear ran against. */
+            scope: {
+                Kind?: string;
+                Central?: string;
+                Interface?: string;
+                Device?: string;
+            };
+            /**
+             * Format: int64
+             * @description Device-description rows removed (-1 when the store does not report a count).
+             */
+            devices: number;
+            /**
+             * Format: int64
+             * @description Paramset-description rows removed.
+             */
+            paramsets: number;
+            /**
+             * Format: int64
+             * @description Persistent VALUES-cache rows removed (-1 for device-scoped deletes).
+             */
+            values: number;
+            /**
+             * Format: int64
+             * @description Persisted MASTER-value rows removed (-1 for device-scoped deletes).
+             */
+            master: number;
+            /** @description Centrals that were re-initialized through the boot path. */
+            centrals_reinit: string[];
+            /** @description Per-store errors collected during the clear; present only when the clear partially failed. */
+            errors?: string[];
         };
         ValuesCacheStats: {
             /**
@@ -3612,6 +4145,17 @@ export interface components {
              */
             value_list?: string[];
             /**
+             * @description Maps each raw `value_list` entry to its localised display
+             *     string, resolved through the OCCU `parameter_values_<locale>`
+             *     table in the request locale. Only entries with an actual
+             *     translation are included (an untranslated value is omitted so
+             *     the client falls back to the raw `value_list` token); absent
+             *     entirely for non-ENUM parameters or when no value translates.
+             */
+            value_translations?: {
+                [key: string]: string;
+            };
+            /**
              * @description Descriptor UNIT string ("°C", "% rF", "lx", "Wh", ...)
              *     as the CCU declares it. Empty when none.
              */
@@ -3643,6 +4187,13 @@ export interface components {
                  */
                 state_color_rule?: string;
             };
+            /**
+             * @description Canonical loom-namespaced routing key for this data point —
+             *     the same value the WS `datapoint.value_changed` payload
+             *     carries. Lets a client build its entity registry from the
+             *     summary or snapshot without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
         };
         /**
          * @description Body of `POST /ui/event` — anonymous fire-and-forget
@@ -3669,7 +4220,11 @@ export interface components {
             id: string;
             name: string;
             description?: string;
-            active?: boolean | null;
+            /**
+             * @description Program enabled state. Omitted when the CCU has not reported it
+             *     (the Go DTO marshals the pointer with omitempty: absent, not null).
+             */
+            active?: boolean;
             /** @description RFC3339 timestamp of the most recent execution. */
             last_executed?: string;
             /**
@@ -3684,6 +4239,13 @@ export interface components {
              *     are configured: the entry is included but disabled by default.
              */
             enabled_default?: boolean;
+            /**
+             * @description Canonical loom routing key for this program — the same value
+             *     the WS `hub.program_executed` event carries. Lets clients
+             *     build their entity registry from the summary without
+             *     recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
         };
         SysvarSummary: {
             /** @description CCU this system variable belongs to. */
@@ -3724,12 +4286,43 @@ export interface components {
              *     are configured: the entry is included but disabled by default.
              */
             enabled_default?: boolean;
+            /**
+             * @description Canonical loom routing key for this system variable — the
+             *     same value the WS `hub.sysvar_changed` event carries. Lets
+             *     clients build their entity registry from the summary without
+             *     recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
         };
         SysvarSetRequest: {
             value: unknown;
         };
+        /** @description One aggregated bucket of measurement history: the average, minimum, maximum and sample count over the bucket's time span. */
+        HistoryBucket: {
+            /**
+             * Format: date-time
+             * @description Start of the bucket's time span (UTC).
+             */
+            ts: string;
+            /** @description Mean of the raw samples in this bucket. */
+            avg: number;
+            /** @description Minimum raw sample in this bucket. */
+            min: number;
+            /** @description Maximum raw sample in this bucket. */
+            max: number;
+            /**
+             * Format: int64
+             * @description Number of raw samples aggregated into this bucket.
+             */
+            count: number;
+        };
         /** @description One recorded user-initiated configuration change. */
         AuditEntry: {
+            /**
+             * @description CCU this entry belongs to, derived best-effort from the device
+             *     address. Omitted for daemon-wide entries (e.g. CCU management).
+             */
+            central?: string;
             /**
              * Format: date-time
              * @description UTC time at which the change was recorded.
@@ -3759,10 +4352,19 @@ export interface components {
             }[];
         };
         AlarmMessage: {
+            /** @description CCU this alarm message belongs to (multi-central grouping). */
+            central?: string;
             id: string;
             name: string;
             description?: string;
             device_name?: string;
+            /**
+             * @description CCU channel address that generated the alarm. Omitted when
+             *     unavailable (legacy CCUs).
+             */
+            address?: string;
+            /** @description Raw alarm state string from the CCU Rega script. */
+            state_value?: string;
             /** Format: date-time */
             timestamp: string;
             counter: number;
@@ -3770,15 +4372,21 @@ export interface components {
             rooms?: string[];
         };
         ServiceMessage: {
+            /** @description CCU this service message belongs to (multi-central grouping). */
+            central?: string;
             id: string;
             name: string;
             address?: string;
             device_name?: string;
             type?: string;
+            /** @description Optional human-readable message text. */
+            description?: string;
+            /** @description Integer priority level (0 = normal). */
+            priority?: number;
             /** Format: date-time */
             timestamp: string;
             counter: number;
-            quittable?: boolean;
+            quittable: boolean;
         };
         InstallModeInterfaceEntry: {
             /** @description CCU the interface belongs to. */
@@ -3823,10 +4431,6 @@ export interface components {
         ChannelLockRequest: {
             /** @description Include (true) / exclude (false) the channel from the week-program schedule. */
             enabled: boolean;
-        };
-        InstallModeState: {
-            active: boolean;
-            seconds?: number;
         };
         InterfaceState: {
             id: string;
@@ -4106,12 +4710,14 @@ export interface components {
             paramset_key: string;
             /**
              * @description Canonical loom-namespaced routing key (`loom_<routing-key>`)
-             *     for this data point. Optional — omitted when the producer
-             *     cannot resolve it. Clients consume it directly instead of
-             *     rebuilding from raw fields; see
-             *     docs/external-clients/ha-unique-id-migration.md.
+             *     for this data point. Always present: the daemon owns the key and a
+             *     central emits no events until its CCU serial (the central-id slot of
+             *     the key) is resolved by the bring-up readiness gate, so the value is
+             *     non-empty in normal operation (an empty string would signal an
+             *     unresolved serial). Clients consume it directly instead of rebuilding
+             *     from raw fields; see docs/external-clients/ha-unique-id-migration.md.
              */
-            unique_id?: string;
+            unique_id: string;
             /** @description New value in its native CCU type (bool/int/float/string/list/null). */
             value: unknown;
             /**
@@ -4140,10 +4746,10 @@ export interface components {
             kind?: string;
             /**
              * @description Canonical loom-namespaced routing key (`loom_<routing-key>`)
-             *     for this custom data point. Optional — see
+             *     for this custom data point. Always present and non-empty — see
              *     DataPointValueChangedPayload.unique_id.
              */
-            unique_id?: string;
+            unique_id: string;
             /** @description Composed state snapshot — keys depend on the CDP category. */
             state: {
                 [key: string]: unknown;
@@ -4193,10 +4799,10 @@ export interface components {
             value_type?: string;
             /**
              * @description Canonical loom-namespaced routing key
-             *     (`loom_<serial10>_sysvar_<hub-slug>`) for this sysvar.
-             *     Optional — see DataPointValueChangedPayload.unique_id.
+             *     (`loom_<serial10>_sysvar_<hub-slug>`) for this sysvar. Always
+             *     present and non-empty — see DataPointValueChangedPayload.unique_id.
              */
-            unique_id?: string;
+            unique_id: string;
             /** @description New sysvar value in its native CCU type. */
             value: unknown;
             /** @description Prior sysvar value; omitted when no prior value was tracked. */
@@ -4231,6 +4837,136 @@ export interface components {
             enabled: boolean;
             /** @description Seconds remaining before the pairing window closes; 0 when disabled. */
             remaining_s: number;
+        };
+        /**
+         * @description Payload of the `hub.alarm_message`, `hub.service_message` and
+         *     `hub.inbox_changed` broadcasts. Carries the current entry count so
+         *     clients drop their poll loop; the full list is fetched on demand via
+         *     the corresponding REST endpoint.
+         */
+        HubCountChangedPayload: {
+            central: string;
+            count: number;
+        };
+        /**
+         * @description Payload of a `hub.metrics_changed` broadcast. Topic pattern
+         *     `hub.{central}.metrics`. Fires when a hub metric is re-observed.
+         */
+        HubMetricChangedPayload: {
+            central: string;
+            /** @description Metric kind (system_health, connection_latency_ms, last_event_age_seconds). */
+            metric: string;
+            value: number;
+            /** @description Unit string ("%", "ms", "s"); omitted when unitless. */
+            unit?: string;
+        };
+        /**
+         * @description Payload of a `connectivity.changed` broadcast. Topic pattern
+         *     `hub.{central}.connectivity.{interface_id}`. Fires when per-interface
+         *     reachability flips.
+         */
+        HubConnectivityChangedPayload: {
+            central: string;
+            interface_id: string;
+            reachable: boolean;
+            /** @description Probe round-trip in milliseconds; omitted when not measured. */
+            latency_ms?: number;
+        };
+        /**
+         * @description Payload of a `hub.system_update_changed` broadcast. Topic pattern
+         *     `hub.{central}.system_update`. Mirrors the `GET /system/update` entry
+         *     so a client can drop its update-status poll loop and consume the same
+         *     fields off the push.
+         */
+        HubSystemUpdateChangedPayload: {
+            central: string;
+            /** @description Installed firmware version; omitted while unobserved. */
+            current_firmware?: string;
+            /** @description Firmware version offered for install; omitted while unobserved. */
+            available_firmware?: string;
+            update_available: boolean;
+            in_progress: boolean;
+        };
+        /** @description The most recent event fired within an event group. */
+        TriggeredEventSummary: {
+            /** @description Lowercased parameter name of the source that fired. */
+            parameter: string;
+            /** @description The value carried by the fire; omitted when none. */
+            value?: unknown;
+            /**
+             * Format: date-time
+             * @description RFC3339 timestamp of the fire.
+             */
+            triggered_at?: string;
+        };
+        /**
+         * @description Per-Kind aggregation of a channel's keypress / impulse /
+         *     device-error event sources — the bootstrap shape an `event`
+         *     platform builds its entities from.
+         */
+        EventGroupSummary: {
+            channel_address: string;
+            /** @description Short device-trigger flavour ("keypress", "impulse", "device_error"). */
+            kind: string;
+            /** @description Lowercased member parameter names (event-type identifiers). */
+            event_types: string[];
+            /** @description Upper-case CCU parameter names of the member sources. */
+            parameters: string[];
+            available: boolean;
+            last_triggered_event?: components["schemas"]["TriggeredEventSummary"];
+            /**
+             * @description Canonical loom routing key for this event group — the same
+             *     value the WS `hub.program_executed`-family event carries for
+             *     event groups. Lets clients build their entity registry from
+             *     the summary without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
+        };
+        /** @description Count-valued hub singleton (alarm / service messages, inbox). */
+        HubCountDataPoint: {
+            legacy_name: string;
+            value: number;
+        };
+        /** @description Firmware-update hub singleton. */
+        HubUpdateDataPoint: {
+            legacy_name: string;
+            update_available: boolean;
+            in_progress: boolean;
+        };
+        /** @description One hub metric with its unit. */
+        HubMetricDataPoint: {
+            legacy_name: string;
+            value: number;
+            unit?: string;
+        };
+        /** @description Per-interface reachability hub singleton. */
+        HubConnectivityDataPoint: {
+            interface_id: string;
+            reachable: boolean;
+        };
+        /** @description Per-interface install-mode hub singleton. */
+        HubInstallModeDataPoint: {
+            interface_id: string;
+            enabled: boolean;
+            /** @description Seconds left while enabled; 0 when disabled. */
+            remaining_s: number;
+            /** @description False until the first state has been read from the CCU. */
+            observed: boolean;
+        };
+        /**
+         * @description Aggregated hub-singleton snapshot for one central (returned by
+         *     `GET /hub/data-points`). Gathers the hub singletons into the
+         *     coordinator shape a client builds its singleton entities from.
+         */
+        HubDataPoints: {
+            central?: string;
+            alarm_messages: components["schemas"]["HubCountDataPoint"];
+            service_messages: components["schemas"]["HubCountDataPoint"];
+            inbox: components["schemas"]["HubCountDataPoint"];
+            update: components["schemas"]["HubUpdateDataPoint"];
+            metrics?: components["schemas"]["HubMetricDataPoint"][];
+            connectivity?: components["schemas"]["HubConnectivityDataPoint"][];
+            install_mode?: components["schemas"]["HubInstallModeDataPoint"][];
         };
         /**
          * @description Payload of a `device.created` broadcast. Topic pattern
@@ -4277,10 +5013,10 @@ export interface components {
             /**
              * @description Canonical loom-namespaced routing key (`loom_<routing-key>`)
              *     for the rolled-back data point; matches the
-             *     `datapoint.value_changed` entity key. Optional — see
-             *     DataPointValueChangedPayload.unique_id.
+             *     `datapoint.value_changed` entity key. Always present and
+             *     non-empty — see DataPointValueChangedPayload.unique_id.
              */
-            unique_id?: string;
+            unique_id: string;
             /** @description The optimistic value that was rolled back. Omitted when not tracked. */
             sent?: unknown;
             /** @description The value the data point reverted to (last CCU-confirmed value). Omitted when not tracked. */
@@ -4305,10 +5041,10 @@ export interface components {
              * @description Canonical loom-namespaced routing key (`loom_<routing-key>`)
              *     for the data point this trigger fires on; matches the
              *     `datapoint.value_changed` entity key (a trigger and a value
-             *     change on the same DP route to the same entity). Optional —
-             *     see DataPointValueChangedPayload.unique_id.
+             *     change on the same DP route to the same entity). Always present
+             *     and non-empty — see DataPointValueChangedPayload.unique_id.
              */
-            unique_id?: string;
+            unique_id: string;
             /** @description Optional value carried by the trigger event in its native CCU type. Omitted when absent. */
             value?: unknown;
         };
@@ -4360,6 +5096,12 @@ export interface components {
             go_type: string;
             /** @description Whether changing this field requires a daemon restart to take effect. */
             restart_required: boolean;
+            /**
+             * @description The consumer-facing default value for this field, as emitted by
+             *     the schema handler. Type follows the field's `go_type` (string,
+             *     bool, number, …); absent when the field has no documented default.
+             */
+            default?: unknown;
         };
         SchemaResponse: {
             /** @description Top-level config section names (e.g. ["logging", "north", "centrals"]). */
@@ -4612,9 +5354,35 @@ export interface components {
         SetActiveProfileRequest: {
             profile: string;
         };
+        /**
+         * @description Copy the whole week schedule from the path device to the named
+         *     target device. Both schedule channels are auto-resolved.
+         */
+        CopyScheduleRequest: {
+            target_device_address: string;
+        };
+        /**
+         * @description Copy a single climate profile from the path channel/source_profile
+         *     to the named target channel/target_profile.
+         */
+        CopyProfileRequest: {
+            source_profile: number;
+            target_channel_address: string;
+            target_profile: number;
+        };
         /** @description Week-profile descriptor for a thermostat channel. */
         WeekProfileResponse: {
             address: string;
+            /**
+             * @description Canonical loom-namespaced routing key for the device-level
+             *     week-profile sensor entity
+             *     (`loom_week_profile_<device-addr>_week_profile`), built over the
+             *     owning device address + parameter "WEEK_PROFILE" + prefix
+             *     "week_profile". Bit-identical to the client-synthesised key so the
+             *     client consumes it instead of recomputing it. Always present and
+             *     non-empty (the serial-readiness gate guarantees the central-id slot).
+             */
+            unique_id: string;
             /** @enum {string} */
             schedule_type: "default" | "climate";
             min_temp: number;
@@ -4638,6 +5406,16 @@ export interface components {
             name: string;
             /** @enum {string} */
             channel_type: "primary" | "secondary";
+            /**
+             * @description Canonical loom-namespaced routing key for the schedule-channel-switch
+             *     entity this target maps to
+             *     (`loom_schedule_channel_switch_<device-addr>_schedule_channel_lock_<channel_key>`),
+             *     built over the owning device address + parameter
+             *     "SCHEDULE_CHANNEL_LOCK_<channel_key>" (the map key, e.g. "1_1") +
+             *     prefix "schedule_channel_switch". Bit-identical to the
+             *     client-synthesised key; always present and non-empty.
+             */
+            unique_id: string;
         };
         /** @description One direct link (sender → receiver peering) of a device. */
         Link: {
@@ -4690,6 +5468,13 @@ export interface components {
             translated_name?: string;
             /** Format: date-time */
             modified_at?: string;
+            /**
+             * @description Canonical loom routing key for this calculated data point —
+             *     the same canonical key generic data points carry. Lets
+             *     clients build their entity registry from the summary without
+             *     recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+             */
+            unique_id: string;
         };
         CalculatedDPDetail: components["schemas"]["CalculatedDPSummary"] & {
             depends_on?: string[];
@@ -4855,6 +5640,29 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getDeviceIcon: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: components["parameters"]["Address"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Icon image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     getParamset: {
         parameters: {
             query?: never;
@@ -4901,6 +5709,28 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    fetchSysvars: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted — sysvar re-pull triggered. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
@@ -5034,6 +5864,51 @@ export interface operations {
             };
         };
     };
+    getRestartPending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restart-pending status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        pending: boolean;
+                        fields: string[];
+                    };
+                };
+            };
+        };
+    };
+    getConfigChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Changed config field paths */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        fields: string[];
+                    };
+                };
+            };
+        };
+    };
     listSystemStatus: {
         parameters: {
             query?: never;
@@ -5135,6 +6010,116 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Identity"];
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    changeOwnPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    current_password: string;
+                    new_password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Password changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preference value */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        key?: string;
+                        value?: unknown;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Preference too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deletePreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted (or already absent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
         };
@@ -5369,6 +6354,53 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    reloadDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device config reloaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    reloadChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Channel config reloaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     acceptInboxDevice: {
         parameters: {
             query?: never;
@@ -5426,6 +6458,36 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    deviceInstallMode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    /** @default 60 */
+                    seconds?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Pairing window opened */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     getUiSchema: {
         parameters: {
             query?: {
@@ -5453,6 +6515,41 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    exportDeviceDefinition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Device-definition zip archive */
+            200: {
+                headers: {
+                    /** @description attachment; filename="{model}.zip" */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description CCU read error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -5875,6 +6972,65 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    copyDeviceSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    copyClimateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                addr: string;
+                no: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Scheduled */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["UnprocessableEntity"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listLinks: {
         parameters: {
             query?: {
@@ -6074,6 +7230,26 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getHubDataPoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubDataPoints"][];
+                };
+            };
+        };
+    };
     listInbox: {
         parameters: {
             query?: never;
@@ -6110,6 +7286,90 @@ export interface operations {
             };
         };
     };
+    createRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** @description Target CCU (required when more than one is configured). */
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteRoom: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    renameRoom: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    new_name: string;
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
     listFunctions: {
         parameters: {
             query?: never;
@@ -6126,6 +7386,114 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    createFunction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            502: components["responses"]["BadGateway"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    deleteFunction: {
+        parameters: {
+            query?: {
+                central?: string;
+            };
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    renameFunction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    new_name: string;
+                    central?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Renamed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            502: components["responses"]["BadGateway"];
+        };
+    };
+    getProgram: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgramSummary"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     setProgramEnabled: {
@@ -6409,6 +7777,10 @@ export interface operations {
                 until?: string;
                 /** @description Maximum entries to return. 0 or absent uses the default (1000). Values above 10000 are capped to 10000. */
                 limit?: number;
+                /** @description Pagination offset over the durable history (SQLite path). Ignored on the in-memory fallback. */
+                offset?: number;
+                /** @description When `csv`, returns the entries as a downloadable `text/csv` attachment instead of JSON. */
+                format?: "csv";
             };
             header?: never;
             path?: never;
@@ -6426,6 +7798,44 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getHistory: {
+        parameters: {
+            query: {
+                /** @description Central (CCU) name that owns the data point. */
+                central: string;
+                /** @description Canonical interface id (&lt;central&gt;-&lt;interface&gt;). */
+                interface_id: string;
+                /** @description Channel address, e.g. ABC0000001:4. */
+                channel: string;
+                /** @description Parameter name, e.g. ACTUAL_TEMPERATURE. */
+                parameter: string;
+                /** @description Inclusive lower bound (RFC3339). */
+                from: string;
+                /** @description Exclusive upper bound (RFC3339). Must be after from. */
+                to: string;
+                /** @description Target bucket count. Capped to 2000; values &lt;= 0 or absent use the default (200). */
+                buckets?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Chronological list of non-empty buckets. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryBucket"][];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
         };
     };
@@ -6890,6 +8300,35 @@ export interface operations {
             };
         };
     };
+    uploadTLSCertificate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    cert: string;
+                    /** Format: binary */
+                    key: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Certificate replaced and reloaded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     reloadMQTT: {
         parameters: {
             query?: never;
@@ -6971,6 +8410,51 @@ export interface operations {
             };
             500: components["responses"]["InternalError"];
             /** @description cache feature disabled or store unwired. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clearCache: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CacheClearRequest"];
+            };
+        };
+        responses: {
+            /** @description clear completed; report describes what was removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheClearReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /**
+             * @description clear ran but one or more stores reported an error; the
+             *     partial report (with the `errors` array populated) is still
+             *     returned in the body.
+             */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CacheClearReport"];
+                };
+            };
+            /** @description cache reset unavailable (south-bound never came up). */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7710,6 +9194,30 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Deleted (idempotent — 204 even if section was absent) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    resetConfigField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dotted config field path, e.g. "north.rest.rate_limit.enabled". */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset (idempotent — 204 even if already at default) */
             204: {
                 headers: {
                     [name: string]: unknown;

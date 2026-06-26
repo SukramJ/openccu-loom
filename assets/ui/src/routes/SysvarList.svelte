@@ -98,7 +98,7 @@
   }
 
   function draftKey(sv: SysvarEntry): string {
-    return sv.central + "/" + sv.name;
+    return (sv.central ?? "") + "/" + sv.name;
   }
 
   async function save(sv: SysvarEntry) {
@@ -359,7 +359,7 @@
     <EmptyState message={t("sysvars.empty")} icon="mdi:sliders" />
   {:else}
     <ul class="space-y-2">
-      {#each filtered as sv (sv.central + "/" + sv.name)}
+      {#each filtered as sv ((sv.central ?? "") + "/" + sv.name)}
         {@const dirty = isDirty(sv)}
         {@const saving = savingName === sv.name}
         <li>
