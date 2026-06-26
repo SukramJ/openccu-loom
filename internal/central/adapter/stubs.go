@@ -14,49 +14,11 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ErrUnimplemented is returned by MVP stubs when a feature needs a
 // backing service that has not been wired yet.
 var ErrUnimplemented = errors.New("adapter: not implemented in MVP")
-
-// --- Paramsets stub ---
-
-// ParamsetsAdapter is the MVP stub. Real implementations come with
-// the backend wiring (§14.6 CallParameterCollector).
-type ParamsetsAdapter struct{}
-
-// NewParamsetsAdapter constructs the stub.
-//
-// loom:reachable:reason="wired into REST paramset handler in daemon.go north-side setup"
-func NewParamsetsAdapter() *ParamsetsAdapter { return &ParamsetsAdapter{} }
-
-// GetParamset implements handlers.ParamsetService.
-func (a *ParamsetsAdapter) GetParamset(
-	_ context.Context, _ string, _ hmenum.ParamsetKey,
-) (map[string]any, error) {
-	return nil, ErrUnimplemented
-}
-
-// PutParamset implements handlers.ParamsetService.
-func (a *ParamsetsAdapter) PutParamset(
-	_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any,
-) error {
-	return ErrUnimplemented
-}
-
-// --- Incidents stub ---
-
-// IncidentsAdapter returns an empty list until persistent incident
-// storage is wired.
-type IncidentsAdapter struct{}
-
-// NewIncidentsAdapter constructs the stub.
-func NewIncidentsAdapter() *IncidentsAdapter { return &IncidentsAdapter{} }
-
-// Incidents implements handlers.IncidentsReader.
-func (a *IncidentsAdapter) Incidents() []hmapi.Incident { return nil }
 
 // --- Backup adapter ---
 

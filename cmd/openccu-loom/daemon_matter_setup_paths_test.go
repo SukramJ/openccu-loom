@@ -1067,7 +1067,7 @@ func TestWireIncidentRecorder_CentralWithCache_SetsRecorder(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 	// No assertion needed — no panic is the goal.

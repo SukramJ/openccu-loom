@@ -11,7 +11,6 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ============================================================
@@ -459,32 +458,6 @@ func TestMqttParameterLabelAdapterNilReceiver(t *testing.T) {
 // ============================================================
 // stubs.go: MVP stubs
 // ============================================================
-
-func TestParamsetsAdapterGetParamsetReturnsUnimplemented(t *testing.T) {
-	t.Parallel()
-	a := NewParamsetsAdapter()
-	_, err := a.GetParamset(context.Background(), "addr:1", hmenum.ParamsetKeyValues)
-	if err == nil {
-		t.Fatal("expected ErrUnimplemented")
-	}
-}
-
-func TestParamsetsAdapterPutParamsetReturnsUnimplemented(t *testing.T) {
-	t.Parallel()
-	a := NewParamsetsAdapter()
-	err := a.PutParamset(context.Background(), "addr:1", hmenum.ParamsetKeyValues, nil)
-	if err == nil {
-		t.Fatal("expected ErrUnimplemented")
-	}
-}
-
-func TestIncidentsAdapterReturnsNil(t *testing.T) {
-	t.Parallel()
-	a := NewIncidentsAdapter()
-	if got := a.Incidents(); got != nil {
-		t.Errorf("Incidents() = %v, want nil", got)
-	}
-}
 
 func TestBackupAdapterNilRegistryTrigger(t *testing.T) {
 	t.Parallel()
