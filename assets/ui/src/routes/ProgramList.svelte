@@ -10,6 +10,7 @@
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
+  import { makeTextMatcher } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
@@ -93,15 +94,11 @@
   });
 
   const filtered = $derived.by(() => {
-    const q = search.trim().toLowerCase();
+    const match = makeTextMatcher(search);
     const list = [...programs].sort((a, b) => a.name.localeCompare(b.name));
-    const bySearch = !q
-      ? list
-      : list.filter(
-          (p) =>
-            p.name.toLowerCase().includes(q) ||
-            (p.description ?? "").toLowerCase().includes(q),
-        );
+    const bySearch = list.filter(
+      (p) => match(p.name) || match(p.description ?? ""),
+    );
     if (!centralFilter) return bySearch;
     return bySearch.filter((p) => p.central === centralFilter);
   });
@@ -158,7 +155,7 @@
         {@const running = runningId === p.id}
         <li>
           <Card class="flex h-full flex-col justify-between p-4">
-            <div class="min-w-0">
+            <div class="min-w-0" class:opacity-60={p.active === false}>
               <div class="flex items-center gap-2">
                 <h3 class="truncate font-semibold">{p.name}</h3>
                 {#if p.active === true}

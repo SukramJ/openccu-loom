@@ -24,6 +24,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   new `ErrPermissionDenied` sentinel and short-circuits retry, instead of
   being retried as a generic client exception. Surfaces a mis-configured
   user level instead of silently hammering the CCU.
+- **SPA list search accepts regular expressions.** The device, system-
+  variable, and program list filters now match by regex when the term is a
+  valid pattern (e.g. `BidCos-RF\.MEQ`, `MEQ|HEQ`), and fall back to a
+  case-insensitive substring match otherwise.
+- **SPA favorites became a quick-control surface.** Pinned system variables
+  can now be changed inline (toggle / number / select) directly on the
+  start page instead of only linking back to the sysvar list. Inactive
+  programs are visually dimmed in the program list for faster scanning.
 
 ### Removed
 
