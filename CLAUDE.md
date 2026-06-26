@@ -928,7 +928,9 @@ automatically propagates the update without requiring a second manual edit.
   label.
 - Commits are signed off (`git commit -s`) — DCO applies so the
   authorship chain stays traceable.
-- Releases tagged `vX.Y.Z`. Pre-releases `vX.Y.Z-rc.N`.
+- Releases tagged `vX.Y.Z`. Pre-releases `vX.Y.Z-rc.N`. Each release updates
+  both changelogs (root `CHANGELOG.md` + `packaging/ha-addon/openccu-loom/CHANGELOG.md`,
+  the operator-facing HA add-on changelog) — see the completion checklist.
 - Never push `--force` to `main`.
 
 ---
@@ -1109,6 +1111,12 @@ history is in `CHANGELOG.md`.
 - [ ] Fully typed, passes `golangci-lint`.
 - [ ] Tests updated (unit + contract where applicable).
 - [ ] `CHANGELOG.md` entry for user-visible changes.
+- [ ] On a version bump / release: update **both** the root `CHANGELOG.md`
+      **and** the HA add-on changelog
+      (`packaging/ha-addon/openccu-loom/CHANGELOG.md`) — Home Assistant shows
+      the latter to users in the add-on store / Update view, so it must not
+      lag the release. Bump it alongside `internal/build/version.go` and
+      `packaging/ha-addon/openccu-loom/config.yaml`.
 - [ ] `SPECIFICATION.md` updated if the change touches a goal,
       non-goal, hard constraint, or resolved decision; ADR written
       for any architectural shift that future readers will need to
