@@ -350,3 +350,16 @@ type Operations interface {
 	LinkOps
 	SystemOps
 }
+
+// RSSIInfoProvider is an optional extension to [Operations] that RF-capable
+// backends implement to expose the CCU's per-interface reception-strength
+// matrix (XML-RPC `rssiInfo`). Callers holding an [Operations] reference
+// type-assert to [RSSIInfoProvider]; backends that do not speak RF (e.g.
+// CUxD over BIN-RPC) simply do not implement it, so the assertion fails and
+// the caller skips that interface.
+//
+// The result is keyed by device address → partner address → [rssiDevice,
+// rssiPeer]; the wire sentinel 65536 marks a direction with no data.
+type RSSIInfoProvider interface {
+	RSSIInfo(ctx context.Context) (map[string]map[string][2]int, error)
+}

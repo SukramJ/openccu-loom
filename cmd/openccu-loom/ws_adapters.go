@@ -25,6 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/cachereset"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
+	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
@@ -152,6 +153,9 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	ws.RegisterMissingCommands(router, ws.MissingCommandsConfig{
 		// ccu.get_signal_quality — RSSI + reachability per device.
 		SignalQuality: allDevices,
+		// ccu.get_rssi_info — pairwise RF reception matrix (CCU rssiInfo)
+		// across every central + RF interface.
+		RSSIInfo: &wsRSSIInfo{registry: w.registry, writer: w.valueWriter},
 		// schedules.list_devices — devices that expose a week-profile.
 		ScheduleDevices: allDevices,
 		// ccu.get_hub_data — service/alarm message counts.
@@ -188,6 +192,93 @@ func (w *wsAllDevices) AllDevices() []*device.Device {
 		return nil
 	}
 	return w.devs.Devices()
+}
+
+// ── wsRSSIInfo ───────────────────────────────────────────────────────────────
+
+// wsRSSIInfo adapts the per-interface XML-RPC `rssiInfo` matrix onto
+// ws.RSSIMatrixProvider, backing the ccu.get_rssi_info command. It
+// iterates every central, collects the distinct RF interfaces from that
+// central's devices, fetches each backend's reception matrix, and
+// resolves device/channel addresses to names. Backends that do not speak
+// RF (e.g. CUxD over BIN-RPC) do not implement backends.RSSIInfoProvider,
+// so the type assertion fails and the interface is skipped.
+type wsRSSIInfo struct {
+	registry *central.Registry
+	writer   *clientpkg.ValueWriter
+}
+
+// rssiNoInfo is the CCU's wire sentinel for "no reception data" in an RSSI
+// slot; it is surfaced to clients as null.
+const rssiNoInfo = 65536
+
+func (w *wsRSSIInfo) RSSIInfo(ctx context.Context) (map[string]any, error) {
+	devices := make([]map[string]any, 0)
+	if w.registry == nil || w.writer == nil {
+		return map[string]any{"devices": devices}, nil
+	}
+	for _, u := range w.registry.List() {
+		if u == nil || u.ModelRegistry == nil {
+			continue
+		}
+		// Build an address→name lookup (devices + channels) and the set of
+		// distinct interface IDs to query, in one pass over the model.
+		nameByAddr := map[string]string{}
+		ifaceIDs := map[string]struct{}{}
+		for _, d := range u.ModelRegistry.List() {
+			nameByAddr[d.Address] = d.Name
+			for _, ch := range d.Channels() {
+				nameByAddr[ch.Address] = ch.Name
+			}
+			if d.InterfaceID != "" {
+				ifaceIDs[d.InterfaceID] = struct{}{}
+			}
+		}
+		for ifaceID := range ifaceIDs {
+			backend, ok := w.writer.Backend(u.Name(), ifaceID)
+			if !ok {
+				continue
+			}
+			provider, ok := backend.(backends.RSSIInfoProvider)
+			if !ok {
+				continue // non-RF backend (e.g. CUxD) — no rssiInfo
+			}
+			matrix, err := provider.RSSIInfo(ctx)
+			if err != nil {
+				// A failed / unsupported interface must not sink the whole
+				// command; other interfaces may still answer.
+				continue
+			}
+			for devAddr, partners := range matrix {
+				ps := make([]map[string]any, 0, len(partners))
+				for partnerAddr, pair := range partners {
+					ps = append(ps, map[string]any{
+						"address":     partnerAddr,
+						"name":        nameByAddr[partnerAddr],
+						"rssi_device": rssiOrNull(pair[0]),
+						"rssi_peer":   rssiOrNull(pair[1]),
+					})
+				}
+				devices = append(devices, map[string]any{
+					"address":      devAddr,
+					"name":         nameByAddr[devAddr],
+					"interface_id": ifaceID,
+					"central":      u.Name(),
+					"partners":     ps,
+				})
+			}
+		}
+	}
+	return map[string]any{"devices": devices}, nil
+}
+
+// rssiOrNull maps the CCU's 65536 "no data" sentinel to nil and passes any
+// real reading through unchanged.
+func rssiOrNull(v int) any {
+	if v == rssiNoInfo {
+		return nil
+	}
+	return v
 }
 
 // ── wsHubMessageCounts ───────────────────────────────────────────────────────

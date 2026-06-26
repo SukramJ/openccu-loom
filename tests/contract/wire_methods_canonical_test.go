@@ -42,6 +42,7 @@ func TestWireMethodsCanonical(t *testing.T) {
 		"putParamset":             true,
 		"setValue":                true,
 		"getValue":                true,
+		"rssiInfo":                true,
 		"setInstallMode":          true,
 		"installFirmware":         true,
 		"updateFirmware":          true,

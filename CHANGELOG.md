@@ -6,6 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.15.1]
 
+### Added
+
+- **`ccu.get_rssi_info` WebSocket command.** Exposes the CCU's pairwise RF
+  reception matrix (device ↔ communication-partner RSSI pairs) read from
+  `Interface.rssiInfo`, across every central and RF interface; the CCU's
+  65536 "no data" sentinel is normalised to `null`. Complements
+  `ccu.get_signal_quality` (a flat per-device list) with the link-level
+  matrix the CCU reports directly. Bumps the north-bound API contract
+  version to 2.2.0.
+
+### Changed
+
+- **JSON-RPC permission errors are now distinguishable from generic
+  failures.** A CCU JSON-RPC `error.code 400` ("access denied" —
+  authenticated but the session's privilege level is too low) maps to the
+  new `ErrPermissionDenied` sentinel and short-circuits retry, instead of
+  being retried as a generic client exception. Surfaces a mis-configured
+  user level instead of silently hammering the CCU.
+
 ### Removed
 
 - **`north.ui.listen` config setting + `OPENCCU_LOOM_UI_LISTEN` env var.** The
