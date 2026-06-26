@@ -196,11 +196,14 @@ Items still pending under P0-5 / P1, ordered by impact:
 
 ## Pre-release production-load test
 
-**Status**: not started; pre-release QA gate (target: before 1.0.0).
+**Status**: harness implemented (`tests/loadtest/`, `-tags=loadtest`).
+The hermetic SMOKE run is part of the gated suite and passes
+deterministically; the ≥ 1000-device / ≥ 60-min production-scale soak is
+operator-run before tagging a release (it is not part of routine CI).
 
 The daemon ships with contract tests + golden-file replay +
-godevccu integration tests, but no measured headroom against a
-realistic fleet.
+godevccu integration tests; this harness adds measured headroom against
+a realistic fleet.
 
 ### Target shape
 
@@ -225,16 +228,46 @@ realistic fleet.
 
 ### Tooling
 
-- `tests/bench/` already houses Go benchmarks; the load test sits
-  one tier up. Likely shape: a `tests/loadtest/` package guarded by
-  `-tags=loadtest` so it does not run on every `go test ./...`.
-- godevccu spins a programmable fleet via the existing
-  `tests/integration/testdata/` fixtures; the load harness drives
-  it through the same wire-DP construction as the integration
-  tests.
+- `tests/bench/` houses Go benchmarks; the load test sits one tier
+  up in `tests/loadtest/`, guarded by `-tags=loadtest` so it never
+  runs on `go test ./...`. Run it explicitly:
+
+  ```sh
+  go test -tags=loadtest ./tests/loadtest/...
+  ```
+
+- godevccu spins the programmable fleet in-process; the harness builds
+  the full Central → DevicePipeline stack and drives the production chi
+  REST handlers (`GET .../data-points`, `PUT .../value`) plus the
+  EventBus fan-out the WS pump publishes, so the workload exercises the
+  same code paths the live daemon runs. MQTT is optional and only
+  engages when `LOADTEST_MQTT_URL` is set (the SMOKE run stays
+  Docker-free).
+- Env knobs (with SMOKE defaults): `LOADTEST_DEVICES` (20),
+  `LOADTEST_DURATION` (3s), `LOADTEST_RPS` (200), `LOADTEST_STRICT`
+  (0 = loose smoke thresholds), `LOADTEST_MQTT_URL` (unset → MQTT
+  skipped). Metrics: REST latency percentiles (p50/p95/p99), a
+  dropped-request counter, a `runtime.NumGoroutine()` baseline-vs-
+  teardown leak check, and `runtime.ReadMemStats` heap-growth stability.
+
+### Operator soak
+
+The production-scale soak sets the strict gate (the **Pass criteria**
+above) and runs for the full window:
+
+```sh
+LOADTEST_DEVICES=1000 LOADTEST_DURATION=60m LOADTEST_RPS=10000 \
+LOADTEST_STRICT=1 \
+go test -tags=loadtest -timeout=90m -run TestProductionLoad ./tests/loadtest/...
+```
+
+The strict settle window exceeds the 30s optimistic-rollback timeout so
+those expected, self-retiring rollback goroutines drain before the leak
+snapshot. See `tests/loadtest/doc.go` for the full SMOKE-vs-SOAK
+breakdown and threshold table.
 
 ### When
 
-Before tagging the 1.0.0 release. Findings + remediation tracked
-in the architecture audit doc.
+Run the operator soak before tagging the 1.0.0 release. Findings +
+remediation tracked in the architecture audit doc.
 
