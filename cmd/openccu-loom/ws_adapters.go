@@ -249,27 +249,40 @@ func (w *wsRSSIInfo) RSSIInfo(ctx context.Context) (map[string]any, error) {
 				// command; other interfaces may still answer.
 				continue
 			}
-			for devAddr, partners := range matrix {
-				ps := make([]map[string]any, 0, len(partners))
-				for partnerAddr, pair := range partners {
-					ps = append(ps, map[string]any{
-						"address":     partnerAddr,
-						"name":        nameByAddr[partnerAddr],
-						"rssi_device": rssiOrNull(pair[0]),
-						"rssi_peer":   rssiOrNull(pair[1]),
-					})
-				}
-				devices = append(devices, map[string]any{
-					"address":      devAddr,
-					"name":         nameByAddr[devAddr],
-					"interface_id": ifaceID,
-					"central":      u.Name(),
-					"partners":     ps,
-				})
-			}
+			devices = append(devices, buildRSSIDeviceEntries(matrix, ifaceID, u.Name(), nameByAddr)...)
 		}
 	}
 	return map[string]any{"devices": devices}, nil
+}
+
+// buildRSSIDeviceEntries shapes one interface's raw reception matrix into
+// the wire entries: it resolves device and partner addresses to names via
+// nameByAddr (empty string when unknown) and normalises the CCU's 65536
+// "no data" sentinel to null. Pure — no registry / backend access — so the
+// name-resolution and normalisation logic is unit-testable on its own.
+func buildRSSIDeviceEntries(
+	matrix map[string]map[string][2]int, ifaceID, centralName string, nameByAddr map[string]string,
+) []map[string]any {
+	devices := make([]map[string]any, 0, len(matrix))
+	for devAddr, partners := range matrix {
+		ps := make([]map[string]any, 0, len(partners))
+		for partnerAddr, pair := range partners {
+			ps = append(ps, map[string]any{
+				"address":     partnerAddr,
+				"name":        nameByAddr[partnerAddr],
+				"rssi_device": rssiOrNull(pair[0]),
+				"rssi_peer":   rssiOrNull(pair[1]),
+			})
+		}
+		devices = append(devices, map[string]any{
+			"address":      devAddr,
+			"name":         nameByAddr[devAddr],
+			"interface_id": ifaceID,
+			"central":      centralName,
+			"partners":     ps,
+		})
+	}
+	return devices
 }
 
 // rssiOrNull maps the CCU's 65536 "no data" sentinel to nil and passes any
