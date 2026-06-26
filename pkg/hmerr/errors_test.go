@@ -84,6 +84,24 @@ func TestJSONRPCErrorClassification(t *testing.T) {
 	if errors.Is(client, ErrInternalBackendException) {
 		t.Fatal("non-internal code must not classify as ErrInternalBackendException")
 	}
+
+	// CCU code 400 ("access denied") is a privilege-level mismatch: it
+	// classifies as ErrPermissionDenied so callers can single it out,
+	// while still matching the broad ErrClientException category.
+	denied := &JSONRPCError{Code: 400, Message: "access denied"}
+	if !errors.Is(denied, ErrPermissionDenied) {
+		t.Fatal("code 400 should classify as ErrPermissionDenied")
+	}
+	if !errors.Is(denied, ErrClientException) {
+		t.Fatal("code 400 should still classify as ErrClientException")
+	}
+	if errors.Is(denied, ErrAuthFailure) {
+		t.Fatal("code 400 must not classify as ErrAuthFailure (credentials are valid)")
+	}
+	// Other codes must not leak the permission classification.
+	if errors.Is(client, ErrPermissionDenied) {
+		t.Fatal("non-400 code must not classify as ErrPermissionDenied")
+	}
 }
 
 func TestContextualErrorFormat(t *testing.T) {
