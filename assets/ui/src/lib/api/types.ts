@@ -444,6 +444,28 @@ export type LinkableChannel = {
   device_model?: string;
 };
 
+// RSSI matrix from `GET /diagnostics/rssi` — the CCU's pairwise RF
+// reception data. rssi_device / rssi_peer are null when the CCU reported
+// its 65536 "no data" sentinel. Not in the generated schema.
+export type RSSIPartner = {
+  address: string;
+  name: string;
+  rssi_device: number | null;
+  rssi_peer: number | null;
+};
+
+export type RSSIDevice = {
+  address: string;
+  name: string;
+  interface_id: string;
+  central: string;
+  partners: RSSIPartner[];
+};
+
+export type RSSIMatrix = {
+  devices: RSSIDevice[];
+};
+
 // RpcRecordingStatus: not in generated schema components. Keep hand-written.
 export type RpcRecordingStatus = {
   central: string;

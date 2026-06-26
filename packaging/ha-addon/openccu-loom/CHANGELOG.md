@@ -2,9 +2,10 @@
 
 ## 0.16.0
 
-- **RF reception matrix in the API.** A new `ccu.get_rssi_info` WebSocket
-  command exposes the CCU's pairwise device ↔ partner RSSI matrix for RF
-  diagnostics, alongside the existing per-device signal-quality view.
+- **RF reception matrix.** The CCU's pairwise device ↔ partner RSSI matrix is
+  now available for RF diagnostics — as a new on-demand "Signal / RSSI matrix"
+  section on the Diagnostics page, plus a REST endpoint and WebSocket command —
+  alongside the existing per-device signal-quality view.
 - **Regex search in the config UI lists.** The device, system-variable, and
   program lists now accept regular expressions (e.g. `BidCos-RF\.MEQ`,
   `MEQ|HEQ`) and fall back to a plain substring match otherwise.

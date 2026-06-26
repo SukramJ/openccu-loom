@@ -8,13 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **`ccu.get_rssi_info` WebSocket command.** Exposes the CCU's pairwise RF
-  reception matrix (device ↔ communication-partner RSSI pairs) read from
-  `Interface.rssiInfo`, across every central and RF interface; the CCU's
-  65536 "no data" sentinel is normalised to `null`. Complements
-  `ccu.get_signal_quality` (a flat per-device list) with the link-level
-  matrix the CCU reports directly. Bumps the north-bound API contract
-  version to 2.2.0.
+- **RF reception matrix — WS command, REST endpoint, and Config-UI view.**
+  Exposes the CCU's pairwise RF reception matrix (device ↔ communication-
+  partner RSSI pairs) read from `Interface.rssiInfo`, across every central
+  and RF interface; the CCU's 65536 "no data" sentinel is normalised to
+  `null`. Reachable via the `ccu.get_rssi_info` WebSocket command, the
+  admin-only `GET /diagnostics/rssi` REST endpoint, and an on-demand
+  "Signal / RSSI matrix" section on the Config-UI Diagnostics page.
+  Complements `ccu.get_signal_quality` (a flat per-device list) with the
+  link-level matrix the CCU reports directly. Bumps the north-bound API
+  contract version to 2.2.0.
 
 ### Changed
 
