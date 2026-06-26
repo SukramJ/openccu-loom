@@ -1909,7 +1909,9 @@ Python `hub.py:388,510,554` wires `fetch_metrics_data`, `init_metrics`, and `pub
 
 OpenCCU-Loom's `MetricHubSensor` family (`internal/model/hub/metrics.go`) is fully implemented at the model level, and the MQTT surface is now wired: `wireOneCentral` (`internal/central/adapter/hub_mqtt_publisher.go`, `--- Metrics ---` block) publishes `BuildSystemHealthDiscovery` + `PublishHubSystemHealthScore` and subscribes `Metrics.OnUpdate(MetricSystemHealth, …)`; Connection Latency rides the per-interface `ConnectivityChangedEvent.LatencyMs` path (`PublishHubConnectionLatency`) in the `--- Connectivity ---` block. Coverage: `internal/central/adapter/hub_metric_sensors_test.go`. The REST surface (`GET /api/v1/hub/{central}/metrics`) remains in place alongside it.
 
-**Remaining sub-item:** `MetricLastEventAgeSecs` is now observed by the `hub.last_event_age_refresh` scheduler job (see `BD-MetricLastEventAgeUnwired` below), so the value is live in the hub-metrics model. Its MQTT Discovery/publish path is still separate — `hub_mqtt_publisher.go` publishes only `MetricSystemHealth` today (tracked under `A3-BD-MetricLastEventAge`).
+**Remaining sub-item (original):** `MetricLastEventAgeSecs` MQTT Discovery/publish path was still separate — `hub_mqtt_publisher.go` published only `MetricSystemHealth` (tracked under `A3-BD-MetricLastEventAge`).
+
+**Status (2026-06): implemented — `MetricLastEventAgeSecs` discovery and publish are wired in `internal/north/mqtt/`: `BuildLastEventAgeDiscovery` in `hub_discovery.go`, `PublishHubLastEventAge` in `bridge.go`, and the subscription in `hub_mqtt_publisher.go`.**
 
 Go paths: `internal/model/hub/metrics.go`, `internal/central/adapter/hub_mqtt_publisher.go`.
 
@@ -2107,17 +2109,13 @@ Go path: `internal/model/custom/state_change.go`, individual `IsStateChange` met
 
 ### A3-G2 — InstallMode per-interface data point: architectural TODO
 
-Python exposes one `HmInstallModeSensor` per interface on the hub. Go's `InstallMode` (`internal/model/hub/install_mode.go`) is a single aggregate tracking install mode state without per-interface granularity.
+Python exposes one `HmInstallModeSensor` per interface on the hub. Go's `InstallMode` (`internal/model/hub/install_mode.go`) was originally a single aggregate tracking install mode state without per-interface granularity.
 
-This is a tracked TODO for a post-0.1.0 milestone. Per-interface install mode requires the `Connectivity`-style per-interface map pattern applied to `InstallMode`. The REST API currently exposes install-mode state as a single hub-level resource; per-interface splitting would require a REST API revision.
+This was a tracked TODO for a post-0.1.0 milestone. Per-interface install mode required the `Connectivity`-style per-interface map pattern applied to `InstallMode`. The REST API originally exposed install-mode state as a single hub-level resource; per-interface splitting required a REST API revision.
 
-**Re-activation checklist:**
-- [ ] Add `states map[string]bool` to `InstallMode` mirroring `Connectivity`.
-- [ ] Add `OnStateWithInterface` and `List()` methods.
-- [ ] Update hub coordinator to populate per-interface install mode.
-- [ ] Update REST handler to surface per-interface state.
+**Status (2026-06): implemented — `GET /install-mode/interfaces` and `POST /install-mode/interfaces` are routed at `internal/north/rest/router.go:816-817`, with handlers in `internal/north/rest/handlers/system_hub.go`.**
 
-Go path: `internal/model/hub/install_mode.go`.
+Go path: `internal/model/hub/install_mode.go`, `internal/north/rest/handlers/system_hub.go`.
 
 ---
 
@@ -2774,9 +2772,11 @@ Each command is pre-registered so it appears in `system.commands` and in `assets
 
 The stub responses are intentional placeholders that communicate clearly to API clients that the feature is not yet available in the current build. The handler pattern — conditional real vs. stub registration — is the standard OpenCCU-Loom extension point for features whose domain layer is defined but whose wiring through the full stack has not been completed yet.
 
-These are not permanent divergences from the Python reference; the Python equivalents in `websocket_api.py` (`ws_set_schedule_enabled`, `ws_get_link_form_schema`, `ws_get_link_profiles`, `ws_test_link_profile`, `ws_determine_parameter`) are the target parity surface. The wiring of each service into `daemon.go` is deferred to a post-0.1.0 milestone.
+These are not permanent divergences from the Python reference; the Python equivalents in `websocket_api.py` (`ws_set_schedule_enabled`, `ws_get_link_form_schema`, `ws_get_link_profiles`, `ws_test_link_profile`, `ws_determine_parameter`) are the target parity surface. The wiring of each service into `daemon.go` was deferred to a post-0.1.0 milestone.
 
-Go paths: `internal/north/rest/ws/commands_missing.go` (stub registrations), `cmd/openccu-loom/daemon.go` (service wiring site).
+**Status (2026-06): implemented — all five commands are wired as REAL handlers in `cmd/openccu-loom/ws_adapters.go` (lines 159, 162, 166, 169); the `stubHandler` path applies only when a provider is nil, and all providers are now wired at daemon startup.**
+
+Go paths: `internal/north/rest/ws/commands_missing.go` (stub registrations), `cmd/openccu-loom/ws_adapters.go` (service wiring site).
 
 ---
 
@@ -2972,9 +2972,11 @@ Go path: `internal/model/device/device.go::ReloadDeviceConfig`, `internal/centra
 
 `DeviceCoordinator.RefreshDeviceLinkPeers` (`internal/central/coordinators/device.go`) re-fetches link-peer addresses for every channel of a device and publishes a `LinkPeerChangedEvent`. The method exists to support the boot-time link-peer initialisation that the reference implementation performs in `Channel.__init__ → init_link_peer`.
 
-This is by design for 0.1.0: boot-time link-peer fetching has been deferred because it requires one RPC call per channel with link peers and the performance cost on a large inventory has not been profiled. The method is exercised in contract tests to keep the implementation correct. A future `ccu_wiring.go` boot step will call it after `CheckAndCreateDevicesFromCache`; until then the `RecoveryCompletedEvent` subscriber in `climate_link_peer_refresh.go` uses the cached `ch.LinkPeers()` slice from the initial paramset load.
+For 0.1.0, boot-time link-peer fetching was deferred because it requires one RPC call per channel with link peers and the performance cost on a large inventory had not been profiled. The method was exercised in contract tests to keep the implementation correct. Until wired, the `RecoveryCompletedEvent` subscriber in `climate_link_peer_refresh.go` used the cached `ch.LinkPeers()` slice from the initial paramset load.
 
-Go path: `internal/central/coordinators/device.go::RefreshDeviceLinkPeers`.
+**Status (2026-06): implemented as on-demand refresh — `config.reload_device_config` now also calls `RefreshDeviceLinkPeers` (`internal/central/adapter/device_reloader.go`). Note: this is on-demand-on-reload, NOT a boot-time per-device sweep; the boot-time sweep remains intentionally avoided to prevent an RPC storm on large inventories.**
+
+Go path: `internal/central/coordinators/device.go::RefreshDeviceLinkPeers`, `internal/central/adapter/device_reloader.go`.
 
 ---
 
@@ -2990,10 +2992,10 @@ adapter layer currently bypasses:
 | `CheckForNewDeviceAddresses` | Reference counterpart `device.py::check_for_new_device_addresses`; the Go adapter resolves new-device detection through the `HandleNewDevices` push pipeline instead, so this stays as the pull-mode counterpart for a future poll path |
 | `InitialPull` | Boot-load path is covered by `CheckAndCreateDevicesFromCache` + `RefreshDeviceDescriptionsAndCreateMissingDevices`; retained as the explicit pull-stage hook for post-0.1.0 boot-stage wiring |
 | `RefreshAfterPair` / `RefreshAfterUnpair` | Pairing flow is a P2 feature; CCU-initiated pair/unpair runs through the `callback.deleteDevices` → `RemoveDevice` path today |
-| `AddNewDevicesManually` | Reference `device.py::add_new_devices_manually`; no WS/REST endpoint exposes manual add yet (post-0.1.0) |
+| `AddNewDevicesManually` | Reference `device.py::add_new_devices_manually`; **Status (2026-06): implemented** — REST `POST /devices/{addr}/accept` (`internal/north/rest/handlers/device_admin.go`), adapter `internal/central/adapter/device_admin.go`, coordinator `AddNewDevicesManually` (`internal/central/coordinators/device.go`). |
 | `GetVirtualRemotes` / `GetVirtualRemoteAddresses` | Reference `device.py::get_virtual_remotes`; wired when virtual-remote support reaches the MQTT/REST surface |
 | `DeleteDevice` / `HandleDeleteDevices` | Adapter `device_admin.go` calls `backend.DeleteDevice` directly; the coordinator variants are the pure-registry layer the adapter bypasses by design |
-| `RefreshFirmwareDataByState` | WS `firmware.refresh` uses the `FirmwareRefresher` interface (`ws_adapters.go`); reference `device.py:710` counterpart, wired post-0.1.0 |
+| `RefreshFirmwareDataByState` | WS `firmware.refresh` uses the `FirmwareRefresher` interface (`ws_adapters.go`); reference `device.py:710` counterpart. **Status (2026-06): implemented** — `FirmwareDomain` (`internal/central/adapter/firmware_domain.go`) backs the `firmware.refresh` WS command, wired in `cmd/openccu-loom/ws_adapters.go:135`. |
 | `SetDeviceNameOverrideChecker` / `RenameNewDeviceFromOverride` | Optional operator name-override feature flag; not wired in `ccu_wiring.go` for 0.1.0 |
 
 `CheckParamsetConsistency` is excluded from this list: it is indirectly
@@ -3014,11 +3016,13 @@ Go path: `pkg/hmevent/catalogue.go::DeviceStateChangedEvent`.
 
 ### BD-A1-V13 — `EmitDeviceRemovedEvent` has no production call site
 
-`EventCoordinator.EmitDeviceRemovedEvent` (`internal/central/coordinators/event.go`) publishes a `DeviceRemovedEvent` onto the bus. Device removal in 0.1.0 goes through `CentralUnit.RemoveDevice` → `ModelRegistry.Remove` without calling `EmitDeviceRemovedEvent`. WS subscribers for `DeviceRemovedEvent` therefore never receive the event in production.
+`EventCoordinator.EmitDeviceRemovedEvent` (`internal/central/coordinators/event.go`) publishes a `DeviceRemovedEvent` onto the bus. Device removal in 0.1.0 went through `CentralUnit.RemoveDevice` → `ModelRegistry.Remove` without calling `EmitDeviceRemovedEvent`. WS subscribers for `DeviceRemovedEvent` therefore did not receive the event in production.
 
-This is a known gap for 0.1.0: live device-removal push to SPA clients is not yet wired. Device removal is an infrequent operator action and the SPA handles the stale-device case via periodic refresh. The fix is a one-line addition in `internal/central/central.go` at the device-removal path, deferred to a follow-up. The method is correct and its implementation is covered by a contract test; the call site is the missing piece.
+This was a known gap for 0.1.0: live device-removal push to SPA clients was not yet wired. Device removal is an infrequent operator action and the SPA handled the stale-device case via periodic refresh. The fix was a one-line addition in `internal/central/central.go` at the device-removal path, deferred to a follow-up. The method was correct and its implementation was covered by a contract test; the call site was the missing piece.
 
-Go path: `internal/central/coordinators/event.go::EmitDeviceRemovedEvent`, `internal/central/central.go::RemoveDevice`.
+**Status (2026-06): implemented — `DeviceLifecycleSubscriber` subscribes to `DeviceRemovedEvent` and publishes to the WS hub (`internal/north/rest/ws/device_lifecycle.go`), started at boot in `cmd/openccu-loom/daemon_sysstatus.go:41-42`.**
+
+Go path: `internal/central/coordinators/event.go::EmitDeviceRemovedEvent`, `internal/north/rest/ws/device_lifecycle.go::DeviceLifecycleSubscriber`.
 
 ---
 
