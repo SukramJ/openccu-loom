@@ -495,6 +495,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// stop defer.
 	restMountTeardown := mountRESTServer(ctx, cfg, logger, servers, restMountDeps{
 		reg:                     reg,
+		valueWriter:             valueWriter,
 		bootstrap:               bootstrapRouter,
 		noUsers:                 noUsers,
 		matter:                  matter,

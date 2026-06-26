@@ -2739,6 +2739,51 @@ paths:
         "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
+  /diagnostics/rssi:
+    get:
+      operationId: getDiagnosticsRSSI
+      summary: Pairwise RF reception matrix (admin-only)
+      description: >
+        Read-only snapshot of the CCU's pairwise RF reception matrix
+        (device ↔ communication-partner RSSI pairs) read from the XML-RPC
+        `rssiInfo` method, across every central and RF interface. The CCU's
+        65536 "no data" sentinel is normalised to null. Exposes the same data
+        as the `ccu.get_rssi_info` WebSocket command.
+      tags: [diagnostics]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "200":
+          description: RF reception matrix
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  devices:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        address: { type: string }
+                        name: { type: string }
+                        interface_id: { type: string }
+                        central: { type: string }
+                        partners:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              address: { type: string }
+                              name: { type: string }
+                              rssi_device:
+                                type: [integer, "null"]
+                                description: RSSI as seen by the device; null when no data.
+                              rssi_peer:
+                                type: [integer, "null"]
+                                description: RSSI as seen by the partner; null when no data.
   /diagnostics/reliability:
     get:
       operationId: getDiagnosticsReliability
