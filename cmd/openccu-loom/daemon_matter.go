@@ -1331,7 +1331,7 @@ type rootClusterRefs struct {
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
 // single misconfigured cluster cannot block the rest.
-func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8)) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen // composition/wiring: long sequential setup
+func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8)) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
 	out := make([]interfaces.MatterClusterServer, 0, 8)
 	var opCreds *mattercore.OperationalCredentials
 	var refs rootClusterRefs
@@ -1450,16 +1450,20 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 	// Descriptor.ServerList and rejects an unknown cluster on the
 	// RootNode device type as schematic inconsistency.
 	//
-	// TimeSynchronization (0x0038) is intentionally NOT mounted on the
-	// Root endpoint either. matter.js's RootEndpoint lists it in
-	// `optional` only (root.ts:215), meant for hub/coordinator devices.
-	// home-assistant-matter-bridge omits it. A Matter-Bridge has no
-	// time-server role; Apple's HAP mapper similarly rejects the extra
-	// cluster on RootNode.
+	// TimeSynchronization (0x0038) is NOT mounted by default. matter.js's
+	// RootEndpoint lists it in `optional` only (root.ts:215), meant for
+	// hub/coordinator devices; home-assistant-matter-bridge omits it and
+	// Apple's HAP mapper may reject the extra cluster on RootNode. It is
+	// mounted only behind the explicit, default-off operator opt-in
+	// (north.matter.enable_time_sync) for controllers that genuinely need a
+	// time-sync surface — see docs/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
+	if mc.TimeSyncEnabled() {
+		out = append(out, mattercore.NewTimeSynchronization())
+		logger.Warn("matter.bridge.time_sync.mounted — TimeSynchronization (0x0038) advertised on RootNode by operator opt-in; some controllers (e.g. Apple Home) may reject pairing")
+	}
 	//
-	// Re-add either cluster only if the bridge ever takes on the
-	// corresponding device-class role (OTA provider / time
-	// coordinator).
+	// Re-add the OTA cluster only if the bridge ever takes on the OTA-provider
+	// device-class role.
 	// IcdManagement (0x0046) is intentionally NOT mounted on the Root
 	// endpoint. Mirrors matter.js RootEndpoint
 	// (packages/node/src/endpoints/root.ts:248-277): IcdManagement is
