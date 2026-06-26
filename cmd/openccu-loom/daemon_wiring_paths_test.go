@@ -91,7 +91,7 @@ func TestWireIncidentRecorder_EmptyDataDir_DoesNotPanic(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 }
@@ -118,7 +118,7 @@ func TestWireIncidentRecorder_NilCache_ContinueBranch(t *testing.T) {
 
 	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 }
@@ -221,7 +221,7 @@ func TestWireIncidentRecorder_DBOpenError_DoesNotPanic(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
 
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 }

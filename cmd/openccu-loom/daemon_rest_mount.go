@@ -54,6 +54,7 @@ type restMountDeps struct {
 	paramsetsDomain        *adapter.ParamsetsDomain
 	hubAdapter             *adapter.HubAdapter
 	ifaceAdapter           *adapter.InterfacesAdapter
+	incidents              handlers.IncidentsReader
 	sysStatusBuf           *handlers.SystemStatusBuffer
 	visFilter              filter.VisibilitySet
 	metricsReg             *metrics.Registry
@@ -160,7 +161,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Hub:               d.hubAdapter,
 		SysvarRefresh:     adapter.NewSysvarFetchAdapter(d.reg),
 		Interfaces:        d.ifaceAdapter,
-		Incidents:         adapter.NewIncidentsAdapter(),
+		Incidents:         d.incidents,
 		SystemStatus:      d.sysStatusBuf,
 		Labels:            adapter.NewParameterLabelAdapter(d.translations, cfg.Locale),
 		DataPointVis:      d.visFilter,

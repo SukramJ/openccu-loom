@@ -133,9 +133,9 @@ func wireSessionRecorderPersistence(cfg *config.Config, reg *central.Registry, l
 //
 // Degrades gracefully — if the database cannot be opened the centrals run
 // without incident persistence (the slot remains nil / no-op).
-func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slog.Logger) func() {
+func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slog.Logger) (store *sqlite.IncidentStore, teardown func()) {
 	if cfg == nil || reg == nil {
-		return func() {}
+		return nil, func() {}
 	}
 	dataDir := cfg.DataDir
 	if dataDir == "" {
@@ -151,7 +151,7 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 			slog.String("dsn", dsn),
 			slog.String("err", err.Error()),
 		)
-		return func() {}
+		return nil, func() {}
 	}
 	recorder := sqlite.NewIncidentStore(db)
 	for _, u := range reg.List() {
@@ -165,7 +165,7 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 		slog.String("dsn", dsn),
 		slog.Int("centrals", len(reg.List())),
 	)
-	return func() { _ = db.Close() }
+	return recorder, func() { _ = db.Close() }
 }
 
 // wireAuditPersistence layers SQLite persistence on top of the in-

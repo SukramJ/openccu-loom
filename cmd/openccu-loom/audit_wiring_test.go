@@ -93,7 +93,7 @@ func TestWireSessionRecorderPersistence_ValidDir_ReturnsCloser(t *testing.T) {
 func TestWireIncidentRecorder_NilConfig_IsNoop(t *testing.T) {
 	t.Parallel()
 	// Must not panic.
-	closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
+	_, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
 	t.Cleanup(closer)
 }
 
@@ -101,7 +101,7 @@ func TestWireIncidentRecorder_NilRegistry_IsNoop(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.DataDir = t.TempDir()
-	closer := wireIncidentRecorder(cfg, nil, slog.Default())
+	_, closer := wireIncidentRecorder(cfg, nil, slog.Default())
 	t.Cleanup(closer)
 }
 
@@ -112,7 +112,7 @@ func TestWireIncidentRecorder_ValidConfig_DoesNotPanic(t *testing.T) {
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 }

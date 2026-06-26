@@ -735,7 +735,7 @@ func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-inc")
 	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 }

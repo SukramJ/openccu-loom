@@ -35,6 +35,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **`GET /api/v1/incidents` now returns the recorded incidents.** The REST
+  incident reader was wired to an empty MVP stub, so the endpoint (and the
+  diagnostics envelope) always returned an empty list even though incidents were
+  being persisted to SQLite. It now reads from the incident store across every
+  central. Dead stub code (`ParamsetsAdapter`, `IncidentsAdapter`) removed.
 - **OpenAPI spec now matches the server's actual JSON, removing the hand-written
   type divergence in the SPA.** Seven response schemas drifted from what the Go
   handlers emit — `openapi.yaml` was missing fields the server always sends

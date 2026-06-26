@@ -128,7 +128,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// CacheCoordinator. CallbackHandlers reads the recorder lazily from
 	// CacheCoordinator.GetIncidentRecorder(), so no separate handler-level
 	// wiring step is needed. Degrades gracefully when the DB cannot be opened.
-	defer wireIncidentRecorder(cfg, reg, logger)() //nolint:contextcheck // wireIncidentRecorder has no ctx parameter; it creates its own internal context
+	incidentStore, incidentTeardown := wireIncidentRecorder(cfg, reg, logger) //nolint:contextcheck // wireIncidentRecorder has no ctx parameter; it creates its own internal context
+	defer incidentTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
 	// primary-interface pin, event-bus / audit / scheduler gauges) and wire
@@ -508,6 +509,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		paramsetsDomain:         paramsetsDomain,
 		hubAdapter:              hubAdapter,
 		ifaceAdapter:            ifaceAdapter,
+		incidents:               adapter.NewIncidentsStoreReader(incidentStore, reg, logger),
 		sysStatusBuf:            sysStatusBuf,
 		visFilter:               visFilter,
 		metricsReg:              metricsReg,

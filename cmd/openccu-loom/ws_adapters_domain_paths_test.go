@@ -549,7 +549,7 @@ func TestWireIncidentRecorder_WithRegistryContainingCache_DoesNotPanic(t *testin
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
 	gooseMigrateMu.Lock()
-	closer := wireIncidentRecorder(cfg, reg, logger)
+	_, closer := wireIncidentRecorder(cfg, reg, logger)
 	gooseMigrateMu.Unlock()
 	t.Cleanup(closer)
 	// If the Cache field is non-nil and SetIncidentRecorder is called, must not panic.

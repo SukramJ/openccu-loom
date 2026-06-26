@@ -155,27 +155,27 @@ func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 	} else {
 		// Stub registration so the command appears in system.commands even
 		// before the domain is wired.
-		router.Register("schedules.set_enabled", stubHandler("ws: schedules.set_enabled: SetScheduleEnabled not yet wired through domain"))
+		router.Register("schedules.set_enabled", stubHandler("ws: schedules.set_enabled: schedule domain provider not configured in this deployment"))
 	}
 
 	if cfg.LinkFormSchema != nil {
 		router.Register("links.get_form_schema", linksGetFormSchemaHandler(cfg.LinkFormSchema))
 	} else {
-		router.Register("links.get_form_schema", stubHandler("ws: links.get_form_schema: GetLinkParamsetDescription not yet wired through domain"))
+		router.Register("links.get_form_schema", stubHandler("ws: links.get_form_schema: link form-schema provider not configured in this deployment"))
 	}
 
 	if cfg.LinkProfiles != nil {
 		router.Register("links.get_profiles", linksGetProfilesHandler(cfg.LinkProfiles))
 		router.Register("links.test_profile", linksTestProfileHandler(cfg.LinkProfiles))
 	} else {
-		router.Register("links.get_profiles", stubHandler("ws: links.get_profiles: link-profile store not yet wired"))
-		router.Register("links.test_profile", stubHandler("ws: links.test_profile: link-profile store not yet wired"))
+		router.Register("links.get_profiles", stubHandler("ws: links.get_profiles: link-profile provider not configured in this deployment"))
+		router.Register("links.test_profile", stubHandler("ws: links.test_profile: link-profile provider not configured in this deployment"))
 	}
 
 	if cfg.ParameterDeterminer != nil {
 		router.Register("paramset.determine", paramsetDetermineHandler(cfg.ParameterDeterminer))
 	} else {
-		router.Register("paramset.determine", stubHandler("ws: paramset.determine: determine_parameter not yet wired through InterfaceClient"))
+		router.Register("paramset.determine", stubHandler("ws: paramset.determine: parameter-determiner provider not configured in this deployment"))
 	}
 }
 
