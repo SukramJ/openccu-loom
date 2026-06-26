@@ -105,6 +105,18 @@ only sysvars were a real gap.
   *Sysvar create/update-metadata/delete via the SPA stays nil for
   Homegear: those carry ReGa-only metadata Homegear does not model.*
 
+**Concluded (2026-06).** Homegear is **at parity with the defined target**
+(aiohomematic's Homegear support) and the topic is closed. The
+`HomegearBackend` implements the full operations surface — devices, paramsets,
+get/set value, links, sysvars, metadata, device name, `determineParameter` —
+and the only `ErrUnsupported` methods are ReGa-only concepts Homegear has no
+engine for (programs, rooms, functions, inbox, system-update, sysvar-create),
+exactly matching aiohomematic. Going **beyond** this target (full CCU-like
+depth, non-HomeMatic Homegear families such as Z-Wave/EnOcean, a Homegear-native
+sysvar-create path, validation against a live Homegear) is the explicit
+non-goal recorded in `SPECIFICATION.md` §2.2 ("No Homegear depth-parity (full)")
+and is **not** planned. No further Homegear work is scheduled.
+
 ### Phase 4 — Trigger-driven / opportunistic (low, non-blocking)
 
 Both items confirmed correctly deferred; no action this round.

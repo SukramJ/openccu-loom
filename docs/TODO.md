@@ -44,6 +44,17 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 - [ ] **AccessRestrictionList (ARL, 0x002B)** — intentionally deferred: no Managed-Aggregator use-case; a full matter.js-grade port (fabric store + AddNOC review + enforcement) is weeks of sensitive work. `[planned]` P3 L.
 - [ ] **Actions (0x0025)** — intentionally deferred: the bridge has no scene/action surface to model. `[planned]` P3 M.
 
+## 4. Southbound — Homegear — CONCLUDED (at parity)
+
+- [x] **Homegear backend** — concluded (2026-06). At parity with the defined
+  target (aiohomematic's Homegear support): the `HomegearBackend` implements the
+  full operations surface (devices, paramsets, get/set value, links, sysvars,
+  metadata, device name, `determineParameter`); ReGa-only ops (programs, rooms,
+  functions, inbox, system-update, sysvar-create) return `ErrUnsupported`,
+  matching aiohomematic. Going beyond (full CCU-like depth, non-HomeMatic
+  families, live-Homegear validation) is the explicit non-goal in
+  `SPECIFICATION.md` §2.2 — not planned. See `docs/roadmap.md` Phase 3.
+
 ## 5. Persistence / Config
 
 - [x] **Per-central feature-flag layer** — no genuine gap: the TODO mis-attributed `A5-P04` (an unrelated by-design item); no per-central flag scaffolding exists and there is no operator demand.
