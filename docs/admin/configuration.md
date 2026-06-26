@@ -108,7 +108,6 @@ that are unset leave the YAML value intact.
 | `OPENCCU_LOOM_REST_LISTEN` | `north.rest.listen` | string |
 | `OPENCCU_LOOM_REST_OPENAPI_VALIDATE` | OpenAPI request validation | bool |
 | `OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH` | external OpenAPI spec path | path |
-| `OPENCCU_LOOM_UI_LISTEN` | `north.ui.listen` | string |
 | `OPENCCU_LOOM_MQTT_BROKER_URL` | `north.mqtt.broker_url` | string |
 | `OPENCCU_LOOM_SECRET_KEY` | at-rest master key (see [Secrets](#secrets)) | base64 |
 | `OPENCCU_LOOM_MQTT_PASSWORD` | MQTT broker password (runtime only) | string |
@@ -269,13 +268,13 @@ server-rendered `/health` and `/about`). The Svelte SPA and the
 bootstrap surface are both served on the REST listener (`:8080`
 by default) since 0.14.0 — there is no separate UI listener.
 
-`north.ui.listen` is a **deprecated no-op**: setting it has no effect
-and logs a startup warning. Remove it from existing configs.
+`north.ui.listen` has been **removed** — the bootstrap UI shares the REST
+listener, so there is no separate UI bind address. Delete the key (and the
+`OPENCCU_LOOM_UI_LISTEN` env var) from existing configs.
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
 | `north.ui.enabled` | bool | `true` | — | no |
-| ~~`north.ui.listen`~~ | string | — | ~~`OPENCCU_LOOM_UI_LISTEN`~~ | no — **deprecated, removed** |
 
 ### `north.mqtt`
 

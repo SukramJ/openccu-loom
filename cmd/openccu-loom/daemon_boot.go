@@ -79,7 +79,7 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 		bootstrapCfg := &config.BootstrapConfig{
 			DataDir: cfg.DataDir,
 			Logging: cfg.Logging,
-			Listen:  config.BootstrapListen{REST: cfg.North.REST.Listen, UI: cfg.North.UI.Listen},
+			Listen:  config.BootstrapListen{REST: cfg.North.REST.Listen},
 		}
 		// Resolve the at-rest secret cipher (ADR 0027) and wire it into the
 		// section + centrals stores so secret-classed fields are sealed

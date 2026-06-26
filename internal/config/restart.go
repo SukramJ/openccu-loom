@@ -26,7 +26,6 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(boot.DataDir != eff.DataDir, "data_dir")
 	add(boot.North.REST.Listen != eff.North.REST.Listen, "north.rest.listen")
 	add(boot.North.REST.PublicURL != eff.North.REST.PublicURL, "north.rest.public_url")
-	add(boot.North.UI.Listen != eff.North.UI.Listen, "north.ui.listen")
 	add(boot.Callback.Host != eff.Callback.Host, "callback.host")
 	add(boot.Callback.Port != eff.Callback.Port, "callback.port")
 	add(boot.Callback.BinPort != eff.Callback.BinPort, "callback.bin_port")

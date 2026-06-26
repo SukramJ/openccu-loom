@@ -549,12 +549,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	defer restMountTeardown()
 
 	// The browser-facing bootstrap surface is folded into the REST server
-	// above (ADR 0044) — no separate UI listener. north.ui.listen is
-	// deprecated; warn if an operator still pins it.
-	if l := cfg.North.UI.Listen; l != "" && l != cfg.North.REST.Listen {
-		logger.Warn("config.north.ui.listen.deprecated — the bootstrap UI now shares the REST listener; this setting is ignored",
-			slog.String("north.ui.listen", l))
-	}
+	// above (ADR 0044) — there is no separate UI listener.
 
 	if err := servers.startAll(); err != nil { //nolint:contextcheck // startAll has no ctx parameter; individual servers manage their own lifecycle
 		return fmt.Errorf("server start: %w", err)

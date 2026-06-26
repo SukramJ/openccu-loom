@@ -10,7 +10,7 @@
 #   The configuration model has two layers:
 #
 #   1. Bootstrap-Tier (read BEFORE opening the SQLite database):
-#      data_dir, logging, listen (north.rest.listen / north.ui.listen),
+#      data_dir, logging, listen (north.rest.listen),
 #      bootstrap, env_file.
 #      These values are stored in config.yaml and re-evaluated on EVERY start;
 #      changes take effect immediately (daemon restart required).
@@ -191,7 +191,7 @@ north:
         # secret — encrypted at rest; prefer providing it via an env var (see example.env)
         client_secret: ""
         # Redirect URL after a successful OIDC login.
-        redirect_url: "http://localhost:8081/oidc/callback"
+        redirect_url: "http://localhost:8080/login/oidc/callback"
         # Name of the claim in the ID token that carries the user's role.
         # Empty = no role mapping via OIDC.
         role_claim: "groups"
@@ -200,12 +200,10 @@ north:
   # =============================================================================
   # NORTH — Bootstrap UI (HTMX, login, setup wizard, /health, /about)
   # DB section: north.ui
-  # Bind address is Bootstrap-Tier.
+  # Served on the REST listener (:8080) — no separate bind address.
   # =============================================================================
 
   ui:
-    # Bind address of the HTMX bootstrap server.  [default: :8081]
-    listen: ":8081"
     # Master switch. false = no bootstrap UI.
     # Pointer-bool: nil → true.  [default: true]
     # enabled: true

@@ -140,7 +140,7 @@ operators to hand-edit YAML for every change.
 
 | Tier | Lives in | What goes there | Edit via |
 |------|----------|-----------------|----------|
-| **Bootstrap** | `config.yaml` | `data_dir`, `north.rest.listen`, `north.ui.listen`, `logging.{level,format}`, `bootstrap.allow_first_run_setup`, `env_file` | Edit the YAML + restart |
+| **Bootstrap** | `config.yaml` | `data_dir`, `north.rest.listen`, `logging.{level,format}`, `bootstrap.allow_first_run_setup`, `env_file` | Edit the YAML + restart |
 | **Live** | SQLite (`<data_dir>/openccu-loom.db`) | Everything else — CCUs, MQTT, Matter, mDNS, CORS, OIDC, rate-limit, reliability tunables, users, API tokens | SPA Settings tab, or REST `PUT /api/v1/config/sections/{section}` |
 | **Secrets** | environment (process or `.env` file) | CCU passwords, MQTT password, OIDC client secret | Operator-owned; daemon never writes them back |
 

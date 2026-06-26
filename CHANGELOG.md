@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1]
+
+### Removed
+
+- **`north.ui.listen` config setting + `OPENCCU_LOOM_UI_LISTEN` env var.** The
+  bootstrap UI (login / setup / health / about) has shared the REST listener
+  since 0.14.0 (ADR 0044), so the separate UI bind address was a deprecated
+  no-op. It is now removed entirely — config struct, bootstrap tier, the
+  startup deprecation warning, restart-required handling, and the SPA i18n
+  entries. `north.ui.enabled` (the bootstrap-surface on/off toggle) stays.
+  Delete `north.ui.listen` from existing config files; the loader already
+  ignores unknown keys, so no migration is required.
+
 ## [0.15.0]
 
 ### Added

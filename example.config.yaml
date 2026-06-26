@@ -70,13 +70,15 @@ logging:
   # json | text | text-color                             [default: json]
   format: json
 
-# REST + Bootstrap-UI bind addresses. These two cannot be edited
-# from the SPA itself — the SPA needs to reach them BEFORE it can
-# render its Settings tab. Everything else under `north:` is
-# managed in the SPA (MQTT, Matter, mDNS, CORS, OIDC, rate-limit).
+# REST bind address. This cannot be edited from the SPA itself —
+# the SPA needs to reach it BEFORE it can render its Settings tab.
+# The bootstrap UI (login, /setup, /health, /about) shares this same
+# listener — there is no separate UI bind address. Everything else
+# under `north:` is managed in the SPA (MQTT, Matter, mDNS, CORS,
+# OIDC, rate-limit).
 #
-# REST and UI default to enabled — omit the `enabled:` key here
-# and the daemon turns them on. Set `enabled: false` only to
+# REST and the bootstrap UI default to enabled — omit the `enabled:`
+# key and the daemon turns them on. Set `enabled: false` only to
 # intentionally run a daemon without the matching surface.
 north:
   rest:
@@ -140,12 +142,6 @@ north:
       #   enabled: false                  # unset → on in the HA add-on; false opts out
       #   trusted_proxy_cidr: "172.30.32.0/23"  # HA Supervisor subnet
       #   role: admin                     # granted role: admin | operator | viewer
-  # DEPRECATED since 0.14.0: the bootstrap surface (login, /setup, OIDC
-  # callback, /health, /about) is now served on the REST listener (:8080).
-  # north.ui.listen is silently ignored; the daemon logs a startup warning
-  # when it is set. Remove this key — it has no effect.
-  ui:
-    listen: ":8081"  # deprecated — ignored since 0.14.0; safe to remove
   # MCP server (Model Context Protocol) — exposes the daemon to LLM
   # agents as tools over Streamable HTTP, mounted on the REST listener
   # behind the same auth chain. Disabled by default. Read-only even when

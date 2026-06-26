@@ -798,8 +798,7 @@ type NorthUI struct {
 	// flows and the daemon cannot drive a first-run setup. Use
 	// *bool so the YAML decoder can distinguish "not set" from
 	// "explicitly false".
-	Enabled *bool  `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
-	Listen  string `yaml:"listen" json:"listen" cfg:"basic"`
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
 }
 
 // IsEnabled reports whether the bootstrap UI should run. nil → true.
@@ -1216,9 +1215,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.North.REST.Listen == "" {
 		c.North.REST.Listen = ":8080"
-	}
-	if c.North.UI.Listen == "" {
-		c.North.UI.Listen = ":8081"
 	}
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"

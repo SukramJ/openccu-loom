@@ -109,7 +109,6 @@ func TestDaemonServe_WithRESTAndUI(t *testing.T) {
 	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(true)
-	cfg.North.UI.Listen = "127.0.0.1:0"
 	cfg.Callback.Port = 0
 	cfg.Callback.BinPort = 0
 	cfg.DataDir = t.TempDir()

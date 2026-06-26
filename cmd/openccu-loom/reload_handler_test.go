@@ -139,24 +139,6 @@ func TestHotReloadHandler_RESTListenChange(t *testing.T) {
 	}
 }
 
-// TestHotReloadHandler_UIListenChange is restart-required.
-func TestHotReloadHandler_UIListenChange(t *testing.T) {
-	t.Parallel()
-	var buf bytes.Buffer
-	h := hotReloadHandler(makeLogger(&buf), nil)
-
-	prev := config.Default()
-	next := config.Default()
-	next.North.UI.Listen = ":8888"
-	if err := h(prev, next); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	out := buf.String()
-	if !strings.Contains(out, "north.ui.listen") {
-		t.Errorf("expected north.ui.listen restart_required log; got:\n%s", out)
-	}
-}
-
 // TestHotReloadHandler_CentralsCountChange is restart-required.
 func TestHotReloadHandler_CentralsCountChange(t *testing.T) {
 	t.Parallel()

@@ -128,7 +128,6 @@ var restartRequiredPaths = map[string]struct{}{
 	"data_dir":              {},
 	"north.rest.listen":     {},
 	"north.rest.public_url": {},
-	"north.ui.listen":       {},
 	"callback.host":         {},
 	"callback.port":         {},
 	"callback.bin_port":     {},
