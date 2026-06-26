@@ -169,8 +169,6 @@ func TestHotReloadHandler_AllRestartRequiredFields(t *testing.T) {
 	next.Locale = "de"
 	// callback (change port so struct comparison finds a diff)
 	next.Callback.Port = 9999
-	// north.ui.listen
-	next.North.UI.Listen = ":19999"
 	// centrals count
 	next.Centrals = append(next.Centrals, config.CentralConfig{Name: "extra", Host: "10.0.0.99"})
 
@@ -178,7 +176,7 @@ func TestHotReloadHandler_AllRestartRequiredFields(t *testing.T) {
 		t.Fatalf("handler error: %v", err)
 	}
 	out := buf.String()
-	for _, field := range []string{"data_dir", "locale", "callback", "north.ui.listen", "centrals.count"} {
+	for _, field := range []string{"data_dir", "locale", "callback", "centrals.count"} {
 		if !strings.Contains(out, field) {
 			t.Errorf("expected restart_required for field %q, got:\n%s", field, out)
 		}

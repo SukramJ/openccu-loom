@@ -141,8 +141,6 @@ func (s *Store) Effective(ctx context.Context) (*EffectiveResult, error) {
 	srcs["logging"] = SourceBootstrap
 	cfg.North.REST.Listen = s.bootstrap.Listen.REST
 	srcs["north.rest.listen"] = SourceBootstrap
-	cfg.North.UI.Listen = s.bootstrap.Listen.UI
-	srcs["north.ui.listen"] = SourceBootstrap
 
 	if s.sections != nil {
 		if err := s.layerSections(ctx, cfg, srcs); err != nil {

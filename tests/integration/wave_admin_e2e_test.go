@@ -82,7 +82,7 @@ func newAdminE2EHarness(t *testing.T) *adminE2EHarness {
 	bootstrap := &config.BootstrapConfig{
 		DataDir: t.TempDir(),
 		Logging: config.LoggingConfig{Level: "info", Format: "json"},
-		Listen:  config.BootstrapListen{REST: ":0", UI: ":0"},
+		Listen:  config.BootstrapListen{REST: ":0"},
 	}
 	store := configstore.New(bootstrap, sections, centrals)
 

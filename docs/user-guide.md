@@ -56,9 +56,8 @@ Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 
 Since 0.14.0 the REST API, Svelte SPA, and HTMX bootstrap surface (login,
 `/setup`, OIDC callback, `/health`, `/about`) all share port `8080`. The
-separate `:8081` listener has been removed. The `north.ui.listen` config
-key is deprecated and silently ignored (a startup warning is emitted when
-it is set).
+separate `:8081` listener has been removed, along with the `north.ui.listen`
+config key — there is no separate UI bind address.
 
 The two callback ports are how the CCU pushes value changes back to
 the daemon, so they must be reachable **from** the CCU. The Matter

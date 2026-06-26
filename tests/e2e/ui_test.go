@@ -22,9 +22,9 @@ import (
 //     assets, immutable caching, client-routing fallback).
 //
 //   - HTMX bootstrap (login / setup / health / about / OIDC start +
-//     callback) served on the UI listener (`:8081`). Pre-auth flows
-//     plus a SPA-down diagnosis page. Tests assert each page returns
-//     well-formed HTML with the expected anchors.
+//     callback) folded onto the REST listener (`:8080`, ADR 0044).
+//     Pre-auth flows plus a SPA-down diagnosis page. Tests assert each
+//     page returns well-formed HTML with the expected anchors.
 //
 // All UI tests are HTTP-only (no browser); deep DOM behaviour is
 // tracked separately in the nightly Playwright job (Layer B).

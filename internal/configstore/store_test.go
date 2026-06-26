@@ -73,7 +73,6 @@ func defaultBootstrap() *config.BootstrapConfig {
 		Logging: config.LoggingConfig{Level: "info", Format: "json"},
 		Listen: config.BootstrapListen{
 			REST: ":9080",
-			UI:   ":9081",
 		},
 	}
 }
@@ -99,9 +98,6 @@ func TestStoreEffectiveNoLoaders(t *testing.T) {
 	if res.Config.North.REST.Listen != ":9080" {
 		t.Errorf("North.REST.Listen=%q want :9080", res.Config.North.REST.Listen)
 	}
-	if res.Config.North.UI.Listen != ":9081" {
-		t.Errorf("North.UI.Listen=%q want :9081", res.Config.North.UI.Listen)
-	}
 	if res.Sources["data_dir"] != SourceBootstrap {
 		t.Errorf("data_dir source=%q want bootstrap", res.Sources["data_dir"])
 	}
@@ -110,9 +106,6 @@ func TestStoreEffectiveNoLoaders(t *testing.T) {
 	}
 	if res.Sources["north.rest.listen"] != SourceBootstrap {
 		t.Errorf("north.rest.listen source=%q want bootstrap", res.Sources["north.rest.listen"])
-	}
-	if res.Sources["north.ui.listen"] != SourceBootstrap {
-		t.Errorf("north.ui.listen source=%q want bootstrap", res.Sources["north.ui.listen"])
 	}
 }
 
@@ -126,7 +119,7 @@ func TestStoreEffectiveBootstrapFieldSources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Effective: %v", err)
 	}
-	bootstrapFields := []string{"data_dir", "logging", "north.rest.listen", "north.ui.listen"}
+	bootstrapFields := []string{"data_dir", "logging", "north.rest.listen"}
 	for _, f := range bootstrapFields {
 		if got := res.Sources[f]; got != SourceBootstrap {
 			t.Errorf("Sources[%q]=%q want %q", f, got, SourceBootstrap)

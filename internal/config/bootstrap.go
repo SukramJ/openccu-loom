@@ -64,11 +64,10 @@ type BootstrapConfig struct {
 // can serve any configuration UI.
 type BootstrapListen struct {
 	// REST is the bind address of the REST + WebSocket server,
-	// e.g. ":8080" or "0.0.0.0:8080". Empty defaults to ":8080".
+	// e.g. ":8080" or "0.0.0.0:8080". Empty defaults to ":8080". The
+	// server-rendered bootstrap surface (login / setup / about) shares
+	// this listener — there is no separate UI bind address.
 	REST string `yaml:"rest" cfg:"basic"`
-	// UI is the bind address of the SPA + bootstrap HTMX server,
-	// e.g. ":8081". Empty defaults to ":8081".
-	UI string `yaml:"ui" cfg:"basic"`
 }
 
 // BootstrapSafety bundles startup-only safety toggles.
@@ -134,9 +133,6 @@ func (b *BootstrapConfig) applyDefaults() {
 	if b.Listen.REST == "" {
 		b.Listen.REST = ":8080"
 	}
-	if b.Listen.UI == "" {
-		b.Listen.UI = ":8081"
-	}
 	if b.EnvFile == "" {
 		b.EnvFile = DefaultEnvFile
 	}
@@ -157,7 +153,6 @@ func (b *BootstrapConfig) OverlayFromEnv(getenv func(string) string) {
 	overlayString(getenv, "OPENCCU_LOOM_LOG_LEVEL", &b.Logging.Level)
 	overlayString(getenv, "OPENCCU_LOOM_LOG_FORMAT", &b.Logging.Format)
 	overlayString(getenv, "OPENCCU_LOOM_REST_LISTEN", &b.Listen.REST)
-	overlayString(getenv, "OPENCCU_LOOM_UI_LISTEN", &b.Listen.UI)
 }
 
 // EnvFileEnabled reports whether the env-file loader should run.

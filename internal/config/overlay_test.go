@@ -21,7 +21,6 @@ func TestOverlayFromEnv(t *testing.T) {
 		"OPENCCU_LOOM_REST_LISTEN":            ":18080",
 		"OPENCCU_LOOM_REST_OPENAPI_VALIDATE":  "true",
 		"OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH": "/etc/gohm/openapi.yaml",
-		"OPENCCU_LOOM_UI_LISTEN":              ":18081",
 		"OPENCCU_LOOM_MQTT_BROKER_URL":        "tcp://broker:1883",
 		// Garbage variable — must be ignored.
 		"OPENCCU_LOOM_MADE_UP": "ignored",
@@ -44,7 +43,6 @@ func TestOverlayFromEnv(t *testing.T) {
 		{"REST.Listen", cfg.North.REST.Listen, ":18080"},
 		{"REST.OpenAPIValidate", cfg.North.REST.OpenAPIValidateEnabled(), true},
 		{"REST.OpenAPISpecPath", cfg.North.REST.OpenAPISpecPath, "/etc/gohm/openapi.yaml"},
-		{"UI.Listen", cfg.North.UI.Listen, ":18081"},
 		{"MQTT.BrokerURL", cfg.North.MQTT.BrokerURL, "tcp://broker:1883"},
 	}
 	for _, c := range cases {

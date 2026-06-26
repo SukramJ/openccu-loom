@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.15.1
+
+- Removed the obsolete `north.ui.listen` setting — the bootstrap UI has shared
+  the same listener (and HA Ingress port) since 0.14.0, so it had no effect. No
+  action needed unless you set it by hand; if so, just delete the key.
+
 ## 0.15.0
 
 - **`GET /incidents` now returns the recorded incidents** — the diagnostics
