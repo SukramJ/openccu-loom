@@ -1,50 +1,18 @@
-// REST DTOs. Types that match the generated schema cleanly are
-// re-exported from types.generated.ts; hand-written definitions
-// remain where the generated shape diverges from current SPA usage
-// (see TODO(openapi-typescript) comments below).
+// REST DTOs. Types that have a matching openapi.yaml schema are
+// re-exported from types.generated.ts so the SPA tracks the contract
+// automatically; the remaining hand-written definitions are the ones
+// with no openapi schema at all (generic wrappers like Paginated, the
+// SPA-internal normalized WS event shapes, and diagnostics/inbox/log
+// surfaces not yet modelled in the spec).
 import type { components } from "./types.generated";
 
-// TODO(openapi-typescript): reconcile with generated DeviceSummary.
-// Generated shape lacks: central, model_label, model_icon, update_available,
-// has_sub_devices, master_pushes_config_pending; has extra: ise_id.
-// Generated also makes updatable optional; SPA callers treat it as boolean.
-export type DeviceSummary = {
-  address: string;
-  central?: string;
-  interface: string;
-  interface_id: string;
-  model: string;
-  model_label?: string;
-  model_icon?: string;
-  sub_model?: string;
-  name: string;
-  manufacturer?: string;
-  product_group?: string;
-  available: boolean;
-  channels_count: number;
-  /** Device *supports* firmware updates (CCU UPDATABLE capability) — NOT
-   *  whether one is pending. Use update_available for the "update available"
-   *  indicator. */
-  updatable: boolean;
-  /** An installable firmware update is actually pending: the gated latest
-   *  version differs from the installed one (image already delivered for
-   *  HmIP-RF / available for BidCos). A newer firmware the CCU merely knows
-   *  about but has not delivered does NOT set this. */
-  update_available: boolean;
-  rooms?: string[];
-  functions?: string[];
-  /** True when the device's interface delivers reliable CONFIG_PENDING
-   *  events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
-   *  for the true→false transition before refreshing MASTER. False for
-   *  BidCos-*, VirtualDevices, CUxD — those rely on the save-path
-   *  reload because CONFIG_PENDING never fires (or fires unreliably). */
-  master_pushes_config_pending: boolean;
-  /** True when the device should be split into multiple logical
-   *  sub-devices for northbound presentation. The SPA's CdpTilesPanel
-   *  uses this flag to switch from a flat tile grid to per-group
-   *  sections. */
-  has_sub_devices?: boolean;
-};
+// DeviceSummary re-exported from generated schema — openapi.yaml now
+// carries every field the Go DTO emits (central, model_label, model_icon,
+// update_available, has_sub_devices, master_pushes_config_pending,
+// functions) with updatable / update_available / has_sub_devices /
+// master_pushes_config_pending marked required to match the always-emitted
+// Go json tags.
+export type DeviceSummary = components["schemas"]["DeviceSummary"];
 
 // ChannelSummary re-exported from generated schema — matches SPA usage.
 // Generated adds: category, paramset_keys, room; those are additive and safe.
@@ -64,36 +32,14 @@ export type DataPointSummary = components["schemas"]["DataPointSummary"];
 /** Per-DP UI classification the daemon computes via `pkg/hmui.HintFor`. */
 export type UIHint = NonNullable<components["schemas"]["DataPointSummary"]["ui_hint"]>;
 
-// TODO(openapi-typescript): reconcile with generated DeviceDetail.
-// Missing from generated: availability.reachable (boolean), availability.reason (string).
-// Generated uses capitalized availability keys (IsReachable, LastUpdated, BatteryLevel,
-// LowBattery, SignalStrength) and makes channels optional; SPA callers index
-// detail.channels as non-optional (DeviceDetail.svelte:109,120,127,505) and read
-// availability.reachable. Keep hand-written until openapi.yaml aligns the key names.
-export type DeviceDetail = DeviceSummary & {
-  firmware: {
-    /** Current firmware version installed on the device. */
-    Current?: string;
-    /** Latest available firmware version reported by the CCU. */
-    Available?: string;
-    /** True when an update is available and the device can be updated. */
-    Updatable: boolean;
-    /**
-     * Update lifecycle state as reported by the CCU.
-     * Known values: UNKNOWN, UP_TO_DATE, LIVE_UP_TO_DATE,
-     * NEW_FIRMWARE_AVAILABLE, LIVE_NEW_FIRMWARE_AVAILABLE,
-     * DELIVER_FIRMWARE_IMAGE, LIVE_DELIVER_FIRMWARE_IMAGE,
-     * READY_FOR_UPDATE, DO_UPDATE_PENDING, PERFORMING_UPDATE,
-     * BACKGROUND_UPDATE_NOT_SUPPORTED.
-     */
-    UpdateState?: string;
-  };
-  availability: {
-    reachable: boolean;
-    reason?: string;
-  };
-  channels: ChannelSummary[];
-};
+// DeviceDetail re-exported from generated schema. openapi.yaml now marks
+// firmware / availability / channels required (the handler always emits
+// them), so the generated members are non-optional and SPA callers can
+// index detail.channels without a guard. firmware keeps the capitalized
+// keys (Current/Available/Updatable/UpdateState) the Go DTO marshals from
+// device.FirmwareInfo; availability uses the capitalized keys the Go DTO
+// marshals from device.AvailabilityInfo (IsReachable/LastUpdated/...).
+export type DeviceDetail = components["schemas"]["DeviceDetail"];
 
 // Paginated is generic — not generated (openapi-typescript generates per-endpoint
 // response types, not a generic wrapper). Keep hand-written.
@@ -303,34 +249,16 @@ export type BackupEntry = {
   created_at: string;
 };
 
-// TODO(openapi-typescript): reconcile with generated SysvarSummary.
-// Missing from generated: central as required string (generated has central?: string).
-// SPA callers rely on central being non-null (SysvarList.svelte:99 uses
-// sv.central + "/" + sv.name as a stable composite key). Keep hand-written until
-// openapi.yaml makes central a required field.
-export type SysvarEntry = {
-  central: string;
-  name: string;
-  description?: string;
-  unit?: string;
-  value_type: "BOOL" | "INTEGER" | "FLOAT" | "STRING" | "ENUM" | string;
-  value?: unknown;
-  observed: boolean;
-  value_list?: string[];
-};
+// SysvarEntry re-exported from the generated SysvarSummary. central is
+// optional (Go json:"central,omitempty"); SysvarList.svelte builds its
+// composite key as (sv.central ?? "") + "/" + sv.name.
+export type SysvarEntry = components["schemas"]["SysvarSummary"];
 
-// TODO(openapi-typescript): reconcile with generated ProgramSummary.
-// Missing from generated: central as required string (generated has central?: string).
-// SPA callers rely on central being non-null (ProgramList.svelte:153 uses
-// p.central + "/" + p.id as a stable composite key). Keep hand-written until
-// openapi.yaml makes central a required field.
-export type ProgramEntry = {
-  central: string;
-  id: string;
-  name: string;
-  description?: string;
-  active?: boolean;
-};
+// ProgramEntry re-exported from the generated ProgramSummary. central is
+// optional (Go json:"central,omitempty"); ProgramList.svelte builds its
+// composite key as (p.central ?? "") + "/" + p.id. Generated adds extra
+// fields (unique_id, last_executed, ...) that SPA callers ignore.
+export type ProgramEntry = components["schemas"]["ProgramSummary"];
 
 export type AuditChange = {
   parameter: string;
@@ -338,65 +266,22 @@ export type AuditChange = {
   after?: unknown;
 };
 
-// TODO(openapi-typescript): reconcile with generated AuditEntry.
-// Missing from generated: central field entirely (not present at all).
-// Also: generated action is plain string; SPA uses the union for
-// exhaustive branching in AuditLog.svelte. Keep hand-written until
-// openapi.yaml adds the central field.
-export type AuditEntry = {
-  central?: string;
-  timestamp: string;
-  user?: string;
-  action:
-    | "paramset_write"
-    | "link_paramset_write"
-    | "link_add"
-    | "link_remove"
-    | "schedule_write"
-    | "active_profile"
-    | "data_point_write"
-    | string;
-  device_address?: string;
-  channel_no?: number;
-  paramset?: string;
-  peer?: string;
-  parameter?: string;
-  changes?: AuditChange[];
-  note?: string;
-};
+// AuditEntry re-exported from generated schema — openapi.yaml now carries
+// the central field (optional, derived best-effort from the device address).
+// action is a plain string; AuditLog.svelte's actionLabel() resolves known
+// tags via a lookup set, so no string union is needed.
+export type AuditEntry = components["schemas"]["AuditEntry"];
 
-// TODO(openapi-typescript): reconcile with generated AlarmMessage.
-// Missing from generated: central field entirely (not present at all).
-// MessageList.svelte:209 uses a.central + "/" + a.id as a stable composite key.
-// Keep hand-written until openapi.yaml adds the central field.
-export type AlarmMessage = {
-  central: string;
-  id: string;
-  name: string;
-  description?: string;
-  device_name?: string;
-  timestamp: string;
-  counter: number;
-  last_trigger?: string;
-  rooms?: string[];
-};
+// AlarmMessage re-exported from generated schema — openapi.yaml now carries
+// the central field (optional, Go json:"central,omitempty"). MessageList.svelte
+// builds its composite key as (a.central ?? "") + "/" + a.id.
+export type AlarmMessage = components["schemas"]["AlarmMessage"];
 
-// TODO(openapi-typescript): reconcile with generated ServiceMessage.
-// Missing from generated: central field entirely (not present at all);
-// quittable is optional (quittable?: boolean) while SPA renders it as a
-// required boolean (MessageList.svelte:327 passes s.quittable to ack guard).
-// Keep hand-written until openapi.yaml adds central and makes quittable required.
-export type ServiceMessage = {
-  central: string;
-  id: string;
-  name: string;
-  address?: string;
-  device_name?: string;
-  type?: string;
-  timestamp: string;
-  counter: number;
-  quittable: boolean;
-};
+// ServiceMessage re-exported from generated schema — openapi.yaml now carries
+// the central field (optional, Go json:"central,omitempty") and marks quittable
+// required (the Go DTO always emits it). MessageList.svelte builds its composite
+// key as (s.central ?? "") + "/" + s.id.
+export type ServiceMessage = components["schemas"]["ServiceMessage"];
 
 // InterfaceInfo re-exported from generated InterfaceState — same shape.
 export type InterfaceInfo = components["schemas"]["InterfaceState"];

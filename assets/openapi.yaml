@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.0.0
+  version: 2.1.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4442,9 +4442,27 @@ components:
           additionalProperties: { type: boolean }
     DeviceSummary:
       type: object
-      required: [address, interface, model, name, available, channels_count]
+      required:
+        [
+          address,
+          interface,
+          interface_id,
+          model,
+          name,
+          available,
+          channels_count,
+          updatable,
+          update_available,
+          master_pushes_config_pending,
+          has_sub_devices,
+        ]
       properties:
         address: { type: string }
+        central:
+          type: string
+          description: |
+            CCU this device belongs to (multi-central grouping). Omitted
+            for backends that report no owning central.
         interface: { type: string }
         interface_id: { type: string }
         ise_id:
@@ -4454,13 +4472,33 @@ components:
             devices by ISE_ID (e.g. the HA rename-by-ise_id path) map back
             to the device address. Absent when the backend reports none.
         model: { type: string }
+        model_label:
+          type: string
+          description: |
+            Localised, human-readable device-type label. Empty when no
+            translation exists; consumers fall back to the raw `model`.
+        model_icon:
+          type: string
+          description: Icon identifier for the device model. Empty when none.
         sub_model: { type: string }
         name: { type: string }
         manufacturer: { type: string }
         product_group: { type: string }
         available: { type: boolean }
         channels_count: { type: integer }
-        updatable: { type: boolean }
+        updatable:
+          type: boolean
+          description: |
+            Device *supports* firmware updates (CCU UPDATABLE capability) —
+            NOT whether one is pending. Use update_available for the
+            "update available" indicator.
+        update_available:
+          type: boolean
+          description: |
+            An installable firmware update is actually pending: the gated
+            latest version differs from the installed one (image already
+            delivered for HmIP-RF / available for BidCos). A newer firmware
+            the CCU merely knows about but has not delivered does NOT set this.
         update_status:
           type: string
           enum: [up_to_date, update_available, installing]
@@ -4472,6 +4510,25 @@ components:
         rooms:
           type: array
           items: { type: string }
+        functions:
+          type: array
+          items: { type: string }
+          description: Resolved "Gewerke" (function) labels for the device.
+        master_pushes_config_pending:
+          type: boolean
+          description: |
+            True when the device's interface delivers reliable CONFIG_PENDING
+            events on MASTER writes (HmIP-RF, HmIP-Wired). The SPA then waits
+            for the true→false transition before refreshing MASTER. False for
+            BidCos-*, VirtualDevices, CUxD — those rely on the save-path
+            reload because CONFIG_PENDING never fires (or fires unreliably).
+        has_sub_devices:
+          type: boolean
+          description: |
+            True when the device should be split into multiple logical
+            sub-devices for northbound presentation. The SPA's CdpTilesPanel
+            uses this flag to switch from a flat tile grid to per-group
+            sections.
     DeviceList:
       type: object
       required: [items, page, per_page, total]
@@ -4486,6 +4543,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/DeviceSummary"
         - type: object
+          required: [firmware, availability, channels]
           properties:
             firmware:
               type: object
@@ -4859,7 +4917,11 @@ components:
         id: { type: string }
         name: { type: string }
         description: { type: string }
-        active: { type: boolean, nullable: true }
+        active:
+          type: boolean
+          description: |
+            Program enabled state. Omitted when the CCU has not reported it
+            (the Go DTO marshals the pointer with omitempty: absent, not null).
         last_executed:
           type: string
           description: RFC3339 timestamp of the most recent execution.
@@ -4970,6 +5032,11 @@ components:
       required: [timestamp, action]
       description: One recorded user-initiated configuration change.
       properties:
+        central:
+          type: string
+          description: |
+            CCU this entry belongs to, derived best-effort from the device
+            address. Omitted for daemon-wide entries (e.g. CCU management).
         timestamp:
           type: string
           format: date-time
@@ -5014,10 +5081,21 @@ components:
       type: object
       required: [id, name, timestamp, counter]
       properties:
+        central:
+          type: string
+          description: CCU this alarm message belongs to (multi-central grouping).
         id: { type: string }
         name: { type: string }
         description: { type: string }
         device_name: { type: string }
+        address:
+          type: string
+          description: |
+            CCU channel address that generated the alarm. Omitted when
+            unavailable (legacy CCUs).
+        state_value:
+          type: string
+          description: Raw alarm state string from the CCU Rega script.
         timestamp: { type: string, format: date-time }
         counter: { type: integer }
         last_trigger: { type: string }
@@ -5026,13 +5104,22 @@ components:
           items: { type: string }
     ServiceMessage:
       type: object
-      required: [id, name, timestamp, counter]
+      required: [id, name, timestamp, counter, quittable]
       properties:
+        central:
+          type: string
+          description: CCU this service message belongs to (multi-central grouping).
         id: { type: string }
         name: { type: string }
         address: { type: string }
         device_name: { type: string }
         type: { type: string }
+        description:
+          type: string
+          description: Optional human-readable message text.
+        priority:
+          type: integer
+          description: Integer priority level (0 = normal).
         timestamp: { type: string, format: date-time }
         counter: { type: integer }
         quittable: { type: boolean }

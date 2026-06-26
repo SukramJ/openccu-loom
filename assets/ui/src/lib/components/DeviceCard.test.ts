@@ -37,6 +37,7 @@ function makeDevice(overrides: Partial<DeviceSummary> = {}): DeviceSummary {
     updatable: false,
     update_available: false,
     master_pushes_config_pending: false,
+    has_sub_devices: false,
     ...overrides,
   };
 }

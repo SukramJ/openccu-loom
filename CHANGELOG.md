@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0]
+
+### Fixed
+
+- **OpenAPI spec now matches the server's actual JSON, removing the hand-written
+  type divergence in the SPA.** Seven response schemas drifted from what the Go
+  handlers emit — `openapi.yaml` was missing fields the server always sends
+  (`DeviceSummary.central`/`model_label`/`model_icon`/`update_available`/
+  `functions`/`has_sub_devices`/`master_pushes_config_pending`; `central` on
+  audit/alarm/service entries; alarm `address`/`state_value`; service
+  `description`/`priority`) and over-constrained others. The spec is corrected to
+  the Go json tags, the generated client types are regenerated, and the SPA's
+  `TODO(openapi-typescript)` hand-written overrides are removed (it now re-exports
+  the generated types). Composite-key call sites guard the optional `central`.
+  REST API version bumped 2.0.0 → 2.1.0 (additive).
+
 ## [0.15.0]
 
 ### Added

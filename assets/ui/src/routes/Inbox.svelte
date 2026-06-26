@@ -182,7 +182,7 @@
           class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           title={t("inbox.install_mode_interface_label")}
         >
-          {#each installModeStore.interfaces as iface (iface.central + "/" + iface.interface)}
+          {#each installModeStore.interfaces as iface ((iface.central ?? "") + "/" + iface.interface)}
             <option value={iface.interface}>
               {iface.interface}{iface.active ? " ●" : ""}
             </option>
@@ -256,7 +256,7 @@
     <EmptyState message={t("inbox.empty")} />
   {:else}
     <ul class="space-y-2">
-      {#each visibleEntries as d (d.central + "/" + d.address)}
+      {#each visibleEntries as d ((d.central ?? "") + "/" + d.address)}
         <li>
           <Card class="p-4">
             <div class="flex flex-wrap items-start justify-between gap-3">

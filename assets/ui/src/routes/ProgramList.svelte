@@ -33,7 +33,7 @@
     }
   }
 
-  async function execute(id: string, name: string, central: string) {
+  async function execute(id: string, name: string, central?: string) {
     const ok = await confirmStore.ask({
       title: t("programs.confirm_run", { name }),
       confirmLabel: t("programs.run"),
@@ -57,7 +57,7 @@
     }
   }
 
-  async function toggle(id: string, name: string, current: boolean | undefined, central: string) {
+  async function toggle(id: string, name: string, current: boolean | undefined, central?: string) {
     togglingId = id;
     try {
       const next = !(current === true);
@@ -154,7 +154,7 @@
     <EmptyState message={t("programs.empty")} icon="mdi:play" />
   {:else}
     <ul class="grid grid-cols-1 gap-3 md:grid-cols-2">
-      {#each filtered as p (p.central + "/" + p.id)}
+      {#each filtered as p ((p.central ?? "") + "/" + p.id)}
         {@const running = runningId === p.id}
         <li>
           <Card class="flex h-full flex-col justify-between p-4">

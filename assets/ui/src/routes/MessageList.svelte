@@ -51,7 +51,7 @@
     }
   }
 
-  async function ackAlarm(id: string, central: string) {
+  async function ackAlarm(id: string, central?: string) {
     acking = id;
     try {
       await api.ackAlarm(id, central);
@@ -70,7 +70,7 @@
     }
   }
 
-  async function ackService(id: string, central: string) {
+  async function ackService(id: string, central?: string) {
     acking = id;
     try {
       await api.ackService(id, central);
@@ -199,7 +199,7 @@
       <EmptyState message={t("messages.empty.alarms")} icon="mdi:bell-off" />
     {:else}
       <ul class="space-y-2">
-        {#each alarmsSorted as a (a.central + "/" + a.id)}
+        {#each alarmsSorted as a ((a.central ?? "") + "/" + a.id)}
           <li>
             <Card class="p-4">
               <div class="flex flex-wrap items-start justify-between gap-2">
@@ -280,7 +280,7 @@
       <EmptyState message={t("messages.empty.service")} icon="mdi:bell-off" />
     {:else}
       <ul class="space-y-2">
-        {#each servicesSorted as s (s.central + "/" + s.id)}
+        {#each servicesSorted as s ((s.central ?? "") + "/" + s.id)}
           <li>
             <Card class="p-4">
               <div class="flex flex-wrap items-start justify-between gap-2">
