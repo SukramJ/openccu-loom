@@ -483,6 +483,21 @@ type NorthMatter struct {
 	// production breaks accessory recognition; users must re-link
 	// every device in the Home app after each daemon restart.
 	DevRotateUniqueIDs bool `yaml:"dev_rotate_unique_ids" json:"dev_rotate_unique_ids" cfg:"expert"`
+
+	// EnableTimeSync mounts the TimeSynchronization cluster (0x0038) on the
+	// Root endpoint. Tri-state via *bool: nil / false → not mounted, which is
+	// the safe default — matter.js lists TimeSynchronization as optional-only
+	// on the RootNode and Apple Home's HAP service mapper may reject an
+	// unexpected RootNode cluster at pairing. Set true only when a controller
+	// genuinely needs the bridge to expose a time-sync surface (re-pair
+	// afterwards). See docs/parity/by_design.md (BD-Matter-TimeSync-NotMounted).
+	EnableTimeSync *bool `yaml:"enable_time_sync,omitempty" json:"enable_time_sync,omitempty" cfg:"expert"`
+}
+
+// TimeSyncEnabled reports whether the TimeSynchronization cluster (0x0038)
+// should be mounted on the Root endpoint. Default (unset) is false.
+func (m NorthMatter) TimeSyncEnabled() bool {
+	return m.EnableTimeSync != nil && *m.EnableTimeSync
 }
 
 // NorthMatterAttestation carries vendor-supplied attestation

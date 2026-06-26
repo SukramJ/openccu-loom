@@ -86,3 +86,30 @@ func TestNorthMatter_SectionPutWithStringPasscode(t *testing.T) {
 		t.Fatalf("Iterations = %d, want 1000", m.Commissioning.Iterations)
 	}
 }
+
+func ptrBool(b bool) *bool { return &b }
+
+// TestNorthMatter_TimeSyncEnabled verifies the tri-state logic of
+// NorthMatter.TimeSyncEnabled: nil (unset) and explicit false both
+// yield false; only an explicit true yields true.
+// Mirrors the EnableTimeSync field semantics in config.go.
+func TestNorthMatter_TimeSyncEnabled(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		m    NorthMatter
+		want bool
+	}{
+		{"nil pointer — default off", NorthMatter{EnableTimeSync: nil}, false},
+		{"explicit false", NorthMatter{EnableTimeSync: ptrBool(false)}, false},
+		{"explicit true", NorthMatter{EnableTimeSync: ptrBool(true)}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tc.m.TimeSyncEnabled(); got != tc.want {
+				t.Errorf("TimeSyncEnabled() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

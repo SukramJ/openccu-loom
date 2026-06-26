@@ -4,7 +4,34 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.16.0]
+## [0.15.0]
+
+### Added
+
+- **`firmware.refresh` WebSocket command is now wired.** It re-pulls device
+  descriptions (and with them the firmware-version fields) from the CCU across
+  every central and interface. Previously the command was registered only as a
+  no-op stub (the `FirmwareRefresher` was left nil). Mirrors aiohomematic
+  `ws_refresh_firmware_data`.
+- **Optional Matter TimeSynchronization cluster (0x0038), operator opt-in.**
+  New `north.matter.enable_time_sync` flag (tri-state, default off) mounts the
+  already-implemented TimeSynchronization cluster on the Matter Root endpoint.
+  Off by default because it is optional-only on a RootNode and some controllers
+  (e.g. Apple Home) may reject the bridge at pairing when it appears; enable
+  only when a controller needs a time-sync surface. ARL (0x002B) and Actions
+  (0x0025) remain intentionally deferred (no current use-case) — see
+  `docs/parity/by_design.md`.
+- **Matter cluster-revision parity tests** added for previously-untested
+  clusters, closing the documented behavioural-parity test gaps against the
+  matter.js schema snapshot.
+
+### Changed
+
+- **A manual device reload now also refreshes link-peer addresses.**
+  `config.reload_device_config` / `ccu.reload_device_config` re-pull the device's
+  link peers as part of the (already RPC-bound) reload, keeping link data current
+  on demand — without adding a boot-time per-device RPC sweep across the whole
+  fleet.
 
 ### Fixed
 
@@ -16,27 +43,9 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   audit/alarm/service entries; alarm `address`/`state_value`; service
   `description`/`priority`) and over-constrained others. The spec is corrected to
   the Go json tags, the generated client types are regenerated, and the SPA's
-  `TODO(openapi-typescript)` hand-written overrides are removed (it now re-exports
-  the generated types). Composite-key call sites guard the optional `central`.
-  REST API version bumped 2.0.0 → 2.1.0 (additive).
-
-## [0.15.0]
-
-### Added
-
-- **`firmware.refresh` WebSocket command is now wired.** It re-pulls device
-  descriptions (and with them the firmware-version fields) from the CCU across
-  every central and interface. Previously the command was registered only as a
-  no-op stub (the `FirmwareRefresher` was left nil). Mirrors aiohomematic
-  `ws_refresh_firmware_data`.
-
-### Changed
-
-- **A manual device reload now also refreshes link-peer addresses.**
-  `config.reload_device_config` / `ccu.reload_device_config` re-pull the device's
-  link peers as part of the (already RPC-bound) reload, keeping link data current
-  on demand — without adding a boot-time per-device RPC sweep across the whole
-  fleet.
+  `TODO(openapi-typescript)` overrides are removed (it now re-exports the
+  generated types). Composite-key call sites guard the optional `central`. REST
+  API version bumped 2.0.0 → 2.1.0 (additive).
 
 ## [0.14.6]
 
