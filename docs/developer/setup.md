@@ -41,7 +41,7 @@ cp example.config.yaml config.yaml
 ./bin/openccu-loom --config config.yaml
 ```
 
-The REST API and WebSocket stream bind `:8080` by default; the bootstrap UI binds `:8081`. See [Getting started](../getting-started.md) and [Configuration](../admin/configuration.md) for the config surface, and [Authentication](../admin/auth.md) for first-run credentials.
+The REST API, WebSocket stream, and bootstrap UI (login, first-run `/setup`, `/health`, `/about`) all bind `:8080` by default (single listener since 0.14.0). See [Getting started](../getting-started.md) and [Configuration](../admin/configuration.md) for the config surface, and [Authentication](../admin/auth.md) for first-run credentials.
 
 To iterate on the SPA against a running daemon:
 

@@ -78,7 +78,7 @@ Each component reports one of four statuses:
 
 ### UI health page
 
-The bootstrap UI on the UI port (default `:8081`) serves a
+The bootstrap surface on the REST port (default `:8080`) serves a
 server-rendered `/health` page (with `/` redirecting to it). It is the
 SPA-down fallback for diagnosing the daemon when the JavaScript bundle
 will not load; `/about` on the same port shows the version and license.

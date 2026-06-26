@@ -80,8 +80,6 @@ centrals:
 north:
   rest:
     listen: ":8080"
-  ui:
-    listen: ":8081"
 ```
 
 For the complete annotated set of every key, see
@@ -267,13 +265,17 @@ detail on the auth admin page (`docs/admin/auth.md`).
 ### `north.ui`
 
 The HTMX bootstrap surface (login, first-run `/setup` wizard,
-server-rendered `/health` and `/about`). The Svelte SPA is served from
-the same daemon.
+server-rendered `/health` and `/about`). The Svelte SPA and the
+bootstrap surface are both served on the REST listener (`:8080`
+by default) since 0.14.0 — there is no separate UI listener.
+
+`north.ui.listen` is a **deprecated no-op**: setting it has no effect
+and logs a startup warning. Remove it from existing configs.
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
 | `north.ui.enabled` | bool | `true` | — | no |
-| `north.ui.listen` | string | `:8081` | `OPENCCU_LOOM_UI_LISTEN` | no |
+| ~~`north.ui.listen`~~ | string | — | ~~`OPENCCU_LOOM_UI_LISTEN`~~ | no — **deprecated, removed** |
 
 ### `north.mqtt`
 

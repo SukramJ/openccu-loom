@@ -22,7 +22,7 @@ It runs as a native HA add-on and is accessible directly from the HA sidebar.
 |---|---|
 | HA sidebar / Ingress | Recommended — authentication is handled by the HA Ingress proxy. Works from any HA frontend (browser, companion app). |
 | `http://<ha-host>:8080/app/` | Direct access — bypasses Ingress; useful when Ingress is unavailable or for API clients. Opens the full SPA. |
-| `http://<ha-host>:8081/` | Pre-auth bootstrap surface (login page, OIDC callback, `/health`, `/about`). Useful for scripted health checks. |
+| `http://<ha-host>:8080/` | Bootstrap surface (login page, first-run `/setup`, OIDC callback, `/health`, `/about`) — same port as the SPA since 0.14.0. |
 
 ## Why `host_network: true`
 
@@ -38,8 +38,7 @@ can advertise the correct IP.
 
 | Port | Protocol | Purpose |
 |---|---|---|
-| 8080 | TCP | REST API + Config UI (SPA). Also the Ingress port. |
-| 8081 | TCP | Pre-auth bootstrap (login, OIDC callback, /health, /about). |
+| 8080 | TCP | REST API + Config UI (SPA) + bootstrap surface (login, /setup, /health, /about). Also the Ingress port. |
 | 8120 | TCP | XML-RPC callback — the CCU pushes events here. |
 | 8129 | TCP | BIN-RPC callback — CUxD pushes events here. |
 
