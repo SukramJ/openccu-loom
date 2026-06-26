@@ -48,7 +48,7 @@ The app is organised into views. The main ones, and the everyday tasks they cove
 | **Audit log** | Review what changes were made and by whom. |
 | **Settings** | Adjust daemon and UI settings. |
 
-<!-- TODO screenshot: main navigation / device list -->
+![The OpenCCU-Loom web UI: the navigation sidebar on the left and the Devices view listing discovered devices grouped by interface.](img/web-ui-device-list.png)
 
 The sections below cover the tasks most users do.
 
@@ -64,7 +64,7 @@ Selecting a device opens its detail view, where you can:
 
 If you are unsure what "device", "channel", and "data point" mean, read [Core concepts](concepts.md) first.
 
-<!-- TODO screenshot: device detail with channels and data points -->
+![The device detail view for a wall thermostat: header with model and address, the Overview/Configure/History tabs, the channel selector strip, and a channel's configuration parameters.](img/web-ui-device-detail.png)
 
 ## Changing a value
 
@@ -83,7 +83,7 @@ Beyond live values, many devices have **configuration parameters** (the device's
 You can also **export** a channel's configuration and **import** it again, which is handy for copying settings between similar devices. These map to the channel config export/import endpoints
 (`GET .../config/export` and `POST .../config/import`).
 
-<!-- TODO screenshot: channel configuration form -->
+![A channel configuration form with grouped, labelled parameters: a temperature offset slider, a maximum-temperature slider, a display-unit selector, and a child-lock toggle, plus Export/Import/Reset/Save controls.](img/web-ui-channel-config.png)
 
 ## Showing hidden parameters (un-ignore)
 

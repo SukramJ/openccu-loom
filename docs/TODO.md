@@ -37,26 +37,26 @@ divergences live in `docs/parity/by_design.md` and are not tracked here.
 > Verify each cluster's real state first. Mount only behind an opt-in flag:
 > extra RootNode clusters can make Apple Home reject the bridge at pairing.
 
-- [ ] **AccessRestrictionList (ARL, 0x002B)** — skeleton present, not mounted. `[planned]` P3 L.
-- [ ] **TimeSynchronization (0x0038)** — impl exists, not mounted. `[planned]` P3 M.
-- [ ] **Actions (0x0025)** on the Aggregator. `[planned]` P3 M.
-- [ ] **AccessControl Extension store** — fabric-scoped + conflict + fan-out. `[planned]` P3 M.
-- [ ] **Event-driven re-announce + matter.js backoff** — fixed 30-min cadence today. `[planned]` P3 S–M.
-- [ ] **Cluster-revision parity tests (8)** — Thermostat, DoorLock, WindowCovering, … `[gap-test]` P2 M.
+- [x] **TimeSynchronization (0x0038)** — done; flag-gated mount via `north.matter.enable_time_sync` (default off).
+- [x] **AccessControl Extension** — already implemented (per-fabric extension list, mounted with the AccessControl cluster).
+- [x] **Event-driven re-announce** — already wired: `RemoveFabric` triggers an immediate mDNS re-announce (`TriggerReannounce`) on top of the 30-min cadence.
+- [x] **Cluster-revision parity tests** — already present in `parityCases()` (TimeSync, AccessControl, GroupKeyManagement, PowerSource, ICD…).
+- [ ] **AccessRestrictionList (ARL, 0x002B)** — intentionally deferred: no Managed-Aggregator use-case; a full matter.js-grade port (fabric store + AddNOC review + enforcement) is weeks of sensitive work. `[planned]` P3 L.
+- [ ] **Actions (0x0025)** — intentionally deferred: the bridge has no scene/action surface to model. `[planned]` P3 M.
 
 ## 5. Persistence / Config
 
-- [ ] **Per-central feature-flag layer** — single daemon config today. `[planned]` P3 M — verify first.
+- [x] **Per-central feature-flag layer** — no genuine gap: the TODO mis-attributed `A5-P04` (an unrelated by-design item); no per-central flag scaffolding exists and there is no operator demand.
 
 ## 6. Testing (targeted — the 4 named risk areas, not a blanket LOC push)
 
-- [ ] **Reliability timing tests** via `internal/clock` (backoff/jitter). `[gap]` P1 M.
-- [ ] **Coordinator integration scenarios** (recovery, failover). `[gap]` P2 M–L.
-- [ ] **Store/cache coherency** (paramset patches + invalidation). `[gap]` P2 M.
-- [ ] **Consolidated event-bus race battery** (~38 scenarios). `[gap]` P2 M.
-- [ ] **Pre-release load/soak harness** — `tests/loadtest` (`-tags=loadtest`); the 60-min ≥1000-device run is operator-executed. `[planned]` P1 L.
+- [x] **Reliability timing tests** — done; circuit-breaker OPEN→HALF_OPEN boundary + retry backoff timeline via the clock seam.
+- [x] **Coordinator integration scenarios** — done; readiness-gate re-entry, multi-interface concurrent failover, classification-reason chains, event-driven recovery.
+- [x] **Store/cache coherency** — done; patch→upsert cache coherency, multi-paramset-key isolation, device-model-change (additive-cache limitation pinned).
+- [x] **Consolidated event-bus race battery** — extended; cross-priority reentrancy, self-unsubscribe, clear+resubscribe, panic cascade (all under `-race`).
+- [x] **Pre-release load/soak harness** — done; `tests/loadtest` (`-tags=loadtest`), env-scaled smoke + operator-run ≥1000-device/60-min soak.
 
 ## 7. Docs / ADRs
 
-- [ ] **SPA user-guide screenshots (3)** + **Matter commissioning screenshot** — generated via the Playwright pipeline. `[gap]` P3 S.
-- [ ] **Backfill missing ADRs** — recent (post-0.12) decisions not yet formal ADRs. `[gap]` P3 M.
+- [x] **SPA user-guide screenshots (3)** + **Matter commissioning screenshot** — done; generated via the Playwright pipeline into `docs/user/img/` and embedded in `web-ui.md` / `matter.md`.
+- [x] **Backfill missing ADRs** — no genuine gap: ADRs are complete through 0044; recent post-0.12 work is bug-fixes / small features recorded in `CHANGELOG.md` + `by_design.md`, none an architectural shift warranting a new ADR.
