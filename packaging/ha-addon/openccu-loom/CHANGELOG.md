@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.3
+
+- **Updated the embedded Homematic metadata to openccu-data 2026.6.1** (device
+  translations + easymode definitions), including curated labels for HmIP-DLP,
+  HmIP-UDI-SMI55, HmIP-SMO230 and HmIP-SWDO-PL-2.
+
 ## 0.17.2
 
 - **Fixed: removed devices now disappear from Home Assistant immediately.** A

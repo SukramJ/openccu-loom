@@ -1,15 +1,15 @@
 {
-  "snapshot_date": "2026-04-27",
+  "snapshot_date": "2026-06-27",
   "files": [
     {
       "path": "translation_extract.json.gz",
-      "size": 282145,
-      "sha256": "f025cac92851e80c0ade3013030826104ade21dec0ef181287e6bfd12eac9371"
+      "size": 285155,
+      "sha256": "4aab037c82ea874604552c54c6f01a93026fe9bd2e050bd463488fc3262cd7aa"
     },
     {
       "path": "easymode_extract.json.gz",
-      "size": 151508,
-      "sha256": "ed3e169b049ca06e01ec29b45d3515acb6825afa3aa9ff81de215899f341bad2"
+      "size": 152387,
+      "sha256": "6663cd4bf2d09bcd6373c47bdbef98fbafb81462e7a2b977c26fb9d24f04293c"
     }
   ]
 }
