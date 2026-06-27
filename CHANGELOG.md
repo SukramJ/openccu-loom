@@ -4,6 +4,16 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3]
+
+### Changed
+
+- **Refreshed the embedded openccu-data extracts to 2026.6.1** — updated device
+  translations (`translation_extract`) and easymode definitions
+  (`easymode_extract`), with the manifest hashes regenerated to match. 2026.6.1
+  also restores the curated model labels for HmIP-DLP, HmIP-UDI-SMI55,
+  HmIP-SMO230 and HmIP-SWDO-PL-2 (the extract ships those models only as icons).
+
 ## [0.17.2]
 
 ### Fixed
