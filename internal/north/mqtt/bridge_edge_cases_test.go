@@ -3092,11 +3092,12 @@ func (r *rejectAllVisibility) VisibleForChannel(_, _ string, _ int, _ hmenum.Par
 	return false
 }
 
-// TestPruneDeclaredForDeviceRemovesMatchingTopics verifies that
-// PruneDeclaredForDevice deletes only the declared entries whose topic
-// contains the expected node_id fragment and leaves unrelated entries
-// intact.
-func TestPruneDeclaredForDeviceRemovesMatchingTopics(t *testing.T) {
+// TestRetractDiscoveryForDeviceRetractsMatchingTopics verifies that
+// RetractDiscoveryForDevice (a) deletes only the declared entries whose topic
+// contains the expected node_id fragment, leaving unrelated entries intact, and
+// (b) publishes an empty retained payload to each matched topic so Home
+// Assistant drops the entity immediately.
+func TestRetractDiscoveryForDeviceRetractsMatchingTopics(t *testing.T) {
 	t.Parallel()
 
 	mp := &mockPublisher{}
@@ -3108,46 +3109,96 @@ func TestPruneDeclaredForDeviceRemovesMatchingTopics(t *testing.T) {
 	// Seed the declared map with three topics: two belonging to address
 	// "AABBCCDD1122" and one belonging to an unrelated address.
 	addr := "AABBCCDD1122"
+	const (
+		match1    = "homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"
+		match2    = "homeassistant/sensor/ccu01_aabbccdd1122/ch2_temp/config"
+		unrelated = "homeassistant/switch/ccu01_other000000aa/ch1_state/config"
+	)
 	b.mu.Lock()
-	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
-	b.declared["homeassistant/sensor/ccu01_aabbccdd1122/ch2_temp/config"] = []byte(`{}`)
-	b.declared["homeassistant/switch/ccu01_other000000aa/ch1_state/config"] = []byte(`{}`)
+	b.declared[match1] = []byte(`{}`)
+	b.declared[match2] = []byte(`{}`)
+	b.declared[unrelated] = []byte(`{}`)
 	b.mu.Unlock()
 
-	pruned := b.PruneDeclaredForDevice(addr)
-	if pruned != 2 {
-		t.Fatalf("PruneDeclaredForDevice(%q) = %d pruned, want 2", addr, pruned)
+	retracted := b.RetractDiscoveryForDevice(context.Background(), addr)
+	if retracted != 2 {
+		t.Fatalf("RetractDiscoveryForDevice(%q) = %d, want 2", addr, retracted)
 	}
 
+	// The two matching entries are pruned; the unrelated one survives.
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if _, ok := b.declared["homeassistant/switch/ccu01_other000000aa/ch1_state/config"]; !ok {
+	if _, ok := b.declared[unrelated]; !ok {
 		t.Fatal("unrelated device entry was incorrectly pruned")
 	}
-	if _, ok := b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"]; ok {
+	if _, ok := b.declared[match1]; ok {
 		t.Fatal("device entry should have been pruned but still present")
+	}
+	b.mu.Unlock()
+
+	// Each matched topic is retracted on the broker: empty retained payload.
+	retractSeen := map[string]bool{match1: false, match2: false}
+	for _, p := range mp.publications() {
+		if p.topic == unrelated {
+			t.Fatalf("unrelated device's config must not be retracted")
+		}
+		if _, ok := retractSeen[p.topic]; !ok {
+			continue
+		}
+		if p.payload != "" {
+			t.Fatalf("retract %q: payload not empty (%q)", p.topic, p.payload)
+		}
+		if !p.retain {
+			t.Fatalf("retract %q: must be a retained publish", p.topic)
+		}
+		retractSeen[p.topic] = true
+	}
+	for topic, seen := range retractSeen {
+		if !seen {
+			t.Fatalf("expected an empty retained publish for %q, none seen", topic)
+		}
 	}
 }
 
-// TestPruneDeclaredForDeviceEmptyAddressIsNoop ensures an empty address
-// produces no modifications.
-func TestPruneDeclaredForDeviceEmptyAddressIsNoop(t *testing.T) {
+// TestRetractDiscoveryForDeviceEmptyAddressIsNoop ensures an empty address
+// neither prunes nor publishes.
+func TestRetractDiscoveryForDeviceEmptyAddressIsNoop(t *testing.T) {
 	t.Parallel()
 
 	mp := &mockPublisher{}
-	b := NewBridge(BridgeConfig{Base: "loom"}, mp)
+	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: true}, mp)
 	b.mu.Lock()
 	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
 	b.mu.Unlock()
 
-	pruned := b.PruneDeclaredForDevice("")
-	if pruned != 0 {
-		t.Fatalf("empty address should prune 0, got %d", pruned)
+	if n := b.RetractDiscoveryForDevice(context.Background(), ""); n != 0 {
+		t.Fatalf("empty address should retract 0, got %d", n)
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if len(b.declared) != 1 {
 		t.Fatalf("declared should still have 1 entry, got %d", len(b.declared))
+	}
+	if len(mp.publications()) != 0 {
+		t.Fatalf("empty address must not publish anything, got %d", len(mp.publications()))
+	}
+}
+
+// TestRetractDiscoveryForDeviceDiscoveryDisabledIsNoop ensures the pass does
+// nothing when HA Discovery is off — there are no discovery configs to clear.
+func TestRetractDiscoveryForDeviceDiscoveryDisabledIsNoop(t *testing.T) {
+	t.Parallel()
+
+	mp := &mockPublisher{}
+	b := NewBridge(BridgeConfig{Base: "loom", HADiscoveryEnabled: false}, mp)
+	b.mu.Lock()
+	b.declared["homeassistant/switch/ccu01_aabbccdd1122/ch1_state/config"] = []byte(`{}`)
+	b.mu.Unlock()
+
+	if n := b.RetractDiscoveryForDevice(context.Background(), "AABBCCDD1122"); n != 0 {
+		t.Fatalf("discovery disabled should retract 0, got %d", n)
+	}
+	if len(mp.publications()) != 0 {
+		t.Fatalf("discovery disabled must not publish anything, got %d", len(mp.publications()))
 	}
 }
 

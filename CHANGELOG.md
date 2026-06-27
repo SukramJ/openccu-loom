@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2]
+
+### Fixed
+
+- **Removed devices now disappear from Home Assistant immediately.** When a
+  device was deleted from the CCU while the daemon was running, its MQTT
+  HA-Discovery configs lingered on the broker — so the entities stayed visible
+  as permanently "unavailable" until the next daemon restart (when the boot
+  orphan-cleanup pass evicted them). The device-removed handler now retracts
+  the device's discovery configs right away (empty retained payload), scoped to
+  the device's own node_id so unrelated entities are never touched.
+
 ## [0.17.1]
 
 ### Fixed

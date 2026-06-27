@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.2
+
+- **Fixed: removed devices now disappear from Home Assistant immediately.** A
+  device deleted from the CCU while the daemon runs has its HA-Discovery configs
+  retracted right away, instead of lingering as "unavailable" until the next
+  daemon restart.
+
 ## 0.17.1
 
 - **Fixed: battery values now show in the Signal-quality table.** Battery level

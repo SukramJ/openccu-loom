@@ -1217,12 +1217,14 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 	}
 }
 
-// PruneDeclaredForDevice removes every entry from the declared map whose
-// HA-Discovery topic belongs to the given device address. Called when the
-// daemon processes a device-removed callback so that subsequent snapshot
-// passes do not re-emit discovery configs for a device that no longer exists
-// in the model, and so the dedup gate does not suppress the orphan-cleanup
-// pass from evicting the topic on the broker.
+// RetractDiscoveryForDevice retracts every HA-Discovery config this bridge
+// declared for the given device address — publishing an empty retained payload
+// to each topic — and removes those entries from the declared map. Called when
+// the daemon processes a device-removed callback so the removed device's
+// entities disappear from Home Assistant immediately, rather than lingering as
+// permanently "unavailable" until the next boot's orphan-cleanup pass evicts
+// them. Pruning the declared entries additionally stops the dedup gate from
+// suppressing a re-publish should the same address reappear later.
 //
 // The discovery topic shape is
 // `homeassistant/<component>/<node_id>/<object_id>/config`
@@ -1230,21 +1232,32 @@ func (b *Bridge) publishTextDisplayNotify(ctx context.Context, ev Event) {
 // which is unambiguous for the node_id segment — addresses are formatted as
 // hex strings (e.g. `000c9709aef157`) and can only collide if two devices
 // share the same address string, which the CCU prevents.
-func (b *Bridge) PruneDeclaredForDevice(deviceAddress string) int {
-	if deviceAddress == "" {
+//
+// Returns the number of config topics retracted. A no-op when HA Discovery is
+// disabled or the address declared no configs.
+func (b *Bridge) RetractDiscoveryForDevice(ctx context.Context, deviceAddress string) int {
+	if deviceAddress == "" || !b.cfg.HADiscoveryEnabled {
 		return 0
 	}
 	needle := "_" + strings.ToLower(deviceAddress) + "/"
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	var pruned int
+	topics := make([]string, 0)
 	for topic := range b.declared {
 		if strings.Contains(topic, needle) {
+			topics = append(topics, topic)
 			delete(b.declared, topic)
-			pruned++
 		}
 	}
-	return pruned
+	b.mu.Unlock()
+	for _, topic := range topics {
+		// Empty retained payload clears the retained config so HA drops the
+		// entity. Best-effort: a publish error leaves the boot orphan-cleanup
+		// pass as the backstop.
+		if err := b.client.Publish(ctx, topic, nil, b.cfg.QoS.Discovery, true); err != nil {
+			b.incPublishErrors()
+		}
+	}
+	return len(topics)
 }
 
 func (b *Bridge) publishDiscovery(ctx context.Context, component, nodeID, objectID string, payload []byte) error {
