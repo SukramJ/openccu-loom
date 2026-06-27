@@ -216,7 +216,7 @@
   // custom rendering; name/channel/parameter/kind/class are sortable text fields.
   const columns: DataColumn<MatterExposure>[] = $derived([
     { key: "select", label: t("matter.expose.col_select") },
-    { key: "state", label: t("matter.expose.col_state"), get: (r) => (r.enabled ? 1 : 0) },
+    { key: "state", label: t("matter.expose.col_state"), sortable: true, get: (r) => (r.enabled ? 1 : 0) },
     {
       key: "name",
       label: t("matter.expose.col_name"),

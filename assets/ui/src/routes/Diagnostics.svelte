@@ -383,11 +383,12 @@
 
   const interfaceCols: DataColumn<InterfaceInfo>[] = $derived([
     { key: "id", label: t("diagnostics.col.interface"), sortable: true, title: true, get: (i) => i.id },
-    { key: "type", label: t("diagnostics.col.type"), get: (i) => i.interface },
-    { key: "status", label: t("diagnostics.col.status") },
+    { key: "type", label: t("diagnostics.col.type"), sortable: true, get: (i) => i.interface },
+    { key: "status", label: t("diagnostics.col.status"), sortable: true, get: (i) => (i.connected ? 1 : 0) },
     {
       key: "host",
       label: t("diagnostics.col.host"),
+      sortable: true,
       get: (i) => [i.central_id, i.host, i.note].filter(Boolean).join(" · "),
     },
     { key: "action", label: t("diagnostics.col.action"), align: "right", cellClass: "reflow-actions" },
@@ -395,32 +396,35 @@
 
   const clientCols: DataColumn<DiagnosticsClient>[] = $derived([
     { key: "name", label: t("diagnostics.col.client"), sortable: true, title: true, get: (c) => c.name },
-    { key: "status", label: t("diagnostics.col.status"), get: (c) => c.status },
+    { key: "status", label: t("diagnostics.col.status"), sortable: true, get: (c) => c.status },
     { key: "score", label: t("diagnostics.col.score"), sortable: true, align: "right", get: (c) => c.score },
     {
       key: "last_ok",
       label: t("diagnostics.last_ok"),
-      get: (c) => (c.last_successful_request ? formatDate(c.last_successful_request) : ""),
+      sortable: true,
+      get: (c) => c.last_successful_request ?? "",
     },
     {
       key: "last_fail",
       label: t("diagnostics.last_fail"),
-      get: (c) => (c.last_failed_request ? formatDate(c.last_failed_request) : ""),
+      sortable: true,
+      get: (c) => c.last_failed_request ?? "",
     },
     {
       key: "last_event",
       label: t("diagnostics.last_event"),
-      get: (c) => (c.last_event_received ? formatDate(c.last_event_received) : ""),
+      sortable: true,
+      get: (c) => c.last_event_received ?? "",
     },
-    { key: "consec_failures", label: t("diagnostics.consecutive_failures"), align: "right", get: (c) => c.consecutive_failures },
-    { key: "reconnect_attempts", label: t("diagnostics.reconnect_attempts"), align: "right", get: (c) => c.reconnect_attempts },
+    { key: "consec_failures", label: t("diagnostics.consecutive_failures"), sortable: true, align: "right", get: (c) => c.consecutive_failures },
+    { key: "reconnect_attempts", label: t("diagnostics.reconnect_attempts"), sortable: true, align: "right", get: (c) => c.reconnect_attempts },
   ]);
 
   const recordingCols: DataColumn<UnifiedRow>[] = $derived([
-    { key: "type", label: t("diagnostics.recordings.col_type"), title: true },
-    { key: "ccu", label: t("diagnostics.recordings.col_scope"), get: (r) => r.ccu },
-    { key: "start", label: t("diagnostics.recordings.col_start") },
-    { key: "size", label: t("diagnostics.recordings.col_size"), get: (r) => r.sizeLabel },
+    { key: "type", label: t("diagnostics.recordings.col_type"), sortable: true, title: true, get: (r) => r.kind },
+    { key: "ccu", label: t("diagnostics.recordings.col_scope"), sortable: true, get: (r) => r.ccu },
+    { key: "start", label: t("diagnostics.recordings.col_start"), sortable: true, get: (r) => r.startedAt },
+    { key: "size", label: t("diagnostics.recordings.col_size"), sortable: true, get: (r) => r.sizeLabel },
     { key: "action", label: t("diagnostics.recordings.col_action"), align: "right", cellClass: "reflow-actions" },
   ]);
 </script>

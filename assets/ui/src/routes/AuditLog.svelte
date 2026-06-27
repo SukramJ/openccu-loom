@@ -192,6 +192,7 @@
     {
       key: "target",
       label: t("audit.col.target"),
+      sortable: true,
       get: (e) =>
         [e.device_address, e.paramset, e.peer, e.parameter]
           .filter(Boolean)
@@ -200,6 +201,7 @@
     {
       key: "changes",
       label: t("audit.col.changes"),
+      sortable: true,
       align: "right",
       get: (e) => e.changes?.length ?? 0,
     },

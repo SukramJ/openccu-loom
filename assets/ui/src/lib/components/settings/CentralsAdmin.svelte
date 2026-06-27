@@ -340,7 +340,7 @@
   const columns: DataColumn<CentralRow>[] = $derived([
     { key: "name", label: t("centrals.col.name"), sortable: true, title: true, get: (c) => c.name },
     { key: "host", label: t("centrals.col.host"), sortable: true, get: (c) => c.host },
-    { key: "status", label: t("centrals.col.status") },
+    { key: "status", label: t("centrals.col.status"), sortable: true, get: (c) => (c.enabled ? 1 : 0) },
     { key: "actions", label: t("centrals.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
 </script>

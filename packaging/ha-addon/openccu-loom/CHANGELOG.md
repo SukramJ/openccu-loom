@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.1
+
+- **Fixed: battery values now show in the Signal-quality table.** Battery level
+  is read from the calculated voltage level (which was previously missed), and
+  low-battery now also recognises HmIP's `LOWBAT` flag.
+- **Every sensible table column is now sortable** by clicking its header,
+  across all tables in the Config UI.
+
 ## 0.17.0
 
 - **Homogeneous, sortable tables across the Config UI.** Devices, system

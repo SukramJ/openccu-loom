@@ -137,9 +137,12 @@ func TestAvailabilityInfoFromObservedValues(t *testing.T) {
 	rssi.OnEvent(-68)
 	ch0.Put(rssi)
 
+	// OPERATING_VOLTAGE_LEVEL is a CALCULATED data point in production (the
+	// derived battery-level %), so it lives in the channel's calculated set —
+	// attach it as such, not as a VALUES entry.
 	bat := newFloatDP("0001ABCD:0", hmenum.Parameter(hmenum.CalculatedParameterOperatingVoltageLevel))
 	bat.OnEvent(82)
-	ch0.Put(bat)
+	ch0.AttachCalculatedDataPoint(bat)
 
 	info := d.Availability().Info()
 	if !info.IsReachable {
@@ -159,6 +162,25 @@ func TestAvailabilityInfoFromObservedValues(t *testing.T) {
 	}
 	if info.LastUpdated.IsZero() {
 		t.Fatal("LastUpdated should track modifiedAt")
+	}
+}
+
+func TestAvailabilityLowBatteryFromHmIPLowbat(t *testing.T) {
+	d := newTestDevice(t)
+	ch0 := d.Channel("0001ABCD:0")
+
+	// HmIP devices report the low-battery flag under LOWBAT (no underscore),
+	// where BidCos uses LOW_BAT — both must be recognised.
+	low := newBoolDP("0001ABCD:0", hmenum.ParameterLowbat)
+	low.OnEvent(true)
+	ch0.Put(low)
+
+	info := d.Availability().Info()
+	if info.LowBattery == nil || !*info.LowBattery {
+		t.Fatalf("low battery from LOWBAT: %+v", info.LowBattery)
+	}
+	if !info.HasBattery() {
+		t.Fatal("HasBattery should be true when LOWBAT is observed")
 	}
 }
 

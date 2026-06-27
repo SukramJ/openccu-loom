@@ -4,6 +4,26 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1]
+
+### Fixed
+
+- **Battery values now appear in the Signal-quality table.** The battery
+  level read the derived `OPERATING_VOLTAGE_LEVEL`, but that is a *calculated*
+  data point and the lookup only searched the VALUES paramset — so the column
+  was always empty (most visibly for HmIP). The maintenance-channel lookup now
+  also searches calculated data points. Low-battery detection additionally
+  recognises HmIP's `LOWBAT` parameter (previously only BidCos `LOW_BAT`).
+
+### Changed
+
+- **Every sensible table column is now sortable.** Across all DataTable views
+  (devices, firmware, signal quality, system variables, programs, messages,
+  inbox, un-ignore, backups, audit, Matter, the settings admin tables, and the
+  Diagnostics sub-tables) every data column now sorts on header click;
+  selection and action columns stay non-sortable. Timestamp columns sort on
+  their raw value while still rendering the formatted date.
+
 ## [0.17.0]
 
 ### Added

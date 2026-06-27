@@ -254,7 +254,7 @@
     { key: "name", label: t("devicelist.col.name"), sortable: true, title: true, get: (d) => d.name || d.address },
     { key: "model", label: t("devicelist.col.model"), sortable: true, get: (d) => d.model_label || d.model },
     { key: "interface", label: t("diagnostics.interfaces"), sortable: true, get: (d) => d.interface_id || d.interface },
-    { key: "rooms", label: t("devicelist.col.rooms"), get: (d) => (d.rooms ?? []).join(", ") },
+    { key: "rooms", label: t("devicelist.col.rooms"), sortable: true, get: (d) => (d.rooms ?? []).join(", ") },
     { key: "status", label: t("devicelist.col.status"), sortable: true, align: "right", get: (d) => (d.available ? 1 : 0) },
   ]);
 

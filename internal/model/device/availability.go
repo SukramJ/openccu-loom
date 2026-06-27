@@ -141,17 +141,43 @@ func (a *Availability) channel0Float(p hmenum.Parameter) (value float64, ok bool
 	if ch == nil {
 		return 0, false
 	}
-	dp := ch.Parameter(p)
-	if dp == nil {
-		return 0, false
+	// VALUES paramset first (RSSI_DEVICE, BATTERY_STATE, …).
+	if dp := ch.Parameter(p); dp != nil {
+		if raw, observed := dp.RawValue(); observed {
+			if f, ok := floatFromRaw(raw); ok {
+				return f, true
+			}
+		}
 	}
-	raw, ok := dp.RawValue()
-	if !ok {
-		return 0, false
+	// Then calculated data points. OPERATING_VOLTAGE_LEVEL — the derived
+	// battery-level percentage — lives in the channel's calculated set, not
+	// the VALUES paramset, so a plain Parameter() lookup never finds it.
+	for _, dp := range ch.CalculatedDataPoints() {
+		if dp.DataPointKey().Parameter != string(p) {
+			continue
+		}
+		rv, readable := dp.(interface{ RawValue() (any, bool) })
+		if !readable {
+			continue
+		}
+		if raw, observed := rv.RawValue(); observed {
+			if f, ok := floatFromRaw(raw); ok {
+				return f, true
+			}
+		}
 	}
+	return 0, false
+}
+
+// floatFromRaw coerces a wire-decoded numeric value into a float64.
+func floatFromRaw(raw any) (float64, bool) {
 	switch v := raw.(type) {
 	case float64:
 		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
 	case int32:
 		return float64(v), true
 	case int64:
@@ -178,13 +204,17 @@ func (a *Availability) lowBattery() *bool {
 		if channel == nil {
 			continue
 		}
-		dp := channel.Parameter(hmenum.ParameterLowBat)
-		if dp == nil {
-			continue
-		}
-		if raw, ok := dp.RawValue(); ok {
-			if b, ok := raw.(bool); ok {
-				return &b
+		// LOW_BAT (HM/BidCos) and LOWBAT (HmIP) carry the same low-battery
+		// flag under different parameter names — check both.
+		for _, p := range []hmenum.Parameter{hmenum.ParameterLowBat, hmenum.ParameterLowbat} {
+			dp := channel.Parameter(p)
+			if dp == nil {
+				continue
+			}
+			if raw, ok := dp.RawValue(); ok {
+				if b, ok := raw.(bool); ok {
+					return &b
+				}
 			}
 		}
 	}

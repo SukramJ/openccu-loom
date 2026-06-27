@@ -117,13 +117,16 @@
     {
       key: "match",
       label: t("unignore.col.match"),
+      sortable: true,
       get: (p) =>
         visibilityStore.candidates.includes(p) ? "match" : "no match",
     },
     {
       key: "enabled",
       label: t("unignore.col.enabled"),
+      sortable: true,
       align: "center",
+      get: (p) => (effectiveSet.has(p) ? 1 : 0),
     },
   ]);
 </script>
