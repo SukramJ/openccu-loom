@@ -1,14 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
+  import type { DeviceSummary } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import DeviceCard from "$lib/components/DeviceCard.svelte";
+  import Badge from "$lib/components/ui/Badge.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import { makeTextMatcher } from "$lib/utils";
   import { prefs, setDeviceView } from "$lib/stores/preferences.svelte";
-  import { deviceListFilters as saved } from "$lib/stores/deviceListFilters.svelte";
+  import {
+    deviceListFilters as saved,
+    persistDeviceListFilters,
+  } from "$lib/stores/deviceListFilters.svelte";
   import Icon from "$lib/components/ui/Icon.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
@@ -39,6 +47,7 @@
     saved.sortColumn = sortColumn;
     saved.sortAsc = sortAsc;
     saved.groupByInterface = groupByInterface;
+    persistDeviceListFilters();
   });
 
   // Layout class for the device containers — a multi-column card grid
@@ -238,6 +247,17 @@
     }));
   });
 
+  // Columns for the table view mode. The select column carries the
+  // multi-select checkbox; name/model/interface/status sort on click.
+  const columns: DataColumn<DeviceSummary>[] = $derived([
+    { key: "select", label: "", get: () => "" },
+    { key: "name", label: t("devicelist.col.name"), sortable: true, title: true, get: (d) => d.name || d.address },
+    { key: "model", label: t("devicelist.col.model"), sortable: true, get: (d) => d.model_label || d.model },
+    { key: "interface", label: t("diagnostics.interfaces"), sortable: true, get: (d) => d.interface_id || d.interface },
+    { key: "rooms", label: t("devicelist.col.rooms"), get: (d) => (d.rooms ?? []).join(", ") },
+    { key: "status", label: t("devicelist.col.status"), sortable: true, align: "right", get: (d) => (d.available ? 1 : 0) },
+  ]);
+
   onMount(() => {
     deviceStore.refresh();
     deviceStore.ensureStream();
@@ -393,41 +413,124 @@
     </div>
   {/if}
 
-  <!-- Sort toolbar: click a column to set the sort direction; clicking
-       again flips asc/desc. The "group by interface" toggle clusters
-       devices under section headers. -->
+  <!-- Sort toolbar: in card (grid) mode the buttons drive the order; in
+       table mode the DataTable column headers sort, so only the group-by
+       toggle remains. -->
   <div class="mb-3 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-    <span>{t("common.sort")}</span>
-    {#each [
-      { key: "name", label: t("devicelist.col.name") },
-      { key: "address", label: t("devicelist.col.address") },
-      { key: "model", label: t("devicelist.col.model") },
-    ] as col (col.key)}
-      <button
-        type="button"
-        class="rounded-md border px-2 py-0.5 transition {sortColumn === col.key
-          ? 'border-brand-500 text-brand-700 dark:text-brand-300'
-          : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
-        onclick={() => setSort(col.key as "name" | "address" | "model")}
-      >
-        {col.label}
-        {#if sortColumn === col.key}
-          <span aria-hidden="true">{sortAsc ? "↑" : "↓"}</span>
-        {/if}
-      </button>
-    {/each}
-    <span class="mx-1">·</span>
+    {#if prefs.deviceView !== "list"}
+      <span>{t("common.sort")}</span>
+      {#each [
+        { key: "name", label: t("devicelist.col.name") },
+        { key: "address", label: t("devicelist.col.address") },
+        { key: "model", label: t("devicelist.col.model") },
+      ] as col (col.key)}
+        <button
+          type="button"
+          class="rounded-md border px-2 py-0.5 transition {sortColumn === col.key
+            ? 'border-brand-500 text-brand-700 dark:text-brand-300'
+            : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-slate-700 dark:text-slate-300'}"
+          onclick={() => setSort(col.key as "name" | "address" | "model")}
+        >
+          {col.label}
+          {#if sortColumn === col.key}
+            <span aria-hidden="true">{sortAsc ? "↑" : "↓"}</span>
+          {/if}
+        </button>
+      {/each}
+      <span class="mx-1">·</span>
+    {/if}
     <label class="inline-flex items-center gap-1.5 cursor-pointer">
       <input type="checkbox" bind:checked={groupByInterface} />
       {t("devicelist.group_by_interface")}
     </label>
   </div>
 
+  <!-- Per-row cell renderer shared by every device DataTable. -->
+  {#snippet deviceCell(device: DeviceSummary, col: DataColumn<DeviceSummary>)}
+    {#if col.key === "select"}
+      <input
+        type="checkbox"
+        class="h-4 w-4 cursor-pointer accent-brand-500"
+        checked={selected.has(device.address)}
+        onchange={(e) => toggleSelect(device.address, e.currentTarget.checked)}
+        aria-label={device.name || device.address}
+      />
+    {:else if col.key === "name"}
+      <a
+        href="#/devices/{encodeURIComponent(device.address)}"
+        class="font-medium text-brand-700 hover:underline dark:text-brand-400"
+      >{device.name || device.address}</a>
+      <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{device.address}</span>
+    {:else if col.key === "model"}
+      <span>{device.model_label || device.model}</span>
+    {:else if col.key === "interface"}
+      <span class="font-mono text-xs">{device.interface_id || device.interface}</span>
+      {#if centrals.length > 1 && device.central}
+        <span class="block text-xs text-[var(--ha-secondary-text-color)]">{device.central}</span>
+      {/if}
+    {:else if col.key === "rooms"}
+      {#if device.rooms && device.rooms.length > 0}
+        <span class="text-xs">{device.rooms.join(", ")}</span>
+      {:else}
+        <span class="text-[var(--ha-secondary-text-color)]">—</span>
+      {/if}
+    {:else if col.key === "status"}
+      <span class="inline-flex flex-wrap items-center justify-end gap-1.5">
+        {#if device.available}
+          <Badge variant="success">{t("device.list.reachable")}</Badge>
+        {:else}
+          <Badge variant="danger">{t("device.list.unreachable")}</Badge>
+        {/if}
+        {#if device.update_available}
+          <Badge variant="warning">{t("firmware.update")}</Badge>
+        {/if}
+      </span>
+    {/if}
+  {/snippet}
+
   {#if deviceStore.loading && deviceStore.items.length === 0}
     <LoadingState message={t("devices.loading")} />
   {:else if filtered.length === 0}
     <EmptyState message={t("devices.empty")} />
+  {:else if prefs.deviceView === "list"}
+    <!-- TABLE MODE -->
+    {#if groups}
+      {#each groups as g (g.iface)}
+        <section class="mb-6">
+          <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {g.iface}
+            <span class="text-slate-400 dark:text-slate-500">·&nbsp;{g.items.length}</span>
+          </h2>
+          <Card class="p-4">
+            <DataTable
+              rows={g.items}
+              {columns}
+              rowKey={(d) => d.interface_id + "/" + d.address}
+              cell={deviceCell}
+              initialSort={{ key: "name", asc: true }}
+              emptyMessage={t("devices.empty")}
+            />
+          </Card>
+        </section>
+      {/each}
+    {:else}
+      <Card class="p-4">
+        <DataTable
+          rows={filtered}
+          {columns}
+          rowKey={(d) => d.interface_id + "/" + d.address}
+          cell={deviceCell}
+          persistKey="device-list"
+          initialSort={{ key: "name", asc: true }}
+          emptyMessage={t("devices.empty")}
+        />
+      </Card>
+    {/if}
+    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+      {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
+    </p>
   {:else if groups}
+    <!-- CARD (GRID) MODE, grouped -->
     {#each groups as g (g.iface)}
       <section class="mb-6">
         <h2 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
@@ -451,6 +554,7 @@
       {t("devicelist.count", { filtered: filtered.length, total: deviceStore.items.length })}
     </p>
   {:else}
+    <!-- CARD (GRID) MODE, flat -->
     <ul class={listClass}>
       {#each filtered as device (device.interface_id + "/" + device.address)}
         <li>

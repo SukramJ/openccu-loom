@@ -2,23 +2,23 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { ProgramEntry } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
-  import { makeTextMatcher } from "$lib/utils";
+  import { loadLS, saveLS } from "$lib/utils";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
 
   let programs = $state<ProgramEntry[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let search = $state("");
-  let centralFilter = $state("");
+  let centralFilter = $state(loadLS("programs:central"));
+  $effect(() => saveLS("programs:central", centralFilter));
   let runningId = $state<string | null>(null);
   let togglingId = $state<string | null>(null);
 
@@ -93,15 +93,15 @@
     );
   });
 
-  const filtered = $derived.by(() => {
-    const match = makeTextMatcher(search);
-    const list = [...programs].sort((a, b) => a.name.localeCompare(b.name));
-    const bySearch = list.filter(
-      (p) => match(p.name) || match(p.description ?? ""),
-    );
-    if (!centralFilter) return bySearch;
-    return bySearch.filter((p) => p.central === centralFilter);
-  });
+  const filtered = $derived(
+    centralFilter ? programs.filter((p) => p.central === centralFilter) : programs,
+  );
+
+  const columns: DataColumn<ProgramEntry>[] = $derived([
+    { key: "name", label: t("programs.col.name"), sortable: true, title: true, get: (p) => p.name },
+    { key: "status", label: t("programs.col.status"), sortable: true, get: (p) => (p.active === true ? 1 : p.active === false ? 0 : -1) },
+    { key: "actions", label: t("programs.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -133,46 +133,47 @@
     </div>
   </header>
 
-  <div class="mb-4 max-w-md">
-    <Input
-      type="search"
-      placeholder={t("common.search")}
-      bind:value={search}
-    />
-  </div>
-
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
   {#if loading}
     <LoadingState />
-  {:else if filtered.length === 0}
-    <EmptyState message={t("programs.empty")} icon="mdi:play" />
   {:else}
-    <ul class="grid grid-cols-1 gap-3 md:grid-cols-2">
-      {#each filtered as p ((p.central ?? "") + "/" + p.id)}
-        {@const running = runningId === p.id}
-        <li>
-          <Card class="flex h-full flex-col justify-between p-4">
-            <div class="min-w-0" class:opacity-60={p.active === false}>
-              <div class="flex items-center gap-2">
-                <h3 class="truncate font-semibold">{p.name}</h3>
-                {#if p.active === true}
-                  <Badge variant="default">{t("programs.active")}</Badge>
-                {:else if p.active === false}
-                  <Badge variant="muted">{t("programs.inactive")}</Badge>
-                {/if}
-                {#if centrals.length > 1 && p.central}
-                  <Badge variant="muted">{p.central}</Badge>
-                {/if}
-              </div>
-              {#if p.description}
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{p.description}</p>
+    <Card class="p-4">
+      <DataTable
+        rows={filtered}
+        {columns}
+        rowKey={(p) => (p.central ?? "") + "/" + p.id}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="programs"
+        initialSort={{ key: "name", asc: true }}
+        emptyMessage={t("programs.empty")}
+        emptyIcon="mdi:play"
+      >
+        {#snippet cell(p, col)}
+          {#if col.key === "name"}
+            <div class:opacity-60={p.active === false}>
+              <span class="font-medium">{p.name}</span>
+              {#if centrals.length > 1 && p.central}
+                <Badge variant="muted">{p.central}</Badge>
               {/if}
-              <p class="mt-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">{p.id}</p>
+              {#if p.description}
+                <span class="block text-xs text-slate-500 dark:text-slate-400">{p.description}</span>
+              {/if}
+              <span class="block font-mono text-[10px] text-slate-500 dark:text-slate-400">{p.id}</span>
             </div>
-            <div class="mt-3 flex justify-end gap-2">
+          {:else if col.key === "status"}
+            {#if p.active === true}
+              <Badge variant="default">{t("programs.active")}</Badge>
+            {:else if p.active === false}
+              <Badge variant="muted">{t("programs.inactive")}</Badge>
+            {:else}
+              <span class="text-[var(--ha-secondary-text-color)]">—</span>
+            {/if}
+          {:else if col.key === "actions"}
+            <span class="inline-flex items-center justify-end gap-2">
               {#if p.active !== undefined}
                 <Button
                   type="button"
@@ -182,25 +183,21 @@
                   disabled={togglingId === p.id}
                   title={t("programs.toggle.tooltip")}
                 >
-                  {togglingId === p.id
-                    ? "…"
-                    : p.active
-                      ? t("common.disable")
-                      : t("common.enable")}
+                  {togglingId === p.id ? "…" : p.active ? t("common.disable") : t("common.enable")}
                 </Button>
               {/if}
               <Button
                 type="button"
                 size="sm"
                 onclick={() => void execute(p.id, p.name, p.central)}
-                disabled={running}
+                disabled={runningId === p.id}
               >
-                {running ? t("programs.running") : t("programs.run")}
+                {runningId === p.id ? t("programs.running") : t("programs.run")}
               </Button>
-            </div>
-          </Card>
-        </li>
-      {/each}
-    </ul>
+            </span>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 </section>

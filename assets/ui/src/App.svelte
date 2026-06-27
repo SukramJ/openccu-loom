@@ -18,6 +18,7 @@
   import Settings from "./routes/Settings.svelte";
   import Inbox from "./routes/Inbox.svelte";
   import FirmwareList from "./routes/FirmwareList.svelte";
+  import SignalQualityList from "./routes/SignalQualityList.svelte";
   import UnIgnoreList from "./routes/UnIgnoreList.svelte";
   // Imported statically (not code-split): DeviceDetail's history tab
   // already pulls AuditLog into the main chunk, so a dynamic import here
@@ -117,6 +118,7 @@
     | { kind: "settings" }
     | { kind: "inbox" }
     | { kind: "firmware" }
+    | { kind: "signal" }
     | { kind: "matter"; subpath: string }
     | { kind: "visibility" }
     | { kind: "unknown" };
@@ -134,6 +136,7 @@
     if (path === "/settings") return { kind: "settings" };
     if (path === "/inbox") return { kind: "inbox" };
     if (path === "/firmware") return { kind: "firmware" };
+    if (path === "/signal") return { kind: "signal" };
     if (path === "/visibility") return { kind: "visibility" };
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
@@ -280,6 +283,8 @@
           <Inbox />
         {:else if route.kind === "firmware"}
           <FirmwareList />
+        {:else if route.kind === "signal"}
+          <SignalQualityList />
         {:else if route.kind === "matter"}
           {#await loadMatter()}
             <LoadingState />

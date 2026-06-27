@@ -2,15 +2,16 @@
   import { onMount } from "svelte";
   import { deviceStore } from "$lib/stores/devices.svelte";
   import { api, ApiError } from "$lib/api/client";
-  import type { DeviceDetail } from "$lib/api/types";
+  import type { DeviceDetail, DeviceSummary } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
-  import Input from "$lib/components/ui/Input.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
+  import { loadLS, saveLS } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -28,9 +29,12 @@
   let detailMap = $state<Record<string, DeviceDetail>>({});
   let loadingDetail = $state<Set<string>>(new Set());
   let updating = $state<Set<string>>(new Set());
-  let filterMode = $state<"all" | "updatable">("all");
-  let searchText = $state("");
-  let centralFilter = $state("");
+  let filterMode = $state<"all" | "updatable">(
+    loadLS("firmware:mode", "all") === "updatable" ? "updatable" : "all",
+  );
+  $effect(() => saveLS("firmware:mode", filterMode));
+  let centralFilter = $state(loadLS("firmware:central"));
+  $effect(() => saveLS("firmware:central", centralFilter));
 
   // ---- derived ---------------------------------------------------------
 
@@ -48,17 +52,20 @@
     if (filterMode === "updatable") {
       list = list.filter((d) => d.update_available);
     }
-    if (searchText.trim()) {
-      const q = searchText.trim().toLowerCase();
-      list = list.filter(
-        (d) =>
-          d.name.toLowerCase().includes(q) ||
-          d.address.toLowerCase().includes(q) ||
-          d.model.toLowerCase().includes(q),
-      );
-    }
     return list;
   });
+
+  // DataTable columns. Device + model sort on synchronous fields; the
+  // firmware version columns are lazily loaded per row, so they are not
+  // offered as sort keys (most rows would have no value to sort by).
+  const columns: DataColumn<DeviceSummary>[] = $derived([
+    { key: "device", label: t("firmware.col.device"), sortable: true, title: true, get: (d) => d.name || d.address },
+    { key: "model", label: t("firmware.col.model"), sortable: true, get: (d) => d.model },
+    { key: "current", label: t("firmware.col.current"), get: (d) => detailMap[d.address]?.firmware?.Current ?? "" },
+    { key: "available", label: t("firmware.col.available"), get: (d) => detailMap[d.address]?.firmware?.Available ?? "" },
+    { key: "state", label: t("firmware.col.state") },
+    { key: "action", label: t("firmware.col.action"), align: "right", cellClass: "reflow-actions" },
+  ]);
 
   const updatableCount = $derived(
     allDevices.filter((d) => d.update_available).length,
@@ -226,169 +233,101 @@
         {/each}
       </select>
     {/if}
-
-    <Input
-      type="search"
-      placeholder={t("common.search")}
-      bind:value={searchText}
-    />
   </div>
 
-  <!-- Loading / error / empty -->
+  <!-- Loading / error / table -->
   {#if deviceStore.loading && allDevices.length === 0}
     <LoadingState />
   {:else if deviceStore.error}
     <ErrorState message={deviceStore.error} onRetry={() => void deviceStore.refresh()} />
-  {:else if filtered.length === 0}
-    <EmptyState
-      message={filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
-      icon="mdi:upload"
-    />
   {:else}
-    <!-- Device table -->
-    <Card class="overflow-hidden p-0">
-      <table class="table-reflow w-full text-sm">
-        <thead class="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
-          <tr>
-            <th class="px-4 py-2">{t("firmware.col.device")}</th>
-            <th class="px-4 py-2">{t("firmware.col.model")}</th>
-            <th class="px-4 py-2">{t("firmware.col.current")}</th>
-            <th class="px-4 py-2">{t("firmware.col.available")}</th>
-            <th class="px-4 py-2">{t("firmware.col.state")}</th>
-            <th class="px-4 py-2">{t("firmware.col.action")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each filtered as device (device.interface_id + "/" + device.address)}
-            {@const detail = detailMap[device.address]}
-            {@const fw = detail?.firmware}
-            {@const busy = updating.has(device.address)}
-            {@const loadingFw = loadingDetail.has(device.address)}
-            {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
-            {@const updateAvailable = detail?.update_available ?? false}
-            <tr class="border-b border-slate-100 transition-colors last:border-0 dark:border-slate-800">
-              <!-- Device name / address -->
-              <td class="reflow-title px-4 py-3">
-                <a
-                  href="#/devices/{encodeURIComponent(device.address)}"
-                  class="font-medium text-brand-700 hover:underline dark:text-brand-400"
-                >
-                  {device.name || device.address}
-                </a>
-                <div class="text-xs text-slate-500 dark:text-slate-400">
-                  {device.address}
-                  {#if centrals.length > 1 && device.central}
-                    · <span class="font-medium">{device.central}</span>
-                  {/if}
-                </div>
-              </td>
-
-              <!-- Model -->
-              <td class="px-4 py-3" data-label={t("firmware.col.model")}>
-                <span>{device.model}</span>
-                {#if device.model_label && device.model_label !== device.model}
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
-                    {device.model_label}
-                  </div>
-                {/if}
-              </td>
-
-              <!-- Current version -->
-              <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.current")}>
-                {#if loadingFw}
-                  <span class="text-slate-400 dark:text-slate-500">…</span>
-                {:else}
-                  {fw?.Current || "—"}
-                {/if}
-              </td>
-
-              <!-- Available version -->
-              <td class="px-4 py-3 font-mono text-xs" data-label={t("firmware.col.available")}>
-                {#if loadingFw}
-                  <span class="text-slate-400 dark:text-slate-500">…</span>
-                {:else if fw?.Available && fw.Available !== fw.Current}
-                  <span class="font-semibold text-amber-600 dark:text-amber-400">
-                    {fw.Available}
-                  </span>
-                {:else}
-                  {fw?.Available || "—"}
-                {/if}
-              </td>
-
-              <!-- Update state -->
-              <!-- Priority order:
-                   1. Both versions known and equal → canonical "Up to date",
-                      regardless of CCU-reported state or updatable flag.
-                   2. isUpdateAvailable (available > current) → show CCU state
-                      if present; fall back to generic "Update available" badge.
-                   3. available <= current (versions known, no upgrade) → "Up to date".
-                   4. Version info not yet loaded → show CCU state if present,
-                      or fall back to device.update_available (the gated pending
-                      flag, NOT the updatable capability) for a best-effort hint. -->
-              <td class="px-4 py-3" data-label={t("firmware.col.state")}>
-                {#if loadingFw}
-                  <span class="text-xs text-slate-400 dark:text-slate-500">…</span>
-                {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
-                  <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
-                {:else if updateAvailable}
-                  {#if fw?.UpdateState}
-                    <Badge variant={stateBadgeVariant(fw.UpdateState)}>
-                      {stateLabel(fw.UpdateState)}
-                    </Badge>
-                  {:else}
-                    <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
-                  {/if}
-                {:else if fw?.UpdateState}
-                  <Badge variant={stateBadgeVariant(fw.UpdateState)}>
-                    {stateLabel(fw.UpdateState)}
-                  </Badge>
-                {:else if device.update_available}
-                  <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
-                {:else}
-                  <Badge variant="muted">{t("firmware.state.UP_TO_DATE")}</Badge>
-                {/if}
-              </td>
-
-              <!-- Action -->
-              <!-- Show the update button only when the version comparison
-                   confirms available > current. This is the single source of
-                   truth; device.updatable (CCU flag) may lag reality after a
-                   manual flash or a stale firmware-check cache. -->
-              <td class="reflow-actions px-4 py-3">
-                {#if updateAvailable && !busy && !loadingFw}
-                  {@const inProgress = isInProgress(fw?.UpdateState)}
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    disabled={inProgress}
-                    onclick={() => void triggerUpdate(device.address, device.name || device.address)}
-                  >
-                    {#if inProgress}
-                      {t("firmware.in_progress")}
-                    {:else}
-                      {t("firmware.update")}
-                    {/if}
-                  </Button>
-                {:else if busy}
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    disabled={true}
-                  >
-                    {t("firmware.triggering")}
-                  </Button>
-                {:else if !loadingFw && detail && !updateAvailable}
-                  <span class="text-xs text-slate-500 dark:text-slate-400">
-                    {t("firmware.up_to_date")}
-                  </span>
-                {/if}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <Card class="p-4">
+      <DataTable
+        rows={filtered}
+        {columns}
+        rowKey={(d) => d.interface_id + "/" + d.address}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="firmware"
+        initialSort={{ key: "device", asc: true }}
+        emptyMessage={filterMode === "updatable" ? t("firmware.no_updates") : t("devices.empty")}
+        emptyIcon="mdi:upload"
+      >
+        {#snippet cell(device, col)}
+          {@const detail = detailMap[device.address]}
+          {@const fw = detail?.firmware}
+          {@const busy = updating.has(device.address)}
+          {@const loadingFw = loadingDetail.has(device.address)}
+          {@const versionsMatch = !!fw?.Current && !!fw?.Available && fw.Current === fw.Available}
+          {@const updateAvailable = detail?.update_available ?? false}
+          {#if col.key === "device"}
+            <a
+              href="#/devices/{encodeURIComponent(device.address)}"
+              class="font-medium text-brand-700 hover:underline dark:text-brand-400"
+            >{device.name || device.address}</a>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              {device.address}{#if centrals.length > 1 && device.central} · <span class="font-medium">{device.central}</span>{/if}
+            </div>
+          {:else if col.key === "model"}
+            <span>{device.model}</span>
+            {#if device.model_label && device.model_label !== device.model}
+              <div class="text-xs text-slate-500 dark:text-slate-400">{device.model_label}</div>
+            {/if}
+          {:else if col.key === "current"}
+            <span class="font-mono text-xs">
+              {#if loadingFw}<span class="text-slate-400 dark:text-slate-500">…</span>{:else}{fw?.Current || "—"}{/if}
+            </span>
+          {:else if col.key === "available"}
+            <span class="font-mono text-xs">
+              {#if loadingFw}
+                <span class="text-slate-400 dark:text-slate-500">…</span>
+              {:else if fw?.Available && fw.Available !== fw.Current}
+                <span class="font-semibold text-amber-600 dark:text-amber-400">{fw.Available}</span>
+              {:else}{fw?.Available || "—"}{/if}
+            </span>
+          {:else if col.key === "state"}
+            <!-- Priority: equal versions → Up to date; else update-available
+                 → CCU state or generic badge; else loaded-and-equal → Up to
+                 date; else best-effort from the gated update_available flag. -->
+            {#if loadingFw}
+              <span class="text-xs text-slate-400 dark:text-slate-500">…</span>
+            {:else if versionsMatch || (!updateAvailable && !!fw?.Current && !!fw?.Available)}
+              <Badge variant="success">{t("firmware.state.UP_TO_DATE")}</Badge>
+            {:else if updateAvailable}
+              {#if fw?.UpdateState}
+                <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
+              {:else}
+                <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
+              {/if}
+            {:else if fw?.UpdateState}
+              <Badge variant={stateBadgeVariant(fw.UpdateState)}>{stateLabel(fw.UpdateState)}</Badge>
+            {:else if device.update_available}
+              <Badge variant="default">{t("firmware.state.NEW_FIRMWARE_AVAILABLE")}</Badge>
+            {:else}
+              <Badge variant="muted">{t("firmware.state.UP_TO_DATE")}</Badge>
+            {/if}
+          {:else if col.key === "action"}
+            {#if updateAvailable && !busy && !loadingFw}
+              {@const inProgress = isInProgress(fw?.UpdateState)}
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                disabled={inProgress}
+                onclick={() => void triggerUpdate(device.address, device.name || device.address)}
+              >
+                {#if inProgress}{t("firmware.in_progress")}{:else}{t("firmware.update")}{/if}
+              </Button>
+            {:else if busy}
+              <Button type="button" variant="default" size="sm" disabled={true}>
+                {t("firmware.triggering")}
+              </Button>
+            {:else if !loadingFw && detail && !updateAvailable}
+              <span class="text-xs text-slate-500 dark:text-slate-400">{t("firmware.up_to_date")}</span>
+            {/if}
+          {/if}
+        {/snippet}
+      </DataTable>
     </Card>
 
     <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">

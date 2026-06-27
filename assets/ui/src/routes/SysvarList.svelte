@@ -2,25 +2,26 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { SysvarEntry } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import Switch from "$lib/components/ui/Switch.svelte";
   import Select from "$lib/components/ui/Select.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
-  import { makeTextMatcher } from "$lib/utils";
+  import { loadLS, saveLS } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
   let sysvars = $state<SysvarEntry[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let search = $state("");
-  let centralFilter = $state("");
+  let centralFilter = $state(loadLS("sysvars:central"));
+  $effect(() => saveLS("sysvars:central", centralFilter));
   let drafts = $state<Record<string, unknown>>({});
   let savingName = $state<string | null>(null);
   let creating = $state(false);
@@ -200,15 +201,16 @@
     );
   });
 
-  const filtered = $derived.by(() => {
-    const match = makeTextMatcher(search);
-    const list = [...sysvars].sort((a, b) => a.name.localeCompare(b.name));
-    const bySearch = list.filter(
-      (s) => match(s.name) || match(s.description ?? ""),
-    );
-    if (!centralFilter) return bySearch;
-    return bySearch.filter((s) => s.central === centralFilter);
-  });
+  const filtered = $derived(
+    centralFilter ? sysvars.filter((s) => s.central === centralFilter) : sysvars,
+  );
+
+  const columns: DataColumn<SysvarEntry>[] = $derived([
+    { key: "name", label: t("sysvars.col.name"), sortable: true, title: true, get: (s) => s.name },
+    { key: "type", label: t("sysvars.col.type"), sortable: true, get: (s) => s.value_type },
+    { key: "value", label: t("sysvars.col.value"), get: (s) => (s.value == null ? "" : String(s.value)) },
+    { key: "actions", label: t("sysvars.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 
   function currentValue(s: SysvarEntry): unknown {
     const key = draftKey(s);
@@ -338,123 +340,75 @@
     </Card>
   {/if}
 
-  <div class="mb-4 max-w-md">
-    <Input
-      type="search"
-      placeholder={t("common.search")}
-      bind:value={search}
-    />
-  </div>
-
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />
   {/if}
 
   {#if loading}
     <LoadingState />
-  {:else if filtered.length === 0}
-    <EmptyState message={t("sysvars.empty")} icon="mdi:sliders" />
   {:else}
-    <ul class="space-y-2">
-      {#each filtered as sv ((sv.central ?? "") + "/" + sv.name)}
-        {@const dirty = isDirty(sv)}
-        {@const saving = savingName === sv.name}
-        <li>
-          <Card class="p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <h3 class="font-mono text-sm font-semibold">{sv.name}</h3>
-                  <Badge variant="muted">{sv.value_type}</Badge>
-                  {#if sv.unit}
-                    <span class="text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>
-                  {/if}
-                  {#if dirty}
-                    <Badge variant="warning">{t("common.modified")}</Badge>
-                  {/if}
-                  {#if centrals.length > 1 && sv.central}
-                    <Badge variant="muted">{sv.central}</Badge>
-                  {/if}
-                </div>
-                {#if sv.description}
-                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{sv.description}</p>
-                {/if}
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                {#if sv.value_type === "BOOL"}
-                  <Switch
-                    checked={Boolean(currentValue(sv))}
-                    onCheckedChange={(v) => setDraft(sv, v)}
-                  />
-                {:else if sv.value_list && sv.value_list.length > 0}
-                  <Select
-                    options={sv.value_list.map((label, i) => ({
-                      value: String(i),
-                      label,
-                    }))}
-                    value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
-                    onValueChange={(v) => setDraft(sv, Number(v))}
-                  />
-                {:else if sv.value_type === "INTEGER" || sv.value_type === "FLOAT"}
-                  <Input
-                    type="number"
-                    step={sv.value_type === "FLOAT" ? "any" : "1"}
-                    value={currentValue(sv) as number | null}
-                    oninput={(e) => {
-                      const n = Number((e.target as HTMLInputElement).value);
-                      if (Number.isFinite(n)) setDraft(sv, n);
-                    }}
-                  />
-                {:else}
-                  <Input
-                    type="text"
-                    value={(currentValue(sv) ?? "") as string}
-                    oninput={(e) => setDraft(sv, (e.target as HTMLInputElement).value)}
-                  />
-                {/if}
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onclick={() => discardDraft(sv)}
-                  disabled={!dirty || saving}
-                >
-                  ×
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onclick={() => void save(sv)}
-                  disabled={!dirty || saving}
-                >
-                  {saving ? "…" : t("common.save")}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onclick={() => startEdit(sv)}
-                  disabled={savingName === sv.name}
-                  title={t("sysvars.edit.tooltip")}
-                >
-                  ⚙
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="destructive"
-                  onclick={() => void deleteSv(sv)}
-                  disabled={savingName === sv.name}
-                  title={t("sysvars.remove.tooltip")}
-                >
-                  ×
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </li>
-      {/each}
-    </ul>
+    <Card class="p-4">
+      <DataTable
+        rows={filtered}
+        {columns}
+        rowKey={(s) => (s.central ?? "") + "/" + s.name}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="sysvars"
+        initialSort={{ key: "name", asc: true }}
+        emptyMessage={t("sysvars.empty")}
+        emptyIcon="mdi:sliders"
+      >
+        {#snippet cell(sv, col)}
+          {#if col.key === "name"}
+            <span class="font-mono text-sm font-semibold">{sv.name}</span>
+            {#if isDirty(sv)}<Badge variant="warning">{t("common.modified")}</Badge>{/if}
+            {#if centrals.length > 1 && sv.central}<Badge variant="muted">{sv.central}</Badge>{/if}
+            {#if sv.description}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{sv.description}</span>
+            {/if}
+          {:else if col.key === "type"}
+            <Badge variant="muted">{sv.value_type}</Badge>
+            {#if sv.unit}<span class="ml-1 text-xs text-slate-500 dark:text-slate-400">{sv.unit}</span>{/if}
+          {:else if col.key === "value"}
+            {#if sv.value_type === "BOOL"}
+              <Switch checked={Boolean(currentValue(sv))} onCheckedChange={(v) => setDraft(sv, v)} />
+            {:else if sv.value_list && sv.value_list.length > 0}
+              <Select
+                options={sv.value_list.map((label, i) => ({ value: String(i), label }))}
+                value={currentValue(sv) != null ? String(currentValue(sv)) : ""}
+                onValueChange={(v) => setDraft(sv, Number(v))}
+              />
+            {:else if sv.value_type === "INTEGER" || sv.value_type === "FLOAT"}
+              <Input
+                type="number"
+                step={sv.value_type === "FLOAT" ? "any" : "1"}
+                value={currentValue(sv) as number | null}
+                oninput={(e) => {
+                  const n = Number((e.target as HTMLInputElement).value);
+                  if (Number.isFinite(n)) setDraft(sv, n);
+                }}
+              />
+            {:else}
+              <Input
+                type="text"
+                value={(currentValue(sv) ?? "") as string}
+                oninput={(e) => setDraft(sv, (e.target as HTMLInputElement).value)}
+              />
+            {/if}
+          {:else if col.key === "actions"}
+            <span class="inline-flex items-center justify-end gap-1.5">
+              <Button type="button" size="sm" variant="outline" onclick={() => discardDraft(sv)} disabled={!isDirty(sv) || savingName === sv.name}>×</Button>
+              <Button type="button" size="sm" onclick={() => void save(sv)} disabled={!isDirty(sv) || savingName === sv.name}>
+                {savingName === sv.name ? "…" : t("common.save")}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onclick={() => startEdit(sv)} disabled={savingName === sv.name} title={t("sysvars.edit.tooltip")}>⚙</Button>
+              <Button type="button" size="sm" variant="destructive" onclick={() => void deleteSv(sv)} disabled={savingName === sv.name} title={t("sysvars.remove.tooltip")}>×</Button>
+            </span>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 </section>
 

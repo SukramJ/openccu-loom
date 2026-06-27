@@ -9,7 +9,6 @@
     InterfaceInfo,
     LogLevelsResponse,
     RpcRecordingStatus,
-    RSSIDevice,
   } from "$lib/api/types";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
@@ -54,27 +53,6 @@
   let recType = $state<"log" | "rpc" | "both">("log");
   let rpcScope = $state<string>("");
   let recordingStarting = $state(false);
-
-  // Per-device RSSI — read from the in-memory device model (no CCU
-  // round-trip), so it loads with the page and is cheap to refresh.
-  let rssiDevices = $state<RSSIDevice[]>([]);
-  let rssiLoading = $state(false);
-  let rssiLoaded = $state(false);
-  let rssiError = $state<string | null>(null);
-
-  async function loadRSSI() {
-    rssiLoading = true;
-    rssiError = null;
-    try {
-      const matrix = await api.rssiInfo();
-      rssiDevices = matrix.devices;
-      rssiLoaded = true;
-    } catch (err) {
-      rssiError = err instanceof ApiError ? err.message : String(err);
-    } finally {
-      rssiLoading = false;
-    }
-  }
 
   async function load() {
     loading = true;
@@ -312,7 +290,6 @@
 
   onMount(() => {
     void load();
-    void loadRSSI();
     // Poll RPC recording status every 5 s while any recording is active.
     rpcPollTimer = setInterval(() => {
       void refreshRpcRecordings();
@@ -625,68 +602,6 @@
           </li>
         {/each}
       </ul>
-    {/if}
-  </Card>
-
-  <Card class="p-4">
-    <header class="mb-3 flex items-center justify-between gap-2">
-      <h2 class="text-lg font-semibold">{t("diagnostics.rssi.title")}</h2>
-      <span class="flex items-center gap-2">
-        {#if rssiLoaded}
-          <span class="text-xs text-[var(--ha-secondary-text-color)]">{rssiDevices.length}</span>
-        {/if}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onclick={() => void loadRSSI()}
-          disabled={rssiLoading}
-        >
-          {rssiLoading ? "…" : t("common.reload")}
-        </Button>
-      </span>
-    </header>
-    <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.rssi.hint")}</p>
-    {#if rssiError}
-      <ErrorState message={rssiError} onRetry={loadRSSI} />
-    {:else if !rssiLoaded}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
-    {:else if rssiDevices.length === 0}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.rssi.empty")}</p>
-    {:else}
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-          <thead class="text-xs text-[var(--ha-secondary-text-color)]">
-            <tr class="border-b border-slate-200 dark:border-slate-800">
-              <th class="py-1 pr-3 font-normal">{t("diagnostics.rssi.device")}</th>
-              <th class="py-1 pr-3 font-normal">{t("diagnostics.interfaces")}</th>
-              <th class="py-1 pr-3 text-right font-normal">{t("diagnostics.rssi.device_dbm")}</th>
-              <th class="py-1 pr-3 text-right font-normal">{t("diagnostics.rssi.peer_dbm")}</th>
-              <th class="py-1 font-normal">{t("diagnostics.rssi.reachable")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each rssiDevices as d (d.central + "/" + d.address)}
-              <tr class="border-b border-slate-100 dark:border-slate-800/60">
-                <td class="py-1 pr-3">
-                  <span class="font-medium">{d.name || d.address}</span>
-                  <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.address}</span>
-                </td>
-                <td class="py-1 pr-3 font-mono text-xs">{d.interface_id}</td>
-                <td class="py-1 pr-3 text-right font-mono">{d.rssi_device ?? "—"}</td>
-                <td class="py-1 pr-3 text-right font-mono">{d.rssi_peer ?? "—"}</td>
-                <td class="py-1">
-                  {#if d.reachable}
-                    <Badge variant="success">{t("diagnostics.connected")}</Badge>
-                  {:else}
-                    <Badge variant="danger">{t("diagnostics.disconnected")}</Badge>
-                  {/if}
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
     {/if}
   </Card>
 
