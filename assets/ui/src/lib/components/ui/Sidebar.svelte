@@ -47,6 +47,7 @@
     | "settings"
     | "inbox"
     | "firmware"
+    | "signal"
     | "matter"
     | "visibility"
     | "unknown";
@@ -163,6 +164,12 @@
           icon: "mdi:gauge",
           label: t("nav.diagnostics"),
           matches: ["diagnostics"],
+        },
+        {
+          href: "#/signal",
+          icon: "mdi:signal",
+          label: t("nav.signal"),
+          matches: ["signal"],
         },
         {
           href: "#/audit",

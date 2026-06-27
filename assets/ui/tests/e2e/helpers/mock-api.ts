@@ -118,6 +118,8 @@ export async function mockAllApis(page: Page): Promise<void> {
             central: 'ccu',
             rssi_device: -72,
             rssi_peer: -68,
+            battery_level: null,
+            low_battery: null,
             reachable: true,
           },
           {
@@ -127,6 +129,8 @@ export async function mockAllApis(page: Page): Promise<void> {
             central: 'ccu',
             rssi_device: -80,
             rssi_peer: null,
+            battery_level: 35,
+            low_battery: false,
             reachable: false,
           },
         ],

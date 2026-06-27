@@ -3,15 +3,16 @@
   import { visibilityStore } from "$lib/stores/visibility.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
 
   let selectedCentral = $state<string>("");
-  let searchText = $state("");
   let customPattern = $state("");
   let savingCentral = $state<string | null>(null);
   let includeMaster = $state(false);
@@ -42,14 +43,12 @@
 
   const effectiveSet = $derived(new Set(effective));
 
+  // Full pattern list without client-side text filter; DataTable's built-in
+  // search replaces the previous searchText Input.
   const pickerItems = $derived.by<string[]>(() => {
     const set = new Set<string>(visibilityStore.candidates);
     for (const p of effective) set.add(p);
-    const q = searchText.trim().toLowerCase();
-    const items = Array.from(set);
-    items.sort();
-    if (!q) return items;
-    return items.filter((p) => p.toLowerCase().includes(q));
+    return Array.from(set).sort();
   });
 
   const hasPending = $derived(
@@ -106,6 +105,27 @@
       visibilityStore.loadCandidates(includeMaster),
     ]);
   }
+
+  const columns: DataColumn<string>[] = $derived([
+    {
+      key: "pattern",
+      label: t("unignore.col.pattern"),
+      sortable: true,
+      title: true,
+      get: (p) => p,
+    },
+    {
+      key: "match",
+      label: t("unignore.col.match"),
+      get: (p) =>
+        visibilityStore.candidates.includes(p) ? "match" : "no match",
+    },
+    {
+      key: "enabled",
+      label: t("unignore.col.enabled"),
+      align: "center",
+    },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
@@ -127,6 +147,7 @@
     <EmptyState message={t("unignore.no_centrals")} icon="mdi:server" />
   {:else}
     <Card>
+      <!-- Central selector + include-master toggle -->
       <div class="flex flex-wrap items-center gap-3 p-4">
         <label class="text-sm font-medium">
           {t("unignore.central_label")}
@@ -150,38 +171,42 @@
         </label>
       </div>
 
+      <!-- Pattern list as DataTable -->
       <div class="border-t border-slate-200 p-4 dark:border-slate-800">
-        <Input
-          bind:value={searchText}
-          placeholder={t("unignore.search_placeholder")}
-          aria-label={t("unignore.search_placeholder")}
-        />
-
-        <ul
-          class="mt-3 max-h-[480px] divide-y divide-slate-100 overflow-y-auto rounded border border-slate-200 dark:divide-slate-800 dark:border-slate-700"
+        <DataTable
+          rows={pickerItems}
+          {columns}
+          rowKey={(p) => p}
+          search
+          searchPlaceholder={t("unignore.search_placeholder")}
+          persistKey="unignore"
+          initialSort={{ key: "pattern", asc: true }}
+          emptyMessage={t("unignore.no_candidates")}
+          emptyIcon="mdi:hidden"
         >
-          {#each pickerItems as pattern (pattern)}
-            <li class="flex items-center gap-3 px-3 py-2 text-sm">
-              <input
-                type="checkbox"
-                checked={effectiveSet.has(pattern)}
-                onchange={() => toggle(pattern)}
-              />
-              <code class="font-mono">{pattern}</code>
-              {#if !visibilityStore.candidates.includes(pattern)}
-                <span class="ml-auto text-xs text-slate-500 dark:text-slate-400">
+          {#snippet cell(p, col)}
+            {#if col.key === "pattern"}
+              <code class="font-mono text-sm">{p}</code>
+            {:else if col.key === "match"}
+              {#if !visibilityStore.candidates.includes(p)}
+                <span class="text-xs text-slate-500 dark:text-slate-400">
                   {t("unignore.no_match")}
                 </span>
+              {:else}
+                <span class="text-xs text-slate-500 dark:text-slate-400">—</span>
               {/if}
-            </li>
-          {:else}
-            <li class="px-3 py-3 text-sm text-slate-500 dark:text-slate-400">
-              {t("unignore.no_candidates")}
-            </li>
-          {/each}
-        </ul>
+            {:else if col.key === "enabled"}
+              <input
+                type="checkbox"
+                checked={effectiveSet.has(p)}
+                onchange={() => toggle(p)}
+              />
+            {/if}
+          {/snippet}
+        </DataTable>
       </div>
 
+      <!-- Custom pattern add -->
       <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
         <Input
           bind:value={customPattern}
@@ -193,6 +218,7 @@
         </Button>
       </div>
 
+      <!-- Save / discard -->
       <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 p-4 dark:border-slate-800">
         {#if hasPending}
           <span class="text-sm text-amber-600 dark:text-amber-400">

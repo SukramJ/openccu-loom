@@ -4,6 +4,40 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0]
+
+### Added
+
+- **Shared, sortable, searchable tables across the Config UI.** A new
+  `DataTable` design-system component gives every list view one consistent
+  interaction model: click a column header to sort (▲/▼, keyboard-operable),
+  a built-in search field, a responsive layout that reflows to cards on
+  phones, and persisted sort/search. The device, system-variable, program,
+  firmware, and signal-quality views all render through it.
+- **Signal quality view (own nav entry).** Per-device RF reception strength
+  (RSSI_DEVICE / RSSI_PEER, colour-coded by quality), **battery** state
+  (colour-coded ≤20 % red / ≤55 % amber, from `OPERATING_VOLTAGE_LEVEL`),
+  and reachability — searchable and sortable. Moved out of the Diagnostics
+  page into its own top-level entry. Backed by `battery_level` / `low_battery`
+  added to `GET /diagnostics/rssi` (API contract 2.3.0 → 2.4.0).
+
+### Changed
+
+- **Device list: cards ↔ table toggle.** The former single-column "list"
+  mode is now a real table (multi-select, interface grouping, bulk actions
+  preserved); the card grid stays as the alternative view. The view mode,
+  search, sort, and filters are all remembered across reloads.
+- **Firmware, programs, and system variables are now tables** with click-to-
+  sort headers and search, replacing the previous card grids. System
+  variables keep their inline value editor (now in the value cell). Each
+  view also remembers its search, sort, and central/mode filter.
+- **The remaining list/table surfaces now share the same DataTable too**:
+  messages, the device inbox, the un-ignore picker, backups, the audit log,
+  the Matter exposure list (with multi-select) and fabrics, the Settings
+  admin tables (users, API tokens, CCUs, rooms/functions), and the
+  Diagnostics sub-tables (interfaces, client health, RPC recordings) — all
+  sortable and consistently styled.
+
 ## [0.16.1]
 
 ### Fixed

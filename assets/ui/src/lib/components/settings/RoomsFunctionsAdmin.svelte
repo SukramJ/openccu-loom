@@ -3,11 +3,11 @@
   import { api, ApiError } from "$lib/api/client";
   import type { CentralRow } from "$lib/api/client";
   import type { RoomEntry, FunctionEntry } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
-  import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -156,6 +156,18 @@
       toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
+
+  const roomColumns: DataColumn<RoomEntry>[] = $derived([
+    { key: "name", label: t("roomsfn.col.name"), sortable: true, title: true, get: (r) => r.name },
+    { key: "count", label: t("roomsfn.col.count"), sortable: true, align: "right", get: (r) => r.device_count },
+    { key: "actions", label: t("roomsfn.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
+
+  const fnColumns: DataColumn<FunctionEntry>[] = $derived([
+    { key: "name", label: t("roomsfn.col.name"), sortable: true, title: true, get: (f) => f.name },
+    { key: "count", label: t("roomsfn.col.count"), sortable: true, align: "right", get: (f) => f.device_count },
+    { key: "actions", label: t("roomsfn.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 {#if loading}
@@ -189,23 +201,34 @@
           {t("groups.rooms_title")}
         </h3>
 
-        {#if rooms.length === 0}
-          <EmptyState message={t("groups.empty_rooms")} class="py-6" />
-        {:else}
-          <ul class="mb-3 divide-y divide-slate-100 dark:divide-slate-800">
-            {#each rooms as room (room.name)}
-              <li class="py-2">
+        <div class="mb-3">
+          <DataTable
+            rows={rooms}
+            columns={roomColumns}
+            rowKey={(r) => r.name}
+            emptyMessage={t("groups.empty_rooms")}
+            emptyIcon="mdi:home"
+          >
+            {#snippet cell(room, col)}
+              {#if col.key === "name"}
                 {#if renamingRoom === room.name}
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      bind:value={renameRoomValue}
-                      class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-                      onkeydown={(e) => {
-                        if (e.key === "Enter") void saveRenameRoom(room.name);
-                        if (e.key === "Escape") renamingRoom = null;
-                      }}
-                    />
+                  <input
+                    type="text"
+                    bind:value={renameRoomValue}
+                    class="min-w-0 w-full rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") void saveRenameRoom(room.name);
+                      if (e.key === "Escape") renamingRoom = null;
+                    }}
+                  />
+                {:else}
+                  <span class="truncate">{room.name}</span>
+                {/if}
+              {:else if col.key === "count"}
+                <span class="text-[var(--ha-secondary-text-color)]">{room.device_count}</span>
+              {:else if col.key === "actions"}
+                {#if renamingRoom === room.name}
+                  <div class="flex justify-end gap-1">
                     <Button type="button" variant="default" size="sm" onclick={() => void saveRenameRoom(room.name)}>
                       {t("common.save")}
                     </Button>
@@ -214,40 +237,33 @@
                     </Button>
                   </div>
                 {:else}
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="flex min-w-0 items-center gap-2 text-sm">
-                      <span class="truncate">{room.name}</span>
-                      <Badge variant="muted" class="shrink-0 whitespace-nowrap"
-                        >{t("groups.device_count", { count: String(room.device_count) })}</Badge>
-                    </span>
-                    <div class="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => {
-                          renamingRoom = room.name;
-                          renameRoomValue = room.name;
-                        }}
-                      >
-                        {t("groups.rename")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        class="text-red-600 hover:text-red-700 dark:text-red-400"
-                        onclick={() => void deleteRoom(room.name)}
-                      >
-                        {t("common.delete")}
-                      </Button>
-                    </div>
+                  <div class="flex justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => {
+                        renamingRoom = room.name;
+                        renameRoomValue = room.name;
+                      }}
+                    >
+                      {t("groups.rename")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="text-red-600 hover:text-red-700 dark:text-red-400"
+                      onclick={() => void deleteRoom(room.name)}
+                    >
+                      {t("common.delete")}
+                    </Button>
                   </div>
                 {/if}
-              </li>
-            {/each}
-          </ul>
-        {/if}
+              {/if}
+            {/snippet}
+          </DataTable>
+        </div>
 
         <div class="flex gap-2">
           <input
@@ -275,23 +291,34 @@
           {t("groups.functions_title")}
         </h3>
 
-        {#if functions.length === 0}
-          <EmptyState message={t("groups.empty_functions")} class="py-6" />
-        {:else}
-          <ul class="mb-3 divide-y divide-slate-100 dark:divide-slate-800">
-            {#each functions as fn (fn.name)}
-              <li class="py-2">
+        <div class="mb-3">
+          <DataTable
+            rows={functions}
+            columns={fnColumns}
+            rowKey={(f) => f.name}
+            emptyMessage={t("groups.empty_functions")}
+            emptyIcon="mdi:format-list-bulleted"
+          >
+            {#snippet cell(fn, col)}
+              {#if col.key === "name"}
                 {#if renamingFunction === fn.name}
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      bind:value={renameFunctionValue}
-                      class="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
-                      onkeydown={(e) => {
-                        if (e.key === "Enter") void saveRenameFunction(fn.name);
-                        if (e.key === "Escape") renamingFunction = null;
-                      }}
-                    />
+                  <input
+                    type="text"
+                    bind:value={renameFunctionValue}
+                    class="min-w-0 w-full rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-700 dark:bg-slate-900"
+                    onkeydown={(e) => {
+                      if (e.key === "Enter") void saveRenameFunction(fn.name);
+                      if (e.key === "Escape") renamingFunction = null;
+                    }}
+                  />
+                {:else}
+                  <span class="truncate">{fn.name}</span>
+                {/if}
+              {:else if col.key === "count"}
+                <span class="text-[var(--ha-secondary-text-color)]">{fn.device_count}</span>
+              {:else if col.key === "actions"}
+                {#if renamingFunction === fn.name}
+                  <div class="flex justify-end gap-1">
                     <Button type="button" variant="default" size="sm" onclick={() => void saveRenameFunction(fn.name)}>
                       {t("common.save")}
                     </Button>
@@ -300,40 +327,33 @@
                     </Button>
                   </div>
                 {:else}
-                  <div class="flex items-center justify-between gap-2">
-                    <span class="flex min-w-0 items-center gap-2 text-sm">
-                      <span class="truncate">{fn.name}</span>
-                      <Badge variant="muted" class="shrink-0 whitespace-nowrap"
-                        >{t("groups.device_count", { count: String(fn.device_count) })}</Badge>
-                    </span>
-                    <div class="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onclick={() => {
-                          renamingFunction = fn.name;
-                          renameFunctionValue = fn.name;
-                        }}
-                      >
-                        {t("groups.rename")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        class="text-red-600 hover:text-red-700 dark:text-red-400"
-                        onclick={() => void deleteFunction(fn.name)}
-                      >
-                        {t("common.delete")}
-                      </Button>
-                    </div>
+                  <div class="flex justify-end gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => {
+                        renamingFunction = fn.name;
+                        renameFunctionValue = fn.name;
+                      }}
+                    >
+                      {t("groups.rename")}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      class="text-red-600 hover:text-red-700 dark:text-red-400"
+                      onclick={() => void deleteFunction(fn.name)}
+                    >
+                      {t("common.delete")}
+                    </Button>
                   </div>
                 {/if}
-              </li>
-            {/each}
-          </ul>
-        {/if}
+              {/if}
+            {/snippet}
+          </DataTable>
+        </div>
 
         <div class="flex gap-2">
           <input

@@ -2,11 +2,12 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { BackupEntry } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -97,11 +98,41 @@
     }
   }
 
-  const sortedBackups = $derived(
-    [...backups].sort((a, b) =>
-      b.created_at.localeCompare(a.created_at),
-    ),
-  );
+  // Reuse existing backup.col.* i18n keys.
+  const columns: DataColumn<BackupEntry>[] = $derived([
+    {
+      key: "created",
+      label: t("backup.col.created"),
+      sortable: true,
+      title: true,
+      get: (e) => e.created_at,
+    },
+    {
+      key: "central",
+      label: t("backup.col.central"),
+      sortable: true,
+      get: (e) => e.central,
+    },
+    {
+      key: "size",
+      label: t("backup.col.size"),
+      sortable: true,
+      align: "right",
+      get: (e) => e.bytes,
+    },
+    {
+      key: "id",
+      label: t("backup.col.id"),
+      sortable: true,
+      get: (e) => e.id,
+    },
+    {
+      key: "action",
+      label: t("backup.col.action"),
+      align: "right",
+      cellClass: "reflow-actions",
+    },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -126,55 +157,50 @@
 
   {#if loading}
     <LoadingState />
-  {:else if sortedBackups.length === 0}
-    <EmptyState message={t("backup.empty")} icon="mdi:download" />
   {:else}
-    <Card class="overflow-hidden p-0">
-      <table class="table-reflow w-full text-left text-sm">
-        <thead
-          class="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400"
-        >
-          <tr>
-            <th class="px-4 py-2">{t("backup.col.created")}</th>
-            <th class="px-4 py-2">{t("backup.col.central")}</th>
-            <th class="px-4 py-2">{t("backup.col.size")}</th>
-            <th class="px-4 py-2">{t("backup.col.id")}</th>
-            <th class="px-4 py-2 text-right">{t("backup.col.action")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each sortedBackups as entry (entry.id)}
-            <tr class="border-b border-slate-100 last:border-0 dark:border-slate-800">
-              <td class="reflow-title px-4 py-2">{formatDate(entry.created_at)}</td>
-              <td class="px-4 py-2" data-label={t("backup.col.central")}>
-                <Badge variant="muted">{entry.central}</Badge>
-              </td>
-              <td class="px-4 py-2 font-mono text-xs" data-label={t("backup.col.size")}>{formatBytes(entry.bytes)}</td>
-              <td class="px-4 py-2 font-mono text-xs text-slate-500 dark:text-slate-400" data-label={t("backup.col.id")}>{entry.id}</td>
-              <td class="reflow-actions px-4 py-2">
-                <div class="flex items-center justify-end gap-2">
-                  <a
-                    class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
-                    href={api.backupDownloadUrl(entry.id)}
-                    download={`${entry.id}.sbk`}
-                  >
-                    {t("backup.download")}
-                  </a>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onclick={() => void restore(entry)}
-                    disabled={restoring === entry.id}
-                  >
-                    {restoring === entry.id ? "…" : t("common.restore")}
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
+    <Card class="p-4">
+      <DataTable
+        rows={backups}
+        {columns}
+        rowKey={(e) => e.id}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="backups"
+        initialSort={{ key: "created", asc: false }}
+        emptyMessage={t("backup.empty")}
+        emptyIcon="mdi:download"
+      >
+        {#snippet cell(entry, col)}
+          {#if col.key === "created"}
+            <span class="font-medium">{formatDate(entry.created_at)}</span>
+          {:else if col.key === "central"}
+            <Badge variant="muted">{entry.central}</Badge>
+          {:else if col.key === "size"}
+            <span class="font-mono text-xs">{formatBytes(entry.bytes)}</span>
+          {:else if col.key === "id"}
+            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{entry.id}</span>
+          {:else if col.key === "action"}
+            <div class="flex items-center justify-end gap-2">
+              <a
+                class="text-brand-700 hover:text-brand-800 dark:text-brand-400 dark:hover:text-brand-300"
+                href={api.backupDownloadUrl(entry.id)}
+                download={`${entry.id}.sbk`}
+              >
+                {t("backup.download")}
+              </a>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void restore(entry)}
+                disabled={restoring === entry.id}
+              >
+                {restoring === entry.id ? "…" : t("common.restore")}
+              </Button>
+            </div>
+          {/if}
+        {/snippet}
+      </DataTable>
     </Card>
   {/if}
 </section>

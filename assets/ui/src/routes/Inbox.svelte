@@ -2,14 +2,16 @@
   import { onDestroy, onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { InboxDevice } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { t } from "$lib/i18n";
+  import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -21,7 +23,8 @@
   let entries = $state<InboxDevice[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let centralFilter = $state("");
+  let centralFilter = $state(loadLS("inbox:central"));
+  $effect(() => saveLS("inbox:central", centralFilter));
   let accepting = $state<string | null>(null);
 
   // Teach-in scope: install mode on the CCU is per-interface only, so the
@@ -152,6 +155,40 @@
       return String(secs);
     }
   }
+
+  const columns: DataColumn<InboxDevice>[] = $derived([
+    {
+      key: "address",
+      label: t("inbox.col.address"),
+      sortable: true,
+      title: true,
+      get: (d) => d.address,
+    },
+    {
+      key: "model",
+      label: t("inbox.col.model"),
+      sortable: true,
+      get: (d) => d.model,
+    },
+    {
+      key: "serial",
+      label: t("inbox.col.serial"),
+      sortable: true,
+      get: (d) => d.serial ?? "",
+    },
+    {
+      key: "first_seen",
+      label: t("inbox.col.first_seen"),
+      sortable: true,
+      get: (d) => d.first_seen ?? 0,
+    },
+    {
+      key: "actions",
+      label: t("inbox.col.actions"),
+      align: "right",
+      cellClass: "reflow-actions",
+    },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -252,48 +289,54 @@
 
   {#if loading}
     <LoadingState />
-  {:else if visibleEntries.length === 0}
-    <EmptyState message={t("inbox.empty")} />
   {:else}
-    <ul class="space-y-2">
-      {#each visibleEntries as d ((d.central ?? "") + "/" + d.address)}
-        <li>
-          <Card class="p-4">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex flex-wrap items-baseline gap-2">
-                  <h3 class="font-mono font-semibold">{d.address}</h3>
-                  <Badge variant="muted">{d.model}</Badge>
-                  {#if d.manufacturer}
-                    <Badge variant="muted">{d.manufacturer}</Badge>
-                  {/if}
-                  {#if centrals.length > 1 && d.central}
-                    <Badge variant="muted">{d.central}</Badge>
-                  {/if}
-                </div>
-                {#if d.serial}
-                  <p class="mt-1 font-mono text-[11px] text-slate-500 dark:text-slate-400">
-                    {t("inbox.serial")} {d.serial}
-                  </p>
-                {/if}
-                {#if d.first_seen}
-                  <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    {t("inbox.first_seen")} {formatTs(d.first_seen)}
-                  </p>
-                {/if}
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                onclick={() => void accept(d.address, d.central)}
-                disabled={accepting === d.address}
-              >
-                {accepting === d.address ? "…" : t("inbox.accept")}
-              </Button>
-            </div>
-          </Card>
-        </li>
-      {/each}
-    </ul>
+    <Card class="p-4">
+      <DataTable
+        rows={visibleEntries}
+        {columns}
+        rowKey={(d) => (d.central ?? "") + "/" + d.address}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="inbox"
+        initialSort={{ key: "first_seen", asc: false }}
+        emptyMessage={t("inbox.empty")}
+        emptyIcon="mdi:server"
+      >
+        {#snippet cell(d, col)}
+          {#if col.key === "address"}
+            <span class="font-mono font-semibold">{d.address}</span>
+            {#if centrals.length > 1 && d.central}
+              <Badge variant="muted">{d.central}</Badge>
+            {/if}
+          {:else if col.key === "model"}
+            <Badge variant="muted">{d.model}</Badge>
+            {#if d.manufacturer}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{d.manufacturer}</span>
+            {/if}
+          {:else if col.key === "serial"}
+            {#if d.serial}
+              <span class="font-mono text-xs">{d.serial}</span>
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {:else if col.key === "first_seen"}
+            {#if d.first_seen}
+              <span class="text-xs text-slate-500 dark:text-slate-400">{formatTs(d.first_seen)}</span>
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {:else if col.key === "actions"}
+            <Button
+              type="button"
+              size="sm"
+              onclick={() => void accept(d.address, d.central)}
+              disabled={accepting === d.address}
+            >
+              {accepting === d.address ? "…" : t("inbox.accept")}
+            </Button>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 </section>

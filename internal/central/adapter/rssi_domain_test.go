@@ -54,6 +54,30 @@ func putRSSIDevice(t *testing.T, dev *device.Device, param hmenum.Parameter, v f
 	dp.OnEvent(v)
 }
 
+// putBoolDP adds a bool data point for param to channel-0 of dev and
+// fires an OnEvent with value v.
+func putBoolDP(t *testing.T, dev *device.Device, param hmenum.Parameter, v bool) {
+	t.Helper()
+	ch0 := dev.Channel(dev.Address + ":0")
+	if ch0 == nil {
+		ch0 = dev.AddChannel(dev.Address+":0", 0, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	}
+	dp := generic.NewDataPoint[bool](generic.Spec{
+		Key: hmtypes.DataPointKey{
+			InterfaceID:    dev.InterfaceID,
+			ChannelAddress: dev.Address + ":0",
+			ParamsetKey:    hmenum.ParamsetKeyValues,
+			Parameter:      string(param),
+		},
+		Descriptor: hmproto.ParameterData{
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsEvent,
+		},
+	})
+	ch0.Put(dp)
+	dp.OnEvent(v)
+}
+
 func TestRSSIInfoDomain_NilRegistryReturnsEmpty(t *testing.T) {
 	t.Parallel()
 	out, err := NewRSSIInfoDomain(nil).RSSIInfo(context.Background())
@@ -84,6 +108,10 @@ func TestRSSIInfoDomain_PerDeviceRSSI(t *testing.T) {
 	})
 	putRSSIDevice(t, withRSSI, hmenum.ParameterRSSIDevice, -65)
 	putRSSIDevice(t, withRSSI, hmenum.ParameterRSSIPeer, -70)
+	// BATTERY_STATE > 10 triggers the percentage path in batteryLevel().
+	putRSSIDevice(t, withRSSI, hmenum.ParameterBatteryState, 80)
+	// LOW_BAT on channel :0 is picked up by lowBattery().
+	putBoolDP(t, withRSSI, hmenum.ParameterLowBat, false)
 	c.ModelRegistry.Put(withRSSI)
 
 	// Device WITHOUT any RSSI reading — must be skipped.
@@ -119,6 +147,13 @@ func TestRSSIInfoDomain_PerDeviceRSSI(t *testing.T) {
 	}
 	if d["reachable"] != true {
 		t.Errorf("reachable = %v, want true", d["reachable"])
+	}
+	// Battery fields must be populated when the data points are present.
+	if d["battery_level"] != 80 {
+		t.Errorf("battery_level = %v, want 80", d["battery_level"])
+	}
+	if d["low_battery"] != false {
+		t.Errorf("low_battery = %v, want false", d["low_battery"])
 	}
 }
 

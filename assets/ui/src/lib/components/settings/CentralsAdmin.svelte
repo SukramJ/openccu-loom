@@ -7,8 +7,10 @@
     DescriptionMarker,
     InterfaceSpec,
   } from "$lib/api/client";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -334,6 +336,13 @@
       toastStore.error(err instanceof ApiError ? err.message : String(err));
     }
   }
+
+  const columns: DataColumn<CentralRow>[] = $derived([
+    { key: "name", label: t("centrals.col.name"), sortable: true, title: true, get: (c) => c.name },
+    { key: "host", label: t("centrals.col.host"), sortable: true, get: (c) => c.host },
+    { key: "status", label: t("centrals.col.status") },
+    { key: "actions", label: t("centrals.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <div class="space-y-4">
@@ -350,45 +359,23 @@
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
   {:else if loadError}
     <p class="text-sm text-red-600 dark:text-red-400">{t("common.error")} {loadError}</p>
-  {:else if centrals.length === 0}
-    <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("centrals.empty")}</p>
   {:else}
-    <ul class="space-y-2">
-      {#each centrals as c (c.name)}
-        <li class="rounded border border-slate-200 p-3 text-sm dark:border-slate-800">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <span class="font-medium">{c.name}</span>
-              <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.host}</span>
-              <Badge variant={c.enabled ? "success" : "muted"}>
-                {c.enabled ? t("settings.enabled") : t("common.disable")}
-              </Badge>
-            </div>
-            <div class="flex gap-1">
-              <Button type="button" variant="ghost" size="sm" onclick={() => openEdit(c)}>
-                {t("common.edit")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onclick={() => void toggleEnabled(c)}
-              >
-                {c.enabled ? t("common.disable") : t("common.enable")}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="text-red-600 hover:text-red-700 dark:text-red-400"
-                onclick={() => void deleteCentral(c.name)}
-              >
-                {t("common.delete")}
-              </Button>
-            </div>
-          </div>
+    <DataTable
+      rows={centrals}
+      {columns}
+      rowKey={(c) => c.name}
+      search
+      searchPlaceholder={t("common.search")}
+      persistKey="centrals-admin"
+      initialSort={{ key: "name", asc: true }}
+      emptyMessage={t("centrals.empty")}
+      emptyIcon="mdi:server"
+    >
+      {#snippet cell(c, col)}
+        {#if col.key === "name"}
+          <span class="font-medium">{c.name}</span>
           {#if c.interfaces.length > 0}
-            <div class="mt-1.5 flex flex-wrap gap-1">
+            <div class="mt-1 flex flex-wrap gap-1">
               {#each c.interfaces as iface (iface.name)}
                 <Badge variant="muted">
                   {iface.name}{iface.port ? `:${iface.port}` : ""}
@@ -396,9 +383,38 @@
               {/each}
             </div>
           {/if}
-        </li>
-      {/each}
-    </ul>
+        {:else if col.key === "host"}
+          <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{c.host}</span>
+        {:else if col.key === "status"}
+          <Badge variant={c.enabled ? "success" : "muted"}>
+            {c.enabled ? t("settings.enabled") : t("common.disable")}
+          </Badge>
+        {:else if col.key === "actions"}
+          <div class="flex justify-end gap-1">
+            <Button type="button" variant="ghost" size="sm" onclick={() => openEdit(c)}>
+              {t("common.edit")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onclick={() => void toggleEnabled(c)}
+            >
+              {c.enabled ? t("common.disable") : t("common.enable")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-red-600 hover:text-red-700 dark:text-red-400"
+              onclick={() => void deleteCentral(c.name)}
+            >
+              {t("common.delete")}
+            </Button>
+          </div>
+        {/if}
+      {/snippet}
+    </DataTable>
   {/if}
 </div>
 

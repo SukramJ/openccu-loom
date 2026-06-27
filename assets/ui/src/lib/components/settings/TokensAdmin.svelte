@@ -2,8 +2,10 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { TokenSummaryV2 } from "$lib/api/client";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -104,6 +106,15 @@
       return s;
     }
   }
+
+  const columns: DataColumn<TokenSummaryV2>[] = $derived([
+    { key: "subject", label: t("tokens.col.subject"), sortable: true, title: true, get: (tok) => tok.subject },
+    { key: "role", label: t("tokens.col.role"), sortable: true, get: (tok) => tok.role },
+    { key: "fingerprint", label: t("tokens.col.fingerprint"), get: (tok) => tok.fingerprint },
+    { key: "created", label: t("tokens.col.created"), sortable: true, get: (tok) => tok.created_at ?? "" },
+    { key: "last_seen", label: t("tokens.col.last_seen"), sortable: true, get: (tok) => tok.last_seen_at ?? "" },
+    { key: "actions", label: t("tokens.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <div class="space-y-4">
@@ -120,47 +131,44 @@
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
   {:else if loadError}
     <p class="text-sm text-red-600 dark:text-red-400">{t("common.error")} {loadError}</p>
-  {:else if tokens.length === 0}
-    <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("tokens.empty")}</p>
   {:else}
-    <div class="overflow-x-auto">
-      <table class="table-reflow w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-left dark:border-slate-800">
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.subject")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.role")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.fingerprint")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.created")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.last_seen")}</th>
-            <th class="pb-2 font-medium text-[var(--ha-secondary-text-color)]">{t("tokens.col.actions")}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {#each tokens as tok (tok.fingerprint)}
-            <tr>
-              <td class="reflow-title py-2 pr-4">{tok.subject}</td>
-              <td class="py-2 pr-4" data-label={t("tokens.col.role")}>
-                <Badge variant={roleBadgeVariant(tok.role)}>{tok.role}</Badge>
-              </td>
-              <td class="py-2 pr-4 font-mono text-xs" data-label={t("tokens.col.fingerprint")}>{tok.fingerprint}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("tokens.col.created")}>{fmtDate(tok.created_at)}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("tokens.col.last_seen")}>{fmtDate(tok.last_seen_at)}</td>
-              <td class="reflow-actions py-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  class="text-red-600 hover:text-red-700 dark:text-red-400"
-                  onclick={() => void revokeToken(tok.fingerprint)}
-                >
-                  {t("tokens.revoke")}
-                </Button>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={tokens}
+      {columns}
+      rowKey={(tok) => tok.fingerprint}
+      search
+      searchPlaceholder={t("common.search")}
+      persistKey="tokens-admin"
+      initialSort={{ key: "subject", asc: true }}
+      emptyMessage={t("tokens.empty")}
+      emptyIcon="mdi:key"
+    >
+      {#snippet cell(tok, col)}
+        {#if col.key === "subject"}
+          <span>{tok.subject}</span>
+        {:else if col.key === "role"}
+          <Badge variant={roleBadgeVariant(tok.role)}>{tok.role}</Badge>
+        {:else if col.key === "fingerprint"}
+          <span class="font-mono text-xs">{tok.fingerprint}</span>
+        {:else if col.key === "created"}
+          <span class="text-[var(--ha-secondary-text-color)]">{fmtDate(tok.created_at)}</span>
+        {:else if col.key === "last_seen"}
+          <span class="text-[var(--ha-secondary-text-color)]">{fmtDate(tok.last_seen_at)}</span>
+        {:else if col.key === "actions"}
+          <div class="flex justify-end">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-red-600 hover:text-red-700 dark:text-red-400"
+              onclick={() => void revokeToken(tok.fingerprint)}
+            >
+              {t("tokens.revoke")}
+            </Button>
+          </div>
+        {/if}
+      {/snippet}
+    </DataTable>
   {/if}
 </div>
 

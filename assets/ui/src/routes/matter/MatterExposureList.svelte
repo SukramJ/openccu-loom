@@ -3,8 +3,13 @@
   import { matterStore } from "$lib/stores/matter.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { t } from "$lib/i18n";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Input from "$lib/components/ui/Input.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import type { MatterExposure } from "$lib/api/matter-types";
 
   onMount(async () => {
@@ -64,6 +69,8 @@
     selectedClasses = new Set();
   }
 
+  // Pass the pre-filtered list to DataTable so the external search/kind/class
+  // filters are not duplicated by DataTable's own search feature.
   const filteredItems = $derived.by(() => {
     const q = searchText.trim().toLowerCase();
     const classFilterActive = selectedClasses.size > 0;
@@ -88,12 +95,6 @@
     });
   });
 
-  function mappabilityIcon(m: string): string {
-    if (m === "mappable") return "●";
-    if (m === "partially_mappable") return "⚠";
-    return "⛔";
-  }
-
   function stateIcon(item: MatterExposure): string {
     if (item.mappable === "unmappable") return "⛔";
     if (item.enabled && item.mappable === "mappable") return "●";
@@ -106,6 +107,12 @@
     if (item.enabled && item.mappable === "mappable") return "text-green-500 dark:text-green-400";
     if (item.enabled && item.mappable === "partially_mappable") return "text-amber-500 dark:text-amber-400";
     return "text-slate-400 dark:text-slate-500";
+  }
+
+  function mappabilityIcon(m: string): string {
+    if (m === "mappable") return "●";
+    if (m === "partially_mappable") return "⚠";
+    return "⛔";
   }
 
   function isBulkable(item: MatterExposure): boolean {
@@ -150,7 +157,6 @@
   }
 
   function openDrawer(item: MatterExposure) {
-    // Check if there's a pending update for this item
     const key = matterStore.exposureKey(item);
     const pending = matterStore.pendingUpdates.get(key);
     drawerExposure = item;
@@ -206,6 +212,29 @@
     return row?.dp_key ?? "";
   });
 
+  // DataTable columns — the select and state columns use the cell snippet for
+  // custom rendering; name/channel/parameter/kind/class are sortable text fields.
+  const columns: DataColumn<MatterExposure>[] = $derived([
+    { key: "select", label: t("matter.expose.col_select") },
+    { key: "state", label: t("matter.expose.col_state"), get: (r) => (r.enabled ? 1 : 0) },
+    {
+      key: "name",
+      label: t("matter.expose.col_name"),
+      sortable: true,
+      title: true,
+      get: (r) => matterStore.pendingUpdates.get(matterStore.exposureKey(r))?.friendly_name ?? (r.friendly_name || r.display_name),
+    },
+    { key: "channel", label: t("matter.expose.col_channel"), sortable: true, get: (r) => r.channel_no },
+    { key: "parameter", label: t("matter.expose.col_parameter"), sortable: true, get: (r) => r.parameter_label || r.dp_key },
+    { key: "kind", label: t("matter.expose.filter_kind"), sortable: true, get: (r) => r.dp_kind },
+    { key: "class", label: t("matter.expose.filter_class"), sortable: true, get: (r) => r.device_type_label },
+  ]);
+
+  // Row highlight for the selected state via DataTable's rowClass prop.
+  function rowClass(item: MatterExposure): string {
+    const key = matterStore.exposureKey(item);
+    return selectedKeys.has(key) ? "bg-black/5 dark:bg-white/5" : "";
+  }
 </script>
 
 <div>
@@ -280,86 +309,72 @@
   {/if}
 
   {#if matterStore.exposuresLoading && matterStore.exposures.length === 0}
-    <p class="text-sm text-slate-500 dark:text-slate-400">{t("common.loading")}</p>
+    <LoadingState message={t("common.loading")} />
   {:else if matterStore.exposuresError}
-    <p class="text-sm text-red-600 dark:text-red-400">{matterStore.exposuresError}</p>
-  {:else if filteredItems.length === 0}
-    <p class="text-sm text-slate-500 dark:text-slate-400">{t("matter.expose.empty")}</p>
+    <ErrorState message={matterStore.exposuresError} onRetry={() => void matterStore.loadExposures()} />
   {:else}
-    <div class="rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <th class="px-3 py-2 text-left w-10">
-              <span class="sr-only">{t("matter.expose.col_select")}</span>
-            </th>
-            <th class="px-3 py-2 text-left w-8">
-              <span class="sr-only">{t("matter.expose.col_state")}</span>
-            </th>
-            <th class="px-3 py-2 text-left">{t("matter.expose.col_name")}</th>
-            <th class="px-3 py-2 text-left hidden md:table-cell">{t("matter.expose.col_channel")}</th>
-            <th class="px-3 py-2 text-left hidden md:table-cell">{t("matter.expose.col_parameter")}</th>
-            <th class="px-3 py-2 text-left hidden md:table-cell">{t("matter.expose.filter_kind")}</th>
-            <th class="px-3 py-2 text-left hidden lg:table-cell">{t("matter.expose.filter_class")}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each filteredItems as item (matterStore.exposureKey(item))}
-            {@const key = matterStore.exposureKey(item)}
-            {@const selected = selectedKeys.has(key)}
-            {@const bulkable = isBulkable(item)}
-            {@const pending = matterStore.pendingUpdates.has(key)}
-            <tr
-              class="cursor-pointer transition border-b border-slate-200 dark:border-slate-700 {selected ? 'bg-black/5 dark:bg-white/5' : ''}"
+    <Card class="p-4">
+      <DataTable
+        rows={filteredItems}
+        {columns}
+        rowKey={(item) => matterStore.exposureKey(item)}
+        {rowClass}
+        emptyMessage={t("matter.expose.empty")}
+        emptyIcon="mdi:list-checks"
+        initialSort={{ key: "name", asc: true }}
+      >
+        {#snippet cell(item, col)}
+          {@const key = matterStore.exposureKey(item)}
+          {@const selected = selectedKeys.has(key)}
+          {@const bulkable = isBulkable(item)}
+          {@const pending = matterStore.pendingUpdates.has(key)}
+          {#if col.key === "select"}
+            <label class="flex items-center justify-center">
+              <input
+                type="checkbox"
+                checked={selected}
+                disabled={!bulkable}
+                onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
+                class="cursor-pointer h-5 w-5"
+                aria-label={t("matter.expose.select_row")}
+              />
+            </label>
+          {:else if col.key === "state"}
+            <span class="text-base {stateColorClass(item)}">
+              {stateIcon(item)}
+            </span>
+          {:else if col.key === "name"}
+            <button
+              type="button"
+              class="text-left font-medium text-slate-900 dark:text-slate-100 hover:underline w-full"
               onclick={() => openDrawer(item)}
-              onkeydown={(e) => { if (e.key === "Enter") openDrawer(item); }}
-              tabindex="0"
             >
-              <td class="p-0">
-                <label class="flex items-center justify-center p-2">
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    disabled={!bulkable}
-                    onclick={(e) => { e.stopPropagation(); toggleSelect(key, bulkable); }}
-                    class="cursor-pointer h-5 w-5"
-                    aria-label={t("matter.expose.select_row")}
-                  />
-                </label>
-              </td>
-              <td class="px-3 py-2">
-                <span class="text-base {stateColorClass(item)}">
-                  {stateIcon(item)}
-                </span>
-              </td>
-              <td class="px-3 py-2 font-medium text-slate-900 dark:text-slate-100">
-                {(matterStore.pendingUpdates.get(key)?.friendly_name ?? item.friendly_name) || item.display_name}
-                {#if pending}
-                  <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
-                {/if}
-              </td>
-              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
-                {item.channel_no}
-              </td>
-              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
-                {#if item.parameter_label}
-                  {item.parameter_label}
-                  <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
-                {:else}
-                  <span class="font-mono text-xs">{item.dp_key}</span>
-                {/if}
-              </td>
-              <td class="px-3 py-2 hidden md:table-cell text-slate-500 dark:text-slate-400">
-                {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
-              </td>
-              <td class="px-3 py-2 hidden lg:table-cell text-slate-500 dark:text-slate-400">
-                {item.device_type_label || "—"}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+              {(matterStore.pendingUpdates.get(key)?.friendly_name ?? item.friendly_name) || item.display_name}
+              {#if pending}
+                <span class="ml-1 text-xs text-brand-600 dark:text-brand-400">{t("common.modified")}</span>
+              {/if}
+            </button>
+          {:else if col.key === "channel"}
+            <span class="text-slate-500 dark:text-slate-400">{item.channel_no}</span>
+          {:else if col.key === "parameter"}
+            {#if item.parameter_label}
+              <span class="text-slate-500 dark:text-slate-400">{item.parameter_label}</span>
+              <span class="ml-1 font-mono text-[10px] opacity-60">{item.dp_key}</span>
+            {:else}
+              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{item.dp_key}</span>
+            {/if}
+          {:else if col.key === "kind"}
+            <span class="text-slate-500 dark:text-slate-400">
+              {t(`matter.expose.kind.${item.dp_kind}`) ?? item.dp_kind}
+            </span>
+          {:else if col.key === "class"}
+            <span class="text-slate-500 dark:text-slate-400">
+              {item.device_type_label || "—"}
+            </span>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 </div>
 
@@ -430,7 +445,7 @@
           </p>
         </div>
       {/if}
-      <!-- Conflict hint: custom DP, but generic/calculated DPs are already enabled on this channel -->
+      <!-- Conflict hint: custom DP, but generic/calculated/combined/measurement DP is already enabled -->
       {#if drawerConflictGenericActive}
         <div class="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm space-y-1 text-amber-900 dark:text-amber-200">
           <p class="font-semibold flex items-center gap-1">

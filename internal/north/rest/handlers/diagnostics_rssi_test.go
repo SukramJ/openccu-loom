@@ -45,16 +45,20 @@ func TestDiagnosticsRSSI_ServiceError_Returns500(t *testing.T) {
 
 func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 	t.Parallel()
+	battLevel := 80
+	lowBat := false
 	svc := &fakeRSSIService{result: map[string]any{
 		"devices": []map[string]any{
 			{
-				"address":      "DEV001",
-				"name":         "Living Room Switch",
-				"interface_id": "BidCos-RF",
-				"central":      "ccu-01",
-				"rssi_device":  -72,
-				"rssi_peer":    nil,
-				"reachable":    true,
+				"address":       "DEV001",
+				"name":          "Living Room Switch",
+				"interface_id":  "BidCos-RF",
+				"central":       "ccu-01",
+				"rssi_device":   -72,
+				"rssi_peer":     nil,
+				"battery_level": battLevel,
+				"low_battery":   lowBat,
+				"reachable":     true,
 			},
 		},
 	}}
@@ -67,12 +71,14 @@ func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 	}
 	var body struct {
 		Devices []struct {
-			Address     string `json:"address"`
-			InterfaceID string `json:"interface_id"`
-			Central     string `json:"central"`
-			RSSIDevice  *int   `json:"rssi_device"`
-			RSSIPeer    *int   `json:"rssi_peer"`
-			Reachable   bool   `json:"reachable"`
+			Address      string `json:"address"`
+			InterfaceID  string `json:"interface_id"`
+			Central      string `json:"central"`
+			RSSIDevice   *int   `json:"rssi_device"`
+			RSSIPeer     *int   `json:"rssi_peer"`
+			BatteryLevel *int   `json:"battery_level"`
+			LowBattery   *bool  `json:"low_battery"`
+			Reachable    bool   `json:"reachable"`
 		} `json:"devices"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -90,5 +96,11 @@ func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 	}
 	if d.RSSIPeer != nil {
 		t.Errorf("rssi_peer = %v, want null", d.RSSIPeer)
+	}
+	if d.BatteryLevel == nil || *d.BatteryLevel != 80 {
+		t.Errorf("battery_level = %v, want 80", d.BatteryLevel)
+	}
+	if d.LowBattery == nil || *d.LowBattery != false {
+		t.Errorf("low_battery = %v, want false", d.LowBattery)
 	}
 }

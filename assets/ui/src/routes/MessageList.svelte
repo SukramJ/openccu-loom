@@ -2,13 +2,15 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { AlarmMessage, ServiceMessage } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
+  import { loadLS, saveLS } from "$lib/utils";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
 
@@ -20,7 +22,8 @@
   let acking = $state<string | null>(null);
   let typeFilter = $state<string>("");
   let onlyQuittable = $state(false);
-  let centralFilter = $state<string>("");
+  let centralFilter = $state(loadLS("messages:central"));
+  $effect(() => saveLS("messages:central", centralFilter));
 
   function serviceTypeLabel(typeId: string): string {
     const known = new Set([
@@ -115,20 +118,17 @@
     );
   });
 
-  const alarmsSorted = $derived(
-    [...alarms]
-      .filter((a) => !centralFilter || a.central === centralFilter)
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+  const alarmRows = $derived(
+    alarms.filter((a) => !centralFilter || a.central === centralFilter),
   );
-  const servicesSorted = $derived(
-    [...services]
-      .filter((s) => {
-        if (onlyQuittable && !s.quittable) return false;
-        if (typeFilter && (s.type ?? "") !== typeFilter) return false;
-        if (centralFilter && s.central !== centralFilter) return false;
-        return true;
-      })
-      .sort((a, b) => b.timestamp.localeCompare(a.timestamp)),
+
+  const serviceRows = $derived(
+    services.filter((s) => {
+      if (onlyQuittable && !s.quittable) return false;
+      if (typeFilter && (s.type ?? "") !== typeFilter) return false;
+      if (centralFilter && s.central !== centralFilter) return false;
+      return true;
+    }),
   );
 
   const serviceTypes = $derived.by(() => {
@@ -136,6 +136,68 @@
     for (const s of services) if (s.type) set.add(s.type);
     return Array.from(set).sort();
   });
+
+  const alarmColumns: DataColumn<AlarmMessage>[] = $derived([
+    {
+      key: "name",
+      label: t("messages.col.name"),
+      sortable: true,
+      title: true,
+      get: (a) => a.name,
+    },
+    {
+      key: "device",
+      label: t("messages.col.device"),
+      sortable: true,
+      get: (a) => a.device_name ?? "",
+    },
+    {
+      key: "time",
+      label: t("messages.col.time"),
+      sortable: true,
+      get: (a) => a.timestamp,
+    },
+    {
+      key: "actions",
+      label: t("messages.col.actions"),
+      align: "right",
+      cellClass: "reflow-actions",
+    },
+  ]);
+
+  const serviceColumns: DataColumn<ServiceMessage>[] = $derived([
+    {
+      key: "name",
+      label: t("messages.col.name"),
+      sortable: true,
+      title: true,
+      get: (s) => s.name,
+    },
+    {
+      key: "type",
+      label: t("messages.col.type"),
+      sortable: true,
+      get: (s) => s.type ?? "",
+    },
+    {
+      key: "device",
+      label: t("messages.col.device"),
+      sortable: true,
+      get: (s) => s.device_name ?? s.address ?? "",
+    },
+    {
+      key: "time",
+      label: t("messages.col.time"),
+      sortable: true,
+      get: (s) => s.timestamp,
+    },
+    {
+      key: "actions",
+      label: t("messages.col.actions"),
+      align: "right",
+      cellClass: "reflow-actions",
+    },
+  ]);
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
@@ -195,56 +257,59 @@
   {#if loading}
     <LoadingState />
   {:else if tab === "alarm"}
-    {#if alarmsSorted.length === 0}
-      <EmptyState message={t("messages.empty.alarms")} icon="mdi:bell-off" />
-    {:else}
-      <ul class="space-y-2">
-        {#each alarmsSorted as a ((a.central ?? "") + "/" + a.id)}
-          <li>
-            <Card class="p-4">
-              <div class="flex flex-wrap items-start justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-baseline gap-2">
-                    <h3 class="font-semibold">{a.name}</h3>
-                    <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.timestamp)}</span>
-                    {#if a.counter > 1}
-                      <Badge variant="warning">×{a.counter}</Badge>
-                    {/if}
-                    {#if a.device_name}
-                      <Badge variant="muted">{a.device_name}</Badge>
-                    {/if}
-                    {#if a.rooms && a.rooms.length > 0}
-                      <span class="text-xs text-slate-500 dark:text-slate-400">{a.rooms.join(", ")}</span>
-                    {/if}
-                    {#if alarmCentrals.length > 1 && a.central}
-                      <Badge variant="muted">{a.central}</Badge>
-                    {/if}
-                  </div>
-                  {#if a.description}
-                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">{a.description}</p>
-                  {/if}
-                  {#if a.last_trigger}
-                    <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">
-                      {t("messages.last_trigger")} {a.last_trigger}
-                    </p>
-                  {/if}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onclick={() => void ackAlarm(a.id, a.central)}
-                  disabled={acking === a.id}
-                  title={t("common.acknowledge")}
-                >
-                  {acking === a.id ? "…" : t("common.acknowledge")}
-                </Button>
-              </div>
-            </Card>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <Card class="p-4">
+      <DataTable
+        rows={alarmRows}
+        columns={alarmColumns}
+        rowKey={(a) => (a.central ?? "") + "/" + a.id}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="messages-alarm"
+        initialSort={{ key: "time", asc: false }}
+        emptyMessage={t("messages.empty.alarms")}
+        emptyIcon="mdi:bell-off"
+      >
+        {#snippet cell(a, col)}
+          {#if col.key === "name"}
+            <span class="font-semibold">{a.name}</span>
+            {#if a.counter > 1}
+              <Badge variant="warning">×{a.counter}</Badge>
+            {/if}
+            {#if alarmCentrals.length > 1 && a.central}
+              <Badge variant="muted">{a.central}</Badge>
+            {/if}
+            {#if a.last_trigger}
+              <span class="block text-xs italic text-slate-500 dark:text-slate-400">
+                {t("messages.last_trigger")} {a.last_trigger}
+              </span>
+            {/if}
+            {#if a.description}
+              <span class="block text-xs text-slate-600 dark:text-slate-300">{a.description}</span>
+            {/if}
+          {:else if col.key === "device"}
+            {#if a.device_name}
+              <span class="text-sm">{a.device_name}</span>
+            {/if}
+            {#if a.rooms && a.rooms.length > 0}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{a.rooms.join(", ")}</span>
+            {/if}
+          {:else if col.key === "time"}
+            <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(a.timestamp)}</span>
+          {:else if col.key === "actions"}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onclick={() => void ackAlarm(a.id, a.central)}
+              disabled={acking === a.id}
+              title={t("common.acknowledge")}
+            >
+              {acking === a.id ? "…" : t("common.acknowledge")}
+            </Button>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {:else}
     <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
       <select
@@ -272,61 +337,62 @@
           {/each}
         </select>
       {/if}
-      <span class="text-slate-500 dark:text-slate-400">
-        {servicesSorted.length} / {services.length}
-      </span>
     </div>
-    {#if servicesSorted.length === 0}
-      <EmptyState message={t("messages.empty.service")} icon="mdi:bell-off" />
-    {:else}
-      <ul class="space-y-2">
-        {#each servicesSorted as s ((s.central ?? "") + "/" + s.id)}
-          <li>
-            <Card class="p-4">
-              <div class="flex flex-wrap items-start justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-baseline gap-2">
-                    <h3 class="font-semibold">{s.name}</h3>
-                    <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(s.timestamp)}</span>
-                    {#if s.counter > 1}
-                      <Badge variant="warning">×{s.counter}</Badge>
-                    {/if}
-                    {#if s.type}
-                      <Badge variant="muted">{serviceTypeLabel(s.type)}</Badge>
-                    {/if}
-                    {#if s.quittable}
-                      <Badge variant="default">{t("messages.ackable")}</Badge>
-                    {/if}
-                    {#if serviceCentrals.length > 1 && s.central}
-                      <Badge variant="muted">{s.central}</Badge>
-                    {/if}
-                  </div>
-                  {#if s.device_name || s.address}
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                      {s.device_name ?? ""}
-                      {#if s.address}
-                        <span class="font-mono">· {s.address}</span>
-                      {/if}
-                    </p>
-                  {/if}
-                </div>
-                {#if s.quittable}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onclick={() => void ackService(s.id, s.central)}
-                    disabled={acking === s.id}
-                    title={t("common.acknowledge")}
-                  >
-                    {acking === s.id ? "…" : t("common.acknowledge")}
-                  </Button>
-                {/if}
-              </div>
-            </Card>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <Card class="p-4">
+      <DataTable
+        rows={serviceRows}
+        columns={serviceColumns}
+        rowKey={(s) => (s.central ?? "") + "/" + s.id}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="messages-service"
+        initialSort={{ key: "time", asc: false }}
+        emptyMessage={t("messages.empty.service")}
+        emptyIcon="mdi:bell-off"
+      >
+        {#snippet cell(s, col)}
+          {#if col.key === "name"}
+            <span class="font-semibold">{s.name}</span>
+            {#if s.counter > 1}
+              <Badge variant="warning">×{s.counter}</Badge>
+            {/if}
+            {#if s.quittable}
+              <Badge variant="default">{t("messages.ackable")}</Badge>
+            {/if}
+            {#if serviceCentrals.length > 1 && s.central}
+              <Badge variant="muted">{s.central}</Badge>
+            {/if}
+          {:else if col.key === "type"}
+            {#if s.type}
+              <Badge variant="muted">{serviceTypeLabel(s.type)}</Badge>
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {:else if col.key === "device"}
+            {#if s.device_name}
+              <span class="text-sm">{s.device_name}</span>
+            {/if}
+            {#if s.address}
+              <span class="block font-mono text-xs text-slate-500 dark:text-slate-400">{s.address}</span>
+            {/if}
+          {:else if col.key === "time"}
+            <span class="text-xs text-slate-500 dark:text-slate-400">{formatDate(s.timestamp)}</span>
+          {:else if col.key === "actions"}
+            {#if s.quittable}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onclick={() => void ackService(s.id, s.central)}
+                disabled={acking === s.id}
+                title={t("common.acknowledge")}
+              >
+                {acking === s.id ? "…" : t("common.acknowledge")}
+              </Button>
+            {/if}
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 </section>

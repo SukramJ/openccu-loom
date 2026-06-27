@@ -19,6 +19,28 @@ export function cn(...inputs: ClassValue[]): string {
  * falls back to a plain case-insensitive substring match, so the input is
  * never "broken" while it is being typed. An empty term matches everything.
  */
+/**
+ * Read a string from localStorage, returning `fallback` when the key is
+ * absent or storage is unavailable. Pair with {@link saveLS} to persist a
+ * per-view filter across reloads.
+ */
+export function loadLS(key: string, fallback = ""): string {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Best-effort write to localStorage; ignores a disabled or full store. */
+export function saveLS(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // storage unavailable — the value simply does not persist.
+  }
+}
+
 export function makeTextMatcher(term: string): (text: string) => boolean {
   const q = term.trim();
   if (!q) return () => true;

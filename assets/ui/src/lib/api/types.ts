@@ -455,6 +455,8 @@ export type RSSIDevice = {
   central: string;
   rssi_device: number | null;
   rssi_peer: number | null;
+  battery_level: number | null;
+  low_battery: boolean | null;
   reachable: boolean;
 };
 

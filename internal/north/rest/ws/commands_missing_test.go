@@ -418,13 +418,15 @@ func TestMissingCCUGetRSSIInfo_WithProvider(t *testing.T) {
 	payload := map[string]any{
 		"devices": []any{
 			map[string]any{
-				"address":      "ABC0001",
-				"name":         "Lamp",
-				"interface_id": "HmIP-RF",
-				"central":      "ccu-01",
-				"rssi_device":  -65,
-				"rssi_peer":    -70,
-				"reachable":    true,
+				"address":       "ABC0001",
+				"name":          "Lamp",
+				"interface_id":  "HmIP-RF",
+				"central":       "ccu-01",
+				"rssi_device":   -65,
+				"rssi_peer":     -70,
+				"battery_level": 80,
+				"low_battery":   false,
+				"reachable":     true,
 			},
 		},
 	}
