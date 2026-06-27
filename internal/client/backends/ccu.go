@@ -237,69 +237,6 @@ func (b *CcuBackend) GetParamset(
 	return m, nil
 }
 
-// rssiNoInfo is the wire sentinel the CCU returns in an RSSI slot when no
-// reception data is available for that direction.
-const rssiNoInfo = 65536
-
-// RSSIInfo implements [RSSIInfoProvider]. It calls the XML-RPC `rssiInfo`
-// method, which returns the per-interface reception-strength matrix: a
-// struct keyed by device address, each value a struct keyed by
-// communication-partner address, each value a two-element array
-// [rssiDevice, rssiPeer] of dBm-scaled integers. The wire sentinel
-// [rssiNoInfo] (65536) marks a direction with no data; it is preserved
-// verbatim so callers can decide how to surface "unknown".
-//
-// Only RF interfaces (BidCos-RF, HmIP-RF) answer this call meaningfully;
-// the CCU returns an empty matrix for the rest.
-func (b *CcuBackend) RSSIInfo(ctx context.Context) (map[string]map[string][2]int, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "rssiInfo")
-	if err != nil {
-		return nil, err
-	}
-	top, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.RSSIInfo: unexpected type %T", raw)
-	}
-	out := make(map[string]map[string][2]int, len(top))
-	for deviceAddr, v := range top {
-		partners, ok := v.(map[string]any)
-		if !ok {
-			continue
-		}
-		pm := make(map[string][2]int, len(partners))
-		for partnerAddr, rv := range partners {
-			arr, ok := rv.([]any)
-			if !ok || len(arr) < 2 {
-				continue
-			}
-			pm[partnerAddr] = [2]int{rssiToInt(arr[0]), rssiToInt(arr[1])}
-		}
-		out[deviceAddr] = pm
-	}
-	return out, nil
-}
-
-// rssiToInt coerces an XML-RPC-decoded numeric value to int. The codec
-// may surface integers as int, int64, int32, or float64 depending on the
-// decode path; anything unrecognised collapses to [rssiNoInfo] ("unknown").
-func rssiToInt(v any) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case int64:
-		return int(n)
-	case int32:
-		return int(n)
-	case float64:
-		return int(n)
-	default:
-		return rssiNoInfo
-	}
-}
-
 // PutParamset implements Operations. When rxMode is non-empty it is
 // Appended as a 4th wire argument (
 // with rx_mode suffix).

@@ -52,9 +52,9 @@ func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 				"name":         "Living Room Switch",
 				"interface_id": "BidCos-RF",
 				"central":      "ccu-01",
-				"partners": []map[string]any{
-					{"address": "BidCoS-RF", "name": "", "rssi_device": -72, "rssi_peer": nil},
-				},
+				"rssi_device":  -72,
+				"rssi_peer":    nil,
+				"reachable":    true,
 			},
 		},
 	}}
@@ -70,11 +70,9 @@ func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 			Address     string `json:"address"`
 			InterfaceID string `json:"interface_id"`
 			Central     string `json:"central"`
-			Partners    []struct {
-				Address    string `json:"address"`
-				RSSIDevice *int   `json:"rssi_device"`
-				RSSIPeer   *int   `json:"rssi_peer"`
-			} `json:"partners"`
+			RSSIDevice  *int   `json:"rssi_device"`
+			RSSIPeer    *int   `json:"rssi_peer"`
+			Reachable   bool   `json:"reachable"`
 		} `json:"devices"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -84,16 +82,13 @@ func TestDiagnosticsRSSI_OK_ReturnsMatrix(t *testing.T) {
 		t.Fatalf("unexpected devices: %+v", body.Devices)
 	}
 	d := body.Devices[0]
-	if d.InterfaceID != "BidCos-RF" || d.Central != "ccu-01" {
-		t.Errorf("scoping wrong: %+v", d)
+	if d.InterfaceID != "BidCos-RF" || d.Central != "ccu-01" || !d.Reachable {
+		t.Errorf("scoping/reachable wrong: %+v", d)
 	}
-	if len(d.Partners) != 1 {
-		t.Fatalf("want 1 partner, got %d", len(d.Partners))
+	if d.RSSIDevice == nil || *d.RSSIDevice != -72 {
+		t.Errorf("rssi_device = %v, want -72", d.RSSIDevice)
 	}
-	if d.Partners[0].RSSIDevice == nil || *d.Partners[0].RSSIDevice != -72 {
-		t.Errorf("rssi_device = %v, want -72", d.Partners[0].RSSIDevice)
-	}
-	if d.Partners[0].RSSIPeer != nil {
-		t.Errorf("rssi_peer = %v, want null", d.Partners[0].RSSIPeer)
+	if d.RSSIPeer != nil {
+		t.Errorf("rssi_peer = %v, want null", d.RSSIPeer)
 	}
 }

@@ -55,8 +55,8 @@
   let rpcScope = $state<string>("");
   let recordingStarting = $state(false);
 
-  // RSSI matrix — loaded on demand (a fresh rssiInfo hits the CCU radio),
-  // not on every diagnostics open.
+  // Per-device RSSI — read from the in-memory device model (no CCU
+  // round-trip), so it loads with the page and is cheap to refresh.
   let rssiDevices = $state<RSSIDevice[]>([]);
   let rssiLoading = $state(false);
   let rssiLoaded = $state(false);
@@ -312,6 +312,7 @@
 
   onMount(() => {
     void load();
+    void loadRSSI();
     // Poll RPC recording status every 5 s while any recording is active.
     rpcPollTimer = setInterval(() => {
       void refreshRpcRecordings();
@@ -630,56 +631,62 @@
   <Card class="p-4">
     <header class="mb-3 flex items-center justify-between gap-2">
       <h2 class="text-lg font-semibold">{t("diagnostics.rssi.title")}</h2>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onclick={() => void loadRSSI()}
-        disabled={rssiLoading}
-      >
-        {rssiLoading ? "…" : rssiLoaded ? t("common.reload") : t("common.load")}
-      </Button>
+      <span class="flex items-center gap-2">
+        {#if rssiLoaded}
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">{rssiDevices.length}</span>
+        {/if}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onclick={() => void loadRSSI()}
+          disabled={rssiLoading}
+        >
+          {rssiLoading ? "…" : t("common.reload")}
+        </Button>
+      </span>
     </header>
     <p class="mb-3 text-xs text-[var(--ha-secondary-text-color)]">{t("diagnostics.rssi.hint")}</p>
     {#if rssiError}
       <ErrorState message={rssiError} onRetry={loadRSSI} />
     {:else if !rssiLoaded}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.rssi.not_loaded")}</p>
+      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
     {:else if rssiDevices.length === 0}
       <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.rssi.empty")}</p>
     {:else}
-      <ul class="space-y-3">
-        {#each rssiDevices as d (d.central + "/" + d.address)}
-          <li class="rounded border border-slate-200 p-2 dark:border-slate-800">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-medium">{d.name || d.address}</span>
-              <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.address}</span>
-              <Badge variant="muted">{d.interface_id}</Badge>
-            </div>
-            <table class="mt-2 w-full text-left text-xs">
-              <thead class="text-[var(--ha-secondary-text-color)]">
-                <tr>
-                  <th class="py-1 pr-2 font-normal">{t("diagnostics.rssi.partner")}</th>
-                  <th class="py-1 pr-2 font-normal">{t("diagnostics.rssi.device_dbm")}</th>
-                  <th class="py-1 font-normal">{t("diagnostics.rssi.peer_dbm")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each d.partners as p (p.address)}
-                  <tr class="border-t border-slate-100 dark:border-slate-800">
-                    <td class="py-1 pr-2">
-                      <span class="font-mono">{p.address}</span>
-                      {#if p.name}<span class="text-[var(--ha-secondary-text-color)]"> · {p.name}</span>{/if}
-                    </td>
-                    <td class="py-1 pr-2 font-mono">{p.rssi_device ?? "—"}</td>
-                    <td class="py-1 font-mono">{p.rssi_peer ?? "—"}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </li>
-        {/each}
-      </ul>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="text-xs text-[var(--ha-secondary-text-color)]">
+            <tr class="border-b border-slate-200 dark:border-slate-800">
+              <th class="py-1 pr-3 font-normal">{t("diagnostics.rssi.device")}</th>
+              <th class="py-1 pr-3 font-normal">{t("diagnostics.interfaces")}</th>
+              <th class="py-1 pr-3 text-right font-normal">{t("diagnostics.rssi.device_dbm")}</th>
+              <th class="py-1 pr-3 text-right font-normal">{t("diagnostics.rssi.peer_dbm")}</th>
+              <th class="py-1 font-normal">{t("diagnostics.rssi.reachable")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each rssiDevices as d (d.central + "/" + d.address)}
+              <tr class="border-b border-slate-100 dark:border-slate-800/60">
+                <td class="py-1 pr-3">
+                  <span class="font-medium">{d.name || d.address}</span>
+                  <span class="block font-mono text-xs text-[var(--ha-secondary-text-color)]">{d.address}</span>
+                </td>
+                <td class="py-1 pr-3 font-mono text-xs">{d.interface_id}</td>
+                <td class="py-1 pr-3 text-right font-mono">{d.rssi_device ?? "—"}</td>
+                <td class="py-1 pr-3 text-right font-mono">{d.rssi_peer ?? "—"}</td>
+                <td class="py-1">
+                  {#if d.reachable}
+                    <Badge variant="success">{t("diagnostics.connected")}</Badge>
+                  {:else}
+                    <Badge variant="danger">{t("diagnostics.disconnected")}</Badge>
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
   </Card>
 

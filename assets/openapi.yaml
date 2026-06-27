@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.2.0
+  version: 2.3.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2742,12 +2742,12 @@ paths:
   /diagnostics/rssi:
     get:
       operationId: getDiagnosticsRSSI
-      summary: Pairwise RF reception matrix (admin-only)
+      summary: Per-device RF reception strength (admin-only)
       description: >
-        Read-only snapshot of the CCU's pairwise RF reception matrix
-        (device ↔ communication-partner RSSI pairs) read from the XML-RPC
-        `rssiInfo` method, across every central and RF interface. The CCU's
-        65536 "no data" sentinel is normalised to null. Exposes the same data
+        Read-only snapshot of per-device RF reception strength, read from the
+        device model's maintenance-channel RSSI_DEVICE / RSSI_PEER data points
+        (so it works for HmIP and BidCos alike), across every central. Only
+        devices that report an RSSI reading are listed. Exposes the same data
         as the `ccu.get_rssi_info` WebSocket command.
       tags: [diagnostics]
       security:
@@ -2756,7 +2756,7 @@ paths:
         - openIdConnect: [admin]
       responses:
         "200":
-          description: RF reception matrix
+          description: Per-device RF reception strength
           content:
             application/json:
               schema:
@@ -2771,19 +2771,15 @@ paths:
                         name: { type: string }
                         interface_id: { type: string }
                         central: { type: string }
-                        partners:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              address: { type: string }
-                              name: { type: string }
-                              rssi_device:
-                                type: [integer, "null"]
-                                description: RSSI as seen by the device; null when no data.
-                              rssi_peer:
-                                type: [integer, "null"]
-                                description: RSSI as seen by the partner; null when no data.
+                        rssi_device:
+                          type: [integer, "null"]
+                          description: RSSI_DEVICE in dBm (device's view); null when absent.
+                        rssi_peer:
+                          type: [integer, "null"]
+                          description: RSSI_PEER in dBm (partner's view); null when absent.
+                        reachable:
+                          type: boolean
+                          description: Whether the device is currently reachable.
   /diagnostics/reliability:
     get:
       operationId: getDiagnosticsReliability

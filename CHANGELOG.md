@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1]
+
+### Fixed
+
+- **RF reception (RSSI) overview now works for HmIP devices.** The 0.16.0
+  feature read the BidCos-RF-only XML-RPC `rssiInfo` matrix, which HmIP-RF
+  answers with a generic fault — so HmIP setups saw "no data" after a
+  multi-second delay. It now reports **per-device** reception strength
+  (`rssi_device` = RSSI_DEVICE, `rssi_peer` = RSSI_PEER, dBm) plus
+  reachability, read from the device model's maintenance channel with no CCU
+  round-trip, so it covers HmIP and BidCos alike. The Config-UI Diagnostics
+  section became a per-device "Signal quality (RSSI)" table that loads with
+  the page.
+
+### Changed
+
+- **`GET /diagnostics/rssi` / `ccu.get_rssi_info` response shape.** Each
+  device entry now carries `rssi_device`, `rssi_peer`, and `reachable`
+  directly instead of a nested `partners` list. North-bound API contract
+  version 2.2.0 → 2.3.0 (the removed `partners` field is the only
+  non-additive part; oasdiff classifies it as non-breaking).
+
 ## [0.16.0]
 
 ### Added

@@ -152,10 +152,9 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	ws.RegisterMissingCommands(router, ws.MissingCommandsConfig{
 		// ccu.get_signal_quality — RSSI + reachability per device.
 		SignalQuality: allDevices,
-		// ccu.get_rssi_info — pairwise RF reception matrix (CCU rssiInfo)
-		// across every central + RF interface. Same domain instance backs
-		// the GET /diagnostics/rssi REST endpoint.
-		RSSIInfo: adapter.NewRSSIInfoDomain(w.registry, w.valueWriter),
+		// ccu.get_rssi_info — per-device RF reception strength across every
+		// central. Same domain backs the GET /diagnostics/rssi REST endpoint.
+		RSSIInfo: adapter.NewRSSIInfoDomain(w.registry),
 		// schedules.list_devices — devices that expose a week-profile.
 		ScheduleDevices: allDevices,
 		// ccu.get_hub_data — service/alarm message counts.

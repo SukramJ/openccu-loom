@@ -33,8 +33,14 @@ type AvailabilityInfo struct {
 	// no battery indicator.
 	LowBattery *bool
 
-	// SignalStrength is RSSI_DEVICE in dBm (negative values).
+	// SignalStrength is RSSI_DEVICE in dBm (negative values) — the
+	// reception strength the device reports for the central.
 	SignalStrength *int
+
+	// RSSIPeer is RSSI_PEER in dBm (negative values) — the reception
+	// strength the central/partner reports for the device. Nil when the
+	// device does not expose it.
+	RSSIPeer *int
 }
 
 // HasBattery reports whether any battery reading is present.
@@ -109,6 +115,7 @@ func (a *Availability) Info() AvailabilityInfo {
 		BatteryLevel:   a.batteryLevel(),
 		LowBattery:     a.lowBattery(),
 		SignalStrength: a.signalStrength(),
+		RSSIPeer:       a.rssiPeer(),
 	}
 }
 
@@ -186,6 +193,14 @@ func (a *Availability) lowBattery() *bool {
 
 func (a *Availability) signalStrength() *int {
 	if f, ok := a.channel0Float(hmenum.ParameterRSSIDevice); ok {
+		v := int(f)
+		return &v
+	}
+	return nil
+}
+
+func (a *Availability) rssiPeer() *int {
+	if f, ok := a.channel0Float(hmenum.ParameterRSSIPeer); ok {
 		v := int(f)
 		return &v
 	}

@@ -444,22 +444,18 @@ export type LinkableChannel = {
   device_model?: string;
 };
 
-// RSSI matrix from `GET /diagnostics/rssi` — the CCU's pairwise RF
-// reception data. rssi_device / rssi_peer are null when the CCU reported
-// its 65536 "no data" sentinel. Not in the generated schema.
-export type RSSIPartner = {
-  address: string;
-  name: string;
-  rssi_device: number | null;
-  rssi_peer: number | null;
-};
-
+// Per-device RF reception strength from `GET /diagnostics/rssi`, read from
+// the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP
+// and BidCos). rssi_device / rssi_peer are null when the device does not
+// report that reading. Not in the generated schema.
 export type RSSIDevice = {
   address: string;
   name: string;
   interface_id: string;
   central: string;
-  partners: RSSIPartner[];
+  rssi_device: number | null;
+  rssi_peer: number | null;
+  reachable: boolean;
 };
 
 export type RSSIMatrix = {
