@@ -79,7 +79,7 @@
     },
     {
       "category": "ccu",
-      "description": "Return the CCU's pairwise RF reception matrix (device ↔ communication-partner RSSI pairs) across every central and RF interface. Backs the CCU's Interface.rssiInfo; the 65536 no-data sentinel is normalised to null.",
+      "description": "Return per-device RF reception strength (RSSI_DEVICE / RSSI_PEER in dBm) plus reachability, read from the device model's maintenance channel across every central. Works for HmIP and BidCos alike; only devices that report an RSSI reading are listed.",
       "name": "ccu.get_rssi_info"
     },
     {

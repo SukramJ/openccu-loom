@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.16.1
+
+- **RSSI overview now works for HmIP devices.** The new "Signal quality (RSSI)"
+  section on the Diagnostics page shows per-device reception strength
+  (RSSI_DEVICE / RSSI_PEER, dBm) plus reachability for HmIP and BidCos devices
+  alike — replacing the 0.16.0 approach that only worked for classic BidCos-RF
+  and showed "no data" on HmIP.
+
 ## 0.16.0
 
 - **RF reception matrix.** The CCU's pairwise device ↔ partner RSSI matrix is

@@ -403,13 +403,13 @@ func TestMissingParamsetDetermine_WiredPath(t *testing.T) {
 
 // ─── ccu.get_rssi_info ──────────────────────────────────────────────────────
 
-// stubRSSIMatrix implements [RSSIMatrixProvider] for tests.
-type stubRSSIMatrix struct {
+// stubRSSI implements [RSSIProvider] for tests.
+type stubRSSI struct {
 	result map[string]any
 	err    error
 }
 
-func (s *stubRSSIMatrix) RSSIInfo(_ context.Context) (map[string]any, error) {
+func (s *stubRSSI) RSSIInfo(_ context.Context) (map[string]any, error) {
 	return s.result, s.err
 }
 
@@ -422,11 +422,13 @@ func TestMissingCCUGetRSSIInfo_WithProvider(t *testing.T) {
 				"name":         "Lamp",
 				"interface_id": "HmIP-RF",
 				"central":      "ccu-01",
-				"partners":     []any{},
+				"rssi_device":  -65,
+				"rssi_peer":    -70,
+				"reachable":    true,
 			},
 		},
 	}
-	p := &stubRSSIMatrix{result: payload}
+	p := &stubRSSI{result: payload}
 	r := newMissingRouter(MissingCommandsConfig{RSSIInfo: p})
 	out := dispatchMissing(t, r, "ccu.get_rssi_info", nil)
 	devs, ok := out["devices"].([]any)
