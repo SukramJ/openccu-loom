@@ -25,11 +25,11 @@ func NewRSSIInfoDomain(r *central.Registry) *RSSIInfoDomain {
 }
 
 // RSSIInfo returns { "devices": [...] } — per-device reception strength
-// (`rssi_device` = RSSI_DEVICE, `rssi_peer` = RSSI_PEER, both dBm) plus
-// reachability, for every device that reports an RSSI reading, across all
-// centrals. It reads the device model's maintenance channel (RSSI_DEVICE /
-// RSSI_PEER) rather than the BidCos-RF-only XML-RPC `rssiInfo` method, so it
-// works for HmIP and BidCos alike.
+// (`rssi_device` = RSSI_DEVICE, `rssi_peer` = RSSI_PEER, both dBm), battery
+// state (`battery_level` 0-100, `low_battery`), and reachability, for every
+// device that reports an RSSI reading, across all centrals. It reads the
+// device model's maintenance channel rather than the BidCos-RF-only XML-RPC
+// `rssiInfo` method, so it works for HmIP and BidCos alike.
 func (d *RSSIInfoDomain) RSSIInfo(_ context.Context) (map[string]any, error) {
 	devices := make([]map[string]any, 0)
 	if d.registry == nil {
@@ -45,13 +45,15 @@ func (d *RSSIInfoDomain) RSSIInfo(_ context.Context) (map[string]any, error) {
 				continue // no RSSI reading (e.g. wired / never seen) — skip
 			}
 			devices = append(devices, map[string]any{
-				"address":      dev.Address,
-				"name":         dev.Name,
-				"interface_id": dev.InterfaceID,
-				"central":      u.Name(),
-				"rssi_device":  intOrNil(info.SignalStrength),
-				"rssi_peer":    intOrNil(info.RSSIPeer),
-				"reachable":    info.IsReachable,
+				"address":       dev.Address,
+				"name":          dev.Name,
+				"interface_id":  dev.InterfaceID,
+				"central":       u.Name(),
+				"rssi_device":   intOrNil(info.SignalStrength),
+				"rssi_peer":     intOrNil(info.RSSIPeer),
+				"battery_level": intOrNil(info.BatteryLevel),
+				"low_battery":   boolOrNil(info.LowBattery),
+				"reachable":     info.IsReachable,
 			})
 		}
 	}
@@ -61,6 +63,15 @@ func (d *RSSIInfoDomain) RSSIInfo(_ context.Context) (map[string]any, error) {
 // intOrNil unwraps an optional int into a JSON value: the int when present,
 // nil (→ JSON null) otherwise.
 func intOrNil(p *int) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+// boolOrNil unwraps an optional bool into a JSON value: the bool when present,
+// nil (→ JSON null) otherwise.
+func boolOrNil(p *bool) any {
 	if p == nil {
 		return nil
 	}

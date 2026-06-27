@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.3.0
+  version: 2.4.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2742,13 +2742,14 @@ paths:
   /diagnostics/rssi:
     get:
       operationId: getDiagnosticsRSSI
-      summary: Per-device RF reception strength (admin-only)
+      summary: Per-device signal quality and battery (admin-only)
       description: >
-        Read-only snapshot of per-device RF reception strength, read from the
-        device model's maintenance-channel RSSI_DEVICE / RSSI_PEER data points
-        (so it works for HmIP and BidCos alike), across every central. Only
-        devices that report an RSSI reading are listed. Exposes the same data
-        as the `ccu.get_rssi_info` WebSocket command.
+        Read-only snapshot of per-device RF reception strength (RSSI_DEVICE /
+        RSSI_PEER), battery state, and reachability, read from the device
+        model's maintenance channel (so it works for HmIP and BidCos alike),
+        across every central. Only devices that report an RSSI reading are
+        listed. Exposes the same data as the `ccu.get_rssi_info` WebSocket
+        command.
       tags: [diagnostics]
       security:
         - basicAuth: []
@@ -2777,6 +2778,12 @@ paths:
                         rssi_peer:
                           type: [integer, "null"]
                           description: RSSI_PEER in dBm (partner's view); null when absent.
+                        battery_level:
+                          type: [integer, "null"]
+                          description: Battery level 0-100 (%); null for mains-powered devices.
+                        low_battery:
+                          type: [boolean, "null"]
+                          description: LOW_BAT flag; null when the device has no battery indicator.
                         reachable:
                           type: boolean
                           description: Whether the device is currently reachable.
