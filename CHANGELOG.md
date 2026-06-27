@@ -31,6 +31,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sort headers and search, replacing the previous card grids. System
   variables keep their inline value editor (now in the value cell). Each
   view also remembers its search, sort, and central/mode filter.
+- **The remaining list/table surfaces now share the same DataTable too**:
+  messages, the device inbox, the un-ignore picker, backups, the audit log,
+  the Matter exposure list (with multi-select) and fabrics, the Settings
+  admin tables (users, API tokens, CCUs, rooms/functions), and the
+  Diagnostics sub-tables (interfaces, client health, RPC recordings) — all
+  sortable and consistently styled.
 
 ## [0.16.1]
 

@@ -5,8 +5,13 @@
   import { toastStore } from "$lib/stores/toast.svelte";
   import { api, ApiError } from "$lib/api/client";
   import { t } from "$lib/i18n";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
-  import type { MatterCommissioningWindow } from "$lib/api/matter-types";
+  import Card from "$lib/components/ui/Card.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import type { MatterCommissioningWindow, MatterFabric } from "$lib/api/matter-types";
 
   onMount(async () => {
     await matterStore.loadFabrics();
@@ -60,57 +65,55 @@
       sharing = false;
     }
   }
+
+  const columns: DataColumn<MatterFabric>[] = $derived([
+    { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f.vendor_id) },
+    { key: "label", label: t("matter.fabrics.col_label"), sortable: true, get: (f) => f.label || t("matter.fabric.label_unknown") },
+    { key: "fabric", label: t("matter.fabrics.col_fabric"), sortable: true, get: (f) => f.fabric_index },
+    { key: "node_id", label: t("matter.fabrics.col_node_id"), get: (f) => f.node_id },
+    { key: "action", label: "", align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <div class="space-y-6">
   {#if matterStore.fabricsLoading}
-    <p class="text-sm text-slate-500 dark:text-slate-400">{t("common.loading")}</p>
+    <LoadingState message={t("common.loading")} />
   {:else if matterStore.fabricsError}
-    <p class="text-sm text-red-600 dark:text-red-400">{matterStore.fabricsError}</p>
-  {:else if matterStore.fabrics.length === 0}
-    <p class="text-sm text-slate-500 dark:text-slate-400">{t("matter.fabrics.empty")}</p>
+    <ErrorState message={matterStore.fabricsError} onRetry={() => void matterStore.loadFabrics()} />
   {:else}
-    <div class="rounded-lg border border-slate-200 dark:border-slate-700 overflow-x-auto">
-      <table class="table-reflow w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <th class="px-3 py-3 text-left">{t("matter.fabrics.col_vendor")}</th>
-            <th class="px-3 py-3 text-left">{t("matter.fabrics.col_label")}</th>
-            <th class="px-3 py-3 text-left hidden md:table-cell">{t("matter.fabrics.col_fabric")}</th>
-            <th class="px-3 py-3 text-left hidden lg:table-cell">{t("matter.fabrics.col_node_id")}</th>
-            <th class="px-3 py-3 text-left"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each matterStore.fabrics as fabric (fabric.fabric_index)}
-            <tr class="border-b border-slate-200 dark:border-slate-700">
-              <td class="reflow-title px-3 py-3 text-slate-900 dark:text-slate-100">
-                {vendorName(fabric.vendor_id)}
-              </td>
-              <td class="px-3 py-3 {fabric.label ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}" data-label={t("matter.fabrics.col_label")}>
-                {fabric.label || t("matter.fabric.label_unknown")}
-              </td>
-              <td class="px-3 py-3 hidden md:table-cell text-slate-500 dark:text-slate-400" data-label={t("matter.fabrics.col_fabric")}>
-                {fabric.fabric_index}
-              </td>
-              <td class="px-3 py-3 hidden lg:table-cell font-mono text-xs text-slate-500 dark:text-slate-400" data-label={t("matter.fabrics.col_node_id")}>
-                0x{fabric.node_id}
-              </td>
-              <td class="reflow-actions px-3 py-3 text-right">
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  class="text-red-600 hover:text-red-700 dark:text-red-400"
-                  onclick={() => void unpair(fabric.fabric_index, fabric.label)}
-                >
-                  {t("common.remove")}
-                </Button>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    <Card class="p-4">
+      <DataTable
+        rows={matterStore.fabrics}
+        {columns}
+        rowKey={(f) => String(f.fabric_index)}
+        emptyMessage={t("matter.fabrics.empty")}
+        emptyIcon="mdi:link"
+        initialSort={{ key: "vendor", asc: true }}
+      >
+        {#snippet cell(fabric, col)}
+          {#if col.key === "vendor"}
+            <span class="text-slate-900 dark:text-slate-100">{vendorName(fabric.vendor_id)}</span>
+          {:else if col.key === "label"}
+            <span class="{fabric.label ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}">
+              {fabric.label || t("matter.fabric.label_unknown")}
+            </span>
+          {:else if col.key === "fabric"}
+            <span class="text-slate-500 dark:text-slate-400">{fabric.fabric_index}</span>
+          {:else if col.key === "node_id"}
+            <span class="font-mono text-xs text-slate-500 dark:text-slate-400">0x{fabric.node_id}</span>
+          {:else if col.key === "action"}
+            <Button
+              size="sm"
+              variant="ghost"
+              class="text-red-600 hover:text-red-700 dark:text-red-400"
+              onclick={() => void unpair(fabric.fabric_index, fabric.label)}
+            >
+              {t("common.remove")}
+            </Button>
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
   {/if}
 
   <!-- Share bridge section -->

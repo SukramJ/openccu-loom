@@ -2,11 +2,12 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { AuditEntry } from "$lib/api/types";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
-  import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
@@ -25,9 +26,9 @@
   let entries = $state<AuditEntry[]>([]);
   let loading = $state(true);
   let loadError = $state<string | null>(null);
-  let expandedIdx = $state<Set<number>>(new Set());
+  // Expanded rows keyed by a stable composite string.
+  let expandedRows = $state<Set<string>>(new Set());
   let actionFilter = $state<string>("");
-  let searchFilter = $state<string>("");
   let centralFilter = $state<string>("");
 
   // Server-side filters (durable audit path): date range + pagination.
@@ -67,7 +68,7 @@
 
   // Reload whenever the server-side filters or page change. The date
   // inputs and pagination buttons mutate these; client-side
-  // action/search/central filters do not trigger a refetch.
+  // action/central filters do not trigger a refetch.
   let firstRun = true;
   $effect(() => {
     // Track the server-side inputs.
@@ -119,11 +120,16 @@
     }
   }
 
-  function toggle(i: number) {
-    const next = new Set(expandedIdx);
-    if (next.has(i)) next.delete(i);
-    else next.add(i);
-    expandedIdx = next;
+  function rowKey(e: AuditEntry): string {
+    return e.timestamp + "|" + e.action + "|" + (e.device_address ?? "") + "|" + (e.user ?? "");
+  }
+
+  function toggleExpand(e: AuditEntry) {
+    const key = rowKey(e);
+    const next = new Set(expandedRows);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    expandedRows = next;
   }
 
   const actions = $derived.by(() => {
@@ -142,8 +148,8 @@
     );
   });
 
+  // Client-side action/central filter applied before DataTable search.
   const filteredEntries = $derived.by(() => {
-    const q = searchFilter.trim().toLowerCase();
     return entries.filter((e) => {
       if (actionFilter && e.action !== actionFilter) return false;
       // Device scoping is applied server-side (prefix match) via the
@@ -156,22 +162,48 @@
       } else if (centralFilter && e.central !== centralFilter) {
         return false;
       }
-      if (!q) return true;
-      const haystack = [
-        e.action,
-        e.user ?? "",
-        e.device_address ?? "",
-        e.paramset ?? "",
-        e.peer ?? "",
-        e.parameter ?? "",
-        e.note ?? "",
-        e.central ?? "",
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(q);
+      return true;
     });
   });
+
+  // Columns for the outer DataTable. The `get()` functions provide both
+  // sort values and search text used by DataTable's built-in search.
+  // Reuse existing audit.col.* keys for the inner changes sub-table.
+  const columns: DataColumn<AuditEntry>[] = $derived([
+    {
+      key: "time",
+      label: t("audit.col.time"),
+      sortable: true,
+      title: true,
+      get: (e) => e.timestamp,
+    },
+    {
+      key: "action",
+      label: t("audit.col.action"),
+      sortable: true,
+      get: (e) => actionLabel(e.action),
+    },
+    {
+      key: "user",
+      label: t("audit.col.user"),
+      sortable: true,
+      get: (e) => e.user ?? "",
+    },
+    {
+      key: "target",
+      label: t("audit.col.target"),
+      get: (e) =>
+        [e.device_address, e.paramset, e.peer, e.parameter]
+          .filter(Boolean)
+          .join(" "),
+    },
+    {
+      key: "changes",
+      label: t("audit.col.changes"),
+      align: "right",
+      get: (e) => e.changes?.length ?? 0,
+    },
+  ]);
 </script>
 
 <section
@@ -193,13 +225,9 @@
     </header>
   {/if}
 
+  <!-- External filters: action, central, date range, export. DataTable
+       provides the free-text search box on top of these filters. -->
   <div class="mb-4 flex flex-wrap items-center gap-2">
-    <input
-      type="search"
-      placeholder={t("common.search")}
-      bind:value={searchFilter}
-      class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 sm:w-64"
-    />
     <select
       bind:value={actionFilter}
       class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
@@ -258,76 +286,98 @@
 
   {#if loading}
     <LoadingState />
-  {:else if entries.length === 0}
-    <EmptyState message={t("audit.empty")} icon="mdi:history" />
   {:else}
-    <ul class="space-y-2">
-      {#each filteredEntries as entry, idx (idx)}
-        {@const expanded = expandedIdx.has(idx)}
-        <li>
-          <Card class="p-3">
+    <Card class="p-4">
+      <DataTable
+        rows={filteredEntries}
+        {columns}
+        rowKey={(e) => rowKey(e)}
+        search
+        searchPlaceholder={t("common.search")}
+        persistKey="audit-log"
+        initialSort={{ key: "time", asc: false }}
+        emptyMessage={t("audit.empty")}
+        emptyIcon="mdi:history"
+      >
+        {#snippet cell(entry, col)}
+          {#if col.key === "time"}
             <button
               type="button"
-              class="flex w-full flex-wrap items-baseline gap-2 text-left text-sm"
-              onclick={() => toggle(idx)}
+              class="flex items-center gap-1 text-left text-xs text-slate-500 dark:text-slate-400 hover:text-[var(--ha-primary-text-color)]"
+              onclick={() => toggleExpand(entry)}
+              title={entry.changes && entry.changes.length > 0 ? t("audit.changes") : undefined}
             >
-              <span class="font-mono text-xs text-slate-500 dark:text-slate-400">{formatTs(entry.timestamp)}</span>
-              <Badge variant="default">{actionLabel(entry.action)}</Badge>
-              {#if entry.user}
-                <Badge variant="muted">{entry.user}</Badge>
-              {/if}
-              {#if centrals.length > 0 && entry.central}
-                <Badge variant="muted">{entry.central}</Badge>
-              {/if}
-              {#if entry.device_address}
-                <span class="font-mono text-xs">
-                  {entry.device_address}{#if entry.channel_no}:{entry.channel_no}{/if}
-                </span>
-              {/if}
-              {#if entry.paramset}
-                <span class="text-xs text-slate-500 dark:text-slate-400">{entry.paramset}</span>
-              {/if}
-              {#if entry.peer}
-                <span class="text-xs text-slate-500 dark:text-slate-400">→ {entry.peer}</span>
-              {/if}
-              {#if entry.changes && entry.changes.length > 0}
-                <span class="ml-auto text-xs text-slate-500 dark:text-slate-400">
-                  {entry.changes.length}
-                  {t("audit.changes")}
-                </span>
-              {/if}
+              <span class="w-3 text-[10px]" aria-hidden="true">
+                {#if entry.changes && entry.changes.length > 0}
+                  {expandedRows.has(rowKey(entry)) ? "▼" : "▶"}
+                {:else}
+                  &nbsp;
+                {/if}
+              </span>
+              {formatTs(entry.timestamp)}
             </button>
-            {#if expanded && entry.changes && entry.changes.length > 0}
-              <table class="table-reflow mt-2 w-full text-left text-xs">
-                <thead class="text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th class="py-1 pr-2">{t("audit.col.parameter")}</th>
-                    <th class="py-1 pr-2">{t("audit.col.before")}</th>
-                    <th class="py-1">{t("audit.col.after")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each entry.changes as change (change.parameter)}
-                    <tr class="border-t border-slate-100 dark:border-slate-800">
-                      <td class="reflow-title py-1 pr-2 font-mono">{change.parameter}</td>
-                      <td class="py-1 pr-2 font-mono text-slate-500 dark:text-slate-400" data-label={t("audit.col.before")}>
-                        {change.before == null ? "—" : JSON.stringify(change.before)}
-                      </td>
-                      <td class="py-1 font-mono" data-label={t("audit.col.after")}>
-                        {change.after == null ? "—" : JSON.stringify(change.after)}
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            {/if}
+          {:else if col.key === "action"}
+            <Badge variant="default">{actionLabel(entry.action)}</Badge>
             {#if entry.note}
-              <p class="mt-1 text-xs italic text-slate-500 dark:text-slate-400">{entry.note}</p>
+              <span class="block text-xs italic text-slate-500 dark:text-slate-400">{entry.note}</span>
             {/if}
-          </Card>
-        </li>
-      {/each}
-    </ul>
+          {:else if col.key === "user"}
+            {#if entry.user}
+              <Badge variant="muted">{entry.user}</Badge>
+            {/if}
+            {#if centrals.length > 0 && entry.central}
+              <Badge variant="muted">{entry.central}</Badge>
+            {/if}
+          {:else if col.key === "target"}
+            {#if entry.device_address}
+              <span class="font-mono text-xs">
+                {entry.device_address}{#if entry.channel_no}:{entry.channel_no}{/if}
+              </span>
+            {/if}
+            {#if entry.paramset}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">{entry.paramset}</span>
+            {/if}
+            {#if entry.peer}
+              <span class="block text-xs text-slate-500 dark:text-slate-400">→ {entry.peer}</span>
+            {/if}
+          {:else if col.key === "changes"}
+            {#if entry.changes && entry.changes.length > 0}
+              <span class="text-xs text-slate-500 dark:text-slate-400">
+                {entry.changes.length}
+              </span>
+              {#if expandedRows.has(rowKey(entry))}
+                <div class="mt-2">
+                  <table class="w-full text-left text-xs">
+                    <thead class="text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th class="py-1 pr-2">{t("audit.col.parameter")}</th>
+                        <th class="py-1 pr-2">{t("audit.col.before")}</th>
+                        <th class="py-1">{t("audit.col.after")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each entry.changes as change (change.parameter)}
+                        <tr class="border-t border-slate-100 dark:border-slate-800">
+                          <td class="py-1 pr-2 font-mono">{change.parameter}</td>
+                          <td class="py-1 pr-2 font-mono text-slate-500 dark:text-slate-400">
+                            {change.before == null ? "—" : JSON.stringify(change.before)}
+                          </td>
+                          <td class="py-1 font-mono">
+                            {change.after == null ? "—" : JSON.stringify(change.after)}
+                          </td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
+              {/if}
+            {:else}
+              <span class="text-slate-400 dark:text-slate-500">—</span>
+            {/if}
+          {/if}
+        {/snippet}
+      </DataTable>
+    </Card>
 
     <div class="mt-4 flex items-center justify-center gap-3">
       <Button

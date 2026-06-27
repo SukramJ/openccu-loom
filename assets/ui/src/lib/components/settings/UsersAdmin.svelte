@@ -2,8 +2,10 @@
   import { onMount } from "svelte";
   import { api, ApiError } from "$lib/api/client";
   import type { UserSummaryV2 } from "$lib/api/client";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -122,6 +124,14 @@
       return s;
     }
   }
+
+  const columns: DataColumn<UserSummaryV2>[] = $derived([
+    { key: "subject", label: t("users.col.subject"), sortable: true, title: true, get: (u) => u.subject },
+    { key: "role", label: t("users.col.role"), sortable: true, get: (u) => u.role },
+    { key: "created", label: t("users.col.created"), sortable: true, get: (u) => u.created_at ?? "" },
+    { key: "last_seen", label: t("users.col.last_seen"), sortable: true, get: (u) => u.last_seen_at ?? "" },
+    { key: "actions", label: t("users.col.actions"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <div class="space-y-4">
@@ -138,71 +148,66 @@
     <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("common.loading")}</p>
   {:else if loadError}
     <p class="text-sm text-red-600 dark:text-red-400">{t("common.error")} {loadError}</p>
-  {:else if users.length === 0}
-    <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("users.empty")}</p>
   {:else}
-    <div class="overflow-x-auto">
-      <table class="table-reflow w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-left dark:border-slate-800">
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.subject")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.role")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.created")}</th>
-            <th class="pb-2 pr-4 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.last_seen")}</th>
-            <th class="pb-2 font-medium text-[var(--ha-secondary-text-color)]">{t("users.col.actions")}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {#each users as u (u.subject)}
-            <tr>
-              <td class="reflow-title py-2 pr-4 font-mono">{u.subject}</td>
-              <td class="py-2 pr-4" data-label={t("users.col.role")}>
-                <span class="inline-flex items-center gap-1">
-                  <select
-                    value={u.role}
-                    onchange={(e) =>
-                      void changeRole(u.subject, (e.target as HTMLSelectElement).value)}
-                    class="min-h-[36px] rounded border border-slate-300 bg-white px-2 py-0.5 text-xs sm:min-h-0 dark:border-slate-700 dark:bg-slate-900"
-                  >
-                    <option value="viewer">viewer</option>
-                    <option value="operator">operator</option>
-                    <option value="admin">admin</option>
-                  </select>
-                  <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
-                </span>
-              </td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("users.col.created")}>{fmtDate(u.created_at)}</td>
-              <td class="py-2 pr-4 text-[var(--ha-secondary-text-color)]" data-label={t("users.col.last_seen")}>{fmtDate(u.last_seen_at)}</td>
-              <td class="reflow-actions py-2">
-                <div class="flex gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => {
-                      pwSubject = u.subject;
-                      newPassword = "";
-                      pwError = null;
-                    }}
-                  >
-                    {t("users.change_password")}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="text-red-600 hover:text-red-700 dark:text-red-400"
-                    onclick={() => void deleteUser(u.subject)}
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      rows={users}
+      {columns}
+      rowKey={(u) => u.subject}
+      search
+      searchPlaceholder={t("common.search")}
+      persistKey="users-admin"
+      initialSort={{ key: "subject", asc: true }}
+      emptyMessage={t("users.empty")}
+      emptyIcon="mdi:format-list-bulleted"
+    >
+      {#snippet cell(u, col)}
+        {#if col.key === "subject"}
+          <span class="font-mono">{u.subject}</span>
+        {:else if col.key === "role"}
+          <span class="inline-flex items-center gap-1">
+            <select
+              value={u.role}
+              onchange={(e) =>
+                void changeRole(u.subject, (e.target as HTMLSelectElement).value)}
+              class="min-h-[36px] rounded border border-slate-300 bg-white px-2 py-0.5 text-xs sm:min-h-0 dark:border-slate-700 dark:bg-slate-900"
+            >
+              <option value="viewer">viewer</option>
+              <option value="operator">operator</option>
+              <option value="admin">admin</option>
+            </select>
+            <Badge variant={roleBadgeVariant(u.role)}>{u.role}</Badge>
+          </span>
+        {:else if col.key === "created"}
+          <span class="text-[var(--ha-secondary-text-color)]">{fmtDate(u.created_at)}</span>
+        {:else if col.key === "last_seen"}
+          <span class="text-[var(--ha-secondary-text-color)]">{fmtDate(u.last_seen_at)}</span>
+        {:else if col.key === "actions"}
+          <div class="flex justify-end gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onclick={() => {
+                pwSubject = u.subject;
+                newPassword = "";
+                pwError = null;
+              }}
+            >
+              {t("users.change_password")}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="text-red-600 hover:text-red-700 dark:text-red-400"
+              onclick={() => void deleteUser(u.subject)}
+            >
+              {t("common.delete")}
+            </Button>
+          </div>
+        {/if}
+      {/snippet}
+    </DataTable>
   {/if}
 </div>
 

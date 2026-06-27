@@ -13,7 +13,9 @@
   import Button from "$lib/components/ui/Button.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import DataTable from "$lib/components/ui/DataTable.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import type { DataColumn } from "$lib/components/ui/data-table";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -376,6 +378,51 @@
     }
     return v.toFixed(2);
   }
+
+  // Column definitions for the three DataTable subtables.
+
+  const interfaceCols: DataColumn<InterfaceInfo>[] = $derived([
+    { key: "id", label: t("diagnostics.col.interface"), sortable: true, title: true, get: (i) => i.id },
+    { key: "type", label: t("diagnostics.col.type"), get: (i) => i.interface },
+    { key: "status", label: t("diagnostics.col.status") },
+    {
+      key: "host",
+      label: t("diagnostics.col.host"),
+      get: (i) => [i.central_id, i.host, i.note].filter(Boolean).join(" · "),
+    },
+    { key: "action", label: t("diagnostics.col.action"), align: "right", cellClass: "reflow-actions" },
+  ]);
+
+  const clientCols: DataColumn<DiagnosticsClient>[] = $derived([
+    { key: "name", label: t("diagnostics.col.client"), sortable: true, title: true, get: (c) => c.name },
+    { key: "status", label: t("diagnostics.col.status"), get: (c) => c.status },
+    { key: "score", label: t("diagnostics.col.score"), sortable: true, align: "right", get: (c) => c.score },
+    {
+      key: "last_ok",
+      label: t("diagnostics.last_ok"),
+      get: (c) => (c.last_successful_request ? formatDate(c.last_successful_request) : ""),
+    },
+    {
+      key: "last_fail",
+      label: t("diagnostics.last_fail"),
+      get: (c) => (c.last_failed_request ? formatDate(c.last_failed_request) : ""),
+    },
+    {
+      key: "last_event",
+      label: t("diagnostics.last_event"),
+      get: (c) => (c.last_event_received ? formatDate(c.last_event_received) : ""),
+    },
+    { key: "consec_failures", label: t("diagnostics.consecutive_failures"), align: "right", get: (c) => c.consecutive_failures },
+    { key: "reconnect_attempts", label: t("diagnostics.reconnect_attempts"), align: "right", get: (c) => c.reconnect_attempts },
+  ]);
+
+  const recordingCols: DataColumn<UnifiedRow>[] = $derived([
+    { key: "type", label: t("diagnostics.recordings.col_type"), title: true },
+    { key: "ccu", label: t("diagnostics.recordings.col_scope"), get: (r) => r.ccu },
+    { key: "start", label: t("diagnostics.recordings.col_start") },
+    { key: "size", label: t("diagnostics.recordings.col_size"), get: (r) => r.sizeLabel },
+    { key: "action", label: t("diagnostics.recordings.col_action"), align: "right", cellClass: "reflow-actions" },
+  ]);
 </script>
 
 <svelte:head>
@@ -486,48 +533,37 @@
           </Badge>
         {/if}
       </header>
-      <ul class="space-y-2">
-        {#each clients as c (c.name)}
-          <li class="rounded border border-slate-200 p-2 dark:border-slate-800">
-            <div class="flex flex-wrap items-baseline gap-2">
-              <span class="font-mono text-sm">{c.name}</span>
-              <Badge variant={statusVariant(c.status)}>{c.status}</Badge>
-              <span class="text-xs font-semibold tabular-nums">{c.score}%</span>
-              {#if c.in_recovery}
+      <DataTable
+        rows={clients}
+        columns={clientCols}
+        rowKey={(c) => c.name}
+        emptyMessage={t("diagnostics.empty.components")}
+      >
+        {#snippet cell(row, col)}
+          {#if col.key === "name"}
+            <span class="font-mono text-sm">{row.name}</span>
+          {:else if col.key === "status"}
+            <div class="flex flex-wrap items-center gap-1">
+              <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
+              {#if row.in_recovery}
                 <Badge variant="warning">{t("diagnostics.in_recovery")}</Badge>
               {/if}
             </div>
-            <dl class="mt-1 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-[var(--ha-secondary-text-color)] sm:grid-cols-3">
-              {#if c.last_successful_request}
-                <div>
-                  <dt class="inline font-medium">{t("diagnostics.last_ok")}:</dt>
-                  <dd class="inline ml-1">{formatDate(c.last_successful_request)}</dd>
-                </div>
-              {/if}
-              {#if c.last_failed_request}
-                <div>
-                  <dt class="inline font-medium">{t("diagnostics.last_fail")}:</dt>
-                  <dd class="inline ml-1">{formatDate(c.last_failed_request)}</dd>
-                </div>
-              {/if}
-              {#if c.last_event_received}
-                <div>
-                  <dt class="inline font-medium">{t("diagnostics.last_event")}:</dt>
-                  <dd class="inline ml-1">{formatDate(c.last_event_received)}</dd>
-                </div>
-              {/if}
-              <div>
-                <dt class="inline font-medium">{t("diagnostics.consecutive_failures")}:</dt>
-                <dd class="inline ml-1 tabular-nums">{c.consecutive_failures}</dd>
-              </div>
-              <div>
-                <dt class="inline font-medium">{t("diagnostics.reconnect_attempts")}:</dt>
-                <dd class="inline ml-1 tabular-nums">{c.reconnect_attempts}</dd>
-              </div>
-            </dl>
-          </li>
-        {/each}
-      </ul>
+          {:else if col.key === "score"}
+            <span class="font-semibold tabular-nums">{row.score}%</span>
+          {:else if col.key === "last_ok"}
+            <span class="text-xs">{row.last_successful_request ? formatDate(row.last_successful_request) : "—"}</span>
+          {:else if col.key === "last_fail"}
+            <span class="text-xs">{row.last_failed_request ? formatDate(row.last_failed_request) : "—"}</span>
+          {:else if col.key === "last_event"}
+            <span class="text-xs">{row.last_event_received ? formatDate(row.last_event_received) : "—"}</span>
+          {:else if col.key === "consec_failures"}
+            <span class="tabular-nums">{row.consecutive_failures}</span>
+          {:else if col.key === "reconnect_attempts"}
+            <span class="tabular-nums">{row.reconnect_attempts}</span>
+          {/if}
+        {/snippet}
+      </DataTable>
     </Card>
   {/if}
 
@@ -566,43 +602,40 @@
       <h2 class="text-lg font-semibold">{t("diagnostics.interfaces")}</h2>
       <span class="text-xs text-[var(--ha-secondary-text-color)]">{interfaces.length}</span>
     </header>
-    {#if interfaces.length === 0 && !loading}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.empty.interfaces")}</p>
-    {:else}
-      <ul class="space-y-2">
-        {#each interfaces as i (i.id)}
-          <li class="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-2 dark:border-slate-800">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span class="font-mono text-sm">{i.id}</span>
-                <Badge variant="muted">{i.interface}</Badge>
-                {#if i.connected}
-                  <Badge variant="success">{t("diagnostics.connected")}</Badge>
-                {:else}
-                  <Badge variant="danger">{t("diagnostics.disconnected")}</Badge>
-                {/if}
-              </div>
-              {#if i.host || i.central_id || i.note}
-                <p class="mt-1 text-xs text-[var(--ha-secondary-text-color)]">
-                  {#if i.central_id}<span>{i.central_id}</span>{/if}
-                  {#if i.host}<span> · {i.host}</span>{/if}
-                  {#if i.note}<span> · {i.note}</span>{/if}
-                </p>
-              {/if}
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onclick={() => void reconnect(i.id)}
-              disabled={reconnecting === i.id}
-            >
-              {reconnecting === i.id ? "…" : t("diagnostics.reconnect")}
-            </Button>
-          </li>
-        {/each}
-      </ul>
-    {/if}
+    <DataTable
+      rows={interfaces}
+      columns={interfaceCols}
+      rowKey={(i) => i.id}
+      emptyMessage={t("diagnostics.empty.interfaces")}
+    >
+      {#snippet cell(row, col)}
+        {#if col.key === "id"}
+          <span class="font-mono text-sm">{row.id}</span>
+        {:else if col.key === "type"}
+          <Badge variant="muted">{row.interface}</Badge>
+        {:else if col.key === "status"}
+          {#if row.connected}
+            <Badge variant="success">{t("diagnostics.connected")}</Badge>
+          {:else}
+            <Badge variant="danger">{t("diagnostics.disconnected")}</Badge>
+          {/if}
+        {:else if col.key === "host"}
+          <span class="text-xs text-[var(--ha-secondary-text-color)]">
+            {[row.central_id, row.host, row.note].filter(Boolean).join(" · ")}
+          </span>
+        {:else if col.key === "action"}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onclick={() => void reconnect(row.id)}
+            disabled={reconnecting === row.id}
+          >
+            {reconnecting === row.id ? "…" : t("diagnostics.reconnect")}
+          </Button>
+        {/if}
+      {/snippet}
+    </DataTable>
   </Card>
 
   <Card class="p-4">
@@ -810,80 +843,63 @@
       <h2 class="text-lg font-semibold">{t("diagnostics.recordings.section_title")}</h2>
       <span class="text-xs text-[var(--ha-secondary-text-color)]">{unifiedList.length}</span>
     </header>
-    {#if unifiedList.length === 0}
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">{t("diagnostics.recordings.empty")}</p>
-    {:else}
-      <table class="table-reflow w-full text-sm">
-        <thead>
-          <tr class="border-b border-slate-200 text-left text-xs text-[var(--ha-secondary-text-color)] dark:border-slate-800">
-            <th class="pb-1 pr-3 font-medium">{t("diagnostics.recordings.col_type")}</th>
-            <th class="pb-1 pr-3 font-medium">{t("diagnostics.recordings.col_scope")}</th>
-            <th class="pb-1 pr-3 font-medium">{t("diagnostics.recordings.col_start")}</th>
-            <th class="pb-1 pr-3 font-medium">{t("diagnostics.recordings.col_size")}</th>
-            <th class="pb-1 font-medium">{t("diagnostics.recordings.col_action")}</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-          {#each unifiedList as row (row.kind + ":" + row.id)}
-            <tr>
-              <td class="reflow-title py-2 pr-3">
-                {#if row.kind === "log"}
-                  <Badge variant="default">{t("diagnostics.recording_type.debug_log")}</Badge>
-                {:else}
-                  <Badge variant="muted">RPC</Badge>
-                {/if}
-              </td>
-              <td class="py-2 pr-3 font-mono text-xs" data-label={t("diagnostics.recordings.col_scope")}>{row.ccu}</td>
-              <td class="py-2 pr-3" data-label={t("diagnostics.recordings.col_start")}>
-                <Badge variant={row.statusVariantKey}>{row.status}</Badge>
-                {#if row.startedAt}
-                  <span class="ml-1 text-xs text-[var(--ha-secondary-text-color)]">{formatDate(row.startedAt)}</span>
-                {/if}
-              </td>
-              <td class="py-2 pr-3 tabular-nums text-xs" data-label={t("diagnostics.recordings.col_size")}>{row.sizeLabel}</td>
-              <td class="reflow-actions py-2">
-                {#if row.canStop}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={captureStopping === row.id}
-                    onclick={() => void stopCapture(row.id)}
-                  >
-                    {captureStopping === row.id ? "…" : t("diagnostics.stop")}
-                  </Button>
-                {:else if row.kind === "rpc" && row.canDownload}
-                  <div class="flex flex-wrap items-center gap-2">
-                    {#if row.rpcDownloadMapHref}
-                      <a class="text-xs underline" href={row.rpcDownloadMapHref} download rel="noopener">
-                        {t("diagnostics.recordings.format_map")}
-                      </a>
-                    {/if}
-                    {#if row.rpcDownloadGoldenHref}
-                      <a class="text-xs underline" href={row.rpcDownloadGoldenHref} download rel="noopener">
-                        {t("diagnostics.recordings.format_golden")}
-                      </a>
-                    {/if}
-                    {#if row.rpcRandomize}
-                      <Badge variant="muted">{t("diagnostics.recordings.anonymised")}</Badge>
-                    {/if}
-                  </div>
-                {:else if row.canDownload}
-                  <a
-                    class="text-xs underline"
-                    href={row.downloadHref}
-                    download
-                    rel="noopener"
-                  >
-                    {t("common.download")}
-                  </a>
-                {/if}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    {/if}
+    <DataTable
+      rows={unifiedList}
+      columns={recordingCols}
+      rowKey={(r) => r.kind + ":" + r.id}
+      emptyMessage={t("diagnostics.recordings.empty")}
+    >
+      {#snippet cell(row, col)}
+        {#if col.key === "type"}
+          {#if row.kind === "log"}
+            <Badge variant="default">{t("diagnostics.recording_type.debug_log")}</Badge>
+          {:else}
+            <Badge variant="muted">RPC</Badge>
+          {/if}
+        {:else if col.key === "ccu"}
+          <span class="font-mono text-xs">{row.ccu}</span>
+        {:else if col.key === "start"}
+          <Badge variant={row.statusVariantKey}>{row.status}</Badge>
+          {#if row.startedAt}
+            <span class="ml-1 text-xs text-[var(--ha-secondary-text-color)]">{formatDate(row.startedAt)}</span>
+          {/if}
+        {:else if col.key === "size"}
+          <span class="tabular-nums text-xs">{row.sizeLabel}</span>
+        {:else if col.key === "action"}
+          {#if row.canStop}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={captureStopping === row.id}
+              onclick={() => void stopCapture(row.id)}
+            >
+              {captureStopping === row.id ? "…" : t("diagnostics.stop")}
+            </Button>
+          {:else if row.kind === "rpc" && row.canDownload}
+            <div class="flex flex-wrap items-center gap-2">
+              {#if row.rpcDownloadMapHref}
+                <a class="text-xs underline" href={row.rpcDownloadMapHref} download rel="noopener">
+                  {t("diagnostics.recordings.format_map")}
+                </a>
+              {/if}
+              {#if row.rpcDownloadGoldenHref}
+                <a class="text-xs underline" href={row.rpcDownloadGoldenHref} download rel="noopener">
+                  {t("diagnostics.recordings.format_golden")}
+                </a>
+              {/if}
+              {#if row.rpcRandomize}
+                <Badge variant="muted">{t("diagnostics.recordings.anonymised")}</Badge>
+              {/if}
+            </div>
+          {:else if row.canDownload}
+            <a class="text-xs underline" href={row.downloadHref} download rel="noopener">
+              {t("common.download")}
+            </a>
+          {/if}
+        {/if}
+      {/snippet}
+    </DataTable>
   </Card>
 
   <Card class="p-4">

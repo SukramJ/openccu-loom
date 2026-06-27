@@ -3,8 +3,9 @@
 ## 0.17.0
 
 - **Homogeneous, sortable tables across the Config UI.** Devices, system
-  variables, programs, firmware, and the new Signal-quality view now share
-  one table with click-to-sort columns, search, and remembered settings.
+  variables, programs, firmware, the new Signal-quality view, plus messages,
+  inbox, backups, the audit log, Matter, and the settings admin tables now
+  share one table with click-to-sort columns, search, and remembered settings.
 - **Signal quality** is its own menu entry: per-device RSSI (colour-coded),
   battery level (colour-coded), and reachability — searchable and sortable.
 - **Device list** gains a cards ↔ table toggle (multi-select and grouping
