@@ -55,15 +55,12 @@
     return list;
   });
 
-  // DataTable columns. Device + model sort on synchronous fields; the
-  // firmware version columns are lazily loaded per row, so they are not
-  // offered as sort keys (most rows would have no value to sort by).
   const columns: DataColumn<DeviceSummary>[] = $derived([
     { key: "device", label: t("firmware.col.device"), sortable: true, title: true, get: (d) => d.name || d.address },
     { key: "model", label: t("firmware.col.model"), sortable: true, get: (d) => d.model },
-    { key: "current", label: t("firmware.col.current"), get: (d) => detailMap[d.address]?.firmware?.Current ?? "" },
-    { key: "available", label: t("firmware.col.available"), get: (d) => detailMap[d.address]?.firmware?.Available ?? "" },
-    { key: "state", label: t("firmware.col.state") },
+    { key: "current", label: t("firmware.col.current"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Current ?? "" },
+    { key: "available", label: t("firmware.col.available"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.Available ?? "" },
+    { key: "state", label: t("firmware.col.state"), sortable: true, get: (d) => detailMap[d.address]?.firmware?.UpdateState ?? (d.update_available ? "NEW_FIRMWARE_AVAILABLE" : "UP_TO_DATE") },
     { key: "action", label: t("firmware.col.action"), align: "right", cellClass: "reflow-actions" },
   ]);
 

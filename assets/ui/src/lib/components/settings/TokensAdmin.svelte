@@ -110,7 +110,7 @@
   const columns: DataColumn<TokenSummaryV2>[] = $derived([
     { key: "subject", label: t("tokens.col.subject"), sortable: true, title: true, get: (tok) => tok.subject },
     { key: "role", label: t("tokens.col.role"), sortable: true, get: (tok) => tok.role },
-    { key: "fingerprint", label: t("tokens.col.fingerprint"), get: (tok) => tok.fingerprint },
+    { key: "fingerprint", label: t("tokens.col.fingerprint"), sortable: true, get: (tok) => tok.fingerprint },
     { key: "created", label: t("tokens.col.created"), sortable: true, get: (tok) => tok.created_at ?? "" },
     { key: "last_seen", label: t("tokens.col.last_seen"), sortable: true, get: (tok) => tok.last_seen_at ?? "" },
     { key: "actions", label: t("tokens.col.actions"), align: "right", cellClass: "reflow-actions" },

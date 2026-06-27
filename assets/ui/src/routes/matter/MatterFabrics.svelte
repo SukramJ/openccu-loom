@@ -70,7 +70,7 @@
     { key: "vendor", label: t("matter.fabrics.col_vendor"), sortable: true, title: true, get: (f) => vendorName(f.vendor_id) },
     { key: "label", label: t("matter.fabrics.col_label"), sortable: true, get: (f) => f.label || t("matter.fabric.label_unknown") },
     { key: "fabric", label: t("matter.fabrics.col_fabric"), sortable: true, get: (f) => f.fabric_index },
-    { key: "node_id", label: t("matter.fabrics.col_node_id"), get: (f) => f.node_id },
+    { key: "node_id", label: t("matter.fabrics.col_node_id"), sortable: true, get: (f) => f.node_id },
     { key: "action", label: "", align: "right", cellClass: "reflow-actions" },
   ]);
 </script>

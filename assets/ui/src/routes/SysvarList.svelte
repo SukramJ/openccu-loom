@@ -208,7 +208,7 @@
   const columns: DataColumn<SysvarEntry>[] = $derived([
     { key: "name", label: t("sysvars.col.name"), sortable: true, title: true, get: (s) => s.name },
     { key: "type", label: t("sysvars.col.type"), sortable: true, get: (s) => s.value_type },
-    { key: "value", label: t("sysvars.col.value"), get: (s) => (s.value == null ? "" : String(s.value)) },
+    { key: "value", label: t("sysvars.col.value"), sortable: true, get: (s) => (s.value == null ? "" : String(s.value)) },
     { key: "actions", label: t("sysvars.col.actions"), align: "right", cellClass: "reflow-actions" },
   ]);
 
