@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.0
+
+- **Homogeneous, sortable tables across the Config UI.** Devices, system
+  variables, programs, firmware, and the new Signal-quality view now share
+  one table with click-to-sort columns, search, and remembered settings.
+- **Signal quality** is its own menu entry: per-device RSSI (colour-coded),
+  battery level (colour-coded), and reachability — searchable and sortable.
+- **Device list** gains a cards ↔ table toggle (multi-select and grouping
+  kept), and remembers your view, search, sort, and filters across reloads.
+
 ## 0.16.1
 
 - **RSSI overview now works for HmIP devices.** The new "Signal quality (RSSI)"
