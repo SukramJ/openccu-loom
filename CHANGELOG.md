@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.5]
+
+### Removed
+
+- **Internal only:** deleted unused scaffolding that never had a production
+  caller — the standalone `health.Connection`/`ConnectionRegistry` model
+  (superseded by the live health tracker), the `ClientCoordinator.PollClients` /
+  `SubscribeToHealthEvents` / `RestartClients` methods, and the never-published
+  `DeviceStateChangedEvent`. None were part of the REST/WebSocket contract, so
+  there is no API change and downstream clients are unaffected; the concept each
+  embodied is recorded in `docs/parity/by_design.md`.
+
 ## [0.18.4]
 
 ### Changed
