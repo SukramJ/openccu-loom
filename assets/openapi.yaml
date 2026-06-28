@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.5.0
+  version: 2.6.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1688,6 +1688,11 @@ paths:
       responses:
         "200":
           description: Channel list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/LinkableChannel" }
         "400":
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
@@ -2065,13 +2070,27 @@ paths:
       operationId: listInbox
       summary: Pending pairing candidates
       tags: [hub]
-      responses: { "200": { description: Inbox list } }
+      responses:
+        "200":
+          description: Inbox list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/InboxDevice" }
   /rooms:
     get:
       operationId: listRooms
       summary: Aggregated room index with device counts
       tags: [hub]
-      responses: { "200": { description: Room list } }
+      responses:
+        "200":
+          description: Room list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RoomEntry" }
     post:
       operationId: createRoom
       summary: Create a room on the CCU (operator)
@@ -2141,7 +2160,14 @@ paths:
       operationId: listFunctions
       summary: Aggregated function-group index with device counts
       tags: [hub]
-      responses: { "200": { description: Function list } }
+      responses:
+        "200":
+          description: Function list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FunctionEntry" }
     post:
       operationId: createFunction
       summary: Create a function/Gewerk on the CCU (operator)
@@ -2295,7 +2321,13 @@ paths:
       summary: Locally stored CCU backups
       tags: [backup]
       responses:
-        "200": { description: Backup list }
+        "200":
+          description: Backup list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BackupEntry" }
         "502": { $ref: "#/components/responses/BadGateway" }
   /backups/{id}/download:
     get:
@@ -2355,7 +2387,11 @@ paths:
                 key: { type: string }
                 subject: { type: string }
       responses:
-        "200": { description: Lock acquired }
+        "200":
+          description: Lock acquired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EditSessionResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "422": { $ref: "#/components/responses/UnprocessableEntity" }
         "423": { description: Locked by another session }
@@ -2382,7 +2418,11 @@ paths:
         - bearerAuth: []
         - openIdConnect: [operator]
       responses:
-        "200": { description: Refreshed }
+        "200":
+          description: Refreshed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EditSessionResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "410": { description: Session expired }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -2536,7 +2576,14 @@ paths:
       operationId: listIncidents
       summary: Diagnostic incidents
       tags: [diagnostics]
-      responses: { "200": { description: Incidents } }
+      responses:
+        "200":
+          description: Incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Incident" }
   /metrics:
     get:
       operationId: metrics
@@ -2708,7 +2755,14 @@ paths:
           description: Recent log records
           content:
             application/json:
-              schema: { type: object, additionalProperties: true }
+              schema:
+                type: object
+                required: [last_seq, records]
+                properties:
+                  last_seq: { type: integer, format: int64 }
+                  records:
+                    type: array
+                    items: { $ref: "#/components/schemas/LogRecord" }
             application/x-ndjson:
               schema: { type: string }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -3181,7 +3235,9 @@ paths:
           description: Recording started — per-central status
           content:
             application/json:
-              schema: { type: array, items: { type: object, additionalProperties: true } }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RPCRecordingStatus" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
     get:
@@ -3197,7 +3253,9 @@ paths:
           description: Per-central recorder status
           content:
             application/json:
-              schema: { type: array, items: { type: object, additionalProperties: true } }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RPCRecordingStatus" }
   /diagnostics/rpc-recording/stop:
     post:
       operationId: stopRpcRecording
@@ -3217,7 +3275,9 @@ paths:
           description: Per-central recorder status after stop
           content:
             application/json:
-              schema: { type: array, items: { type: object, additionalProperties: true } }
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RPCRecordingStatus" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /diagnostics/rpc-recording/{central}/download:
@@ -6646,3 +6706,99 @@ components:
             depends_on:
               type: array
               items: { type: string }
+
+    BackupEntry:
+      type: object
+      required: [id, central, bytes, created_at]
+      description: One entry in the backup list.
+      properties:
+        id: { type: string }
+        central: { type: string }
+        bytes: { type: integer, format: int64 }
+        created_at: { type: string, format: date-time }
+
+    EditSessionResponse:
+      type: object
+      required: [token, key, expires]
+      description: Lock state returned on open and heartbeat.
+      properties:
+        token: { type: string }
+        key: { type: string }
+        subject: { type: string }
+        expires: { type: string, format: date-time }
+
+    FunctionEntry:
+      type: object
+      required: [name, device_count]
+      description: One row in GET /api/v1/functions.
+      properties:
+        name: { type: string }
+        device_count: { type: integer }
+
+    Incident:
+      type: object
+      required: [id, when, component, severity, summary]
+      description: One diagnostic entry surfaced at /incidents.
+      properties:
+        id: { type: string }
+        when: { type: string, format: date-time }
+        component: { type: string }
+        severity: { type: string }
+        summary: { type: string }
+        detail: { type: string }
+
+    InboxDevice:
+      type: object
+      required: [address, model]
+      description: One pending-pairing candidate in GET /api/v1/inbox.
+      properties:
+        central: { type: string, description: CCU that reported this pending device. }
+        address: { type: string }
+        model: { type: string }
+        serial: { type: string }
+        manufacturer: { type: string }
+        first_seen: { type: integer, format: int64 }
+
+    LinkableChannel:
+      type: object
+      required: [address, device_address]
+      description: One candidate returned by GET /channels/{no}/linkable-channels.
+      properties:
+        address: { type: string }
+        channel_type: { type: string }
+        channel_type_label: { type: string }
+        channel_name: { type: string }
+        device_address: { type: string }
+        device_name: { type: string }
+        device_model: { type: string }
+
+    LogRecord:
+      type: object
+      required: [seq, time, level, msg]
+      description: One structured log line in the live-log ring.
+      properties:
+        seq: { type: integer, format: int64 }
+        time: { type: string, format: date-time }
+        level: { type: string }
+        logger: { type: string }
+        msg: { type: string }
+        attrs: { type: object, additionalProperties: true }
+
+    RPCRecordingStatus:
+      type: object
+      required: [central, active, entries]
+      description: One central's RPC recorder status.
+      properties:
+        central: { type: string }
+        active: { type: boolean }
+        entries: { type: integer }
+        ends_at: { type: string }
+        randomize: { type: boolean }
+
+    RoomEntry:
+      type: object
+      required: [name, device_count]
+      description: One row in GET /api/v1/rooms.
+      properties:
+        name: { type: string }
+        device_count: { type: integer }

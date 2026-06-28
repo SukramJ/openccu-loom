@@ -326,7 +326,7 @@
             <Button
               type="button"
               size="sm"
-              onclick={() => void accept(d.address, d.central)}
+              onclick={() => void accept(d.address, d.central ?? "")}
               disabled={accepting === d.address}
             >
               {accepting === d.address ? "…" : t("inbox.accept")}
