@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0]
+
+### Added
+
+- **Combined data points are now published.** Cover blinds expose a combined
+  level/slats position and HmIP RGB lights expose a combined hue/saturation as
+  their own data points — materialised through the device pipeline and surfaced
+  as Home Assistant discovery sensors over MQTT (plus REST/WebSocket). (Mapping
+  HS colour onto the Matter ColorControl cluster is a follow-up.)
+- **Service and alarm messages carry a human-readable `display_name`.** The
+  message code (e.g. `LOW_BAT`, `UNREACH`) is now translated (de/en) and added
+  as an additive `display_name` field on the messages REST/SPA surface
+  (north-bound API contract 2.4.0 → 2.5.0). The raw MQTT attribute form is
+  unchanged, so existing automations keep working.
+
+### Removed
+
+- **Dropped the speculative HmIP-COOK ("hood") custom data point.** It had no
+  counterpart in any of the HomeMatic reference sources — a placeholder added in
+  the very first commit — and was never registered, so it was dead code.
+
 ## [0.17.5]
 
 ### Fixed

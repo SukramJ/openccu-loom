@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.18.0
+
+- **Combined data points** for cover blinds (level + slats) and RGB lights (hue
+  + saturation) are now published as their own MQTT / Home Assistant entities.
+- **Service & alarm messages now show a readable name** (the translated message
+  code, e.g. "Low Battery") instead of only the raw identifier.
+- Removed an unused, speculative HmIP-COOK ("hood") device type that had no real
+  HomeMatic counterpart.
+
 ## 0.17.5
 
 - **Fixed: Matter string attribute writes (e.g. device name) are no longer
