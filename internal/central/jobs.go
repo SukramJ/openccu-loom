@@ -316,6 +316,10 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 	if hbInterval <= 0 {
 		hbInterval = defaultHealthHeartbeat
 	}
+	// Baseline for the scheduler liveness sample below. TotalFailures is a
+	// monotonic counter, so the heartbeat compares the delta against the count
+	// seen at the previous tick — only *new* failures degrade the component.
+	lastSchedulerFailures := unit.Scheduler.TotalFailures()
 	if err := unit.Scheduler.Add(scheduler.Job{
 		Name:       "central.health_heartbeat",
 		Interval:   hbInterval,
@@ -353,6 +357,17 @@ func RegisterStandardJobs(unit *Unit, cfg StandardJobs) ([]string, error) { //no
 					})
 				}
 			}
+			// Scheduler liveness. A job that accrued new failures since the
+			// previous heartbeat marks the `scheduler` component degraded for
+			// this tick; a quiet interval restores it. The delta — not the
+			// absolute monotonic count — is what reflects *recent* trouble,
+			// complementing the cumulative scheduler.failures gauge.
+			currentSchedulerFailures := unit.Scheduler.TotalFailures()
+			unit.Health.Record("scheduler", health.Sample{
+				Healthy: currentSchedulerFailures == lastSchedulerFailures,
+				Note:    "heartbeat",
+			})
+			lastSchedulerFailures = currentSchedulerFailures
 			return nil
 		},
 	}); err != nil {

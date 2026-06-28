@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.3]
+
+### Added
+
+- **Scheduler health component.** The per-central health view now carries a
+  `scheduler` liveness row: if a periodic job has failed since the last health
+  heartbeat the component reads degraded for that interval and recovers once a
+  quiet interval passes (a failure delta against the cumulative
+  `scheduler.failures` metric). This completes the health-producer coverage
+  (MQTT, Matter and SQLite already reported status; REST and WebSocket stay
+  metric-only by design, since their liveness is implied by the daemon serving
+  `/health`).
+
 ## [0.18.2]
 
 ### Changed

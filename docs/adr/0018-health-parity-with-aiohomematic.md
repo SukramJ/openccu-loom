@@ -86,7 +86,7 @@ its semantics):
 | `RecordRequest(name, success)` | `record_successful_request` / `record_failed_request` | observer.Health on every RPC |
 | `SetRecoveryFlag(name, bool)` | `in_recovery = …` | RecoveryStarted/Completed/Failed events |
 | `ResetReconnects(name)` | `reset_reconnect_counter` | ClientStateChanged → Connected |
-| `SetPrimaryInterface(name)` | `set_primary_interface` | composition root (not yet wired) |
+| `SetPrimaryInterface(name)` | `set_primary_interface` | composition root (`seedCentralHealthAndMetrics`) |
 | `ClientDetail(name)` | snapshot of `ConnectionHealth` | diagnostics dump |
 | `ClientScore(name)` | `health_score` (40/30/30) | diagnostics dump + SPA |
 | `PrimaryClientHealthy()` | `primary_client_healthy` | JSON-RPC hub fallback |
@@ -117,11 +117,19 @@ Each subsystem becomes a Health producer using one of two patterns:
    JSON-RPC hub config so hub-only failures show up as
    `hub.ccu-main` independently of the XML-RPC interfaces.
 
-The remaining subsystems (MQTT, Matter, Scheduler, REST/WS) follow
-the same pattern and are scheduled as a follow-up wave (Wave 6b-tail).
-Their producer files are not yet committed — the SPA already
-tolerates their absence (the Client-Health card only renders the
-rows that exist).
+The remaining subsystems followed the same pattern in Wave 6b-tail.
+MQTT (`internal/north/mqtt/health_probe.go`, component `mqtt`), Matter
+(`internal/north/matter/bridge/health_probe.go`, component `matter`, plus
+`matter.bridge` from `cmd/openccu-loom/matter_health.go`) and SQLite
+(`internal/store/sqlite/health_probe.go`, component `sqlite`) are status
+producers wired at the composition root. The Scheduler reports a per-central
+`scheduler` liveness component from the health-heartbeat job — a failure
+delta against the cumulative `scheduler.failures` gauge, so only *new*
+failures degrade it. REST and WebSocket deliberately expose metric gauges
+(`rest.5xx`, `ws.subscribers`) rather than a status component: their
+liveness is implied by the daemon answering `/health` at all, so a
+dedicated component would be redundant. The SPA renders whichever rows
+exist.
 
 ### Per-Central aggregation
 
@@ -200,13 +208,13 @@ daemon does not show an empty grid.
 
 ## Follow-ups
 
-- Wave 6b-tail: MQTT, Matter, Scheduler, REST/WS health producers.
-  The SPA already tolerates their absence; once added, no SPA
-  changes are needed.
-- `Tracker.SetPrimaryInterface` is not yet called from any wiring.
-  The fallback HmIP-RF substring rule satisfies the
-  `PrimaryClientHealthy` query in every current deployment; explicit
-  pinning becomes useful only for non-HmIP CCUs.
+- Wave 6b-tail landed: MQTT, Matter and SQLite are status producers, and
+  the Scheduler reports a `scheduler` liveness component from the health
+  heartbeat. REST/WS stay metric-only by design — their liveness is implied
+  by the daemon serving `/health`, so a status component would be redundant.
+- `Tracker.SetPrimaryInterface` is wired in `seedCentralHealthAndMetrics`
+  from `cfg.Centrals[i].PrimaryInterface`. The fallback HmIP-RF substring
+  rule still satisfies `PrimaryClientHealthy` when no interface is pinned.
 
 ## References
 
