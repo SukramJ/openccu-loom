@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.4.0
+  version: 2.5.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5147,6 +5147,9 @@ components:
         timestamp: { type: string, format: date-time }
         counter: { type: integer }
         last_trigger: { type: string }
+        display_name:
+          type: string
+          description: Human-readable translation of the message code.
         rooms:
           type: array
           items: { type: string }
@@ -5171,6 +5174,9 @@ components:
         timestamp: { type: string, format: date-time }
         counter: { type: integer }
         quittable: { type: boolean }
+        display_name:
+          type: string
+          description: Human-readable translation of the message code.
     InstallModeInterfaceEntry:
       type: object
       required: [interface, active, seconds, observed]

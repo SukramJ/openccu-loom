@@ -120,5 +120,19 @@
   "matter.status.disabled": "Matter-Bridge ist nicht aktiviert.",
   "matter.status.endpoints": "{count} Endpunkte",
   "matter.status.fabrics": "{count} Fabrics",
-  "matter.status.advertising": "wird beworben"
+  "matter.status.advertising": "wird beworben",
+
+  "message.code.CONFIG_PENDING": "Konfiguration ausstehend",
+  "message.code.DEVICE_IN_BOOTLOADER": "Gerät im Bootloader",
+  "message.code.ERROR": "Fehler",
+  "message.code.ERROR_CODE": "Fehlercode",
+  "message.code.ERROR_JAMMED": "Motor blockiert",
+  "message.code.ERROR_NON_FLAT_POSITIONING": "Nicht-flache Positionierung",
+  "message.code.ERROR_OVERHEAT": "Überhitzung",
+  "message.code.ERROR_OVERLOAD": "Überlastung",
+  "message.code.LOW_BAT": "Batterie schwach",
+  "message.code.SABOTAGE": "Sabotage",
+  "message.code.STICKY_UNREACH": "Nicht erreichbar (dauerhaft)",
+  "message.code.UNREACH": "Nicht erreichbar",
+  "message.code.UPDATE_PENDING": "Update ausstehend"
 }

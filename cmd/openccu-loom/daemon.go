@@ -274,6 +274,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		logger:                  logger,
 		valueWriter:             valueWriter,
 		translations:            translations,
+		catalogs:                catalogs,
 		callbackSrv:             callbackSrv,
 		callbackPort:            callbackPort,
 		callbackHost:            callbackHost,

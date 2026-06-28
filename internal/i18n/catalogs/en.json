@@ -120,5 +120,19 @@
   "matter.status.disabled": "Matter bridge is not enabled.",
   "matter.status.endpoints": "{count} endpoints",
   "matter.status.fabrics": "{count} fabrics",
-  "matter.status.advertising": "advertising"
+  "matter.status.advertising": "advertising",
+
+  "message.code.CONFIG_PENDING": "Config Pending",
+  "message.code.DEVICE_IN_BOOTLOADER": "Device in Bootloader",
+  "message.code.ERROR": "Error",
+  "message.code.ERROR_CODE": "Error Code",
+  "message.code.ERROR_JAMMED": "Motor Jammed",
+  "message.code.ERROR_NON_FLAT_POSITIONING": "Non-flat Positioning",
+  "message.code.ERROR_OVERHEAT": "Overheat",
+  "message.code.ERROR_OVERLOAD": "Overload",
+  "message.code.LOW_BAT": "Low Battery",
+  "message.code.SABOTAGE": "Sabotage",
+  "message.code.STICKY_UNREACH": "Unreachable (sticky)",
+  "message.code.UNREACH": "Unreachable",
+  "message.code.UPDATE_PENDING": "Update Pending"
 }
