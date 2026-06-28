@@ -4,6 +4,19 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4]
+
+### Fixed
+
+- **Device-detail header no longer collapses on a narrow content area.** When
+  the page was shown in a narrow container (most visibly inside the Home
+  Assistant Ingress iframe, where the sidebar leaves little width), the action
+  buttons stayed on one row and squeezed the title/metadata column to a sliver,
+  wrapping the model and description character-by-character. The header now uses
+  a container query: it stacks (title + metadata on their own full-width rows,
+  actions below) until the content area is wide enough, then restores the
+  side-by-side layout with the actions top-right.
+
 ## [0.17.3]
 
 ### Changed
