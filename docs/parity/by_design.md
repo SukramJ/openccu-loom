@@ -3018,16 +3018,16 @@ Go path: `internal/configui/easymode/usecase.go::Pipeline`, `internal/central/ad
 
 ---
 
-### BD-A3-CombinedUnused — HSColor→Matter ColorControl not wired; WeekProfile uses its own pipeline
+### BD-A3-CombinedSurfaces — combined.HSColor is a north-bound aggregate; WeekProfile uses its own pipeline
 
-`combined.LevelCombined` and `combined.HSColor` are now production-wired: both implement `IsCombined()`, are attached via `AttachCalculatedDataPoint` in `custom/cover/blind.go` and `custom/light/color.go` respectively, and the `materialiseCombinedDataPoints` pipeline pass in `device_pipeline.go` (directly after `materialiseCalculatedDataPoints`) bridges them to the event bus via `BridgeCombinedDataPoint`. The MQTT, WS, and REST surfaces (`publishCombinedLevelSensor` / `publishCombinedHSColorSensor`) are complete.
+`combined.LevelCombined` and `combined.HSColor` are production-wired: both implement `IsCombined()`, are attached via `AttachCalculatedDataPoint` in `custom/cover/blind.go` and `custom/light/color.go` respectively, and the `materialiseCombinedDataPoints` pipeline pass in `device_pipeline.go` (directly after `materialiseCalculatedDataPoints`) bridges them to the event bus via `BridgeCombinedDataPoint`. The MQTT, WS, and REST surfaces (`publishCombinedLevelSensor` / `publishCombinedHSColorSensor`) are complete.
 
-Two items remain as deliberate open divergences:
+Two scoping notes:
 
-- **HSColor → Matter ColorControl mapping**: `combined.HSColor` has no Matter-side wiring. The `ColorControl` cluster binding from HSColor to the Matter bridge is not yet implemented; only the MQTT/WS/REST surface is live.
+- **`combined.HSColor` is a north-bound aggregate only — it does not feed Matter, and does not need to.** The Matter ColorControl projection for RGB lights is independent and complete: `ColorLight` (which embeds `Light`) projects the `ExtendedColorLight` (0x010D) device type with an HS-mode `ColorControl` (0x0300) cluster server (`hsColorServer` in `custom/light/matter_color.go`), reading and writing the underlying HUE / SATURATION data points directly. `combined.HSColor` is the MQTT/WS/REST aggregate of those same two data points; routing it into Matter as well would double-surface the colour.
 - **WeekProfile pipeline**: `combined.WeekProfile` runs via its own dedicated pipeline in `model/weekprofile/` and is not wired through `materialiseCombinedDataPoints`. This is by design — week-profile scheduling has its own coordinator lifecycle and does not fit the per-device combined-DP pattern.
 
-Go paths: `internal/model/combined/`, `internal/central/adapter/combined_bridge.go`, `internal/client/backends/combined.go`, `internal/central/adapter/device_pipeline.go`.
+Go paths: `internal/model/combined/`, `internal/central/adapter/combined_bridge.go`, `internal/central/adapter/device_pipeline.go`, `internal/model/custom/light/matter_color.go`.
 
 ---
 

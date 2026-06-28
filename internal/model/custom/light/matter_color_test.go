@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -179,8 +180,7 @@ func TestColorLightHueSatRoundTrip(t *testing.T) {
 		}
 	}
 	// Matter 127 hue ≈ 180°, 254 saturation = 1.0.
-	fields := map[string]any{"hue": uint8(127), "saturation": uint8(254)}
-	if _, err := hs.MatterInvoke(context.Background(), 0x06, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), 0x06, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 254}, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("MoveToHueAndSaturation err: %v", err)
 	}
 	if ch.Parameter(hmenum.ParameterHue) == nil {

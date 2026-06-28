@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -88,8 +89,7 @@ func TestParityMatterJS_HSColorDataVersionBumpsOnInvoke(t *testing.T) {
 			hs = v
 		}
 	}
-	fields := map[string]any{"hue": uint8(127), "saturation": uint8(200)}
-	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := hs.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 127, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("MoveToHueAndSaturation: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {
@@ -146,8 +146,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnHSInvoke(t *testing.T) {
 			rgbw = v
 		}
 	}
-	fields := map[string]any{"hue": uint8(64), "saturation": uint8(128)}
-	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, fields, hmenum.CommandPriorityHigh); err != nil {
+	if _, err := rgbw.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 64, Saturation: 128}, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("RGBW MoveToHueAndSaturation: %v", err)
 	}
 	if after := l.MatterDataVersion(); after <= before {

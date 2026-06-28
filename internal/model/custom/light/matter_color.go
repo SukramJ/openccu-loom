@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -541,71 +542,58 @@ func (s rgbwColorServer) MatterAttributes() []uint32 {
 	}
 }
 
-// extractHueOnly pulls a uint8 hue field from a MoveToHue request.
+// extractHueOnly pulls the hue from a decoded MoveToHue request. The bridge's
+// command-fields reader decodes the payload into the typed wire request
+// (tag 0 = Hue); the generic tag-keyed map is accepted as a fallback.
 func extractHueOnly(fields any) (uint8, error) {
 	switch v := fields.(type) {
-	case uint8:
-		return v, nil
-	case map[string]any:
-		raw, ok := v["hue"]
-		if !ok {
-			return 0, fmt.Errorf("%w: MoveToHue missing hue", errMatterValueType)
-		}
-		hue, ok := raw.(uint8)
-		if !ok {
-			return 0, fmt.Errorf("%w: MoveToHue hue expected uint8, got %T", errMatterValueType, raw)
-		}
-		return hue, nil
+	case wire.MoveToHueRequest:
+		return v.Hue, nil
+	case map[uint8]any:
+		return colorTagU8(v, 0), nil
 	default:
-		return 0, fmt.Errorf("%w: MoveToHue expected uint8 or map, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: MoveToHue got %T", errMatterValueType, fields)
 	}
 }
 
-// extractSaturationOnly pulls a uint8 saturation field from a
-// MoveToSaturation request.
+// extractSaturationOnly pulls the saturation from a decoded MoveToSaturation
+// request (tag 0 = Saturation).
 func extractSaturationOnly(fields any) (uint8, error) {
 	switch v := fields.(type) {
-	case uint8:
-		return v, nil
-	case map[string]any:
-		raw, ok := v["saturation"]
-		if !ok {
-			return 0, fmt.Errorf("%w: MoveToSaturation missing saturation", errMatterValueType)
-		}
-		sat, ok := raw.(uint8)
-		if !ok {
-			return 0, fmt.Errorf("%w: MoveToSaturation saturation expected uint8, got %T", errMatterValueType, raw)
-		}
-		return sat, nil
+	case wire.MoveToSaturationRequest:
+		return v.Saturation, nil
+	case map[uint8]any:
+		return colorTagU8(v, 0), nil
 	default:
-		return 0, fmt.Errorf("%w: MoveToSaturation expected uint8 or map, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: MoveToSaturation got %T", errMatterValueType, fields)
 	}
 }
 
-// extractHueAndSaturation pulls the (hue, saturation) pair from a
-// MoveToHueAndSaturation request.
+// extractHueAndSaturation pulls the (hue, saturation) pair from a decoded
+// MoveToHueAndSaturation request (tag 0 = Hue, tag 1 = Saturation).
 func extractHueAndSaturation(fields any) (hue, sat uint8, err error) {
-	v, ok := fields.(map[string]any)
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation expected map, got %T", errMatterValueType, fields)
+	switch v := fields.(type) {
+	case wire.MoveToHueAndSaturationRequest:
+		return v.Hue, v.Saturation, nil
+	case map[uint8]any:
+		return colorTagU8(v, 0), colorTagU8(v, 1), nil
+	default:
+		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation got %T", errMatterValueType, fields)
 	}
-	rawH, ok := v["hue"]
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation missing hue", errMatterValueType)
+}
+
+// colorTagU8 reads a context-tag value from the generic tag-keyed fields map
+// produced by the bridge's decodeGenericTagMap (unsigned ints land as uint64),
+// clamped to uint8. Returns 0 when the tag is absent.
+func colorTagU8(m map[uint8]any, tag uint8) uint8 {
+	switch raw := m[tag].(type) {
+	case uint64:
+		return uint8(raw & 0xFF)
+	case uint8:
+		return raw
+	default:
+		return 0
 	}
-	hue, ok = rawH.(uint8)
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation hue expected uint8, got %T", errMatterValueType, rawH)
-	}
-	rawS, ok := v["saturation"]
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation missing saturation", errMatterValueType)
-	}
-	sat, ok = rawS.(uint8)
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: MoveToHueAndSaturation saturation expected uint8, got %T", errMatterValueType, rawS)
-	}
-	return hue, sat, nil
 }
 
 // extractColorTempMireds pulls a uint16 colorTempMireds field.

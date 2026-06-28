@@ -235,7 +235,7 @@ func TestParityMatterJS_ColorControl_MoveToColorTemperatureCropsToRange(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			srv2 := light.NewColorControlServer(cfg)
-			if _, err := srv2.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, tc.target, hmenum.CommandPriorityHigh); err != nil {
+			if _, err := srv2.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target}, hmenum.CommandPriorityHigh); err != nil {
 				t.Fatalf("MoveToColorTemperature(%d): %v", tc.target, err)
 			}
 			v, ok := srv2.MatterRead(wire.ColorCtrlAttrColorTemperatureMireds)
@@ -250,17 +250,20 @@ func TestParityMatterJS_ColorControl_MoveToColorTemperatureCropsToRange(t *testi
 	_ = srv // used to check default remains unchanged
 }
 
-// TestParityMatterJS_ColorControl_MoveToColorTemperatureMapPayload verifies
-// the map[string]any delivery path for MoveToColorTemperature fields.
-func TestParityMatterJS_ColorControl_MoveToColorTemperatureMapPayload(t *testing.T) {
+// TestParityMatterJS_ColorControl_MoveToColorTemperatureTagMapPayload verifies
+// the map[uint8]any generic-tag-keyed fallback delivery path for
+// MoveToColorTemperature fields. The bridge uses this path for commands that
+// do not yet have a typed decoder.
+func TestParityMatterJS_ColorControl_MoveToColorTemperatureTagMapPayload(t *testing.T) {
 	t.Parallel()
 	cfg := light.DefaultColorControlServerConfig()
 	srv := light.NewColorControlServer(cfg)
 	ctx := context.Background()
 
-	fields := map[string]any{"colorTemperatureMireds": uint16(250)}
+	// Tag 0 = ColorTemperatureMireds as uint64 (generic-tag-map encoding).
+	fields := map[uint8]any{0: uint64(250)}
 	if _, err := srv.MatterInvoke(ctx, wire.ColorCtrlCmdMoveToColorTemperature, fields, hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("MoveToColorTemperature(map): %v", err)
+		t.Fatalf("MoveToColorTemperature(tag map): %v", err)
 	}
 	v, ok := srv.MatterRead(wire.ColorCtrlAttrColorTemperatureMireds)
 	if !ok {
