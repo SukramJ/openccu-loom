@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.18.4
+
+- "Reload device" now refetches only that device and its channels instead of
+  every device on the CCU — faster on large installations.
+
 ## 0.18.3
 
 - Health view now shows a `scheduler` row that flags when a background job has
