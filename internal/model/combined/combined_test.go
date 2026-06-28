@@ -42,6 +42,96 @@ func (w *stubWriter) find(p hmenum.Parameter) (any, bool) {
 	return nil, false
 }
 
+// --- IsCombined marker ---
+
+func TestLevelCombinedIsCombined(t *testing.T) {
+	t.Parallel()
+	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	if !lc.IsCombined() {
+		t.Fatal("LevelCombined.IsCombined() must return true")
+	}
+}
+
+func TestHSColorIsCombined(t *testing.T) {
+	t.Parallel()
+	hs := NewHSColor("x:1", &stubWriter{}, hmenum.ParameterHue, hmenum.ParameterSaturation)
+	if !hs.IsCombined() {
+		t.Fatal("HSColor.IsCombined() must return true")
+	}
+}
+
+func TestTimerIsCombined(t *testing.T) {
+	t.Parallel()
+	tm := NewTimer("x:1", &stubWriter{}, hmenum.ParameterDurationValue, hmenum.ParameterDurationUnit)
+	if !tm.IsCombined() {
+		t.Fatal("Timer.IsCombined() must return true")
+	}
+}
+
+// --- DataPointKey ---
+
+func TestLevelCombinedDataPointKey(t *testing.T) {
+	t.Parallel()
+	lc := NewLevelCombinedWithCentral("ccu1", "DEV:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	key := lc.DataPointKey()
+	if key.ChannelAddress != "DEV:1" {
+		t.Errorf("ChannelAddress = %q, want DEV:1", key.ChannelAddress)
+	}
+	if key.Parameter != levelCombinedKeyName {
+		t.Errorf("Parameter = %q, want %q", key.Parameter, levelCombinedKeyName)
+	}
+}
+
+func TestHSColorDataPointKey(t *testing.T) {
+	t.Parallel()
+	hs := NewHSColorWithCentral("ccu1", "DEV:1", &stubWriter{}, hmenum.ParameterHue, hmenum.ParameterSaturation)
+	key := hs.DataPointKey()
+	if key.ChannelAddress != "DEV:1" {
+		t.Errorf("ChannelAddress = %q, want DEV:1", key.ChannelAddress)
+	}
+	if key.Parameter != hsColorKeyName {
+		t.Errorf("Parameter = %q, want %q", key.Parameter, hsColorKeyName)
+	}
+}
+
+// --- OnAnyUpdate (JSON encoding) ---
+
+func TestLevelCombinedOnAnyUpdateJSON(t *testing.T) {
+	t.Parallel()
+	lc := NewLevelCombined("x:1", &stubWriter{}, hmenum.ParameterLevel, hmenum.ParameterLevel2, hmenum.ParameterLevelCombined)
+	var got string
+	unsub := lc.OnAnyUpdate(func(_, next any) {
+		got, _ = next.(string)
+	})
+	defer unsub()
+	lc.OnLevel(0.5)
+	lc.OnSlatsLevel(0.25)
+	if got == "" {
+		t.Fatal("OnAnyUpdate did not fire")
+	}
+	if !strings.Contains(got, `"level"`) || !strings.Contains(got, `"slats"`) {
+		t.Errorf("unexpected JSON payload: %s", got)
+	}
+}
+
+func TestHSColorOnAnyUpdateJSON(t *testing.T) {
+	t.Parallel()
+	hs := NewHSColor("x:1", &stubWriter{}, hmenum.ParameterHue, hmenum.ParameterSaturation)
+	var got string
+	unsub := hs.OnAnyUpdate(func(_, next any) {
+		got, _ = next.(string)
+	})
+	defer unsub()
+	hs.OnHue(120)
+	hs.OnSaturation(0.5)
+	if got == "" {
+		t.Fatal("OnAnyUpdate did not fire")
+	}
+	if !strings.Contains(got, `"hue"`) || !strings.Contains(got, `"saturation"`) {
+		t.Errorf("unexpected JSON payload: %s", got)
+	}
+}
+
 // --- HSColor ---
 
 func TestHSColorValueRequiresBothInputs(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -117,6 +118,20 @@ func NewBlind(cfg BlindConfig) *Blind {
 	}
 	if b.level2 != nil {
 		_ = b.level2.OnConfirmedUpdate(func(_, _ float64) { b.dataVersion.Bump() })
+	}
+	// Attach a LevelCombined combined DP so the aggregate (level + slats)
+	// is surfaced on the event bus and visible via Channel.CombinedDataPoints.
+	// The write path remains sendCombined; LevelCombined is read-side only.
+	if cfg.Channel != nil && cov != nil && cov.Float != nil && b.level2 != nil {
+		lc := combined.NewLevelCombinedWithCentral(
+			cfg.Channel.CentralName(),
+			cfg.Channel.Address,
+			cfg.Writer,
+			hmenum.ParameterLevel,
+			hmenum.ParameterLevel2,
+			hmenum.ParameterLevelCombined,
+		)
+		cfg.Channel.AttachCalculatedDataPoint(lc)
 	}
 	return b
 }

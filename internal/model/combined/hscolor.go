@@ -5,12 +5,15 @@ package combined
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/datapoint"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
 // hsColorKeyName is the canonical key segment used by [HSColor]'s
@@ -95,6 +98,82 @@ func NewHSColorWithCentral(centralName, address string, w Writer, hueParam, satP
 	}
 	c.SetForcedUsage(hmenum.DataPointUsageNoCreate)
 	return c
+}
+
+// IsCombined satisfies the [device.CombinedDataPoint] marker interface
+// so Channel.CombinedDataPoints surfaces the HSColor.
+func (c *HSColor) IsCombined() bool { return true }
+
+// DataPointKey returns the combined DP's identity. Satisfies the
+// [device.AttachableDataPoint] contract so HSColor can be registered
+// on a channel via Channel.AttachCalculatedDataPoint.
+func (c *HSColor) DataPointKey() hmtypes.DataPointKey {
+	return hmtypes.DataPointKey{
+		ChannelAddress: c.Address,
+		ParamsetKey:    hmenum.ParamsetKeyCombined,
+		Parameter:      hsColorKeyName,
+	}
+}
+
+// Subscribe wires HSColor to the channel's HUE and SATURATION generic DPs.
+// When either fires an OnAnyUpdate event the new value is fed into OnHue /
+// OnSaturation so the composite tracks the live CCU state. Returns nil when
+// either source parameter is absent.
+//
+// Satisfies the [device.SubscribingDataPoint] contract; channels invoke it
+// from AttachCalculatedDataPoint.
+func (c *HSColor) Subscribe(ch *device.Channel) func() {
+	if ch == nil {
+		return nil
+	}
+	hueDP, _ := any(ch.Parameter(c.HueParameter)).(timerWireDataPoint)
+	satDP, _ := any(ch.Parameter(c.SaturationParameter)).(timerWireDataPoint)
+	if hueDP == nil || satDP == nil {
+		return nil
+	}
+	unsubHue := hueDP.OnAnyUpdate(func(_, next any) {
+		if v, ok := toInt32(next); ok {
+			c.OnHue(v)
+		}
+	})
+	unsubSat := satDP.OnAnyUpdate(func(_, next any) {
+		if v, ok := toFloat64(next); ok {
+			c.OnSaturation(v)
+		}
+	})
+	// Seed with already-observed values so the composite is immediately
+	// populated on reconnect without waiting for the next push event.
+	if raw, ok := hueDP.RawValue(); ok {
+		if v, ok2 := toInt32(raw); ok2 {
+			c.OnHue(v)
+		}
+	}
+	if raw, ok := satDP.RawValue(); ok {
+		if v, ok2 := toFloat64(raw); ok2 {
+			c.OnSaturation(v)
+		}
+	}
+	return func() {
+		if unsubHue != nil {
+			unsubHue()
+		}
+		if unsubSat != nil {
+			unsubSat()
+		}
+	}
+}
+
+// OnAnyUpdate satisfies the adapter.CombinedDataPoint interface. The typed
+// HS value is JSON-encoded to a string so BridgeCombinedDataPoint can wrap
+// it in a ParamValue and publish it on the event bus.
+func (c *HSColor) OnAnyUpdate(fn func(old, next any)) func() {
+	return c.OnUpdate(func(_, next HS) {
+		data, _ := json.Marshal(map[string]any{
+			"hue":        next.Hue,
+			"saturation": next.Saturation,
+		})
+		fn(nil, string(data))
+	})
 }
 
 // Value returns the current (hue, saturation) pair and whether both
@@ -248,6 +327,23 @@ func (c *HSColor) IsRefreshed() bool {
 // optimistically. HSColor has no optimistic tracker of its own.
 // Returns false always. Implements M18.
 func (c *HSColor) StateUncertain() bool { return false }
+
+// toInt32 converts an arbitrary CCU wire value to int32. Handles the types a
+// JSON decoder produces plus the primitive Go counterparts (int/int32/int64/
+// float64). Returns (0, false) for unrecognised types.
+func toInt32(v any) (int32, bool) {
+	switch x := v.(type) {
+	case int32:
+		return x, true
+	case int:
+		return int32(x), true //nolint:gosec // CCU hue is 0..359; narrowing is safe
+	case int64:
+		return int32(x), true //nolint:gosec // CCU hue is 0..359; narrowing is safe
+	case float64:
+		return int32(x), true //nolint:gosec // CCU hue is 0..359; narrowing is safe
+	}
+	return 0, false
+}
 
 // snapshotLocked returns the current (hs, observed) pair while the
 // caller holds the mutex.
