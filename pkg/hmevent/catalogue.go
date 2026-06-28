@@ -39,7 +39,6 @@ const (
 	EventTypeCustomDataPointStateChanged EventType = "custom_data_point.state_changed"
 	EventTypeDeviceCreated               EventType = "device.created"
 	EventTypeDeviceRemoved               EventType = "device.removed"
-	EventTypeDeviceStateChanged          EventType = "device.state_changed"
 	EventTypeDeviceTrigger               EventType = "device.trigger"
 	EventTypeFirmwareStateChanged        EventType = "device.firmware_state_changed"
 	EventTypeLinkPeerChanged             EventType = "link.peer_changed"
@@ -307,22 +306,6 @@ type DeviceRemovedEvent struct {
 
 // Type implements Event.
 func (DeviceRemovedEvent) Type() EventType { return EventTypeDeviceRemoved }
-
-// DeviceStateChangedEvent summarises a device's high-level state
-// transition (reachable / low-battery / configuration-pending / ...).
-type DeviceStateChangedEvent struct {
-	Base
-	CentralName    string
-	Address        string
-	Available      bool
-	LowBattery     bool
-	ConfigPending  bool
-	UpdatePending  bool
-	SignalStrength int // dBm; 0 = unknown
-}
-
-// Type implements Event.
-func (DeviceStateChangedEvent) Type() EventType { return EventTypeDeviceStateChanged }
 
 // DeviceTriggerEvent fires for non-state device events (keypress,
 // impulse, error).

@@ -11,9 +11,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// TestAll36EventTypes locks the event catalogue to the current count.
+// TestAll35EventTypes locks the event catalogue to the current count.
 // Extensions must bump the count and add the new event to the list.
-func TestAll36EventTypes(t *testing.T) {
+func TestAll35EventTypes(t *testing.T) {
 	events := []Event{
 		CentralStateChangedEvent{},
 		ClientStateChangedEvent{},
@@ -23,7 +23,6 @@ func TestAll36EventTypes(t *testing.T) {
 		DataPointSourceChangedEvent{},
 		DeviceCreatedEvent{},
 		DeviceRemovedEvent{},
-		DeviceStateChangedEvent{},
 		DeviceTriggerEvent{},
 		FirmwareStateChangedEvent{},
 		LinkPeerChangedEvent{},
@@ -53,8 +52,8 @@ func TestAll36EventTypes(t *testing.T) {
 		RPCParameterReceivedEvent{},
 		DeviceLifecycleEvent{},
 	}
-	if len(events) != 36 {
-		t.Fatalf("catalogue has %d events, want 36", len(events))
+	if len(events) != 35 {
+		t.Fatalf("catalogue has %d events, want 35", len(events))
 	}
 	seen := make(map[EventType]struct{})
 	for _, e := range events {

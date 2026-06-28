@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// tracker_record_state_test.go — Tracker record/state-machine and ConnectionRegistry threshold tests.
+// tracker_record_state_test.go — Tracker record/state-machine tests.
 //
 // Covers: score degradation curve, tracker initial state, Record/RecordFailure/
-// RecordSuccess semantics, ShouldBeDegraded/ShouldBeRunning thresholds,
-// stale-decay to Unknown, multi-interface registry score, Connection recovery
-// flag, WindowedScore, and MetricsHealthSummary.
+// RecordSuccess semantics, stale-decay to Unknown, multi-interface registry
+// score, WindowedScore, and MetricsHealthSummary.
 package health
 
 import (
@@ -14,7 +13,6 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/clock"
-	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -165,64 +163,7 @@ func TestParityRecordSuccessAfterFailureRecovers(t *testing.T) {
 	}
 }
 
-// ── 4. ShouldBeDegraded / ShouldBeRunning thresholds ─────────────────────────
-
-// TestParityShouldBeDegradedWhenSomeBad verifies that ShouldBeDegraded is true
-// when at least one connection is healthy but not all.
-func TestParityShouldBeDegradedWhenSomeBad(t *testing.T) {
-	t.Parallel()
-	reg := NewConnectionRegistry()
-
-	healthy, _ := newTestConn("p-a")
-	healthy.SetClientState(hmenum.ClientStateConnected)
-	reg.Register(healthy)
-
-	sick, _ := newTestConn("p-b")
-	// sick stays in CREATED — not connected
-	reg.Register(sick)
-
-	if !reg.ShouldBeDegraded() {
-		t.Error("ShouldBeDegraded() = false, want true when one healthy + one not")
-	}
-	if reg.ShouldBeRunning() {
-		t.Error("ShouldBeRunning() = true, want false when not all healthy")
-	}
-}
-
-// TestParityShouldBeRunningWhenAllHealthy verifies that ShouldBeRunning is true
-// only when every connection is connected and not degraded.
-func TestParityShouldBeRunningWhenAllHealthy(t *testing.T) {
-	t.Parallel()
-	reg := NewConnectionRegistry()
-
-	for _, id := range []string{"r-a", "r-b"} {
-		c, _ := newTestConn(id)
-		c.SetClientState(hmenum.ClientStateConnected)
-		reg.Register(c)
-	}
-
-	if !reg.ShouldBeRunning() {
-		t.Error("ShouldBeRunning() = false, want true when all connected")
-	}
-	if reg.ShouldBeDegraded() {
-		t.Error("ShouldBeDegraded() = true, want false when all healthy")
-	}
-}
-
-// TestParityShouldBeDegradedEmptyRegistryFalse verifies that an empty registry
-// reports ShouldBeDegraded == false and ShouldBeRunning == false.
-func TestParityShouldBeDegradedEmptyRegistryFalse(t *testing.T) {
-	t.Parallel()
-	reg := NewConnectionRegistry()
-	if reg.ShouldBeDegraded() {
-		t.Error("ShouldBeDegraded() = true on empty registry, want false")
-	}
-	if reg.ShouldBeRunning() {
-		t.Error("ShouldBeRunning() = true on empty registry, want false")
-	}
-}
-
-// ── 5. Stale-decay to Unknown ─────────────────────────────────────────────────
+// ── 4. Stale-decay to Unknown ─────────────────────────────────────────────────
 
 // TestParityStaleDecayToUnknown verifies that a component whose last sample is
 // older than StaleAfter decays to StatusUnknown on Get and Snapshot.
@@ -280,30 +221,7 @@ func TestParityMultiInterfaceScoreAggregation(t *testing.T) {
 	}
 }
 
-// ── 7. Connection.SetInRecovery probe-timeout behaviour ──────────────────────
-
-// TestParityConnectionRecoveryFlagDegrades verifies that setting InRecovery on
-// a CONNECTED connection causes IsDegraded to return true, modelling the probe-
-// Timeout path described in py.
-func TestParityConnectionRecoveryFlagDegrades(t *testing.T) {
-	t.Parallel()
-	c, _ := newTestConn("recovery-iface")
-	c.SetClientState(hmenum.ClientStateConnected)
-
-	if c.IsDegraded() {
-		t.Fatal("pre-condition: should not be degraded before SetInRecovery")
-	}
-
-	c.SetInRecovery(true)
-	if !c.IsDegraded() {
-		t.Error("IsDegraded() = false after SetInRecovery(true), want true")
-	}
-	if c.IsFailed() {
-		t.Error("IsFailed() = true during recovery, want false (in-recovery ≠ failed)")
-	}
-}
-
-// ── 8. WindowedScore ─────────────────────────────────────────────────────────
+// ── 7. WindowedScore ─────────────────────────────────────────────────────────
 
 // TestParityWindowedScoreOnlyCountsRecentSamples verifies that WindowedScore
 // ignores samples outside the window and counts only fresh ones.
@@ -328,7 +246,7 @@ func TestParityWindowedScoreOnlyCountsRecentSamples(t *testing.T) {
 	}
 }
 
-// ── 9. MetricsHealthSummary ───────────────────────────────────────────────────
+// ── 8. MetricsHealthSummary ───────────────────────────────────────────────────
 
 // TestParityMetricsHealthSummary verifies that MetricsHealthSummary correctly
 // counts healthy/degraded/failed components and computes OverallScore.
@@ -359,68 +277,5 @@ func TestParityMetricsHealthSummary(t *testing.T) {
 	wantScore := (1.0 + 0.5 + 0.0) / 3
 	if diff := v.OverallScore - wantScore; diff < -1e-9 || diff > 1e-9 {
 		t.Errorf("OverallScore=%f want %f", v.OverallScore, wantScore)
-	}
-}
-
-// ── 10. UpdateClientHealth reconnect tracking ─────────────────────────────────
-
-// TestParityUpdateClientHealthTracksReconnects verifies that transitioning a
-// connection from CONNECTED → RECONNECTING bumps ReconnectAttempts, and that
-// going RECONNECTING → CONNECTED resets the counter to 0.
-func TestParityUpdateClientHealthTracksReconnects(t *testing.T) {
-	t.Parallel()
-	reg := NewConnectionRegistry()
-	c, _ := newTestConn("uch-iface")
-	c.SetClientState(hmenum.ClientStateConnected)
-	reg.Register(c)
-
-	// Connected → Reconnecting: counter bumps.
-	reg.UpdateClientHealth("uch-iface", hmenum.ClientStateConnected, hmenum.ClientStateReconnecting)
-	snap := c.Snapshot()
-	if snap.ReconnectAttempts != 1 {
-		t.Errorf("ReconnectAttempts=%d want 1 after first reconnect", snap.ReconnectAttempts)
-	}
-
-	// Reconnecting → Reconnecting: does NOT bump (old == new == Reconnecting per
-	reg.UpdateClientHealth("uch-iface", hmenum.ClientStateReconnecting, hmenum.ClientStateReconnecting)
-	snap = c.Snapshot()
-	if snap.ReconnectAttempts != 1 {
-		t.Errorf("ReconnectAttempts=%d want 1 (same→same does not bump)", snap.ReconnectAttempts)
-	}
-
-	// Reconnecting → Connected: counter reset.
-	reg.UpdateClientHealth("uch-iface", hmenum.ClientStateReconnecting, hmenum.ClientStateConnected)
-	snap = c.Snapshot()
-	if snap.ReconnectAttempts != 0 {
-		t.Errorf("ReconnectAttempts=%d want 0 after successful connect", snap.ReconnectAttempts)
-	}
-}
-
-// ── 11. PrimaryClientHealthy ─────────────────────────────────────────────────
-
-// TestParityPrimaryClientHealthyPrefersHmIPRF verifies that when both a
-// HmIP-RF and a BidCos-RF connection are registered, PrimaryClientHealthy
-// reflects the HmIP-RF state, not the fallback.
-func TestParityPrimaryClientHealthyPrefersHmIPRF(t *testing.T) {
-	t.Parallel()
-	reg := NewConnectionRegistry()
-
-	// HmIP-RF: unhealthy (stays in CREATED)
-	hmip := NewConnection("HmIP-RF.1", hmenum.InterfaceHmIPRF)
-	reg.Register(hmip)
-
-	// BidCos-RF: fully healthy
-	bidcos := NewConnection("BidCos-RF.1", hmenum.InterfaceBidCosRF)
-	bidcos.SetClientState(hmenum.ClientStateConnected)
-	reg.Register(bidcos)
-
-	// PrimaryClientHealthy must follow HmIP-RF (not the healthy BidCos-RF).
-	if reg.PrimaryClientHealthy() {
-		t.Error("PrimaryClientHealthy() = true when HmIP-RF is not connected, want false")
-	}
-
-	hmip.SetClientState(hmenum.ClientStateConnected)
-	if !reg.PrimaryClientHealthy() {
-		t.Error("PrimaryClientHealthy() = false after HmIP-RF connected, want true")
 	}
 }

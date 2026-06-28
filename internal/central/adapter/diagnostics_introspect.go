@@ -98,13 +98,12 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmap
 		emit(hmapi.DiagnosticsEvent{TS: time.Now().UTC().Format(time.RFC3339Nano), Type: name, Event: e})
 	}
 
-	unsubs := make([]func(), 0, 11)
+	unsubs := make([]func(), 0, 10)
 	unsubs = append(
 		unsubs,
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) { send("DataPointValueChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.DataPointStatusChangedEvent) { send("DataPointStatusChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) { send("DeviceTrigger", e) }),
-		events.Subscribe(bus, func(e hmevent.DeviceStateChangedEvent) { send("DeviceStateChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) { send("CentralStateChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) { send("ClientStateChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.CircuitBreakerStateChangedEvent) { send("CircuitBreakerStateChanged", e) }),

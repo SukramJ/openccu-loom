@@ -647,10 +647,57 @@ documented as by-design here.
 
 | ID | Python symbol | File:line | Go idiom | Go path | Rationale | Marked |
 |----|--------------|-------------|---------|---------|------------|---------|
-| M5050 | `ClientCoordinator._primary_client` cache + `_clients_started` flag | central/coordinators/client.py | `PrimaryClient()` recomputed from sorted list; `AllClientsActive()` as read proxy | `internal/central/coordinators/client.go` | Avoid caching; deterministic re-computation from the registry list is sufficient (at most N=8 interfaces) | W6/Wave-E |
+| M5050 | `ClientCoordinator._primary_client` cache + `_clients_started` flag | central/coordinators/client.py | `PrimaryClient()` recomputed from sorted list; `AllClientsActive()` as read proxy (backs `Available()`) | `internal/central/coordinators/client.go` | Avoid caching; deterministic re-computation from the registry list is sufficient (at most N=8 interfaces) | W6/Wave-E |
 | M5051 | `ClientCoordinator.poll_clients` filter | central/coordinators/client.py | `DataPoint.NoPushUpdates` flag per-DP via `internal/model/generic/datapoint.go` | (cross-cutting) | Push capability is a DataPoint property, not a client property; modelling it per-DataPoint is closer to wire behaviour and decouples the coordinator from DP details | W6/Wave-E |
 | M5052 | `ClientCoordinator.wait_for_tcp_ready()` | central/coordinators/client.py | `ConnectionRecoveryCoordinator.RecoveryStageTCPChecking` as own recovery stage | `internal/central/coordinators/connection_recovery.go` | TCP readiness is a recovery concern, not a client-init concern; a stage-based pipeline with classification is cleaner than a client method call | W6/Wave-E |
-| M5053 | `ClientCoordinator._on_health_record_event` | central/coordinators/client.py | Health tracking in `internal/health/connection.go`; coordinator status is not driven by health events | `internal/health/` | Health subscription on a pure-registry coordinator is a layer violation; health lives in its own package and propagates via dedicated events | W6/Wave-E |
+| M5053 | `ClientCoordinator._on_health_record_event` | central/coordinators/client.py | Health tracking in `internal/health/tracker.go`; coordinator status is not driven by health events | `internal/health/` | Health subscription on a pure-registry coordinator is a layer violation; health lives in its own package and propagates via dedicated events | W6/Wave-E |
+
+### Removed unused coordinator / connection-health scaffolding (2026-06-28)
+
+These symbols were carried as design scaffolding but never gained a production
+caller. With 1:1 aiohomematic parity no longer a primary goal, they were removed
+rather than kept as unwired API; the concept each embodied is recorded here so
+the knowledge survives the deletion.
+
+- **`internal/health/connection.go` (`Connection` + `ConnectionRegistry`, ~476 LOC).**
+  Modelled per-interface connection health as a standalone object: XML-RPC /
+  JSON-RPC circuit state, an in-recovery flag, successful/failed request and
+  event counters, and `ConnectionSnapshot` exports, held in a registry keyed by
+  interface ID. It was superseded by the live health surface in
+  `internal/health/tracker.go` (`Component` / `ClientHealth`, fed by the
+  per-central heartbeat and the transport observer), which became the single
+  source of health truth — leaving `connection.go` an uninstantiated parallel
+  model. When richer per-interface connection diagnostics are wanted, extend the
+  tracker rather than reviving this object.
+- **`ClientCoordinator.PollClients()`** returned the registered client entries
+  whose transport was not connected (re-poll candidates). The coordinator stays
+  a pure registry (table above); a "which interfaces are down" view is better
+  derived from the health tracker than from a coordinator method.
+- **`ClientCoordinator.SubscribeToHealthEvents(bus, onEval)`** wired the
+  coordinator to health-evaluation events, which contradicted M5053 (health is
+  not driven from the pure-registry coordinator); removal aligns the code with
+  that decision.
+- **`ClientCoordinator.RestartClients(ctx)`** was a stop → cooldown → start
+  convenience over the still-present `StopClients` / `StartClients`. Re-add it
+  (or an equivalent) when an operator "restart interface" command lands.
+  (`AllClientsActive()` / `Available()` were kept — `Available()` backs the
+  per-central connection verdict in `central.go`.)
+- **`hmevent.DeviceStateChangedEvent`** aggregated a device's high-level flags
+  (`Available` / `LowBattery` / `ConfigPending` / `UpdatePending`) into one
+  event. It never had a publisher — only a diagnostics-introspection subscriber
+  that therefore never fired. There is no aiohomematic counterpart: there a
+  device's `available` and maintenance flags are *derived* properties (an
+  availability helper reads `UN_REACH` on channel 0; the maintenance flags read
+  the other channel-0 maintenance data points), and changes propagate through
+  the ordinary data-point update callbacks. openccu-loom mirrors that: consumers
+  read `dev.Available()` / the maintenance accessors on demand (MQTT
+  `SetAvailableFunc`, Matter `Reachable`, the SPA), and reactive updates ride the
+  underlying maintenance data points' `DataPointValueChangedEvent`. The aggregate
+  was therefore a redundant *second* propagation path over the same per-DP
+  signals — not a second source of truth, but duplicate notification with no
+  consumer. Reintroduce it only together with a consumer that genuinely wants a
+  single per-device state-change event (so the event and its subscriber land in
+  one step).
 
 ---
 
