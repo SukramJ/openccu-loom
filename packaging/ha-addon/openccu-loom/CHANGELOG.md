@@ -1,5 +1,11 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.18.1
+
+- **Fixed: setting colour or colour-temperature on a Matter light now works.**
+  Colour-picker changes from Apple Home / Google Home were silently dropped (the
+  bulb never changed); the ColorControl command path is now decoded correctly.
+
 ## 0.18.0
 
 - **Combined data points** for cover blinds (level + slats) and RGB lights (hue

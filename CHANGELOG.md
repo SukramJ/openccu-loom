@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.1]
+
+### Fixed
+
+- **Matter colour and colour-temperature writes now work.** The ColorControl
+  command handlers (`MoveToHue` / `MoveToSaturation` / `MoveToHueAndSaturation`
+  for RGB lights, `MoveToColorTemperature` for tunable-white lights) decoded the
+  command payload into the wrong shape, so every colour or CT change requested
+  from a Matter controller (Apple Home / Google Home colour picker) was silently
+  rejected and the bulb never changed. The bridge now decodes ColorControl
+  commands into typed requests and the cluster servers consume them, with an
+  end-to-end test that exercises the real TLV-payload → dispatcher → device path.
+  Read-side attributes (current hue/saturation/CT) were already correct, so this
+  is a write-path-only fix.
+
 ## [0.18.0]
 
 ### Added
