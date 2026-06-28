@@ -4,6 +4,7 @@
 package tlv
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -187,6 +188,15 @@ func (d *Decoder) readValue(el *Element) error { //nolint:funlen // wire/dispatc
 		body, err := d.readStringLike(w)
 		if err != nil {
 			return err
+		}
+		// Per Matter §7.19.2.40 only the bytes before the first IS1 (0x1F,
+		// Information Separator 1) are the textual content of a character
+		// string; conformant peers never emit IS1. Truncate at the first IS1
+		// so we interpret only the text. Mirrors matter.js
+		// packages/types/src/tlv/TlvString.ts decodeTlvInternalValue (#3977).
+		// Octet strings are left untouched.
+		if i := bytes.IndexByte(body, 0x1F); i >= 0 {
+			body = body[:i]
 		}
 		el.String = string(body)
 	case TypeOctetStr1, TypeOctetStr2, TypeOctetStr4, TypeOctetStr8:

@@ -221,7 +221,10 @@ func primitiveAttributeValue(el tlv.Element, dec *tlv.Decoder) (im.AttributeValu
 	case tlv.TypeBoolFalse:
 		return im.AttributeValue{Value: false}, nil
 	case tlv.TypeUTF8Str1, tlv.TypeUTF8Str2, tlv.TypeUTF8Str4, tlv.TypeUTF8Str8:
-		return im.AttributeValue{Value: string(el.Octets)}, nil
+		// UTF-8 strings are decoded into el.String (octet strings use
+		// el.Octets); reading el.Octets here dropped every UTF-8 attribute
+		// write — e.g. a NodeLabel — to the empty string.
+		return im.AttributeValue{Value: el.String}, nil
 	case tlv.TypeOctetStr1, tlv.TypeOctetStr2, tlv.TypeOctetStr4, tlv.TypeOctetStr8:
 		return im.AttributeValue{Value: append([]byte(nil), el.Octets...)}, nil
 	case tlv.TypeSignedInt1, tlv.TypeSignedInt2, tlv.TypeSignedInt4, tlv.TypeSignedInt8:

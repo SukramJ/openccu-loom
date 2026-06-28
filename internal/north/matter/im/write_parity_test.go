@@ -231,6 +231,108 @@ func TestWriteParity_InvalidMessage_MalformedTLV(t *testing.T) {
 	}
 }
 
+// TestWriteParity_DataVersion_WildcardEndpoint_RejectsWithInvalidAction mirrors
+// matter.js packages/protocol/src/action/request/Write.ts:33 (#3988): a write
+// that carries HasDataVersion=true but HasEndpoint=false (wildcard endpoint) MUST
+// produce AttributeStatus with StatusInvalidAction. A DataVersion is meaningless
+// against a wildcard-endpoint path — resolving it against endpoint 0 is silent
+// data corruption per Matter §8.9.2.8.1.
+func TestWriteParity_DataVersion_WildcardEndpoint_RejectsWithInvalidAction(t *testing.T) {
+	t.Parallel()
+	d := &fakeDispatcher{writeStat: StatusSuccess}
+	req := WriteRequest{
+		Writes: []AttributeWrite{
+			{
+				Path: ConcreteAttributePath{
+					// HasEndpoint intentionally false — wildcard endpoint.
+					Cluster:      0x0006,
+					HasCluster:   true,
+					Attribute:    0x0000,
+					HasAttribute: true,
+				},
+				Value:          AttributeValue{Value: true},
+				DataVersion:    0xABCD,
+				HasDataVersion: true,
+			},
+		},
+	}
+	wr := HandleWriteRequest(context.Background(), d, req)
+	if len(wr.Responses) != 1 {
+		t.Fatalf("responses=%d, want 1", len(wr.Responses))
+	}
+	if wr.Responses[0].Status.Status != StatusInvalidAction {
+		t.Fatalf("status=%v, want StatusInvalidAction", wr.Responses[0].Status.Status)
+	}
+}
+
+// clusterStatusDispatcher returns a WriteResult with HasClusterStatus=true and
+// a configurable global status. Used to test the StatusIB-clamping invariant
+// (Fix F).
+type clusterStatusDispatcher struct {
+	clusterStatus uint8
+	globalStatus  StatusCode
+}
+
+func (d *clusterStatusDispatcher) Read(_ context.Context, p ConcreteAttributePath) []ReadResult {
+	return []ReadResult{{Path: p, Status: StatusSuccess}}
+}
+
+func (d *clusterStatusDispatcher) Write(_ context.Context, p ConcreteAttributePath, _ AttributeValue) []WriteResult {
+	return []WriteResult{{
+		Path:             p,
+		Status:           d.globalStatus,
+		ClusterStatus:    d.clusterStatus,
+		HasClusterStatus: true,
+	}}
+}
+
+func (d *clusterStatusDispatcher) Invoke(_ context.Context, p ConcreteCommandPath, _ any) InvokeResult {
+	return InvokeResult{Path: p, Status: StatusSuccess}
+}
+
+var _ Dispatcher = (*clusterStatusDispatcher)(nil)
+
+// TestWriteParity_ClusterStatus_NonSuccess_ClampedToFailure mirrors
+// matter.js packages/protocol/src/action/server/AttributeWriteResponse.ts:32
+// (#3988, Matter §7.10.7): when a WriteResult carries HasClusterStatus=true
+// alongside a non-Success global status, HandleWriteRequest MUST clamp the
+// outer Status to StatusFailure while preserving both HasClusterStatus and
+// the ClusterStatus byte.
+func TestWriteParity_ClusterStatus_NonSuccess_ClampedToFailure(t *testing.T) {
+	t.Parallel()
+	const clusterErrCode uint8 = 0x42
+	d := &clusterStatusDispatcher{
+		clusterStatus: clusterErrCode,
+		globalStatus:  StatusConstraintError, // non-Success, non-Failure code
+	}
+	req := WriteRequest{
+		Writes: []AttributeWrite{
+			{
+				Path: ConcreteAttributePath{
+					Endpoint: 1, HasEndpoint: true,
+					Cluster: 0x0006, HasCluster: true,
+					Attribute: 0x0000, HasAttribute: true,
+				},
+				Value: AttributeValue{Value: true},
+			},
+		},
+	}
+	wr := HandleWriteRequest(context.Background(), d, req)
+	if len(wr.Responses) != 1 {
+		t.Fatalf("responses=%d, want 1", len(wr.Responses))
+	}
+	got := wr.Responses[0].Status
+	if got.Status != StatusFailure {
+		t.Fatalf("outer Status=%v, want StatusFailure (clamped per Matter §7.10.7)", got.Status)
+	}
+	if !got.HasClusterStatus {
+		t.Fatal("HasClusterStatus must be preserved after clamping")
+	}
+	if got.ClusterStatus != clusterErrCode {
+		t.Fatalf("ClusterStatus=%#x, want %#x", got.ClusterStatus, clusterErrCode)
+	}
+}
+
 // TestWriteParity_WriteResponseMarshal mirrors the WriteResponse wire
 // shape validation implicit in chip's
 // src/app/tests/TestWriteInteraction.cpp:462 round-trip assertion.

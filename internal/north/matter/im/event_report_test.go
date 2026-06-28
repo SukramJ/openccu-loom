@@ -490,6 +490,79 @@ func TestEventReport_Marshal_DataIB_NullPayload_OmitsData(t *testing.T) {
 	}
 }
 
+// ---- EventReport.marshal: IsUrgent stripped from EventDataIB path (Fix G) ----
+
+// TestEventReport_Marshal_DataIB_IsUrgentNotInDataPath mirrors matter.js
+// packages/protocol/src/interaction/AttributeDataEncoder.ts:131 (#3988,
+// Matter §8.9.3.4): an EventDataIB path MUST NOT carry tagEventPathIsUrgent
+// (context tag 4) even when Path.IsUrgent=true on the EventReport. IsUrgent
+// is a SubscribeRequest path qualifier; it is deleted before the data path is
+// encoded so the controller's EventDataIB decoder never sees it.
+func TestEventReport_Marshal_DataIB_IsUrgentNotInDataPath(t *testing.T) {
+	t.Parallel()
+	rep := EventReport{
+		Path: ConcreteEventPath{
+			Endpoint: 1, HasEndpoint: true,
+			Cluster: 0x003B, HasCluster: true,
+			Event: 0x01, HasEvent: true,
+			IsUrgent: true, // must be stripped in the encoded data path
+		},
+		Number:    1,
+		Priority:  EventPriorityCritical,
+		Timestamp: 100,
+		IsStatus:  false,
+	}
+
+	enc := tlv.NewEncoder()
+	enc.StartArray(tlv.AnonymousTag())
+	rep.marshal(enc, func(_ *tlv.Encoder, _ tlv.Tag, _ AttributeValue) {})
+	if err := enc.EndContainer(); err != nil {
+		t.Fatalf("EndContainer: %v", err)
+	}
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("Bytes: %v", err)
+	}
+
+	dec := tlv.NewDecoder(wire)
+	if _, err := dec.Next(); err != nil { // array opener
+		t.Fatalf("array opener: %v", err)
+	}
+	if _, err := dec.Next(); err != nil { // EventReportIB struct
+		t.Fatalf("EventReportIB struct opener: %v", err)
+	}
+	dataIBEl, err := dec.Next() // EventDataIB struct (tag = tagEventReportData)
+	if err != nil {
+		t.Fatalf("EventDataIB opener: %v", err)
+	}
+	if dataIBEl.Tag.Number != uint32(tagEventReportData) {
+		t.Fatalf("expected EventDataIB (tag %d), got tag %d", tagEventReportData, dataIBEl.Tag.Number)
+	}
+
+	// The first field inside EventDataIB is tagEventDataPath (tag 0) — a List.
+	pathEl, err := dec.Next()
+	if err != nil {
+		t.Fatalf("EventDataPath element: %v", err)
+	}
+	if pathEl.Tag.Number != uint32(tagEventDataPath) || !pathEl.IsContainer {
+		t.Fatalf("expected tagEventDataPath (0, List), got tag=%d IsContainer=%v", pathEl.Tag.Number, pathEl.IsContainer)
+	}
+
+	// Walk the path List; assert tagEventPathIsUrgent (context tag 4) is absent.
+	for {
+		inner, err := dec.Next()
+		if err != nil {
+			t.Fatalf("decode path fields: %v", err)
+		}
+		if inner.IsEndContainer {
+			break
+		}
+		if inner.Tag.Kind == tlv.TagKindContext && inner.Tag.Number == uint32(tagEventPathIsUrgent) {
+			t.Errorf("EventDataIB path carries tagEventPathIsUrgent (tag 4); must be stripped per matter.js AttributeDataEncoder.ts:131")
+		}
+	}
+}
+
 // ---- ReportData.MarshalTLV: EventReports array only emitted when non-empty ----
 
 // nilValueWriter satisfies the AttributeValueWriter signature without

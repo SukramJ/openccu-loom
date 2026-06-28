@@ -229,6 +229,19 @@ func validateBridgedBasicInfoAttributes(cfg BridgedConfig, resolvedSerial string
 			slog.String("value", cfg.UniqueID),
 		)
 	}
+	// VendorID is optional on bridged devices, but when supplied it must be a
+	// valid device identity. Mirrors matter.js basic-information-validators.ts:32
+	// (`vendorId > 0xfff4`); 0xFFF5-0xFFFF are reserved test/anchor IDs. Warn
+	// rather than block — bridged metadata is advisory, not a commissioned
+	// identity.
+	if cfg.VendorID != 0 && cfg.VendorID > 0xFFF4 {
+		slog.Default().Warn(
+			"matter.bridged_device_basic_information.validate",
+			slog.String("field", "VendorID"),
+			slog.String("reason", "VendorID outside 0x0001-0xFFF4 is not a valid device identity"),
+			slog.String("value", fmt.Sprintf("0x%04X", cfg.VendorID)),
+		)
+	}
 }
 
 // Compile-time assertions.

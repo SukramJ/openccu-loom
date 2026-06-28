@@ -210,7 +210,13 @@ func (rep EventReport) marshal(enc *tlv.Encoder, valueWriter EventDataWriter) {
 		_ = enc.EndContainer()
 	} else {
 		enc.StartStruct(tlv.ContextTag(tagEventReportData))
-		rep.Path.MarshalTLV(enc, tlv.ContextTag(tagEventDataPath))
+		// IsUrgent is a SubscribeRequest path qualifier; it MUST NOT appear in
+		// an EventDataIB path. Mirrors matter.js
+		// packages/protocol/src/interaction/AttributeDataEncoder.ts:131 (#3988,
+		// Matter §8.9.3.4), which deletes isUrgent before encoding the data path.
+		dataPath := rep.Path
+		dataPath.IsUrgent = false
+		dataPath.MarshalTLV(enc, tlv.ContextTag(tagEventDataPath))
 		// EventNumber and EpochTimestamp must be encoded as exactly 8 bytes.
 		// chip-tool's strict IM decoder rejects narrower widths with
 		// CHIP Error 0x26 (Wrong TLV type). Use PutUintWidth(8) rather than

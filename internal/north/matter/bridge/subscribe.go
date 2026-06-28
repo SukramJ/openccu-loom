@@ -539,6 +539,25 @@ func (b *Bridge) handleSubscribeRequest(
 		return nil
 	}
 
+	// Reject illegal paths up front with a top-level InvalidAction
+	// StatusResponse (wildcard cluster + concrete non-global attribute, or
+	// wildcard cluster + concrete event) before building any report. Mirrors
+	// matter.js InteractionServer.ts validateReadPaths (#3926, Matter
+	// §8.4.3.2), which gates Read and Subscribe through the same check.
+	if im.ValidateReadPaths(req.AttributeRequests, req.EventRequests) != im.StatusSuccess {
+		body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
+		if err != nil {
+			debugReplyError(b.logger, "encode_subscribe_path_reject", src, err)
+			return err
+		}
+		if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+			debugReplyError(b.logger, "send_subscribe_path_reject", src, err)
+			return err
+		}
+		b.dischargeOwedAck(proto.ExchangeID)
+		return nil
+	}
+
 	// Stamp the FabricFiltered flag + requesting FabricIndex into the
 	// context for the initial ReportData pass. Subscribe requests carry
 	// FabricFiltered the same way ReadRequests do (Matter §10.6.3);

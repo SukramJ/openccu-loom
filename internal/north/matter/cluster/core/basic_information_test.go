@@ -883,6 +883,57 @@ func TestBasicInfo_EmitReachableChanged(t *testing.T) {
 	}
 }
 
+// TestBasicInfo_ValidationVendorIDAboveFFF4 verifies that NewBasicInformation
+// rejects VendorID values in the range 0xFFF5–0xFFFF. These are reserved and
+// not valid device identity values; using them would cause commissioners to
+// reject the device or assign it incorrect ecosystem privileges.
+// Mirrors matter.js packages/node/src/behaviors/basic-information/
+// basic-information-validators.ts:32 (#3978):
+// vendorId === 0 || vendorId > 0xfff4 → ImplementationError.
+func TestBasicInfo_ValidationVendorIDAboveFFF4(t *testing.T) {
+	t.Parallel()
+	for _, vid := range []uint16{0xFFF5, 0xFFFF} {
+		t.Run(fmt.Sprintf("VendorID=0x%04X", vid), func(t *testing.T) {
+			t.Parallel()
+			cfg := validBasicInfoConfig()
+			cfg.VendorID = vid
+			_, err := core.NewBasicInformation(cfg)
+			if err == nil {
+				t.Fatalf("NewBasicInformation with VendorID=0x%04X: expected error, got nil", vid)
+			}
+		})
+	}
+}
+
+// TestBasicInfo_ValidationVendorIDFFF4Accepted verifies that VendorID=0xFFF4
+// (the inclusive upper boundary of the valid 0x0001–0xFFF4 range) is accepted.
+// Mirrors matter.js packages/node/src/behaviors/basic-information/
+// basic-information-validators.ts:32 (#3978).
+func TestBasicInfo_ValidationVendorIDFFF4Accepted(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.VendorID = 0xFFF4
+	_, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation with VendorID=0xFFF4: expected no error, got %v", err)
+	}
+}
+
+// TestBasicInfo_ValidationVendorID0001Accepted verifies that VendorID=0x0001
+// (the inclusive lower boundary of the valid range) is accepted.
+// Mirrors matter.js packages/node/src/behaviors/basic-information/
+// basic-information-validators.ts:32 (#3978):
+// 0x0000 is reserved; 0x0001 is the first valid device identity VendorID.
+func TestBasicInfo_ValidationVendorID0001Accepted(t *testing.T) {
+	t.Parallel()
+	cfg := validBasicInfoConfig()
+	cfg.VendorID = 0x0001
+	_, err := core.NewBasicInformation(cfg)
+	if err != nil {
+		t.Fatalf("NewBasicInformation with VendorID=0x0001: expected no error, got %v", err)
+	}
+}
+
 // TestBasicInfo_MatterRead_UnknownAttr verifies the fall-through (nil, false)
 // for an unknown attribute ID.
 func TestBasicInfo_MatterRead_UnknownAttr(t *testing.T) {

@@ -697,3 +697,33 @@ func TestAttributeValueReader_OtherCluster_Primitive(t *testing.T) {
 		t.Errorf("expected true, got %v", av.Value)
 	}
 }
+
+// TestPrimitiveAttributeValue_UTF8String_ReturnsDecodedContent verifies that
+// primitiveAttributeValue returns the textual content from el.String for UTF-8
+// string elements, not string(el.Octets) (which is always empty because the
+// decoder only populates el.Octets for octet-string types). The pre-fix code
+// path read el.Octets for UTF-8 elements, silently dropping every string write
+// such as NodeLabel or Location to the empty string "".
+// Mirrors matter.js packages/node/src/behaviors/basic-information/
+// BasicInformationServer.ts nodeLabel write path.
+func TestPrimitiveAttributeValue_UTF8String_ReturnsDecodedContent(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.PutUTF8(tlv.AnonymousTag(), "NodeLabel-Test")
+	raw, _ := enc.Bytes()
+
+	dec := tlv.NewDecoder(raw)
+	el := advanceToContent(t, dec)
+	got, err := primitiveAttributeValue(el, dec)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	s, ok := got.Value.(string)
+	if !ok {
+		t.Fatalf("expected string value, got %T", got.Value)
+	}
+	if s != "NodeLabel-Test" {
+		t.Errorf("primitiveAttributeValue UTF-8 = %q, want %q (el.String=%q el.OctetsLen=%d)",
+			s, "NodeLabel-Test", el.String, len(el.Octets))
+	}
+}
