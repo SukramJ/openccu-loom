@@ -2930,11 +2930,11 @@ Go path: `internal/central/coordinators/client.go`.
 
 ---
 
-### BD-A1-V06 — `Device.ReloadDeviceConfig` has no direct production caller; adapter delegates to `RefreshDeviceDescriptionsAndCreateMissingDevices`
+### BD-A1-V06 — `Device.ReloadDeviceConfig` (the model `OnConfigChanged` cascade) has no direct production caller
 
-`Device.ReloadDeviceConfig` (`internal/model/device/device.go`) runs the per-channel `OnConfigChanged` cascade. The WS command `reload_device_config` reaches the `DeviceReloaderAdapter` (`internal/central/adapter/device_reloader.go`), which calls `DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices` for the full interface rather than `Device.ReloadDeviceConfig` for the single device. `Device.ReloadDeviceConfig` therefore has no production caller.
+`Device.ReloadDeviceConfig` (`internal/model/device/device.go`) runs the per-channel `OnConfigChanged` cascade. The WS command `reload_device_config` reaches the `DeviceReloaderAdapter` (`internal/central/adapter/device_reloader.go`), which materialises the device through `DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices` rather than calling `Device.ReloadDeviceConfig`. The model method therefore has no production caller.
 
-This is by design for the current 0.1.0 scope. The adapter deliberately delegates to the broader refresh because a `DeviceCoordinator.RefreshSingleDevice` method (using `Backend.GetDeviceDescription` + per-channel `GetParamsetDescription`) does not yet exist. From the operator's perspective the result is equivalent: the target device is refreshed. `Device.ReloadDeviceConfig` is the future target for a single-device-level refresh and is kept in the model so the semantic OnConfigChanged cascade is testable independently of the adapter layer. A future `RefreshSingleDevice` method will call it.
+The adapter now scopes that refresh to the target device only: `singleDeviceDescFetcher` fetches `Backend.GetDeviceDescription` for the device plus each address in its `CHILDREN` list, instead of `ListDevices` over the whole interface (a per-channel fetch error is logged and skipped so one unreachable channel cannot abort the reload). What remains by design is the *materialisation path*: the adapter goes through the coordinator's additive create-missing flow, not the model's `OnConfigChanged` cascade. `Device.ReloadDeviceConfig` is kept in the model so that cascade stays unit-testable independently of the adapter layer; wiring the adapter onto it would be a deeper refresh-semantics change than the targeted-fetch optimisation that landed here.
 
 Go path: `internal/model/device/device.go::ReloadDeviceConfig`, `internal/central/adapter/device_reloader.go::ReloadDeviceConfig`.
 
