@@ -403,7 +403,7 @@
   });
 </script>
 
-<section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
+<section class="@container mx-auto max-w-6xl px-4 py-6 sm:px-6">
   {#if error}
     <div class="mb-4">
       <ErrorState message={error} onRetry={load} />
@@ -424,7 +424,9 @@
         ]}
         class="mb-2"
       />
-      <div class="flex flex-wrap items-start justify-between gap-3">
+      <div
+        class="flex flex-col gap-3 @3xl:flex-row @3xl:flex-wrap @3xl:items-start @3xl:justify-between"
+      >
         <div class="min-w-0 flex-1">
           {#if renaming}
             <div class="flex flex-wrap items-center gap-2">
