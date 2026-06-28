@@ -112,6 +112,23 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 			slog.Any("attribute", p.Attribute),
 			slog.String("attribute_set", strconv.FormatBool(p.HasAttribute)))
 	}
+	// Reject illegal paths up front (wildcard cluster + concrete non-global
+	// attribute, or wildcard cluster + concrete event) with a top-level
+	// InvalidAction StatusResponse. Mirrors matter.js InteractionServer.ts
+	// validateReadPaths (#3926, Matter §8.4.3.2).
+	if im.ValidateReadPaths(req.AttributeRequests, req.EventRequests) != im.StatusSuccess {
+		body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
+		if err != nil {
+			debugReplyError(b.logger, "encode_read_path_reject", src, err)
+			return err
+		}
+		if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+			debugReplyError(b.logger, "send_read_path_reject", src, err)
+			return err
+		}
+		b.dischargeOwedAck(proto.ExchangeID)
+		return nil
+	}
 	// Stamp the FabricFiltered flag + the requesting FabricIndex
 	// into the context so fabric-scoped cluster servers
 	// (OperationalCredentials, AccessControl) can project their

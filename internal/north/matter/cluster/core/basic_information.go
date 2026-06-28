@@ -173,8 +173,13 @@ type Config struct {
 // error when mandatory fields (VendorID, ProductID, NodeLabel) are
 // missing or zero-valued.
 func NewBasicInformation(cfg Config) (*BasicInformation, error) {
-	if cfg.VendorID == 0 {
-		return nil, errors.New("matter: BasicInformation Config.VendorID must be non-zero")
+	// VendorID must be a valid device identity: non-zero and within the
+	// CSA-assignable range. Mirrors matter.js
+	// packages/node/src/behaviors/basic-information/basic-information-validators.ts:32
+	// (`vendorId === 0 || vendorId > 0xfff4` → ImplementationError); 0xFFF5-0xFFFF
+	// are reserved test/anchor IDs that are not valid product identities.
+	if cfg.VendorID == 0 || cfg.VendorID > 0xFFF4 {
+		return nil, fmt.Errorf("matter: BasicInformation Config.VendorID 0x%04X is not a valid device identity; it must be in 0x0001-0xFFF4", cfg.VendorID)
 	}
 	if cfg.ProductID == 0 {
 		return nil, errors.New("matter: BasicInformation Config.ProductID must be non-zero")

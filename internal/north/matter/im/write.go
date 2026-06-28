@@ -244,6 +244,18 @@ func HandleWriteRequest(ctx context.Context, d Dispatcher, req WriteRequest) Wri
 				continue
 			}
 		}
+		// A write that carries a DataVersion MUST target a concrete endpoint;
+		// a DataVersion is meaningless against a wildcard-endpoint path.
+		// Mirrors matter.js packages/protocol/src/action/request/Write.ts:33
+		// (#3988, Matter §8.9.2.8.1): reject with InvalidAction rather than
+		// resolving the version against endpoint 0.
+		if w.HasDataVersion && !w.Path.HasEndpoint {
+			wr.Responses = append(wr.Responses, AttributeStatus{
+				Path:   w.Path,
+				Status: StatusIB{Status: StatusInvalidAction},
+			})
+			continue
+		}
 		// DataVersion mismatch check. Mirrors matter.js InteractionServer.ts
 		// version check and chip WriteHandler.cpp DataVersion guard. A zero
 		// DataVersion in the request means "caller does not constrain the
@@ -260,6 +272,14 @@ func HandleWriteRequest(ctx context.Context, d Dispatcher, req WriteRequest) Wri
 			}
 		}
 		for _, res := range d.Write(ctx, w.Path, w.Value) {
+			// When a cluster-specific status is conveyed, the outer global
+			// status MUST be FAILURE (not a more specific global code).
+			// Mirrors matter.js
+			// packages/protocol/src/action/server/AttributeWriteResponse.ts:32
+			// (#3988, Matter §7.10.7).
+			if res.HasClusterStatus && res.Status != StatusSuccess {
+				res.Status = StatusFailure
+			}
 			wr.Responses = append(wr.Responses, AttributeStatus{
 				Path:   res.Path,
 				Status: StatusIB{Status: res.Status, ClusterStatus: res.ClusterStatus, HasClusterStatus: res.HasClusterStatus},

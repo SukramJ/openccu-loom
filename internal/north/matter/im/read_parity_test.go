@@ -303,6 +303,82 @@ func TestReadParity_PerChunkStatusResponseWait(t *testing.T) {
 	t.Skip("FixMe: structural encoding of SuppressResponse per MoreChunkedMessages flag requires the ReportData marshal path in the secure-session send layer; the per-chunk StatusResponse wait itself is enforced by the session layer (tested end-to-end in chip-tool brief §T7 via TestReadChunking)")
 }
 
+// ─── ValidateReadPaths ────────────────────────────────────────────────────────
+
+// TestValidateReadPaths_WildcardCluster_NonGlobalAttribute mirrors
+// matter.js packages/node/src/node/server/InteractionServer.ts
+// validateReadAttributesPath (#3926): wildcard cluster (HasCluster=false) combined
+// with a concrete non-global attribute is illegal — the action must be rejected
+// up front with StatusInvalidAction.
+func TestValidateReadPaths_WildcardCluster_NonGlobalAttribute(t *testing.T) {
+	t.Parallel()
+	attrs := []ConcreteAttributePath{
+		{HasAttribute: true, Attribute: 0x0006}, // concrete non-global, wildcard cluster
+	}
+	got := ValidateReadPaths(attrs, nil)
+	if got != StatusInvalidAction {
+		t.Fatalf("got=%v, want StatusInvalidAction", got)
+	}
+}
+
+// TestValidateReadPaths_WildcardCluster_GlobalAttribute mirrors
+// matter.js packages/node/src/node/server/InteractionServer.ts
+// validateReadAttributesPath (#3926): a global attribute ID (0xFFF8–0xFFFD) on a
+// wildcard-cluster path is legal and must return StatusSuccess.
+func TestValidateReadPaths_WildcardCluster_GlobalAttribute(t *testing.T) {
+	t.Parallel()
+	attrs := []ConcreteAttributePath{
+		{HasAttribute: true, Attribute: 0xFFFD}, // ClusterRevision — global
+	}
+	got := ValidateReadPaths(attrs, nil)
+	if got != StatusSuccess {
+		t.Fatalf("got=%v, want StatusSuccess for global attribute on wildcard cluster", got)
+	}
+}
+
+// TestValidateReadPaths_WildcardCluster_ConcreteEvent mirrors
+// matter.js packages/node/src/node/server/InteractionServer.ts
+// validateReadEventPath (#3926): wildcard cluster combined with a concrete event
+// (HasEvent=true) is illegal — must return StatusInvalidAction.
+func TestValidateReadPaths_WildcardCluster_ConcreteEvent(t *testing.T) {
+	t.Parallel()
+	events := []ConcreteEventPath{
+		{HasEvent: true, Event: 0x0001}, // concrete event, wildcard cluster
+	}
+	got := ValidateReadPaths(nil, events)
+	if got != StatusInvalidAction {
+		t.Fatalf("got=%v, want StatusInvalidAction", got)
+	}
+}
+
+// TestValidateReadPaths_FullyConcrete_ReturnsSuccess verifies that a fully
+// concrete attribute path (HasCluster=true + HasAttribute=true) is always
+// accepted regardless of attribute ID.
+func TestValidateReadPaths_FullyConcrete_ReturnsSuccess(t *testing.T) {
+	t.Parallel()
+	attrs := []ConcreteAttributePath{
+		{HasCluster: true, Cluster: 0x0006, HasAttribute: true, Attribute: 0x0000},
+	}
+	got := ValidateReadPaths(attrs, nil)
+	if got != StatusSuccess {
+		t.Fatalf("got=%v, want StatusSuccess for fully-concrete path", got)
+	}
+}
+
+// TestValidateReadPaths_PureWildcard_ReturnsSuccess verifies that a pure
+// wildcard path (no Has* set) is accepted — the spec only restricts the
+// combination of wildcard-cluster with concrete non-global attribute or event.
+func TestValidateReadPaths_PureWildcard_ReturnsSuccess(t *testing.T) {
+	t.Parallel()
+	attrs := []ConcreteAttributePath{
+		{}, // pure wildcard — no Has* set
+	}
+	got := ValidateReadPaths(attrs, nil)
+	if got != StatusSuccess {
+		t.Fatalf("got=%v, want StatusSuccess for pure wildcard", got)
+	}
+}
+
 // --- helpers for read_parity_test.go ---
 
 // dispatcherWithVersion is a Dispatcher variant that surfaces a non-zero

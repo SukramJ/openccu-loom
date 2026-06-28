@@ -614,3 +614,33 @@ func BuildEventReports(paths []ConcreteEventPath, log *EventLog, filters []Event
 func HandleReadEventRequest(req ReadRequest, log *EventLog) []EventReport {
 	return BuildEventReports(req.EventRequests, log, req.EventFilters)
 }
+
+// isGlobalAttributeID reports whether attrID is a universal global attribute
+// (0xFFF8-0xFFFD): GeneratedCommandList, AcceptedCommandList, EventList,
+// AttributeList, FeatureMap, ClusterRevision. These are legal on a
+// wildcard-cluster read path; concrete non-global attributes are not.
+func isGlobalAttributeID(attrID uint32) bool {
+	return attrID >= 0xFFF8 && attrID <= 0xFFFD
+}
+
+// ValidateReadPaths enforces the Matter §8.4.3.2 path rules shared by Read and
+// Subscribe: a wildcard cluster (HasCluster == false) combined with a concrete
+// non-global attribute, or with a concrete event, is illegal — the whole action
+// must be rejected up front with InvalidAction rather than silently expanded.
+// Returns StatusInvalidAction on the first offending path, else StatusSuccess.
+// Mirrors matter.js packages/node/src/node/server/InteractionServer.ts
+// validateReadAttributesPath / validateReadEventPath (#3926). Callers (the read
+// and subscribe dispatchers) run this before building any report.
+func ValidateReadPaths(attrs []ConcreteAttributePath, events []ConcreteEventPath) StatusCode {
+	for _, p := range attrs {
+		if !p.HasCluster && p.HasAttribute && !isGlobalAttributeID(p.Attribute) {
+			return StatusInvalidAction
+		}
+	}
+	for _, p := range events {
+		if !p.HasCluster && p.HasEvent {
+			return StatusInvalidAction
+		}
+	}
+	return StatusSuccess
+}
