@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.18.3
+
+- Health view now shows a `scheduler` row that flags when a background job has
+  recently failed (and clears once things settle).
+
 ## 0.18.2
 
 - Internal: filled in the OpenAPI schema for several REST responses so the
