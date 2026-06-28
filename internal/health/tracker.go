@@ -737,10 +737,9 @@ func (t *Tracker) RecordEventReceived(name string) {
 // the named component (typically an interfaceID). The counter is
 // surfaced by the health REST endpoint and the SPA sparkline.
 //
-// The tracker maintains a per-component counter (separate from the
-// [Connection] reconnect counter) so the aggregate [MetricsHealthSummary]
-// view can include reconnect activity without knowing about the
-// [ConnectionRegistry].
+// The tracker maintains a per-component counter independent of any
+// per-client reconnect counters so the aggregate [MetricsHealthSummary]
+// view can include reconnect activity without coupling to client internals.
 func (t *Tracker) RecordReconnectAttempt(name string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()

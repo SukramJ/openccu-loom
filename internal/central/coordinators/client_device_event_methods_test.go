@@ -34,22 +34,6 @@ func TestWaitForTCPReadyUnreachable(t *testing.T) {
 	}
 }
 
-// ---- L-A5-11: PollClients ----
-
-func TestPollClientsReturnsDisconnectedEntries(t *testing.T) {
-	c := NewClientCoordinator()
-	// No clients → empty poll list.
-	if len(c.PollClients()) != 0 {
-		t.Fatal("PollClients should return empty when no clients registered")
-	}
-	// Client with nil inner client counts as disconnected.
-	_ = c.Register(&ClientEntry{InterfaceID: "iface1", Interface: hmenum.InterfaceHmIPRF, Client: nil})
-	poll := c.PollClients()
-	if len(poll) != 1 {
-		t.Fatalf("PollClients = %d entries, want 1", len(poll))
-	}
-}
-
 // ---- L-A5-12: RecordLastFailure / LastFailureReason / LastFailureInterfaceID ----
 
 func TestLastFailureTracking(t *testing.T) {
@@ -71,65 +55,6 @@ func TestLastFailureTracking(t *testing.T) {
 	c.RecordLastFailure("connection_refused", "BidCos-RF.local")
 	if c.LastFailureReason() != "connection_refused" {
 		t.Fatalf("LastFailureReason = %q, want connection_refused", c.LastFailureReason())
-	}
-}
-
-// ---- L-A5-13: SubscribeToHealthEvents ----
-
-func TestSubscribeToHealthEventsNilBusNoOp(t *testing.T) {
-	c := NewClientCoordinator()
-	unsub := c.SubscribeToHealthEvents(nil, nil)
-	unsub() // must not panic
-}
-
-func TestSubscribeToHealthEventsTriggersOnMatch(t *testing.T) {
-	bus := events.NewBus()
-	c := NewClientCoordinator()
-	_ = c.Register(&ClientEntry{InterfaceID: "iface1", Interface: hmenum.InterfaceHmIPRF})
-
-	called := make(chan string, 1)
-	unsub := c.SubscribeToHealthEvents(bus, func(ifaceID string) {
-		called <- ifaceID
-	})
-	defer unsub()
-
-	events.Publish(bus, hmevent.HealthRecordedEvent{
-		Base:        hmevent.NewBase(),
-		InterfaceID: "iface1",
-		Healthy:     false,
-	})
-
-	select {
-	case id := <-called:
-		if id != "iface1" {
-			t.Fatalf("callback received %q, want iface1", id)
-		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("callback not triggered within timeout")
-	}
-}
-
-func TestSubscribeToHealthEventsIgnoresUnknownInterface(t *testing.T) {
-	bus := events.NewBus()
-	c := NewClientCoordinator()
-	_ = c.Register(&ClientEntry{InterfaceID: "iface1", Interface: hmenum.InterfaceHmIPRF})
-
-	called := make(chan struct{}, 1)
-	unsub := c.SubscribeToHealthEvents(bus, func(_ string) {
-		called <- struct{}{}
-	})
-	defer unsub()
-
-	events.Publish(bus, hmevent.HealthRecordedEvent{
-		Base:        hmevent.NewBase(),
-		InterfaceID: "other-iface",
-		Healthy:     false,
-	})
-
-	// Allow bus delivery to settle.
-	time.Sleep(50 * time.Millisecond)
-	if len(called) != 0 {
-		t.Fatal("callback must not fire for unknown interface")
 	}
 }
 

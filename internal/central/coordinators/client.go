@@ -14,11 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
-	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
 
 // ErrClientExists is returned when two clients are registered with the
@@ -281,27 +279,6 @@ func (c *ClientCoordinator) StopClients(ctx context.Context) error {
 	})
 }
 
-// restartClientsCooldown is the pause between Stop and Start in
-// [RestartClients]. The 500 ms window lets in-flight RPC responses
-// drain and CCU-side state settle before the new Init handshake fires.
-const restartClientsCooldown = 500 * time.Millisecond
-
-// RestartClients stops all clients, waits for a brief cooldown, then
-// starts them again. The 500 ms pause lets in-flight wire responses
-// drain before the reconnect Init handshake fires.
-func (c *ClientCoordinator) RestartClients(ctx context.Context) error {
-	if err := c.StopClients(ctx); err != nil {
-		return err
-	}
-	// Brief cooldown: let in-flight RPC responses drain before re-init.
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(restartClientsCooldown):
-	}
-	return c.StartClients(ctx)
-}
-
 // forEachLifecycle iterates all registered entries (sorted) and calls fn.
 // It collects errors from all entries and returns them combined.
 func (c *ClientCoordinator) forEachLifecycle(ctx context.Context, fn func(*ClientEntry) error) error {
@@ -376,19 +353,6 @@ func (c *ClientCoordinator) WaitForTCPReady(ctx context.Context, host string, po
 	}
 	_ = conn.Close()
 	return nil
-}
-
-// PollClients returns every registered [ClientEntry] whose underlying
-// [client.InterfaceClient] is in polling mode (i.e. Connected() == false).
-// Entries are returned in the same sorted order as [List].
-func (c *ClientCoordinator) PollClients() []*ClientEntry {
-	var out []*ClientEntry
-	for _, e := range c.List() {
-		if !e.Connected() {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 // RecordLastFailure stores the failure reason and the responsible
@@ -483,30 +447,4 @@ func (c *ClientCoordinator) CreateClient(ctx context.Context, cfg CreateClientCo
 	// Unreachable — the loop always returns or falls through to the last-attempt
 	// branch above — but the compiler requires a terminal statement.
 	return nil, fmt.Errorf("create_client %s: exhausted attempts", cfg.InterfaceID)
-}
-
-// SubscribeToHealthEvents wires the coordinator to the event bus so it
-// can re-evaluate client states in response to [hmevent.HealthRecordedEvent].
-// When a health record arrives for an interface owned by this coordinator,
-// the entry's Connected() state is refreshed and callers that gate on
-// Available() observe the update without polling.
-//
-// Returns an unsubscribe function; call it on teardown to avoid goroutine leaks.
-// Pass a nil bus to get a no-op unsubscribe.
-func (c *ClientCoordinator) SubscribeToHealthEvents(bus *events.Bus, onEval func(interfaceID string)) func() {
-	if bus == nil {
-		return func() {}
-	}
-	return events.Subscribe(bus, func(e hmevent.HealthRecordedEvent) {
-		if e.InterfaceID == "" {
-			return
-		}
-		// Re-evaluate: if the coordinator owns the interface, notify the caller.
-		if _, ok := c.Get(e.InterfaceID); !ok {
-			return
-		}
-		if onEval != nil {
-			onEval(e.InterfaceID)
-		}
-	})
 }

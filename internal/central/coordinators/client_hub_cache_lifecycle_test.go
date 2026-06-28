@@ -123,28 +123,6 @@ func TestClientCoordinatorStopClientsInvokesHooks(t *testing.T) {
 	}
 }
 
-func TestClientCoordinatorRestartClientsCallsBothHooks(t *testing.T) {
-	t.Parallel()
-	bus := events.NewBus()
-	cc := NewClientCoordinator()
-
-	var starts, stops atomic.Int32
-	e := makeEntry(bus, "iface-Z", hmenum.InterfaceHmIPRF)
-	e.StartFunc = func(_ context.Context) error { starts.Add(1); return nil }
-	e.StopFunc = func(_ context.Context) error { stops.Add(1); return nil }
-	_ = cc.Register(e)
-
-	if err := cc.RestartClients(context.Background()); err != nil {
-		t.Fatalf("RestartClients: %v", err)
-	}
-	if stops.Load() != 1 {
-		t.Fatalf("StopFunc called %d times, want 1", stops.Load())
-	}
-	if starts.Load() != 1 {
-		t.Fatalf("StartFunc called %d times, want 1", starts.Load())
-	}
-}
-
 func TestClientCoordinatorStartClientsCollectsErrors(t *testing.T) {
 	t.Parallel()
 	bus := events.NewBus()
