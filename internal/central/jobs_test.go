@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -817,5 +818,114 @@ func TestHeartbeatStartupGuard_DisconnectedClientNotStarting(t *testing.T) {
 	comp := runHeartbeat(t, c)
 	if comp.LastSample.Healthy {
 		t.Errorf("heartbeat recorded Healthy=true with disconnected client and non-Running state; want false (outage)")
+	}
+}
+
+// TestHealthHeartbeatRecordsSchedulerLiveness verifies that the
+// central.health_heartbeat job records the "scheduler" component using a
+// delta-based failure check. Three paths are exercised in sequence:
+//
+//  1. Healthy path: no scheduler failures since baseline → component healthy.
+//  2. Degraded path: new failures accrued between ticks → component unhealthy.
+//  3. Recovery path: no new failures on next tick → component healthy again.
+//
+// The failure is injected by adding a job that returns an error and runs on
+// scheduler start (RunOnStart: true), which increments TotalFailures past the
+// zero baseline captured at RegisterStandardJobs time. All three phases call
+// the heartbeat Run closure directly so no interval timing is involved.
+func TestHealthHeartbeatRecordsSchedulerLiveness(t *testing.T) {
+	t.Parallel()
+
+	c, err := New(Config{Name: "hb-sched-live"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Baseline TotalFailures == 0 is captured inside RegisterStandardJobs.
+	if _, err := RegisterStandardJobs(c, StandardJobs{
+		HealthHeartbeatInterval: 10 * time.Second,
+	}); err != nil {
+		t.Fatalf("RegisterStandardJobs: %v", err)
+	}
+
+	heartbeat := findJobRun(c, "central.health_heartbeat")
+	if heartbeat == nil {
+		t.Fatal("central.health_heartbeat job not registered")
+	}
+
+	// --- Healthy path: no failures since baseline ---
+	if err := heartbeat(context.Background()); err != nil {
+		t.Fatalf("heartbeat run (healthy path): %v", err)
+	}
+	comp, ok := c.Health.Get("scheduler")
+	if !ok {
+		t.Fatal("heartbeat did not record a 'scheduler' component")
+	}
+	if !comp.LastSample.Healthy {
+		t.Errorf("healthy path: scheduler Healthy=false, want true (no failures yet)")
+	}
+	if comp.LastSample.Note != "heartbeat" {
+		t.Errorf("healthy path: scheduler Note=%q, want %q", comp.LastSample.Note, "heartbeat")
+	}
+
+	// --- Degraded path: inject a scheduler failure between ticks ---
+	//
+	// A job that returns an error on RunOnStart advances TotalFailures past the
+	// zero baseline captured above. A channel synchronises the test without
+	// relying on wall-clock sleeps.
+	failRan := make(chan struct{}, 1)
+	if err := c.Scheduler.Add(scheduler.Job{
+		Name:       "test.failing_job",
+		Interval:   time.Minute, // long interval — only RunOnStart invocation matters
+		RunOnStart: true,
+		Run: func(_ context.Context) error {
+			select {
+			case failRan <- struct{}{}:
+			default:
+			}
+			return errors.New("injected failure")
+		},
+	}); err != nil {
+		t.Fatalf("add failing job: %v", err)
+	}
+
+	schedCtx, schedCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer schedCancel()
+	if err := c.Scheduler.Start(schedCtx); err != nil {
+		t.Fatalf("scheduler start: %v", err)
+	}
+	select {
+	case <-failRan:
+		// failure has been recorded by the scheduler
+	case <-schedCtx.Done():
+		t.Fatal("timed out waiting for failing job to run")
+	}
+	c.Scheduler.Stop()
+
+	// Heartbeat now sees currentFailures (1) > lastSchedulerFailures (0).
+	if err := heartbeat(context.Background()); err != nil {
+		t.Fatalf("heartbeat run (degraded path): %v", err)
+	}
+	comp, ok = c.Health.Get("scheduler")
+	if !ok {
+		t.Fatal("scheduler component missing after degraded heartbeat")
+	}
+	if comp.LastSample.Healthy {
+		t.Errorf("degraded path: scheduler Healthy=true after new failures; want false")
+	}
+
+	// --- Recovery path: lastSchedulerFailures is now 1; no new failures ---
+	//
+	// The closure updated lastSchedulerFailures to 1 on the previous tick.
+	// TotalFailures is still 1, so the delta is zero → healthy.
+	if err := heartbeat(context.Background()); err != nil {
+		t.Fatalf("heartbeat run (recovery path): %v", err)
+	}
+	comp, ok = c.Health.Get("scheduler")
+	if !ok {
+		t.Fatal("scheduler component missing after recovery heartbeat")
+	}
+	if !comp.LastSample.Healthy {
+		t.Errorf("recovery path: scheduler Healthy=false after quiet interval; want true (delta recovery)")
 	}
 }
