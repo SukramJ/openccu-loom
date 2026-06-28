@@ -8,6 +8,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
@@ -164,24 +165,19 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <!-- Header -->
-  <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("firmware.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        {t("firmware.subtitle")}
-      </p>
-    </div>
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onclick={() => void deviceStore.refresh()}
-      disabled={deviceStore.loading}
-    >
-      {t("common.reload")}
-    </Button>
-  </header>
+  <PageHeader title={t("firmware.title")} subtitle={t("firmware.subtitle")}>
+    {#snippet actions()}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => void deviceStore.refresh()}
+        disabled={deviceStore.loading}
+      >
+        {t("common.reload")}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   <!-- Summary bar -->
   {#if updatableCount > 0}

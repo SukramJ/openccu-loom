@@ -7,6 +7,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
@@ -212,19 +213,16 @@
   class={embedded ? "" : "mx-auto max-w-6xl px-4 py-6 sm:px-6"}
 >
   {#if !embedded}
-    <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-semibold">{t("audit.title")}</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          {loading
-            ? t("common.loading")
-            : t("audit.entries", { count: entries.length })}
-        </p>
-      </div>
-      <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
-        {t("common.reload")}
-      </Button>
-    </header>
+    <PageHeader
+      title={t("audit.title")}
+      subtitle={loading ? t("common.loading") : t("audit.entries", { count: entries.length })}
+    >
+      {#snippet actions()}
+        <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
+          {t("common.reload")}
+        </Button>
+      {/snippet}
+    </PageHeader>
   {/if}
 
   <!-- External filters: action, central, date range, export. DataTable

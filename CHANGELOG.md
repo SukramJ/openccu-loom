@@ -17,6 +17,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   actions below) until the content area is wide enough, then restores the
   side-by-side layout with the actions top-right.
 
+### Changed
+
+- **Unified the list-view page headers behind a shared `PageHeader` component.**
+  Devices, firmware, signal quality, system variables, programs, messages,
+  inbox, un-ignore, backups, and the audit log now render their title +
+  actions through one component with a single, robust responsive rule (the
+  title never shrinks, so a crowded header wraps its actions onto their own
+  line instead of squeezing). Behaviour is unchanged; the device-list title
+  drops a stray `tracking-tight` to match the other headers.
+
 ## [0.17.3]
 
 ### Changed

@@ -9,6 +9,7 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { prefs } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -136,20 +137,16 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("backup.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">{t("backup.subtitle")}</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+  <PageHeader title={t("backup.title")} subtitle={t("backup.subtitle")}>
+    {#snippet actions()}
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
       <Button type="button" size="sm" onclick={() => void trigger()} disabled={triggering}>
         {triggering ? t("backup.triggering") : t("backup.trigger")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if loadError}
     <ErrorState message={loadError} onRetry={load} class="mb-4" />

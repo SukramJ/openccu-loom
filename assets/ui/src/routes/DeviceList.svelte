@@ -7,6 +7,7 @@
   import Badge from "$lib/components/ui/Badge.svelte";
   import Card from "$lib/components/ui/Card.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import { api } from "$lib/api/client";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -265,108 +266,108 @@
 </script>
 
 <section class="w-full px-4 py-8 sm:px-6">
-  <header class="mb-6 flex flex-wrap items-center justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-semibold tracking-tight">{t("devices.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        {#if deviceStore.lastLoaded}
-          {t("devicelist.last_updated", { time: deviceStore.lastLoaded.toLocaleTimeString() })}
-        {:else}
-          {t("common.loading")}
+  <PageHeader
+    title={t("devices.title")}
+    subtitle={deviceStore.lastLoaded
+      ? t("devicelist.last_updated", {
+          time: deviceStore.lastLoaded.toLocaleTimeString(),
+        })
+      : t("common.loading")}
+    class="mb-6"
+  >
+    {#snippet actions()}
+      <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
+        <input
+          type="search"
+          placeholder={t("devicelist.search_placeholder")}
+          bind:value={filter}
+          class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-72 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
+        />
+        <select
+          bind:value={availability}
+          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          title={t("devicelist.availability")}
+        >
+          <option value="all">{t("devicelist.all")}</option>
+          <option value="available">{t("devicelist.available")}</option>
+          <option value="unavailable">{t("devicelist.unavailable")}</option>
+        </select>
+        {#if rooms.length > 0}
+          <select
+            bind:value={roomFilter}
+            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            title={t("devicelist.room")}
+          >
+            <option value="">{t("devicelist.all_rooms")}</option>
+            {#each rooms as r (r)}
+              <option value={r}>{r}</option>
+            {/each}
+          </select>
         {/if}
-      </p>
-    </div>
-    <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
-      <input
-        type="search"
-        placeholder={t("devicelist.search_placeholder")}
-        bind:value={filter}
-        class="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:w-72 sm:text-sm dark:border-slate-700 dark:bg-slate-900"
-      />
-      <select
-        bind:value={availability}
-        class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
-        title={t("devicelist.availability")}
-      >
-        <option value="all">{t("devicelist.all")}</option>
-        <option value="available">{t("devicelist.available")}</option>
-        <option value="unavailable">{t("devicelist.unavailable")}</option>
-      </select>
-      {#if rooms.length > 0}
-        <select
-          bind:value={roomFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
-          title={t("devicelist.room")}
-        >
-          <option value="">{t("devicelist.all_rooms")}</option>
-          {#each rooms as r (r)}
-            <option value={r}>{r}</option>
-          {/each}
-        </select>
-      {/if}
-      {#if centrals.length > 1}
-        <select
-          bind:value={centralFilter}
-          class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
-          title="CCU"
-        >
-          <option value="">{t("common.all_ccus")}</option>
-          {#each centrals as c (c)}
-            <option value={c}>{c}</option>
-          {/each}
-        </select>
-      {/if}
-      <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-        <input type="checkbox" bind:checked={updateOnly} />
-        {t("devicelist.update_available")}
-      </label>
-      <Button
-        type="button"
-        variant="default"
-        onclick={async () => {
-          try {
-            await api.refreshDevices();
-          } catch {
-            // best-effort; the local refresh below picks up regardless
-          }
-          await deviceStore.refresh();
-        }}
-        disabled={deviceStore.loading}
-        title={t("devicelist.ccu_refresh_title")}
-      >
-        {t("devicelist.ccu_refresh")}
-      </Button>
-      <!-- Grid / list layout toggle (persisted preference). -->
-      <div
-        class="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-700"
-        role="group"
-        aria-label={t("devicelist.view_mode")}
-      >
-        <button
+        {#if centrals.length > 1}
+          <select
+            bind:value={centralFilter}
+            class="rounded-md border border-slate-300 bg-white px-2 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            title="CCU"
+          >
+            <option value="">{t("common.all_ccus")}</option>
+            {#each centrals as c (c)}
+              <option value={c}>{c}</option>
+            {/each}
+          </select>
+        {/if}
+        <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+          <input type="checkbox" bind:checked={updateOnly} />
+          {t("devicelist.update_available")}
+        </label>
+        <Button
           type="button"
-          class="px-2.5 py-2 transition {prefs.deviceView === 'grid'
-            ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
-          aria-pressed={prefs.deviceView === "grid"}
-          title={t("devicelist.view_grid")}
-          onclick={() => setDeviceView("grid")}
+          variant="default"
+          onclick={async () => {
+            try {
+              await api.refreshDevices();
+            } catch {
+              // best-effort; the local refresh below picks up regardless
+            }
+            await deviceStore.refresh();
+          }}
+          disabled={deviceStore.loading}
+          title={t("devicelist.ccu_refresh_title")}
         >
-          <Icon name="mdi:dots-grid" size={18} />
-        </button>
-        <button
-          type="button"
-          class="px-2.5 py-2 transition {prefs.deviceView === 'list'
-            ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
-            : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
-          aria-pressed={prefs.deviceView === "list"}
-          title={t("devicelist.view_list")}
-          onclick={() => setDeviceView("list")}
+          {t("devicelist.ccu_refresh")}
+        </Button>
+        <!-- Grid / list layout toggle (persisted preference). -->
+        <div
+          class="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300 dark:border-slate-700"
+          role="group"
+          aria-label={t("devicelist.view_mode")}
         >
-          <Icon name="mdi:format-list-bulleted" size={18} />
-        </button>
+          <button
+            type="button"
+            class="px-2.5 py-2 transition {prefs.deviceView === 'grid'
+              ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+            aria-pressed={prefs.deviceView === "grid"}
+            title={t("devicelist.view_grid")}
+            onclick={() => setDeviceView("grid")}
+          >
+            <Icon name="mdi:dots-grid" size={18} />
+          </button>
+          <button
+            type="button"
+            class="px-2.5 py-2 transition {prefs.deviceView === 'list'
+              ? 'bg-brand-50 text-brand-900 dark:bg-brand-900/30 dark:text-brand-100'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'}"
+            aria-pressed={prefs.deviceView === "list"}
+            title={t("devicelist.view_list")}
+            onclick={() => setDeviceView("list")}
+          >
+            <Icon name="mdi:format-list-bulleted" size={18} />
+          </button>
+        </div>
       </div>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if selected.size > 0}
     <div class="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-brand-300 bg-brand-50 p-2 text-sm dark:border-brand-800 dark:bg-brand-950/40">

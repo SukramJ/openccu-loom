@@ -8,6 +8,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Input from "$lib/components/ui/Input.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import EmptyState from "$lib/components/ui/EmptyState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
@@ -132,15 +133,10 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-  <header class="mb-6">
-    <h1 class="text-2xl font-semibold">{t("unignore.title")}</h1>
-    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
-      {t("unignore.subtitle")}
-    </p>
-    <p class="mt-2 text-sm text-amber-600 dark:text-amber-400">
-      ⚠ {t("unignore.warning")}
-    </p>
-  </header>
+  <PageHeader title={t("unignore.title")} subtitle={t("unignore.subtitle")} />
+  <p class="mb-4 text-sm text-amber-600 dark:text-amber-400">
+    ⚠ {t("unignore.warning")}
+  </p>
 
   {#if visibilityStore.centralsLoading || visibilityStore.candidatesLoading}
     <LoadingState />

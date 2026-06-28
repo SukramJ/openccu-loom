@@ -8,6 +8,7 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
 
@@ -75,14 +76,11 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("signal.title")}</h1>
-      <p class="text-sm text-[var(--ha-secondary-text-color)]">
-        {loading ? t("common.loading") : t("signal.count", { count: filtered.length })}
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
+  <PageHeader
+    title={t("signal.title")}
+    subtitle={loading ? t("common.loading") : t("signal.count", { count: filtered.length })}
+  >
+    {#snippet actions()}
       {#if centrals.length > 1}
         <select
           bind:value={centralFilter}
@@ -98,8 +96,8 @@
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <p class="mb-3 text-sm text-[var(--ha-secondary-text-color)]">{t("signal.hint")}</p>
 
