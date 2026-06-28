@@ -4,6 +4,20 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.2]
+
+### Changed
+
+- **API schema completeness.** Nine response shapes the web UI carried as
+  hand-written types — backups, incidents, rooms, functions, linkable channels,
+  RPC-recording status, live-log records, edit-session, and inbox devices — are
+  now defined in `assets/openapi.yaml` and consumed by the SPA from the
+  generated client, so the documented contract and the UI stay in sync (API
+  contract 2.5.0 → 2.6.0, additive). Two latent UI/daemon mismatches were
+  corrected in passing: the inbox device's `central` field is optional (matching
+  what the daemon serves), and the install-mode interface entry now carries its
+  `observed` flag.
+
 ## [0.18.1]
 
 ### Fixed
