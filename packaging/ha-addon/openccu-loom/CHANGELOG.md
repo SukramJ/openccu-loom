@@ -1,5 +1,10 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.18.2
+
+- Internal: filled in the OpenAPI schema for several REST responses so the
+  documented API and the web UI stay in sync. No change to behaviour.
+
 ## 0.18.1
 
 - **Fixed: setting colour or colour-temperature on a Matter light now works.**

@@ -2712,6 +2712,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/diagnostics/rssi": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-device signal quality and battery (admin-only)
+         * @description Read-only snapshot of per-device RF reception strength (RSSI_DEVICE / RSSI_PEER), battery state, and reachability, read from the device model's maintenance channel (so it works for HmIP and BidCos alike), across every central. Only devices that report an RSSI reading are listed. Exposes the same data as the `ccu.get_rssi_info` WebSocket command.
+         */
+        get: operations["getDiagnosticsRSSI"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/diagnostics/reliability": {
         parameters: {
             query?: never;
@@ -4369,6 +4389,8 @@ export interface components {
             timestamp: string;
             counter: number;
             last_trigger?: string;
+            /** @description Human-readable translation of the message code. */
+            display_name?: string;
             rooms?: string[];
         };
         ServiceMessage: {
@@ -4387,6 +4409,8 @@ export interface components {
             timestamp: string;
             counter: number;
             quittable: boolean;
+            /** @description Human-readable translation of the message code. */
+            display_name?: string;
         };
         InstallModeInterfaceEntry: {
             /** @description CCU the interface belongs to. */
@@ -5478,6 +5502,85 @@ export interface components {
         };
         CalculatedDPDetail: components["schemas"]["CalculatedDPSummary"] & {
             depends_on?: string[];
+        };
+        /** @description One entry in the backup list. */
+        BackupEntry: {
+            id: string;
+            central: string;
+            /** Format: int64 */
+            bytes: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description Lock state returned on open and heartbeat. */
+        EditSessionResponse: {
+            token: string;
+            key: string;
+            subject?: string;
+            /** Format: date-time */
+            expires: string;
+        };
+        /** @description One row in GET /api/v1/functions. */
+        FunctionEntry: {
+            name: string;
+            device_count: number;
+        };
+        /** @description One diagnostic entry surfaced at /incidents. */
+        Incident: {
+            id: string;
+            /** Format: date-time */
+            when: string;
+            component: string;
+            severity: string;
+            summary: string;
+            detail?: string;
+        };
+        /** @description One pending-pairing candidate in GET /api/v1/inbox. */
+        InboxDevice: {
+            /** @description CCU that reported this pending device. */
+            central?: string;
+            address: string;
+            model: string;
+            serial?: string;
+            manufacturer?: string;
+            /** Format: int64 */
+            first_seen?: number;
+        };
+        /** @description One candidate returned by GET /channels/{no}/linkable-channels. */
+        LinkableChannel: {
+            address: string;
+            channel_type?: string;
+            channel_type_label?: string;
+            channel_name?: string;
+            device_address: string;
+            device_name?: string;
+            device_model?: string;
+        };
+        /** @description One structured log line in the live-log ring. */
+        LogRecord: {
+            /** Format: int64 */
+            seq: number;
+            /** Format: date-time */
+            time: string;
+            level: string;
+            logger?: string;
+            msg: string;
+            attrs?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description One central's RPC recorder status. */
+        RPCRecordingStatus: {
+            central: string;
+            active: boolean;
+            entries: number;
+            ends_at?: string;
+            randomize?: boolean;
+        };
+        /** @description One row in GET /api/v1/rooms. */
+        RoomEntry: {
+            name: string;
+            device_count: number;
         };
     };
     responses: {
@@ -6775,7 +6878,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["LinkableChannel"][];
+                };
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
@@ -7264,7 +7369,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["InboxDevice"][];
+                };
             };
         };
     };
@@ -7282,7 +7389,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RoomEntry"][];
+                };
             };
         };
     };
@@ -7384,7 +7493,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["FunctionEntry"][];
+                };
             };
         };
     };
@@ -7584,7 +7695,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["BackupEntry"][];
+                };
             };
             502: components["responses"]["BadGateway"];
         };
@@ -7677,7 +7790,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EditSessionResponse"];
+                };
             };
             400: components["responses"]["BadRequest"];
             422: components["responses"]["UnprocessableEntity"];
@@ -7725,7 +7840,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EditSessionResponse"];
+                };
             };
             400: components["responses"]["BadRequest"];
             /** @description Session expired */
@@ -7853,7 +7970,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["Incident"][];
+                };
             };
         };
     };
@@ -8048,7 +8167,9 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        [key: string]: unknown;
+                        /** Format: int64 */
+                        last_seq: number;
+                        records: components["schemas"]["LogRecord"][];
                     };
                     "application/x-ndjson": string;
                 };
@@ -8080,6 +8201,43 @@ export interface operations {
             };
             500: components["responses"]["InternalError"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    getDiagnosticsRSSI: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-device RF reception strength */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        devices?: {
+                            address?: string;
+                            name?: string;
+                            interface_id?: string;
+                            central?: string;
+                            /** @description RSSI_DEVICE in dBm (device's view); null when absent. */
+                            rssi_device?: number | null;
+                            /** @description RSSI_PEER in dBm (partner's view); null when absent. */
+                            rssi_peer?: number | null;
+                            /** @description Battery level 0-100 (%); null for mains-powered devices. */
+                            battery_level?: number | null;
+                            /** @description LOW_BAT flag; null when the device has no battery indicator. */
+                            low_battery?: boolean | null;
+                            /** @description Whether the device is currently reachable. */
+                            reachable?: boolean;
+                        }[];
+                    };
+                };
+            };
         };
     };
     getDiagnosticsReliability: {
@@ -8504,9 +8662,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["RPCRecordingStatus"][];
                 };
             };
         };
@@ -8532,9 +8688,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["RPCRecordingStatus"][];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -8562,9 +8716,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    }[];
+                    "application/json": components["schemas"]["RPCRecordingStatus"][];
                 };
             };
             400: components["responses"]["BadRequest"];

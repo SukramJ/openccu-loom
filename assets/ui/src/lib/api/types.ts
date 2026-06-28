@@ -30,7 +30,9 @@ export type DataPointSource = "unobserved" | "cache" | "live" | "stale";
 export type DataPointSummary = components["schemas"]["DataPointSummary"];
 
 /** Per-DP UI classification the daemon computes via `pkg/hmui.HintFor`. */
-export type UIHint = NonNullable<components["schemas"]["DataPointSummary"]["ui_hint"]>;
+export type UIHint = NonNullable<
+  components["schemas"]["DataPointSummary"]["ui_hint"]
+>;
 
 // DeviceDetail re-exported from generated schema. openapi.yaml now marks
 // firmware / availability / channels required (the handler always emits
@@ -240,14 +242,8 @@ export type SimpleScheduleEntry = components["schemas"]["SimpleScheduleEntry"];
 // (active_profile_index) are safe to ignore in existing SPA callers.
 export type ClimateSchedule = components["schemas"]["Schedule"];
 
-// BackupEntry: not in generated schema (no backup schema defined in openapi.yaml components).
-// Keep hand-written.
-export type BackupEntry = {
-  id: string;
-  central: string;
-  bytes: number;
-  created_at: string;
-};
+// BackupEntry re-exported from generated schema.
+export type BackupEntry = components["schemas"]["BackupEntry"];
 
 // SysvarEntry re-exported from the generated SysvarSummary. central is
 // optional (Go json:"central,omitempty"); SysvarList.svelte builds its
@@ -299,16 +295,8 @@ export type HealthComponent = {
 // Generated uses a stricter status enum but is a superset — safe.
 export type HealthSnapshot = components["schemas"]["Health"];
 
-// Incident: not in generated schema (no /incidents endpoint schema defined in openapi.yaml).
-// Keep hand-written.
-export type Incident = {
-  id: string;
-  when: string;
-  component: string;
-  severity: "info" | "warn" | "error" | string;
-  summary: string;
-  detail?: string;
-};
+// Incident re-exported from generated schema.
+export type Incident = components["schemas"]["Incident"];
 
 // --- Diagnostics --------------------------------------------------
 
@@ -392,16 +380,9 @@ export type CentralLinksReport = {
   failed: number;
 };
 
-// RoomEntry/FunctionEntry: not in generated schema components. Keep hand-written.
-export type RoomEntry = {
-  name: string;
-  device_count: number;
-};
-
-export type FunctionEntry = {
-  name: string;
-  device_count: number;
-};
+// RoomEntry/FunctionEntry re-exported from generated schema.
+export type RoomEntry = components["schemas"]["RoomEntry"];
+export type FunctionEntry = components["schemas"]["FunctionEntry"];
 
 // UserListEntry re-exported from generated schema — shapes match.
 export type UserListEntry = components["schemas"]["UserListEntry"];
@@ -411,38 +392,18 @@ export type UserListEntry = components["schemas"]["UserListEntry"];
 // Additive extra field is safe to ignore.
 export type TokenListEntry = components["schemas"]["TokenListEntry"];
 
-// EditSessionResponse: not in generated schema components. Keep hand-written.
-export type EditSessionResponse = {
-  token: string;
-  key: string;
-  subject?: string;
-  expires: string;
-};
+// EditSessionResponse re-exported from generated schema.
+export type EditSessionResponse = components["schemas"]["EditSessionResponse"];
 
-// InboxDevice: not in generated schema components. Keep hand-written.
-export type InboxDevice = {
-  central: string;
-  address: string;
-  model: string;
-  serial?: string;
-  manufacturer?: string;
-  first_seen?: number;
-};
+// InboxDevice re-exported from generated schema. central is optional (Go json:"central,omitempty").
+export type InboxDevice = components["schemas"]["InboxDevice"];
 
 // ConfigSnapshot re-exported from generated schema.
 // Generated adds: extras, policies fields — additive, safe.
 export type ConfigSnapshot = components["schemas"]["ConfigSnapshot"];
 
-// LinkableChannel: not in generated schema components. Keep hand-written.
-export type LinkableChannel = {
-  address: string;
-  channel_type?: string;
-  channel_type_label?: string;
-  channel_name?: string;
-  device_address: string;
-  device_name?: string;
-  device_model?: string;
-};
+// LinkableChannel re-exported from generated schema.
+export type LinkableChannel = components["schemas"]["LinkableChannel"];
 
 // Per-device RF reception strength from `GET /diagnostics/rssi`, read from
 // the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP
@@ -464,31 +425,12 @@ export type RSSIMatrix = {
   devices: RSSIDevice[];
 };
 
-// RpcRecordingStatus: not in generated schema components. Keep hand-written.
-export type RpcRecordingStatus = {
-  central: string;
-  active: boolean;
-  entries: number;
-  ends_at?: string;
-  randomize?: boolean;
-};
+// RpcRecordingStatus re-exported from generated RPCRecordingStatus schema.
+export type RpcRecordingStatus = components["schemas"]["RPCRecordingStatus"];
 
-// InstallModeInterfaceEntry: one radio's install-mode state from
-// `GET /install-mode/interfaces`. Not in the generated schema yet.
-export type InstallModeInterfaceEntry = {
-  central?: string;
-  interface: string;
-  active: boolean;
-  seconds: number;
-  observed: boolean;
-};
+// InstallModeInterfaceEntry re-exported from generated schema.
+export type InstallModeInterfaceEntry =
+  components["schemas"]["InstallModeInterfaceEntry"];
 
-// LogRecord: not in generated schema components. Keep hand-written.
-export type LogRecord = {
-  seq: number;
-  time: string;
-  level: "debug" | "info" | "warn" | "error" | string;
-  logger?: string;
-  msg: string;
-  attrs?: Record<string, unknown>;
-};
+// LogRecord re-exported from generated schema.
+export type LogRecord = components["schemas"]["LogRecord"];
