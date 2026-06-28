@@ -7,6 +7,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { t } from "$lib/i18n";
@@ -201,14 +202,11 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("messages.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        {t("messages.summary", { alarms: alarms.length, services: services.length })}
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
+  <PageHeader
+    title={t("messages.title")}
+    subtitle={t("messages.summary", { alarms: alarms.length, services: services.length })}
+  >
+    {#snippet actions()}
       {#if (tab === "alarm" ? alarmCentrals : serviceCentrals).length > 1}
         <select
           bind:value={centralFilter}
@@ -224,8 +222,8 @@
       <Button type="button" variant="outline" size="sm" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <nav class="mb-4 flex gap-1 border-b border-slate-200 dark:border-slate-800">
     <button

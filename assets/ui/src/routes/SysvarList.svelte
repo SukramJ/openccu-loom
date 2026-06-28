@@ -12,6 +12,7 @@
   import DataTable from "$lib/components/ui/DataTable.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import { t } from "$lib/i18n";
   import { loadLS, saveLS } from "$lib/utils";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -230,16 +231,11 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("sysvars.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">
-        {loading
-          ? t("common.loading")
-          : t("sysvars.count", { count: sysvars.length })}
-      </p>
-    </div>
-    <div class="flex items-center gap-2">
+  <PageHeader
+    title={t("sysvars.title")}
+    subtitle={loading ? t("common.loading") : t("sysvars.count", { count: sysvars.length })}
+  >
+    {#snippet actions()}
       {#if centrals.length > 1}
         <select
           bind:value={centralFilter}
@@ -258,8 +254,8 @@
       <Button type="button" size="sm" onclick={() => (creating = !creating)}>
         {creating ? t("common.cancel") : t("common.new")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   {#if creating}
     <Card class="mb-4 p-4">

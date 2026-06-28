@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.4
+
+- **Fixed: the device-detail header now uses the full width on narrow screens.**
+  Inside the Home Assistant sidebar (Ingress), the device page header squeezed
+  the device name and model into a sliver and wrapped them character-by-character;
+  it now stacks cleanly and only places the action buttons beside the title when
+  there is enough room.
+
 ## 0.17.3
 
 - **Updated the embedded Homematic metadata to openccu-data 2026.6.1** (device

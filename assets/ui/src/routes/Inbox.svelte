@@ -7,6 +7,7 @@
   import Card from "$lib/components/ui/Card.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import PageHeader from "$lib/components/ui/PageHeader.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import { installModeStore } from "$lib/stores/installMode.svelte";
@@ -192,12 +193,8 @@
 </script>
 
 <section class="mx-auto max-w-6xl px-4 py-6 sm:px-6">
-  <header class="mb-4 flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-semibold">{t("inbox.title")}</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400">{t("inbox.subtitle")}</p>
-    </div>
-    <div class="flex flex-wrap items-center gap-2">
+  <PageHeader title={t("inbox.title")} subtitle={t("inbox.subtitle")}>
+    {#snippet actions()}
       {#if installModeStore.banner && !installModeStore.active}
         <span class="text-xs text-slate-500 dark:text-slate-400">{installModeStore.banner}</span>
       {/if}
@@ -244,8 +241,8 @@
       <Button type="button" variant="outline" onclick={() => void load()} disabled={loading}>
         {t("common.reload")}
       </Button>
-    </div>
-  </header>
+    {/snippet}
+  </PageHeader>
 
   <!-- Targeted teach-in by serial / device address -->
   <form
