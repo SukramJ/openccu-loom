@@ -6,56 +6,7 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.18.5]
 
-### Removed
-
-- **Internal only:** deleted unused scaffolding that never had a production
-  caller — the standalone `health.Connection`/`ConnectionRegistry` model
-  (superseded by the live health tracker), the `ClientCoordinator.PollClients` /
-  `SubscribeToHealthEvents` / `RestartClients` methods, and the never-published
-  `DeviceStateChangedEvent`. None were part of the REST/WebSocket contract, so
-  there is no API change and downstream clients are unaffected; the concept each
-  embodied is recorded in `docs/parity/by_design.md`.
-
-## [0.18.4]
-
-### Changed
-
-- **"Reload device" now refetches just that device.** Reloading a single device
-  from the UI previously pulled the descriptions for *every* device on the same
-  CCU interface; it now fetches only the target device and its channels
-  (`GetDeviceDescription` over the device plus its `CHILDREN`). One unreachable
-  channel is logged and skipped rather than failing the whole reload. The
-  operator-visible result is unchanged — only less work on the CCU, which
-  matters on large installations.
-
-## [0.18.3]
-
-### Added
-
-- **Scheduler health component.** The per-central health view now carries a
-  `scheduler` liveness row: if a periodic job has failed since the last health
-  heartbeat the component reads degraded for that interval and recovers once a
-  quiet interval passes (a failure delta against the cumulative
-  `scheduler.failures` metric). This completes the health-producer coverage
-  (MQTT, Matter and SQLite already reported status; REST and WebSocket stay
-  metric-only by design, since their liveness is implied by the daemon serving
-  `/health`).
-
-## [0.18.2]
-
-### Changed
-
-- **API schema completeness.** Nine response shapes the web UI carried as
-  hand-written types — backups, incidents, rooms, functions, linkable channels,
-  RPC-recording status, live-log records, edit-session, and inbox devices — are
-  now defined in `assets/openapi.yaml` and consumed by the SPA from the
-  generated client, so the documented contract and the UI stay in sync (API
-  contract 2.5.0 → 2.6.0, additive). Two latent UI/daemon mismatches were
-  corrected in passing: the inbox device's `central` field is optional (matching
-  what the daemon serves), and the install-mode interface entry now carries its
-  `observed` flag.
-
-## [0.18.1]
+Bundles the work developed as 0.18.1–0.18.5 (none were tagged individually).
 
 ### Fixed
 
@@ -69,6 +20,46 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   end-to-end test that exercises the real TLV-payload → dispatcher → device path.
   Read-side attributes (current hue/saturation/CT) were already correct, so this
   is a write-path-only fix.
+
+### Added
+
+- **Scheduler health component.** The per-central health view now carries a
+  `scheduler` liveness row: if a periodic job has failed since the last health
+  heartbeat the component reads degraded for that interval and recovers once a
+  quiet interval passes (a failure delta against the cumulative
+  `scheduler.failures` metric). This completes the health-producer coverage
+  (MQTT, Matter and SQLite already reported status; REST and WebSocket stay
+  metric-only by design, since their liveness is implied by the daemon serving
+  `/health`).
+
+### Changed
+
+- **"Reload device" now refetches just that device.** Reloading a single device
+  from the UI previously pulled the descriptions for *every* device on the same
+  CCU interface; it now fetches only the target device and its channels
+  (`GetDeviceDescription` over the device plus its `CHILDREN`). One unreachable
+  channel is logged and skipped rather than failing the whole reload. The
+  operator-visible result is unchanged — only less work on the CCU, which
+  matters on large installations.
+- **API schema completeness.** Nine response shapes the web UI carried as
+  hand-written types — backups, incidents, rooms, functions, linkable channels,
+  RPC-recording status, live-log records, edit-session, and inbox devices — are
+  now defined in `assets/openapi.yaml` and consumed by the SPA from the
+  generated client, so the documented contract and the UI stay in sync (API
+  contract 2.5.0 → 2.6.0, additive). Two latent UI/daemon mismatches were
+  corrected in passing: the inbox device's `central` field is optional (matching
+  what the daemon serves), and the install-mode interface entry now carries its
+  `observed` flag.
+
+### Removed
+
+- **Internal only:** deleted unused scaffolding that never had a production
+  caller — the standalone `health.Connection`/`ConnectionRegistry` model
+  (superseded by the live health tracker), the `ClientCoordinator.PollClients` /
+  `SubscribeToHealthEvents` / `RestartClients` methods, and the never-published
+  `DeviceStateChangedEvent`. None were part of the REST/WebSocket contract, so
+  there is no API change and downstream clients are unaffected; the concept each
+  embodied is recorded in `docs/parity/by_design.md`.
 
 ## [0.18.0]
 

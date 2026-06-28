@@ -2,28 +2,16 @@
 
 ## 0.18.5
 
-- Internal housekeeping only (removed unused code). No functional change.
-
-## 0.18.4
-
-- "Reload device" now refetches only that device and its channels instead of
-  every device on the CCU — faster on large installations.
-
-## 0.18.3
-
-- Health view now shows a `scheduler` row that flags when a background job has
-  recently failed (and clears once things settle).
-
-## 0.18.2
-
-- Internal: filled in the OpenAPI schema for several REST responses so the
-  documented API and the web UI stay in sync. No change to behaviour.
-
-## 0.18.1
-
 - **Fixed: setting colour or colour-temperature on a Matter light now works.**
   Colour-picker changes from Apple Home / Google Home were silently dropped (the
   bulb never changed); the ColorControl command path is now decoded correctly.
+- Health view now shows a `scheduler` row that flags when a background job has
+  recently failed (and clears once things settle).
+- "Reload device" now refetches only that device and its channels instead of
+  every device on the CCU — faster on large installations.
+- Internal: filled in the OpenAPI schema for several REST responses so the
+  documented API and the web UI stay in sync, and removed unused code. No
+  functional change from these two.
 
 ## 0.18.0
 
