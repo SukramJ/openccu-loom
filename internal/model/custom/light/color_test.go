@@ -213,3 +213,24 @@ func TestFixedColorLightSet(t *testing.T) {
 		t.Fatalf("last=%+v", got)
 	}
 }
+
+// TestColorLightAttachesHSColorDP verifies that NewColorLight attaches an HSColor
+// combined DP that appears in channel.CombinedDataPoints().
+func TestColorLightAttachesHSColorDP(t *testing.T) {
+	t.Parallel()
+	w := &colorStubWriter{}
+	ch := newColorRig(t, "HmIP-RGBW:3", w, custom.LightCapabilities{SupportsColor: true, Dimmable: true})
+	_ = NewColorLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true}})
+
+	cdps := ch.CombinedDataPoints()
+	var found bool
+	for _, cdp := range cdps {
+		if m, ok := cdp.(device.CombinedDataPoint); ok && m.IsCombined() {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected an HSColor combined DP in CombinedDataPoints(), got %d DPs", len(cdps))
+	}
+}

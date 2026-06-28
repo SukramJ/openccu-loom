@@ -109,7 +109,7 @@ func TestLoadAlarmMessagesPopulatesHub(t *testing.T) {
 	)
 	h := hubmodel.NewHub("test-central")
 
-	if err := loadAlarmMessages(context.Background(), r, h); err != nil {
+	if err := loadAlarmMessages(context.Background(), r, h, nil, "en"); err != nil {
 		t.Fatalf("loadAlarmMessages: %v", err)
 	}
 	got := h.Messages.List()
@@ -122,7 +122,7 @@ func TestLoadAlarmMessagesNilRunner(t *testing.T) {
 	t.Parallel()
 	h := hubmodel.NewHub("test-central")
 	// A nil runner must be a no-op, not a panic.
-	if err := loadAlarmMessages(context.Background(), nil, h); err != nil {
+	if err := loadAlarmMessages(context.Background(), nil, h, nil, "en"); err != nil {
 		t.Errorf("loadAlarmMessages(nil runner) = %v, want nil", err)
 	}
 }
@@ -131,7 +131,7 @@ func TestLoadAlarmMessagesNilHub(t *testing.T) {
 	t.Parallel()
 	r := newRegaRunnerFor(t, `[]`)
 	// Must not panic.
-	if err := loadAlarmMessages(context.Background(), r, nil); err != nil {
+	if err := loadAlarmMessages(context.Background(), r, nil, nil, "en"); err != nil {
 		t.Errorf("loadAlarmMessages(nil hub) = %v, want nil", err)
 	}
 }
@@ -385,7 +385,7 @@ func TestLoadServiceMessagesDeduplicated(t *testing.T) {
 	)
 	unit := newMinimalUnit(t, "HmIP-RF", "BidCos-RF")
 
-	if err := loadServiceMessages(context.Background(), r, unit); err != nil {
+	if err := loadServiceMessages(context.Background(), r, unit, nil, "en"); err != nil {
 		t.Fatalf("loadServiceMessages: %v", err)
 	}
 	msgs := unit.HubModel.ServiceMessages.List()
@@ -398,7 +398,7 @@ func TestLoadServiceMessagesNilRunner(t *testing.T) {
 	t.Parallel()
 	unit := newMinimalUnit(t)
 	// A nil runner must be a no-op, not a panic.
-	if err := loadServiceMessages(context.Background(), nil, unit); err != nil {
+	if err := loadServiceMessages(context.Background(), nil, unit, nil, "en"); err != nil {
 		t.Errorf("loadServiceMessages(nil runner) = %v, want nil", err)
 	}
 }

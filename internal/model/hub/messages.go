@@ -34,6 +34,9 @@ type AlarmMessage struct {
 	Counter     int
 	LastTrigger string
 	Rooms       []string
+	// DisplayName is the human-readable translation of the message code
+	// extracted from the raw CCU name (the part after the last dot).
+	DisplayName string
 }
 
 // AlarmMessages aggregates active alarm entries. Updates replace the
@@ -228,6 +231,9 @@ type ServiceMessage struct {
 	Rooms     []string
 	Functions []string
 	Quittable bool
+	// DisplayName is the human-readable translation of the message code
+	// extracted from the raw CCU name (the part after the last dot).
+	DisplayName string
 }
 
 // ServiceMessages aggregates service messages.
@@ -501,6 +507,9 @@ func (s *ServiceMessages) AdditionalInformation() []map[string]any {
 			"counter":     msgs[i].Counter,
 			"timestamp":   msgs[i].Timestamp.Unix(),
 		}
+		if msgs[i].DisplayName != "" {
+			entry["display_name"] = msgs[i].DisplayName
+		}
 		if msgs[i].Description != "" {
 			entry["description"] = msgs[i].Description
 		}
@@ -534,6 +543,9 @@ func (a *AlarmMessages) AdditionalInformation() []map[string]any {
 			"state_value": msgs[i].StateValue,
 			"counter":     msgs[i].Counter,
 			"timestamp":   msgs[i].Timestamp.Unix(),
+		}
+		if msgs[i].DisplayName != "" {
+			entry["display_name"] = msgs[i].DisplayName
 		}
 		if len(msgs[i].Rooms) > 0 {
 			entry["rooms"] = msgs[i].Rooms

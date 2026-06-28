@@ -15,6 +15,7 @@ import (
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -35,6 +36,7 @@ type southboundWiringDeps struct {
 	callbackHost            func(*config.CentralConfig) string
 	binRPCSrv               *rpcserver.BINRPCServer
 	binRPCPort              int
+	catalogs                *i18n.Catalogs
 	visReg                  *visibility.Registry
 	masterValuesStore       *sqlite.MasterValuesStore
 	valuesCacheStore        *sqlite.ValuesCacheStore
@@ -115,6 +117,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	bringUpMgr, wireErr := adapter.WireCentrals(ctx, cfg, reg, adapter.WireDeps{
 		Writer:               d.valueWriter,
 		Translations:         d.translations,
+		Catalogs:             d.catalogs,
 		CallbackServer:       d.callbackSrv,
 		CallbackPort:         d.callbackPort,
 		CallbackHostFor:      d.callbackHost,

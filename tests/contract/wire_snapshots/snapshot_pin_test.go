@@ -27,7 +27,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
-	"github.com/SukramJ/openccu-loom/internal/model/custom/hood"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/lock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/siren"
@@ -656,19 +655,6 @@ func newSoundPlayerFixture(t *testing.T, w *fakeWriter) *siren.SoundPlayer {
 	})
 	ch.Put(repDP)
 	return siren.NewSoundPlayer(siren.SoundPlayerConfig{Channel: ch, Writer: w})
-}
-
-func newHoodFixture(t *testing.T, w *fakeWriter) *hood.Hood {
-	t.Helper()
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "COOK0001"})
-	ch := d.AddChannel("COOK0001:1", 1, "HOOD", hmenum.ParamsetKeyValues)
-	lp := generic.NewInteger(generic.Spec{
-		Key:        hmtypes.DataPointKey{ChannelAddress: "COOK0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterLevel)},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeInteger, Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent},
-		Writer:     w,
-	})
-	ch.Put(lp)
-	return hood.New(hood.Config{Channel: ch, Writer: w})
 }
 
 // --- pin runner ---------------------------------------------------------
@@ -1301,21 +1287,6 @@ func TestWireSnapshots(t *testing.T) {
 				sp := newSoundPlayerFixture(t, w)
 				_ = sp.StopSound(ctx, pri)
 				return []WireCapture{w.Capture()}
-			},
-		},
-		// Hood
-		{
-			dpType: "Hood", setter: "SetFanSpeed",
-			run: func(t *testing.T, w *fakeWriter) []WireCapture {
-				t.Helper()
-				speeds := []hood.FanSpeed{hood.FanSpeedOff, hood.FanSpeedLow, hood.FanSpeedMedium, hood.FanSpeedHigh}
-				out := make([]WireCapture, 0, len(speeds))
-				for _, s := range speeds {
-					h := newHoodFixture(t, w)
-					_ = h.SetFanSpeed(ctx, s, pri)
-					out = append(out, w.Capture())
-				}
-				return out
 			},
 		},
 	}

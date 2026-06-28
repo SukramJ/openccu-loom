@@ -429,6 +429,10 @@ func (p *DevicePipeline) IngestFromBackend(
 	// visibility marks have been applied otherwise a calculated sensor's source
 	// DP could still report the wrong usage.
 	p.materialiseCalculatedDataPoints(interfaceID, logger)
+	// Combined DPs (LevelCombined / HSColor / Timer / …) are attached by the
+	// custom-DP constructors above; bridge their OnAnyUpdate into the event bus
+	// here so MQTT / WS / REST receive live combined-state changes.
+	p.materialiseCombinedDataPoints(interfaceID, logger)
 	// Wire optimistic-rollback → event-bus producers for every DP on
 	// every channel of every device in the interface scope. Mirrors
 	// Python `data_point.py:1493-1504 _publish_rollback_event`; without
@@ -982,6 +986,40 @@ func (p *DevicePipeline) materialiseCalculatedDataPoints(interfaceID string, log
 			}
 			for _, s := range sensors {
 				bridgeCalculatedSensorToBus(bus, centralName, d.InterfaceID, ch.Address, s, logger)
+			}
+		}
+	}
+}
+
+// materialiseCombinedDataPoints walks every channel of every device on
+// interfaceID and, for each combined DP attached to the channel, wires
+// [BridgeCombinedDataPoint] so value changes propagate as
+// [hmevent.DataPointValueChangedEvent] on the central event bus. This makes
+// WS / MQTT / REST consumers receive live combined-state updates for
+// LevelCombined (blind level+slats) and HSColor (hue+saturation) without each
+// adapter needing its own enumeration step.
+//
+// The combined DPs are already attached to channels by the custom-DP
+// constructors (NewBlind / NewColorLight); this pass only installs the
+// event-bus bridge. The unsubscribe is intentionally not captured: combined
+// DP lifetime equals channel lifetime, and re-attach replaces the registration.
+func (p *DevicePipeline) materialiseCombinedDataPoints(interfaceID string, logger *slog.Logger) {
+	if p.unit == nil {
+		return
+	}
+	bus := p.unit.EventBus
+	for _, d := range p.unit.ModelRegistry.List() {
+		if d.InterfaceID != interfaceID {
+			continue
+		}
+		for _, ch := range d.Channels() {
+			for _, rawDP := range ch.CombinedDataPoints() {
+				dp, ok := rawDP.(CombinedDataPoint)
+				if !ok {
+					continue
+				}
+				param := rawDP.DataPointKey().Parameter
+				BridgeCombinedDataPoint(bus, dp, interfaceID, ch.Address, param, logger)
 			}
 		}
 	}

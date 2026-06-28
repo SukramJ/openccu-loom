@@ -654,3 +654,64 @@ func TestSeedReadableEventsNonNilUnitNoDevices(t *testing.T) {
 	// No devices → covers lines 110-112 (wireID assignment) and 147-152 (log block).
 	seedReadableEvents(context.Background(), c, hmenum.InterfaceHmIPRF, nil)
 }
+
+// ============================================================
+// DevicePipeline.materialiseCombinedDataPoints
+// ============================================================
+
+func TestMaterialiseCombinedDataPointsNilCentral(t *testing.T) {
+	t.Parallel()
+	p := NewDevicePipeline(nil)
+	p.materialiseCombinedDataPoints("HmIP-RF", nil) // must not panic
+}
+
+func TestMaterialiseCombinedDataPointsWrongInterface(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-cdp-iface"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	dev := device.New(device.Config{Address: "CDPDEV001", InterfaceID: "BidCos-RF", Model: "HM-Sec-Win"})
+	c.ModelRegistry.Put(dev)
+	p := NewDevicePipeline(c)
+	p.materialiseCombinedDataPoints("HmIP-RF", nil) // no matching device; no panic
+}
+
+func TestMaterialiseCombinedDataPointsBridgesValueToBus(t *testing.T) {
+	t.Parallel()
+	c, err := central.New(central.Config{Name: "ccu-cdp-bus"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+
+	dev := device.New(device.Config{Address: "CDPDEV002", InterfaceID: "HmIP-RF", Model: "HM-Blind"})
+	ch := dev.AddChannel("CDPDEV002:1", 1, "BLIND", hmenum.ParamsetKeyValues)
+	fdp := &pipelineFakeCombinedDP{dpKey: hmtypes.DataPointKey{
+		ChannelAddress: "CDPDEV002:1",
+		ParamsetKey:    hmenum.ParamsetKeyCombined,
+		Parameter:      "LEVEL_COMBINED",
+	}}
+	ch.AttachCalculatedDataPoint(fdp)
+	c.ModelRegistry.Put(dev)
+
+	p := NewDevicePipeline(c)
+	p.materialiseCombinedDataPoints("HmIP-RF", slog.Default())
+
+	if !fdp.subscribed {
+		t.Fatal("materialiseCombinedDataPoints must call OnAnyUpdate on the combined DP")
+	}
+}
+
+// pipelineFakeCombinedDP is a minimal fake that satisfies device.CombinedDataPoint
+// and the adapter CombinedDataPoint interface (OnAnyUpdate).
+type pipelineFakeCombinedDP struct {
+	dpKey      hmtypes.DataPointKey
+	subscribed bool
+}
+
+func (f *pipelineFakeCombinedDP) IsCombined() bool                   { return true }
+func (f *pipelineFakeCombinedDP) DataPointKey() hmtypes.DataPointKey { return f.dpKey }
+func (f *pipelineFakeCombinedDP) OnAnyUpdate(_ func(old, next any)) func() {
+	f.subscribed = true
+	return func() {}
+}

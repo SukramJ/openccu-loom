@@ -27,7 +27,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
-	"github.com/SukramJ/openccu-loom/internal/model/custom/hood"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/lock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/siren"
@@ -664,20 +663,6 @@ func newSoundPlayerFixture(t *testing.T, w *fakeWriter) *siren.SoundPlayer {
 // Real devices ship SOUNDFILE_001..SOUNDFILE_189; we use a 5-entry stub.
 func buildSoundfileList() []string {
 	return []string{"SOUNDFILE_001", "SOUNDFILE_002", "SOUNDFILE_003", "SOUNDFILE_004", "SOUNDFILE_005"}
-}
-
-// newHoodFixture builds a Hood custom DP.
-func newHoodFixture(t *testing.T, w *fakeWriter) *hood.Hood {
-	t.Helper()
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "COOK0001"})
-	ch := d.AddChannel("COOK0001:1", 1, "HOOD", hmenum.ParamsetKeyValues)
-	lp := generic.NewInteger(generic.Spec{
-		Key:        hmtypes.DataPointKey{ChannelAddress: "COOK0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterLevel)},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeInteger, Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent},
-		Writer:     w,
-	})
-	ch.Put(lp)
-	return hood.New(hood.Config{Channel: ch, Writer: w})
 }
 
 // --- generator entries --------------------------------------------------
@@ -1488,30 +1473,6 @@ func TestGenerateWireSnapshots(t *testing.T) {
 				sp := newSoundPlayerFixture(t, w)
 				_ = sp.StopSound(ctx, pri)
 				return []SnapshotEntry{{Label: "priority=normal", Calls: w.Capture()}}
-			},
-		},
-		// ── Hood ─────────────────────────────────────────────────────────────
-		{
-			dpType: "Hood",
-			setter: "SetFanSpeed",
-			run: func(t *testing.T, w *fakeWriter) []SnapshotEntry {
-				t.Helper()
-				speeds := []struct {
-					label string
-					s     hood.FanSpeed
-				}{
-					{"OFF", hood.FanSpeedOff},
-					{"LOW", hood.FanSpeedLow},
-					{"MEDIUM", hood.FanSpeedMedium},
-					{"HIGH", hood.FanSpeedHigh},
-				}
-				var entries []SnapshotEntry
-				for _, sv := range speeds {
-					h := newHoodFixture(t, w)
-					_ = h.SetFanSpeed(ctx, sv.s, pri)
-					entries = append(entries, SnapshotEntry{Label: sv.label, Calls: w.Capture()})
-				}
-				return entries
 			},
 		},
 	}

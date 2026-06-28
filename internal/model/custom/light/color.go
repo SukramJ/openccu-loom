@@ -10,6 +10,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -40,6 +41,19 @@ func NewColorLight(cfg Config) *ColorLight {
 	}
 	if cl.saturation != nil {
 		_ = cl.saturation.OnConfirmedUpdate(func(_, _ float64) { cl.dataVersion.Bump() })
+	}
+	// Attach an HSColor combined DP so the aggregate (hue + saturation) is
+	// surfaced on the event bus and visible via Channel.CombinedDataPoints.
+	// The write path remains ColorLight.SetColor; HSColor is read-side only.
+	if cfg.Channel != nil && cl.hue != nil && cl.saturation != nil {
+		hs := combined.NewHSColorWithCentral(
+			cfg.Channel.CentralName(),
+			cfg.Channel.Address,
+			cfg.Writer,
+			hmenum.ParameterHue,
+			hmenum.ParameterSaturation,
+		)
+		cfg.Channel.AttachCalculatedDataPoint(hs)
 	}
 	return cl
 }

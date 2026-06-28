@@ -27,6 +27,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/internal/store/visibility"
@@ -59,8 +60,12 @@ const connectionCheckerInterval = 15 * time.Second
 // beyond the config + registry pair. Fields marked optional can be
 // nil — the daemon degrades gracefully (no callbacks wired).
 type WireDeps struct {
-	Writer         *client.ValueWriter
-	Translations   *ccudata.Translations
+	Writer       *client.ValueWriter
+	Translations *ccudata.Translations
+	// Catalogs provides the daemon i18n translations used to produce
+	// human-readable display names for alarm and service message codes.
+	// May be nil — callers that omit it get raw code strings as display names.
+	Catalogs       *i18n.Catalogs
 	CallbackServer *rpcserver.XMLRPCServer // optional
 	// CallbackPort is the effective XML-RPC callback port. Required when
 	// CallbackServer != nil. The host is resolved per-central via
@@ -296,7 +301,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 
 	// Hub first: a failure here means the CCU is not yet serving JSON-RPC.
 	// Return before any wiring so the gate retries cleanly with no half-state.
-	runner, hubData, hubCloser, err := WireHub(ctx, *cc, unit, logger)
+	runner, hubData, hubCloser, err := WireHub(ctx, *cc, unit, logger, deps.Catalogs, cfg.Locale)
 	if err != nil {
 		logger.Warn("wire.hub.failed",
 			slog.String("central", cc.Name),

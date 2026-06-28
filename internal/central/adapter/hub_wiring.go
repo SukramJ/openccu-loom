@@ -25,6 +25,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/devicedetails"
@@ -114,6 +115,8 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 	cc config.CentralConfig,
 	unit *central.Unit,
 	logger *slog.Logger,
+	catalogs *i18n.Catalogs,
+	locale string,
 ) (*rega.Runner, HubData, func(), error) {
 	endpoint := jsonrpcEndpoint(cc)
 	hubComponent := "hub." + cc.Name
@@ -325,10 +328,10 @@ func WireHub( //nolint:funlen // composition/wiring: long sequential setup
 				return loadInbox(ctx, runner, unit)
 			},
 			ServiceMessages: func(ctx context.Context) error {
-				return loadServiceMessages(ctx, runner, unit)
+				return loadServiceMessages(ctx, runner, unit, catalogs, locale)
 			},
 			AlarmMessages: func(ctx context.Context) error {
-				return loadAlarmMessages(ctx, runner, unit.HubModel)
+				return loadAlarmMessages(ctx, runner, unit.HubModel, catalogs, locale)
 			},
 			SystemUpdate: func(ctx context.Context) error {
 				return loadSystemUpdate(ctx, runner, unit.HubModel)
@@ -956,7 +959,7 @@ func loadInbox(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
 
 // loadServiceMessages fetches active service messages via the ReGa script
 // engine (get_service_messages) and refreshes unit.HubModel.ServiceMessages.
-func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit) error {
+func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit, catalogs *i18n.Catalogs, locale string) error {
 	if r == nil || unit == nil || unit.HubModel == nil {
 		return nil
 	}
@@ -977,12 +980,13 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 		}
 		seen[id] = struct{}{}
 		all = append(all, hub.ServiceMessage{
-			ID:         id,
-			Name:       decodeRegaField(m.Name),
-			Address:    m.Address,
-			DeviceName: decodeRegaField(m.DeviceName),
-			Type:       hmenum.ServiceMessageType(m.Type),
-			Counter:    m.Counter,
+			ID:          id,
+			Name:        decodeRegaField(m.Name),
+			Address:     m.Address,
+			DeviceName:  decodeRegaField(m.DeviceName),
+			Type:        hmenum.ServiceMessageType(m.Type),
+			Counter:     m.Counter,
+			DisplayName: messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
 		})
 	}
 	unit.HubModel.ServiceMessages.Replace(all)
@@ -992,7 +996,7 @@ func loadServiceMessages(ctx context.Context, r *rega.Runner, unit *central.Unit
 // loadAlarmMessages fetches all active alarm messages via the ReGa script
 // engine (get_alarm_messages) and refreshes h.Messages. The query is
 // central-wide; no per-interface iteration is needed.
-func loadAlarmMessages(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
+func loadAlarmMessages(ctx context.Context, r *rega.Runner, h *hub.Hub, catalogs *i18n.Catalogs, locale string) error {
 	if r == nil || h == nil {
 		return nil
 	}
@@ -1013,10 +1017,32 @@ func loadAlarmMessages(ctx context.Context, r *rega.Runner, h *hub.Hub) error {
 			DeviceName:  decodeRegaField(m.DeviceName),
 			Counter:     m.Counter,
 			LastTrigger: m.LastTrigger,
+			DisplayName: messageDisplayName(catalogs, locale, decodeRegaField(m.Name)),
 		})
 	}
 	h.Messages.Replace(msgs)
 	return nil
+}
+
+// messageDisplayName extracts the message code from rawName (the segment after
+// the last dot) and returns the translated string from catalogs using the
+// given locale. Falls back to the raw code when catalogs is nil or the key is
+// absent, and to rawName itself when no dot is present.
+func messageDisplayName(catalogs *i18n.Catalogs, locale, rawName string) string {
+	code := rawName
+	if idx := strings.LastIndex(rawName, "."); idx >= 0 {
+		code = rawName[idx+1:]
+	}
+	if catalogs == nil || code == "" {
+		return code
+	}
+	key := "message.code." + code
+	translated := catalogs.T(locale, key)
+	// T returns the key itself when no translation is found.
+	if translated == key {
+		return code
+	}
+	return translated
 }
 
 // decodeRegaField URL-decodes a field emitted by the get_service_messages,

@@ -180,3 +180,137 @@ func formatSeconds(s float64) string {
 	}
 	return fmt.Sprintf("%g", s)
 }
+
+// CombinedSensorEvent carries the per-channel context the discovery builder
+// needs to emit an HA `sensor` entity for a combined DP (LevelCombined or
+// HSColor). The state payload is a JSON object; ValueTemplate extracts the
+// primary scalar from it.
+type CombinedSensorEvent struct {
+	// Central is the CCU identifier (required for topic scoping).
+	Central string
+	// Interface is the CCU interface identifier.
+	Interface string
+	// DeviceAddress is the base device address.
+	DeviceAddress string
+	// ChannelNo is the channel number within the device.
+	ChannelNo int
+	// DeviceName is the human-readable device name.
+	DeviceName string
+	// Model is the CCU device model string.
+	Model string
+	// Device, when non-nil, is used by deviceDescriptor for the HA device block.
+	Device any
+	// Kind is the combined-DP kind ("level_combined", "hs_color"). Used as the
+	// topic-segment and suffix on object_id / unique_id.
+	Kind string
+	// Label is the operator-facing entity name.
+	Label string
+	// ValueTemplate is the HA Jinja2 template that extracts the primary value
+	// from the JSON state payload (e.g. "{{ value_json.level }}").
+	ValueTemplate string
+	// Unit is the engineering unit shown in HA. Optional.
+	Unit string
+}
+
+// BuildCombinedSensorDiscovery builds the HA Discovery `sensor` payload for a
+// combined DP that publishes a JSON object as its state.
+func (d *DefaultDiscoveryBuilder) BuildCombinedSensorDiscovery(centralName string, ev CombinedSensorEvent) DiscoveryItem {
+	if ev.Kind == "" || ev.DeviceAddress == "" {
+		return DiscoveryItem{}
+	}
+	stateTopic := d.TopicBuilder.CombinedState(centralName, ev.Interface, ev.DeviceAddress, ev.ChannelNo, ev.Kind)
+
+	nodeID := discoveryNodeID(centralName, ev.DeviceAddress)
+	objectID := fmt.Sprintf("openccu-loom_%s_%d_%s",
+		strings.ToLower(ev.DeviceAddress), ev.ChannelNo, ev.Kind)
+
+	mockEv := Event{
+		Central:       centralName,
+		Interface:     ev.Interface,
+		DeviceAddress: ev.DeviceAddress,
+		DeviceName:    ev.DeviceName,
+		Model:         ev.Model,
+		ChannelNo:     ev.ChannelNo,
+		Device:        ev.Device,
+	}
+
+	availability := []map[string]string{
+		{
+			"topic":                 d.TopicBuilder.BridgeStatus(),
+			"payload_available":     "online",
+			"payload_not_available": "offline",
+		},
+		{
+			"topic":                 d.TopicBuilder.DeviceAvailability(centralName, ev.Interface, ev.DeviceAddress),
+			"payload_available":     "online",
+			"payload_not_available": "offline",
+		},
+	}
+
+	body := map[string]any{
+		"name":              ev.Label,
+		"unique_id":         objectID,
+		"state_topic":       stateTopic,
+		"availability":      availability,
+		"availability_mode": "all",
+		"device":            deviceDescriptor(mockEv, d.Hub.URL, d.SubDevicesEnabled),
+		"origin":            BuildOriginInfo(),
+		"entity_category":   EntityCategoryDiagnostic,
+	}
+	if ev.ValueTemplate != "" {
+		body["value_template"] = ev.ValueTemplate
+	}
+	if ev.Unit != "" {
+		body["unit_of_measurement"] = ev.Unit
+	}
+
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return DiscoveryItem{}
+	}
+	return DiscoveryItem{
+		Component: string(HAComponentSensor),
+		NodeID:    nodeID,
+		ObjectID:  objectID,
+		Payload:   buf,
+		OK:        true,
+	}
+}
+
+// PublishCombinedSensorDiscovery publishes the HA Discovery payload for a
+// combined-DP sensor entity. No-ops when HA discovery is disabled.
+func (b *Bridge) PublishCombinedSensorDiscovery(ctx context.Context, centralName string, ev CombinedSensorEvent) error {
+	if !b.cfg.HADiscoveryEnabled {
+		return nil
+	}
+	if b.cfg.DiscoveryBuilder == nil {
+		return nil
+	}
+	builder, ok := b.cfg.DiscoveryBuilder.(*DefaultDiscoveryBuilder)
+	if !ok {
+		return nil
+	}
+	item := builder.BuildCombinedSensorDiscovery(centralName, ev)
+	if !item.OK {
+		return nil
+	}
+	return b.publishDiscovery(ctx, item.Component, item.NodeID, item.ObjectID, item.Payload)
+}
+
+// PublishCombinedSensorState publishes the current JSON state to the combined
+// sensor's retained state topic.
+func (b *Bridge) PublishCombinedSensorState(
+	ctx context.Context,
+	centralName, iface, address string,
+	channel int,
+	kind, jsonState string,
+) error {
+	if !b.cfg.RawEnabled {
+		return nil
+	}
+	if centralName == "" {
+		centralName = b.cfg.CentralName
+	}
+	topic := b.topics.CombinedState(centralName, iface, address, channel, kind)
+	return b.client.Publish(ctx, topic, []byte(jsonState), b.cfg.QoS.State, true)
+}

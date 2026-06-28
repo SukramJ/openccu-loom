@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/model/combined"
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
@@ -275,5 +276,43 @@ func TestBlindHMSetPositionAfterTiltSendsLevelCombined(t *testing.T) {
 	// level=1.0 → int(1.0*100*2)=200=0xc8; tilt staged=0.5 → int(0.5*100*2)=100=0x64 → "0xc8,0x64"
 	if got, ok := cc[0].value.(string); !ok || got != "0xc8,0x64" {
 		t.Errorf("LEVEL_COMBINED=%v, want 0xc8,0x64", cc[0].value)
+	}
+}
+
+// TestBlindHMAttachesLevelCombinedDP verifies that NewBlind (HM kind, tilt)
+// attaches a LevelCombined combined DP that appears in CombinedDataPoints().
+func TestBlindHMAttachesLevelCombinedDP(t *testing.T) {
+	t.Parallel()
+	w := &putWriter{}
+	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "VCU3560967"})
+	ch := d.AddChannel("VCU3560967:1", 1, "BLIND", hmenum.ParamsetKeyValues)
+	mk := func(p hmenum.Parameter) *generic.Float {
+		return generic.NewFloat(generic.Spec{
+			Key: hmtypes.DataPointKey{
+				ChannelAddress: "VCU3560967:1",
+				ParamsetKey:    hmenum.ParamsetKeyValues,
+				Parameter:      string(p),
+			},
+			Descriptor: hmproto.ParameterData{
+				Type:       hmenum.ParameterTypeFloat,
+				Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+			},
+			Writer: w,
+		})
+	}
+	ch.Put(mk(hmenum.ParameterLevel))
+	ch.Put(mk(hmenum.ParameterLevel2))
+	_ = NewBlind(BlindConfig{Channel: ch, Writer: w, Capabilities: custom.CoverCapabilities{SupportsTilt: true}, Kind: BlindKindHM})
+
+	cdps := ch.CombinedDataPoints()
+	var found bool
+	for _, cdp := range cdps {
+		if _, ok := cdp.(*combined.LevelCombined); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected LevelCombined in CombinedDataPoints(), got %d DPs", len(cdps))
 	}
 }

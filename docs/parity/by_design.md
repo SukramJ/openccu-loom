@@ -2678,16 +2678,6 @@ Go path: `internal/model/custom/lock/lock.go::unlockEventRing`.
 
 ---
 
-### A2-BD02 — Hood custom data point is Go-only
-
-`Hood` (`internal/model/custom/hood/hood.go`) exposes the HmIP-COOK fan-speed and light switch as a unified custom DP. The reference implementation has no `Hood` custom DP; the HmIP-COOK is handled generically there.
-
-This is by design: OpenCCU-Loom targets the HmIP-COOK as a first-class device with a dedicated MQTT/Matter surface (fan-speed levels 0..3, light on/off). The reference implementation surfaces it as plain generic DPs. No parity gap exists — the Go DP is an extension, not a divergence from a Python counterpart.
-
-Go path: `internal/model/custom/hood/hood.go`.
-
----
-
 ### A2-BD03 — Valve modulating data point is Go-only
 
 `Valve.Modulating` (`internal/model/custom/valve/valve.go:139-205`) exposes a continuous LEVEL parameter on modulating valve actuators (e.g. HmIP-FALMOT-C12). The reference implementation contains only `CustomDpIpIrrigationValve` (a switch-based on/off valve).
@@ -2822,16 +2812,6 @@ Go path: `internal/model/hub/metrics.go::MetricLastEventAgeSecs`, `internal/nort
 
 ---
 
-### A3-BD-MessageDisplayName — `AlarmMessage`/`ServiceMessage` use `Name` instead of `display_name`
-
-Python `AlarmMessageData` and `ServiceMessageData` carry a `display_name` field (`const.py:2131-2145`). Go's `AlarmMessage` and `ServiceMessage` use the `Name` field from the wire response in `AdditionalInformationIndexed`.
-
-The difference is by design for v0.1.0: the CCU's JSON-RPC message response does not provide a separate `display_name` per entry directly; Python populates it via a secondary device-registry lookup that is deferred to a depth-parity milestone. The HA `json_attributes_template` shows raw device identifiers rather than human-readable names until this is addressed.
-
-Go path: `internal/model/hub/messages.go::AlarmMessage`, `internal/model/hub/messages.go::ServiceMessage`.
-
----
-
 ### A5-BD-LoadDataCacheIface — `LoadDataCache` always loads all interfaces; no per-interface filter
 
 Python `CacheCoordinator.load_data_cache(*, interface=None)` (`cache.py:313`) accepts an optional interface filter. Go's `CachePersister.LoadDataCache(ctx)` (`internal/central/coordinators/cache.go:43-45`) always loads the full cache.
@@ -2889,16 +2869,6 @@ Python `AddLink` / `RemoveLink` / `SetLinkInfo` use keyword-only arguments (`lin
 The difference is cosmetic: Go does not have keyword-only argument syntax. The Go call sites pass values in the documented order; accidental positional swap is a compile-time concern only in fully typed languages, and all string parameters carry distinct semantic roles documented in the method signature.
 
 Go path: `internal/central/coordinators/link.go::AddLink`.
-
----
-
-### BD-HoodPackage — `internal/model/custom/hood/` has no equivalent in the reference implementation
-
-The `hood` package (`internal/model/custom/hood/hood.go`) implements a range-hood / extractor-fan custom data point for HmIP-COOK class devices (LEVEL = fan speed code 0..3). No equivalent class exists in the reference implementation; the reference covers only the device types it encountered during development, and HmIP-COOK was not among them.
-
-The package is intentional Go-only functionality: the CCU-side device model for HmIP-COOK is well-defined (INTEGER LEVEL parameter, 4 discrete states), and the wrapper provides clean typed access for any future north-bound adapter (MQTT, Matter). The package is currently not imported from any production path (no profile registration), making it dead code from the north-bound perspective. A future commit will either register it in `generated_profiles.go` when a matching device profile is added, or remove it if HmIP-COOK support is deferred beyond 0.1.0.
-
-Go path: `internal/model/custom/hood/hood.go`.
 
 ---
 
@@ -3048,21 +3018,16 @@ Go path: `internal/configui/easymode/usecase.go::Pipeline`, `internal/central/ad
 
 ---
 
-### BD-A3-CombinedUnused — combined.HSColor / LevelCombined / WeekProfile / BridgeCombinedDataPoint have no production callers
+### BD-A3-CombinedUnused — HSColor→Matter ColorControl not wired; WeekProfile uses its own pipeline
 
-The `internal/model/combined` package ships four types that have zero production callers:
+`combined.LevelCombined` and `combined.HSColor` are now production-wired: both implement `IsCombined()`, are attached via `AttachCalculatedDataPoint` in `custom/cover/blind.go` and `custom/light/color.go` respectively, and the `materialiseCombinedDataPoints` pipeline pass in `device_pipeline.go` (directly after `materialiseCalculatedDataPoints`) bridges them to the event bus via `BridgeCombinedDataPoint`. The MQTT, WS, and REST surfaces (`publishCombinedLevelSensor` / `publishCombinedHSColorSensor`) are complete.
 
-- `combined.HSColor` / `NewHSColor` / `NewHSColorWithCentral` (`combined/hscolor.go`)
-- `combined.LevelCombined` / `NewLevelCombined` / `NewLevelCombinedWithCentral` (`combined/level_combined.go`)
-- `combined.WeekProfile` / `NewWeekProfile` / `NewCombinedWeekProfile` (`combined/weekprofile.go`)
-- `adapter.BridgeCombinedDataPoint` (`internal/central/adapter/combined_bridge.go`)
-- `backends.EncodeHMLevel` (`internal/client/backends/combined.go`)
+Two items remain as deliberate open divergences:
 
-These are structural scaffolding that never received a device-pipeline caller. Custom device types implement the same semantics inline: `custom/light/color.go` writes HUE/SATURATION directly; `custom/cover/blind.go` encodes LEVEL_COMBINED via an inline helper. `materialiseCombinedDataPoints` — the device-pipeline counterpart to `materialiseCalculatedDataPoints` (`device_pipeline.go:783`) — was never added, so the `CombinedDataPoint` interface (`device/aggregate.go:748`) would not surface them in any case. Only `combined.Timer` implements `IsCombined() bool` and is used productively via `custom/siren/siren.go`.
+- **HSColor → Matter ColorControl mapping**: `combined.HSColor` has no Matter-side wiring. The `ColorControl` cluster binding from HSColor to the Matter bridge is not yet implemented; only the MQTT/WS/REST surface is live.
+- **WeekProfile pipeline**: `combined.WeekProfile` runs via its own dedicated pipeline in `model/weekprofile/` and is not wired through `materialiseCombinedDataPoints`. This is by design — week-profile scheduling has its own coordinator lifecycle and does not fit the per-device combined-DP pattern.
 
-All five items are retained as tested library code. They represent the correct abstraction for a future `materialiseCombinedDataPoints` pass; the implementation is complete, the wiring is not. `BridgeCombinedDataPoint` is the correct bus-bridge for that future pass.
-
-Go paths: `internal/model/combined/`, `internal/central/adapter/combined_bridge.go`, `internal/client/backends/combined.go`.
+Go paths: `internal/model/combined/`, `internal/central/adapter/combined_bridge.go`, `internal/client/backends/combined.go`, `internal/central/adapter/device_pipeline.go`.
 
 ---
 

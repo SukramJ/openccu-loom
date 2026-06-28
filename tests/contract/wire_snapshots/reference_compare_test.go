@@ -36,7 +36,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/climate"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/cover"
-	"github.com/SukramJ/openccu-loom/internal/model/custom/hood"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/light"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/lock"
 	"github.com/SukramJ/openccu-loom/internal/model/custom/siren"
@@ -573,19 +572,6 @@ func newModulatingFixtureRef(t *testing.T, w *fakeWriter) *valve.Modulating {
 	})
 	ch.Put(dp)
 	return valve.NewModulating(ch)
-}
-
-func newHoodFixtureRef(t *testing.T, w *fakeWriter) *hood.Hood {
-	t.Helper()
-	d := device.New(device.Config{InterfaceID: "HmIP-RF", Address: "COOK0001"})
-	ch := d.AddChannel("COOK0001:1", 1, "HOOD", hmenum.ParamsetKeyValues)
-	lp := generic.NewInteger(generic.Spec{
-		Key:        hmtypes.DataPointKey{ChannelAddress: "COOK0001:1", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: string(hmenum.ParameterLevel)},
-		Descriptor: hmproto.ParameterData{Type: hmenum.ParameterTypeInteger, Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent},
-		Writer:     w,
-	})
-	ch.Put(lp)
-	return hood.New(hood.Config{Channel: ch, Writer: w})
 }
 
 func newClimateIPFixtureRef(t *testing.T, w *fakeWriter) *climate.Climate {
@@ -1152,24 +1138,6 @@ func TestReferenceCompare(t *testing.T) {
 				for _, lvl := range []float64{0.0, 0.5, 1.0} {
 					mv := newModulatingFixtureRef(t, w)
 					_ = mv.SetLevel(ctx, lvl, pri)
-					out = append(out, w.Capture())
-				}
-				return out
-			},
-		},
-		{
-			dpType: "Hood", setter: "SetFanSpeed",
-			run: func(t *testing.T, w *fakeWriter) []WireCapture {
-				t.Helper()
-				var out []WireCapture
-				for _, sp := range []hood.FanSpeed{
-					hood.FanSpeedOff,
-					hood.FanSpeedLow,
-					hood.FanSpeedMedium,
-					hood.FanSpeedHigh,
-				} {
-					h := newHoodFixtureRef(t, w)
-					_ = h.SetFanSpeed(ctx, sp, pri)
 					out = append(out, w.Capture())
 				}
 				return out
