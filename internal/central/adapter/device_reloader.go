@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
@@ -23,17 +24,9 @@ import (
 // DeviceCoordinator.RefreshDeviceDescriptionsAndCreateMissingDevices
 // scoped to that interface.
 //
-// Note: openccu-loom refreshes the whole interface (all devices on the
-// same CCU backend) because the single-device refresh path would
-// require a `DeviceCoordinator.RefreshSingleDevice` method that does
-// not yet exist.
-// From an operator perspective the result is identical (the target device
-// is refreshed); the performance difference for a large inventory (~50
-// devices) is negligible because the JSON-RPC `listDevices` response is
-// cached. A future `DeviceCoordinator.RefreshSingleDevice` method using
-// `Backend.GetDeviceDescription(addr)` + `GetParamsetDescription`
-// iteration for only the affected channels would be the per-device
-// optimisation.
+// ReloadDeviceConfig fetches only the target device and its channels via
+// GetDeviceDescription, so the coordinator refresh touches exactly one
+// device rather than the whole interface.
 type DeviceReloaderAdapter struct {
 	registry *central.Registry
 	writer   *clientpkg.ValueWriter
@@ -61,7 +54,7 @@ func (a *DeviceReloaderAdapter) ReloadDeviceConfig(ctx context.Context, deviceAd
 		if !ok {
 			return fmt.Errorf("device_reloader: no backend for %s/%s", unit.Name(), dev.InterfaceID)
 		}
-		fetcher := &backendDescFetcher{ops: b}
+		fetcher := &singleDeviceDescFetcher{ops: b, address: deviceAddress}
 		if err := unit.Devices.RefreshDeviceDescriptionsAndCreateMissingDevices(ctx, fetcher, dev.Interface); err != nil {
 			return err
 		}
@@ -150,3 +143,60 @@ func (f *backendLinkPeerFetcher) GetLinkPeers(ctx context.Context, _ hmenum.Inte
 }
 
 var _ coordinators.LinkPeerFetcher = (*backendLinkPeerFetcher)(nil)
+
+// singleDeviceDescFetcher fetches a description for exactly one device
+// and its channels by address, satisfying coordinators.DeviceDescriptionFetcher.
+// It uses GetDeviceDescription for the device and each child address from
+// the CHILDREN field instead of ListDevices, scoping the refresh to the
+// target device only.
+type singleDeviceDescFetcher struct {
+	ops     backends.Operations
+	address string
+}
+
+// ListDevices satisfies coordinators.DeviceDescriptionFetcher. It fetches
+// the target device description and each of its channel descriptions via
+// GetDeviceDescription. A failure at the device level is propagated; a
+// failure fetching an individual channel is logged and skipped so that one
+// unreachable channel cannot abort the entire reload.
+func (f *singleDeviceDescFetcher) ListDevices(ctx context.Context, _ hmenum.Interface) ([]hmproto.DeviceDescription, error) {
+	rawDevice, err := f.ops.GetDeviceDescription(ctx, f.address)
+	if err != nil {
+		return nil, fmt.Errorf("device_reloader: GetDeviceDescription %s: %w", f.address, err)
+	}
+	if rawDevice == nil {
+		return nil, fmt.Errorf("device_reloader: nil description returned for %s", f.address)
+	}
+	deviceDescs := backends.ParseDeviceDescriptions([]any{rawDevice})
+	if len(deviceDescs) == 0 {
+		return nil, fmt.Errorf("device_reloader: failed to parse description for %s", f.address)
+	}
+	dev := deviceDescs[0]
+	// Capacity hint sized to the child count only; the leading device element
+	// may trigger one extra grow, which is cheap. Avoid `1 + len(...)` here so
+	// the allocation size carries no arithmetic over the CCU-supplied child
+	// list (go/allocation-size-overflow).
+	result := make([]hmproto.DeviceDescription, 0, len(dev.Children))
+	result = append(result, dev)
+	for _, childAddr := range dev.Children {
+		rawChild, err := f.ops.GetDeviceDescription(ctx, childAddr)
+		if err != nil {
+			slog.Default().Warn("device_reloader: skipping channel fetch error",
+				slog.String("device", f.address),
+				slog.String("channel", childAddr),
+				slog.String("err", err.Error()))
+			continue
+		}
+		if rawChild == nil {
+			continue
+		}
+		childDescs := backends.ParseDeviceDescriptions([]any{rawChild})
+		if len(childDescs) == 0 {
+			continue
+		}
+		result = append(result, childDescs[0])
+	}
+	return result, nil
+}
+
+var _ coordinators.DeviceDescriptionFetcher = (*singleDeviceDescFetcher)(nil)

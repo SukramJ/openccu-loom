@@ -4,6 +4,18 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.4]
+
+### Changed
+
+- **"Reload device" now refetches just that device.** Reloading a single device
+  from the UI previously pulled the descriptions for *every* device on the same
+  CCU interface; it now fetches only the target device and its channels
+  (`GetDeviceDescription` over the device plus its `CHILDREN`). One unreachable
+  channel is logged and skipped rather than failing the whole reload. The
+  operator-visible result is unchanged — only less work on the CCU, which
+  matters on large installations.
+
 ## [0.18.3]
 
 ### Added

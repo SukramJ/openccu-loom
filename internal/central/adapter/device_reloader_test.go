@@ -6,16 +6,20 @@ package adapter
 // Tests for DeviceReloaderAdapter — both ReloadDeviceConfig and
 // ReloadChannelConfig.
 //
-// Strategy: build a central with a device seeded into ModelRegistry,
-// register a fake backends.Operations that records ListDevices calls,
-// then call the reload methods and assert delegation reaches the
-// DeviceCoordinator refresh path (verified via the ListDevices call on the
-// backend). For ReloadChannelConfig, fakeOperations.GetParamsetDescription
-// returns (nil, nil), so fetched == 3 and ReloadChannelConfig on the
-// coordinator succeeds before the device-level refresh runs.
+// ReloadDeviceConfig: uses a getDescOps fake that records GetDeviceDescription
+// calls and returns per-address descriptions. Assertions verify that
+// GetDeviceDescription is called for the device and each child channel, that
+// ListDevices is never called, and that a per-channel error is skipped rather
+// than aborting the reload.
+//
+// ReloadChannelConfig: uses a listDevicesOps fake so that the
+// backendDescFetcher path (which still calls ListDevices) can be exercised.
+// For ReloadChannelConfig, fakeOperations.GetParamsetDescription returns
+// (nil, nil), so the coordinator succeeds before the device-level refresh runs.
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -27,8 +31,11 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
+// ─── fakes shared by multiple test groups ────────────────────────────────────
+
 // listDevicesOps is a fake backends.Operations that records ListDevices
-// calls. Embeds fakeOperations for all no-op stub methods.
+// calls. Used by the ReloadChannelConfig tests which still go through
+// backendDescFetcher.
 type listDevicesOps struct {
 	fakeOperations
 
@@ -42,9 +49,66 @@ func (f *listDevicesOps) ListDevices(_ context.Context) ([]hmproto.DeviceDescrip
 	return f.returnDescs, f.returnErr
 }
 
-// buildReloaderFixture creates a central with one device at address
-// deviceAddr registered, a fake backend wired via a ValueWriter, and
-// returns the DeviceReloaderAdapter and the fake backend for inspection.
+// getDescOps is a fake backends.Operations that records GetDeviceDescription
+// calls and returns configured responses per address. Used by the
+// ReloadDeviceConfig tests which go through singleDeviceDescFetcher.
+type getDescOps struct {
+	fakeOperations
+	// descByAddr maps address → raw description to return.
+	descByAddr map[string]map[string]any
+	// errByAddr maps address → error to return.
+	errByAddr map[string]error
+	// calledAddrs records all addresses GetDeviceDescription was called with.
+	calledAddrs []string
+	// listCalls counts ListDevices invocations (must stay 0 for ReloadDeviceConfig).
+	listCalls int
+}
+
+func (f *getDescOps) GetDeviceDescription(_ context.Context, addr string) (map[string]any, error) {
+	f.calledAddrs = append(f.calledAddrs, addr)
+	if err, ok := f.errByAddr[addr]; ok {
+		return nil, err
+	}
+	if m, ok := f.descByAddr[addr]; ok {
+		return m, nil
+	}
+	return nil, nil
+}
+
+func (f *getDescOps) ListDevices(_ context.Context) ([]hmproto.DeviceDescription, error) {
+	f.listCalls++
+	return nil, nil
+}
+
+// ─── helper functions ─────────────────────────────────────────────────────────
+
+// rawDeviceMap builds a minimal CCU wire-format map for a top-level device.
+func rawDeviceMap(address, typ string, children []string) map[string]any {
+	childSlice := make([]any, len(children))
+	for i, c := range children {
+		childSlice[i] = c
+	}
+	return map[string]any{
+		"ADDRESS":   address,
+		"TYPE":      typ,
+		"CHILDREN":  childSlice,
+		"PARAMSETS": []any{"MASTER", "VALUES"},
+	}
+}
+
+// rawChannelMap builds a minimal CCU wire-format map for a channel.
+func rawChannelMap(address, parent string) map[string]any {
+	return map[string]any{
+		"ADDRESS":   address,
+		"TYPE":      "SWITCH_VIRTUAL_RECEIVER",
+		"PARENT":    parent,
+		"PARAMSETS": []any{"VALUES"},
+	}
+}
+
+// buildReloaderFixture creates a central with one device registered and a
+// listDevicesOps fake wired via a ValueWriter. Used by ReloadChannelConfig
+// tests and by error-path tests that never reach the backend.
 func buildReloaderFixture(
 	t *testing.T,
 	deviceAddr string,
@@ -82,20 +146,88 @@ func buildReloaderFixture(
 	return NewDeviceReloaderAdapter(reg, w), fake
 }
 
-func TestReloadDeviceConfigCallsListDevices(t *testing.T) {
+// buildSingleDeviceFixture creates a central with one device registered and a
+// getDescOps fake wired via a ValueWriter. Used by ReloadDeviceConfig tests.
+func buildSingleDeviceFixture(
+	t *testing.T,
+	deviceAddr string,
+	fake *getDescOps,
+) *DeviceReloaderAdapter {
+	t.Helper()
+
+	c, err := central.New(central.Config{Name: "ccu-01"})
+	if err != nil {
+		t.Fatalf("central.New: %v", err)
+	}
+	reg := central.NewRegistry()
+	if err := reg.Register(c); err != nil {
+		t.Fatalf("reg.Register: %v", err)
+	}
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     deviceAddr,
+		Model:       "HmIP-STH",
+		Name:        "Sensor",
+	})
+	c.ModelRegistry.Put(dev)
+	w := clientpkg.NewValueWriter()
+	w.Register("ccu-01", "HmIP-RF", fake)
+	return NewDeviceReloaderAdapter(reg, w)
+}
+
+// ─── ReloadDeviceConfig ───────────────────────────────────────────────────────
+
+func TestReloadDeviceConfigFetchesSingleDeviceDescription(t *testing.T) {
 	t.Parallel()
 
-	// The backend returns one description for the device.
-	descs := []hmproto.DeviceDescription{
-		{Address: "0001ABCD", Type: "HmIP-STH", Children: []string{"0001ABCD:0", "0001ABCD:1"}},
+	children := []string{"0001ABCD:0", "0001ABCD:1"}
+	fake := &getDescOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		descByAddr: map[string]map[string]any{
+			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
+			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),
+			"0001ABCD:1": rawChannelMap("0001ABCD:1", "0001ABCD"),
+		},
 	}
-	adapter, fake := buildReloaderFixture(t, "0001ABCD", descs, nil)
+	a := buildSingleDeviceFixture(t, "0001ABCD", fake)
 
-	if err := adapter.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
+	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
 		t.Fatalf("ReloadDeviceConfig: %v", err)
 	}
-	if fake.listCalls != 1 {
-		t.Errorf("expected 1 ListDevices call, got %d", fake.listCalls)
+	if fake.listCalls != 0 {
+		t.Errorf("ListDevices must not be called, got %d calls", fake.listCalls)
+	}
+	// device + 2 channels = 3 GetDeviceDescription calls
+	if len(fake.calledAddrs) != 3 {
+		t.Errorf("expected 3 GetDeviceDescription calls (device + 2 channels), got %d: %v",
+			len(fake.calledAddrs), fake.calledAddrs)
+	}
+	if fake.calledAddrs[0] != "0001ABCD" {
+		t.Errorf("first GetDeviceDescription call = %q, want 0001ABCD", fake.calledAddrs[0])
+	}
+}
+
+func TestReloadDeviceConfigPartialChannelErrorSkipped(t *testing.T) {
+	t.Parallel()
+
+	children := []string{"0001ABCD:0", "0001ABCD:1"}
+	fake := &getDescOps{
+		fakeOperations: fakeOperations{kind: backends.KindCCU},
+		descByAddr: map[string]map[string]any{
+			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
+			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),
+			// 0001ABCD:1 intentionally absent
+		},
+		errByAddr: map[string]error{
+			"0001ABCD:1": errors.New("channel temporarily unreachable"),
+		},
+	}
+	a := buildSingleDeviceFixture(t, "0001ABCD", fake)
+
+	// A per-channel error must not abort the reload.
+	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
+		t.Fatalf("ReloadDeviceConfig should succeed despite one channel error, got: %v", err)
 	}
 }
 
@@ -302,21 +434,22 @@ func TestBackendLinkPeerFetcher_IgnoresIfaceArg(t *testing.T) {
 	}
 }
 
-// TestReloadDeviceConfigInvokesLinkPeerRefresh ensures that the link-peer
-// refresh path is reached as part of ReloadDeviceConfig. The listDevicesOps
-// fake does not record GetLinkPeers calls (it inherits the fakeOperations
-// no-op), so we use a combined fake that tracks both ListDevices and
-// GetLinkPeers.
+// reloadWithLinkPeerOps is a combined fake that records both
+// GetDeviceDescription and GetLinkPeers calls, used to verify that
+// ReloadDeviceConfig triggers the link-peer refresh path.
 type reloadWithLinkPeerOps struct {
 	fakeOperations
-	listCalls     int
+	getDescCalls  int
 	linkPeerCalls int
-	returnDescs   []hmproto.DeviceDescription
+	descByAddr    map[string]map[string]any
 }
 
-func (f *reloadWithLinkPeerOps) ListDevices(_ context.Context) ([]hmproto.DeviceDescription, error) {
-	f.listCalls++
-	return f.returnDescs, nil
+func (f *reloadWithLinkPeerOps) GetDeviceDescription(_ context.Context, addr string) (map[string]any, error) {
+	f.getDescCalls++
+	if m, ok := f.descByAddr[addr]; ok {
+		return m, nil
+	}
+	return nil, nil
 }
 
 func (f *reloadWithLinkPeerOps) GetLinkPeers(_ context.Context, _ string) ([]string, error) {
@@ -327,12 +460,14 @@ func (f *reloadWithLinkPeerOps) GetLinkPeers(_ context.Context, _ string) ([]str
 func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 	t.Parallel()
 
-	descs := []hmproto.DeviceDescription{
-		{Address: "0001ABCD", Type: "HmIP-STH", Children: []string{"0001ABCD:0", "0001ABCD:1"}},
-	}
+	children := []string{"0001ABCD:0", "0001ABCD:1"}
 	fake := &reloadWithLinkPeerOps{
 		fakeOperations: fakeOperations{kind: backends.KindCCU},
-		returnDescs:    descs,
+		descByAddr: map[string]map[string]any{
+			"0001ABCD":   rawDeviceMap("0001ABCD", "HmIP-STH", children),
+			"0001ABCD:0": rawChannelMap("0001ABCD:0", "0001ABCD"),
+			"0001ABCD:1": rawChannelMap("0001ABCD:1", "0001ABCD"),
+		},
 	}
 
 	c, err := central.New(central.Config{Name: "ccu-01"})
@@ -370,8 +505,8 @@ func TestReloadDeviceConfigInvokesLinkPeerRefresh(t *testing.T) {
 	if err := a.ReloadDeviceConfig(context.Background(), "0001ABCD"); err != nil {
 		t.Fatalf("ReloadDeviceConfig: %v", err)
 	}
-	if fake.listCalls != 1 {
-		t.Errorf("expected 1 ListDevices call, got %d", fake.listCalls)
+	if fake.getDescCalls == 0 {
+		t.Errorf("expected GetDeviceDescription to be called, got 0")
 	}
 	// The DeviceCoordinator's RefreshDeviceLinkPeers walks every channel of
 	// the device; each channel triggers one GetLinkPeers call on the backend.
