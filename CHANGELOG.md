@@ -4,6 +4,30 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.5]
+
+### Fixed
+
+- **Matter: string attribute writes are no longer dropped to empty.** A UTF-8
+  attribute write (e.g. `NodeLabel`) was read from the wrong decoded field and
+  always stored as the empty string; it now keeps the written value.
+- **Matter conformance sweep against matter.js HEAD.** Mirrored five upstream
+  fixes the schema snapshot does not track: truncate decoded character strings
+  at Information Separator 1 / 0x1F (§7.19.2.40); reject a write that carries a
+  DataVersion against a wildcard endpoint, and clamp the status when a
+  cluster-specific status is returned (§8.9.2.8.1 / §7.10.7); reject illegal
+  Read/Subscribe paths (wildcard cluster with a concrete non-global attribute
+  or event) up front with InvalidAction (§8.4.3.2); strip `IsUrgent` from event
+  report paths (§8.9.3.4); and reject a VendorID outside 0x0001-0xFFF4 as an
+  invalid device identity.
+
+### Changed
+
+- **Matter schema snapshot now records its provenance.** The embedded
+  `matter-schema-snapshot.json` captures the matter.js source commit and the
+  Matter spec revision (1.5.1) it was extracted at, so the pinned reference is
+  traceable to an exact upstream commit.
+
 ## [0.17.4]
 
 ### Fixed

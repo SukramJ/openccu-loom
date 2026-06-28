@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.17.5
+
+- **Fixed: Matter string attribute writes (e.g. device name) are no longer
+  stored as empty.** Plus a conformance sweep against matter.js HEAD (TLV
+  string handling, Read/Subscribe path validation, write DataVersion/status
+  rules, event-path urgency, VendorID validation).
+- The embedded Matter schema snapshot now records the exact matter.js commit it
+  was generated from.
+
 ## 0.17.4
 
 - **Fixed: the device-detail header now uses the full width on narrow screens.**
