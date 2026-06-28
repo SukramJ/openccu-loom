@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -526,28 +527,28 @@ func TestHSColorServerWriteAndInvoke(t *testing.T) {
 	hue.OnEvent(int32(0))
 	sat.OnEvent(0.0)
 
-	// MoveToHue bare uint8.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, uint8(127), hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("MatterInvoke(MoveToHue/uint8): %v", err)
+	// MoveToHue wire struct.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 127}, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("MatterInvoke(MoveToHue/wire): %v", err)
 	}
 
-	// MoveToHue map.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, map[string]any{"hue": uint8(64)}, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("MatterInvoke(MoveToHue/map): %v", err)
+	// MoveToHue wire struct variant.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHue, wire.MoveToHueRequest{Hue: 64}, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("MatterInvoke(MoveToHue/wire2): %v", err)
 	}
 
-	// MoveToSaturation bare uint8.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, uint8(200), hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("MatterInvoke(MoveToSat/uint8): %v", err)
+	// MoveToSaturation wire struct.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("MatterInvoke(MoveToSat/wire): %v", err)
 	}
 
-	// MoveToSaturation map.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, map[string]any{"saturation": uint8(100)}, hmenum.CommandPriorityHigh); err != nil {
-		t.Errorf("MatterInvoke(MoveToSat/map): %v", err)
+	// MoveToSaturation wire struct variant.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToSaturation, wire.MoveToSaturationRequest{Saturation: 100}, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("MatterInvoke(MoveToSat/wire2): %v", err)
 	}
 
-	// MoveToHueAndSaturation map.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, map[string]any{"hue": uint8(60), "saturation": uint8(200)}, hmenum.CommandPriorityHigh); err != nil {
+	// MoveToHueAndSaturation wire struct.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
 		t.Errorf("MatterInvoke(MoveToHueSat): %v", err)
 	}
 
@@ -661,8 +662,8 @@ func TestRGBWColorServerWriteAndInvoke(t *testing.T) {
 		t.Error("rgbwColorServer.MatterWrite must always return error")
 	}
 
-	// MoveToHueAndSaturation.
-	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, map[string]any{"hue": uint8(60), "saturation": uint8(200)}, hmenum.CommandPriorityHigh); err != nil {
+	// MoveToHueAndSaturation wire struct.
+	if _, err := s.MatterInvoke(context.Background(), matterCmdColorMoveToHueAndSaturation, wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200}, hmenum.CommandPriorityHigh); err != nil {
 		t.Errorf("MatterInvoke(MoveToHueSat): %v", err)
 	}
 
@@ -769,31 +770,19 @@ func TestRGBWLightMatterClusterServers(t *testing.T) {
 
 // TestExtractHueOnlyBranches verifies all extractHueOnly branches.
 func TestExtractHueOnlyBranches(t *testing.T) {
-	// Bare uint8.
-	v, err := extractHueOnly(uint8(42))
+	// Wire-struct primary path.
+	v, err := extractHueOnly(wire.MoveToHueRequest{Hue: 42})
 	if err != nil || v != 42 {
-		t.Errorf("extractHueOnly(uint8) = (%d, %v), want (42, nil)", v, err)
+		t.Errorf("extractHueOnly(wire struct) = (%d, %v), want (42, nil)", v, err)
 	}
 
-	// Map with hue.
-	v, err = extractHueOnly(map[string]any{"hue": uint8(10)})
+	// map[uint8]any fallback: tag 0 = Hue as uint64.
+	v, err = extractHueOnly(map[uint8]any{0: uint64(10)})
 	if err != nil || v != 10 {
-		t.Errorf("extractHueOnly(map) = (%d, %v)", v, err)
+		t.Errorf("extractHueOnly(map fallback) = (%d, %v), want (10, nil)", v, err)
 	}
 
-	// Map missing hue.
-	_, err = extractHueOnly(map[string]any{})
-	if err == nil {
-		t.Error("extractHueOnly(map{}) must return error")
-	}
-
-	// Map wrong hue type.
-	_, err = extractHueOnly(map[string]any{"hue": "bad"})
-	if err == nil {
-		t.Error("extractHueOnly(map{hue:string}) must return error")
-	}
-
-	// Unsupported type.
+	// Unsupported type must return errMatterValueType.
 	_, err = extractHueOnly("not-valid")
 	if err == nil {
 		t.Error("extractHueOnly(string) must return error")
@@ -802,31 +791,19 @@ func TestExtractHueOnlyBranches(t *testing.T) {
 
 // TestExtractSaturationOnlyBranches verifies all extractSaturationOnly branches.
 func TestExtractSaturationOnlyBranches(t *testing.T) {
-	// Bare uint8.
-	v, err := extractSaturationOnly(uint8(200))
+	// Wire-struct primary path.
+	v, err := extractSaturationOnly(wire.MoveToSaturationRequest{Saturation: 200})
 	if err != nil || v != 200 {
-		t.Errorf("extractSaturationOnly(uint8) = (%d, %v)", v, err)
+		t.Errorf("extractSaturationOnly(wire struct) = (%d, %v), want (200, nil)", v, err)
 	}
 
-	// Map with saturation.
-	v, err = extractSaturationOnly(map[string]any{"saturation": uint8(100)})
+	// map[uint8]any fallback: tag 0 = Saturation as uint64.
+	v, err = extractSaturationOnly(map[uint8]any{0: uint64(100)})
 	if err != nil || v != 100 {
-		t.Errorf("extractSaturationOnly(map) = (%d, %v)", v, err)
+		t.Errorf("extractSaturationOnly(map fallback) = (%d, %v), want (100, nil)", v, err)
 	}
 
-	// Map missing saturation.
-	_, err = extractSaturationOnly(map[string]any{})
-	if err == nil {
-		t.Error("extractSaturationOnly(map{}) must return error")
-	}
-
-	// Map wrong type.
-	_, err = extractSaturationOnly(map[string]any{"saturation": "bad"})
-	if err == nil {
-		t.Error("extractSaturationOnly(map{sat:string}) must return error")
-	}
-
-	// Unsupported type.
+	// Unsupported type must return errMatterValueType.
 	_, err = extractSaturationOnly("bad")
 	if err == nil {
 		t.Error("extractSaturationOnly(string) must return error")
@@ -835,40 +812,22 @@ func TestExtractSaturationOnlyBranches(t *testing.T) {
 
 // TestExtractHueAndSaturationBranches verifies all extractHueAndSaturation branches.
 func TestExtractHueAndSaturationBranches(t *testing.T) {
-	// Valid map.
-	h, s, err := extractHueAndSaturation(map[string]any{"hue": uint8(60), "saturation": uint8(200)})
+	// Wire-struct primary path.
+	h, s, err := extractHueAndSaturation(wire.MoveToHueAndSaturationRequest{Hue: 60, Saturation: 200})
 	if err != nil || h != 60 || s != 200 {
-		t.Errorf("extractHueAndSaturation valid = (%d, %d, %v)", h, s, err)
+		t.Errorf("extractHueAndSaturation(wire struct) = (%d, %d, %v)", h, s, err)
 	}
 
-	// Not a map.
+	// map[uint8]any fallback: tag 0 = Hue, tag 1 = Saturation as uint64.
+	h, s, err = extractHueAndSaturation(map[uint8]any{0: uint64(30), 1: uint64(120)})
+	if err != nil || h != 30 || s != 120 {
+		t.Errorf("extractHueAndSaturation(map fallback) = (%d, %d, %v)", h, s, err)
+	}
+
+	// Unsupported type must return errMatterValueType.
 	_, _, err = extractHueAndSaturation("bad")
 	if err == nil {
 		t.Error("extractHueAndSaturation(string) must return error")
-	}
-
-	// Missing hue.
-	_, _, err = extractHueAndSaturation(map[string]any{"saturation": uint8(100)})
-	if err == nil {
-		t.Error("extractHueAndSaturation missing hue must return error")
-	}
-
-	// Wrong hue type.
-	_, _, err = extractHueAndSaturation(map[string]any{"hue": "bad", "saturation": uint8(100)})
-	if err == nil {
-		t.Error("extractHueAndSaturation wrong hue type must return error")
-	}
-
-	// Missing saturation.
-	_, _, err = extractHueAndSaturation(map[string]any{"hue": uint8(60)})
-	if err == nil {
-		t.Error("extractHueAndSaturation missing saturation must return error")
-	}
-
-	// Wrong saturation type.
-	_, _, err = extractHueAndSaturation(map[string]any{"hue": uint8(60), "saturation": "bad"})
-	if err == nil {
-		t.Error("extractHueAndSaturation wrong saturation type must return error")
 	}
 }
 

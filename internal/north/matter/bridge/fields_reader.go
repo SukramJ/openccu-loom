@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
@@ -60,6 +61,17 @@ func commandFieldsReader(path im.ConcreteCommandPath, dec *tlv.Decoder, _ tlv.El
 		case 0x00, 0x04: // MoveToLevel, MoveToLevelWithOnOff
 			return decodeMoveToLevelRequest(dec)
 		}
+	case 0x0300: // ColorControl
+		switch path.Command {
+		case wire.ColorCtrlCmdMoveToHue:
+			return decodeMoveToHueFields(dec)
+		case wire.ColorCtrlCmdMoveToSaturation:
+			return decodeMoveToSaturationFields(dec)
+		case wire.ColorCtrlCmdMoveToHueAndSaturation:
+			return decodeMoveToHueAndSaturationFields(dec)
+		case wire.ColorCtrlCmdMoveToColorTemperature:
+			return decodeMoveToColorTemperatureFields(dec)
+		}
 	}
 	// Unknown command-path: salvage as a tag-keyed map[uint8]any so the
 	// cluster server gets the field payload regardless of whether the
@@ -95,6 +107,108 @@ func decodeMoveToLevelRequest(dec *tlv.Decoder) (uint8, error) {
 				return 0, fmt.Errorf("MoveToLevel: Level %d > uint8 max", el.Uint)
 			}
 			level = uint8(el.Uint & 0xFF)
+		}
+	}
+}
+
+// decodeMoveToHueFields reads ColorControl.MoveToHue fields (Matter §3.2.7.4).
+// Tags: [0] uint8 Hue, [1] enum8 Direction, [2] uint16 TransitionTime.
+func decodeMoveToHueFields(dec *tlv.Decoder) (wire.MoveToHueRequest, error) {
+	var req wire.MoveToHueRequest
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return req, fmt.Errorf("MoveToHue: %w", err)
+		}
+		if el.IsEndContainer {
+			return req, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch uint8(el.Tag.Number & 0xFF) {
+		case 0:
+			req.Hue = uint8(el.Uint & 0xFF)
+		case 1:
+			req.Direction = uint8(el.Uint & 0xFF)
+		case 2:
+			req.TransitionTime = uint16(el.Uint & 0xFFFF)
+		}
+	}
+}
+
+// decodeMoveToSaturationFields reads ColorControl.MoveToSaturation fields
+// (Matter §3.2.7.7). Tags: [0] uint8 Saturation, [1] uint16 TransitionTime.
+func decodeMoveToSaturationFields(dec *tlv.Decoder) (wire.MoveToSaturationRequest, error) {
+	var req wire.MoveToSaturationRequest
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return req, fmt.Errorf("MoveToSaturation: %w", err)
+		}
+		if el.IsEndContainer {
+			return req, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch uint8(el.Tag.Number & 0xFF) {
+		case 0:
+			req.Saturation = uint8(el.Uint & 0xFF)
+		case 1:
+			req.TransitionTime = uint16(el.Uint & 0xFFFF)
+		}
+	}
+}
+
+// decodeMoveToHueAndSaturationFields reads ColorControl.MoveToHueAndSaturation
+// fields (Matter §3.2.7.10). Tags: [0] uint8 Hue, [1] uint8 Saturation,
+// [2] uint16 TransitionTime.
+func decodeMoveToHueAndSaturationFields(dec *tlv.Decoder) (wire.MoveToHueAndSaturationRequest, error) {
+	var req wire.MoveToHueAndSaturationRequest
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return req, fmt.Errorf("MoveToHueAndSaturation: %w", err)
+		}
+		if el.IsEndContainer {
+			return req, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch uint8(el.Tag.Number & 0xFF) {
+		case 0:
+			req.Hue = uint8(el.Uint & 0xFF)
+		case 1:
+			req.Saturation = uint8(el.Uint & 0xFF)
+		case 2:
+			req.TransitionTime = uint16(el.Uint & 0xFFFF)
+		}
+	}
+}
+
+// decodeMoveToColorTemperatureFields reads ColorControl.MoveToColorTemperature
+// fields (Matter §3.2.7.21). Tags: [0] uint16 ColorTemperatureMireds,
+// [1] uint16 TransitionTime.
+func decodeMoveToColorTemperatureFields(dec *tlv.Decoder) (wire.MoveToColorTemperatureRequest, error) {
+	var req wire.MoveToColorTemperatureRequest
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			return req, fmt.Errorf("MoveToColorTemperature: %w", err)
+		}
+		if el.IsEndContainer {
+			return req, nil
+		}
+		if el.Tag.Kind != tlv.TagKindContext {
+			continue
+		}
+		switch uint8(el.Tag.Number & 0xFF) {
+		case 0:
+			req.ColorTemperatureMireds = uint16(el.Uint & 0xFFFF)
+		case 1:
+			req.TransitionTime = uint16(el.Uint & 0xFFFF)
 		}
 	}
 }

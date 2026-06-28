@@ -149,17 +149,16 @@ func (s *ColorControlServer) MatterWrite(_ context.Context, attrID uint32, _ any
 func (s *ColorControlServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	switch cmdID {
 	case wire.ColorCtrlCmdMoveToColorTemperature:
-		// Decode target mireds from fields. The bridge delivers either a bare
-		// uint16 or a map[string]any{"colorTemperatureMireds": uint16}.
+		// The bridge's command-fields reader decodes the payload into the
+		// typed wire request (tag 0 = ColorTemperatureMireds); the generic
+		// tag-keyed map (uint64 values) is accepted as a fallback.
 		var target uint16
 		switch v := fields.(type) {
-		case uint16:
-			target = v
-		case map[string]any:
-			if raw, ok := v["colorTemperatureMireds"]; ok {
-				if u, ok := raw.(uint16); ok {
-					target = u
-				}
+		case wire.MoveToColorTemperatureRequest:
+			target = v.ColorTemperatureMireds
+		case map[uint8]any:
+			if raw, ok := v[0].(uint64); ok {
+				target = uint16(raw & 0xFFFF)
 			}
 		}
 		// Crop to [MinMireds, MaxMireds]. Mirrors matter.js

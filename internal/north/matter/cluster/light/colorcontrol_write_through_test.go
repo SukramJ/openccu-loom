@@ -57,7 +57,7 @@ func TestColorControl_WriteThrough_WriterCalledOnce(t *testing.T) {
 
 	const target uint16 = 300
 	ret, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		map[string]any{"colorTemperatureMireds": target}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
 	if err != nil {
 		t.Fatalf("MatterInvoke returned error: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestColorControl_WriteThrough_WriterError(t *testing.T) {
 	}
 
 	_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		map[string]any{"colorTemperatureMireds": uint16(300)}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}, hmenum.CommandPriorityHigh)
 
 	if err == nil {
 		t.Fatal("MatterInvoke expected error when writer fails, got nil")
@@ -136,7 +136,7 @@ func TestColorControl_WriteThrough_Clamping(t *testing.T) {
 			srv.SetWriter(w)
 
 			_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-				map[string]any{"colorTemperatureMireds": tc.target}, hmenum.CommandPriorityHigh)
+				wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: tc.target}, hmenum.CommandPriorityHigh)
 			if err != nil {
 				t.Fatalf("MatterInvoke returned error: %v", err)
 			}
@@ -166,7 +166,7 @@ func TestColorControl_WriteThrough_NoWriter(t *testing.T) {
 
 	const target uint16 = 250
 	ret, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		map[string]any{"colorTemperatureMireds": target}, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
 	if err != nil {
 		t.Fatalf("MatterInvoke without writer returned error: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestColorControl_WriteThrough_SetWriterNil(t *testing.T) {
 
 	const target uint16 = 200
 	_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-		target, hmenum.CommandPriorityHigh)
+		wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: target}, hmenum.CommandPriorityHigh)
 	if err != nil {
 		t.Fatalf("MatterInvoke after SetWriter(nil) returned error: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestColorControl_WriteThrough_PriorityPropagation(t *testing.T) {
 			w := &fakeColorTemperatureWriter{}
 			srv.SetWriter(w)
 			_, err := srv.MatterInvoke(context.Background(), wire.ColorCtrlCmdMoveToColorTemperature,
-				map[string]any{"colorTemperatureMireds": uint16(300)}, prio)
+				wire.MoveToColorTemperatureRequest{ColorTemperatureMireds: 300}, prio)
 			if err != nil {
 				t.Fatalf("MatterInvoke: %v", err)
 			}
