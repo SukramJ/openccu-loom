@@ -172,7 +172,11 @@ func (f *singleDeviceDescFetcher) ListDevices(ctx context.Context, _ hmenum.Inte
 		return nil, fmt.Errorf("device_reloader: failed to parse description for %s", f.address)
 	}
 	dev := deviceDescs[0]
-	result := make([]hmproto.DeviceDescription, 0, 1+len(dev.Children))
+	// Capacity hint sized to the child count only; the leading device element
+	// may trigger one extra grow, which is cheap. Avoid `1 + len(...)` here so
+	// the allocation size carries no arithmetic over the CCU-supplied child
+	// list (go/allocation-size-overflow).
+	result := make([]hmproto.DeviceDescription, 0, len(dev.Children))
 	result = append(result, dev)
 	for _, childAddr := range dev.Children {
 		rawChild, err := f.ops.GetDeviceDescription(ctx, childAddr)
