@@ -1,5 +1,11 @@
 {
-  "matter": {},
+  "matter": {
+    "revision": "1.5.1",
+    "specificationVersion": 17105152,
+    "interactionModelRevision": 13,
+    "dataModelRevision": 19,
+    "sourceCommit": "67a669f75cddb30b884f3a0fa5a67fc097822308"
+  },
   "deviceTypes": [
     {
       "id": 10,

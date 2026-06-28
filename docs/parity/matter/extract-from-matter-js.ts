@@ -3,7 +3,8 @@
 // clusters with revisions + featureMap + per-attribute IDs/types/conformance/
 // constraints + commands + events. Output is JSON on stdout — pipe to
 // docs/parity/matter/matter-schema-snapshot.json for in-repo persistence.
-import { MatterDefinition } from "@matter/model";
+import { MatterDefinition, Specification } from "@matter/model";
+import { execSync } from "node:child_process";
 
 interface DeviceTypeOut {
     id: number;
@@ -55,21 +56,29 @@ const out = {
         specificationVersion: undefined as number | undefined,
         interactionModelRevision: undefined as number | undefined,
         dataModelRevision: undefined as number | undefined,
+        sourceCommit: undefined as string | undefined,
     },
     deviceTypes: [] as DeviceTypeOut[],
     clusters: [] as ClusterOut[],
 };
 
+// Matter spec metadata, straight off the @matter/model package export so the
+// snapshot records which spec revision the schema was extracted at.
+out.matter.revision = Specification.REVISION;
+out.matter.specificationVersion = Specification.SPECIFICATION_VERSION;
+out.matter.interactionModelRevision = Specification.INTERACTION_MODEL_REVISION;
+out.matter.dataModelRevision = Specification.DATA_MODEL_REVISION;
+
 try {
-    const spec = require("@matter/model/dist/cjs/common/Specification.js");
-    if (spec.Specification) {
-        out.matter.revision = spec.Specification.REVISION;
-        out.matter.specificationVersion = spec.Specification.SPECIFICATION_VERSION;
-        out.matter.interactionModelRevision = spec.Specification.INTERACTION_MODEL_REVISION;
-        out.matter.dataModelRevision = spec.Specification.DATA_MODEL_REVISION;
-    }
+    // Record the matter.js HEAD commit the snapshot was extracted from, so the
+    // pinned reference is traceable. This script runs inside the matter.js
+    // checkout, so HEAD is matter.js's. Deterministic: changes only when the
+    // matter.js source does.
+    out.matter.sourceCommit = execSync("git rev-parse HEAD", {
+        encoding: "utf8",
+    }).trim();
 } catch (e) {
-    console.error("spec import:", (e as Error).message);
+    console.error("source commit:", (e as Error).message);
 }
 
 function jsonable(v: any): any {

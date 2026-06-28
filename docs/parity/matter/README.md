@@ -4,6 +4,14 @@ Parity artefacts that lock OpenCCU-Loom's Matter-side wire shapes against
 matter.js HEAD. See `CLAUDE.md §matter.js as the Matter Gold Standard` for
 the full workflow.
 
+**Which matter.js does the snapshot pin?** `matter-schema-snapshot.json`'s
+top-level `matter` object records the provenance of each regeneration: the
+matter.js source commit (`sourceCommit`) the schema was extracted from, plus
+the Matter spec `revision` / `specificationVersion` /
+`interactionModelRevision` / `dataModelRevision` reported by `@matter/model`.
+`extract-from-matter-js.ts` captures these automatically, so the reference is
+always traceable to an exact matter.js commit.
+
 ---
 
 ## Files
