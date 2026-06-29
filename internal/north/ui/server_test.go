@@ -111,86 +111,14 @@ func TestNewRouterNoMiddlewaresIsNilSafe(t *testing.T) {
 	t.Parallel()
 	cats, _ := i18n.NewCatalogs()
 	h := NewRouter(Deps{
-		Lang:        "en",
-		Catalogs:    cats,
-		AuthResolve: nil,
-		AuthRequire: nil,
+		Lang:     "en",
+		Catalogs: cats,
 	})
 	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
 	rr := httptest.NewRecorder()
 	h.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rr.Code)
-	}
-}
-
-func TestNewRouterWithAuthResolveMiddleware(t *testing.T) {
-	t.Parallel()
-	cats, _ := i18n.NewCatalogs()
-	called := false
-	middleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			called = true
-			next.ServeHTTP(w, r)
-		})
-	}
-	h := NewRouter(Deps{
-		Lang:        "en",
-		Catalogs:    cats,
-		AuthResolve: middleware,
-	})
-	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if !called {
-		t.Fatal("AuthResolve middleware was not called")
-	}
-}
-
-func TestNewRouterWithAuthRequireMiddleware(t *testing.T) {
-	t.Parallel()
-	cats, _ := i18n.NewCatalogs()
-	// Middleware that adds a header to the response — verifies it runs.
-	middleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("X-Test-MW", "yes")
-			next.ServeHTTP(w, r)
-		})
-	}
-	h := NewRouter(Deps{
-		Lang:        "en",
-		Catalogs:    cats,
-		AuthRequire: middleware,
-	})
-	req := httptest.NewRequest(http.MethodGet, "/health", http.NoBody)
-	rr := httptest.NewRecorder()
-	h.ServeHTTP(rr, req)
-	if rr.Header().Get("X-Test-MW") != "yes" {
-		t.Fatal("AuthRequire middleware was not called")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// ifLogger — covers the nil-Logger branch
-// ---------------------------------------------------------------------------
-
-func TestIfLoggerReturnsDefaultWhenNil(t *testing.T) {
-	d := Deps{Logger: nil}
-	l := ifLogger(d)
-	if l == nil {
-		t.Fatal("ifLogger must return slog.Default(), never nil")
-	}
-}
-
-func TestIfLoggerReturnsProvidedLogger(t *testing.T) {
-	// Use a non-nil Deps.Logger and verify the same instance is returned.
-	// We can't easily compare *slog.Logger identity, but we can verify
-	// non-nil is passed through.
-	cats, _ := i18n.NewCatalogs()
-	h := NewRouter(Deps{Lang: "en", Catalogs: cats})
-	// Presence of a valid handler means NewRouter used ifLogger without panic.
-	if h == nil {
-		t.Fatal("router must not be nil")
 	}
 }
 

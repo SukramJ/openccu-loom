@@ -13,47 +13,32 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 )
 
-// Deps collects every dependency the bootstrap UI needs. The HTMX
-// surface is intentionally narrow — login/setup before the SPA can
-// authenticate, plus a server-rendered /health and /about for the
-// case where the SPA bundle fails to load.
+// Deps collects every dependency the diagnostic UI needs. The
+// server-rendered surface is intentionally tiny — a no-JS /health and
+// /about that stay reachable when the Svelte SPA bundle fails to load.
+// Login, logout, OIDC, and first-run onboarding all live in the SPA now.
 type Deps struct {
 	Logger   *slog.Logger
 	Lang     string
 	Health   handlers.HealthReader
 	Catalogs *i18n.Catalogs
-	Auth     *AuthDeps
-	OIDC     *OIDCDeps
-	// Setup wires the multi-step SQLite-backed wizard. When nil (or when
-	// Setup.Users is nil), the router falls back to the legacy single-step
-	// handler so test fixtures that do not wire SQLite continue to work.
-	Setup       *SetupWizardDeps
-	AuthResolve func(http.Handler) http.Handler
-	AuthRequire func(http.Handler) http.Handler
 }
 
-// NewRouter builds the bootstrap UI router. The HTMX surface only
-// covers what the Svelte SPA structurally cannot:
+// NewRouter builds the diagnostic UI router. The server-rendered surface
+// only covers what stays useful when the SPA cannot load:
 //
-//	/                       — redirect to /health
-//	/login, POST /login     — form login (basic auth)
-//	POST /logout            — clears the session
-//	/setup, POST /setup     — first-run admin bootstrap
-//	/login/oidc/start       — begin OIDC PKCE flow
-//	/login/oidc/callback    — finish OIDC PKCE flow
-//	/health                 — server-rendered status (SPA-down fallback)
-//	/about                  — version + license
-//	/ui/assets/*            — embedded CSS
+//	/              — redirect to /health
+//	/health        — server-rendered status (SPA-down fallback)
+//	/about         — version + license
+//	/ui/assets/*   — embedded CSS + logo
 //
-// Everything device-, program-, sysvar-, paramset-, incident-,
-// settings-, user- or token-related lives in the Svelte SPA at
-// /app/* on the REST server.
+// Everything interactive — login, onboarding, devices, settings, … — lives
+// in the Svelte SPA at /app/ on the REST server.
 func NewRouter(d Deps) *chi.Mux {
 	if d.Logger == nil {
 		d.Logger = slog.Default()
@@ -62,12 +47,8 @@ func NewRouter(d Deps) *chi.Mux {
 		d.Lang = "en"
 	}
 	tpl := mustParseTemplates(d.Catalogs, d.Lang)
-	loginRL := newLoginRateLimiter(loginRateBurst)
 
 	r := chi.NewRouter()
-	if d.AuthResolve != nil {
-		r.Use(d.AuthResolve)
-	}
 
 	assetSub, err := fs.Sub(assetFS, "assets")
 	if err != nil {
@@ -75,67 +56,17 @@ func NewRouter(d Deps) *chi.Mux {
 	}
 	r.Handle("/ui/assets/*", http.StripPrefix("/ui/assets/", http.FileServer(http.FS(assetSub))))
 
-	r.Group(func(pr chi.Router) {
-		if d.AuthRequire != nil {
-			pr.Use(d.AuthRequire)
-		}
-		pr.Get("/", func(w http.ResponseWriter, r *http.Request) {
-			uiRedirect(w, r, "/health")
-		})
-		pr.Get("/health", handleHealth(d, tpl))
-		pr.Get("/about", handleAbout(d, tpl))
-		pr.Get("/login", handleLogin(d, tpl))
-		pr.Post("/login", loginRL.guard(handleLoginPost(d, d.Auth)))
-		pr.Post("/logout", handleLogoutPost(d, d.Auth))
-		// Mount the multi-step wizard when SQLite deps are wired; fall back to
-		// the legacy single-step handler otherwise (test fixtures, in-process simulator).
-		if d.Setup != nil && d.Setup.Users != nil {
-			wd := *d.Setup
-			if wd.Sessions == nil {
-				wd.Sessions = NewSetupSessionStore()
-			}
-			pr.Get("/setup", handleSetupWizard(d, tpl, wd))
-			pr.Post("/setup/admin", handleSetupAdmin(wd))
-			pr.Post("/setup/locale", handleSetupLocale(wd))
-			pr.Post("/setup/ccu", handleSetupCCU(wd))
-			pr.Post("/setup/mqtt", handleSetupMQTT(d, wd))
-		} else {
-			pr.Get("/setup", handleSetup(d, tpl))
-			pr.Post("/setup", handleSetupPost(d, d.Auth))
-		}
-		pr.Get("/login/oidc/start", handleOIDCStart(d))
-		pr.Get("/login/oidc/callback", handleOIDCCallback(d))
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		uiRedirect(w, r, "/health")
 	})
+	r.Get("/health", handleHealth(d, tpl))
+	r.Get("/about", handleAbout(d, tpl))
 	return r
 }
 
 func handleAbout(d Deps, tpl *templateSet) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		render(tpl, w, r, "about.html", pageData{Title: "About", Lang: d.Lang})
-	}
-}
-
-func handleLogin(d Deps, tpl *templateSet) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		oidcEnabled := d.OIDC != nil && d.OIDC.Client != nil
-		render(tpl, w, r, "login.html", pageData{
-			Title: "Sign in", Lang: d.Lang,
-			Data: struct {
-				Error       bool
-				OIDCEnabled bool
-				SetupDone   bool
-			}{
-				Error:       r.URL.Query().Get("error") != "",
-				OIDCEnabled: oidcEnabled,
-				SetupDone:   r.URL.Query().Get("setup_done") == "1",
-			},
-		})
-	}
-}
-
-func handleSetup(d Deps, tpl *templateSet) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		render(tpl, w, r, "setup.html", pageData{Title: "Setup", Lang: d.Lang})
 	}
 }
 
@@ -147,10 +78,8 @@ type pageData struct {
 	// BasePath is the HA Ingress prefix (or "" for direct access). It backs
 	// the layout's <base href> so every relative URL in the bootstrap pages
 	// resolves through the Ingress proxy rather than the HA origin.
-	BasePath  string
-	CSRFToken string
-	Identity  auth.Identity
-	Data      any
+	BasePath string
+	Data     any
 }
 
 // templateSet indexes one compiled template per page. Each page
@@ -163,17 +92,9 @@ type templateSet struct {
 
 func mustParseTemplates(catalogs *i18n.Catalogs, lang string) *templateSet {
 	funcs := template.FuncMap{
-		"deref": func(b *bool) bool {
-			if b == nil {
-				return false
-			}
-			return *b
-		},
 		// t translates key and optionally substitutes {name} placeholders from
-		// trailing (name, value) argument pairs, e.g.
-		//   {{t "setup.step.progress" "current" .Data.Step "total" .Data.Total}}
-		// turns "Step {current} of {total}" into "Step 1 of 4". Calls with no
-		// pairs behave as before.
+		// trailing (name, value) argument pairs. Calls with no pairs behave as
+		// a plain lookup.
 		"t": func(key string, args ...any) string {
 			s := key
 			if catalogs != nil {
@@ -221,10 +142,6 @@ func mustParseTemplates(catalogs *i18n.Catalogs, lang string) *templateSet {
 func render(set *templateSet, w http.ResponseWriter, r *http.Request, bodyFile string, data pageData) {
 	data.Version = build.Version
 	data.BasePath = ingressPrefix(r)
-	data.CSRFToken = auth.CSRFToken(r.Context())
-	if id, ok := auth.IdentityFrom(r.Context()); ok {
-		data.Identity = id
-	}
 	tpl, ok := set.pages[bodyFile]
 	if !ok {
 		http.Error(w, "unknown template "+bodyFile, http.StatusInternalServerError)

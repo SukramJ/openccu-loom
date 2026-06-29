@@ -64,10 +64,10 @@ the spec; when in doubt about *implementation*, read the code.
    files (~80 endpoints in `assets/openapi.yaml`), 85 WebSocket
    commands, 20 ReGa scripts, 139 generated device profiles. The
    primary config UI is a Svelte 5 SPA under `assets/ui/` (embedded
-   via `go:embed all:spa_dist`); a minimal HTMX bootstrap surface
-   (login, first-run setup, OIDC callback, server-rendered /health
-   and /about) covers what the SPA cannot reach — pre-auth flows
-   and SPA-down diagnosis. The SPA has a shared design-system
+   via `go:embed all:spa_dist`); login, OIDC, and the first-run
+   onboarding wizard all live in the SPA (ADR 0045). A minimal
+   server-rendered surface (`/health`, `/about`) remains only as a
+   no-JS SPA-down diagnostic anchor. The SPA has a shared design-system
    (`assets/ui/src/lib/components/ui/`) and a homogeneous operating
    concept (toasts for action results, the shared confirm dialog for
    destructive actions, and shared `LoadingState`/`EmptyState`/
@@ -113,9 +113,9 @@ serves users who want MQTT / REST / UI / Matter access without HA.
 - MQTT — Home Assistant Discovery **and** raw topic planes in parallel.
 - REST + WebSocket API.
 - Config UI — Svelte 5 SPA (Tailwind 4 + Vite, embedded via `go:embed`)
-  as primary surface. A tiny HTMX bootstrap surface (login, first-run
-  setup, OIDC callback, server-rendered /health, /about) covers
-  pre-auth flows and the SPA-down diagnosis case.
+  as primary surface, including login, OIDC, and the first-run
+  onboarding wizard (ADR 0045). A tiny server-rendered surface
+  (`/health`, `/about`) remains only as the no-JS SPA-down diagnosis case.
 - Matter — native-Go bridge, default off; operator opt-in via
   `cfg.North.Matter.Enabled`. See SPECIFICATION.md §6 and ADR 0012.
 
@@ -342,7 +342,7 @@ openccu-loom/
 │   ├── model/               — domain model (devices, data points,
 │   │                          custom profiles, calculated, combined,
 │   │                          optimistic, schedule, week_profile, hub)
-│   ├── north/               — REST, WS, UI (Svelte SPA + HTMX bootstrap), MQTT adapters
+│   ├── north/               — REST, WS, UI (Svelte SPA + no-JS /health,/about), MQTT adapters
 │   ├── observability/       — instrumentation + tracing helpers
 │   ├── parameter/           — validation, coercion, diff
 │   ├── payload/             — north-bound payload assembly + topology

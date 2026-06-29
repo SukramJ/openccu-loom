@@ -60,8 +60,9 @@ export type Identity = {
 
 /**
  * Thin REST wrapper around `/api/v1/*`. Auth cookies travel via the
- * default `credentials: "same-origin"` — the daemon sets the session
- * cookie on the HTMX login page, and the SPA reuses it.
+ * default `credentials: "same-origin"` — the SPA's login form POSTs to
+ * `/auth/login`, the daemon sets the session cookie, and every
+ * subsequent request reuses it.
  */
 class ApiError extends Error {
   constructor(
@@ -235,6 +236,20 @@ export const api = {
   },
   info() {
     return request<DaemonInfo>(`/info`);
+  },
+  // First-run onboarding. setupStatus is probed on boot to decide between
+  // the wizard and the login screen; submitSetup atomically persists the
+  // wizard's accumulated state. Both are unauthenticated — no admin exists
+  // yet when the wizard runs — and submitSetup hard-gates server-side.
+  setupStatus() {
+    return request<{ required: boolean }>(`/setup/status`);
+  },
+  submitSetup(payload: SetupPayload) {
+    return request<void>(`/setup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
   },
   listDevices(page = 1, perPage = 50) {
     return request<Paginated<DeviceSummary>>(
@@ -1196,6 +1211,25 @@ export type SystemUpdateEntry = {
   update_available: boolean;
   in_progress: boolean;
   observed: boolean;
+};
+
+// SetupPayload mirrors the POST /api/v1/setup request body. `ccu` and
+// `mqtt` are optional — omit them to skip that wizard step.
+export type SetupPayload = {
+  admin: { username: string; password: string };
+  locale: { locale: "de" | "en"; theme: "light" | "dark" | "system" };
+  ccu?: {
+    name: string;
+    host: string;
+    username?: string;
+    password?: string;
+    interfaces: string[];
+  };
+  mqtt?: {
+    broker_url: string;
+    username?: string;
+    password?: string;
+  };
 };
 
 export type DaemonInfo = {

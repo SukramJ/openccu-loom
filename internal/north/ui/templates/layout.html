@@ -8,7 +8,6 @@
        shared listener behind Ingress. Keep all URLs in the bootstrap
        templates relative (no leading slash). */}}
   <base href="{{.BasePath}}/">
-  <meta name="csrf-token" content="{{.CSRFToken}}">
   <meta name="theme-color" content="#1E40AF">
   <title>{{.Title}} · openccu-loom</title>
   <link rel="stylesheet" href="ui/assets/app.css">
@@ -26,14 +25,6 @@
       <span class="spacer"></span>
       <a href="health">{{t "nav.health"}}</a>
       <a href="about">{{t "nav.about"}}</a>
-      {{if .Identity.Subject}}
-        <form method="post" action="logout" class="inline">
-          <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
-          <button type="submit" class="linklike">{{t "nav.logout"}} ({{.Identity.Subject}})</button>
-        </form>
-      {{else}}
-        <a href="login">{{t "nav.login"}}</a>
-      {{end}}
     </nav>
   </header>
   <main>

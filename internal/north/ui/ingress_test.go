@@ -96,8 +96,7 @@ func TestUIRedirectPrefixesLocation(t *testing.T) {
 }
 
 // TestRenderWithIngressPrefixEmitsBase verifies that a page rendered with
-// X-Ingress-Path carries <base href="/api/hassio_ingress/abc/"> in the output,
-// and that the login form action is relative ("login", no leading slash).
+// X-Ingress-Path carries <base href="/api/hassio_ingress/abc/"> in the output.
 // Without the header the base must be <base href="/">.
 func TestRenderWithIngressPrefixEmitsBase(t *testing.T) {
 	t.Parallel()
@@ -111,27 +110,16 @@ func TestRenderWithIngressPrefixEmitsBase(t *testing.T) {
 		t.Parallel()
 		var buf strings.Builder
 		data := pageData{
-			Title:    "Sign in",
+			Title:    "About",
 			Lang:     "en",
 			BasePath: "/api/hassio_ingress/abc",
-			Data: struct {
-				Error       bool
-				OIDCEnabled bool
-				SetupDone   bool
-			}{},
 		}
-		if err := tpl.pages["login.html"].ExecuteTemplate(&buf, "layout", data); err != nil {
+		if err := tpl.pages["about.html"].ExecuteTemplate(&buf, "layout", data); err != nil {
 			t.Fatalf("ExecuteTemplate: %v", err)
 		}
 		out := buf.String()
 		if !strings.Contains(out, `<base href="/api/hassio_ingress/abc/">`) {
 			t.Errorf("expected <base href=\"/api/hassio_ingress/abc/\"> in output; got:\n%s", out)
-		}
-		if !strings.Contains(out, `action="login"`) {
-			t.Errorf("expected relative action=\"login\" in output; got:\n%s", out)
-		}
-		if strings.Contains(out, `action="/login"`) {
-			t.Errorf("absolute action=\"/login\" must not appear; got:\n%s", out)
 		}
 	})
 
@@ -139,16 +127,11 @@ func TestRenderWithIngressPrefixEmitsBase(t *testing.T) {
 		t.Parallel()
 		var buf strings.Builder
 		data := pageData{
-			Title:    "Sign in",
+			Title:    "About",
 			Lang:     "en",
 			BasePath: "",
-			Data: struct {
-				Error       bool
-				OIDCEnabled bool
-				SetupDone   bool
-			}{},
 		}
-		if err := tpl.pages["login.html"].ExecuteTemplate(&buf, "layout", data); err != nil {
+		if err := tpl.pages["about.html"].ExecuteTemplate(&buf, "layout", data); err != nil {
 			t.Fatalf("ExecuteTemplate: %v", err)
 		}
 		out := buf.String()

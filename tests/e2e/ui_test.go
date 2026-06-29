@@ -165,11 +165,11 @@ func TestUISPAHashedAssetCacheable(t *testing.T) {
 // HTMX bootstrap surface (folded onto the REST listener — ADR 0044)
 // ─────────────────────────────────────────────────────────────────
 
-// TestUIRootRedirectsToOnboarding asserts that GET / redirects into the SPA
-// (/app/), or to the first-run setup wizard (/setup) when no admin user exists
-// yet. Since 0.14.0 the bootstrap shares the REST listener and the root is
-// owned by the SPA/onboarding flow — the old /→/health redirect is gone.
-func TestUIRootRedirectsToOnboarding(t *testing.T) {
+// TestUIRootRedirectsToSPA asserts that GET / redirects into the SPA (/app/).
+// Since 0.14.0 the bootstrap shares the REST listener and the root is owned by
+// the SPA; the SPA itself probes /api/v1/setup/status and renders the
+// onboarding wizard on first run, so there is no server-side /setup redirect.
+func TestUIRootRedirectsToSPA(t *testing.T) {
 	t.Parallel()
 	h := harness.Start(t, harness.Options{})
 
@@ -186,15 +186,16 @@ func TestUIRootRedirectsToOnboarding(t *testing.T) {
 	if resp.StatusCode < 300 || resp.StatusCode >= 400 {
 		t.Fatalf("GET /: status=%d, want a 3xx redirect", resp.StatusCode)
 	}
-	if loc := resp.Header.Get("Location"); loc != "/app/" && loc != "/setup" {
-		t.Errorf("Location=%q, want /app/ or /setup", loc)
+	if loc := resp.Header.Get("Location"); loc != "/app/" {
+		t.Errorf("Location=%q, want /app/", loc)
 	}
 }
 
-// TestUIHTMXPagesRender asserts that each pre-auth bootstrap page
-// returns well-formed HTML. Templates evolve, so we pin only
-// invariant anchors (the layout's <html> tag and a per-page anchor).
-func TestUIHTMXPagesRender(t *testing.T) {
+// TestUIDiagnosticPagesRender asserts that the server-rendered, no-JS
+// diagnostic pages (/health, /about) return well-formed HTML. They are the
+// SPA-down fallback; login and onboarding now live in the SPA. Templates
+// evolve, so we pin only invariant anchors (the layout's <html> tag).
+func TestUIDiagnosticPagesRender(t *testing.T) {
 	t.Parallel()
 	h := harness.Start(t, harness.Options{})
 
@@ -204,8 +205,6 @@ func TestUIHTMXPagesRender(t *testing.T) {
 	}{
 		{"/health", `<html`},
 		{"/about", `<html`},
-		{"/login", `name="username"`},
-		{"/setup", `<html`},
 	}
 	for _, p := range pages {
 		resp, err := h.REST().HTTPClient().Get(h.UIBase() + p.path)
@@ -215,31 +214,23 @@ func TestUIHTMXPagesRender(t *testing.T) {
 		}
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		// /setup is reachable only on a fresh install; once an admin
-		// user exists the bootstrap redirects to /login. Either is
-		// fine — we only require a well-formed HTML envelope.
-		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusSeeOther {
+		if resp.StatusCode != http.StatusOK {
 			t.Errorf("GET %s: status=%d", p.path, resp.StatusCode)
 			continue
 		}
-		if got := resp.Header.Get("Content-Type"); resp.StatusCode == http.StatusOK &&
-			!strings.HasPrefix(got, "text/html") {
+		if got := resp.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/html") {
 			t.Errorf("GET %s: Content-Type=%q, want text/html prefix", p.path, got)
 		}
-		if resp.StatusCode == http.StatusOK && !strings.Contains(strings.ToLower(string(body)), strings.ToLower(p.anchor)) {
+		if !strings.Contains(strings.ToLower(string(body)), strings.ToLower(p.anchor)) {
 			t.Errorf("GET %s: missing anchor %q\nbody (first 200):\n%s", p.path, p.anchor, truncate(string(body), 200))
 		}
 	}
 }
 
-// TestUIHTMXStaticAssetsServed asserts that /ui/assets/app.css on
-// the UI listener serves the embedded stylesheet the bootstrap
-// templates link to. The HTMX runtime (htmx.min.js) lives in the
-// source tree under assets/ but is NOT embedded today (the embed
-// glob is `assets/*.css`); the bootstrap templates currently do not
-// reference it. See docs/e2e-testplan.md §11.6 for the dead-file
-// follow-up.
-func TestUIHTMXStaticAssetsServed(t *testing.T) {
+// TestUIDiagnosticStaticAssetsServed asserts that /ui/assets/app.css on the
+// UI listener serves the embedded stylesheet the server-rendered diagnostic
+// templates (/health, /about) link to.
+func TestUIDiagnosticStaticAssetsServed(t *testing.T) {
 	t.Parallel()
 	h := harness.Start(t, harness.Options{})
 

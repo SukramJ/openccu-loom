@@ -4,7 +4,6 @@
 package rest
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -173,11 +172,14 @@ type Deps struct {
 	// (ADR 0044). Nil disables those routes. Folded in from the former
 	// stand-alone :8081 UI listener.
 	Bootstrap http.Handler
-	// NoUsers reports whether no admin user exists yet (first run). When true
-	// and the request carries no resolved identity, the root handler redirects
-	// the SPA entrypoint to /setup instead of /app/. Nil ⇒ never first-run.
-	NoUsers func(context.Context) bool
-	Backup  handlers.BackupService
+	// Setup backs the first-run onboarding endpoints
+	// (`GET /api/v1/setup/status`, `POST /api/v1/setup`). Nil disables them
+	// (status reports not-required, finalize returns 503).
+	Setup *handlers.SetupService
+	// LoginRateLimit guards POST /api/v1/auth/login against per-IP brute-force
+	// sweeps. Nil disables the speed-bump (used by test fixtures).
+	LoginRateLimit *middleware.LoginRateLimiter
+	Backup         handlers.BackupService
 	// CentralLinks toggles CCU click-event forwarding for press-event
 	// channels. Nil disables the endpoint trio
 	// (`GET|POST|DELETE /api/v1/devices/{addr}/central-links`).
@@ -428,18 +430,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		// Assistant origin and bypass the Ingress proxy.
 		r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 			prefix := safeIngressPrefix(req)
-			// First run: no admin user exists yet and the request carries no
-			// resolved identity → send the operator to the setup wizard
-			// (served by d.Bootstrap on this same listener) instead of the
-			// SPA. A resolved identity (real login or HA Ingress passthrough)
-			// means setup is done → fall through to the SPA. prefix is "" or a
-			// validated local path (safeIngressPrefix rejects scheme/host).
-			if d.NoUsers != nil && d.NoUsers(req.Context()) {
-				if _, ok := auth.IdentityFrom(req.Context()); !ok {
-					http.Redirect(w, req, prefix+"/setup", http.StatusSeeOther) //nolint:gosec // G710: prefix validated to a local path
-					return
-				}
-			}
+			// Root → SPA. The SPA probes /api/v1/setup/status on boot and
+			// renders the onboarding wizard itself when the daemon has no
+			// authentication source yet, so first-run no longer needs a
+			// server-side redirect here.
 			target := "/app/"
 			if prefix != "" {
 				target = prefix + "/app/"
@@ -453,14 +447,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		r.Handle("/app/*", http.StripPrefix("/app/", d.SPAHandler))
 	}
 
-	// Server-rendered bootstrap surface (login / first-run setup / about /
-	// server-rendered /health diagnosis / OIDC HTMX / its /ui/assets CSS)
-	// folded onto this listener from the former :8081 UI server, so the whole
-	// onboarding + SPA-down diagnosis works through one port (HA Ingress). None
-	// of these overlap with /api/v1, /app or the root / — and they run
-	// unauthenticated by design (the wizard guards itself on the user count).
+	// Server-rendered diagnostic surface (/about + a no-JS /health for the
+	// case where the SPA bundle fails to load, plus its /ui/assets CSS),
+	// folded onto this listener from the former :8081 UI server so SPA-down
+	// diagnosis works through one port (HA Ingress). Login, onboarding, and
+	// OIDC now live in the SPA. None of these overlap with /api/v1, /app or
+	// the root /, and they run unauthenticated by design.
 	if d.Bootstrap != nil {
-		for _, p := range []string{"/login", "/logout", "/setup", "/about", "/health", "/ui"} {
+		for _, p := range []string{"/about", "/health", "/ui"} {
 			r.Handle(p, d.Bootstrap)
 			r.Handle(p+"/*", d.Bootstrap)
 		}
@@ -498,10 +492,22 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 		// whether to show the login page; it returns 401 when there
 		// is no active session.
 		if d.Auth != nil {
-			r.Post("/auth/login", handlers.Login(d.Auth))
+			// The per-IP brute-force speed-bump wraps only the login POST — the
+			// SPA is the sole login surface, so this is the one place a sweep can
+			// guess credentials. Nil limiter ⇒ plain handler (test fixtures).
+			login := handlers.Login(d.Auth)
+			if d.LoginRateLimit != nil {
+				r.With(d.LoginRateLimit.Middleware()).Post("/auth/login", login)
+			} else {
+				r.Post("/auth/login", login)
+			}
 			r.Post("/auth/logout", handlers.Logout(d.Auth))
 			r.Get("/auth/me", handlers.Me())
 		}
+		// First-run onboarding. Unauthenticated: no admin exists yet when the
+		// wizard runs. POST /setup hard-gates itself on the first-run probe.
+		r.Get("/setup/status", handlers.SetupStatus(d.Setup))
+		r.Post("/setup", handlers.Setup(d.Setup))
 		if d.OIDC != nil {
 			r.Get("/auth/oidc/start", handlers.OIDCStart(d.OIDC))
 			r.Get("/auth/oidc/callback", handlers.OIDCCallback(d.OIDC))

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.6.0
+  version: 2.7.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -1027,6 +1027,90 @@ paths:
           description: |
             Plain HTTP request without a valid WebSocket upgrade — the
             server rejects the connection rather than serving HTML.
+
+  # ---- Setup ----
+  /setup/status:
+    get:
+      operationId: setupStatus
+      summary: First-run onboarding probe
+      description: >
+        Reports whether first-run onboarding is still required — true only when
+        no authentication source exists yet (no local admin, no YAML user, no
+        CCU-delegated login, no OIDC). The SPA probes this on boot to decide
+        between the onboarding wizard and the login screen. Unauthenticated.
+      tags: [setup]
+      security: []
+      responses:
+        "200":
+          description: Onboarding requirement
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [required]
+                properties:
+                  required: { type: boolean }
+  /setup:
+    post:
+      operationId: setup
+      summary: Finalize first-run onboarding
+      description: >
+        Atomically persists the admin account, locale preference, optional CCU,
+        and optional MQTT broker collected by the SPA onboarding wizard.
+        Unauthenticated by necessity (no admin exists yet) but hard-gated: once
+        any authentication source exists it returns 409, so a second admin can
+        never be registered through this endpoint. On success the SPA returns to
+        the login screen and the operator signs in with the new admin account.
+      tags: [setup]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [admin, locale]
+              properties:
+                admin:
+                  type: object
+                  required: [username, password]
+                  properties:
+                    username: { type: string, minLength: 1 }
+                    password: { type: string, minLength: 8 }
+                locale:
+                  type: object
+                  required: [locale, theme]
+                  properties:
+                    locale: { type: string, enum: [de, en] }
+                    theme: { type: string, enum: [light, dark, system] }
+                ccu:
+                  type: object
+                  description: Optional first CCU. Omit to skip.
+                  required: [name, host, interfaces]
+                  properties:
+                    name: { type: string, minLength: 1 }
+                    host: { type: string, minLength: 1 }
+                    username: { type: string }
+                    password: { type: string }
+                    interfaces:
+                      type: array
+                      minItems: 1
+                      items: { type: string }
+                mqtt:
+                  type: object
+                  description: Optional MQTT broker. Omit to skip.
+                  required: [broker_url]
+                  properties:
+                    broker_url: { type: string, minLength: 1 }
+                    username: { type: string }
+                    password: { type: string }
+      responses:
+        "204": { description: Onboarding completed }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   # ---- Auth ----
   /auth/login:

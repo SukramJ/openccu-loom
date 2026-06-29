@@ -481,15 +481,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// setup / about / OIDC) once and fold it onto the REST listener instead of
 	// a separate :8081 server (ADR 0044), so onboarding works through one port
 	// / HA Ingress. noUsers drives the first-run SPA→/setup redirect.
-	bootstrapRouter, noUsers := buildBootstrapRouter(cfg, logger, uiMountDeps{ //nolint:contextcheck // buildOIDC uses its own timeout; matches the prior mountUIServer call
+	bootstrapRouter := buildBootstrapRouter(cfg, logger, uiMountDeps{
 		healthAdapter: healthAdapter,
 		catalogs:      catalogs,
-		users:         users,
-		sessions:      sessions,
-		sqUsers:       sqUsers,
-		sqCentrals:    sqCentrals,
-		sqSections:    sqSections,
 	})
+	// First-run probe gates the SPA onboarding endpoints. Built independently
+	// of the UI router so it works whenever REST is up, even with the
+	// diagnostic UI disabled.
+	noUsers := firstRunProbe(cfg, sqUsers)
 
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
@@ -498,6 +497,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		reg:                     reg,
 		bootstrap:               bootstrapRouter,
 		noUsers:                 noUsers,
+		sqUsers:                 sqUsers,
+		sqCentrals:              sqCentrals,
+		sqSections:              sqSections,
 		matter:                  matter,
 		reload:                  deps,
 		healthAdapter:           healthAdapter,

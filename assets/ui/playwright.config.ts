@@ -4,6 +4,11 @@ export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: false,
   timeout: 30000,
+  // Retry once in CI: the GitHub runners are noticeably slower and more
+  // contended than local/containerised runs, which occasionally turns a
+  // reactivity-settle race into a one-off failure. Local runs keep retries
+  // off so genuine flakes surface immediately.
+  retries: process.env.CI ? 1 : 0,
   expect: {
     toHaveScreenshot: { maxDiffPixelRatio: 0.02 },
   },

@@ -147,71 +147,55 @@ func buildSessionStore(persist auth.SessionPersistence, logger *slog.Logger) *au
 	return sessions
 }
 
-// uiMountDeps bundles the live subsystems the browser-facing UI router needs.
+// uiMountDeps bundles the live subsystems the server-rendered diagnostic UI
+// router needs. Since the SPA owns login + onboarding, this is now just the
+// health reader and translation catalogues behind /health and /about.
 type uiMountDeps struct {
 	healthAdapter *adapter.HealthAdapter
 	catalogs      *i18n.Catalogs
-	users         *auth.MemoryUserStore
-	sessions      *auth.SessionStore
-	sqUsers       *sqlitestore.UserStore
-	sqCentrals    *sqlitestore.CentralsStore
-	sqSections    *sqlitestore.ConfigSectionStore
 }
 
-// buildBootstrapRouter builds the server-rendered HTMX bootstrap surface
-// (login, first-run setup wizard, about, OIDC HTMX flow). Since ADR 0044 it is
-// folded onto the REST listener (:8080) instead of a stand-alone :8081 server,
-// so the whole onboarding works through one port / HA Ingress. It returns the
-// router and a first-run probe (no admin user yet) for the SPA root redirect.
-//
-// Returns (nil, nil) when the UI is disabled. The setup wizard is wired only
-// when the SQLite stores are available; otherwise the bootstrap serves the
-// login surface alone (the wizard refuses without a durable store).
-func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps) (router http.Handler, noUsers func(context.Context) bool) {
+// buildBootstrapRouter builds the server-rendered diagnostic surface
+// (/health, /about). Since ADR 0044 it is folded onto the REST listener
+// (:8080) instead of a stand-alone :8081 server, so it works through one port /
+// HA Ingress. Login, logout, OIDC, and first-run onboarding now live in the
+// Svelte SPA — this surface exists only as a no-JS fallback for when the SPA
+// bundle cannot load. Returns nil when the UI is disabled.
+func buildBootstrapRouter(cfg *config.Config, logger *slog.Logger, d uiMountDeps) http.Handler {
 	if !cfg.North.UI.IsEnabled() {
-		return nil, nil
+		return nil
 	}
-	var setupDeps *ui.SetupWizardDeps
-	if d.sqUsers != nil {
-		setupDeps = &ui.SetupWizardDeps{
-			Users:    d.sqUsers,
-			Centrals: d.sqCentrals,
-			Sections: d.sqSections,
-			Sessions: ui.NewSetupSessionStore(),
-		}
-	}
-	uiRouter := ui.NewRouter(ui.Deps{
-		Logger:      logger,
-		Lang:        cfg.Locale,
-		Health:      d.healthAdapter,
-		Catalogs:    d.catalogs,
-		Auth:        &ui.AuthDeps{Users: d.users, Sessions: d.sessions, Secure: false},
-		Setup:       setupDeps,
-		OIDC:        buildOIDC(cfg, logger),
-		AuthResolve: auth.SessionMiddleware(d.sessions),
-		AuthRequire: nil, // UI is browser-facing, wizard runs unauthenticated
+	return ui.NewRouter(ui.Deps{
+		Logger:   logger,
+		Lang:     cfg.Locale,
+		Health:   d.healthAdapter,
+		Catalogs: d.catalogs,
 	})
-	// First-run probe: only force the /setup wizard when there is genuinely no
-	// way to authenticate yet (see firstRunNeedsSetup).
-	noUsers = func(ctx context.Context) bool {
-		if d.sqUsers == nil {
-			return false // no durable store → wizard can't run; don't trap the user
+}
+
+// firstRunProbe returns a probe reporting first-run state — no way to
+// authenticate yet — that gates the SPA onboarding endpoints
+// (GET /api/v1/setup/status, POST /api/v1/setup). nil sqUsers (no durable
+// store) reports "not first run" so the probe never traps an operator on a
+// backend that cannot persist the onboarding result.
+func firstRunProbe(cfg *config.Config, sqUsers *sqlitestore.UserStore) func(context.Context) bool {
+	return func(ctx context.Context) bool {
+		if sqUsers == nil {
+			return false
 		}
-		n, err := d.sqUsers.Count(ctx)
+		n, err := sqUsers.Count(ctx)
 		if err != nil {
 			return false
 		}
 		return firstRunNeedsSetup(cfg, n)
 	}
-	return uiRouter, noUsers
 }
 
-// firstRunNeedsSetup reports whether the operator must be redirected to the
-// /setup wizard: ONLY when there is no way to authenticate yet — no local admin
-// AND no alternative provider. In the add-on CCU auth is on by default, so most
-// operators log in with their CCU account and never create a local admin;
-// treating that as "first run" would trap them on /setup (regression fixed in
-// 0.14.1).
+// firstRunNeedsSetup reports whether the operator still needs onboarding: ONLY
+// when there is no way to authenticate yet — no local admin AND no alternative
+// provider. In the add-on CCU auth is on by default, so most operators log in
+// with their CCU account and never create a local admin; treating that as
+// "first run" would trap them on the wizard (regression fixed in 0.14.1).
 func firstRunNeedsSetup(cfg *config.Config, localUserCount int) bool {
 	switch {
 	case localUserCount > 0:
@@ -298,19 +282,9 @@ func (a scheduleWeekProfileSink) SetActiveProfile(
 	return a.sd.SetActiveProfile(ctx, deviceAddress, channelIdx, profileKey)
 }
 
-// buildOIDC discovers the IdP and constructs the UI OIDC deps.
-// Returns nil when OIDC is disabled or discovery fails — the daemon
-// then renders the login page without the SSO button.
-func buildOIDC(cfg *config.Config, logger *slog.Logger) *ui.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
-	client := buildOIDCClient(cfg, logger)
-	if client == nil {
-		return nil
-	}
-	return ui.NewOIDCDeps(client)
-}
-
-// buildOIDCRest reuses the same OIDC client for the REST mount so
-// SPA-driven SSO and the HTMX wizard share state and credentials.
+// buildOIDCRest discovers the IdP and constructs the REST OIDC deps backing
+// the SPA's SSO flow (`/api/v1/auth/oidc/{start,callback}`). Returns nil when
+// OIDC is disabled or discovery fails — the SPA then hides the SSO button.
 func buildOIDCRest(cfg *config.Config, logger *slog.Logger, authDeps *handlers.AuthDeps) *handlers.OIDCDeps { //nolint:contextcheck // test callers outside owned set prevent ctx signature; buildOIDCClient uses context.Background() with a nolint inside
 	client := buildOIDCClient(cfg, logger)
 	if client == nil {
