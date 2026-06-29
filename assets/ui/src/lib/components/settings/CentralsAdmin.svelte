@@ -1,17 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, ApiError } from "$lib/api/client";
+  import { api, ApiError, friendlyError } from "$lib/api/client";
   import type {
     CentralBehavior,
     CentralRow,
     DescriptionMarker,
+    DiscoveredCCU,
     InterfaceSpec,
   } from "$lib/api/client";
   import type { DataColumn } from "$lib/components/ui/data-table";
   import Button from "$lib/components/ui/Button.svelte";
   import Badge from "$lib/components/ui/Badge.svelte";
+  import Card from "$lib/components/ui/Card.svelte";
   import DataTable from "$lib/components/ui/DataTable.svelte";
+  import EmptyState from "$lib/components/ui/EmptyState.svelte";
+  import ErrorState from "$lib/components/ui/ErrorState.svelte";
   import ExpertGate from "$lib/components/ui/ExpertGate.svelte";
+  import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import { t } from "$lib/i18n";
   import { toastStore } from "$lib/stores/toast.svelte";
   import { confirmStore } from "$lib/stores/confirm.svelte";
@@ -139,6 +144,10 @@
   let loading = $state(true);
   let loadError = $state<string | null>(null);
 
+  let discovered = $state<DiscoveredCCU[]>([]);
+  let discoveredLoading = $state(false);
+  let discoveredError = $state<string | null>(null);
+
   // Modal state (used for both Add and Edit)
   let showModal = $state(false);
   let isEdit = $state(false);
@@ -189,7 +198,55 @@
     }
   }
 
-  onMount(() => void load());
+  async function loadDiscovered() {
+    discoveredLoading = true;
+    discoveredError = null;
+    try {
+      discovered = await api.listDiscoveredCentrals();
+    } catch (err) {
+      discoveredError = friendlyError(err, t);
+    } finally {
+      discoveredLoading = false;
+    }
+  }
+
+  function prefillFromDiscovered(ccu: DiscoveredCCU) {
+    isEdit = false;
+    fName = ccu.name;
+    fHost = ccu.host;
+    fEnabled = true;
+    fTls = false;
+    fTlsInsecure = false;
+    fUsername = "";
+    fPassword = "";
+    fPasswordEnv = "";
+    fJsonRpcPort = "";
+    fPrimaryInterface = "HmIP-RF";
+    fInterfaces = freshInterfaceForm();
+    fBehavior = freshBehaviorForm();
+    showBehavior = false;
+    modalError = null;
+    showModal = true;
+  }
+
+  async function ignoreDiscovered(ccu: DiscoveredCCU) {
+    const ok = await confirmStore.ask({
+      title: t("discovery.ignore"),
+      body: t("discovery.ignore_confirm", { name: ccu.name, serial: ccu.serial }),
+      confirmLabel: t("discovery.ignore"),
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api.ignoreDiscoveredCentral(ccu.serial);
+      toastStore.success(t("discovery.ignored", { name: ccu.name }));
+      await loadDiscovered();
+    } catch (err) {
+      toastStore.error(friendlyError(err, t));
+    }
+  }
+
+  onMount(() => { void load(); void loadDiscovered(); });
 
   function openAdd() {
     isEdit = false;
@@ -346,6 +403,73 @@
 </script>
 
 <div class="space-y-4">
+  <!-- Discovered CCUs section -->
+  <div class="space-y-3">
+    <div class="flex items-center justify-between gap-2">
+      <h3 class="text-sm font-semibold text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
+        {t("discovery.title")}
+      </h3>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onclick={() => void loadDiscovered()}
+        disabled={discoveredLoading}
+      >
+        {t("discovery.refresh")}
+      </Button>
+    </div>
+
+    {#if discoveredLoading}
+      <LoadingState />
+    {:else if discoveredError}
+      <ErrorState message={discoveredError} onRetry={() => void loadDiscovered()} />
+    {:else if discovered.length === 0}
+      <EmptyState message={t("discovery.empty")} icon="mdi:radio-tower" />
+    {:else}
+      <div class="space-y-2">
+        {#each discovered as ccu (ccu.serial)}
+          <Card class="flex flex-wrap items-center gap-3 px-4 py-3">
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="font-medium text-sm">{ccu.name}</span>
+                {#if ccu.already_configured}
+                  <Badge variant="success">{t("discovery.already_configured")}</Badge>
+                {/if}
+                {#if ccu.manufacturer || ccu.model}
+                  <Badge variant="muted">{[ccu.manufacturer, ccu.model].filter(Boolean).join(" ")}</Badge>
+                {/if}
+              </div>
+              <span class="font-mono text-xs text-[var(--ha-secondary-text-color)]">{ccu.host}</span>
+            </div>
+            {#if !ccu.already_configured}
+              <div class="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onclick={() => prefillFromDiscovered(ccu)}
+                >
+                  {t("discovery.add")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onclick={() => void ignoreDiscovered(ccu)}
+                >
+                  {t("discovery.ignore")}
+                </Button>
+              </div>
+            {/if}
+          </Card>
+        {/each}
+      </div>
+    {/if}
+  </div>
+
+  <hr class="border-slate-200 dark:border-slate-700" />
+
   <div class="flex items-center justify-between gap-2">
     <h3 class="text-sm font-semibold text-[var(--ha-secondary-text-color)] uppercase tracking-wide">
       {t("settings.tab.ccus")}

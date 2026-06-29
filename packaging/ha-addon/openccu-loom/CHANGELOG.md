@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.20.0
+
+- **CCUs on your network are now found automatically.** OpenCCU-Loom scans the
+  local network for Homematic / OpenCCU central units and shows them in
+  Settings → CCUs and during first-time setup, so you can add a CCU with its
+  address already filled in instead of typing it. CCUs you don't want can be
+  ignored (they stay hidden until you un-ignore them).
+- This only listens on the local network; nothing about the add-on is sent
+  out, and it simply finds nothing if your network blocks discovery. You can
+  turn it off under `north.discovery.ssdp`.
+
 ## 0.19.0
 
 - **First-run setup and login now run entirely in the web UI.** The initial

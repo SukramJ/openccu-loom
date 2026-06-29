@@ -355,6 +355,40 @@ func (m NorthMCP) MountPath() string {
 // to locate the daemon without manual configuration. See ADR 0021.
 type NorthDiscovery struct {
 	MDNS NorthDiscoveryMDNS `yaml:"mdns" json:"mdns" cfg:"basic"`
+	SSDP NorthDiscoverySSDP `yaml:"ssdp" json:"ssdp" cfg:"basic"`
+}
+
+// NorthDiscoverySSDP configures active SSDP / UPnP discovery of Homematic /
+// OpenCCU central units on the LAN. When enabled the daemon periodically
+// multicasts an M-SEARCH, follows each responder's `basic_dev.cgi`, and
+// surfaces matching CCUs in the UI so the operator can adopt or ignore them.
+//
+// Default is enabled: it only reads the network (a multicast probe — no data
+// about the daemon leaves the LAN) and simply finds nothing when multicast is
+// unavailable (e.g. some container network setups).
+type NorthDiscoverySSDP struct {
+	// Enabled toggles the discovery scan. Defaults to true.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty" cfg:"basic"`
+	// Interval is how often the daemon re-runs the M-SEARCH scan. Zero / unset
+	// falls back to 60s.
+	Interval time.Duration `yaml:"interval" json:"interval" cfg:"basic"`
+}
+
+// IsEnabled reports whether SSDP discovery is on, applying the default-true
+// policy when the pointer is nil.
+func (s NorthDiscoverySSDP) IsEnabled() bool {
+	if s.Enabled == nil {
+		return true
+	}
+	return *s.Enabled
+}
+
+// ResolveInterval returns the configured scan interval, defaulting to 60s.
+func (s NorthDiscoverySSDP) ResolveInterval() time.Duration {
+	if s.Interval <= 0 {
+		return 60 * time.Second
+	}
+	return s.Interval
 }
 
 // NorthDiscoveryMDNS configures the daemon's self-advertisement on

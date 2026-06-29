@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.7.0
+  version: 2.8.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4087,6 +4087,86 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
         "500": { $ref: "#/components/responses/InternalError" }
+
+  /centrals/discovered:
+    get:
+      operationId: listDiscoveredCentrals
+      summary: List CCUs found via SSDP/UPnP discovery
+      description: >
+        Central units discovered on the LAN via active SSDP/UPnP, excluding the
+        ones the operator ignored. Each entry is flagged whether it is already
+        configured (matched by host). Empty when discovery is disabled.
+      tags: [central-admin]
+      responses:
+        "200":
+          description: Discovered CCUs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [serial, name, host, last_seen, already_configured]
+                  properties:
+                    serial: { type: string }
+                    name: { type: string }
+                    host: { type: string }
+                    manufacturer: { type: string }
+                    model: { type: string }
+                    last_seen: { type: string, format: date-time }
+                    already_configured: { type: boolean }
+  /centrals/discovered/ignored:
+    get:
+      operationId: listIgnoredCentrals
+      summary: List the discovered CCUs the operator has ignored
+      tags: [central-admin]
+      responses:
+        "200":
+          description: Ignored CCUs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [serial, ignored_at]
+                  properties:
+                    serial: { type: string }
+                    name: { type: string }
+                    host: { type: string }
+                    ignored_at: { type: string, format: date-time }
+                    ignored_by: { type: string }
+  /centrals/discovered/{serial}/ignore:
+    parameters:
+      - { in: path, name: serial, required: true, schema: { type: string } }
+    post:
+      operationId: ignoreDiscoveredCentral
+      summary: Ignore a discovered CCU (admin)
+      description: Hide a discovered CCU so it stops appearing in the discovery list.
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Ignored }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    delete:
+      operationId: unignoreDiscoveredCentral
+      summary: Un-ignore a discovered CCU (admin)
+      tags: [central-admin]
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [admin]
+      responses:
+        "204": { description: Un-ignored }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
   /centrals/{name}:
     parameters:

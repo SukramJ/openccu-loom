@@ -113,6 +113,11 @@ func buildConfigYAML(in configInputs) string {
 	fmt.Fprintf(&b, "%s", oidcBlock)
 	_ = oidcEnabled // currently encoded inside oidcBlock
 	fmt.Fprintf(&b, "  ui:\n    enabled: true\n    listen: %q\n", in.UIListen)
+	// LAN discovery (mDNS advertise + SSDP scan) is off for E2E: the tests
+	// run on loopback, so advertising/scanning the network adds nothing but
+	// multicast traffic and competes for ephemeral ports during the
+	// port-pinned parallel daemon startups.
+	fmt.Fprintf(&b, "  discovery:\n    mdns:\n      enabled: false\n    ssdp:\n      enabled: false\n")
 	fmt.Fprintf(&b, "%s", mqttBlock)
 	fmt.Fprintf(&b, "centrals:\n")
 	fmt.Fprintf(&b, "  - name: ccu-e2e\n")

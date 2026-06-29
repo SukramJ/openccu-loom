@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0]
+
+### Added
+
+- **CCUs are now discovered automatically on the LAN via SSDP/UPnP**
+  ([ADR 0046](docs/adr/0046-ssdp-ccu-discovery.md)). The daemon periodically
+  multicasts an M-SEARCH, follows each Homematic/OpenCCU central's
+  `basic_dev.cgi`, and surfaces the matches in the UI — in Settings → CCUs and
+  in the first-run onboarding wizard — so a CCU can be added with its host
+  pre-filled instead of typed by hand. Found CCUs already configured are
+  flagged; unwanted ones can be **ignored** (persisted, so they stop
+  reappearing) and un-ignored later. Discovery accepts OpenCCU **and** classic
+  eQ-3 / HomeMatic / RaspberryMatic centrals.
+- New REST endpoints: `GET /api/v1/centrals/discovered`,
+  `GET /api/v1/centrals/discovered/ignored`, and admin-gated
+  `POST|DELETE /api/v1/centrals/discovered/{serial}/ignore`. REST `APIVersion`
+  → `2.8.0`.
+- New config `north.discovery.ssdp` (`enabled`, default true; `interval`,
+  default 60s). Discovery only reads the network — nothing about the daemon
+  leaves the LAN — and finds nothing where multicast is unavailable.
+
 ## [0.19.0]
 
 ### Changed

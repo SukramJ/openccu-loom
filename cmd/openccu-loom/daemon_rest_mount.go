@@ -85,6 +85,7 @@ type restMountDeps struct {
 	prefSvc     handlers.UserPreferencesService
 	tokenSvc    handlers.TokenAdminService
 	centSvc     handlers.CentralAdminService
+	discovery   *handlers.DiscoveryDeps
 
 	translations *ccudata.Translations
 
@@ -191,6 +192,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		TLSCert:           tlsCertSvc,
 		TokenAdmin:        d.tokenSvc,
 		CentralAdmin:      d.centSvc,
+		Discovery:         d.discovery,
 		MQTTReload:        newMQTTReloadAdapter(d.mqttSup, d.reload, cfg),
 		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:        ui.SPAHandler(),

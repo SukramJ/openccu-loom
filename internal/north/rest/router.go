@@ -148,6 +148,9 @@ type Deps struct {
 
 	// CentralAdmin backs the SQLite-backed `/centrals` CRUD.
 	CentralAdmin handlers.CentralAdminService
+	// Discovery backs the SSDP CCU-discovery endpoints
+	// (`/api/v1/centrals/discovered*`). Nil disables them (list returns empty).
+	Discovery *handlers.DiscoveryDeps
 
 	// MQTTReload backs POST /admin/mqtt/reload. Nil disables the
 	// route — operators on builds without the supervisor (tests,
@@ -867,6 +870,14 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.CentralAdmin != nil {
 				pr.Get("/centrals", handlers.ListCentrals(d.CentralAdmin))
+				// Discovery routes register the static `discovered` segment
+				// before the `{name}` param so chi resolves them unambiguously.
+				if d.Discovery != nil {
+					pr.Get("/centrals/discovered", handlers.ListDiscoveredCCUs(d.Discovery))
+					pr.Get("/centrals/discovered/ignored", handlers.ListIgnoredCCUs(d.Discovery))
+					pr.With(admin).Post("/centrals/discovered/{serial}/ignore", handlers.IgnoreDiscoveredCCU(d.Discovery))
+					pr.With(admin).Delete("/centrals/discovered/{serial}/ignore", handlers.UnignoreDiscoveredCCU(d.Discovery))
+				}
 				pr.Get("/centrals/{name}", handlers.GetCentral(d.CentralAdmin))
 				pr.With(admin).Post("/centrals", handlers.CreateCentral(d.CentralAdmin, d.AuditRecorder))
 				pr.With(admin).Put("/centrals/{name}", handlers.UpdateCentral(d.CentralAdmin, d.AuditRecorder))
