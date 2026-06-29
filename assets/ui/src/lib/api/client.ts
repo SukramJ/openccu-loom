@@ -1200,6 +1200,46 @@ export const api = {
       method: "DELETE",
     });
   },
+  // CCU discovery (SSDP/UPnP) ------------------------------------
+  listDiscoveredCentrals() {
+    return request<DiscoveredCCU[]>(`/centrals/discovered`);
+  },
+  listIgnoredCentrals() {
+    return request<IgnoredCCU[]>(`/centrals/discovered/ignored`);
+  },
+  ignoreDiscoveredCentral(serial: string) {
+    return request<void>(
+      `/centrals/discovered/${encodeURIComponent(serial)}/ignore`,
+      { method: "POST" },
+    );
+  },
+  unignoreDiscoveredCentral(serial: string) {
+    return request<void>(
+      `/centrals/discovered/${encodeURIComponent(serial)}/ignore`,
+      { method: "DELETE" },
+    );
+  },
+};
+
+// DiscoveredCCU mirrors one entry of GET /api/v1/centrals/discovered: a central
+// found on the LAN via SSDP/UPnP, flagged whether it is already configured.
+export type DiscoveredCCU = {
+  serial: string;
+  name: string;
+  host: string;
+  manufacturer?: string;
+  model?: string;
+  last_seen: string;
+  already_configured: boolean;
+};
+
+// IgnoredCCU mirrors one entry of GET /api/v1/centrals/discovered/ignored.
+export type IgnoredCCU = {
+  serial: string;
+  name?: string;
+  host?: string;
+  ignored_at: string;
+  ignored_by?: string;
 };
 
 // SystemUpdateEntry mirrors the Go SystemUpdateEntry (GET /system/update):

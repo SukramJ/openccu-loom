@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, friendlyError, type SetupPayload } from "$lib/api/client";
+  import { api, friendlyError, type DiscoveredCCU, type SetupPayload } from "$lib/api/client";
   import { setupStore } from "$lib/stores/setup.svelte";
   import { setLocale, setTheme } from "$lib/stores/preferences.svelte";
   import { toastStore } from "$lib/stores/toast.svelte";
@@ -30,6 +30,7 @@
   let ccuEnabled = $state(true);
   let ccuName = $state("");
   let ccuHost = $state("");
+  let discoveredCCUs = $state<DiscoveredCCU[]>([]);
   let ccuUsername = $state("");
   let ccuPassword = $state("");
   const CCU_INTERFACES = [
@@ -47,6 +48,21 @@
   let mqttBroker = $state("");
   let mqttUsername = $state("");
   let mqttPassword = $state("");
+
+  $effect(() => {
+    if (step === 3 && ccuEnabled) {
+      api.listDiscoveredCentrals().then((list) => {
+        discoveredCCUs = list;
+      }).catch(() => {
+        // Silently ignore — discovery is best-effort in the wizard
+      });
+    }
+  });
+
+  function prefillCCU(ccu: DiscoveredCCU) {
+    ccuName = ccu.name;
+    ccuHost = ccu.host;
+  }
 
   function toggleInterface(name: string, on: boolean) {
     ccuInterfaces = on
@@ -200,6 +216,23 @@
         <span class="text-sm">{t("setup.ccu.enable")}</span>
       </label>
       {#if ccuEnabled}
+        {#if discoveredCCUs.length > 0}
+          <div class="mb-3">
+            <p class="mb-1 text-xs font-medium text-slate-500 dark:text-slate-400">{t("discovery.found_hint")}</p>
+            <div class="flex flex-wrap gap-2">
+              {#each discoveredCCUs as ccu (ccu.serial)}
+                <button
+                  type="button"
+                  class="flex items-center gap-1 rounded border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
+                  onclick={() => prefillCCU(ccu)}
+                >
+                  <span class="font-medium">{ccu.name}</span>
+                  <span class="text-slate-400">{ccu.host}</span>
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
         <label class="mb-3 block">
           <span class="mb-1 block text-sm font-medium">{t("setup.ccu.name")}</span>
           <Input type="text" bind:value={ccuName} />

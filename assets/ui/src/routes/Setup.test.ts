@@ -19,6 +19,7 @@ const mockToastError = vi.fn();
 vi.mock("$lib/api/client", () => ({
   api: {
     submitSetup: (...args: unknown[]) => mockSubmitSetup(...args),
+    listDiscoveredCentrals: vi.fn().mockResolvedValue([]),
   },
   ApiError: class ApiError extends Error {
     public readonly status: number;

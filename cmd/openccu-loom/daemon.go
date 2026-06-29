@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 
 	// Side-effect import: aggregator package whose blank-imports
@@ -81,7 +82,36 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	sqTokens := ov.sqTokens
 	sqCentrals := ov.sqCentrals
 	sqSections := ov.sqSections
+	sqDiscoveryIgnore := ov.sqDiscoveryIgnore
 	configStore := ov.configStore
+
+	// SSDP/UPnP CCU discovery (ADR 0046): a long-lived scan loop that surfaces
+	// Homematic/OpenCCU centrals found on the LAN. Lifecycle mirrors the mDNS
+	// advertiser — start here, stop on daemon exit. Nil when disabled, so the
+	// REST handlers report an empty discovery set.
+	var ssdpDiscoverer *ssdp.Discoverer
+	if cfg.North.Discovery.SSDP.IsEnabled() {
+		ssdpDiscoverer = ssdp.New(cfg.North.Discovery.SSDP.ResolveInterval(), logger)
+		if err := ssdpDiscoverer.Start(ctx); err != nil {
+			logger.Warn("discovery.ssdp.start_failed", slog.String("err", err.Error()))
+			ssdpDiscoverer = nil
+		} else {
+			defer func() { _ = ssdpDiscoverer.Stop() }()
+		}
+	}
+	// Assemble the discovery REST deps. Fields are set only when their backing
+	// component exists so a disabled scanner / absent DB leaves a true-nil
+	// interface (not a non-nil interface wrapping a nil pointer).
+	discoveryDeps := &handlers.DiscoveryDeps{}
+	if ssdpDiscoverer != nil {
+		discoveryDeps.Discoverer = ssdpDiscoverer
+	}
+	if sqDiscoveryIgnore != nil {
+		discoveryDeps.Ignore = sqDiscoveryIgnore
+	}
+	if sqCentrals != nil {
+		discoveryDeps.Centrals = sqCentrals
+	}
 
 	// Start the periodic WAL checkpoint for the audit/config DB. Keeps the
 	// WAL file bounded on embedded and busy targets without blocking readers.
@@ -534,6 +564,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		prefSvc:                 prefSvc,
 		tokenSvc:                tokenAdminSvc,
 		centSvc:                 centralAdminSvc,
+		discovery:               discoveryDeps,
 		translations:            translations,
 		mqttSup:                 mqttSup,
 		mqttAvailable:           mqttWiring != nil,
