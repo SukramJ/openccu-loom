@@ -1467,7 +1467,7 @@ that qualify as 🔄 by-design rather than implementation gaps.
 | Symbol | Loom path | Rationale |
 |---|---|---|
 | Python `CustomDpWindowDrive` subclass | `internal/model/custom/cover/cover.go` `Cover` + `Config.WindowDrive bool` + `CoverVariant=VariantWindow` | Single struct + variant flag collapses the Python subclass — same behaviour surface, less duplication. |
-| `valve.Modulating` (Go-only forward declaration) | `internal/model/custom/valve/valve.go` | No aiohomematic peer; the LEVEL-based modulating valve infrastructure is in place for when a future device profile maps onto it. Until then it remains unregistered (no `init.go` entry). |
+| `valve.Modulating` (Go-only forward declaration) | `internal/model/custom/valve/valve.go` | No aiohomematic peer; the LEVEL-based modulating valve infrastructure is in place for when a future device profile maps onto it. Until then it remains unregistered (no `init.go` entry). Full rationale: entry `A2-BD03`. |
 
 ### A5 — Scheduler
 
@@ -2725,13 +2725,30 @@ Go path: `internal/model/custom/lock/lock.go::unlockEventRing`.
 
 ---
 
-### A2-BD03 — Valve modulating data point is Go-only
+### A2-BD03 — Valve modulating data point is Go-only and unregistered
 
-`Valve.Modulating` (`internal/model/custom/valve/valve.go:139-205`) exposes a continuous LEVEL parameter on modulating valve actuators (e.g. HmIP-FALMOT-C12). The reference implementation contains only `CustomDpIpIrrigationValve` (a switch-based on/off valve).
+`valve.Modulating` (`internal/model/custom/valve/valve.go`) exposes a
+continuous LEVEL (0..1 position) write path for proportional radiator-style
+valve actuators — the kind of device an `HmIP-FALMOT-C12` presents. The
+aiohomematic reference custom-DP set contains only `CustomDpIpIrrigationValve`
+(a switch-based on/off valve) and models no modulating valve at all.
 
-This is by design: modulating valve actuators require a float-valued write path that the switch model cannot express. Go adds this as a dedicated type rather than coercing it into a boolean switch. No Python counterpart exists because the reference implementation does not target modulating valve actuators.
+This is by design on two levels:
 
-Go path: `internal/model/custom/valve/valve.go::Modulating`.
+- **The type exists** because a modulating actuator needs a float-valued
+  write path the boolean switch model cannot express; Go adds it as a
+  dedicated type rather than coercing it into a switch. It is fully
+  exercised by `valve_test.go` (FALMOT-C12-shaped fixtures).
+- **The type is unregistered.** `pkg/hmenum/device_profile.go` defines only
+  `DeviceProfileIPIrrigationValve`, and `valve/init.go` registers a
+  constructor for that profile alone — nothing maps onto `Modulating`.
+  Registering it would mean inventing a device→profile mapping that the
+  reference stack does not have. Leaving it unregistered is therefore
+  parity, not a gap; it is a forward declaration to be wired only if a
+  matching profile appears upstream (see `docs/roadmap.md` Phase 4).
+
+Go path: `internal/model/custom/valve/valve.go::Modulating`;
+registration: `internal/model/custom/valve/init.go`.
 
 ---
 
@@ -2916,12 +2933,6 @@ Python `AddLink` / `RemoveLink` / `SetLinkInfo` use keyword-only arguments (`lin
 The difference is cosmetic: Go does not have keyword-only argument syntax. The Go call sites pass values in the documented order; accidental positional swap is a compile-time concern only in fully typed languages, and all string parameters carry distinct semantic roles documented in the method signature.
 
 Go path: `internal/central/coordinators/link.go::AddLink`.
-
----
-
-### BD-ModulatingValve — `Modulating` valve type has no equivalent in the reference implementation
-
-`internal/model/custom/valve/valve.go` includes a `Modulating` type for proportional-control valves (analogue actuators, 0..100 %). The reference implementation only covers `CustomDpIpIrrigationValve` (on/off irrigation). The modulating path is Go-only extended functionality for HmIP-FALMOT-C12 and similar devices. It follows the same structural pattern (State/Open/Close/SetLevel) and is not a port of any reference-implementation class.
 
 ---
 
