@@ -34,20 +34,6 @@ func TestBuildOIDCClient_EnabledUnreachableIssuer_ReturnsNil(t *testing.T) {
 	}
 }
 
-// TestBuildOIDC_EnabledUnreachableIssuer_ReturnsNil tests the buildOIDC
-// wrapper (which delegates to buildOIDCClient) to cover the nil-return branch.
-func TestBuildOIDC_EnabledUnreachableIssuer_ReturnsNil(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.North.REST.Auth.OIDC.Enabled = true
-	cfg.North.REST.Auth.OIDC.Issuer = "https://192.0.2.1:9999/oidc"
-	logger := slog.New(slog.DiscardHandler)
-	got := buildOIDC(cfg, logger)
-	if got != nil {
-		t.Errorf("expected nil when OIDC discovery fails")
-	}
-}
-
 // TestBuildOIDCRest_EnabledUnreachableIssuer_ReturnsNil tests the buildOIDCRest
 // wrapper.
 func TestBuildOIDCRest_EnabledUnreachableIssuer_ReturnsNil(t *testing.T) {

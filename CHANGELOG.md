@@ -4,6 +4,36 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0]
+
+### Changed
+
+- **Login, OIDC, and first-run onboarding now live entirely in the Svelte
+  SPA** ([ADR 0045](docs/adr/0045-login-and-onboarding-into-spa.md)). The SPA
+  already handled login and OIDC; the four-step first-run wizard (admin →
+  language → CCU → MQTT) is now a SPA view (`Setup.svelte`) that finalizes
+  through a single atomic `POST /api/v1/setup`. The previous server-rendered,
+  no-JS login/setup forms have been removed. The server-rendered surface
+  shrinks to `/health` and `/about`, kept only as a no-JS diagnostic anchor for
+  when the SPA bundle cannot load.
+- REST `APIVersion` → `2.7.0` (capability addition: the setup endpoints).
+
+### Added
+
+- **`GET /api/v1/setup/status`** and **`POST /api/v1/setup`** — the SPA probes
+  status on boot to decide between the onboarding wizard and the login screen,
+  and finalizes onboarding atomically. `POST /api/v1/setup` is unauthenticated
+  by necessity (no admin exists yet) but hard-gated: it returns 409 once any
+  authentication source exists, so a second admin can never be registered
+  through it.
+- A dedicated per-IP login brute-force speed-bump on `POST /api/v1/auth/login`
+  (preserved from the removed server-rendered login, now a REST middleware).
+
+### Removed
+
+- Server-rendered `/login`, `/logout`, `/login/oidc/*`, and the `/setup*`
+  wizard, plus their templates and the wizard session store.
+
 ## [0.18.5]
 
 Bundles the work developed as 0.18.1–0.18.5 (none were tagged individually).

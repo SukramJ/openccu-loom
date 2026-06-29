@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.19.0
+
+- **First-run setup and login now run entirely in the web UI.** The initial
+  setup wizard (admin account → language → CCU → MQTT) is now part of the
+  single-page app instead of a separate no-JS page, so onboarding looks and
+  behaves like the rest of the panel. Nothing changes for existing
+  installations — you sign in exactly as before.
+- The `/health` and `/about` pages stay available as a plain fallback for the
+  rare case where the web UI itself fails to load.
+- Login attempts keep their per-address brute-force speed-bump.
+
 ## 0.18.5
 
 - **Fixed: setting colour or colour-temperature on a Matter light now works.**

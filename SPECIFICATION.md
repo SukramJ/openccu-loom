@@ -63,15 +63,16 @@ interfaces:
 - **MQTT** (Home Assistant Discovery format + raw topic plane in
   parallel)
 - **REST + WebSocket** API
-- **Web-based Config UI** — Svelte 5 SPA (primary). A minimal
-  HTMX bootstrap surface (login, first-run `/setup` wizard, OIDC
-  callback, server-rendered `/health` and `/about`) covers what the
-  SPA cannot reach: pre-auth flows and SPA-down diagnosis. Since
-  0.14.0 this surface is served on the **same listener** as the REST
-  API and SPA (`:8080`); the separate `:8081` listener is removed.
-  On first start, `GET /` redirects to `/setup` until an admin user
-  exists — onboarding works through a single port and through HA
-  Ingress. See [ADR 0044](./docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md).
+- **Web-based Config UI** — Svelte 5 SPA (primary), including login,
+  OIDC, and the first-run onboarding wizard (since 0.19.0, ADR 0045).
+  A minimal server-rendered surface (`/health`, `/about`) remains only
+  as a no-JS SPA-down diagnostic anchor. Everything is served on one
+  listener (`:8080`, since 0.14.0); the SPA probes
+  `GET /api/v1/setup/status` on boot and renders the onboarding wizard
+  itself, finalizing through an atomic `POST /api/v1/setup`. Onboarding
+  works through a single port and through HA Ingress. See
+  [ADR 0044](./docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md)
+  and [ADR 0045](./docs/adr/0045-login-and-onboarding-into-spa.md).
 - **Matter Bridge**
 
 Feature parity with `aiohomematic` on the **south-bound** side (CCU
@@ -626,7 +627,7 @@ an ADR.
 | # | Question | Resolution |
 |---|---|---|
 | Q1 | Default UI locale | `de` default, `en` via `Accept-Language` |
-| Q2 | CSS / UI framework | Svelte 5 SPA primary (Tailwind 4 via Vite); HTMX bootstrap surface uses a tiny hand-rolled CSS for login/setup/health/about only |
+| Q2 | CSS / UI framework | Svelte 5 SPA primary (Tailwind 4 via Vite); the server-rendered `/health` + `/about` diagnostic pages use a tiny hand-rolled CSS only |
 | Q3 | MQTT QoS defaults | Sensible defaults (0 state, 1 discovery / commands), per-interface and per-category overridable in YAML |
 | Q4 | Matter implementation form | Pure-Go, hand-rolled (ADR 0012). On-network commissioning only in 0.1.0. No CGo, no Node.js / Rust sidecar. |
 | Q5 | Backup strategy | CLI subcommand + FS-level parallel (both supported) |

@@ -38,11 +38,19 @@ type restMountDeps struct {
 	matter matterWiring
 	reload *reloadDeps
 
-	// bootstrap is the server-rendered HTMX onboarding surface (login / setup
-	// / about), folded onto the REST listener (ADR 0044). noUsers reports the
-	// first-run state for the SPA→/setup redirect. Both may be nil (UI off).
+	// bootstrap is the server-rendered, no-JS diagnostic surface (/health,
+	// /about), folded onto the REST listener (ADR 0044/0045). noUsers is the
+	// first-run probe that gates the SPA onboarding endpoints. Both may be nil
+	// (UI off / no durable store).
 	bootstrap http.Handler
 	noUsers   func(context.Context) bool
+
+	// First-run onboarding stores, shared with the SPA setup endpoints
+	// (GET /api/v1/setup/status, POST /api/v1/setup). May be nil (no durable
+	// backend → setup reports not-required).
+	sqUsers    *sqlitestore.UserStore
+	sqCentrals *sqlitestore.CentralsStore
+	sqSections *sqlitestore.ConfigSectionStore
 
 	healthAdapter          *adapter.HealthAdapter
 	configAdapter          *adapter.ConfigAdapter
@@ -187,13 +195,19 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		OIDC:              buildOIDCRest(cfg, logger, d.restAuth), //nolint:contextcheck // test callers outside owned set prevent ctx signature; discovery uses its own timeout
 		SPAHandler:        ui.SPAHandler(),
 		Bootstrap:         d.bootstrap,
-		NoUsers:           d.noUsers,
-		Backup:            d.backupAdapter,
-		CacheReset:        d.cacheResetSvc,
-		EditSessions:      handlers.NewEditSessions(),
-		WSHandler:         d.wsHandler,
-		AuthResolve:       d.restResolve,
-		AuthRequire:       d.authMw.Require,
+		Setup: &handlers.SetupService{
+			Users:    d.sqUsers,
+			Centrals: d.sqCentrals,
+			Sections: d.sqSections,
+			Required: d.noUsers,
+		},
+		LoginRateLimit: middleware.NewLoginRateLimiter(),
+		Backup:         d.backupAdapter,
+		CacheReset:     d.cacheResetSvc,
+		EditSessions:   handlers.NewEditSessions(),
+		WSHandler:      d.wsHandler,
+		AuthResolve:    d.restResolve,
+		AuthRequire:    d.authMw.Require,
 		RequireOperator: func(next http.Handler) http.Handler {
 			return d.authMw.RequireRole(auth.RoleOperator, next)
 		},

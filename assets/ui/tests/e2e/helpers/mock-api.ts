@@ -16,6 +16,13 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: fixture('auth-me.json') }),
   );
 
+  // First-run onboarding probe — the SPA calls this on boot. Report "not
+  // required" so the e2e suite exercises the normal login/app flow rather
+  // than the setup wizard.
+  await page.route('**/api/v1/setup/status', (route) =>
+    route.fulfill({ json: { required: false } }),
+  );
+
   // System
   await page.route('**/api/v1/system/restart-pending', (route) =>
     route.fulfill({ json: fixture('restart-pending.json') }),

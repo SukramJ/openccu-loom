@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { authStore } from "$lib/stores/auth.svelte";
+  import { setupStore } from "$lib/stores/setup.svelte";
   import {
     prefs,
     setLocale,
@@ -11,6 +12,7 @@
   import DeviceDetail from "./routes/DeviceDetail.svelte";
   import Favorites from "./routes/Favorites.svelte";
   import Login from "./routes/Login.svelte";
+  import Setup from "./routes/Setup.svelte";
   import BackupList from "./routes/BackupList.svelte";
   import SysvarList from "./routes/SysvarList.svelte";
   import ProgramList from "./routes/ProgramList.svelte";
@@ -59,6 +61,9 @@
 
   onMount(() => {
     authStore.probe();
+    // First-run probe: when the daemon has no auth source yet, render the
+    // onboarding wizard instead of the login screen.
+    void setupStore.probe();
     void refreshRestartPending();
     // Apply persisted/system theme on first paint and bind to OS-
     // preference changes for "system" mode.
@@ -184,13 +189,15 @@
 <ConfirmDialog />
 <ShortcutHelp open={helpOpen} onClose={() => (helpOpen = false)} />
 
-{#if authStore.checking}
+{#if authStore.checking || setupStore.checking}
   <section
     class="flex min-h-screen items-center justify-center"
     style="color: var(--ha-secondary-text-color); background-color: var(--ha-card-background-color);"
   >
     {t("common.loading")}
   </section>
+{:else if setupStore.required}
+  <Setup />
 {:else if !authStore.authenticated}
   <Login />
 {:else}
