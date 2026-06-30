@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.2]
+
+### Fixed
+
+- **A CCU configured by host (e.g. `localhost`) is now recognised as already
+  configured by discovery.** The discovery "already configured" check matches by
+  serial, but centrals created before serial capture (or added manually) carry no
+  stored serial, and a host match can never succeed for a `localhost`-configured
+  central against the CCU's real discovered IP — so the same CCU showed up as a
+  fresh discovery. The daemon now backfills a central's serial from its live ReGa
+  connection at bring-up (the same canonical 10-character form discovery
+  produces, resolved in `hub_wiring`), writing only the serial column and only
+  when empty. After a central connects once, discovery recognises it by serial
+  regardless of host. No wire-schema change (`APIVersion` stays 2.9.0).
+
 ## [0.21.1]
 
 ### Changed

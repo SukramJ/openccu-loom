@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.21.2
+
+- **A CCU you run on the same machine (configured as `localhost`) is no longer
+  shown again as a new discovery.** Once such a CCU connects, OpenCCU-Loom learns
+  its serial automatically and recognises it as already configured — no matter
+  which address you used. Also fixes CCUs that were added before this recognition
+  existed; they are picked up after they next connect.
+
 ## 0.21.1
 
 - **More reliable recognition of already-added CCUs.** A found CCU is now matched

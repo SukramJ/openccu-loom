@@ -139,6 +139,30 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	return nil
 }
 
+// BackfillSerial records a central's serial only when it is currently empty,
+// touching no other column (so it never round-trips the sealed password). It is
+// called once a central's canonical CCU serial has been resolved from the live
+// ReGa connection — the same form SSDP discovery produces — so a central
+// configured by host (e.g. localhost, where a host match against the discovered
+// IP can never succeed) is still recognised as already-configured by serial.
+// Returns true when a row was updated; a no-op (false) when the name is unknown
+// or a serial is already set.
+func (s *CentralsStore) BackfillSerial(ctx context.Context, centralName, serial string) (bool, error) {
+	centralName = strings.TrimSpace(centralName)
+	serial = strings.TrimSpace(serial)
+	if centralName == "" || serial == "" {
+		return false, nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE centrals SET serial = ?, updated_at = ? WHERE name = ? AND serial = ''`,
+		serial, time.Now().UTC(), centralName)
+	if err != nil {
+		return false, fmt.Errorf("sqlite: centrals backfill serial: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // Delete removes a row by name.
 func (s *CentralsStore) Delete(ctx context.Context, centralName string) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM centrals WHERE name = ?`, centralName)

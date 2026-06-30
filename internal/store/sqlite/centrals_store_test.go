@@ -333,6 +333,51 @@ func TestCentralsStoreSerialRoundTrip(t *testing.T) {
 	}
 }
 
+func TestCentralsStoreBackfillSerial(t *testing.T) {
+	t.Parallel()
+	s := newCentralsStore(t)
+	ctx := context.Background()
+
+	// Existing row with an empty serial (predates serial capture).
+	row := baseCentralRow("kearney")
+	row.Serial = ""
+	if err := s.Put(ctx, row); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	// Backfill fills the empty serial and reports the update.
+	updated, err := s.BackfillSerial(ctx, "kearney", "5A4993D962")
+	if err != nil {
+		t.Fatalf("BackfillSerial: %v", err)
+	}
+	if !updated {
+		t.Fatal("want updated=true for an empty serial")
+	}
+	if got, _ := s.Get(ctx, "kearney"); got.Serial != "5A4993D962" {
+		t.Errorf("Serial=%q, want %q", got.Serial, "5A4993D962")
+	}
+
+	// A second backfill is a no-op: a serial already exists, value preserved.
+	updated, err = s.BackfillSerial(ctx, "kearney", "DIFFERENT9")
+	if err != nil {
+		t.Fatalf("BackfillSerial (second): %v", err)
+	}
+	if updated {
+		t.Error("want updated=false when a serial already exists")
+	}
+	if got, _ := s.Get(ctx, "kearney"); got.Serial != "5A4993D962" {
+		t.Errorf("serial overwritten: got %q, want %q", got.Serial, "5A4993D962")
+	}
+
+	// Unknown central and empty-serial argument are both no-ops, no error.
+	if updated, err := s.BackfillSerial(ctx, "does-not-exist", "ABC1234567"); err != nil || updated {
+		t.Errorf("unknown central: updated=%v err=%v, want false/nil", updated, err)
+	}
+	if updated, err := s.BackfillSerial(ctx, "kearney", ""); err != nil || updated {
+		t.Errorf("empty serial arg: updated=%v err=%v, want false/nil", updated, err)
+	}
+}
+
 // TestCentralsStoreBehaviorRoundTrip verifies the per-central behavior
 // block survives a Put → Get round-trip through the behavior_json column.
 func TestCentralsStoreBehaviorRoundTrip(t *testing.T) {

@@ -26,20 +26,23 @@ import (
 // the composition root (callback servers, shared stores, the EventBridge)
 // and threaded through unchanged.
 type southboundWiringDeps struct {
-	cfg                     *config.Config
-	reg                     *central.Registry
-	logger                  *slog.Logger
-	valueWriter             *clientpkg.ValueWriter
-	translations            *ccudata.Translations
-	callbackSrv             *rpcserver.XMLRPCServer
-	callbackPort            int
-	callbackHost            func(*config.CentralConfig) string
-	binRPCSrv               *rpcserver.BINRPCServer
-	binRPCPort              int
-	catalogs                *i18n.Catalogs
-	visReg                  *visibility.Registry
-	masterValuesStore       *sqlite.MasterValuesStore
-	valuesCacheStore        *sqlite.ValuesCacheStore
+	cfg               *config.Config
+	reg               *central.Registry
+	logger            *slog.Logger
+	valueWriter       *clientpkg.ValueWriter
+	translations      *ccudata.Translations
+	callbackSrv       *rpcserver.XMLRPCServer
+	callbackPort      int
+	callbackHost      func(*config.CentralConfig) string
+	binRPCSrv         *rpcserver.BINRPCServer
+	binRPCPort        int
+	catalogs          *i18n.Catalogs
+	visReg            *visibility.Registry
+	masterValuesStore *sqlite.MasterValuesStore
+	valuesCacheStore  *sqlite.ValuesCacheStore
+	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
+	// discovery recognises configured centrals by serial. Nil disables backfill.
+	sqCentrals              *sqlite.CentralsStore
 	historyStore            *sqlite.MeasurementStore
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
@@ -62,6 +65,27 @@ type southboundWiring struct {
 	// bringUpManager exposes per-central re-initialization (clear caches +
 	// readiness-gated re-pull) to the cache-reset service. ADR 0042.
 	bringUpManager *adapter.BringUpManager
+}
+
+// serialBackfiller returns the WireDeps.PersistSerial callback: it records a
+// central's resolved canonical serial into the store (best-effort), so SSDP
+// discovery recognises a host-configured central by serial. A nil store yields
+// a no-op callback; store / log errors never propagate to the bring-up.
+func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx context.Context, centralName, serial string) {
+	return func(ctx context.Context, centralName, serial string) {
+		if store == nil {
+			return
+		}
+		updated, err := store.BackfillSerial(ctx, centralName, serial)
+		switch {
+		case err != nil:
+			logger.Warn("central.serial.backfill_failed",
+				slog.String("central", centralName), slog.String("err", err.Error()))
+		case updated:
+			logger.Info("central.serial.backfilled",
+				slog.String("central", centralName), slog.String("serial", serial))
+		}
+	}
 }
 
 // wireSouthbound performs the southbound wiring phase of the composition
@@ -130,6 +154,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		ValuesCacheCentralFilter: func(centralName string) bool {
 			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},
+		PersistSerial: serialBackfiller(d.sqCentrals, d.logger),
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every
 	// flush_interval (default 60 s; override via
