@@ -2681,13 +2681,15 @@ The placement is by design: `ConnectionState` tracks per-interface issue counts 
 
 ---
 
-### A1-BD01 — `AdditionalInformation()` emitted north-bound — PARTIALLY RESOLVED (MQTT per-DP state)
+### A1-BD01 — `AdditionalInformation()` emitted north-bound — PARTIALLY RESOLVED (MQTT per-DP state + REST datapoint DTO)
 
 `ServiceMessages.AdditionalInformation()` (`internal/model/hub/messages.go`), `AlarmMessages.AdditionalInformation()`, and `OperatingVoltageLevelSensor.AdditionalInformation()` (`internal/model/calculated/voltage.go:129`) expose enriched metadata maps. The original concern — that merging them would require a versioned MQTT-schema bump — was waived by the repo owner in favour of a strictly **additive** extension under a single optional `additional_information` key.
 
 **Status (2026-06): per-DP MQTT state RESOLVED.** The per-DP MQTT slot-state envelope now carries an optional `additional_information` map: `payload.PerDPState.AdditionalInformation` (`json:"additional_information,omitempty"`), populated at the publish boundary in `internal/central/adapter/eventbridge.go` via the non-invasive optional-capability seam `dpAdditionalInformation` (a type assertion on `additionalInfoProvider`, so a plain scalar DP contributes nothing and its payload stays byte-identical). The current producer is the operating-voltage sensor's battery metadata. Documented in `docs/mqtt-topic-schema.md`.
 
-**Remaining follow-up (still open):** the same metadata on (a) the REST datapoint DTO — additive, but the datapoint state shape is in `assets/openapi.yaml`, so it carries the `make export-schemas` + `APIVersion` discipline; and (b) the hub service-/alarm-message MQTT + REST aggregates (`internal/north/mqtt/bridge.go::PublishServiceMessages`/`PublishAlarmMessages`).
+**Status (2026-06): REST datapoint DTO RESOLVED.** `handlers.DataPointSummary` (`internal/north/rest/handlers/devices.go`) now carries the optional `additional_information` map, populated in `toDataPointSummary` via the same optional-capability assertion (`dp.(interface{ AdditionalInformation() map[string]any })`). Additive schema extension: `assets/openapi.yaml` `DataPointSummary` gained the property, `make export-schemas` regenerated the digest, and `APIVersion` bumped 2.9.0 → 2.10.0.
+
+**Remaining follow-up (still open):** the hub service-/alarm-message MQTT + REST aggregates — `internal/north/mqtt/bridge.go::PublishServiceMessages`/`PublishAlarmMessages` currently marshal the raw `[]hub.ServiceMessage`/`[]hub.AlarmMessage` structs (not the `AdditionalInformation()` maps), and `handlers.ServiceMessageDTO`/`AlarmMessageDTO` likewise. Wiring the enriched maps there is a separate change (it alters the published `items` shape).
 
 Go path: `internal/payload/wrapper.go::PerDPState`, `internal/central/adapter/eventbridge.go::dpAdditionalInformation`, `internal/model/calculated/voltage.go::AdditionalInformation`, `internal/model/hub/messages.go::AdditionalInformation`.
 

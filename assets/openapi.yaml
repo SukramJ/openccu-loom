@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.9.0
+  version: 2.10.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -5163,6 +5163,16 @@ components:
             the same value the WS `datapoint.value_changed` payload
             carries. Lets a client build its entity registry from the
             summary or snapshot without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
+        additional_information:
+          type: object
+          additionalProperties: true
+          description: |
+            Optional enriched model metadata for data points that provide
+            it (e.g. the calculated operating-voltage sensor's battery
+            type / quantity / low-voltage limits). Absent for plain scalar
+            data points. Mirrors the optional `additional_information`
+            object on the per-DP MQTT state topic. Additive — existing
+            responses are unchanged.
     UIEventRequest:
       type: object
       description: |
