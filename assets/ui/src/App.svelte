@@ -196,7 +196,11 @@
   >
     {t("common.loading")}
   </section>
-{:else if setupStore.required}
+{:else if setupStore.required && !authStore.authenticated}
+  <!-- First-run onboarding only when there is no way in yet. An already-
+       authenticated admin (a real session, OIDC, or the HA Ingress
+       passthrough of ADR 0044) must never be trapped in the wizard, even
+       if no persistent auth source exists in the database. -->
   <Setup />
 {:else if !authStore.authenticated}
   <Login />

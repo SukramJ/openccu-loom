@@ -73,3 +73,28 @@ no-JS diagnostic remnant server-side.
 - The OIDC callback stays a server endpoint (it must), but only as a REST
   endpoint with no HTML template.
 - `APIVersion` bumps to 2.7.0 (capability addition: the setup endpoints).
+
+## Update (0.20.1): the boot probe must honour an existing identity
+
+Moving the wizard-vs-app decision into the SPA boot probe interacted badly with
+the HA Ingress passthrough of [ADR 0044](./0044-single-port-onboarding-and-ha-ingress-auth.md).
+On the supervised add-on there is no local admin and CCU auth is off, so the
+first-run probe (`firstRunNeedsSetup`) reports `required: true` — but the
+Supervisor passthrough has *already* authenticated the request as admin. The
+SPA showed the onboarding wizard anyway (its `setupStore.required` branch took
+precedence over `authStore.authenticated`), trapping an already-logged-in
+operator in a wizard that could not be finished once the Ingress session lapsed
+— the very friction ADR 0044 set out to remove.
+
+The fix makes "already authenticated" win over "first-run required" on both
+sides:
+
+- `GET /api/v1/setup/status` returns `required: false` whenever the request
+  carries an authenticated identity (the passthrough injects one before the
+  handler runs), regardless of whether a *persistent* auth source exists yet.
+- The SPA renders the wizard only when `setupStore.required && !authStore.authenticated`.
+
+This is a behavioural refinement of the same response shape, so `APIVersion` is
+unchanged. As an Ingress-robustness follow-on, the SPA re-probes `/auth/me` on a
+`401` before flipping to the login view, so a momentarily lapsed Ingress session
+self-heals instead of dead-ending an operator who has no local credential.
