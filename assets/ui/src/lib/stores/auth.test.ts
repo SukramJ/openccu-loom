@@ -106,28 +106,45 @@ describe("authStore.logout", () => {
 });
 
 describe("authStore.expire", () => {
-  it("transitions authenticated→unauthenticated on session expiry", async () => {
+  it("stays authenticated when the re-probe still succeeds (HA Ingress passthrough)", async () => {
     loginMock.mockResolvedValueOnce({ subject: "admin", role: "admin" });
     await authStore.login("admin", "secret");
     expect(authStore.authenticated).toBe(true);
 
-    authStore.expire();
+    // A 401 fired expire(), but /auth/me re-authenticates (the Supervisor
+    // Ingress passthrough re-injects the admin identity) → identity survives.
+    meMock.mockResolvedValueOnce({ subject: "ha-ingress", role: "admin" });
+    await authStore.expire();
+    expect(meMock).toHaveBeenCalledTimes(1);
+    expect(authStore.authenticated).toBe(true);
+    expect(authStore.identity?.subject).toBe("ha-ingress");
+  });
+
+  it("transitions authenticated→unauthenticated when the re-probe also 401s", async () => {
+    loginMock.mockResolvedValueOnce({ subject: "admin", role: "admin" });
+    await authStore.login("admin", "secret");
+    expect(authStore.authenticated).toBe(true);
+
+    const { ApiError: AE } = await import("$lib/api/client");
+    meMock.mockRejectedValueOnce(new AE(401, {}, "unauthorized"));
+    await authStore.expire();
     expect(authStore.authenticated).toBe(false);
     expect(authStore.identity).toBeNull();
     // error carries the i18n key (mocked to return the key itself)
     expect(authStore.error).toBe("api.error.unauthorized");
   });
 
-  it("is a no-op when already unauthenticated", async () => {
+  it("is a no-op when already unauthenticated (no re-probe)", async () => {
     // ensure we start unauthenticated
     logoutMock.mockResolvedValueOnce(undefined);
     await authStore.logout();
     expect(authStore.authenticated).toBe(false);
 
-    // calling expire when already logged-out must not throw or set error
+    // calling expire when already logged-out must not throw, re-probe, or set error
     const prevError = authStore.error;
-    authStore.expire();
+    await authStore.expire();
     expect(authStore.authenticated).toBe(false);
+    expect(meMock).not.toHaveBeenCalled();
     // expire is guarded: no-op when identity is already null
     expect(authStore.error).toBe(prevError);
   });

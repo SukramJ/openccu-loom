@@ -73,11 +73,22 @@ type setupMQTT struct {
 // minSetupPasswordLen mirrors the wizard's prior server-rendered validation.
 const minSetupPasswordLen = 8
 
-// SetupStatus reports whether first-run onboarding is still required. Always
-// unauthenticated — the SPA probes it on boot to decide between the setup
-// wizard and the login screen. Leaks only a single boolean.
+// SetupStatus reports whether first-run onboarding is still required. The SPA
+// probes it on boot to decide between the setup wizard and the login screen.
+// Leaks only a single boolean.
+//
+// A caller that already carries an authenticated identity never needs first-run
+// onboarding — in particular the HA Ingress passthrough (ADR 0044) injects an
+// admin identity before this handler runs, so reporting `required: true` there
+// would trap an already-logged-in admin in the wizard (the very friction ADR
+// 0044 set out to remove). When an identity is present we short-circuit to
+// `required: false` regardless of whether a persistent auth source exists yet.
 func SetupStatus(s *SetupService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := auth.IdentityFrom(r.Context()); ok {
+			JSON(w, http.StatusOK, setupStatusResponse{Required: false})
+			return
+		}
 		JSON(w, http.StatusOK, setupStatusResponse{Required: setupRequired(r.Context(), s)})
 	}
 }

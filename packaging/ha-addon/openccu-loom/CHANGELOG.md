@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.20.1
+
+- **Opening the add-on no longer gets stuck on the setup wizard.** When you open
+  OpenCCU-Loom through the Home Assistant sidebar you are already signed in as
+  admin, so it now takes you straight into the app instead of showing the
+  first-time setup screen (which couldn't be finished and ended on a login page
+  you have no password for). Add or change your CCU and MQTT settings any time
+  under Settings → CCUs.
+- **Brief "session expired" hiccups now recover on their own** instead of
+  bouncing you to a login screen.
+
 ## 0.20.0
 
 - **CCUs on your network are now found automatically.** OpenCCU-Loom scans the

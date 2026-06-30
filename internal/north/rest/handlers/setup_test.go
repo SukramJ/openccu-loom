@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -106,6 +107,36 @@ func TestSetupStatus_RequiredFalse(t *testing.T) {
 	}
 	if body.Required {
 		t.Error("expected required=false")
+	}
+}
+
+// TestSetupStatus_AuthenticatedIdentity_NotRequired pins the ADR-0044 fix: a
+// request that already carries an authenticated identity (e.g. injected by the
+// HA Ingress passthrough) must report required=false even when the first-run
+// probe would otherwise say true — otherwise an already-logged-in admin is
+// trapped in the onboarding wizard.
+func TestSetupStatus_AuthenticatedIdentity_NotRequired(t *testing.T) {
+	t.Parallel()
+	svc := &SetupService{
+		Users:    sqlite.NewUserStore(nil),
+		Sections: sqlite.NewConfigSectionStore(nil),
+		Required: func(context.Context) bool { return true }, // would normally trap the wizard
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/setup/status", http.NoBody)
+	req = req.WithContext(auth.ContextWithIdentity(req.Context(),
+		auth.Identity{Subject: "ha-ingress", Role: auth.RoleAdmin, Scheme: auth.SchemeIngress}))
+	w := httptest.NewRecorder()
+	SetupStatus(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want 200", w.Code)
+	}
+	var body setupStatusResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if body.Required {
+		t.Error("expected required=false for an already-authenticated caller")
 	}
 }
 

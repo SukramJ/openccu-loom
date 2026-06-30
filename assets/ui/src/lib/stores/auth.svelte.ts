@@ -16,6 +16,10 @@ function createAuthStore() {
   let identity = $state<Identity | null>(null);
   let checking = $state(true);
   let error = $state<string | null>(null);
+  // Guards expire()'s re-probe against re-entrancy: the /auth/me call it
+  // makes can itself 401 and route back through the unauthorized handler,
+  // which would otherwise recurse.
+  let reprobing = false;
 
   async function probe() {
     checking = true;
@@ -59,18 +63,31 @@ function createAuthStore() {
   }
 
   // expire is called by the API client when any non-login call returns
-  // 401 — the session cookie is stale (typically the daemon restarted and
-  // lost its in-memory sessions). Dropping the identity makes App.svelte
-  // render the login view, which unmounts the app shell and stops its
-  // background pollers (install-mode, event stream). Guarded so a 401 while
-  // already logged out is a no-op and never clobbers an in-flight login.
-  function expire() {
-    if (identity === null) return;
-    identity = null;
-    // Reuse the shared "session expired" string (de/en) the API-error
-    // formatter already exposes, so the login screen shows it in the
-    // active locale instead of a hard-coded German line.
-    error = t("api.error.unauthorized");
+  // 401 — typically a stale session cookie (the daemon restarted and lost
+  // its in-memory sessions), but it can also be a momentarily lapsed HA
+  // Ingress session (ADR 0044), where the operator has no local credential
+  // and a bounce to the login screen is a dead end.
+  //
+  // So before giving up we re-probe /auth/me: under Ingress the Supervisor
+  // passthrough re-authenticates the request and the identity survives; a
+  // genuinely stale session returns 401 again and we fall through to the
+  // login view (which unmounts the app shell and stops its background
+  // pollers). Guarded so a 401 while already logged out — or the re-probe's
+  // own 401 — is a no-op and never clobbers an in-flight login.
+  async function expire() {
+    if (identity === null || reprobing) return;
+    reprobing = true;
+    try {
+      identity = await api.me();
+    } catch {
+      identity = null;
+      // Reuse the shared "session expired" string (de/en) the API-error
+      // formatter already exposes, so the login screen shows it in the
+      // active locale instead of a hard-coded German line.
+      error = t("api.error.unauthorized");
+    } finally {
+      reprobing = false;
+    }
   }
 
   return {
@@ -97,4 +114,4 @@ export const authStore = createAuthStore();
 
 // Route every client-side 401 (stale session) through the store so the
 // SPA self-heals back to the login view instead of looping on 401s.
-setUnauthorizedHandler(() => authStore.expire());
+setUnauthorizedHandler(() => void authStore.expire());

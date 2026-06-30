@@ -89,6 +89,25 @@ test.describe('Setup wizard', () => {
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
   });
 
+  test('an authenticated admin is never trapped in the wizard (HA Ingress)', async ({ page }) => {
+    // ADR 0044 regression guard: under HA Ingress the request is already
+    // authenticated as admin (auth/me 200, kept from mockAllApis) while the
+    // daemon still has no persistent auth source (setup/status required:true).
+    // The app shell must render — not the onboarding wizard.
+    await mockAllApis(page);
+    await page.route('**/api/v1/setup/status', (route) =>
+      route.fulfill({ json: { required: true } }),
+    );
+
+    await page.goto('http://localhost:5173/app/');
+
+    // <main id="main"> is unique to the logged-in branch of App.svelte, so its
+    // presence proves the app shell rendered rather than the wizard or login.
+    await expect(page.locator('#main')).toBeVisible();
+    await expect(page.getByText('Administrator account')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
+  });
+
   test('Next stays disabled until the admin step is valid', async ({ page }) => {
     await mockSetupRequired(page);
     await page.goto('http://localhost:5173/app/');

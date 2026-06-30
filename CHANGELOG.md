@@ -4,6 +4,28 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1]
+
+### Fixed
+
+- **HA Ingress users are no longer trapped in the first-run setup wizard.**
+  After onboarding moved into the SPA ([ADR 0045](docs/adr/0045-login-and-onboarding-into-spa.md)),
+  the boot probe decided wizard-vs-app purely from the persistent first-run
+  state and ignored the request's identity. Behind Home Assistant Ingress the
+  operator is already authenticated as admin via the Supervisor passthrough
+  ([ADR 0044](docs/adr/0044-single-port-onboarding-and-ha-ingress-auth.md)),
+  yet the SPA still showed the onboarding wizard — which could not be completed
+  because the Ingress session lapsed mid-flow, then dead-ended on a login
+  screen the Ingress-only operator has no credentials for. Now `GET
+  /api/v1/setup/status` reports `required: false` whenever the caller already
+  carries an authenticated identity, and the SPA only renders the wizard when
+  no one is logged in. Guided CCU/MQTT configuration under Ingress happens in
+  Settings → CCUs (with the SSDP auto-discovery added in 0.20.0).
+- **A momentarily lapsed session no longer dead-ends the SPA on the login
+  screen.** On a `401` the SPA now re-probes `/auth/me` before giving up: under
+  Ingress the Supervisor re-authenticates the request and the session survives;
+  a genuinely stale session still falls through to the login view as before.
+
 ## [0.20.0]
 
 ### Added
