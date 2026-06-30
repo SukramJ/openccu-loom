@@ -2246,13 +2246,19 @@ Go path: `internal/client/interface_client.go`, `pkg/interfaces/method_checker.g
 
 ---
 
-### A4-P01 — CONVERTABLE_PARAMETERS auto-routing deferred: Go routes combined parameters at call-site
+### A4-P01 — CONVERTABLE_PARAMETERS auto-routing — RESOLVED (routed at the call-site)
 
-Python `CommandTracker.add_set_value` (command.py:131–134) automatically routes `COMBINED_PARAMETER` / `LEVEL_COMBINED` to `add_combined_parameter` based on parameter membership in `CONVERTABLE_PARAMETERS`. Go's `CommandTracker.AddCombinedParameter` exists, but `InterfaceClient.SetValue` always calls `AddSetValue` without auto-routing.
+Python `CommandTracker.add_set_value` (command.py:131–134) automatically routes `COMBINED_PARAMETER` / `LEVEL_COMBINED` to `add_combined_parameter` based on parameter membership in `CONVERTABLE_PARAMETERS`.
 
-The auto-routing is deferred by design: the parameter-identity check requires loading the full parameter descriptor at the tracker call-site, which couples the tracker to the parameter catalogue. In Go the call-site (`ValueWriter`) already knows the parameter descriptor; adding the routing there is a one-liner. Implementing it inside the tracker would require injecting a parameter-lookup function, adding allocator pressure on every `SetValue` call. The correct resolution is for the north-bound write path to call `AddCombinedParameter` explicitly when it detects a combined-type write, not for the tracker to re-derive the type internally.
+The original entry claimed Go "always calls `AddSetValue` without auto-routing" — that is **no longer true** (and was already stale for the optimistic path). The decided design — route at the call-site rather than re-deriving the type inside the tracker — is implemented and wired:
 
-Go path: `internal/client/reliability/command_tracker.go`, `internal/client/value_writer.go`.
+`InterfaceClient.WriteUnconfirmedValue` (`internal/client/interface_client_orchestration.go`) checks `parameter.IsConvertable(parameter)` and, for a string value, calls `CommandTracker().AddCombinedParameter(channelAddress, parameter, s)` (which decomposes the combined wire string into its constituent sub-parameters under `ParamsetKeyValues`); otherwise it falls back to `AddSetValue`. The production north-bound write path reaches it via the daemon optimistic hook `valueWriter.SetCommandTrackerFn(...)` (`cmd/openccu-loom/daemon_wiring.go`), whose closure resolves the `InterfaceClient` via the central registry and calls `WriteUnconfirmedValue`. So a subsequent north-bound read on a constituent DP (e.g. `LEVEL`) returns the optimistic value rather than the opaque combined shorthand.
+
+Keeping the routing at the call-site (rather than inside the tracker) avoids injecting a parameter-lookup function into the tracker and the allocator pressure that would add on every `SetValue`.
+
+**Status (2026-06): RESOLVED.** Behaviour pinned by a regression test on `WriteUnconfirmedValue` and a guard test that the two `ConvertableParameters` sets (`internal/parameter` used at the call-site, `internal/model/value` the model mirror) stay in agreement.
+
+Go path: `internal/client/interface_client_orchestration.go::WriteUnconfirmedValue`, `internal/client/reliability/command_tracker.go`, `internal/client/value_writer.go::SetCommandTrackerFn`, `internal/parameter/converter.go::IsConvertable`, `internal/model/value/converter.go::IsConvertableParameter`.
 
 ---
 

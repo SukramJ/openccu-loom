@@ -22,7 +22,7 @@ type Scheme string
 const (
 	SchemeBasic   Scheme = "basic"
 	SchemeBearer  Scheme = "bearer"
-	SchemeSession Scheme = "session" // reserved for future session auth
+	SchemeSession Scheme = "session" // session-cookie auth, set by the session and OIDC login flow
 	SchemeIngress Scheme = "ingress" // HA Ingress auth passthrough (ADR 0044)
 )
 

@@ -645,10 +645,11 @@ CCU
 - `internal/client`: `InterfaceClient`, circuit breaker, retry,
   throttle, coalescer, ping/pong. One `InterfaceClient` per
   `(central, interface)` pair.
-- `internal/client/backends`: `CcuBackend` (XML-RPC + JSON-RPC, with
-  `JsonCcuBackend` for CCU-Jack JSON-only mode), `CuxdBackend`
-  (BIN-RPC), `HomegearBackend` (XML-RPC; depth-parity with CCU is a
-  post-0.1.0 milestone — see `SPECIFICATION.md` §2.2 Non-Goals).
+- `internal/client/backends`: `CcuBackend` (XML-RPC + JSON-RPC),
+  `CuxdBackend` (BIN-RPC), `HomegearBackend` (XML-RPC; depth-parity with
+  CCU is a post-0.1.0 milestone — see `SPECIFICATION.md` §2.2 Non-Goals).
+  (CCU-Jack / JSON-RPC-only mode is a dropped non-goal — every interface
+  supports push callbacks; see `SPECIFICATION.md` §2.2.)
 - `internal/model/custom`: device profile registry + custom data point
   types. Profiles are generated from aiohomematic via the Python
   helper; hand-written Go wrappers per device type.
