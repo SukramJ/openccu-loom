@@ -26,20 +26,23 @@ import (
 // the composition root (callback servers, shared stores, the EventBridge)
 // and threaded through unchanged.
 type southboundWiringDeps struct {
-	cfg                     *config.Config
-	reg                     *central.Registry
-	logger                  *slog.Logger
-	valueWriter             *clientpkg.ValueWriter
-	translations            *ccudata.Translations
-	callbackSrv             *rpcserver.XMLRPCServer
-	callbackPort            int
-	callbackHost            func(*config.CentralConfig) string
-	binRPCSrv               *rpcserver.BINRPCServer
-	binRPCPort              int
-	catalogs                *i18n.Catalogs
-	visReg                  *visibility.Registry
-	masterValuesStore       *sqlite.MasterValuesStore
-	valuesCacheStore        *sqlite.ValuesCacheStore
+	cfg               *config.Config
+	reg               *central.Registry
+	logger            *slog.Logger
+	valueWriter       *clientpkg.ValueWriter
+	translations      *ccudata.Translations
+	callbackSrv       *rpcserver.XMLRPCServer
+	callbackPort      int
+	callbackHost      func(*config.CentralConfig) string
+	binRPCSrv         *rpcserver.BINRPCServer
+	binRPCPort        int
+	catalogs          *i18n.Catalogs
+	visReg            *visibility.Registry
+	masterValuesStore *sqlite.MasterValuesStore
+	valuesCacheStore  *sqlite.ValuesCacheStore
+	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
+	// discovery recognises configured centrals by serial. Nil disables backfill.
+	sqCentrals              *sqlite.CentralsStore
 	historyStore            *sqlite.MeasurementStore
 	healthTracker           *health.Tracker
 	visibilityUnIgnoreStore *sqlite.VisibilityUnIgnoreStore
@@ -129,6 +132,21 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		ValuesCache:          d.valuesCacheStore,
 		ValuesCacheCentralFilter: func(centralName string) bool {
 			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
+		},
+		PersistSerial: func(ctx context.Context, centralName, serial string) {
+			if d.sqCentrals == nil {
+				return
+			}
+			updated, err := d.sqCentrals.BackfillSerial(ctx, centralName, serial)
+			if err != nil {
+				d.logger.Warn("central.serial.backfill_failed",
+					slog.String("central", centralName), slog.String("err", err.Error()))
+				return
+			}
+			if updated {
+				d.logger.Info("central.serial.backfilled",
+					slog.String("central", centralName), slog.String("serial", serial))
+			}
 		},
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every

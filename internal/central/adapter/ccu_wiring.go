@@ -135,6 +135,14 @@ type WireDeps struct {
 	// daemon's composition root builds this from the
 	// `persistence.values_cache.disabled_centrals` config key.
 	ValuesCacheCentralFilter func(centralName string) bool
+
+	// PersistSerial, when non-nil, is invoked once per central after its
+	// hub bring-up resolves the CCU serial. The composition root wires it to
+	// persist the serial into the centrals store (backfilling rows that
+	// predate serial capture), so SSDP discovery can recognise a configured
+	// central by serial regardless of its host. Best-effort: errors are the
+	// callee's concern and must not fail the bring-up.
+	PersistSerial func(ctx context.Context, centralName, serial string)
 }
 
 // WireCentrals performs the full southbound bootstrap: per central it
@@ -309,6 +317,16 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 		return fmt.Errorf("hub: %w", err)
 	}
 	addCloser(hubCloser)
+	// Backfill the central's serial into the store now that the hub bring-up has
+	// resolved it (same canonical form SSDP discovery produces), so a central
+	// configured by host — e.g. localhost, where a host match against the
+	// discovered IP can never succeed — is recognised as already-configured by
+	// serial. Best-effort and idempotent; never blocks or fails the bring-up.
+	if deps.PersistSerial != nil {
+		if serial := unit.SystemInformation().Serial; serial != "" {
+			deps.PersistSerial(ctx, cc.Name, serial)
+		}
+	}
 	// Wire the backup restorer the first time a central comes up successfully —
 	// the BackupAdapter selects the first central as its source. Idempotent on a
 	// re-gate: SetRestorer is skipped once a restorer exists.

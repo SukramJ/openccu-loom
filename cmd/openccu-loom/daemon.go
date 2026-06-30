@@ -318,6 +318,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visReg:                  visReg,
 		masterValuesStore:       masterValuesStore,
 		valuesCacheStore:        valuesCacheStore,
+		sqCentrals:              sqCentrals,
 		historyStore:            historyStore,
 		healthTracker:           healthTracker,
 		visibilityUnIgnoreStore: visibilityUnIgnoreStore,
