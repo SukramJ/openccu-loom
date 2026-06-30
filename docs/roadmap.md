@@ -83,22 +83,27 @@ part of the respective plans.
   the natural completion of A4. It depends only on the already-shipped
   `bridge` contract (not on PR4), so it could start earlier, but is
   deliberately ordered after A4 so the contract has settled with its first
-  real consumer before the established bridges are wrapped.* Follow-up
+  real consumer before the established surfaces are migrated.* Follow-up
   to A4: the north-bound `bridge.Service` + `Registry` contract
   (`internal/north/bridge/`) shipped with the outbound webhook as its only
-  registered consumer. The established bridges (MQTT, Matter, MCP, REST) are
-  still hand-wired with bespoke `Start`/`Stop` calls in
-  `cmd/openccu-loom/daemon.go`. Wrap each in a thin `Service` adapter and
-  register it on the shared `Registry`, replacing the inline lifecycle calls
-  one at a time — behaviour-preserving, independently testable (the A4 plan
-  §3a describes this incremental path). **Order MQTT last:** it carries a
-  runtime supervisor (`cmd/openccu-loom/mqtt_supervisor.go`, `SwapBridge`)
-  for hot-reload, so its `Service.Stop` must wrap that lifecycle cleanly
-  rather than fight it; Matter/MCP/REST are mechanical wraps. Pure refactor
-  — guard with the existing per-bridge behaviour/contract tests; do **not**
-  generalise hot-swap into the `Service` interface (out of scope, per A4
-  §3a). *Effort: S–M.*
-  *Plan: [`docs/plans/bridge-registry-migration.md`](./plans/bridge-registry-migration.md).*
+  registered consumer. The established surfaces (the REST/WS/SPA/MCP/
+  diagnostics HTTP listener, MQTT, Matter) are still hand-wired with bespoke
+  `Start`/`Stop`/`defer` calls in `cmd/openccu-loom/daemon.go`.
+  **This is the *architecturally complete* migration, not a cosmetic wrap**
+  (see [ADR 0047](./adr/0047-northbound-bridge-registry.md)): each surface
+  becomes a `bridge.Service` that **owns its lifecycle in its own package**
+  (as `webhook.Outbound` already does — no thin `cmd`-level shims);
+  `cmd/openccu-loom` becomes a composition root; the registration order
+  **is** the boot-dependency order, made explicit and test-pinned; the MQTT
+  supervisor is encapsulated inside the MQTT service (registry owns process
+  lifecycle, the config-watcher owns reconfiguration); MCP is a REST
+  sub-mount, not a peer service; and a **registration-completeness guard**
+  prevents any future surface from bypassing the contract. Lands one surface
+  per PR (Matter → REST+MCP → MQTT, MQTT last for its supervisor),
+  behaviour-preserving, with ordering/rollback/goroutine-leak/health guards.
+  *Effort: M.*
+  *Plan: [`docs/plans/bridge-registry-migration.md`](./plans/bridge-registry-migration.md);
+  ADR: [`docs/adr/0047-northbound-bridge-registry.md`](./adr/0047-northbound-bridge-registry.md).*
 - **`hmcli` power-user CLI.** Grow `cmd/hmcli/` (today only
   `version`/`config validate`/`cache clear`/`export-def`) into a full
   REST client against a running daemon — `devices list/get/set`,
