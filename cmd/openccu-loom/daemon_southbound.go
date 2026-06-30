@@ -67,6 +67,27 @@ type southboundWiring struct {
 	bringUpManager *adapter.BringUpManager
 }
 
+// serialBackfiller returns the WireDeps.PersistSerial callback: it records a
+// central's resolved canonical serial into the store (best-effort), so SSDP
+// discovery recognises a host-configured central by serial. A nil store yields
+// a no-op callback; store / log errors never propagate to the bring-up.
+func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx context.Context, centralName, serial string) {
+	return func(ctx context.Context, centralName, serial string) {
+		if store == nil {
+			return
+		}
+		updated, err := store.BackfillSerial(ctx, centralName, serial)
+		switch {
+		case err != nil:
+			logger.Warn("central.serial.backfill_failed",
+				slog.String("central", centralName), slog.String("err", err.Error()))
+		case updated:
+			logger.Info("central.serial.backfilled",
+				slog.String("central", centralName), slog.String("serial", serial))
+		}
+	}
+}
+
 // wireSouthbound performs the southbound wiring phase of the composition
 // root: it builds the backup adapter, runs WireCentrals (per-central
 // XML-RPC/BIN-RPC client wiring, device pipeline, paramset hydration),
@@ -133,21 +154,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		ValuesCacheCentralFilter: func(centralName string) bool {
 			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},
-		PersistSerial: func(ctx context.Context, centralName, serial string) {
-			if d.sqCentrals == nil {
-				return
-			}
-			updated, err := d.sqCentrals.BackfillSerial(ctx, centralName, serial)
-			if err != nil {
-				d.logger.Warn("central.serial.backfill_failed",
-					slog.String("central", centralName), slog.String("err", err.Error()))
-				return
-			}
-			if updated {
-				d.logger.Info("central.serial.backfilled",
-					slog.String("central", centralName), slog.String("serial", serial))
-			}
-		},
+		PersistSerial: serialBackfiller(d.sqCentrals, d.logger),
 	}, logger)
 	// Background flusher for the persistent VALUES cache. Runs every
 	// flush_interval (default 60 s; override via
