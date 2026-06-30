@@ -17,20 +17,32 @@ const loomNamespace = "loom"
 // width and stay comfortably collision-free across CCUs.
 const serialSuffixLen = 10
 
-// SerialSuffix returns the per-CCU discriminator: the last
-// [serialSuffixLen] characters of the CCU serial, lower-cased. Serials
+// CanonicalSerial reduces a CCU serial to its canonical discriminator: the
+// last [serialSuffixLen] characters, with the original case preserved. Serials
 // shorter than that are returned whole. Empty in, empty out.
+//
+// This is the single source of truth for "the per-CCU serial identity". Every
+// producer of a CCU serial — the ReGa `system.GetSerial` reader and SSDP/UPnP
+// discovery — funnels through here so a CCU's runtime identity and its
+// discovery identity are the same string (which is what lets discovery flag a
+// configured central as already-configured by serial). Case is preserved so the
+// stored / displayed serial matches what the CCU's own UI shows; callers that
+// need a case-insensitive key (e.g. unique_id generation) use [SerialSuffix].
+func CanonicalSerial(serial string) string {
+	if len(serial) <= serialSuffixLen {
+		return serial
+	}
+	return serial[len(serial)-serialSuffixLen:]
+}
+
+// SerialSuffix returns the per-CCU discriminator: [CanonicalSerial] lower-cased.
 //
 // This feeds the central-id slot of [CanonicalUniqueID] for the address
 // classes whose addresses repeat across CCUs (hub roots, INT000*,
 // virtual remotes); normal device serials are globally unique and carry
 // no prefix.
 func SerialSuffix(serial string) string {
-	serial = strings.ToLower(serial)
-	if len(serial) <= serialSuffixLen {
-		return serial
-	}
-	return serial[len(serial)-serialSuffixLen:]
+	return strings.ToLower(CanonicalSerial(serial))
 }
 
 // CanonicalUniqueID builds the external, loom-namespaced unique_id:

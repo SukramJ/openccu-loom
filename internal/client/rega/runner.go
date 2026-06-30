@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/client/transport/jsonrpc"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
@@ -282,11 +283,10 @@ func (r *Runner) GetSerial(ctx context.Context) (string, error) {
 	if err := r.RunJSON(ctx, hmenum.RegaScriptGetSerial, nil, &result); err != nil {
 		return "", err
 	}
-	serial := result.Serial
-	if len(serial) > 10 {
-		serial = serial[len(serial)-10:]
-	}
-	return serial, nil
+	// Canonical per-CCU serial (last 10, case preserved). Shared with SSDP
+	// discovery via routingkey.CanonicalSerial so the runtime identity and the
+	// discovery identity are byte-identical.
+	return routingkey.CanonicalSerial(result.Serial), nil
 }
 
 // ProgramDescription is one entry returned by [Runner.GetProgramDescriptions].
