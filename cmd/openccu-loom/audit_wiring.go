@@ -153,7 +153,12 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 		)
 		return nil, func() {}
 	}
-	recorder := sqlite.NewIncidentStore(db)
+	store = sqlite.NewIncidentStore(db)
+	// Decorate the SQLite recorder so a successful persist also publishes an
+	// IncidentRecordedEvent onto the recording central's bus (north-bound
+	// consumers such as the webhook bridge subscribe to it). The store
+	// returned to the caller stays the raw SQLite store for read access.
+	recorder := adapter.NewPublishingIncidentRecorder(store, reg)
 	for _, u := range reg.List() {
 		if u == nil || u.Cache == nil {
 			continue
@@ -165,7 +170,7 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 		slog.String("dsn", dsn),
 		slog.Int("centrals", len(reg.List())),
 	)
-	return recorder, func() { _ = db.Close() }
+	return store, func() { _ = db.Close() }
 }
 
 // wireAuditPersistence layers SQLite persistence on top of the in-
