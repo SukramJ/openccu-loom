@@ -61,6 +61,12 @@ const (
 	EventTypeServiceMessage              EventType = "hub.service_message"
 	EventTypeConnectivityChanged         EventType = "connectivity.changed"
 	EventTypeDriftCorrected              EventType = "reconciliation.drift_corrected"
+	// EventTypeIncidentRecorded fires after a reliability incident
+	// (circuit-breaker trip, ping/pong mismatch, retry-exhausted, …) has
+	// been persisted. It mirrors the recorded [IncidentRecordedEvent] onto
+	// the central event bus so north-bound consumers (the webhook bridge)
+	// see incidents alongside datapoint and system-status events.
+	EventTypeIncidentRecorded EventType = "incident.recorded"
 	// EventTypeDataRefreshTriggered fires just before a background scheduler job
 	// starts its refresh pass. Closes C-SCHED-2.
 	EventTypeDataRefreshTriggered EventType = "scheduler.refresh_triggered"
@@ -568,6 +574,26 @@ type SystemStatusChangedEvent struct {
 
 // Type implements Event.
 func (SystemStatusChangedEvent) Type() EventType { return EventTypeSystemStatusChanged }
+
+// IncidentRecordedEvent fires after a reliability incident has been
+// persisted into the incident store. It carries the same fields as the
+// reliability-layer incident record so north-bound consumers can render or
+// forward the incident without reaching back into the store. CentralName is
+// the multi-CCU scoping dimension and is always set.
+type IncidentRecordedEvent struct {
+	Base
+	CentralName string
+	InterfaceID string
+	// IncidentType is the incident classification. It is deliberately not
+	// named Type to avoid colliding with the Type() Event-interface method.
+	IncidentType hmenum.IncidentType
+	Severity     hmenum.IncidentSeverity
+	Message      string
+	Details      string
+}
+
+// Type implements Event.
+func (IncidentRecordedEvent) Type() EventType { return EventTypeIncidentRecorded }
 
 // AlarmMessageEvent fires when the CCU emits a new alarm.
 type AlarmMessageEvent struct {

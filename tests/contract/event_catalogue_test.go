@@ -21,6 +21,7 @@ func TestEventTypeStringsStable(t *testing.T) {
 		"recovery.started":                 hmevent.EventTypeRecoveryStarted,
 		"hub.service_message":              hmevent.EventTypeServiceMessage,
 		"hub.alarm_message":                hmevent.EventTypeAlarmMessage,
+		"incident.recorded":                hmevent.EventTypeIncidentRecorded,
 	}
 	for want, got := range cases {
 		if string(got) != want {
