@@ -152,6 +152,19 @@ north:
   #   allow_writes: false   # gate the write tools; keep false for read-only
   #   path: /mcp            # Streamable-HTTP mount path on the REST listener
 
+  # Outbound webhook bridge. When enabled the daemon POSTs a signed JSON
+  # payload to `url` on datapoint, system-status and incident events.
+  # Disabled by default; a single endpoint is supported. Changes are
+  # restart-required (the bridge is wired once at boot).
+  # webhook:
+  #   enabled: false
+  #   url: https://example.invalid/hook
+  #   secret: change-me      # HMAC-SHA256 body signature (X-OpenCCU-Signature)
+  #   events: []             # event-type allowlist; empty = all
+  #   centrals: []           # CCU-name allowlist; empty = all
+  #   parameter_glob: ""     # e.g. "*TEMPERATURE*"; empty = no filter
+  #   timeout_ms: 10000      # per-delivery HTTP timeout
+
 # First-run setup safety. The /setup wizard always refuses once
 # there is at least one admin user; this toggle lets you keep the
 # route dormant even with a manually-emptied users table.

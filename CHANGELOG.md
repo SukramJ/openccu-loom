@@ -4,6 +4,24 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Outbound webhook bridge (`north.webhook`).** A new north-bound adapter
+  that POSTs a signed JSON payload to an operator-configured URL on datapoint,
+  system-status and incident events. Disabled by default. Each delivery carries
+  an HMAC-SHA256 body signature (`X-OpenCCU-Signature: sha256=…`, GitHub-webhook
+  convention) when a secret is set, plus `X-OpenCCU-Event` and a unique
+  `X-OpenCCU-Delivery` header. Deliveries run off a bounded queue with jittered
+  exponential-backoff retry, so a slow or unreachable endpoint never blocks the
+  event bus. Filters: per-event-type allowlist, per-CCU allowlist, and an
+  optional parameter glob on datapoint events. A single endpoint is supported;
+  multi-endpoint fan-out is a planned follow-up. Webhook config changes are
+  restart-required (the bridge is wired once at boot). A new `incident.recorded`
+  event lets reliability incidents flow to the webhook alongside the existing
+  diagnostics surface.
+
 ## [0.21.3]
 
 ### Changed

@@ -16,9 +16,11 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
+	"github.com/SukramJ/openccu-loom/internal/north/webhook"
 
 	// Side-effect import: aggregator package whose blank-imports
 	// trigger every custom-DP sub-package's `init()` so the global
@@ -265,6 +267,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 			bridge.PublishInitialSnapshot(ctx)
 		})
 	}
+
+	// --- north-bound bridge registry ---------------------------
+	// Uniform lifecycle for north-bound adapters (ADR-pending bridge
+	// contract). The outbound webhook is the first registered service;
+	// the established bridges (MQTT, Matter, MCP) are migrated onto the
+	// registry incrementally. Start is a no-op when the webhook is
+	// disabled, so registering it unconditionally is safe.
+	northBridges := northbridge.NewRegistry(logger)
+	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
+	if err := northBridges.StartAll(ctx); err != nil {
+		logger.Warn("north.bridge.start", slog.String("err", err.Error()))
+	}
+	defer northBridges.StopAll(context.Background()) //nolint:contextcheck // shutdown teardown must not hang on the already-cancelled daemon ctx; a fresh background ctx lets each bridge drain cleanly
 
 	// --- XML-RPC callback server -------------------------------
 	// Extracted into wireXMLRPCCallback (daemon_boot.go). The returned

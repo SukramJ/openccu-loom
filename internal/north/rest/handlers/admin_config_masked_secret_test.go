@@ -125,6 +125,79 @@ func TestPutConfigSection_RestoresMaskedSecrets(t *testing.T) {
 	}
 }
 
+// TestGetConfigSection_MasksWebhookSecret verifies the outbound-webhook signing
+// secret is masked on GET — a string secret (north.webhook.secret) that, if
+// leaked, would let anyone forge signed webhook deliveries.
+func TestGetConfigSection_MasksWebhookSecret(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.webhook",
+			ValueJSON: []byte(`{"enabled":true,"url":"https://hook.example","secret":"s3cr3t-key"}`),
+		},
+	}
+	w := getSection(fake, "north.webhook")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "s3cr3t-key") {
+		t.Fatalf("cleartext webhook secret leaked to the GET response: %s", w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not valid JSON: %v", err)
+	}
+	if got["secret"] != "***" {
+		t.Errorf("secret should be masked to ***, got %v", got["secret"])
+	}
+	if got["url"] != "https://hook.example" {
+		t.Errorf("non-secret field must pass through unchanged, got %v", got["url"])
+	}
+}
+
+// TestPutConfigSection_RestoresWebhookSecret verifies the masked webhook secret
+// is restored to the operator's stored value on save, so editing an unrelated
+// webhook field (e.g. the URL) does not overwrite the real signing secret with
+// the "***" sentinel.
+func TestPutConfigSection_RestoresWebhookSecret(t *testing.T) {
+	t.Parallel()
+
+	current := &config.Config{
+		North: config.NorthConfig{
+			Webhook: config.NorthWebhook{
+				Enabled: true,
+				URL:     "https://hook.example",
+				Secret:  "real-signing-key",
+			},
+		},
+	}
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: current}}
+
+	// The operator changed the URL; the SPA echoes the masked secret unchanged.
+	body := `{"enabled":true,"url":"https://hook.example/v2","secret":"***"}`
+	w := putSection(fake, "north.webhook", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	if !fake.putCalled {
+		t.Fatal("PutSection was never called — the save silently aborted")
+	}
+
+	var saved config.NorthWebhook
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON is invalid: %v", err)
+	}
+	if saved.URL != "https://hook.example/v2" {
+		t.Errorf("edited url not persisted: %q", saved.URL)
+	}
+	if saved.Secret != "real-signing-key" {
+		t.Errorf("masked webhook secret not restored: %q", saved.Secret)
+	}
+}
+
 // TestPutConfigSection_KeepsOperatorSuppliedSecret verifies a genuinely changed
 // secret (a non-sentinel value) is persisted verbatim — restoration only
 // touches the "***" sentinel, never operator-supplied new secrets.

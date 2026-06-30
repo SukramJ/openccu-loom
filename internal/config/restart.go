@@ -35,6 +35,15 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(boot.North.MCP.Enabled != eff.North.MCP.Enabled, "north.mcp.enabled")
 	add(boot.North.MCP.AllowWrites != eff.North.MCP.AllowWrites, "north.mcp.allow_writes")
 	add(boot.North.MCP.Path != eff.North.MCP.Path, "north.mcp.path")
+	// The outbound webhook bridge is wired once at boot, so every webhook
+	// field is restart-required (mirrors the MCP block above).
+	add(boot.North.Webhook.Enabled != eff.North.Webhook.Enabled, "north.webhook.enabled")
+	add(boot.North.Webhook.URL != eff.North.Webhook.URL, "north.webhook.url")
+	add(boot.North.Webhook.Secret != eff.North.Webhook.Secret, "north.webhook.secret")
+	add(!reflect.DeepEqual(boot.North.Webhook.Events, eff.North.Webhook.Events), "north.webhook.events")
+	add(!reflect.DeepEqual(boot.North.Webhook.Centrals, eff.North.Webhook.Centrals), "north.webhook.centrals")
+	add(boot.North.Webhook.ParameterGlob != eff.North.Webhook.ParameterGlob, "north.webhook.parameter_glob")
+	add(boot.North.Webhook.TimeoutMs != eff.North.Webhook.TimeoutMs, "north.webhook.timeout_ms")
 	add(!reflect.DeepEqual(boot.Centrals, eff.Centrals), "centrals")
 	// The login chain (incl. the CCU auth provider) is wired once at
 	// boot, so any change to the CCU-auth block is restart-required.

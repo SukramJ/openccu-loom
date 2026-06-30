@@ -320,6 +320,57 @@ type NorthConfig struct {
 	Matter    NorthMatter    `yaml:"matter" json:"matter" cfg:"basic"`
 	MCP       NorthMCP       `yaml:"mcp" json:"mcp" cfg:"basic"`
 	Discovery NorthDiscovery `yaml:"discovery" json:"discovery" cfg:"basic"`
+	Webhook   NorthWebhook   `yaml:"webhook" json:"webhook" cfg:"basic"`
+}
+
+// NorthWebhook configures the outbound webhook bridge — a north-bound
+// adapter that POSTs a signed JSON payload to an operator-configured URL on
+// datapoint, system-status and incident events. Disabled by default.
+//
+// A single endpoint is supported. Multi-endpoint fan-out is a planned
+// follow-up: it requires masking secret-class values inside list elements
+// and a stable element identity across config edits, neither of which the
+// current secret round-trip handles.
+type NorthWebhook struct {
+	// Enabled is the feature flag. Default false; while disabled the daemon
+	// subscribes to no event bus and POSTs nothing. Changing it is
+	// restart-required (the bridge is wired once at boot).
+	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+
+	// URL is the absolute http(s) endpoint the bridge POSTs each event to.
+	// Empty disables delivery even when Enabled is true.
+	URL string `yaml:"url" json:"url" cfg:"basic"`
+
+	// Secret is the shared key for the HMAC-SHA256 body signature sent in
+	// the X-OpenCCU-Signature header. Empty means the bridge sends no
+	// signature header (receiver cannot verify authenticity).
+	Secret string `yaml:"secret" json:"secret" cfg:"secret"`
+
+	// Events is an allowlist of event-type tags to deliver (e.g.
+	// "datapoint.value_changed"). Empty means all supported events.
+	Events []string `yaml:"events" json:"events" cfg:"basic"`
+
+	// Centrals is an allowlist of central names to deliver events for.
+	// Empty means all centrals.
+	Centrals []string `yaml:"centrals" json:"centrals" cfg:"basic"`
+
+	// ParameterGlob, when set, restricts datapoint events to those whose
+	// parameter name matches the glob (e.g. "*TEMPERATURE*"). Empty means
+	// no parameter filter. Non-datapoint events are unaffected.
+	ParameterGlob string `yaml:"parameter_glob" json:"parameter_glob" cfg:"expert"`
+
+	// TimeoutMs is the per-delivery HTTP timeout in milliseconds. Zero or
+	// negative falls back to the 10s default.
+	TimeoutMs int `yaml:"timeout_ms" json:"timeout_ms" cfg:"expert"`
+}
+
+// Timeout returns the configured per-delivery timeout, or the 10s default
+// when TimeoutMs is unset (zero or negative).
+func (w NorthWebhook) Timeout() time.Duration {
+	if w.TimeoutMs <= 0 {
+		return 10 * time.Second
+	}
+	return time.Duration(w.TimeoutMs) * time.Millisecond
 }
 
 // NorthMCP configures the Model Context Protocol server — a north-bound
