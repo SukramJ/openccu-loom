@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Per-DP MQTT state can carry `additional_information`.** Data points that
+  expose enriched model metadata (currently the calculated operating-voltage
+  sensor's battery info — type, quantity, low-voltage limits) now publish it
+  under an optional `additional_information` object on their MQTT state topic.
+  The merge is strictly additive: the key is omitted for plain scalar DPs, so
+  existing payloads are byte-identical. Documented in
+  `docs/mqtt-topic-schema.md`. (Exposing the same metadata on the REST
+  datapoint DTO and the hub service-/alarm-message aggregates is a planned
+  follow-up — see `docs/parity/by_design.md` §A1-BD01.)
 - **MCP `list_incidents` tool.** The Model Context Protocol bridge gains a
   read-only `list_incidents` tool that projects the reliability incident
   journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion) to

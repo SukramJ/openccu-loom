@@ -1123,6 +1123,7 @@ func (b *EventBridge) publishSlotState(
 		if pd.Type == hmenum.ParameterTypeEnum && len(pd.ValueList) > 0 {
 			value = mqtt.ResolveEnumLabel(value, pd.Type, pd.ValueList)
 		}
+		state.AdditionalInformation = dpAdditionalInformation(dp)
 	}
 	state.Value = value
 
@@ -1136,6 +1137,30 @@ func (b *EventBridge) publishSlotState(
 	if src != nil {
 		_ = bridge.PublishSlotConfig(ctx, centralName, iface, slot, src.Config())
 	}
+}
+
+// additionalInfoProvider is the optional capability a data point implements
+// to expose enriched model metadata (battery type/quantity/limits, …)
+// north-bound. Most data points carry none; only enriched types (e.g. the
+// calculated operating-voltage sensor) override it.
+type additionalInfoProvider interface {
+	AdditionalInformation() map[string]any
+}
+
+// dpAdditionalInformation returns the data point's enriched metadata, or nil
+// when it carries none. Non-invasive: a DP that does not implement the
+// capability (or whose map is empty) contributes nothing, so the per-DP
+// state payload stays byte-identical for the common scalar case.
+func dpAdditionalInformation(dp device.ParameterDataPoint) map[string]any {
+	if dp == nil {
+		return nil
+	}
+	if p, ok := dp.(additionalInfoProvider); ok {
+		if m := p.AdditionalInformation(); len(m) > 0 {
+			return m
+		}
+	}
+	return nil
 }
 
 // dpValid reports whether a data point is in a fully valid state for
@@ -1185,8 +1210,9 @@ func (b *EventBridge) republishBaseForStatusPair(
 		value = mqtt.ResolveEnumLabel(value, pd.Type, pd.ValueList)
 	}
 	state := payload.PerDPState{
-		Value:     value,
-		Available: dpValid(dp),
+		Value:                 value,
+		Available:             dpValid(dp),
+		AdditionalInformation: dpAdditionalInformation(dp),
 	}
 	if ts := dp.ModifiedAt(); !ts.IsZero() {
 		epoch := payload.EpochSeconds(ts)

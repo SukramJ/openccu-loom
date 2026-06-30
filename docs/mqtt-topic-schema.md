@@ -135,6 +135,34 @@ OpenCCU-Loom publishes per-DP state as a slim JSON envelope:
 HA Jinja templates can read individual fields via `value_json.value`,
 `value_json.available`, etc.
 
+#### Optional `additional_information`
+
+Data points that expose enriched model metadata carry it under an optional
+`additional_information` object. It is **omitted entirely** for plain scalar
+DPs (so the common-case payload is byte-identical to the example above) and
+present only when the DP provides it. The current producer is the calculated
+operating-voltage sensor, whose metadata describes the device battery:
+
+```json
+{
+  "value": 2.9,
+  "available": true,
+  "modified_at": 1730385720.123,
+  "refreshed_at": 1730385720.123,
+  "additional_information": {
+    "Battery Type": "LR03",
+    "Battery Qty": 2,
+    "Low Battery Limit": "2.2V",
+    "Low Battery Limit Default": "2.2V",
+    "Voltage max": "3.0V"
+  }
+}
+```
+
+The merge is strictly additive — every other field keeps its shape and
+position. (Exposing the same metadata on the REST datapoint DTO and on the
+hub service-/alarm-message aggregates is a planned follow-up.)
+
 ### `/config` companion (descriptor)
 
 Descriptor metadata (`unit`, `type`, `min`, `max`, `default`,
