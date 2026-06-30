@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0]
+
+### Changed
+
+- **CCU discovery now matches "already configured" by serial, not host**
+  ([ADR 0046](docs/adr/0046-ssdp-ccu-discovery.md)). Adopting a discovered CCU
+  persists its hardware serial (new `serial` column on the centrals store,
+  migration 024); the discovery list then flags a CCU as already configured by
+  that stable serial, so a CCU whose IP changed (DHCP lease, rotating docker
+  address) is no longer offered as a duplicate. Centrals configured before this
+  release carry no serial and continue to match by host.
+- **Discovery suggests a stable adoption address.** Each discovered CCU now
+  carries a `suggested_host` the SPA pre-fills instead of the raw SSDP IP:
+  - `localhost` when the CCU is on the daemon's own host (its discovered IP is
+    one of the daemon's interface addresses), and
+  - on the supervised HA add-on, a reverse-DNS-resolved **container hostname**
+    when the CCU is reachable only on a docker-range IP (172.16.0.0/12) — the
+    docker IP rotates, the hostname does not.
+  The raw host is still shown, and is used unchanged when no better address
+  applies. `APIVersion` → 2.9.0 (added `suggested_host` / `serial` fields).
+
 ## [0.20.1]
 
 ### Fixed

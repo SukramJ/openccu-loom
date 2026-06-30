@@ -65,13 +65,26 @@ func (f *fakeIgnoreStore) IgnoredSerials(_ context.Context) (map[string]struct{}
 }
 
 type fakeConfiguredLister struct {
-	hosts []string
+	hosts   []string
+	serials []string
 }
 
 func (f *fakeConfiguredLister) List(_ context.Context) ([]sqlite.CentralRow, error) {
-	rows := make([]sqlite.CentralRow, 0, len(f.hosts))
-	for _, h := range f.hosts {
-		rows = append(rows, sqlite.CentralRow{Host: h, Name: "configured-" + h})
+	n := len(f.hosts)
+	if len(f.serials) > n {
+		n = len(f.serials)
+	}
+	rows := make([]sqlite.CentralRow, 0, n)
+	for i := 0; i < n; i++ {
+		row := sqlite.CentralRow{}
+		if i < len(f.hosts) {
+			row.Host = f.hosts[i]
+			row.Name = "configured-" + f.hosts[i]
+		}
+		if i < len(f.serials) {
+			row.Serial = f.serials[i]
+		}
+		rows = append(rows, row)
 	}
 	return rows, nil
 }
@@ -244,6 +257,124 @@ func TestUnignoreDiscoveredCCU_NotFound(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d body=%s", w.Code, w.Body.String())
 	}
+}
+
+// TestListDiscoveredCCUs_MatchesBySerial verifies that a discovered CCU is
+// marked AlreadyConfigured when a configured central shares its serial even if
+// the hosts differ.
+func TestListDiscoveredCCUs_MatchesBySerial(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	discoverer := &fakeDiscoveredLister{
+		ccus: []ssdp.DiscoveredCCU{
+			{Serial: "SER-X", Name: "Kellerbox", Host: "172.18.9.9", LastSeen: now},
+		},
+	}
+	// Configured central has the same serial but a completely different host.
+	cfgLister := &fakeConfiguredLister{
+		hosts:   []string{"192.168.50.1"},
+		serials: []string{"SER-X"},
+	}
+
+	deps := &DiscoveryDeps{
+		Discoverer: discoverer,
+		Centrals:   cfgLister,
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/centrals/discovered", http.NoBody)
+	w := httptest.NewRecorder()
+	ListDiscoveredCCUs(deps).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var body []discoveredCCU
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 entry, got %d: %+v", len(body), body)
+	}
+	if !body[0].AlreadyConfigured {
+		t.Error("SER-X should be AlreadyConfigured=true via serial match (host differs)")
+	}
+}
+
+// TestListDiscoveredCCUs_SuggestedHostFromDep verifies that SuggestedHost in
+// the response is set by deps.SuggestHost and falls back to the raw host when
+// that func is nil.
+func TestListDiscoveredCCUs_SuggestedHostFromDep(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	discoverer := &fakeDiscoveredLister{
+		ccus: []ssdp.DiscoveredCCU{
+			{Serial: "S1", Name: "Local", Host: "172.18.4.29", LastSeen: now},
+			{Serial: "S2", Name: "Remote", Host: "192.168.1.99", LastSeen: now},
+		},
+	}
+
+	t.Run("suggest_func_applied", func(t *testing.T) {
+		t.Parallel()
+		deps := &DiscoveryDeps{
+			Discoverer: discoverer,
+			SuggestHost: func(_ context.Context, raw string) string {
+				if raw == "172.18.4.29" {
+					return "localhost"
+				}
+				return raw
+			},
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/centrals/discovered", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDiscoveredCCUs(deps).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var body []discoveredCCU
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if len(body) != 2 {
+			t.Fatalf("expected 2 entries, got %d", len(body))
+		}
+		bySerial := map[string]discoveredCCU{}
+		for _, e := range body {
+			bySerial[e.Serial] = e
+		}
+		if bySerial["S1"].SuggestedHost != "localhost" {
+			t.Errorf("S1 SuggestedHost=%q, want %q", bySerial["S1"].SuggestedHost, "localhost")
+		}
+		if bySerial["S2"].SuggestedHost != "192.168.1.99" {
+			t.Errorf("S2 SuggestedHost=%q, want %q", bySerial["S2"].SuggestedHost, "192.168.1.99")
+		}
+	})
+
+	t.Run("nil_suggest_func_falls_back_to_raw_host", func(t *testing.T) {
+		t.Parallel()
+		deps := &DiscoveryDeps{
+			Discoverer:  discoverer,
+			SuggestHost: nil,
+		}
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/centrals/discovered", http.NoBody)
+		w := httptest.NewRecorder()
+		ListDiscoveredCCUs(deps).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+		}
+		var body []discoveredCCU
+		if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		for _, e := range body {
+			if e.SuggestedHost != e.Host {
+				t.Errorf("serial %s: SuggestedHost=%q, want raw Host=%q", e.Serial, e.SuggestedHost, e.Host)
+			}
+		}
+	})
 }
 
 // TestListIgnoredCCUs_ReturnsAll verifies that ListIgnoredCCUs returns every

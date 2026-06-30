@@ -54,8 +54,12 @@ func (s *CentralsStore) openPlain(v string) (string, error) {
 // [config.CentralConfig] shape but holds password material as
 // either an env-var name (preferred) or plaintext fallback.
 type CentralRow struct {
-	Name                  string                  `json:"name"`
-	Host                  string                  `json:"host"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	// Serial is the CCU's stable hardware serial, set when the central is
+	// adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered
+	// rows. Used to match a discovered CCU regardless of its (mutable) host.
+	Serial                string                  `json:"serial,omitempty"`
 	Port                  int                     `json:"port,omitempty"`
 	JSONRPCPort           int                     `json:"json_rpc_port,omitempty"`
 	Username              string                  `json:"username,omitempty"`
@@ -111,12 +115,13 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 	now := time.Now().UTC()
 	_, err = s.db.ExecContext(ctx,
 		`INSERT INTO centrals
-		 (name, host, port, json_rpc_port, username, password_env, password_plain,
+		 (name, host, serial, port, json_rpc_port, username, password_env, password_plain,
 		  tls, tls_insecure_skip_verify, primary_interface, interfaces_json,
 		  ports_json, visibility_json, behavior_json, enabled, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(name) DO UPDATE SET
-		   host=excluded.host, port=excluded.port, json_rpc_port=excluded.json_rpc_port,
+		   host=excluded.host, serial=excluded.serial, port=excluded.port,
+		   json_rpc_port=excluded.json_rpc_port,
 		   username=excluded.username, password_env=excluded.password_env,
 		   password_plain=excluded.password_plain, tls=excluded.tls,
 		   tls_insecure_skip_verify=excluded.tls_insecure_skip_verify,
@@ -124,7 +129,7 @@ func (s *CentralsStore) Put(ctx context.Context, r CentralRow) error {
 		   interfaces_json=excluded.interfaces_json, ports_json=excluded.ports_json,
 		   visibility_json=excluded.visibility_json, behavior_json=excluded.behavior_json,
 		   enabled=excluded.enabled, updated_at=excluded.updated_at`,
-		r.Name, r.Host, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
+		r.Name, r.Host, r.Serial, r.Port, r.JSONRPCPort, r.Username, r.PasswordEnv, sealedPlain,
 		boolInt(r.TLS), boolInt(r.TLSInsecureSkipVerify), r.PrimaryInterface,
 		string(ifJSON), string(portsJSON), string(visJSON), string(behJSON), boolInt(r.Enabled),
 		now, now)
@@ -174,7 +179,7 @@ func (s *CentralsStore) List(ctx context.Context) ([]CentralRow, error) {
 	return out, rows.Err()
 }
 
-const selectCentralsSQL = `SELECT name, host, port, json_rpc_port, username, password_env,
+const selectCentralsSQL = `SELECT name, host, serial, port, json_rpc_port, username, password_env,
 		    password_plain, tls, tls_insecure_skip_verify, primary_interface,
 		    interfaces_json, ports_json, visibility_json, behavior_json, enabled,
 		    created_at, updated_at FROM centrals`
@@ -190,7 +195,7 @@ func (s *CentralsStore) scanRow(row scannable, r *CentralRow) error {
 		ifJSON, portsJSON, visJSON, behJSON string
 		tls, insec, enabled                 int
 	)
-	err := row.Scan(&r.Name, &r.Host, &r.Port, &r.JSONRPCPort, &r.Username,
+	err := row.Scan(&r.Name, &r.Host, &r.Serial, &r.Port, &r.JSONRPCPort, &r.Username,
 		&r.PasswordEnv, &r.PasswordPlain, &tls, &insec, &r.PrimaryInterface,
 		&ifJSON, &portsJSON, &visJSON, &behJSON, &enabled, &r.CreatedAt, &r.UpdatedAt)
 	if errors.Is(err, sql.ErrNoRows) {

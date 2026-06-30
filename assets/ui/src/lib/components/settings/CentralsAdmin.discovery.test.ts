@@ -9,6 +9,7 @@ import { fireEvent } from "@testing-library/svelte";
 const mockListDiscovered = vi.fn();
 const mockIgnore = vi.fn();
 const mockListCentrals = vi.fn();
+const mockCreateCentral = vi.fn();
 const mockConfirmAsk = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
@@ -23,7 +24,7 @@ vi.mock("$lib/api/client", () => ({
     listDiscoveredCentrals: (...args: unknown[]) => mockListDiscovered(...args),
     ignoreDiscoveredCentral: (...args: unknown[]) => mockIgnore(...args),
     updateCentralV2: vi.fn().mockResolvedValue({}),
-    createCentralV2: vi.fn().mockResolvedValue({}),
+    createCentralV2: (...args: unknown[]) => mockCreateCentral(...args),
     deleteCentralV2: vi.fn().mockResolvedValue({}),
     getConfigSchema: vi.fn().mockResolvedValue({ sections: [], fields: [] }),
     getEffectiveConfig: vi.fn().mockResolvedValue({ config: {}, sources: {} }),
@@ -86,6 +87,7 @@ const makeCCU = (overrides: Partial<{
   serial: string;
   name: string;
   host: string;
+  suggested_host: string;
   manufacturer?: string;
   model?: string;
   last_seen: string;
@@ -94,6 +96,7 @@ const makeCCU = (overrides: Partial<{
   serial: "ABC123",
   name: "My CCU",
   host: "192.168.0.10",
+  suggested_host: "192.168.0.10",
   last_seen: new Date().toISOString(),
   already_configured: false,
   ...overrides,
@@ -106,6 +109,7 @@ describe("CentralsAdmin — discovered CCUs", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListCentrals.mockResolvedValue([]);
+    mockCreateCentral.mockResolvedValue({});
   });
 
   it("renders discovered CCUs in the list", async () => {
@@ -182,5 +186,58 @@ describe("CentralsAdmin — discovered CCUs", () => {
     const buttons = Array.from(container.querySelectorAll("button"));
     const addBtn = buttons.find((b) => b.textContent?.trim() === "discovery.add");
     expect(addBtn).toBeUndefined();
+  });
+
+  it("adopting a discovered CCU pre-fills host from suggested_host and carries serial into createCentralV2", async () => {
+    mockListDiscovered.mockResolvedValue([
+      makeCCU({
+        host: "192.168.0.10",
+        suggested_host: "localhost",
+        serial: "SER-9",
+        name: "CCU-Adopt",
+        already_configured: false,
+      }),
+    ]);
+
+    const { container } = render(CentralsAdmin);
+
+    // Wait for the "Add" button to appear next to the discovered CCU
+    let adoptBtn: HTMLElement | undefined;
+    await waitFor(() => {
+      const buttons = Array.from(container.querySelectorAll("button"));
+      adoptBtn = buttons.find(
+        (b) => b.textContent?.trim() === "discovery.add",
+      ) as HTMLElement | undefined;
+      if (!adoptBtn) throw new Error("Adopt button not found");
+    });
+
+    // Click adopt — this calls prefillFromDiscovered which opens the modal
+    await fireEvent.click(adoptBtn!);
+
+    // The modal should be visible; verify host input was set to suggested_host
+    await waitFor(() => {
+      const allInputs = Array.from(
+        container.querySelectorAll<HTMLInputElement>("input[type='text']"),
+      );
+      const hostField = allInputs.find((inp) => inp.value === "localhost");
+      if (!hostField) throw new Error("Host input with suggested_host value not found in modal");
+      expect(hostField.value).toBe("localhost");
+    });
+
+    // Trigger save — HmIP-RF is pre-checked by freshInterfaceForm so no_interface
+    // error is not expected; name is pre-filled from ccu.name
+    const saveBtn = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+      (b) => b.textContent?.trim() === "common.save",
+    );
+    expect(saveBtn).toBeDefined();
+    await fireEvent.click(saveBtn!);
+
+    // Assert createCentralV2 was called with host === "localhost" and serial === "SER-9"
+    await waitFor(() => {
+      expect(mockCreateCentral).toHaveBeenCalledOnce();
+      const payload = mockCreateCentral.mock.calls[0][0] as Record<string, unknown>;
+      expect(payload.host).toBe("localhost");
+      expect(payload.serial).toBe("SER-9");
+    });
   });
 });

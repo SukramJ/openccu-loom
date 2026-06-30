@@ -272,6 +272,67 @@ func TestCentralsStoreEmptyInterfacesAndPorts(t *testing.T) {
 	}
 }
 
+// TestCentralsStoreSerialRoundTrip verifies that the Serial field survives a
+// Put → Get and Put → List round-trip, and that a row stored without a serial
+// reads back as an empty string.
+func TestCentralsStoreSerialRoundTrip(t *testing.T) {
+	t.Parallel()
+	s := newCentralsStore(t)
+	ctx := context.Background()
+
+	// Row with a serial.
+	withSerial := baseCentralRow("ser-ccu")
+	withSerial.Serial = "0123ABC"
+	if err := s.Put(ctx, withSerial); err != nil {
+		t.Fatalf("Put with serial: %v", err)
+	}
+
+	// Row without a serial.
+	noSerial := baseCentralRow("no-ser-ccu")
+	noSerial.Serial = ""
+	if err := s.Put(ctx, noSerial); err != nil {
+		t.Fatalf("Put without serial: %v", err)
+	}
+
+	// Get round-trip for the row with a serial.
+	got, err := s.Get(ctx, "ser-ccu")
+	if err != nil {
+		t.Fatalf("Get ser-ccu: %v", err)
+	}
+	if got.Serial != "0123ABC" {
+		t.Errorf("Get: Serial=%q, want %q", got.Serial, "0123ABC")
+	}
+
+	// Get round-trip for the row without a serial.
+	gotNone, err := s.Get(ctx, "no-ser-ccu")
+	if err != nil {
+		t.Fatalf("Get no-ser-ccu: %v", err)
+	}
+	if gotNone.Serial != "" {
+		t.Errorf("Get: Serial=%q, want empty string", gotNone.Serial)
+	}
+
+	// List round-trip — check both rows are visible with correct serials.
+	rows, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	byName := map[string]CentralRow{}
+	for _, r := range rows {
+		byName[r.Name] = r
+	}
+	if r, ok := byName["ser-ccu"]; !ok {
+		t.Error("List: ser-ccu not found")
+	} else if r.Serial != "0123ABC" {
+		t.Errorf("List: ser-ccu Serial=%q, want %q", r.Serial, "0123ABC")
+	}
+	if r, ok := byName["no-ser-ccu"]; !ok {
+		t.Error("List: no-ser-ccu not found")
+	} else if r.Serial != "" {
+		t.Errorf("List: no-ser-ccu Serial=%q, want empty string", r.Serial)
+	}
+}
+
 // TestCentralsStoreBehaviorRoundTrip verifies the per-central behavior
 // block survives a Put → Get round-trip through the behavior_json column.
 func TestCentralsStoreBehaviorRoundTrip(t *testing.T) {

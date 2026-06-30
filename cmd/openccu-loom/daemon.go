@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
+	"github.com/SukramJ/openccu-loom/internal/north/discovery"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 
@@ -112,6 +113,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if sqCentrals != nil {
 		discoveryDeps.Centrals = sqCentrals
 	}
+	// Suggest a stable adoption address per discovered CCU: localhost for a
+	// co-located CCU, a reverse-resolved docker hostname for a supervised HA
+	// add-on (ADR 0046). Inert (raw host) on a plain build.
+	discoveryDeps.SuggestHost = discovery.NewHostSuggester(isSupervised()).Suggest
 
 	// Start the periodic WAL checkpoint for the audit/config DB. Keeps the
 	// WAL file bounded on embedded and busy targets without blocking readers.

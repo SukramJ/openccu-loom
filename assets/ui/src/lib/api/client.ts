@@ -1227,6 +1227,10 @@ export type DiscoveredCCU = {
   serial: string;
   name: string;
   host: string;
+  // Address to pre-fill on adoption — "localhost" for a CCU on the daemon's own
+  // host, a reverse-resolved docker hostname for a co-located HA add-on, else
+  // equal to host.
+  suggested_host: string;
   manufacturer?: string;
   model?: string;
   last_seen: string;
@@ -1341,6 +1345,9 @@ export type VisibilityConfig = {
 export type CentralRow = {
   name: string;
   host: string;
+  // Hardware serial captured at adoption; lets discovery match this central by
+  // serial regardless of host. Empty/omitted for manual entries.
+  serial?: string;
   port?: number;
   json_rpc_port?: number;
   username?: string;
