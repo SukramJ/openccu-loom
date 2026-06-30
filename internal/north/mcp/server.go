@@ -21,6 +21,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -75,6 +76,14 @@ type HubResolver interface {
 	HubFor(centralName string) *hub.Hub
 }
 
+// IncidentsReader projects the cross-central reliability incident journal —
+// the same enriched, source-tagged list the REST GET /incidents handler
+// serves. *adapter.IncidentsStoreReader satisfies it, so MCP and REST
+// expose byte-identical incident data.
+type IncidentsReader interface {
+	Incidents() []hmapi.Incident
+}
+
 // Deps is the wiring surface. Writer may be nil (no writes available).
 // Audit may be nil (no change-log surface); when present it serves both
 // the read tool (List) and records MCP-origin writes (Record).
@@ -86,6 +95,7 @@ type Deps struct {
 	Health      HealthReader
 	Hubs        HubResolver
 	Audit       audit.Recorder
+	Incidents   IncidentsReader
 	AllowWrites bool
 	Version     string
 }
