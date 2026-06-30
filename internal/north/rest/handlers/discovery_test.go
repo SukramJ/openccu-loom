@@ -75,7 +75,7 @@ func (f *fakeConfiguredLister) List(_ context.Context) ([]sqlite.CentralRow, err
 		n = len(f.serials)
 	}
 	rows := make([]sqlite.CentralRow, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		row := sqlite.CentralRow{}
 		if i < len(f.hosts) {
 			row.Host = f.hosts[i]
