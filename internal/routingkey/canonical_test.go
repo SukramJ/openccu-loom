@@ -45,6 +45,29 @@ func TestSerialSuffix(t *testing.T) {
 	}
 }
 
+// TestCanonicalSerial pins the shared per-CCU serial canonicalisation: last 10
+// characters, case PRESERVED (unlike SerialSuffix, which lower-cases). This is
+// the form both the ReGa GetSerial reader and SSDP discovery funnel through, so
+// a runtime CCU serial and a discovered serial compare equal.
+func TestCanonicalSerial(t *testing.T) {
+	cases := []struct {
+		serial string
+		want   string
+	}{
+		{"3014F711A0001F5A4993D962", "5A4993D962"}, // long UDN tail → last 10, case kept
+		{"0001ABCDEF12", "01ABCDEF12"},
+		{"MEQ1234567", "MEQ1234567"}, // exactly 10 → verbatim
+		{"SHORT", "SHORT"},           // shorter than 10 → verbatim
+		{"", ""},                     // empty in, empty out (keeps the host-fallback path intact)
+		{"X0123456789", "0123456789"},
+	}
+	for _, c := range cases {
+		if got := CanonicalSerial(c.serial); got != c.want {
+			t.Errorf("CanonicalSerial(%q) = %q, want %q", c.serial, got, c.want)
+		}
+	}
+}
+
 func TestCanonicalUniqueID(t *testing.T) {
 	serial10 := SerialSuffix("3014F711A0001234") // 11a0001234
 	cases := []struct {

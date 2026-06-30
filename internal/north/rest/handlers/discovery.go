@@ -14,6 +14,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/north/discovery/ssdp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -204,7 +205,10 @@ func configuredSets(ctx context.Context, centrals ConfiguredCentralLister) (seri
 		return serials, hosts
 	}
 	for i := range rows {
-		if s := strings.ToLower(strings.TrimSpace(rows[i].Serial)); s != "" {
+		// Canonicalise the stored serial to the same last-10 form the discovered
+		// serial already carries, so a central adopted with a full serial (before
+		// discovery started canonicalising) still matches by serial.
+		if s := strings.ToLower(routingkey.CanonicalSerial(strings.TrimSpace(rows[i].Serial))); s != "" {
 			serials[s] = struct{}{}
 		}
 		if h := strings.ToLower(strings.TrimSpace(rows[i].Host)); h != "" {

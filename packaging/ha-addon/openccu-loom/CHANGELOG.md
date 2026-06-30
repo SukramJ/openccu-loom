@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.21.1
+
+- **More reliable recognition of already-added CCUs.** A found CCU is now matched
+  by its short 10-character serial — the same form the CCU reports internally — so
+  it is recognised as "already configured" consistently, even across address
+  changes. CCUs added in 0.21.0 keep being recognised.
+
 ## 0.21.0
 
 - **Found CCUs are recognised even after their address changes.** Discovery now

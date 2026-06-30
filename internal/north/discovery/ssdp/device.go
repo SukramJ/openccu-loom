@@ -17,6 +17,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/routingkey"
 )
 
 // DiscoveredCCU is one central unit found on the network. Serial is the stable
@@ -78,7 +80,12 @@ func parseDeviceDescription(body []byte, locationURL string) (DiscoveredCCU, boo
 	if host == "" {
 		return DiscoveredCCU{}, false
 	}
-	serial := serialFrom(d.UDN, d.ModelDescription)
+	// Reduce to the canonical per-CCU serial (last 10, case preserved) — the
+	// same form the ReGa system.GetSerial reader produces — so a discovered CCU
+	// and a configured central identify by an identical string. CanonicalSerial
+	// is empty-in/empty-out, so the host fallback below still triggers when no
+	// serial could be derived (a host must NOT be truncated).
+	serial := routingkey.CanonicalSerial(serialFrom(d.UDN, d.ModelDescription))
 	if serial == "" {
 		// Without a stable id we cannot dedupe or persist an ignore decision;
 		// fall back to the host so the entry is at least usable.

@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1]
+
+### Changed
+
+- **CCU discovery now identifies a CCU by its canonical 10-character serial.**
+  The serial captured from SSDP/UPnP (the UDN tail, which is longer than 10
+  characters) is reduced to its last 10 characters — the same canonical form the
+  runtime `system.GetSerial` reader produces — so a discovered CCU and a
+  configured central are compared by an identical string. Both producers now
+  funnel through one helper (`routingkey.CanonicalSerial`), guaranteeing the two
+  serial worlds line up. The "already configured" check still falls back to a
+  host match, and also canonicalises a stored full serial at compare time so a
+  central adopted under 0.21.0 (which stored the untruncated serial) keeps
+  matching. No wire-schema change (`APIVersion` stays 2.9.0).
+
 ## [0.21.0]
 
 ### Changed
