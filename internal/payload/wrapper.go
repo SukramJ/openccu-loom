@@ -35,6 +35,13 @@ type PerDPState struct {
 	// RefreshedAt is the timestamp of the last CCU observation,
 	// regardless of value change.
 	RefreshedAt float64 `json:"refreshed_at,omitempty"`
+
+	// AdditionalInformation carries enriched model metadata (e.g. battery
+	// type / quantity / low-voltage limits for a battery-backed device)
+	// when the data point provides it. nil for plain scalar data points —
+	// elided from JSON via omitempty, so a non-metadata DP's payload is
+	// byte-identical to before. Additive only.
+	AdditionalInformation map[string]any `json:"additional_information,omitempty"`
 }
 
 // EpochSeconds renders a Go time.Time as the seconds-since-epoch

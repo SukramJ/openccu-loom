@@ -2681,13 +2681,15 @@ The placement is by design: `ConnectionState` tracks per-interface issue counts 
 
 ---
 
-### A1-BD01 — `AdditionalInformation()` defined but not emitted by north-bound adapters
+### A1-BD01 — `AdditionalInformation()` emitted north-bound — PARTIALLY RESOLVED (MQTT per-DP state)
 
-`ServiceMessages.AdditionalInformation()` (`internal/model/hub/messages.go:487`) and `OperatingVoltageLevelSensor.AdditionalInformation()` (`internal/model/calculated/voltage.go:129`) expose enriched metadata maps. No MQTT state payload or REST response currently merges these maps.
+`ServiceMessages.AdditionalInformation()` (`internal/model/hub/messages.go`), `AlarmMessages.AdditionalInformation()`, and `OperatingVoltageLevelSensor.AdditionalInformation()` (`internal/model/calculated/voltage.go:129`) expose enriched metadata maps. The original concern — that merging them would require a versioned MQTT-schema bump — was waived by the repo owner in favour of a strictly **additive** extension under a single optional `additional_information` key.
 
-This is by design for v0.1.0: the north-bound payload layer (`internal/payload/`, `internal/north/mqtt/`) assembles sensor state from the typed scalar value only. Merging `AdditionalInformation` into the MQTT state topic would change the schema of an established payload and is therefore scoped to a versioned MQTT-schema extension. The method surface exists and is tested; integration into the north-bound adapters is a post-0.1.0 enhancement.
+**Status (2026-06): per-DP MQTT state RESOLVED.** The per-DP MQTT slot-state envelope now carries an optional `additional_information` map: `payload.PerDPState.AdditionalInformation` (`json:"additional_information,omitempty"`), populated at the publish boundary in `internal/central/adapter/eventbridge.go` via the non-invasive optional-capability seam `dpAdditionalInformation` (a type assertion on `additionalInfoProvider`, so a plain scalar DP contributes nothing and its payload stays byte-identical). The current producer is the operating-voltage sensor's battery metadata. Documented in `docs/mqtt-topic-schema.md`.
 
-Go path: `internal/model/hub/messages.go::AdditionalInformation`, `internal/model/calculated/voltage.go::AdditionalInformation`.
+**Remaining follow-up (still open):** the same metadata on (a) the REST datapoint DTO — additive, but the datapoint state shape is in `assets/openapi.yaml`, so it carries the `make export-schemas` + `APIVersion` discipline; and (b) the hub service-/alarm-message MQTT + REST aggregates (`internal/north/mqtt/bridge.go::PublishServiceMessages`/`PublishAlarmMessages`).
+
+Go path: `internal/payload/wrapper.go::PerDPState`, `internal/central/adapter/eventbridge.go::dpAdditionalInformation`, `internal/model/calculated/voltage.go::AdditionalInformation`, `internal/model/hub/messages.go::AdditionalInformation`.
 
 ---
 
