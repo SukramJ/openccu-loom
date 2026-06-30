@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -78,6 +79,24 @@ type listAuditOut struct {
 	Entries []auditSummary `json:"entries"`
 }
 
+type listIncidentsIn struct {
+	CentralName string `json:"central_name,omitempty" jsonschema:"optional CCU name to scope the result; omit to span every central"`
+	Limit       int    `json:"limit,omitempty" jsonschema:"maximum entries to return, newest first (default 50, max 1000)"`
+}
+
+type incidentSummary struct {
+	ID        string `json:"id"`
+	When      string `json:"when"`
+	Component string `json:"component"`
+	Severity  string `json:"severity"`
+	Summary   string `json:"summary"`
+	Detail    string `json:"detail,omitempty"`
+}
+
+type listIncidentsOut struct {
+	Incidents []incidentSummary `json:"incidents"`
+}
+
 type readParamsetIn struct {
 	Address string `json:"address" jsonschema:"the channel address, e.g. 0001D3C99C1234:1"`
 	Key     string `json:"key" jsonschema:"the paramset key: MASTER (configuration) or VALUES (current state)"`
@@ -134,6 +153,9 @@ func registerReadTools(s *mcpsdk.Server, d Deps) {
 	registerGetDevice(s, d)
 	if d.Audit != nil {
 		registerListAudit(s, d)
+	}
+	if d.Incidents != nil {
+		registerListIncidents(s, d)
 	}
 	if d.Paramsets != nil {
 		registerReadParamset(s, d)
@@ -232,6 +254,55 @@ func registerListAudit(s *mcpsdk.Server, d Deps) {
 				DeviceAddress: e.DeviceAddress,
 				Parameter:     e.Parameter,
 				Note:          e.Note,
+			})
+		}
+		return nil, out, nil
+	})
+}
+
+func registerListIncidents(s *mcpsdk.Server, d Deps) {
+	mcpsdk.AddTool(s, &mcpsdk.Tool{
+		Name:        "list_incidents",
+		Description: "Read the recent reliability incident journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion). Newest first. Optionally scope to one CCU via central_name.",
+	}, func(_ context.Context, _ *mcpsdk.CallToolRequest, in listIncidentsIn) (*mcpsdk.CallToolResult, listIncidentsOut, error) {
+		limit := in.Limit
+		if limit <= 0 {
+			limit = 50
+		}
+		if limit > 1000 {
+			limit = 1000
+		}
+		incidents := d.Incidents.Incidents()
+		// Optional central filter: Component is "<central>" or
+		// "<central>/<interface>" (toAPIIncident), so match the central
+		// segment exactly.
+		if central := strings.TrimSpace(in.CentralName); central != "" {
+			filtered := incidents[:0:0]
+			for _, inc := range incidents {
+				if inc.Component == central || strings.HasPrefix(inc.Component, central+"/") {
+					filtered = append(filtered, inc)
+				}
+			}
+			incidents = filtered
+		}
+		// Newest first; Incidents() ordering is not guaranteed, so sort
+		// explicitly before clamping to the limit.
+		sort.SliceStable(incidents, func(i, j int) bool {
+			return incidents[i].When.After(incidents[j].When)
+		})
+		if len(incidents) > limit {
+			incidents = incidents[:limit]
+		}
+		out := listIncidentsOut{Incidents: make([]incidentSummary, 0, len(incidents))}
+		for i := range incidents {
+			inc := &incidents[i]
+			out.Incidents = append(out.Incidents, incidentSummary{
+				ID:        inc.ID,
+				When:      inc.When.UTC().Format(time.RFC3339),
+				Component: inc.Component,
+				Severity:  inc.Severity,
+				Summary:   inc.Summary,
+				Detail:    inc.Detail,
 			})
 		}
 		return nil, out, nil

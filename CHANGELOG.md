@@ -8,6 +8,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **MCP `list_incidents` tool.** The Model Context Protocol bridge gains a
+  read-only `list_incidents` tool that projects the reliability incident
+  journal (circuit-breaker trips, ping/pong mismatches, retry exhaustion) to
+  LLM agents — the same enriched, source-tagged data `GET /incidents` serves
+  REST clients. Newest-first, limit-clamped (default 50, max 1000), with an
+  optional `central_name` filter. Read-only (not gated by `allow_writes`);
+  available whenever the incident store is wired and `north.mcp.enabled`.
 - **Outbound webhook bridge (`north.webhook`).** A new north-bound adapter
   that POSTs a signed JSON payload to an operator-configured URL on datapoint,
   system-status and incident events. Disabled by default. Each delivery carries

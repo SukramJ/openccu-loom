@@ -334,6 +334,7 @@ func mountMCP(cfg *config.Config, d restMountDeps, router http.Handler, logger *
 		Health:      d.healthAdapter,
 		Hubs:        d.reg,
 		Audit:       d.auditRec,
+		Incidents:   d.incidents,
 		AllowWrites: cfg.North.MCP.AllowWrites,
 		Version:     build.Version,
 	}))
