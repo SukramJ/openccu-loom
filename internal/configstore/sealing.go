@@ -27,6 +27,10 @@ func sectionTarget(sec Section) any {
 		return new(config.NorthMatter)
 	case SectionDiscovery:
 		return new(config.NorthDiscovery)
+	case SectionWebhook:
+		// Has the north.webhook.secret signing key (cfg:"secret"), so the
+		// section store seals it at rest by reflection.
+		return new(config.NorthWebhook)
 	case SectionREST:
 		return new(config.NorthREST)
 	case SectionOIDC:

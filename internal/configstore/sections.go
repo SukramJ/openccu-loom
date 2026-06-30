@@ -18,6 +18,10 @@ const (
 	SectionMCP Section = "north.mcp"
 	// SectionDiscovery carries [config.NorthDiscovery].
 	SectionDiscovery Section = "north.discovery"
+	// SectionWebhook carries [config.NorthWebhook] — the outbound webhook
+	// bridge toggle + endpoint. Restart-required: the bridge is wired once
+	// at boot.
+	SectionWebhook Section = "north.webhook"
 	// SectionREST carries the CORS list + auth toggles +
 	// rate-limit block (everything inside [config.NorthREST] except
 	// the bind address, which lives in BootstrapConfig).
@@ -61,6 +65,7 @@ func AllSections() []Section {
 		SectionMatter,
 		SectionMCP,
 		SectionDiscovery,
+		SectionWebhook,
 		SectionREST,
 		SectionOIDC,
 		SectionCCUAuth,

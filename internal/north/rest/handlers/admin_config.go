@@ -139,7 +139,16 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.mcp.enabled":      {},
 	"north.mcp.allow_writes": {},
 	"north.mcp.path":         {},
-	"centrals":               {},
+	// The outbound webhook bridge is wired once at boot, so every webhook
+	// field is restart-required.
+	"north.webhook.enabled":        {},
+	"north.webhook.url":            {},
+	"north.webhook.secret":         {},
+	"north.webhook.events":         {},
+	"north.webhook.centrals":       {},
+	"north.webhook.parameter_glob": {},
+	"north.webhook.timeout_ms":     {},
+	"centrals":                     {},
 	// CCU-delegated login: the login chain (incl. the CCU auth provider)
 	// is wired once at boot, so any field in the block is restart-required.
 	// Mirrors config.RestartRequiredDiff's whole-block diff.
@@ -531,6 +540,9 @@ func validateSection(section configstore.Section, raw json.RawMessage) error {
 		return strictUnmarshal(raw, &v)
 	case configstore.SectionDiscovery:
 		var v config.NorthDiscovery
+		return strictUnmarshal(raw, &v)
+	case configstore.SectionWebhook:
+		var v config.NorthWebhook
 		return strictUnmarshal(raw, &v)
 	case configstore.SectionREST:
 		var v config.NorthREST

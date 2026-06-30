@@ -290,6 +290,8 @@ func applySection(sec Section, raw []byte, cfg *config.Config) error {
 		return json.Unmarshal(raw, &cfg.North.MCP)
 	case SectionDiscovery:
 		return json.Unmarshal(raw, &cfg.North.Discovery)
+	case SectionWebhook:
+		return json.Unmarshal(raw, &cfg.North.Webhook)
 	case SectionREST:
 		return json.Unmarshal(raw, &cfg.North.REST)
 	case SectionOIDC:
@@ -341,6 +343,9 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 		raw, err = json.Marshal(cfg.North.MCP)
 	case SectionDiscovery:
 		raw, err = json.Marshal(cfg.North.Discovery)
+	case SectionWebhook:
+		//nolint:gosec // G117: value is sealed by the section store transform before persistence (ADR 0027); see #20
+		raw, err = json.Marshal(cfg.North.Webhook)
 	case SectionREST:
 		raw, err = json.Marshal(cfg.North.REST)
 	case SectionOIDC:
