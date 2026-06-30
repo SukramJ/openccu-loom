@@ -157,6 +157,9 @@
   // Form fields
   let fName = $state("");
   let fHost = $state("");
+  // Discovery serial — carried through adoption so the central is matched by
+  // serial later, not by its (mutable) host. Empty for manual entries.
+  let fSerial = $state("");
   let fEnabled = $state(true);
   let fTls = $state(false);
   let fTlsInsecure = $state(false);
@@ -213,7 +216,10 @@
   function prefillFromDiscovered(ccu: DiscoveredCCU) {
     isEdit = false;
     fName = ccu.name;
-    fHost = ccu.host;
+    // Prefer the daemon's suggested address (localhost for a co-located CCU, a
+    // stable docker hostname for an HA add-on); fall back to the raw host.
+    fHost = ccu.suggested_host || ccu.host;
+    fSerial = ccu.serial;
     fEnabled = true;
     fTls = false;
     fTlsInsecure = false;
@@ -252,6 +258,7 @@
     isEdit = false;
     fName = "";
     fHost = "";
+    fSerial = "";
     fEnabled = true;
     fTls = false;
     fTlsInsecure = false;
@@ -271,6 +278,7 @@
     isEdit = true;
     fName = row.name;
     fHost = row.host;
+    fSerial = row.serial ?? "";
     fEnabled = row.enabled;
     fTls = row.tls ?? false;
     fTlsInsecure = row.tls_insecure_skip_verify ?? false;
@@ -329,6 +337,7 @@
     return {
       name: fName,
       host: fHost,
+      serial: fSerial || undefined,
       enabled: fEnabled,
       json_rpc_port: jsonRpcPort,
       tls: fTls || undefined,

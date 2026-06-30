@@ -44,13 +44,21 @@ type DiscoveryDeps struct {
 	Discoverer DiscoveredCentralLister
 	Ignore     DiscoveryIgnoreStore
 	Centrals   ConfiguredCentralLister
+	// SuggestHost maps a discovered CCU's raw host to the address an operator
+	// should configure (localhost for a co-located CCU, a stable docker
+	// hostname for an HA add-on). Nil → the raw host is suggested unchanged.
+	SuggestHost func(ctx context.Context, rawHost string) string
 }
 
 // discoveredCCU is the wire shape of one discovered central.
 type discoveredCCU struct {
-	Serial            string    `json:"serial"`
-	Name              string    `json:"name"`
-	Host              string    `json:"host"`
+	Serial string `json:"serial"`
+	Name   string `json:"name"`
+	Host   string `json:"host"`
+	// SuggestedHost is the address the SPA pre-fills on adoption — may differ
+	// from Host (localhost / a resolved docker hostname). Equals Host when no
+	// better suggestion applies.
+	SuggestedHost     string    `json:"suggested_host"`
 	Manufacturer      string    `json:"manufacturer,omitempty"`
 	Model             string    `json:"model,omitempty"`
 	LastSeen          time.Time `json:"last_seen"`
@@ -72,7 +80,7 @@ func ListDiscoveredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 				ignored = set
 			}
 		}
-		configuredHosts := configuredHostSet(r.Context(), d.Centrals)
+		serials, hosts := configuredSets(r.Context(), d.Centrals)
 		for _, c := range d.Discoverer.List() {
 			if _, skip := ignored[c.Serial]; skip {
 				continue
@@ -81,10 +89,11 @@ func ListDiscoveredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 				Serial:            c.Serial,
 				Name:              c.Name,
 				Host:              c.Host,
+				SuggestedHost:     d.suggestHost(r.Context(), c.Host),
 				Manufacturer:      c.Manufacturer,
 				Model:             c.Model,
 				LastSeen:          c.LastSeen,
-				AlreadyConfigured: hostConfigured(c.Host, configuredHosts),
+				AlreadyConfigured: isConfigured(c.Serial, c.Host, serials, hosts),
 			})
 		}
 		JSON(w, http.StatusOK, out)
@@ -169,27 +178,52 @@ func ListIgnoredCCUs(d *DiscoveryDeps) http.HandlerFunc {
 	}
 }
 
-// configuredHostSet returns the hosts of every configured central, lower-cased
-// for case-insensitive comparison. Empty on error / nil dependency.
-func configuredHostSet(ctx context.Context, centrals ConfiguredCentralLister) map[string]struct{} {
-	set := map[string]struct{}{}
+// suggestHost applies the deps' host suggester, falling back to the raw host
+// when none is wired (or it returns empty).
+func (d *DiscoveryDeps) suggestHost(ctx context.Context, rawHost string) string {
+	if d == nil || d.SuggestHost == nil {
+		return rawHost
+	}
+	if s := d.SuggestHost(ctx, rawHost); s != "" {
+		return s
+	}
+	return rawHost
+}
+
+// configuredSets returns the serials and hosts of every configured central.
+// Serials are the primary match key (stable across host changes); hosts are the
+// fallback for rows predating serial capture (YAML / manual / pre-migration).
+// Both are lower-cased for case-insensitive comparison. Empty on error / nil.
+func configuredSets(ctx context.Context, centrals ConfiguredCentralLister) (serials, hosts map[string]struct{}) {
+	serials, hosts = map[string]struct{}{}, map[string]struct{}{}
 	if centrals == nil {
-		return set
+		return serials, hosts
 	}
 	rows, err := centrals.List(ctx)
 	if err != nil {
-		return set
+		return serials, hosts
 	}
 	for i := range rows {
+		if s := strings.ToLower(strings.TrimSpace(rows[i].Serial)); s != "" {
+			serials[s] = struct{}{}
+		}
 		if h := strings.ToLower(strings.TrimSpace(rows[i].Host)); h != "" {
-			set[h] = struct{}{}
+			hosts[h] = struct{}{}
 		}
 	}
-	return set
+	return serials, hosts
 }
 
-func hostConfigured(host string, configured map[string]struct{}) bool {
-	_, ok := configured[strings.ToLower(strings.TrimSpace(host))]
+// isConfigured reports whether a discovered CCU is already configured. A serial
+// match is authoritative; the host match is a fallback so a CCU configured
+// before serials were captured still shows as configured.
+func isConfigured(serial, host string, serials, hosts map[string]struct{}) bool {
+	if s := strings.ToLower(strings.TrimSpace(serial)); s != "" {
+		if _, ok := serials[s]; ok {
+			return true
+		}
+	}
+	_, ok := hosts[strings.ToLower(strings.TrimSpace(host))]
 	return ok
 }
 

@@ -1,5 +1,16 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.21.0
+
+- **Found CCUs are recognised even after their address changes.** Discovery now
+  remembers a CCU by its hardware serial, so a CCU whose IP changed isn't shown
+  again as "new". CCUs added before this update keep working and are matched by
+  address until you re-add them.
+- **Adding a found CCU pre-fills a stable address.** If the CCU runs on the same
+  machine as OpenCCU-Loom it is filled in as `localhost`; if it runs as another
+  Home Assistant add-on, its add-on hostname is used instead of the changing
+  docker IP — so the connection keeps working across restarts.
+
 ## 0.20.1
 
 - **Opening the add-on no longer gets stuck on the setup wizard.** When you open

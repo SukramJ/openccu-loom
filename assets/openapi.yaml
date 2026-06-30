@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.8.0
+  version: 2.9.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -4106,11 +4106,19 @@ paths:
                 type: array
                 items:
                   type: object
-                  required: [serial, name, host, last_seen, already_configured]
+                  required: [serial, name, host, suggested_host, last_seen, already_configured]
                   properties:
                     serial: { type: string }
                     name: { type: string }
                     host: { type: string }
+                    suggested_host:
+                      type: string
+                      description: >-
+                        Address the SPA pre-fills on adoption. Differs from host
+                        when a stabler value applies — "localhost" for a CCU on
+                        the daemon's own host, or a reverse-resolved docker
+                        hostname for a co-located HA add-on. Equals host
+                        otherwise.
                     manufacturer: { type: string }
                     model: { type: string }
                     last_seen: { type: string, format: date-time }
@@ -6542,6 +6550,12 @@ components:
         host:
           type: string
           description: CCU hostname or IP address.
+        serial:
+          type: string
+          description: >-
+            CCU hardware serial, set when the central is adopted from SSDP/UPnP
+            discovery. Empty for YAML / manually-entered rows. Lets discovery
+            mark a CCU "already configured" by serial regardless of its host.
         port:
           type: integer
           minimum: 0

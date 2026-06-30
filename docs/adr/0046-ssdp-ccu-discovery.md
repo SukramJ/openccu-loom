@@ -76,3 +76,25 @@ let the operator **adopt** or **ignore** each find.
   also accepting classic eQ-3 / HomeMatic / RaspberryMatic centrals.
 - Multicast reachability varies by network topology (some container bridges
   drop it); the feature degrades to "no results", never to an error.
+
+## Update (0.21.0): serial-keyed "already configured" + suggested adoption host
+
+The first cut keyed the "already configured" flag and the adoption pre-fill on
+the discovered **host** (the device-description URL's IP). That IP is not
+stable — a DHCP lease or a rotating docker address makes a configured CCU look
+new, and pre-filling a docker IP yields a connection that breaks on the next
+add-on restart. Two refinements:
+
+- **Match by serial.** Adopting a CCU now persists its hardware serial (a
+  `serial` column on the centrals store, migration 024); the discovery list
+  flags "already configured" by serial, falling back to host only for rows that
+  predate serial capture (YAML / manual / pre-migration).
+- **Suggest a stable host.** A server-computed `suggested_host` per discovered
+  CCU (the SPA pre-fills it; the raw host is still shown):
+  1. the discovered IP is one of the daemon's own interface IPs → `localhost`;
+  2. supervised (HA add-on) **and** the IP is in the docker range
+     `172.16.0.0/12` → reverse-DNS the IP to its stable container hostname;
+  3. otherwise the raw host, unchanged.
+
+  LAN ranges (192.168/16, 10/8) are deliberately left untouched, so a normal
+  CCU keeps its address. The reverse lookup is best-effort: no PTR → raw host.
