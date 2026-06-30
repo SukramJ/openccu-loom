@@ -261,6 +261,13 @@ type DataPointSummary struct {
 	// renders the values verbatim without re-classifying client-side.
 	// See docs/ui/auto-tile-concept.md.
 	UIHint *hmui.Hint `json:"ui_hint,omitempty"`
+	// AdditionalInformation carries enriched model metadata (e.g. battery
+	// type / quantity / low-voltage limits for a battery-backed device)
+	// when the data point provides it. Absent for plain scalar DPs
+	// (elided via omitempty), so existing responses are unchanged. Mirrors
+	// the optional `additional_information` object on the per-DP MQTT state
+	// topic.
+	AdditionalInformation map[string]any `json:"additional_information,omitempty"`
 }
 
 // DataPointSummaryOps mirrors the OPERATIONS bitmask the CCU returns
@@ -906,6 +913,15 @@ func toDataPointSummary(dp device.ParameterDataPoint, labels ParameterLabeler, c
 			if age := time.Since(t); age >= 0 {
 				s.ValueAgeSeconds = int64(age / time.Second)
 			}
+		}
+	}
+	// Enriched model metadata (battery type/quantity/limits, …) via the
+	// optional-capability assertion — only DPs that override it (e.g. the
+	// calculated operating-voltage sensor) contribute; plain scalars leave
+	// the field absent. Mirrors the per-DP MQTT state's additional_information.
+	if ai, ok := dp.(interface{ AdditionalInformation() map[string]any }); ok {
+		if m := ai.AdditionalInformation(); len(m) > 0 {
+			s.AdditionalInformation = m
 		}
 	}
 	return s
