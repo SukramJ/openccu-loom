@@ -15,12 +15,12 @@ import (
 // ---------------------------------------------------------------------------
 
 // fakeService records Start/Stop calls into a shared log. It implements
-// Service and, when healthyResult is non-nil, also HealthReporter.
+// Service but NOT HealthReporter; fakeServiceWithHealth embeds it to add
+// the optional Healthy method.
 type fakeService struct {
-	name          string
-	log           *[]string
-	startErr      error
-	healthyResult *healthResult // nil means does not implement HealthReporter
+	name     string
+	log      *[]string
+	startErr error
 }
 
 type healthResult struct {
@@ -47,7 +47,7 @@ type fakeServiceWithHealth struct {
 	result healthResult
 }
 
-func (f *fakeServiceWithHealth) Healthy() (bool, string) {
+func (f *fakeServiceWithHealth) Healthy() (ok bool, detail string) {
 	return f.result.ok, f.result.detail
 }
 
