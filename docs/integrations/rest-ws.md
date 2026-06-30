@@ -7,13 +7,13 @@ OpenCCU-Loom exposes a versioned REST API and a single multiplexed WebSocket str
 
 ## Base URL and transport
 
-The REST API and the WebSocket endpoint share one HTTP listener. By default it binds `:8080`, so the base URL is:
+The REST API and the WebSocket endpoint share one HTTP listener. By default it binds `:8119`, so the base URL is:
 
 ```
-http://<host>:8080/api/v1
+http://<host>:8119/api/v1
 ```
 
-The bind address is the `north.rest.listen` field in the config (default `":8080"`); see [Configuration](../admin/configuration.md). All REST paths below are relative to `/api/v1`.
+The bind address is the `north.rest.listen` field in the config (default `":8119"`); see [Configuration](../admin/configuration.md). All REST paths below are relative to `/api/v1`.
 
 ## Source of truth
 
@@ -72,7 +72,7 @@ The table groups the major endpoint families. Sample paths are illustrative; the
 Connect a WebSocket to:
 
 ```
-ws://<host>:8080/api/v1/events
+ws://<host>:8119/api/v1/events
 ```
 
 This is one multiplexed channel. The same connection carries command replies and topic broadcasts. The schema in [`assets/wsapi.json`](https://github.com/SukramJ/openccu-loom/blob/main/assets/wsapi.json) defines 98 command and broadcast entries.
@@ -104,7 +104,7 @@ The replay buffer holds up to ~1024 events. The daemon also sends `{"op":"ping"}
 ### Example
 
 ```javascript
-const ws = new WebSocket("ws://localhost:8080/api/v1/events");
+const ws = new WebSocket("ws://localhost:8119/api/v1/events");
 
 ws.onopen = () => {
   ws.send(JSON.stringify({ op: "subscribe", topics: ["devices/#"], since: lastSeq }));

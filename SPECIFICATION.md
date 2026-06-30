@@ -67,7 +67,7 @@ interfaces:
   OIDC, and the first-run onboarding wizard (since 0.19.0, ADR 0045).
   A minimal server-rendered surface (`/health`, `/about`) remains only
   as a no-JS SPA-down diagnostic anchor. Everything is served on one
-  listener (`:8080`, since 0.14.0); the SPA probes
+  listener (`:8119`, since 0.14.0); the SPA probes
   `GET /api/v1/setup/status` on boot and renders the onboarding wizard
   itself, finalizing through an atomic `POST /api/v1/setup`. Onboarding
   works through a single port and through HA Ingress. See

@@ -4,6 +4,22 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.3]
+
+### Changed
+
+- **Default REST / Config-UI port is now `8119` (was `8080`) in all environments.**
+  8080 is a busy, commonly-claimed port; the daemon now defaults
+  `north.rest.listen` to `:8119` everywhere (binary, Docker, both add-ons).
+  Override with `north.rest.listen` / `OPENCCU_LOOM_REST_LISTEN` as before.
+- **HA add-on: all three ports are now operator-configurable options.**
+  `rest_port` (8119), `xmlrpc_callback_port` (8120) and `binrpc_callback_port`
+  (8129) are add-on options (passed through to the daemon's env overrides in
+  `run.sh`), instead of a `ports:` mapping block that did nothing under
+  `host_network: true`. The inert `ports:`/`ports_description:` block was
+  removed. `ingress_port` stays static at 8119 and must equal `rest_port` for
+  the Ingress panel — change `rest_port` only for direct-access setups.
+
 ## [0.21.2]
 
 ### Fixed

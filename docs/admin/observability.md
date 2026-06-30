@@ -38,7 +38,7 @@ scrape_configs:
       type: Bearer
       credentials: "<api-token>"
     static_configs:
-      - targets: ["loom.example:8080"]   # north.rest.listen, default :8080
+      - targets: ["loom.example:8119"]   # north.rest.listen, default :8119
 ```
 
 Basic auth works too, via Prometheus's `basic_auth` block, if you prefer
@@ -78,7 +78,7 @@ Each component reports one of four statuses:
 
 ### UI health page
 
-The bootstrap surface on the REST port (default `:8080`) serves a
+The bootstrap surface on the REST port (default `:8119`) serves a
 server-rendered `/health` page (with `/` redirecting to it). It is the
 SPA-down fallback for diagnosing the daemon when the JavaScript bundle
 will not load; `/about` on the same port shows the version and license.

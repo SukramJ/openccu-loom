@@ -187,7 +187,7 @@ body:
 
         - **Config UI:** the **Diagnostics** page → **"Download diagnostics"** button (anonymises operator-identifying fields by default).
 
-        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics" -o diagnostics.json`
+        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8119/api/v1/diagnostics" -o diagnostics.json`
           (raw, un-anonymised: append `?anonymize=0`). The dump bundles health, interfaces, incidents and log-level overrides.
 
   - type: textarea
@@ -204,13 +204,13 @@ body:
         **How to obtain the log:**
 
         - **Enable DEBUG:** Config UI → **Logs** (`#/logs`) → level dropdown to `debug`
-          (or REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8080/api/v1/diagnostics/log-level`).
+          (or REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8119/api/v1/diagnostics/log-level`).
 
         - **Record a window (recommended):** Config UI → **Diagnostics & Recording** → start "New recording: Debug log",
           reproduce, stop → download the archive (`.gz`).
 
         - **Export the last lines:** Config UI → **Logs** → "download last N", or
-          `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
+          `curl -u <user>:<pass> "http://<host>:8119/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
 
   - type: textarea
     id: rpc_recording

@@ -82,7 +82,7 @@ During the restart:
 After the restart both CCUs should appear in the health aggregation:
 
 ```sh
-curl -s http://localhost:8080/api/v1/health | jq '.components[] | select(.name | contains("central"))'
+curl -s http://localhost:8119/api/v1/health | jq '.components[] | select(.name | contains("central"))'
 ```
 
 Expected output (status `healthy`):
@@ -205,7 +205,7 @@ same listener; each CCU learns the new port at its first reconnect.
 ### 4.1 Health endpoint
 
 ```sh
-curl -s http://localhost:8080/api/v1/health | jq .
+curl -s http://localhost:8119/api/v1/health | jq .
 ```
 
 Each central exposes a `central:<name>` component with sub-components
@@ -253,13 +253,13 @@ histogram_quantile(0.95,
 Per-central device list:
 
 ```sh
-curl -s http://localhost:8080/api/v1/centrals/ccu-haus/devices | jq '.devices | length'
+curl -s http://localhost:8119/api/v1/centrals/ccu-haus/devices | jq '.devices | length'
 ```
 
 Per-central audit log:
 
 ```sh
-curl -s 'http://localhost:8080/api/v1/audit?central=ccu-haus&since=1h' | jq .
+curl -s 'http://localhost:8119/api/v1/audit?central=ccu-haus&since=1h' | jq .
 ```
 
 In single-central mode the unscoped path `/api/v1/devices` is enough —
@@ -267,7 +267,7 @@ the router redirects automatically.
 
 ### 4.5 WebSocket events
 
-WebSocket subscription `wss://<host>:8080/api/v1/ws` carries events
+WebSocket subscription `wss://<host>:8119/api/v1/ws` carries events
 from every central. Filter client-side on `event.central_name`:
 
 ```js
@@ -301,7 +301,7 @@ State per daemon lives under `data_dir`:
 Backups are per-central:
 
 ```sh
-curl -s -u admin:secret http://localhost:8080/api/v1/centrals/ccu-haus/backups
+curl -s -u admin:secret http://localhost:8119/api/v1/centrals/ccu-haus/backups
 ```
 
 Backup restore is also per-central — restoring a single CCU does not

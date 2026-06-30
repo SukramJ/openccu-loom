@@ -34,7 +34,7 @@ A fresh daemon with no users defined cannot be administered until you
 create the first account. The bootstrap UI exposes a single-shot setup
 flow:
 
-1. Browse to `:8080` and open `/setup`.
+1. Browse to `:8119` and open `/setup`.
 2. Submit a username, password, and password confirmation.
 3. The account is created with the **`admin`** role and you are
    redirected to `/login`.

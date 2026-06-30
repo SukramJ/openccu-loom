@@ -11,7 +11,7 @@ OpenCCU-Loom. The release pipeline assembles it into
 2. On the CCU web UI: **Settings → Control panel → Additional software**,
    choose the tarball, and install. CCU3 / RaspberryMatic reboot to
    finalise the add-on registration.
-3. Open the **OpenCCU-Loom** entry (or `http://<ccu>:8080/app/`) and
+3. Open the **OpenCCU-Loom** entry (or `http://<ccu>:8119/app/`) and
    complete the first-run setup. Everything — centrals, MQTT, auth — is
    configured through the UI; add a central pointing at `127.0.0.1` to
    bridge the local CCU.
@@ -39,7 +39,7 @@ installed to `/usr/local/addons/openccu-loom/` per `uname -m`.
 
 ## Ports & data
 
-- `:8080` REST API + Config UI (SPA) + bootstrap surface (login, `/setup`, `/health`, `/about`)
+- `:8119` REST API + Config UI (SPA) + bootstrap surface (login, `/setup`, `/health`, `/about`)
 - `:8120` XML-RPC callback · `:8129` BIN-RPC callback
 - Persistent state (SQLite DB + filesystem): `/usr/local/addons/openccu-loom/var`
 
@@ -57,10 +57,10 @@ no events, "central heartbeat degraded").
 
 The add-on's **Settings** page (the "OpenCCU-Loom" entry on *Additional
 software*) has an **Open Config UI** button. By default it links the
-browser straight at the daemon on `http://<same-host>:8080/app/` — correct
+browser straight at the daemon on `http://<same-host>:8119/app/` — correct
 when you reach the CCU directly on the LAN, but unreachable from behind a
 reverse proxy (Traefik, nginx, …) that terminates TLS and only routes
-`:443`, not `:8080`.
+`:443`, not `:8119`.
 
 For a proxied deployment, give the daemon its externally-reachable base URL
 via **`north.rest.public_url`** (Settings tab in the SPA, or YAML):
@@ -95,7 +95,7 @@ http:
     loom:
       loadBalancer:
         servers:
-          - url: "http://<ccu-lan-ip>:8080"
+          - url: "http://<ccu-lan-ip>:8119"
 ```
 
 The SPA is then reachable at `https://loom.example.de/app/`, and the

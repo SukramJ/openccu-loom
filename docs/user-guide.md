@@ -19,7 +19,7 @@ their own pages — linked below.
 
 ```sh
 docker run -d \
-  -p 8080:8080 -p 8120:8120 -p 8129:8129 \
+  -p 8119:8119 -p 8120:8120 -p 8129:8129 \
   -v $(pwd)/config.yaml:/app/config.yaml:ro \
   -v openccu-loom-data:/app/var \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
@@ -49,13 +49,13 @@ Other subcommands: `openccu-loom version`, `openccu-loom backup`,
 
 | Port | Purpose | Direction |
 | --- | --- | --- |
-| `8080` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route | inbound from clients and browsers |
+| `8119` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route | inbound from clients and browsers |
 | `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) | inbound from the CCU |
 | `8129` | BIN-RPC push callback server (CUxD) | inbound from the CCU |
 | `5540` | Matter bridge (UDP; **off by default**) | inbound from controllers |
 
 Since 0.14.0 the REST API, Svelte SPA, and HTMX bootstrap surface (login,
-`/setup`, OIDC callback, `/health`, `/about`) all share port `8080`. The
+`/setup`, OIDC callback, `/health`, `/about`) all share port `8119`. The
 separate `:8081` listener has been removed, along with the `north.ui.listen`
 config key — there is no separate UI bind address.
 
@@ -87,7 +87,7 @@ callback:
 
 north:
   rest:
-    listen: ":8080"
+    listen: ":8119"
 
 centrals:
   - name: ccu-01
@@ -121,13 +121,13 @@ key, see:
 ## First-run setup
 
 1. Start the daemon with the bootstrap config (no users yet).
-2. Open `http://localhost:8080/` — the SPA redirects automatically to
+2. Open `http://localhost:8119/` — the SPA redirects automatically to
    `/setup` when no admin user exists. Create the first admin account.
 3. Sign in at `/login`. OIDC is supported when configured (see
    [Authentication](admin/auth.md)).
 
 **HA add-on users**: the Ingress panel in the HA sidebar opens the same
-`http://…:8080/` entrypoint. On a fresh install the redirect to `/setup`
+`http://…:8119/` entrypoint. On a fresh install the redirect to `/setup`
 works through Ingress — no SSH access is required. After the first admin
 is created, the SPA loads normally through the panel.
 
@@ -144,13 +144,13 @@ for the full security model.
 
 ```sh
 # Health check
-curl http://localhost:8080/api/v1/health
+curl http://localhost:8119/api/v1/health
 
 # List devices (Basic)
-curl -u alice:change-me http://localhost:8080/api/v1/devices
+curl -u alice:change-me http://localhost:8119/api/v1/devices
 
 # Subscribe to events via WebSocket
-websocat ws://localhost:8080/api/v1/events
+websocat ws://localhost:8119/api/v1/events
 > {"op":"subscribe","topics":["device.*"]}
 
 # Set a value
@@ -158,7 +158,7 @@ curl -X PUT \
   -u alice:change-me \
   -H 'Content-Type: application/json' \
   -d '{"value": true, "priority": "high"}' \
-  http://localhost:8080/api/v1/devices/0001ABCD/channels/1/data_points/STATE/value
+  http://localhost:8119/api/v1/devices/0001ABCD/channels/1/data_points/STATE/value
 ```
 
 ## MQTT topic layout

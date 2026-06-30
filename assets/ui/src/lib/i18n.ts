@@ -541,7 +541,7 @@ const EN: Catalog = {
   "config.help.north.discovery.ssdp.enabled": "Periodically scan the LAN for Homematic / OpenCCU central units via SSDP/UPnP so they can be adopted with one click. Read-only — no data about the daemon leaves the LAN.",
   "config.help.north.discovery.ssdp.interval": "How often the discovery scan re-runs (e.g. 60s). Empty falls back to 60 seconds.",
   "config.help.north.rest.enabled": "Master switch for the REST + WebSocket server. Disabling it leaves the daemon with no operator-facing surface.",
-  "config.help.north.rest.listen": "Bind address for REST + WebSocket. :8080 listens on every interface; tighten with a host: prefix when needed.",
+  "config.help.north.rest.listen": "Bind address for REST + WebSocket. :8119 listens on every interface; tighten with a host: prefix when needed.",
   "config.help.north.rest.public_url":
     "Externally-reachable base URL of this daemon (scheme + host [+ port]), e.g. https://loom.example.com. Used to build absolute links such as the OIDC redirect URL and to derive secure-cookie behaviour. Leave empty to infer it per request — set it when running behind a reverse proxy or under a custom domain.",
   "config.help.north.rest.tls_cert_file":
@@ -2392,7 +2392,7 @@ const DE: Catalog = {
   "config.help.north.discovery.ssdp.enabled": "Das LAN regelmäßig per SSDP/UPnP nach Homematic-/OpenCCU-Zentralen durchsuchen, damit sie mit einem Klick übernommen werden können. Nur lesend — es verlassen keine Daemon-Daten das LAN.",
   "config.help.north.discovery.ssdp.interval": "Wie oft die Suche wiederholt wird (z. B. 60s). Leer = 60 Sekunden.",
   "config.help.north.rest.enabled": "Hauptschalter des REST-/WebSocket-Servers. Aus = Daemon hat keine Operator-Oberfläche.",
-  "config.help.north.rest.listen": "Bind-Adresse von REST + WebSocket. :8080 lauscht auf allen Interfaces; mit host:-Präfix einschränken.",
+  "config.help.north.rest.listen": "Bind-Adresse von REST + WebSocket. :8119 lauscht auf allen Interfaces; mit host:-Präfix einschränken.",
   "config.help.north.rest.public_url":
     "Von außen erreichbare Basis-URL dieses Daemons (Schema + Host [+ Port]), z. B. https://loom.example.com. Dient zum Bilden absoluter Links wie der OIDC-Redirect-URL und zur Ableitung des Secure-Cookie-Verhaltens. Leer lassen, um sie pro Anfrage abzuleiten — setzen, wenn hinter einem Reverse Proxy oder unter eigener Domain.",
   "config.help.north.rest.tls_cert_file":

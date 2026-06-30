@@ -37,7 +37,7 @@ Prefer YAML? Set it in your config (`config.yaml`):
 ```yaml
 north:
   rest:
-    listen: ":8080"        # the MCP route is mounted on the REST listener
+    listen: ":8119"        # the MCP route is mounted on the REST listener
   mcp:
     enabled: true          # master switch — false = no MCP route at all
     allow_writes: false    # keep read-only for now (see §4)
@@ -45,7 +45,7 @@ north:
 ```
 
 Defaults: `enabled: false`, `allow_writes: false`, `path: /mcp`. The
-REST listener defaults to `:8080`.
+REST listener defaults to `:8119`.
 
 Restart the daemon. On startup you'll see:
 
@@ -56,7 +56,7 @@ INFO north.mcp.enabled path=/mcp allow_writes=false
 The MCP endpoint is now served at:
 
 ```
-http://<host>:8080/mcp
+http://<host>:8119/mcp
 ```
 
 > **Note:** MCP does **not** get its own listener or port. It is mounted
@@ -95,7 +95,7 @@ can reason about what's available before connecting:
 | `mcp.write.v1` | Write tools are also enabled (`allow_writes: true`) |
 
 ```sh
-curl -s -H "Authorization: Bearer $TOKEN" http://host:8080/info \
+curl -s -H "Authorization: Bearer $TOKEN" http://host:8119/info \
   | jq '.capabilities'
 # [..., "mcp.v1", "mcp.write.v1"]
 ```
@@ -170,7 +170,7 @@ Notes:
 Add the server with the HTTP transport and a bearer token:
 
 ```sh
-claude mcp add --transport http openccu-loom http://host:8080/mcp \
+claude mcp add --transport http openccu-loom http://host:8119/mcp \
   --header "Authorization: Bearer $TOKEN"
 ```
 
@@ -181,7 +181,7 @@ project's `.mcp.json`:
 
 ```sh
 claude mcp add --scope user --transport http openccu-loom \
-  http://host:8080/mcp --header "Authorization: Bearer $TOKEN"
+  http://host:8119/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
 > Avoid `--scope project` if the header carries a real token — a
@@ -203,7 +203,7 @@ endpoint with `mcp-remote`:
       "command": "npx",
       "args": [
         "-y", "mcp-remote",
-        "http://host:8080/mcp",
+        "http://host:8119/mcp",
         "--header", "Authorization: Bearer ${OCCU_TOKEN}"
       ],
       "env": { "OCCU_TOKEN": "<your-api-token>" }
@@ -218,7 +218,7 @@ Initialize a session against the endpoint to confirm reachability and
 auth:
 
 ```sh
-curl -s http://host:8080/mcp \
+curl -s http://host:8119/mcp \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \

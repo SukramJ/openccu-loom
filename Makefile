@@ -130,7 +130,7 @@ ui-install: ## install Svelte SPA dependencies (needs npm)
 	cd $(UI_DIR) && npm install
 
 .PHONY: ui-dev
-ui-dev: ## run the Vite dev server (proxies /api to :8080)
+ui-dev: ## run the Vite dev server (proxies /api to :8119)
 	cd $(UI_DIR) && npm run dev
 
 .PHONY: ui-build

@@ -19,10 +19,10 @@ PIDFILE=/var/run/${ADDON_ID}.pid
 
 # Runtime configuration. The daemon is otherwise UI-configured — these
 # only pin the bootstrap tier (data dir, bind ports). Edit here to move a
-# port that clashes with another add-on. UI is the SPA + REST on :8080,
+# port that clashes with another add-on. UI is the SPA + REST on :8119,
 # the pre-auth bootstrap surface on :8081; CCU callbacks on :8120/:8129.
 export OPENCCU_LOOM_DATA_DIR=${ADDON_DIR}/var
-export OPENCCU_LOOM_REST_LISTEN=:8080
+export OPENCCU_LOOM_REST_LISTEN=:8119
 export OPENCCU_LOOM_UI_LISTEN=:8081
 export OPENCCU_LOOM_LOG_FORMAT=text
 # Note: the callback host is resolved per-central by the daemon (egress

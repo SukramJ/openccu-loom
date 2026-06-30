@@ -14,7 +14,7 @@ generated `openccu_loom_types` Pydantic models when available.
 Usage:
 
     python3 script/openccu_loom_client_snapshot.py \\
-        --base-url http://127.0.0.1:8080 \\
+        --base-url http://127.0.0.1:8119 \\
         --token "$OPENCCU_LOOM_TOKEN" \\
         --out tests/integration/testdata/model_snapshot_py_client.json
 
@@ -79,8 +79,8 @@ def try_pydantic_validate(envelope: dict) -> str | None:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--base-url", default="http://127.0.0.1:8080",
-                   help="Daemon REST base URL (default: http://127.0.0.1:8080).")
+    p.add_argument("--base-url", default="http://127.0.0.1:8119",
+                   help="Daemon REST base URL (default: http://127.0.0.1:8119).")
     p.add_argument("--token", default=None,
                    help="Bearer token (or set OPENCCU_LOOM_TOKEN env var).")
     p.add_argument("--out", required=True, type=Path,

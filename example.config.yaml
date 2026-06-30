@@ -82,14 +82,14 @@ logging:
 # intentionally run a daemon without the matching surface.
 north:
   rest:
-    listen: ":8080"
+    listen: ":8119"
     # public_url: "https://loom.example.de"
     #                       # Externally-reachable base URL of this REST + Config-UI
     #                       # surface. Set it when behind a reverse proxy (Traefik,
     #                       # nginx, …) that terminates TLS and routes a hostname to
     #                       # the REST listener: the CCU add-on's "Open Config UI"
     #                       # button then links at <public_url>/app/ instead of the
-    #                       # direct host:8080 heuristic (unreachable from the public
+    #                       # direct host:8119 heuristic (unreachable from the public
     #                       # side). No path suffix; omit for a LAN-direct install.
     # csrf_enabled: true    # double-submit cookie/header guard for mutating
     #                       # endpoints. Default: true. Set to false only for
@@ -174,7 +174,7 @@ env_file: .env
 # Settings tab.
 #
 # Leave the lists empty if you want to bootstrap a fresh install
-# entirely through the /setup wizard at http://<host>:8080/setup.
+# entirely through the /setup wizard at http://<host>:8119/setup.
 
 centrals: []
 #  - name: Home
@@ -196,11 +196,11 @@ centrals: []
 # ---------------------------------------------------------------------
 #
 # * Live configuration (current effective values + source attribution):
-#   curl --user admin:change-me http://localhost:8080/api/v1/config/effective
+#   curl --user admin:change-me http://localhost:8119/api/v1/config/effective
 #
 # * Field schema (every available knob + classification basic /
 #   expert / secret):
-#   curl http://localhost:8080/api/v1/config/schema
+#   curl http://localhost:8119/api/v1/config/schema
 #
 # * Export a snapshot of the live configuration as JSON:
 #   openccu-loom config export --out my-config.json

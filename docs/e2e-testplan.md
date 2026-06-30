@@ -54,12 +54,12 @@ E2E proves **the door works**, not how the lock looks inside.
 
 | # | Interface | Endpoint | Driver in E2E | Schema source |
 |---|---|---|---|---|
-| 1 | REST API (~80 ops) | `:8080/api/...` | `net/http` + OpenAPI walker | `assets/openapi.yaml` |
-| 2 | WebSocket (85 cmds) | `:8080/api/ws` | `coder/websocket` + WSAPI walker | `assets/wsapi.json` |
+| 1 | REST API (~80 ops) | `:8119/api/...` | `net/http` + OpenAPI walker | `assets/openapi.yaml` |
+| 2 | WebSocket (85 cmds) | `:8119/api/ws` | `coder/websocket` + WSAPI walker | `assets/wsapi.json` |
 | 3 | MQTT (HA Discovery + raw) | `tcp://broker:1883` | `paho.mqtt.golang` | `docs/mqtt-topic-schema.md` |
-| 4 | Config UI (Svelte SPA) | `:8080/` | `net/http` static smoke | `internal/north/ui/spa_dist/` |
-| 5 | HTMX bootstrap | `:8080/login`, `:8080/setup`, `:8080/health`, `:8080/about` | `net/http` form roundtrip | templates |
-| 6 | Prometheus | `:8080/metrics` | `expfmt.TextParser` | `pkg/hmlog`, `internal/metrics` |
+| 4 | Config UI (Svelte SPA) | `:8119/` | `net/http` static smoke | `internal/north/ui/spa_dist/` |
+| 5 | HTMX bootstrap | `:8119/login`, `:8119/setup`, `:8119/health`, `:8119/about` | `net/http` form roundtrip | templates |
+| 6 | Prometheus | `:8119/metrics` | `expfmt.TextParser` | `pkg/hmlog`, `internal/metrics` |
 | 7 | Auth — Basic | `Authorization: Basic` | `net/http` | `assets/openapi.yaml` |
 | 8 | Auth — Session | cookies | `net/http.CookieJar` | login flow |
 | 9 | Auth — API Token | `Authorization: Bearer` | `net/http` | `auth.tokens` config |
@@ -550,7 +550,7 @@ Seven HTTP-only tests cover both browser-facing surfaces:
   `Cache-Control: public, max-age=31536000, immutable` (the
   hash-rotates-on-build cache strategy).
 
-**HTMX bootstrap (REST listener, `:8080`)**:
+**HTMX bootstrap (REST listener, `:8119`)**:
 
 - `TestUIHTMXRootRedirectsToHealth` — `GET /` → 303 to `/health`,
   the canonical landing page.

@@ -54,7 +54,7 @@ COPY --from=builder /src/assets/openapi.yaml /app/assets/openapi.yaml
 USER nonroot:nonroot
 
 # REST API + Config UI (SPA)
-EXPOSE 8080/tcp
+EXPOSE 8119/tcp
 # first-run /setup + bootstrap HTMX (pre-auth)
 EXPOSE 8081/tcp
 # XML-RPC callback (CCU -> daemon)

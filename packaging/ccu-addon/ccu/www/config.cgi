@@ -4,7 +4,7 @@
 # small branded landing card (OpenCCU-Loom logo + a button into the Config
 # UI), mirroring how ccu-jack presents its own logo on its settings page.
 # The daemon is configured entirely through the Config UI (the SPA on the
-# REST listener, port 8080); first run lands on the login / setup wizard.
+# REST listener, port 8119); first run lands on the login / setup wizard.
 #
 # Implementation note: tclsh `puts {...}` treats `{` / `}` literally, so the
 # markup uses inline `style="..."` attributes only — no `<style>{ }` block —
@@ -14,7 +14,7 @@
 # writes north.rest.public_url (with the /app/ SPA path appended) to
 # <data_dir>/public_url whenever it is set; the path mirrors the rc.d default
 # OPENCCU_LOOM_DATA_DIR=${ADDON_DIR}/var. Absent / empty means "fall back to
-# the direct host:8080 heuristic", which is correct for a LAN install hitting
+# the direct host:8119 heuristic", which is correct for a LAN install hitting
 # the CCU directly but unreachable from behind a reverse proxy.
 set cfg_url ""
 set hint /usr/local/addons/openccu-loom/var/public_url
@@ -56,7 +56,7 @@ puts {<!doctype html>
 
 # Open-UI button. With a configured external URL, link at it directly via a
 # server-side href (no client heuristic). Without one, fall back to the
-# direct host:8080 heuristic resolved in the browser — right for a LAN
+# direct host:8119 heuristic resolved in the browser — right for a LAN
 # install reaching the CCU itself. cfg_url is HTML-escaped for the href.
 set astyle "display:inline-block;padding:11px 22px;background:#0F766E;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;border-radius:10px;"
 if {$cfg_url ne ""} {
@@ -71,12 +71,12 @@ puts {      Open Config UI
 if {$cfg_url ne ""} {
   puts {      Opens the OpenCCU-Loom Config UI.}
 } else {
-  puts {      The Config UI is served on port 8080.}
+  puts {      The Config UI is served on port 8119.}
 }
 puts {    </p>
   </div>}
 if {$cfg_url eq ""} {
-  puts {  <script>document.getElementById('cfg').href='http://'+window.location.hostname+':8080/app/'</script>}
+  puts {  <script>document.getElementById('cfg').href='http://'+window.location.hostname+':8119/app/'</script>}
 }
 puts {</body>
 </html>}

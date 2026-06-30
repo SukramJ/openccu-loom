@@ -79,7 +79,7 @@ centrals:
 
 north:
   rest:
-    listen: ":8080"
+    listen: ":8119"
 ```
 
 For the complete annotated set of every key, see
@@ -231,7 +231,7 @@ for the SPA.
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
 | `north.rest.enabled` | bool | `true` | — | no |
-| `north.rest.listen` | string | `:8080` | `OPENCCU_LOOM_REST_LISTEN` | no |
+| `north.rest.listen` | string | `:8119` | `OPENCCU_LOOM_REST_LISTEN` | no |
 | `north.rest.cors` | list | — | — | no |
 | `north.rest.csrf_enabled` | bool | `true` | — | no |
 | `north.rest.csrf_secure` | bool | `false` | — | no |
@@ -265,7 +265,7 @@ detail on the auth admin page (`docs/admin/auth.md`).
 
 The HTMX bootstrap surface (login, first-run `/setup` wizard,
 server-rendered `/health` and `/about`). The Svelte SPA and the
-bootstrap surface are both served on the REST listener (`:8080`
+bootstrap surface are both served on the REST listener (`:8119`
 by default) since 0.14.0 — there is no separate UI listener.
 
 `north.ui.listen` has been **removed** — the bootstrap UI shares the REST

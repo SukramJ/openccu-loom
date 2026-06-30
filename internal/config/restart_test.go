@@ -14,7 +14,7 @@ import (
 func baseConfig() *Config {
 	c := Default()
 	c.DataDir = "/var/lib/loom"
-	c.North.REST.Listen = ":8080"
+	c.North.REST.Listen = ":8119"
 	c.Callback.Host = "192.0.2.1"
 	c.Callback.Port = 8120
 	c.Callback.BinPort = 8129

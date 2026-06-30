@@ -15,7 +15,7 @@ full operator walkthrough see the [User Guide](user-guide.md).
 
     ```sh
     docker run -d \
-      -p 8080:8080 -p 8120:8120 -p 8129:8129 \
+      -p 8119:8119 -p 8120:8120 -p 8129:8129 \
       -v $(pwd)/config.yaml:/app/config.yaml:ro \
       -v openccu-loom-data:/app/var \
       ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
@@ -36,7 +36,7 @@ existing wins): `$OPENCCU_LOOM_CONFIG`, `./config.yaml`,
 
 | Port | Purpose |
 | --- | --- |
-| `8080` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route |
+| `8119` | REST + WebSocket API, Config UI (Svelte SPA + HTMX bootstrap), MCP route |
 | `8120` | XML-RPC push callback server (HmIP-RF, BidCos, …) |
 | `8129` | BIN-RPC push callback server (CUxD) |
 
@@ -46,7 +46,7 @@ daemon; they must be reachable **from** the CCU.
 ## First-run setup
 
 1. Start the daemon with no user pre-configured.
-2. Open `http://localhost:8080/setup` and create the first admin
+2. Open `http://localhost:8119/setup` and create the first admin
    account.
 3. Sign in at `/login`. OIDC is supported when configured.
 
