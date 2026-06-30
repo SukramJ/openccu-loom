@@ -2665,6 +2665,6 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 }
 
 // splitListenPort returns the TCP port from a Go net.Listen-style
-// address (":8080", "0.0.0.0:8080", "[::]:8080"). Reports ok=false
+// address (":8119", "0.0.0.0:8119", "[::]:8119"). Reports ok=false
 // for addresses without a numeric port (e.g. Unix sockets, malformed
 // strings) so the caller can degrade gracefully.

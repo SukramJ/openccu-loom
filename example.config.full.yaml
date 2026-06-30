@@ -51,9 +51,9 @@
 #   hmcli config validate config.full.yaml
 #
 # Retrieve effective configuration (after DB overlay):
-#   curl --user admin http://localhost:8080/api/v1/config/effective   # curl prompts for the password
+#   curl --user admin http://localhost:8119/api/v1/config/effective   # curl prompts for the password
 # Schema of all fields:
-#   curl http://localhost:8080/api/v1/config/schema
+#   curl http://localhost:8119/api/v1/config/schema
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -111,8 +111,8 @@ bootstrap:
 
 north:
   rest:
-    # Bind address of the REST+WebSocket server.  [default: :8080]
-    listen: ":8080"
+    # Bind address of the REST+WebSocket server.  [default: :8119]
+    listen: ":8119"
 
     # Master switch. false = no REST server (no operator surface).
     # Pointer-bool: nil → true.  [default: true]
@@ -191,7 +191,7 @@ north:
         # secret — encrypted at rest; prefer providing it via an env var (see example.env)
         client_secret: ""
         # Redirect URL after a successful OIDC login.
-        redirect_url: "http://localhost:8080/login/oidc/callback"
+        redirect_url: "http://localhost:8119/login/oidc/callback"
         # Name of the claim in the ID token that carries the user's role.
         # Empty = no role mapping via OIDC.
         role_claim: "groups"
@@ -200,7 +200,7 @@ north:
   # =============================================================================
   # NORTH — Bootstrap UI (HTMX, login, setup wizard, /health, /about)
   # DB section: north.ui
-  # Served on the REST listener (:8080) — no separate bind address.
+  # Served on the REST listener (:8119) — no separate bind address.
   # =============================================================================
 
   ui:

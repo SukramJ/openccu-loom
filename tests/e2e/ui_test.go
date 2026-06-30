@@ -22,7 +22,7 @@ import (
 //     assets, immutable caching, client-routing fallback).
 //
 //   - HTMX bootstrap (login / setup / health / about / OIDC start +
-//     callback) folded onto the REST listener (`:8080`, ADR 0044).
+//     callback) folded onto the REST listener (`:8119`, ADR 0044).
 //     Pre-auth flows plus a SPA-down diagnosis page. Tests assert each
 //     page returns well-formed HTML with the expected anchors.
 //

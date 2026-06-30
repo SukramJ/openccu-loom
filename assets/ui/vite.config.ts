@@ -48,11 +48,11 @@ export default defineConfig(({ command }) => ({
     port: 5173,
     strictPort: true,
     // REST + WS proxied to the daemon so `npm run dev` works without
-    // CORS gymnastics. Start the daemon on :8080 before dev:
+    // CORS gymnastics. Start the daemon on :8119 before dev:
     //   ./bin/openccu-loom run --config config.yaml
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8119',
         changeOrigin: true,
         ws: true,
       },

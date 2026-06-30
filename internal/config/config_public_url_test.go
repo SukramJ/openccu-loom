@@ -20,7 +20,7 @@ func TestConfigUIURL(t *testing.T) {
 		{"https://loom.example.de", "https://loom.example.de/app/"},
 		{"https://loom.example.de/", "https://loom.example.de/app/"},
 		{"https://loom.example.de///", "https://loom.example.de/app/"},
-		{"http://ccu.local:8080", "http://ccu.local:8080/app/"},
+		{"http://ccu.local:8119", "http://ccu.local:8119/app/"},
 	}
 
 	for _, tc := range cases {
@@ -46,7 +46,7 @@ func TestValidatePublicURL(t *testing.T) {
 	}{
 		{"", false},
 		{"https://loom.example.de", false},
-		{"http://ccu.local:8080", false},
+		{"http://ccu.local:8119", false},
 		{"ftp://loom.example.de", true},
 		{"loom.example.de", true},
 		{"https://", true},

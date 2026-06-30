@@ -157,7 +157,7 @@ type uiMountDeps struct {
 
 // buildBootstrapRouter builds the server-rendered diagnostic surface
 // (/health, /about). Since ADR 0044 it is folded onto the REST listener
-// (:8080) instead of a stand-alone :8081 server, so it works through one port /
+// (:8119) instead of a stand-alone :8081 server, so it works through one port /
 // HA Ingress. Login, logout, OIDC, and first-run onboarding now live in the
 // Svelte SPA — this surface exists only as a no-JS fallback for when the SPA
 // bundle cannot load. Returns nil when the UI is disabled.

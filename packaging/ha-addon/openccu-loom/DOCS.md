@@ -21,8 +21,8 @@ It runs as a native HA add-on and is accessible directly from the HA sidebar.
 | Access path | Notes |
 |---|---|
 | HA sidebar / Ingress | Recommended — authentication is handled by the HA Ingress proxy. Works from any HA frontend (browser, companion app). |
-| `http://<ha-host>:8080/app/` | Direct access — bypasses Ingress; useful when Ingress is unavailable or for API clients. Opens the full SPA. |
-| `http://<ha-host>:8080/` | Bootstrap surface (login page, first-run `/setup`, OIDC callback, `/health`, `/about`) — same port as the SPA since 0.14.0. |
+| `http://<ha-host>:8119/app/` | Direct access — bypasses Ingress; useful when Ingress is unavailable or for API clients. Opens the full SPA. Uses `rest_port` (default 8119). |
+| `http://<ha-host>:8119/` | Server-rendered diagnostics (`/health`, `/about`) — same port as the SPA. |
 
 ## Why `host_network: true`
 
@@ -36,22 +36,30 @@ can advertise the correct IP.
 
 ## Ports
 
-| Port | Protocol | Purpose |
+| Option | Default | Purpose |
 |---|---|---|
-| 8080 | TCP | REST API + Config UI (SPA) + bootstrap surface (login, /setup, /health, /about). Also the Ingress port. |
-| 8120 | TCP | XML-RPC callback — the CCU pushes events here. |
-| 8129 | TCP | BIN-RPC callback — CUxD pushes events here. |
+| `rest_port` | 8119 | REST API + Config UI (SPA) + diagnostics. Also the Ingress port. |
+| `xmlrpc_callback_port` | 8120 | XML-RPC callback — the CCU pushes events here. |
+| `binrpc_callback_port` | 8129 | BIN-RPC callback — CUxD pushes events here. |
 
 Because the add-on runs with `host_network`, the daemon binds these ports
-directly on the Home Assistant host (they are not remappable from the add-on
-UI). Make sure nothing else on the host already uses them, and that the
-callback ports (8120/8129) are reachable from your CCU's network.
+directly on the Home Assistant host. They are **operator-configurable** via the
+options above — change them to avoid collisions with other host services. Make
+sure the callback ports are reachable from your CCU's network.
+
+> **Ingress + `rest_port`:** the Ingress panel proxies to the static
+> `ingress_port` (8119). If you change `rest_port` away from 8119 the sidebar
+> panel stops working — reach the UI directly at `http://<ha-host>:<rest_port>/app/`.
+> Keep `rest_port` at 8119 to use the panel.
 
 ## Configuration options
 
 | Option | Default | Values | Description |
 |---|---|---|---|
 | `log_level` | `info` | `debug`, `info`, `warn`, `error` | Daemon log verbosity. |
+| `rest_port` | `8119` | `1`–`65535` | Host port for the REST API + Config UI. Must equal `ingress_port` (8119) for the sidebar panel. |
+| `xmlrpc_callback_port` | `8120` | `1`–`65535` | Host port the CCU pushes XML-RPC events to. |
+| `binrpc_callback_port` | `8129` | `1`–`65535` | Host port CUxD pushes BIN-RPC events to. |
 
 All other daemon settings (centrals, MQTT, auth, Matter) are configured
 through the Config UI after the add-on starts.

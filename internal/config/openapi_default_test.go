@@ -49,9 +49,9 @@ func TestOpenAPIValidateYAMLRoundTrip(t *testing.T) {
 		yaml string
 		want bool
 	}{
-		{"unset", "north:\n  rest:\n    listen: ':8080'\n", true},
-		{"explicit-true", "north:\n  rest:\n    openapi_validate: true\n    listen: ':8080'\n", true},
-		{"explicit-false", "north:\n  rest:\n    openapi_validate: false\n    listen: ':8080'\n", false},
+		{"unset", "north:\n  rest:\n    listen: ':8119'\n", true},
+		{"explicit-true", "north:\n  rest:\n    openapi_validate: true\n    listen: ':8119'\n", true},
+		{"explicit-false", "north:\n  rest:\n    openapi_validate: false\n    listen: ':8119'\n", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

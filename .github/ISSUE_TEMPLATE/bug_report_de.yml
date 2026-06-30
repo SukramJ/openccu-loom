@@ -187,7 +187,7 @@ body:
 
         - **Config-UI:** Seite **Diagnose** → Button **„Diagnose herunterladen"** (anonymisiert standardmäßig geräte-/betreiberidentifizierende Felder).
 
-        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics" -o diagnostics.json`
+        - **REST (headless):** `curl -u <user>:<pass> "http://<host>:8119/api/v1/diagnostics" -o diagnostics.json`
           (roh, unanonymisiert: `?anonymize=0` anhängen). Der Dump bündelt Health, Interfaces, Incidents und Log-Level-Overrides.
 
   - type: textarea
@@ -204,13 +204,13 @@ body:
         **So erhältst Du das Log:**
 
         - **DEBUG aktivieren:** Config-UI → **Logdaten** (`#/logs`) → Level-Dropdown auf `debug`
-          (oder REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8080/api/v1/diagnostics/log-level`).
+          (oder REST: `curl -X PUT -u <user>:<pass> -H 'Content-Type: application/json' -d '{"level":"debug"}' http://<host>:8119/api/v1/diagnostics/log-level`).
 
         - **Zeitfenster aufzeichnen (empfohlen):** Config-UI → **Diagnose & Aufzeichnen** → „Neue Aufzeichnung: Debug-Log" starten,
           Problem reproduzieren, beenden → Archiv (`.gz`) herunterladen.
 
         - **Letzte Zeilen exportieren:** Config-UI → **Logdaten** → „letzte N herunterladen", oder
-          `curl -u <user>:<pass> "http://<host>:8080/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
+          `curl -u <user>:<pass> "http://<host>:8119/api/v1/diagnostics/logs?download=1&format=ndjson&limit=2000" -o openccu-loom.ndjson`.
 
   - type: textarea
     id: rpc_recording

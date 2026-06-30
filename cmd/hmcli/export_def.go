@@ -21,12 +21,12 @@ import (
 // the Python reference's export_device_definition, so it can be dropped into
 // godevccu as a device fixture.
 //
-//	hmcli export-def -host http://localhost:8080 -address 00021BE9957782 \
+//	hmcli export-def -host http://localhost:8119 -address 00021BE9957782 \
 //	    -token <api-token> -out HM-Dev.zip
 func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("export-def", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	host := fs.String("host", "http://localhost:8080", "daemon REST base URL")
+	host := fs.String("host", "http://localhost:8119", "daemon REST base URL")
 	address := fs.String("address", "", "device address to export (required)")
 	out := fs.String("out", "", `output file (default: "<model>.zip"; "-" writes to stdout)`)
 	token := fs.String("token", "", "API token (sent as Authorization: Bearer)")

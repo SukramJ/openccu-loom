@@ -36,9 +36,9 @@ import (
 
 func TestSplitListenPort_ColonPort(t *testing.T) {
 	t.Parallel()
-	p, ok := splitListenPort(":8080")
-	if !ok || p != 8080 {
-		t.Errorf("splitListenPort(%q) = (%d, %v), want (8080, true)", ":8080", p, ok)
+	p, ok := splitListenPort(":8119")
+	if !ok || p != 8119 {
+		t.Errorf("splitListenPort(%q) = (%d, %v), want (8119, true)", ":8119", p, ok)
 	}
 }
 

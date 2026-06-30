@@ -1,6 +1,6 @@
 # version MUST equal the release tag and is bumped in the release commit.
 name: OpenCCU-Loom
-version: "0.21.2"
+version: "0.21.3"
 slug: openccu-loom
 description: >-
   Standalone bridge that connects Homematic CCUs to MQTT, a REST + WebSocket
@@ -22,7 +22,9 @@ host_network: true
 init: false
 
 ingress: true
-ingress_port: 8080
+# Static: the Ingress panel proxies to this port, so it must equal the daemon's
+# REST port (options.rest_port). Keep both at 8119 to keep the panel working.
+ingress_port: 8119
 # Ingress is restricted to Home Assistant administrators. The HA Ingress
 # auth-passthrough (north.rest.auth.ha_ingress, ADR 0044) trusts that, so
 # panel_admin MUST stay true — the add-on cannot verify it at runtime.
@@ -30,20 +32,25 @@ panel_admin: true
 panel_icon: mdi:home-assistant
 panel_title: "OpenCCU-Loom"
 
-ports:
-  8080/tcp: 8080
-  8120/tcp: 8120
-  8129/tcp: 8129
-ports_description:
-  8080/tcp: "REST API + Config UI (SPA + onboarding)"
-  8120/tcp: "XML-RPC callback — CCU pushes events to the daemon on this port"
-  8129/tcp: "BIN-RPC callback — CUxD pushes events to the daemon on this port"
+# No `ports:` block: with host_network: true the daemon binds directly on the
+# host, so a port mapping does nothing. The ports are instead operator-selectable
+# via the options below (passed to the daemon as env overrides in run.sh).
 
 map:
   - addon_config:rw
 
 options:
   log_level: info
+  # Ports the daemon binds on the host (host_network: true). All configurable.
+  # rest_port MUST equal ingress_port (8119) for the Ingress panel; change it
+  # only for direct-access setups. The callback ports are where the CCU / CUxD
+  # push events to the daemon — change them to avoid host port collisions.
+  rest_port: 8119
+  xmlrpc_callback_port: 8120
+  binrpc_callback_port: 8129
 
 schema:
   log_level: "list(debug|info|warn|error)?"
+  rest_port: int(1,65535)
+  xmlrpc_callback_port: int(1,65535)
+  binrpc_callback_port: int(1,65535)

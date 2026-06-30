@@ -2,8 +2,8 @@
 #
 # Quick start:
 #   1. docker compose up -d
-#   2. open http://<host>:8080/setup   (first run: create the admin user)
-#   3. add your CCUs, MQTT, auth, … in the Config UI at http://<host>:8080
+#   2. open http://<host>:8119/setup   (first run: create the admin user)
+#   3. add your CCUs, MQTT, auth, … in the Config UI at http://<host>:8119
 #
 # NO config.yaml is required. The daemon runs on defaults and EVERYTHING
 # operational — centrals, MQTT, auth, north-bound bridges — is configured
@@ -12,7 +12,7 @@
 # settings the daemon needs *before* the database is open, and they all
 # have sane defaults (see the optional config mount below):
 #   - data_dir              (where the DB + state live; default ./var)
-#   - listen.rest              (bind address; default :8080)
+#   - listen.rest              (bind address; default :8119)
 #   - logging               (level + format; default info / json)
 #   - bootstrap.allow_first_run_setup  (gates the /setup surface; default true)
 #   - env_file              (path to the secrets file; default .env)
@@ -57,7 +57,7 @@ services:
     # =====================================================================
 
     ports:
-      - "8080:8080"   # REST API + Config UI (SPA) + first-run /setup + bootstrap
+      - "8119:8119"   # REST API + Config UI (SPA) + first-run /setup + bootstrap
       - "8120:8120"   # XML-RPC callback  (CCU  -> daemon)
       - "8129:8129"   # BIN-RPC callback  (CUxD -> daemon)
 
@@ -92,7 +92,7 @@ services:
     # (or use a host bind mount `./var:/app/var` and `chown 65532:65532 ./var`).
 
     # No in-container healthcheck: the distroless image ships no shell/curl.
-    # Monitor http://<host>:8080/health from outside instead.
+    # Monitor http://<host>:8119/health from outside instead.
 
     # Optional log rotation so a chatty daemon can't fill the disk.
     logging:

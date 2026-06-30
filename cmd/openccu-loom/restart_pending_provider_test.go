@@ -46,7 +46,7 @@ var _ handlers.ConfigAdminService = (*fakeConfigAdminService)(nil)
 func bootConfig() *config.Config {
 	c := config.Default()
 	c.DataDir = "/var/lib/loom"
-	c.North.REST.Listen = ":8080"
+	c.North.REST.Listen = ":8119"
 	c.North.Matter.Enabled = false
 	c.Centrals = []config.CentralConfig{{Name: "ccu1", Host: "192.0.2.1"}}
 	return c

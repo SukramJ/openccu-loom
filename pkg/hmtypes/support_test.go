@@ -316,7 +316,7 @@ func TestCreateRandomDeviceAddresses_VCUPrefix(t *testing.T) {
 
 func TestIsPort_ValidRange(t *testing.T) {
 	t.Parallel()
-	for _, p := range []int{0, 1, 8080, 65535} {
+	for _, p := range []int{0, 1, 8119, 65535} {
 		if !hmtypes.IsPort(p) {
 			t.Errorf("IsPort(%d) = false, want true", p)
 		}

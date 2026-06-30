@@ -24,15 +24,15 @@ func txtValue(txt []string, key string) (string, bool) {
 func TestMDNSServiceForBuildsDiscoveryTXT(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Listen = ":8080"
+	cfg.North.REST.Listen = ":8119"
 	cfg.North.Discovery.MDNS.InstanceName = "loom-test"
 
 	svc, ok := mdnsServiceFor(cfg, 3)
 	if !ok {
 		t.Fatal("mdnsServiceFor returned ok=false for a valid listen port")
 	}
-	if svc.Port != 8080 {
-		t.Fatalf("Port = %d, want 8080", svc.Port)
+	if svc.Port != 8119 {
+		t.Fatalf("Port = %d, want 8119", svc.Port)
 	}
 	if svc.InstanceName != "loom-test" {
 		t.Fatalf("InstanceName = %q, want loom-test", svc.InstanceName)
@@ -62,7 +62,7 @@ func TestMDNSServiceForBuildsDiscoveryTXT(t *testing.T) {
 func TestMDNSServiceForInstanceFallsBackToResolved(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
-	cfg.North.REST.Listen = ":8080"
+	cfg.North.REST.Listen = ":8119"
 	cfg.North.Discovery.MDNS.InstanceName = ""
 
 	svc, ok := mdnsServiceFor(cfg, 0)

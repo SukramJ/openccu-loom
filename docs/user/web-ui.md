@@ -7,10 +7,10 @@ OpenCCU-Loom ships a browser-based Config UI for inspecting your CCUs, browsing 
 
 ## Opening the UI
 
-By default the web UI listens on port **8080**. In a browser on the same network, open:
+By default the web UI listens on port **8119**. In a browser on the same network, open:
 
 ```text
-http://<host-running-openccu-loom>:8080/
+http://<host-running-openccu-loom>:8119/
 ```
 
 ### First run
@@ -18,7 +18,7 @@ http://<host-running-openccu-loom>:8080/
 The very first time you open the UI, there is no account yet. You are sent to the **first-run setup** page at `/setup`, where you create the initial administrator account.
 
 ```text
-http://<host>:8080/setup
+http://<host>:8119/setup
 ```
 
 After that, future visits go through the **login** page at `/login`.

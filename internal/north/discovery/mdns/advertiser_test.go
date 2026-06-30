@@ -13,9 +13,9 @@ import (
 
 func TestServiceValidate_PortInRange(t *testing.T) {
 	t.Parallel()
-	s := Service{Port: 8080}
+	s := Service{Port: 8119}
 	if err := s.Validate(); err != nil {
-		t.Fatalf("port 8080 should validate: %v", err)
+		t.Fatalf("port 8119 should validate: %v", err)
 	}
 }
 
@@ -30,7 +30,7 @@ func TestServiceValidate_PortOutOfRange(t *testing.T) {
 
 func TestResolvedInstanceName_FallsBackToHostname(t *testing.T) {
 	t.Parallel()
-	s := Service{Port: 8080}
+	s := Service{Port: 8119}
 	got := s.resolvedInstanceName()
 	if got == "" || got == "openccu-loom" {
 		// "openccu-loom" is the last-ditch fallback; reaching it
@@ -47,7 +47,7 @@ func TestResolvedInstanceName_FallsBackToHostname(t *testing.T) {
 
 func TestResolvedInstanceName_RespectsOverride(t *testing.T) {
 	t.Parallel()
-	s := Service{Port: 8080, InstanceName: "my-hm"}
+	s := Service{Port: 8119, InstanceName: "my-hm"}
 	if got := s.resolvedInstanceName(); got != "my-hm" {
 		t.Fatalf("override ignored, got %q", got)
 	}
@@ -55,7 +55,7 @@ func TestResolvedInstanceName_RespectsOverride(t *testing.T) {
 
 func TestNoop_StartStopRoundTrip(t *testing.T) {
 	t.Parallel()
-	n := NewNoop(Service{Port: 8080})
+	n := NewNoop(Service{Port: 8119})
 	if n.Active() {
 		t.Fatal("Active before Start should be false")
 	}
@@ -75,7 +75,7 @@ func TestNoop_StartStopRoundTrip(t *testing.T) {
 
 func TestNoop_StartTwiceReturnsAlreadyStarted(t *testing.T) {
 	t.Parallel()
-	n := NewNoop(Service{Port: 8080})
+	n := NewNoop(Service{Port: 8119})
 	if err := n.Start(context.Background()); err != nil {
 		t.Fatalf("first Start: %v", err)
 	}
@@ -87,7 +87,7 @@ func TestNoop_StartTwiceReturnsAlreadyStarted(t *testing.T) {
 
 func TestNoop_StopIdempotent(t *testing.T) {
 	t.Parallel()
-	n := NewNoop(Service{Port: 8080})
+	n := NewNoop(Service{Port: 8119})
 	_ = n.Start(context.Background())
 	if err := n.Stop(); err != nil {
 		t.Fatalf("first Stop: %v", err)

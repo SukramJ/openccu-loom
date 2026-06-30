@@ -81,7 +81,7 @@ nohup /tmp/openccu-loom-pair run --config config.yaml > "$NEWLOG" 2>&1 &
 until grep -q 'daemon.ready' "$NEWLOG" 2>/dev/null; do sleep 1; done
 
 # 4. Open commissioning window — 600 s is comfortable.
-curl -sS -X POST http://localhost:8080/api/v1/matter/commissioning/window \
+curl -sS -X POST http://localhost:8119/api/v1/matter/commissioning/window \
   -u 'admin:change-me' -H 'Content-Type: application/json' \
   -d '{"duration_seconds": 600}'
 # → {"qr_code": "MT:-24J0AFN00KA0648G00", "manual_code": "3497-011-2332", ...}

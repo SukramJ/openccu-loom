@@ -64,7 +64,7 @@ type BootstrapConfig struct {
 // can serve any configuration UI.
 type BootstrapListen struct {
 	// REST is the bind address of the REST + WebSocket server,
-	// e.g. ":8080" or "0.0.0.0:8080". Empty defaults to ":8080". The
+	// e.g. ":8119" or "0.0.0.0:8119". Empty defaults to ":8119". The
 	// server-rendered bootstrap surface (login / setup / about) shares
 	// this listener — there is no separate UI bind address.
 	REST string `yaml:"rest" cfg:"basic"`
@@ -131,7 +131,7 @@ func (b *BootstrapConfig) applyDefaults() {
 		b.Logging.Format = "json"
 	}
 	if b.Listen.REST == "" {
-		b.Listen.REST = ":8080"
+		b.Listen.REST = ":8119"
 	}
 	if b.EnvFile == "" {
 		b.EnvFile = DefaultEnvFile

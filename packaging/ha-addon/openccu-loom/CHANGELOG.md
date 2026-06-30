@@ -1,5 +1,17 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.21.3
+
+- **All ports are now configurable in the add-on options.** Set `rest_port`
+  (default 8119, the Config UI / Ingress port), `xmlrpc_callback_port` (8120)
+  and `binrpc_callback_port` (8129) directly — handy to avoid clashes with other
+  things on your Home Assistant host. The previous fixed port list (which did
+  nothing under host networking) was removed.
+- **The default UI port changed from 8080 to 8119.** Direct access is now at
+  `http://<ha-host>:8119/app/`. The sidebar panel keeps working unchanged; only
+  change `rest_port` if you access the UI directly (then it stays at 8119 for
+  the panel).
+
 ## 0.21.2
 
 - **A CCU you run on the same machine (configured as `localhost`) is no longer

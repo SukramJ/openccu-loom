@@ -86,7 +86,7 @@ primary interface (default: the `HmIP-RF`-matching one) is down.
 
 **Symptom.** Fresh install — you cannot log in because no user exists.
 
-**Fix.** The HTMX bootstrap surface (served on the REST listener, default `:8080`) exposes a
+**Fix.** The HTMX bootstrap surface (served on the REST listener, default `:8119`) exposes a
 first-run `/setup` wizard that creates the initial admin account.
 Visit it before configuring anything else. `/` redirects to `/health`,
 and `/health` is server-rendered so it works even when the SPA bundle

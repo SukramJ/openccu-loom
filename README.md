@@ -98,7 +98,7 @@ Canonical references:
 
 ```sh
 docker run -d --restart unless-stopped \
-  -p 8080:8080 -p 8120:8120 -p 8129:8129 \
+  -p 8119:8119 -p 8120:8120 -p 8129:8129 \
   -v $(pwd)/config.yaml:/app/config.yaml:ro \
   -v openccu-loom-data:/app/var \
   ghcr.io/sukramj/openccu-loom:latest run --config /app/config.yaml
@@ -121,7 +121,7 @@ make build
 Add `https://github.com/SukramJ/openccu-loom` as a repository under
 *Settings → Add-ons → Add-on Store → ⋮ → Repositories*, then install
 **OpenCCU-Loom**. The Config UI appears as a sidebar panel (Ingress) and
-on `:8080`; state persists in the add-on's `/data`. See
+on `:8119`; state persists in the add-on's `/data`. See
 [`packaging/ha-addon/README.md`](packaging/ha-addon/README.md). For native
 CCU3 / RaspberryMatic installs, see
 [`packaging/ccu-addon/README.md`](packaging/ccu-addon/README.md).
@@ -129,7 +129,7 @@ CCU3 / RaspberryMatic installs, see
 First-run setup:
 
 1. Start the daemon without a user pre-configured.
-2. Open `http://localhost:8080/setup` and create the first admin.
+2. Open `http://localhost:8119/setup` and create the first admin.
 3. Sign in at `/login` — OIDC is supported when configured.
 
 ## Configuration model

@@ -1248,7 +1248,7 @@ func (c *Config) applyDefaults() {
 		c.Callback.BinPort = 8129
 	}
 	if c.North.REST.Listen == "" {
-		c.North.REST.Listen = ":8080"
+		c.North.REST.Listen = ":8119"
 	}
 	if c.North.MQTT.TopicBase == "" {
 		c.North.MQTT.TopicBase = "openccu-loom"
