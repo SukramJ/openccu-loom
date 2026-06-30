@@ -77,7 +77,13 @@ part of the respective plans.
     values / trigger programs; shares the write/trigger handlers the
     CLI (below) also targets.
   *Plan: [`docs/plans/A4-webhook-plugin-contract.md`](./plans/A4-webhook-plugin-contract.md).*
-- **Migrate MQTT / Matter / MCP / REST onto `bridge.Registry`.** Follow-up
+- **Migrate MQTT / Matter / MCP / REST onto `bridge.Registry`.**
+  *Sequencing: scheduled directly **after A4** — run it once the webhook
+  epic is fully landed (incl. PR4 inbound), before the A1 Matter work, as
+  the natural completion of A4. It depends only on the already-shipped
+  `bridge` contract (not on PR4), so it could start earlier, but is
+  deliberately ordered after A4 so the contract has settled with its first
+  real consumer before the established bridges are wrapped.* Follow-up
   to A4: the north-bound `bridge.Service` + `Registry` contract
   (`internal/north/bridge/`) shipped with the outbound webhook as its only
   registered consumer. The established bridges (MQTT, Matter, MCP, REST) are

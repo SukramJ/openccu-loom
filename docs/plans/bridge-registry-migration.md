@@ -1,6 +1,11 @@
 # Implementation plan — Migrate MQTT / Matter / MCP / REST onto `bridge.Registry`
 
 **Status**: prioritised, not started. **Effort: S–M.**
+**Sequencing**: scheduled directly **after A4** (run once the webhook epic,
+incl. PR4 inbound, is fully landed; before the A1 Matter work). Depends only
+on the already-shipped `bridge` contract, not on PR4 — ordered after A4 by
+choice so the contract settles with its first real consumer before the
+established bridges are wrapped.
 **Audience**: a fresh Claude environment with no access to the review
 conversation. Verify each cited path against the tree before editing
 (paths were correct at the time of writing but code moves).
