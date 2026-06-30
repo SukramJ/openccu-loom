@@ -51,9 +51,11 @@ were stale and have been corrected to RESOLVED.
   block): System Health discovery + publish + `Metrics.OnUpdate`;
   Connection Latency via the per-interface
   `ConnectivityChangedEvent.LatencyMs` path. Tested by
-  `hub_metric_sensors_test.go`. *Remaining: `MetricLastEventAgeSecs`
-  has no production observer — a deferred scheduler job, not an MQTT
-  gap; see `by_design.md`.*
+  `hub_metric_sensors_test.go`. *`MetricLastEventAgeSecs` now has a
+  production observer: the `LastEventAgeRefresh` scheduler job
+  (`internal/central/jobs.go`, wired in `cmd/openccu-loom/daemon_jobs.go`)
+  samples the metric and the publisher mirrors it to MQTT
+  (`hub_mqtt_publisher.go`). No open gap.*
 - **Inbox → MQTT publishing.** Wired in the same file (`--- Inbox ---`
   block): `BuildInboxDiscovery` + initial publish + `Inbox.OnUpdate` →
   `PublishInbox`. Tested by `hub_mqtt_publisher_inbox_test.go`.
@@ -119,20 +121,22 @@ and is **not** planned. No further Homegear work is scheduled.
 
 ### Phase 4 — Trigger-driven / opportunistic (low, non-blocking)
 
-Both items confirmed correctly deferred; no action this round.
+One item remains, correctly deferred; no action this round. (A former
+second item — a `GetProgramDataPointByStatePath` O(1) index — was
+dropped: no such symbol exists in the code, so the entry was stale.)
 
 - **`valve.Modulating` profile-registry wiring — at parity, blocked.**
   The type and constructor exist and are largely complete
   (`internal/model/custom/valve/`, Info/Config/HA-discovery), but no
-  device profile maps onto it. Crucially, the reference stack has **no
-  modulating-valve device either** — it ships only an irrigation valve
-  (`IP_IRRIGATION_VALVE`). So leaving `valve.Modulating` unregistered is
-  parity, not a gap; wiring it would mean inventing a device mapping the
-  reference does not have. Wire it in `init.go` only if such a device
-  appears upstream. *Effort: S. Blocked on a real device.*
-- **`GetProgramDataPointByStatePath` O(1) index.** Pure performance, not
-  a parity item. Current O(n) scan is fine at the typical ≤300 programs.
-  *Effort: S. Deferred to a performance milestone.*
+  device profile maps onto it — `valve/init.go` registers only
+  `DeviceProfileIPIrrigationValve`. Crucially, the reference stack has
+  **no modulating-valve device either** — it ships only an irrigation
+  valve (`IP_IRRIGATION_VALVE`). So leaving `valve.Modulating`
+  unregistered is parity, not a gap; wiring it would mean inventing a
+  device mapping the reference does not have. The divergence is recorded
+  in `docs/parity/by_design.md` (entry `A2-BD03`).
+  Wire it in `init.go` only if such a device appears upstream.
+  *Effort: S. Blocked on a real device.*
 
 ## HomegearBackend depth-parity
 
