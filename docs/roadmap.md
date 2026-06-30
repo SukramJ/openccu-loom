@@ -77,6 +77,22 @@ part of the respective plans.
     values / trigger programs; shares the write/trigger handlers the
     CLI (below) also targets.
   *Plan: [`docs/plans/A4-webhook-plugin-contract.md`](./plans/A4-webhook-plugin-contract.md).*
+- **Migrate MQTT / Matter / MCP / REST onto `bridge.Registry`.** Follow-up
+  to A4: the north-bound `bridge.Service` + `Registry` contract
+  (`internal/north/bridge/`) shipped with the outbound webhook as its only
+  registered consumer. The established bridges (MQTT, Matter, MCP, REST) are
+  still hand-wired with bespoke `Start`/`Stop` calls in
+  `cmd/openccu-loom/daemon.go`. Wrap each in a thin `Service` adapter and
+  register it on the shared `Registry`, replacing the inline lifecycle calls
+  one at a time — behaviour-preserving, independently testable (the A4 plan
+  §3a describes this incremental path). **Order MQTT last:** it carries a
+  runtime supervisor (`cmd/openccu-loom/mqtt_supervisor.go`, `SwapBridge`)
+  for hot-reload, so its `Service.Stop` must wrap that lifecycle cleanly
+  rather than fight it; Matter/MCP/REST are mechanical wraps. Pure refactor
+  — guard with the existing per-bridge behaviour/contract tests; do **not**
+  generalise hot-swap into the `Service` interface (out of scope, per A4
+  §3a). *Effort: S–M.*
+  *Plan: [`docs/plans/bridge-registry-migration.md`](./plans/bridge-registry-migration.md).*
 - **`hmcli` power-user CLI.** Grow `cmd/hmcli/` (today only
   `version`/`config validate`/`cache clear`/`export-def`) into a full
   REST client against a running daemon — `devices list/get/set`,
