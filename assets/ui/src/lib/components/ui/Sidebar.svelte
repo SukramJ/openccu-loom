@@ -45,6 +45,7 @@
     | "audit"
     | "diagnostics"
     | "energy"
+    | "fleet"
     | "logs"
     | "settings"
     | "inbox"
@@ -139,6 +140,12 @@
           icon: "mdi:list-checks",
           label: t("nav.inbox"),
           matches: ["inbox"],
+        },
+        {
+          href: "#/fleet",
+          icon: "mdi:server-network",
+          label: t("nav.fleet"),
+          matches: ["fleet"],
         },
       ],
     },

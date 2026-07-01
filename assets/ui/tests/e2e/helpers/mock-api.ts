@@ -212,6 +212,28 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ status: 200 }),
   );
 
+  // System CCU fleet metadata (GET /api/v1/system/ccu) — a single online
+  // CCU matching devices.json/centrals.json's "ccu1" by default. The
+  // Fleet route's own tests override this with mockFleet() for a
+  // multi-CCU, mixed-availability fixture.
+  await page.route('**/api/v1/system/ccu', (route) =>
+    route.fulfill({
+      json: {
+        entries: [
+          {
+            name: 'ccu1',
+            host: '172.18.4.29',
+            available: true,
+            model: 'CCU3',
+            version: '3.75.7',
+            is_ha_app: false,
+            configured_interfaces: ['HmIP-RF'],
+          },
+        ],
+      },
+    }),
+  );
+
   // Centrals
   await page.route('**/api/v1/centrals', (route) => {
     if (route.request().method() === 'GET') {
@@ -518,6 +540,105 @@ export async function mockOverviewFleet(page: Page): Promise<void> {
     const ch = m ? m[2] : '';
     return route.fulfill({ json: dataPointsByChannel[`${addr}:${ch}`] ?? [] });
   });
+}
+
+/**
+ * Two-CCU fixture for the Fleet route (read-only cross-CCU overview):
+ * "ccu1" is online with two configured interfaces and two devices;
+ * "ccu2" is offline with one configured interface and one device. Covers
+ * both availability states plus the per-central device-count derivation.
+ */
+export async function mockFleet(page: Page): Promise<void> {
+  await page.route('**/api/v1/system/ccu', (route) =>
+    route.fulfill({
+      json: {
+        entries: [
+          {
+            name: 'ccu1',
+            host: '172.18.4.29',
+            available: true,
+            model: 'CCU3',
+            version: '3.75.7',
+            hostname: 'ccu1.local',
+            serial: 'SERIAL0001',
+            url: 'https://172.18.4.29',
+            is_ha_app: false,
+            configured_interfaces: ['HmIP-RF', 'BidCos-RF'],
+          },
+          {
+            name: 'ccu2',
+            host: '172.18.4.30',
+            available: false,
+            is_ha_app: false,
+            configured_interfaces: ['HmIP-RF'],
+          },
+        ],
+      },
+    }),
+  );
+
+  await page.route('**/api/v1/devices*', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            address: 'AAA0000001',
+            central: 'ccu1',
+            interface: 'HmIP-RF',
+            interface_id: 'ccu1-HmIP-RF',
+            model: 'HmIP-PSM',
+            model_label: 'Switch Actuator',
+            name: 'Living Room Switch',
+            available: true,
+            channels_count: 2,
+            updatable: false,
+            update_available: false,
+            rooms: ['Living Room'],
+            functions: ['Lighting'],
+            master_pushes_config_pending: false,
+            has_sub_devices: false,
+          },
+          {
+            address: 'AAA0000002',
+            central: 'ccu1',
+            interface: 'HmIP-RF',
+            interface_id: 'ccu1-HmIP-RF',
+            model: 'HmIP-STHO',
+            model_label: 'Temperature and Humidity Sensor',
+            name: 'Kitchen Sensor',
+            available: true,
+            channels_count: 2,
+            updatable: false,
+            update_available: false,
+            rooms: ['Kitchen'],
+            functions: ['Climate'],
+            master_pushes_config_pending: false,
+            has_sub_devices: false,
+          },
+          {
+            address: 'BBB0000001',
+            central: 'ccu2',
+            interface: 'HmIP-RF',
+            interface_id: 'ccu2-HmIP-RF',
+            model: 'HmIP-BSL',
+            model_label: 'Switch and Dimming Actuator with Signal Lamp',
+            name: 'Office Lamp',
+            available: false,
+            channels_count: 1,
+            updatable: false,
+            update_available: false,
+            rooms: ['Office'],
+            functions: ['Lighting'],
+            master_pushes_config_pending: false,
+            has_sub_devices: false,
+          },
+        ],
+        total: 3,
+        page: 1,
+        per_page: 50,
+      },
+    }),
+  );
 }
 
 /**

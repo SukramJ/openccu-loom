@@ -33,6 +33,7 @@ import type {
   RpcRecordingStatus,
   ServiceMessage,
   SysvarEntry,
+  SystemCCUEntry,
   UISchema,
 } from "./types";
 import type {
@@ -845,6 +846,13 @@ export const api = {
   // Config field paths changed since the daemon started (boot diff).
   getConfigChanges() {
     return request<{ fields: string[] }>(`/system/config-changes`);
+  },
+  // Per-central fleet metadata (name/host/availability/model/version/
+  // config-URL/configured interfaces) for the read-only cross-CCU
+  // overview (Fleet.svelte). Reflects runtime-added CCUs live.
+  async getSystemCCUs(): Promise<SystemCCUEntry[]> {
+    const r = await request<{ entries: SystemCCUEntry[] }>(`/system/ccu`);
+    return r.entries;
   },
   // --- CCU system (firmware) update ----------------------------
   getSystemUpdate() {
