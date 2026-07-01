@@ -277,15 +277,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 
 	// --- north-bound bridge registry ---------------------------
 	// Uniform lifecycle for the north-bound surfaces (ADR 0047). The MQTT
-	// fan-out (EventBridge + optional HubMQTTPublisher) is registered FIRST
-	// so it stops LAST in the reverse-order StopAll (it self-started above,
-	// pre-hydration; the Service owns its teardown). The webhook is a real
-	// Service. Matter and REST register later (PhaseLate). StartAll is a
-	// no-op for the already-started MQTT service and for a disabled webhook.
-	northBridges.Register(newMQTTService(bridge, hubMQTT))
+	// fan-out is registered FIRST (so it stops LAST in the reverse-order
+	// StopAll) as PhaseEarly — it must be live before southbound hydration so
+	// the boot-time initial snapshot of retained CCU state publishes onto a
+	// live bridge; StartPhase(PhaseEarly) here is a no-op (it self-started
+	// above). The webhook is a real PhaseLate Service: it is NOT started here
+	// but later with Matter + REST (northBridges.StartAll after the REST
+	// mount), so it only subscribes once the daemon is fully up — a datapoint
+	// flood during boot hydration would otherwise POST the whole device state
+	// on every restart. Matter and REST register later (also PhaseLate).
+	northBridges.RegisterPhase(newMQTTService(bridge, hubMQTT), northbridge.PhaseEarly)
 	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
-	if err := northBridges.StartAll(ctx); err != nil {
-		logger.Warn("north.bridge.start", slog.String("err", err.Error()))
+	if err := northBridges.StartPhase(ctx, northbridge.PhaseEarly); err != nil {
+		logger.Warn("north.bridge.start_early", slog.String("err", err.Error()))
 	}
 	defer northBridges.StopAll(context.Background()) //nolint:contextcheck // shutdown teardown must not hang on the already-cancelled daemon ctx; a fresh background ctx lets each bridge drain cleanly
 
@@ -620,8 +624,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The browser-facing bootstrap surface is folded into the REST server
 	// above (ADR 0044) — there is no separate UI listener.
 
-	// Start the PhaseLate north-bound surfaces (REST/HTTP; the webhook is
-	// already started above). StartAll skips the already-started webhook.
+	// Start the PhaseLate north-bound surfaces — the webhook, Matter and the
+	// REST/HTTP server — now that the daemon is fully up (router assembled,
+	// devices hydrated). StartAll skips the already-started PhaseEarly MQTT
+	// service.
 	if err := northBridges.StartAll(ctx); err != nil {
 		return fmt.Errorf("north bridge start: %w", err)
 	}
