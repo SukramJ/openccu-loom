@@ -434,3 +434,10 @@ export type InstallModeInterfaceEntry =
 
 // LogRecord re-exported from generated schema.
 export type LogRecord = components["schemas"]["LogRecord"];
+
+// Energy aggregation types (GET /api/v1/energy), re-exported from the
+// generated schema — see docs/plans/A2-timeseries-energy.md. Values are
+// Wh on the wire; the SPA divides by 1000 to render kWh.
+export type EnergyBucket = components["schemas"]["EnergyBucket"];
+export type EnergyDevice = components["schemas"]["EnergyDevice"];
+export type EnergyResponse = components["schemas"]["EnergyResponse"];

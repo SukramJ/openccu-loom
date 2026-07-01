@@ -1,0 +1,29 @@
+{
+  "group": "day",
+  "from": "2026-06-01T00:00:00Z",
+  "to": "2026-07-01T00:00:00Z",
+  "devices": [
+    {
+      "address": "00021BE9957782",
+      "name": "Bücherregal",
+      "buckets": [
+        { "ts": "2026-06-29T00:00:00Z", "consumed_wh": 412.0, "feed_in_wh": 0.0, "avg_power_w": 18.2, "peak_power_w": 240.0, "reset": false },
+        { "ts": "2026-06-30T00:00:00Z", "consumed_wh": 380.0, "feed_in_wh": 0.0, "avg_power_w": 16.5, "peak_power_w": 210.0, "reset": true }
+      ],
+      "total_consumed_wh": 9123.0,
+      "total_feed_in_wh": 0.0
+    },
+    {
+      "address": "00099SOLAR001",
+      "name": "Balkonkraftwerk",
+      "buckets": [
+        { "ts": "2026-06-29T00:00:00Z", "consumed_wh": 50.0, "feed_in_wh": 1200.0, "avg_power_w": 120.0, "peak_power_w": 600.0, "reset": false },
+        { "ts": "2026-06-30T00:00:00Z", "consumed_wh": 45.0, "feed_in_wh": 1100.0, "avg_power_w": 110.0, "peak_power_w": 580.0, "reset": false }
+      ],
+      "total_consumed_wh": 95.0,
+      "total_feed_in_wh": 2300.0
+    }
+  ],
+  "total_consumed_wh": 9218.0,
+  "total_feed_in_wh": 2300.0
+}

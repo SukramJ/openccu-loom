@@ -24,6 +24,7 @@
   import SignalQualityList from "./routes/SignalQualityList.svelte";
   import UnIgnoreList from "./routes/UnIgnoreList.svelte";
   import AccessControl from "./routes/AccessControl.svelte";
+  import Energy from "./routes/Energy.svelte";
   // Imported statically (not code-split): DeviceDetail's history tab
   // already pulls AuditLog into the main chunk, so a dynamic import here
   // would be ineffective (and warns at build time).
@@ -122,6 +123,7 @@
     | { kind: "messages" }
     | { kind: "audit" }
     | { kind: "diagnostics" }
+    | { kind: "energy" }
     | { kind: "logs" }
     | { kind: "settings" }
     | { kind: "inbox" }
@@ -142,6 +144,7 @@
     if (path === "/messages") return { kind: "messages" };
     if (path === "/audit") return { kind: "audit" };
     if (path === "/diagnostics") return { kind: "diagnostics" };
+    if (path === "/energy") return { kind: "energy" };
     if (path === "/logs") return { kind: "logs" };
     if (path === "/settings") return { kind: "settings" };
     if (path === "/inbox") return { kind: "inbox" };
@@ -177,6 +180,7 @@
 <svelte:head>
   <title>{
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
+    route.kind === "energy" ? t("page.title.energy") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "overview" ? t("page.title.overview") :
@@ -284,6 +288,8 @@
           {:then { default: Diagnostics }}
             <Diagnostics />
           {/await}
+        {:else if route.kind === "energy"}
+          <Energy />
         {:else if route.kind === "logs"}
           {#if authStore.identity?.role === "admin"}
             {#await loadLogs()}
