@@ -35,6 +35,7 @@
 
   type RouteKind =
     | "list"
+    | "overview"
     | "favorites"
     | "detail"
     | "backups"
@@ -114,6 +115,12 @@
     {
       label: t("sidebar.cluster.overview"),
       items: [
+        {
+          href: "#/overview",
+          icon: "mdi:dots-grid",
+          label: t("nav.overview"),
+          matches: ["overview"],
+        },
         {
           href: "#/devices",
           icon: "mdi:home",

@@ -11,7 +11,7 @@
   import { isOverviewExcluded, isStatusOnlyChannelType } from "$lib/quickcontrol/domain";
   import ChannelControl from "$lib/control/ChannelControl.svelte";
   import ChannelStatusBadge from "./ChannelStatusBadge.svelte";
-  import AutoTile from "$lib/sensor-actor/AutoTile.svelte";
+  import ChannelTiles from "./ChannelTiles.svelte";
   import { cdpWidgetFor, hasCdpWidget } from "./dispatch";
   import { t } from "$lib/i18n";
 
@@ -314,22 +314,9 @@
        that ships at least one DP. Peer channels (HmIP-SMO230's four
        motion channels, HmIP-STE2-PCB's three temperature probes, …)
        all render as siblings in the same grid; the composer's
-       gridSpan hint widens readout-heavy tiles to 2 cells. -->
-  {#if renderable.length > 0 || autoTileChannels.length > 0}
-    <div class={tileGridClass}>
-      {#each renderable as cdp (`${cdp.name}:${cdp.channel_no}`)}
-        {@const Widget = cdpWidgetFor(cdp.kind)}
-        {@const ch = detail.channels.find((c) => c.number === cdp.channel_no)}
-        {@const title = ch?.name || ch?.type_label || `${detail.address}:${cdp.channel_no}`}
-        {#if Widget}
-          <Widget address={detail.address} {cdp} {title} />
-        {/if}
-      {/each}
-      {#each autoTileChannels as ch (ch.address)}
-        <AutoTile address={detail.address} channel={ch} />
-      {/each}
-    </div>
-  {/if}
+       gridSpan hint widens readout-heavy tiles to 2 cells. Shared with
+       the fleet-wide Overview route via ChannelTiles. -->
+  <ChannelTiles {detail} {cdps} />
 {/if}
 
 {#if !loading && !error && renderable.length === 0 && orphanChannels.length === 0}

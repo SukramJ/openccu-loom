@@ -2,9 +2,21 @@
 
 ## Status
 
-**Concept approved 2026-05-24 via wizard. Not yet implemented.**
-Phase 1 (backend exposes min/max/default + ui_hint on
-DataPointSummary) is the next code step.
+**Concept approved 2026-05-24 via wizard. Phases 1–4 shipped**: the
+Go-side quantity catalogue (`pkg/hmui/quantity.go`), the
+`DataPointSummary` `min`/`max`/`default`/`ui_hint` extension,
+`composer.ts`, `AutoTile.svelte` + the readout primitives, the
+dispatcher integration in `$lib/cdp/dispatch.ts` /
+`$lib/cdp/CdpTilesPanel.svelte`, and the `SensorActorTile` retirement
+are all in place — do not re-implement the engine described below.
+The one remaining piece from the original rollout, a fleet-wide
+**Overview** route that lays these same tiles out across every device
+(roadmap B8), has since shipped too
+(`assets/ui/src/routes/Overview.svelte` +
+`assets/ui/src/lib/cdp/ChannelTiles.svelte`,
+`assets/ui/src/lib/overview/overview-grouping.ts`). See
+[`docs/roadmap.md`](../roadmap.md) for what is still open elsewhere in
+the SPA.
 
 Goal: every device the CCU registry adds
 in the future renders as a coherent tile in the Übersicht (and a

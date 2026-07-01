@@ -9,6 +9,7 @@
     bindSystemTheme,
   } from "$lib/stores/preferences.svelte";
   import DeviceList from "./routes/DeviceList.svelte";
+  import Overview from "./routes/Overview.svelte";
   import DeviceDetail from "./routes/DeviceDetail.svelte";
   import Favorites from "./routes/Favorites.svelte";
   import Login from "./routes/Login.svelte";
@@ -112,6 +113,7 @@
 
   type Route =
     | { kind: "list" }
+    | { kind: "overview" }
     | { kind: "favorites" }
     | { kind: "detail"; address: string; channel?: number }
     | { kind: "backups" }
@@ -132,6 +134,7 @@
 
   const route = $derived.by<Route>(() => {
     if (!path || path === "/" || path === "/devices") return { kind: "list" };
+    if (path === "/overview") return { kind: "overview" };
     if (path === "/favorites") return { kind: "favorites" };
     if (path === "/backups") return { kind: "backups" };
     if (path === "/sysvars") return { kind: "sysvars" };
@@ -176,6 +179,7 @@
     route.kind === "diagnostics" ? t("page.title.diagnostics") :
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
+    route.kind === "overview" ? t("page.title.overview") :
     route.kind === "settings" ? t("page.title.settings") :
     route.kind === "access" ? t("page.title.access") :
     t("page.title.default")
@@ -254,6 +258,8 @@
       <main id="main">
         {#if route.kind === "list"}
           <DeviceList />
+        {:else if route.kind === "overview"}
+          <Overview />
         {:else if route.kind === "favorites"}
           <Favorites />
         {:else if route.kind === "detail"}
