@@ -838,6 +838,40 @@ connectedhomeip's `Dnssd.cpp` would emit (`cmd/openccu-loom/daemon.go`).
 audit does not re-flag it (parity audit 2026-05-30 CHIP-mDNS F2). The wire
 diff that motivated it should be attached when next reproduced.
 
+### BD-Matter-OTAProvider-NotExposed — the OTA Software Update Provider cluster is not exposed
+
+The bridge does not expose the OTA Software Update **Provider** cluster
+(0x0029). Only the **Requestor** cluster server (0x002A) exists, and it too
+is intentionally left unmounted (`cmd/openccu-loom/daemon_matter.go`
+buildRootClusters — "OTASoftwareUpdateRequestor is intentionally NOT
+mounted").
+
+**Rationale (verified against the gold standard, 2026-07):**
+- matter.js **defines** the Provider cluster and an `OtaProvider` device
+  type (`../matter.js/packages/model/src/standard/elements/ota-provider.element.ts:13`
+  — id 0x14) but **composes it on no endpoint**: neither
+  `packages/node/src/endpoints/root.ts` nor
+  `packages/node/src/devices/aggregator.ts` lists cluster 0x0029, and
+  `packages/node/src/devices/` ships no OTA-provider device. There is no
+  gold-standard endpoint composition to mirror.
+  home-assistant-matter-bridge does not expose it either.
+- The Provider cluster is mandatory on the OtaProvider device type (0x14),
+  **not** on the RootNode (0x0016) or Aggregator (0x000E) device types loom
+  composes. Mounting 0x0029 on the RootNode makes Apple Home's HAP mapper
+  reject the node as schematically inconsistent (same reason 0x002A stays
+  unmounted — see the buildRootClusters comment).
+- A bridge has **no Matter-OTA consumer**: HomeMatic devices update through
+  the CCU, and the daemon updates via its Docker / GoReleaser channel
+  (`ota_software_update_requestor.go` header). A Provider that only ever
+  answers `QueryImage` with `NotAvailable` would serve no controller.
+
+Implementing an unreachable, never-invoked responder (plus its dead
+QueryImageResponse / ApplyUpdateResponse TLV encoders) would add code no
+wire path exercises — exactly the silent stub the matter-parity rule
+forbids. Re-open only if loom takes on the OtaProvider device-class role on
+a dedicated device-type-0x14 endpoint, which is out of scope. The cluster
+IDs / command shapes are recorded in the A1 plan for that future work.
+
 ### BD-Matter-SubscriptionResumption-Deferred — no cross-restart subscription resumption
 
 A daemon restart drops every Matter subscription; the controller
