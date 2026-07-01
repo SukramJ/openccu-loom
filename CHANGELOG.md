@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`GET /api/v1/energy` — per-device power/energy breakdown.** Reads the
+  hourly/daily measurement-history rollup tiers (added in the previous
+  release) and folds them into a per-device breakdown: `POWER` samples
+  become `avg_power_w`/`peak_power_w`, `ENERGY_COUNTER`/
+  `ENERGY_COUNTER_FEED_IN` become `consumed_wh`/`feed_in_wh` bucket deltas.
+  A meter reset within a bucket (`last < first`) reports the delta as the
+  counter's post-reset value and sets `reset` — never a negative delta.
+  `?group=hour|day|month` selects the bucket granularity (month
+  re-aggregates the daily tier); `?device=<address>` optionally scopes to
+  one device. Requires the opt-in history feature
+  (`persistence.history.enabled`); the route is absent (404) when
+  disabled, same as `/history`. REST API version bumped to 2.12.0.
+
 - **`hmcli` gains a `devices` command group + shared REST client.** The admin
   CLI moved onto the Cobra framework with a root carrying shared connection
   flags (`--host` default `http://localhost:8119`, `--token`, `--user`,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.11.0
+  version: 2.12.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -2712,6 +2712,59 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /energy:
+    get:
+      operationId: getEnergy
+      summary: Per-device power/energy breakdown over time
+      tags: [history]
+      description: >
+        Per-device power/energy breakdown for the energy view, read from
+        the hourly/daily measurement-history rollup tiers (month
+        re-aggregates the daily tier). Requires the opt-in history
+        feature (persistence.history.enabled); the route is absent and
+        returns 404 when disabled. POWER is averaged/peaked per bucket;
+        ENERGY_COUNTER and ENERGY_COUNTER_FEED_IN are reported as the
+        bucket's cumulative-counter delta (last-first) in Wh. A counter
+        that went backwards within a bucket (meter reset on re-pair /
+        firmware event) reports the delta as `last` (never negative) and
+        sets `reset` on that bucket.
+      parameters:
+        - in: query
+          name: central
+          required: true
+          schema: { type: string }
+          description: Central (CCU) name that owns the energy devices.
+        - in: query
+          name: from
+          required: true
+          schema: { type: string, format: date-time }
+          description: Inclusive lower bound (RFC3339).
+        - in: query
+          name: to
+          required: true
+          schema: { type: string, format: date-time }
+          description: Exclusive upper bound (RFC3339). Must be after from.
+        - in: query
+          name: group
+          schema: { type: string, enum: [hour, day, month], default: day }
+          description: Bucket granularity. Absent uses the default (day).
+        - in: query
+          name: device
+          schema: { type: string }
+          description: >
+            Bare device address to scope the breakdown to one device.
+            Omitted returns every energy device on the central.
+      responses:
+        "200":
+          description: Per-device power/energy breakdown for the requested range.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnergyResponse" }
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /incidents:
     get:
       operationId: listIncidents
@@ -5408,6 +5461,91 @@ components:
           type: integer
           format: int64
           description: Number of raw samples aggregated into this bucket.
+    EnergyBucket:
+      type: object
+      required: [ts, consumed_wh, feed_in_wh, avg_power_w, peak_power_w, reset]
+      description: >
+        One bucketed point of a device's energy breakdown: the
+        cumulative-counter delta over the bucket (Wh) plus the
+        instantaneous POWER summary (W).
+      properties:
+        ts:
+          type: string
+          format: date-time
+          description: Start of the bucket's time span (UTC).
+        consumed_wh:
+          type: number
+          description: >
+            ENERGY_COUNTER delta over the bucket, in Wh. Never negative —
+            see `reset`.
+        feed_in_wh:
+          type: number
+          description: >
+            ENERGY_COUNTER_FEED_IN delta over the bucket, in Wh. Never
+            negative — see `reset`.
+        avg_power_w:
+          type: number
+          description: Mean POWER sample over the bucket, in W.
+        peak_power_w:
+          type: number
+          description: Maximum POWER sample over the bucket, in W.
+        reset:
+          type: boolean
+          description: >
+            True when a cumulative counter went backwards within this
+            bucket (meter reset on re-pair / firmware event); the
+            reported delta is the counter's value at the end of the
+            bucket (energy accumulated since the reset), not a negative
+            delta.
+    EnergyDevice:
+      type: object
+      required: [address, name, buckets, total_consumed_wh, total_feed_in_wh]
+      description: One device's bucketed energy breakdown plus its range totals.
+      properties:
+        address:
+          type: string
+          description: Bare device address.
+        name:
+          type: string
+          description: Device display name (falls back to the address when unknown).
+        buckets:
+          type: array
+          items: { $ref: "#/components/schemas/EnergyBucket" }
+        total_consumed_wh:
+          type: number
+          description: Sum of `consumed_wh` across every bucket, in Wh.
+        total_feed_in_wh:
+          type: number
+          description: Sum of `feed_in_wh` across every bucket, in Wh.
+    EnergyResponse:
+      type: object
+      required: [group, from, to, devices, total_consumed_wh, total_feed_in_wh]
+      description: >
+        `GET /api/v1/energy` response body: one bucketed breakdown per
+        device plus central totals, in Wh (the SPA divides by 1000 to
+        render kWh).
+      properties:
+        group:
+          type: string
+          enum: [hour, day, month]
+          description: Bucket granularity actually used.
+        from:
+          type: string
+          format: date-time
+          description: Inclusive lower bound of the requested range (UTC).
+        to:
+          type: string
+          format: date-time
+          description: Exclusive upper bound of the requested range (UTC).
+        devices:
+          type: array
+          items: { $ref: "#/components/schemas/EnergyDevice" }
+        total_consumed_wh:
+          type: number
+          description: Sum of every device's `total_consumed_wh`, in Wh.
+        total_feed_in_wh:
+          type: number
+          description: Sum of every device's `total_feed_in_wh`, in Wh.
     AuditEntry:
       type: object
       required: [timestamp, action]

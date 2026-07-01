@@ -25,3 +25,7 @@ logout -- covered by TestRESTSessionLifecycle; side-effects disrupt walker
 # rather than a documented status — same situation as systemRestart. Covered
 # by handler unit tests in internal/north/rest/handlers/history_test.go.
 getHistory -- opt-in feature; route not mounted in E2E harness (history off by default)
+# getEnergy is gated on the same persistence.history feature as getHistory: the
+# /energy route is only mounted when history is enabled, so it 404s in the E2E
+# harness. Covered by handler unit tests in internal/north/rest/handlers/energy_test.go.
+getEnergy -- opt-in feature; route not mounted in E2E harness (history off by default)

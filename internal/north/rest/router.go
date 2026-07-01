@@ -113,6 +113,10 @@ type Deps struct {
 	// History feeds the measurement-history chart: GET /api/v1/history.
 	// Nil when the opt-in history feature is disabled (the default).
 	History handlers.HistoryService
+	// Energy feeds the energy view's per-device power/energy breakdown:
+	// GET /api/v1/energy. Nil when the opt-in history feature is
+	// disabled (the same feature flag /history depends on).
+	Energy handlers.EnergyService
 	// Auth exposes login/logout/me endpoints at /api/v1/auth so the
 	// SPA can authenticate without the HTMX pages. Nil disables the
 	// endpoints (they 503 on request).
@@ -670,6 +674,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))
+			}
+			if d.Energy != nil {
+				pr.Get("/energy", handlers.GetEnergy(d.Energy))
 			}
 			if d.DeviceAdmin != nil {
 				pr.With(admin).Delete("/devices/{addr}", handlers.DeleteDevice(d.DeviceAdmin))
