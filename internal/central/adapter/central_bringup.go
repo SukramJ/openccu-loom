@@ -201,6 +201,14 @@ type BringUpManager struct {
 	// every handle derives its per-generation context from. Fired once after
 	// all handles have shut down.
 	parentCancel context.CancelFunc
+	// The following are captured from WireCentrals so a single central can be
+	// built + started at runtime (live CCU adopt) exactly as at boot: parentCtx
+	// is the teardown-bounded daemon-lifetime context every handle derives from;
+	// cfg/deps/logger are the shared wiring inputs. Immutable after WireCentrals.
+	parentCtx context.Context //nolint:containedctx // teardown-bounded daemon-lifetime ctx shared by every handle; the source of a runtime-added handle's parentCtx
+	cfg       *config.Config
+	deps      WireDeps
+	logger    *slog.Logger
 }
 
 func newBringUpManager() *BringUpManager {
@@ -212,6 +220,76 @@ func (m *BringUpManager) add(b *centralBringUp) {
 	defer m.mu.Unlock()
 	m.byCentral[b.cc.Name] = b
 	m.order = append(m.order, b.cc.Name)
+}
+
+// buildAndStart constructs a single central's bring-up handle — registers the
+// (local, no-I/O) callback routes and launches the readiness-gated southbound
+// bring-up — and returns it WITHOUT adding it to the manager (the caller adds
+// it, so this never re-enters m.mu). Shared by WireCentrals (boot) and
+// AddCentral (runtime); uses the manager's captured parentCtx/cfg/deps/logger.
+// The Unit must already be registered in the shared registry.
+func (m *BringUpManager) buildAndStart(cc *config.CentralConfig, unit *central.Unit) *centralBringUp {
+	callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(m.deps, cc, unit, m.logger)
+	b := &centralBringUp{
+		cfg:                m.cfg,
+		cc:                 *cc,
+		unit:               unit,
+		deps:               m.deps,
+		callbackURL:        callbackURL,
+		binRPCCallbackAddr: binRPCCallbackAddr,
+		logger:             m.logger,
+		parentCtx:          m.parentCtx,
+	}
+	b.addPermanentCloser(deregister)
+	//nolint:contextcheck // start runs the gated bring-up on the handle's teardown-bounded parent ctx, not a short-lived caller ctx
+	b.start()
+	return b
+}
+
+// AddCentral brings up a single central's southbound wiring at runtime,
+// mirroring what WireCentrals does per boot central: it registers the callback
+// routes and launches the readiness-gated bring-up. The Unit must already be
+// registered in the shared registry; the caller (composition root) owns the
+// north-bound hooks (wireCentralNorthbound) and per-central scheduler jobs.
+// Returns false if a handle for cc.Name already exists.
+//
+// Add / remove are operator-driven and serialized by the REST handler, so the
+// brief check-then-build window is not contended in practice.
+func (m *BringUpManager) AddCentral(cc *config.CentralConfig, unit *central.Unit) bool {
+	m.mu.Lock()
+	_, exists := m.byCentral[cc.Name]
+	m.mu.Unlock()
+	if exists {
+		return false
+	}
+	m.add(m.buildAndStart(cc, unit))
+	return true
+}
+
+// RemoveCentral tears down a single central's southbound wiring at runtime: it
+// drops the handle from the manager, then shuts it down — draining the gated
+// bring-up + InterfaceClient goroutines and deregistering the callback routes
+// (the handle's permanent closers). Ordering is safe for a live remove: the
+// Unit stays alive through the drain (the caller stops it AFTER this returns),
+// so a callback arriving in the drain window publishes a harmless event rather
+// than hitting a torn-down bus; once shutdown returns the routes are gone, so
+// no further callback can arrive before the caller's Unit.Stop. This does NOT
+// touch the registry, the Unit, or SQLite — the caller sequences Unit.Stop,
+// reg.Unregister, model eviction and row purge afterwards. Returns false if no
+// handle is managed for name.
+func (m *BringUpManager) RemoveCentral(name string) bool {
+	m.mu.Lock()
+	b, ok := m.byCentral[name]
+	if ok {
+		delete(m.byCentral, name)
+		m.order = slices.DeleteFunc(m.order, func(s string) bool { return s == name })
+	}
+	m.mu.Unlock()
+	if !ok {
+		return false
+	}
+	b.shutdown()
+	return true
 }
 
 // ReinitCentral re-initializes the named central's south-bound (teardown →

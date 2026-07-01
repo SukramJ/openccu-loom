@@ -351,3 +351,53 @@ func TestBringUpManager_TeardownRunsAllHandlesAndParentCancel(t *testing.T) {
 		}
 	}
 }
+
+// TestBringUpManager_RemoveCentral_Unmanaged returns false for a name the
+// manager does not hold and does not panic.
+func TestBringUpManager_RemoveCentral_Unmanaged(t *testing.T) {
+	m := newBringUpManager()
+	if m.RemoveCentral("nope") {
+		t.Fatal("RemoveCentral on an unmanaged name returned true")
+	}
+}
+
+// TestBringUpManager_AddCentral_DuplicateRejected rejects a second add for a
+// name already managed, without building a new handle (so no real deps are
+// needed — the guard short-circuits before buildAndStart).
+func TestBringUpManager_AddCentral_DuplicateRejected(t *testing.T) {
+	m := newBringUpManager()
+	m.add(&centralBringUp{logger: slog.Default(), cc: config.CentralConfig{Name: "ccu1"}})
+
+	if m.AddCentral(&config.CentralConfig{Name: "ccu1"}, nil) {
+		t.Fatal("AddCentral for an already-managed name returned true")
+	}
+	if got := m.Centrals(); len(got) != 1 {
+		t.Fatalf("Centrals() = %v, want exactly the pre-existing entry", got)
+	}
+}
+
+// TestBringUpManager_RemoveCentral_DropsHandleAndRunsShutdown removes a managed
+// handle from the manager's map + order and runs its shutdown (permanent
+// closers). The handle has no started generation, so shutdown is a clean no-op
+// teardown plus the permanent-closer run.
+func TestBringUpManager_RemoveCentral_DropsHandleAndRunsShutdown(t *testing.T) {
+	m := newBringUpManager()
+	b := &centralBringUp{logger: slog.Default(), cc: config.CentralConfig{Name: "ccu1"}}
+	shutdownRan := false
+	b.addPermanentCloser(func() { shutdownRan = true })
+	m.add(b)
+
+	if !m.RemoveCentral("ccu1") {
+		t.Fatal("RemoveCentral on a managed name returned false")
+	}
+	if !shutdownRan {
+		t.Fatal("RemoveCentral did not run the handle's permanent closer (shutdown)")
+	}
+	if got := m.Centrals(); len(got) != 0 {
+		t.Fatalf("Centrals() = %v after remove, want empty", got)
+	}
+	// Idempotent: a second remove is a no-op false.
+	if m.RemoveCentral("ccu1") {
+		t.Fatal("second RemoveCentral returned true")
+	}
+}
