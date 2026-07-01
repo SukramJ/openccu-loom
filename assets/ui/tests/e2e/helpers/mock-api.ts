@@ -270,6 +270,15 @@ export async function mockAllApis(page: Page): Promise<void> {
     route.fulfill({ json: [] }),
   );
 
+  // Energy — default empty breakdown; the Energy route's own tests
+  // override this with mockEnergy()/mockEnergyDisabled() for real data
+  // and the feature-off (404) path.
+  await page.route('**/api/v1/energy**', (route) =>
+    route.fulfill({
+      json: { group: 'day', from: '', to: '', devices: [], total_consumed_wh: 0, total_feed_in_wh: 0 },
+    }),
+  );
+
   // WebSocket — abort to prevent hanging
   await page.route('**/api/v1/ws', (route) => route.abort());
   await page.route('**/api/v1/ws**', (route) => route.abort());
@@ -509,6 +518,26 @@ export async function mockOverviewFleet(page: Page): Promise<void> {
     const ch = m ? m[2] : '';
     return route.fulfill({ json: dataPointsByChannel[`${addr}:${ch}`] ?? [] });
   });
+}
+
+/**
+ * Two-device GET /api/v1/energy breakdown for the Energy route (roadmap
+ * A2 step 5): "Bücherregal" carries a bucket with `reset: true` (exercises
+ * the reset badge/footnote), "Balkonkraftwerk" is a net feed-in device
+ * (exercises the feed-in column + totals).
+ */
+export async function mockEnergy(page: Page): Promise<void> {
+  await page.route('**/api/v1/energy**', (route) =>
+    route.fulfill({ json: fixture('energy.json') }),
+  );
+}
+
+/** Simulates the history/energy feature being disabled on the daemon
+ *  (GET /api/v1/energy returns 404 — the same gate as /history). */
+export async function mockEnergyDisabled(page: Page): Promise<void> {
+  await page.route('**/api/v1/energy**', (route) =>
+    route.fulfill({ status: 404, json: { detail: 'history recording is not enabled' } }),
+  );
 }
 
 export async function mockEmptySysvars(page: Page): Promise<void> {

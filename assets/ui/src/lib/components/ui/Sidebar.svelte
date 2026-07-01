@@ -44,6 +44,7 @@
     | "messages"
     | "audit"
     | "diagnostics"
+    | "energy"
     | "logs"
     | "settings"
     | "inbox"
@@ -172,6 +173,12 @@
           icon: "mdi:gauge",
           label: t("nav.diagnostics"),
           matches: ["diagnostics"],
+        },
+        {
+          href: "#/energy",
+          icon: "mdi:zap",
+          label: t("nav.energy"),
+          matches: ["energy"],
         },
         {
           href: "#/signal",

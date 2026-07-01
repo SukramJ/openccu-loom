@@ -6,6 +6,7 @@ import type {
   CentralLinksStatus,
   ConfigSnapshot,
   EditSessionResponse,
+  EnergyResponse,
   FunctionEntry,
   InboxDevice,
   InstallModeInterfaceEntry,
@@ -1440,6 +1441,41 @@ export async function getHistory(params: {
   try {
     const result = await request<HistoryBucket[]>(`/history?${qs.toString()}`);
     return result ?? [];
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      throw new HistoryDisabledError();
+    }
+    throw err;
+  }
+}
+
+/**
+ * Fetch the per-device power/energy breakdown for a central over a
+ * time range (GET /api/v1/energy). Wh on the wire; callers divide by
+ * 1000 to render kWh. Throws HistoryDisabledError when the daemon
+ * returns 404 (history feature off — the energy rollups share the
+ * same gate). Re-throws ApiError for 400/5xx.
+ */
+export async function getEnergy(params: {
+  central: string;
+  from: string;
+  to: string;
+  group?: "hour" | "day" | "month";
+  device?: string;
+}): Promise<EnergyResponse> {
+  const qs = new URLSearchParams({
+    central: params.central,
+    from: params.from,
+    to: params.to,
+  });
+  if (params.group !== undefined) {
+    qs.set("group", params.group);
+  }
+  if (params.device !== undefined) {
+    qs.set("device", params.device);
+  }
+  try {
+    return await request<EnergyResponse>(`/energy?${qs.toString()}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       throw new HistoryDisabledError();
