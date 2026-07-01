@@ -278,71 +278,63 @@ func TestInterfaceNames_MultipleInterfaces(t *testing.T) {
 
 func TestSystemCCUAdapter_List_NilReceiverFields_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	a := &systemCCUAdapter{reg: nil, cfg: nil}
+	a := &systemCCUAdapter{reg: nil, resolve: nil}
 	got := a.List(context.Background())
 	if got != nil {
-		t.Errorf("expected nil for nil reg+cfg, got %v", got)
+		t.Errorf("expected nil for nil reg, got %v", got)
 	}
 }
 
-func TestSystemCCUAdapter_List_EmptyCentrals_EmptyResult(t *testing.T) {
+func TestSystemCCUAdapter_List_EmptyRegistry_EmptyResult(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.Centrals = nil
 	reg := buildTestRegistry(t)
-	a := newSystemCCUAdapter(reg, cfg)
+	a := newSystemCCUAdapter(reg, resolverFromCentrals())
 	got := a.List(context.Background())
 	if len(got) != 0 {
-		t.Errorf("expected empty result for no centrals, got %v", got)
+		t.Errorf("expected empty result for no registered centrals, got %v", got)
 	}
 }
 
-func TestSystemCCUAdapter_List_CentralNotInRegistry_AvailableFalse(t *testing.T) {
+// TestSystemCCUAdapter_List_UnresolvableCentral_StillIncluded asserts a
+// central present in the live registry but unresolvable via the config
+// resolver (e.g. a store race, or disabled between registration and this
+// call) still emits an entry — with an empty Host and no configured
+// interfaces — rather than being dropped from the list.
+func TestSystemCCUAdapter_List_UnresolvableCentral_StillIncluded(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.Centrals = []config.CentralConfig{
-		{
-			Name: "absent-ccu",
-			Host: "10.0.0.99",
-			Interfaces: []config.InterfaceSpec{
-				{Name: "HmIP-RF"},
-			},
-		},
-	}
-	// Registry is empty — central is configured but not registered.
-	reg := buildTestRegistry(t)
-	a := newSystemCCUAdapter(reg, cfg)
+	reg := buildTestRegistry(t, "orphan-ccu")
+	a := newSystemCCUAdapter(reg, resolverFromCentrals())
 	got := a.List(context.Background())
 	if len(got) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(got))
 	}
 	if got[0].Available {
-		t.Error("expected Available=false for unregistered central")
+		t.Error("expected Available=false for a freshly-registered unit with no health data")
 	}
-	if got[0].Name != "absent-ccu" {
-		t.Errorf("Name: got %q, want %q", got[0].Name, "absent-ccu")
+	if got[0].Name != "orphan-ccu" {
+		t.Errorf("Name: got %q, want %q", got[0].Name, "orphan-ccu")
 	}
-	if len(got[0].ConfiguredInterfaces) != 1 || got[0].ConfiguredInterfaces[0] != "HmIP-RF" {
-		t.Errorf("ConfiguredInterfaces: got %v", got[0].ConfiguredInterfaces)
+	if got[0].Host != "" || len(got[0].ConfiguredInterfaces) != 0 {
+		t.Errorf("expected empty Host/ConfiguredInterfaces for an unresolvable central, got %+v", got[0])
 	}
 }
 
+// TestSystemCCUAdapter_List_CentralInRegistry_FieldsPopulated asserts a
+// registered central resolvable via the live config source surfaces its
+// Host and ConfiguredInterfaces from the resolver.
 func TestSystemCCUAdapter_List_CentralInRegistry_FieldsPopulated(t *testing.T) {
 	t.Parallel()
 	const centralName = "registered-ccu"
-	cfg := config.Default()
-	cfg.Centrals = []config.CentralConfig{
-		{
-			Name: centralName,
-			Host: "10.0.0.1",
-			Interfaces: []config.InterfaceSpec{
-				{Name: "HmIP-RF"},
-				{Name: "BidCos-RF"},
-			},
-		},
-	}
 	reg := buildTestRegistry(t, centralName)
-	a := newSystemCCUAdapter(reg, cfg)
+	resolve := resolverFromCentrals(config.CentralConfig{
+		Name: centralName,
+		Host: "10.0.0.1",
+		Interfaces: []config.InterfaceSpec{
+			{Name: "HmIP-RF"},
+			{Name: "BidCos-RF"},
+		},
+	})
+	a := newSystemCCUAdapter(reg, resolve)
 	got := a.List(context.Background())
 	if len(got) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(got))
@@ -350,8 +342,33 @@ func TestSystemCCUAdapter_List_CentralInRegistry_FieldsPopulated(t *testing.T) {
 	if got[0].Name != centralName {
 		t.Errorf("Name: got %q, want %q", got[0].Name, centralName)
 	}
+	if got[0].Host != "10.0.0.1" {
+		t.Errorf("Host: got %q, want %q", got[0].Host, "10.0.0.1")
+	}
 	if len(got[0].ConfiguredInterfaces) != 2 {
 		t.Errorf("ConfiguredInterfaces len: got %d, want 2", len(got[0].ConfiguredInterfaces))
+	}
+}
+
+// TestSystemCCUAdapter_List_SortedByName_RegistrationOrderIndependent
+// pins the ordering guarantee: entries come out sorted by central name
+// (mirroring [central.Registry.List]) regardless of registration order —
+// this is what keeps the runtime-adopted-central case deterministic.
+func TestSystemCCUAdapter_List_SortedByName_RegistrationOrderIndependent(t *testing.T) {
+	t.Parallel()
+	reg := buildTestRegistry(t, "zulu", "alpha", "mike")
+	a := newSystemCCUAdapter(reg, resolverFromCentrals())
+	got := a.List(context.Background())
+	if len(got) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(got))
+	}
+	names := []string{got[0].Name, got[1].Name, got[2].Name}
+	want := []string{"alpha", "mike", "zulu"}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Errorf("entries[%d].Name = %q, want %q (got order %v)", i, names[i], want[i], names)
+			break
+		}
 	}
 }
 
