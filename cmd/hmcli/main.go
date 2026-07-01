@@ -2,8 +2,12 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // Command hmcli is the admin CLI counterpart to the openccu-loom daemon.
-// It offers `version`, `config validate`, and `openapi show` so operators
-// can sanity-check a deployment without reaching for curl.
+// It offers `version`, `config validate`, `cache clear`, `devices`, and
+// `export-def` subcommands so operators can inspect and drive a daemon
+// without curl. Commands are structured with the Cobra CLI framework; the
+// command groups that carry their own `flag.FlagSet` (config, cache,
+// devices, export-def) run with Cobra flag-parsing disabled so their
+// existing flag surface is preserved verbatim.
 package main
 
 import (
@@ -13,6 +17,9 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -25,40 +32,115 @@ func main() {
 	}
 }
 
+// run is the test seam: it builds the Cobra command tree wired to the given
+// writers and executes it against args. It returns the error Cobra surfaces so
+// callers (and tests) decide how to report it. On a missing or unknown
+// subcommand the root usage block is written to stderr, mirroring the pre-Cobra
+// behaviour operators relied on.
 func run(args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 {
-		printUsage(stderr)
-		return errors.New("missing subcommand")
+	root := newRootCmd(stdout, stderr)
+	root.SetArgs(args)
+	err := root.Execute()
+	if err != nil && isUsageError(err) {
+		_, _ = fmt.Fprint(stderr, root.UsageString())
 	}
-	switch args[0] {
-	case "version", "--version", "-v":
-		printVersion(stdout)
-		return nil
-	case "config":
-		return cmdConfig(args[1:], stdout, stderr)
-	case "cache":
-		return cmdCache(args[1:], stdout, stderr)
-	case "export-def":
-		return cmdExportDef(args[1:], stdout, stderr)
-	case "help", "-h", "--help":
-		printUsage(stdout)
-		return nil
-	}
-	printUsage(stderr)
-	return fmt.Errorf("unknown subcommand %q", args[0])
+	return err
 }
 
-func printUsage(w io.Writer) {
-	_, _ = fmt.Fprintf(w, `hmcli %s — openccu-loom admin CLI
+// isUsageError reports whether err is a top-level dispatch failure (no
+// subcommand given, or an unknown one) for which the usage block should be
+// printed. Errors raised inside a resolved subcommand (config validation,
+// network failures, …) are left alone so operators are not buried in usage.
+func isUsageError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if err.Error() == "missing subcommand" {
+		return true
+	}
+	return strings.Contains(err.Error(), "unknown command")
+}
 
-Usage:
-  hmcli version                 print version metadata
-  hmcli config validate <file>  validate a openccu-loom YAML config
-  hmcli cache clear [flags]     clear CCU-derivable caches (online) or SQLite rows (--offline)
-  hmcli export-def -address <a> [-host URL] [-token T] [-out file]
-                                download a device-definition zip from a daemon
-  hmcli help                    print this help
-`, build.Version)
+// newRootCmd assembles the hmcli command tree. The root carries the shared
+// connection flags as persistent flags for discoverability, but the leaf
+// command groups parse their own flags (via flag.FlagSet) — so the persistent
+// flags are declarative help only and each group runs with DisableFlagParsing.
+func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
+	var showVersion bool
+
+	root := &cobra.Command{
+		Use:   "hmcli",
+		Short: "openccu-loom admin CLI",
+		Long:  "hmcli " + build.Version + " — openccu-loom admin CLI",
+		// Errors are returned through run() rather than printed by Cobra;
+		// run() re-prints the usage block to stderr only for top-level
+		// dispatch failures (see isUsageError), so command-internal errors
+		// stay quiet.
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if showVersion {
+				printVersion(stdout)
+				return nil
+			}
+			return errors.New("missing subcommand")
+		},
+	}
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+
+	// `-v` / `--version` mirror the legacy short/long version flags. Cobra's
+	// default help flag (`-h` / `--help`) already prints usage to stdout.
+	root.Flags().BoolVarP(&showVersion, "version", "v", false, "print version metadata and exit")
+
+	// Declarative shared connection flags. The command groups below re-parse
+	// them from their own flag.FlagSet, so these only shape `--help` output.
+	root.PersistentFlags().String("host", "http://localhost:8119", "daemon REST base URL")
+	root.PersistentFlags().String("token", "", "API bearer token (Authorization: Bearer)")
+	root.PersistentFlags().String("user", "", "basic-auth username (alternative to --token)")
+	root.PersistentFlags().String("password", "", "basic-auth password")
+	root.PersistentFlags().Duration("timeout", 0, "request timeout")
+
+	root.AddCommand(
+		newVersionCmd(stdout),
+		newDelegateCmd("config", "Validate a openccu-loom YAML config (config validate <file>)", cmdConfig, stdout, stderr),
+		newDelegateCmd("cache", "Clear CCU-derivable caches (online) or SQLite rows (--offline)", cmdCache, stdout, stderr),
+		newDelegateCmd("devices", "List and drive devices (list, get, get-value, set)", cmdDevices, stdout, stderr),
+		newDelegateCmd("export-def", "Download a device-definition zip from a daemon", cmdExportDef, stdout, stderr),
+	)
+	return root
+}
+
+// newVersionCmd is the `version` subcommand; it prints the same metadata as the
+// `--version` flag.
+func newVersionCmd(stdout io.Writer) *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print version metadata",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			printVersion(stdout)
+			return nil
+		},
+	}
+}
+
+// newDelegateCmd wraps an existing flag.FlagSet-based subcommand as a Cobra
+// command. Cobra flag parsing is disabled so every argument after the command
+// name (including flag-shaped tokens like `--scope` or `-host`) is handed to
+// the delegate verbatim, preserving its self-contained parsing.
+func newDelegateCmd(
+	use, short string,
+	delegate func(args []string, stdout, stderr io.Writer) error,
+	stdout, stderr io.Writer,
+) *cobra.Command {
+	return &cobra.Command{
+		Use:                use,
+		Short:              short,
+		DisableFlagParsing: true,
+		RunE: func(_ *cobra.Command, args []string) error {
+			return delegate(args, stdout, stderr)
+		},
+	}
 }
 
 func printVersion(w io.Writer) {
