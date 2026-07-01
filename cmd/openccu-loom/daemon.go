@@ -451,7 +451,14 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// the operational mDNS record. Failure here never aborts the
 	// daemon — the bridge is best-effort until GA.
 	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, healthTracker, parameterLabels, logger, wsHub)
-	defer matterStop()
+	// Matter's ordered teardown is owned by the north-bound registry (it
+	// stops after REST, before the webhook). Only registered when enabled —
+	// a disabled bridge yields a no-op matterStop and is not a surface. The
+	// registry's StopAll (awaitShutdown + the boot-error defer) runs it; see
+	// matterService for why Start is a no-op (self-started at construction).
+	if cfg.North.Matter.Enabled {
+		northBridges.Register(newMatterService(matterStop))
+	}
 	availClosers = append(availClosers, matterAvailClosers...)
 	centralLinksDomain := adapter.NewCentralLinksDomain(reg, valueWriter)
 	definitionExportDomain := adapter.NewDefinitionExportDomain(reg)

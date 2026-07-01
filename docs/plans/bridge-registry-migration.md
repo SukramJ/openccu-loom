@@ -237,10 +237,21 @@ Per surface:
 
 Special handling:
 
-- **Matter**: move the bridge→subMgr→advertiser→db **stop ordering** inside
-  `matter.Service.Stop`; honour `cfg.North.Matter.Enabled` (a disabled
-  Matter registers a service whose `Start` is a no-op, or is not registered
-  — pick one and pin it in the registration-guard test).
+- **Matter — DONE (teardown-managed, self-start).** A boot-order scout found
+  Matter's start is **not** cleanly separable from construction: `bridge.Start`
+  precedes ~600 lines of `Attach*` wiring and `announcePersistedFabric`
+  requires a running bridge, and Matter cannot be interop-verified from a unit
+  test (chip-tool / real commissioner needed). Forcing a construct/start split
+  would risk silent Apple/Google Home pair-aborts. So `matterService`
+  (`cmd/openccu-loom/matter_service.go`) owns only the **ordered teardown**
+  (the bridge→subMgr→db stop, run in the reverse-order StopAll after REST,
+  before the webhook) — `Start` is a no-op; the bridge self-starts during
+  `wireMatterRuntime`. Registered PhaseLate only when `cfg.North.Matter.Enabled`.
+  `matter.bi.EmitShutDown()` (Matter spec §11.1.6.2) stays in `awaitShutdown`
+  **before** StopAll. This is a **documented divergence** from the
+  "Service.Start does the starting" ideal — justified by the interop-sensitive,
+  un-unit-verifiable bring-up. The registration-guard must therefore treat
+  Matter as a teardown-only service (Start is a legitimate no-op).
 - **REST**: `matter`/southbound handlers must be mounted before `Start`;
   `Stop` is a context-bounded `http.Server.Shutdown`. MCP mount stays inside
   the REST service's router assembly.
