@@ -161,7 +161,9 @@ func TestHotReloadHandler_AllRestartRequiredFields(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn}))
 
 	prev := config.Default()
+	prev.Centrals = []config.CentralConfig{{Name: "ccu1", Host: "10.0.0.1"}}
 	next := config.Default()
+	next.Centrals = []config.CentralConfig{{Name: "ccu1", Host: "10.0.0.1"}}
 
 	// data_dir
 	next.DataDir = "/tmp/changed"
@@ -169,14 +171,16 @@ func TestHotReloadHandler_AllRestartRequiredFields(t *testing.T) {
 	next.Locale = "de"
 	// callback (change port so struct comparison finds a diff)
 	next.Callback.Port = 9999
-	// centrals count
-	next.Centrals = append(next.Centrals, config.CentralConfig{Name: "extra", Host: "10.0.0.99"})
+	// centrals: modify a central present in both prev and next in place
+	// (add/remove of a central is a live operation and is intentionally
+	// NOT restart-required — see TestHotReloadHandler_CentralsAdded).
+	next.Centrals[0].Host = "10.0.0.2"
 
 	if err := hotReloadHandler(logger, nil)(prev, next); err != nil {
 		t.Fatalf("handler error: %v", err)
 	}
 	out := buf.String()
-	for _, field := range []string{"data_dir", "locale", "callback", "centrals.count"} {
+	for _, field := range []string{"data_dir", "locale", "callback", "centrals"} {
 		if !strings.Contains(out, field) {
 			t.Errorf("expected restart_required for field %q, got:\n%s", field, out)
 		}

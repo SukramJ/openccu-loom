@@ -90,7 +90,7 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	// (the default when enabled) the CCU is tried first, otherwise last.
 	// Either way local users remain a break-glass fallback because the
 	// CCU store maps every failure to "unauthenticated".
-	ccuStore := buildCCUAuthStore(cfg, d.reg, logger)
+	ccuStore := buildCCUAuthStore(cfg, d.reg, d.sqCentrals, logger)
 	ccuPrimary := ccuAuthPrimary(cfg.North.REST.Auth.CCU)
 
 	if d.auditDB != nil && d.healthTracker != nil {

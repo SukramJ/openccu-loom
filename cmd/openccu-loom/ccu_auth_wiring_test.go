@@ -12,6 +12,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // ── parseCCURoleMapping ───────────────────────────────────────────────────────
@@ -307,5 +308,141 @@ func TestLoginChainWithCCU_Primary_NilCCUPureLoca(t *testing.T) {
 	}
 	if id.Subject != "alice" {
 		t.Errorf("subject = %q, want %q", id.Subject, "alice")
+	}
+}
+
+// ── newCCUAuthCentralResolver ─────────────────────────────────────────────────
+
+// buildCentralsTestStore opens a fresh migrated SQLite DB and returns its
+// *sqlitestore.CentralsStore, mirroring buildPurgeTestStores's
+// gooseMigrateMu-guarded open pattern (central_adopt_test.go) to avoid
+// goose's migration race when tests run in parallel across the package.
+func buildCentralsTestStore(t *testing.T) *sqlitestore.CentralsStore {
+	t.Helper()
+	ctx := context.Background()
+
+	dsn := "file:" + t.TempDir() + "/ccu_auth_resolver_test.db?_pragma=journal_mode(WAL)"
+	gooseMigrateMu.Lock()
+	db, err := sqlitestore.Open(ctx, dsn)
+	gooseMigrateMu.Unlock()
+	if err != nil {
+		t.Fatalf("sqlitestore.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	return sqlitestore.NewCentralsStore(db)
+}
+
+// TestCCUAuthCentralResolverNoStoreFallback verifies that with a nil
+// centrals store the resolver falls back to the boot-time cfg.Centrals
+// snapshot, replicating the pre-store centralConfig rule: named hit,
+// empty name selects the first entry, unknown name misses.
+func TestCCUAuthCentralResolverNoStoreFallback(t *testing.T) {
+	t.Parallel()
+	cfg := &config.Config{Centrals: []config.CentralConfig{
+		{Name: "ccu1", Host: "192.0.2.1"},
+		{Name: "ccu2", Host: "192.0.2.2"},
+	}}
+	resolve := newCCUAuthCentralResolver(cfg, nil)
+
+	if cc, ok := resolve(context.Background(), "ccu2"); !ok || cc.Host != "192.0.2.2" {
+		t.Errorf("named hit: got %+v ok=%v", cc, ok)
+	}
+	if cc, ok := resolve(context.Background(), ""); !ok || cc.Name != "ccu1" {
+		t.Errorf("empty name: expected first entry ccu1, got %+v ok=%v", cc, ok)
+	}
+	if _, ok := resolve(context.Background(), "unknown"); ok {
+		t.Error("unknown name: expected miss")
+	}
+}
+
+// TestCCUAuthCentralResolverStoreBackedRuntimeAdopted verifies the
+// headline PR4 behaviour: a central that exists ONLY in the SQLite
+// centrals store (simulating a runtime adopt that never touched
+// cfg.Centrals) resolves successfully by name.
+func TestCCUAuthCentralResolverStoreBackedRuntimeAdopted(t *testing.T) {
+	t.Parallel()
+	store := buildCentralsTestStore(t)
+	ctx := context.Background()
+
+	row := sqlitestore.CentralRow{Name: "runtime-ccu", Host: "192.0.2.50", Enabled: true}
+	if err := store.Put(ctx, row); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	// cfg.Centrals intentionally does NOT contain "runtime-ccu" — it was
+	// adopted live after boot.
+	cfg := &config.Config{Centrals: []config.CentralConfig{{Name: "boot-ccu", Host: "192.0.2.1"}}}
+	resolve := newCCUAuthCentralResolver(cfg, store)
+
+	cc, ok := resolve(ctx, "runtime-ccu")
+	if !ok {
+		t.Fatal("expected runtime-adopted central to resolve via the store")
+	}
+	if cc.Host != "192.0.2.50" {
+		t.Errorf("expected host 192.0.2.50, got %q", cc.Host)
+	}
+}
+
+// TestCCUAuthCentralResolverStoreEmptyNameFirstEnabled verifies that an
+// empty name resolves to the first ENABLED row (store.List order),
+// skipping any disabled row.
+func TestCCUAuthCentralResolverStoreEmptyNameFirstEnabled(t *testing.T) {
+	t.Parallel()
+	store := buildCentralsTestStore(t)
+	ctx := context.Background()
+
+	// "a-disabled" sorts before "b-enabled" (store.List orders by name),
+	// so an implementation that ignores Enabled would pick the wrong one.
+	if err := store.Put(ctx, sqlitestore.CentralRow{Name: "a-disabled", Host: "192.0.2.9", Enabled: false}); err != nil {
+		t.Fatalf("Put(a-disabled): %v", err)
+	}
+	if err := store.Put(ctx, sqlitestore.CentralRow{Name: "b-enabled", Host: "192.0.2.10", Enabled: true}); err != nil {
+		t.Fatalf("Put(b-enabled): %v", err)
+	}
+
+	resolve := newCCUAuthCentralResolver(&config.Config{}, store)
+	cc, ok := resolve(ctx, "")
+	if !ok {
+		t.Fatal("expected an enabled default central to resolve")
+	}
+	if cc.Name != "b-enabled" {
+		t.Errorf("expected first enabled row b-enabled, got %q", cc.Name)
+	}
+}
+
+// TestCCUAuthCentralResolverStoreDisabledFailsClosed verifies that a
+// disabled central (present in the store) fails closed by name, and
+// that a store with no enabled centrals fails closed for an empty name.
+func TestCCUAuthCentralResolverStoreDisabledFailsClosed(t *testing.T) {
+	t.Parallel()
+	store := buildCentralsTestStore(t)
+	ctx := context.Background()
+
+	if err := store.Put(ctx, sqlitestore.CentralRow{Name: "parked", Host: "192.0.2.20", Enabled: false}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+
+	resolve := newCCUAuthCentralResolver(&config.Config{}, store)
+	if _, ok := resolve(ctx, "parked"); ok {
+		t.Error("expected a disabled central to fail closed by name")
+	}
+	if _, ok := resolve(ctx, ""); ok {
+		t.Error("expected empty name to fail closed when no central is enabled")
+	}
+}
+
+// TestCCUAuthCentralResolverStoreUnknownNameFailsClosed verifies a name
+// absent from the store fails closed rather than falling back to
+// cfg.Centrals — once a store is available it is the sole source of
+// truth for named lookups.
+func TestCCUAuthCentralResolverStoreUnknownNameFailsClosed(t *testing.T) {
+	t.Parallel()
+	store := buildCentralsTestStore(t)
+	cfg := &config.Config{Centrals: []config.CentralConfig{{Name: "ccu1", Host: "192.0.2.1"}}}
+	resolve := newCCUAuthCentralResolver(cfg, store)
+
+	if _, ok := resolve(context.Background(), "ccu1"); ok {
+		t.Error("expected a name absent from the (empty) store to fail closed even though it exists in cfg.Centrals")
 	}
 }

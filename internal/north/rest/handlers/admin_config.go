@@ -153,7 +153,16 @@ var restartRequiredPaths = map[string]struct{}{
 	// The scheduled-backup job is wired once at boot.
 	"backup.schedule":  {},
 	"backup.keep_last": {},
-	"centrals":         {},
+	// This is a static, non-diff-aware "this field can require a restart"
+	// annotation for the schema/field editor; centrals is not one of the
+	// generically-editable configstore.Section values (it has its own
+	// admin/centrals CRUD surface), so the badge here is never actually
+	// rendered against a live edit. The real, diff-aware gate is
+	// config.RestartRequiredDiff, which only flags "centrals" for an
+	// in-place modification of a central present before and after — adding
+	// or removing a central is a live orchestrator operation and does not
+	// require a restart.
+	"centrals": {},
 	// CCU-delegated login: the login chain (incl. the CCU auth provider)
 	// is wired once at boot, so any field in the block is restart-required.
 	// Mirrors config.RestartRequiredDiff's whole-block diff.

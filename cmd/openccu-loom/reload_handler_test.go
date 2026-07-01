@@ -139,8 +139,9 @@ func TestHotReloadHandler_RESTListenChange(t *testing.T) {
 	}
 }
 
-// TestHotReloadHandler_CentralsCountChange is restart-required.
-func TestHotReloadHandler_CentralsCountChange(t *testing.T) {
+// TestHotReloadHandler_CentralsAdded verifies that a pure central
+// addition is now a live orchestrator operation, not restart-required.
+func TestHotReloadHandler_CentralsAdded(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	h := hotReloadHandler(makeLogger(&buf), nil)
@@ -152,8 +153,34 @@ func TestHotReloadHandler_CentralsCountChange(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := buf.String()
-	if !strings.Contains(out, "centrals.count") {
-		t.Errorf("expected centrals.count restart_required log; got:\n%s", out)
+	if strings.Contains(out, `field=centrals`) {
+		t.Errorf("pure add: unexpected centrals restart_required log; got:\n%s", out)
+	}
+	if !strings.Contains(out, "restart_required_fields=0") {
+		t.Errorf("pure add: expected restart_required_fields=0; got:\n%s", out)
+	}
+}
+
+// TestHotReloadHandler_CentralsModifiedInPlace verifies that changing a
+// field of a central present in both prev and next IS restart-required.
+func TestHotReloadHandler_CentralsModifiedInPlace(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	h := hotReloadHandler(makeLogger(&buf), nil)
+
+	prev := config.Default()
+	prev.Centrals = []config.CentralConfig{{Name: "ccu1", Host: "192.0.2.1"}}
+	next := config.Default()
+	next.Centrals = []config.CentralConfig{{Name: "ccu1", Host: "192.0.2.2"}}
+	if err := h(prev, next); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, `field=centrals`) {
+		t.Errorf("expected centrals restart_required log; got:\n%s", out)
+	}
+	if !strings.Contains(out, "restart_required_fields=1") {
+		t.Errorf("expected restart_required_fields=1; got:\n%s", out)
 	}
 }
 
