@@ -223,7 +223,19 @@ Cite these `path:function` anchors in the Go comments you add.
    deliberate divergence.
 5. Update the stale comment at `subscribe_dispatch.go:161`.
 
-### Step 2 — Timed-required enforcement coverage (Effort: S)
+### Step 2 — Timed-required enforcement coverage (Effort: S) — DONE
+
+**Status: shipped.** The bridge now enforces server-side timed conformance:
+`internal/north/matter/schema/timed.go` (`IsTimedInvoke`, matter.js-derived
+"T" access quality, pinned by `TestTimedInvokeParity` against the
+`administrator-commissioning.element.ts` model file — skips when the matter.js
+checkout is absent) + `bridge/receive_dispatch.go` folds it into the invoke
+gate (`req.TimedRequest || anyTimedRequiredInvoke(req)`), mirroring matter.js
+`CommandInvokeResponse.ts:266`. Across loom's exposed root/utility clusters
+AdministratorCommissioning (0x003C, all three commands `A T`) is the only
+cluster with timed commands; the parity test fails if matter.js adds/removes
+one. The stale `im/doc.go` line was corrected separately (PR #247). Original
+step list kept below for reference.
 
 1. Find where `receive.go:388` returns `StatusNeedsTimedInteraction` and
    determine what predicate gates it.
