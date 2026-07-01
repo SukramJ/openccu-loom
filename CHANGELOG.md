@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`hmcli` gains a `devices` command group + shared REST client.** The admin
+  CLI moved onto the Cobra framework with a root carrying shared connection
+  flags (`--host` default `http://localhost:8119`, `--token`, `--user`,
+  `--password`, `--timeout`); the existing `version`/`config`/`cache`/
+  `export-def` commands are unchanged. New: `hmcli devices list|get|get-value|
+  set` — list the inventory, read a device / datapoint, and flip a value from
+  the shell, each with `--json` for scripting. Pure REST client (no daemon
+  change). The `cache clear` online default host was corrected to
+  `http://localhost:8119` (was `:2121`). (More command groups — `sysvar`,
+  `program`, `paramset`, `events tail` — are follow-ups.)
+
 - **Scheduled / automatic CCU backups (`backup:`).** A new opt-in config
   section runs an automatic backup of each configured CCU on an interval
   (`backup.schedule`, e.g. `24h`; off by default) via a per-central

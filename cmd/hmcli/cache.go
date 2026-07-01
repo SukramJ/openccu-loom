@@ -53,7 +53,7 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	iface := fs.String("interface", "", "interface name (required for scope=interface/device)")
 	device := fs.String("device", "", "device address (required for scope=device)")
 	offline := fs.Bool("offline", false, "clear persisted rows directly against SQLite instead of calling the daemon")
-	url := fs.String("url", "http://localhost:2121", "daemon base URL (online mode)")
+	url := fs.String("url", "http://localhost:8119", "daemon base URL (online mode)")
 	token := fs.String("token", "", "API bearer token (online mode)")
 	cfgPath := fs.String("config", "", "config file path (offline mode; required for scope=global/central)")
 	dbPath := fs.String("db", "", "override DB path (offline mode; skips the config DataDir lookup)")
