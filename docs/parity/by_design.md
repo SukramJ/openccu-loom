@@ -838,6 +838,36 @@ connectedhomeip's `Dnssd.cpp` would emit (`cmd/openccu-loom/daemon.go`).
 audit does not re-flag it (parity audit 2026-05-30 CHIP-mDNS F2). The wire
 diff that motivated it should be attached when next reproduced.
 
+### BD-Matter-SubscriptionResumption-Deferred — no cross-restart subscription resumption
+
+A daemon restart drops every Matter subscription; the controller
+re-subscribes on its own liveness timeout. The SQLite store
+(`internal/north/matter/store/subscriptions.go`) and its table exist but
+are intentionally **not** wired to save-on-subscribe / restore-at-boot in
+production.
+
+**Rationale (verified against the gold standard, 2026-07-01):** matter.js
+HEAD implements **no** subscription resumption — a repo-wide search of
+`../matter.js/packages/protocol/src/interaction/` for resumption /
+server-initiated-CASE re-establishment finds nothing. Meaningful
+resumption is not just persisting rows: (1) the `subscription.Manager`
+generates the `SubscriptionId` internally with no restore-with-id path, so
+a restored row would re-arm under a fresh id the controller does not
+recognise; and (2) report delivery is **session-bound** —
+`bridge/subscribe.go` ships every ReportData through
+`b.subTargets.Load(sub.ID)`, a `subTarget{src: <transport session>}`
+captured at Subscribe time. After a restart the CASE session is gone, so a
+restored subscription has no `subTarget` and the engine tick delivers
+nothing. Resuming delivery would require the daemon to **initiate** CASE
+back to the controller (operational discovery + a CASE-initiator role),
+which loom does not have — the bridge is a pure CASE responder, matching
+matter.js. Building a server-initiated-CASE resumption path the gold
+standard itself omits would be a large divergence, not parity. Deferred
+until matter.js (or a concrete interop need) makes it a parity
+requirement. WIP scaffolding for the id-preserving store lives on the
+unmerged `wip/a1-subscription-persistence` branch; the corrected scope is
+recorded in the A1 implementation plan.
+
 > **Rule of thumb (CLAUDE.md):** matter.js HEAD is the gold standard for everything under `internal/north/matter/`. Cluster IDs / revisions / attribute IDs / constraints / defaults / wire shape are taken verbatim. Any item below is a **deliberate** divergence with a documented reason. Bug-class drift (hand-coded revisions etc.) does **not** belong here — it belongs in a fix.
 
 ### Idiomatic translations TypeScript → Go (not real divergence)
