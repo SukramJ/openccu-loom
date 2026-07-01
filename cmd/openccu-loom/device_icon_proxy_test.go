@@ -13,8 +13,22 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
+
+// resolverFromCentrals builds a stub [adapter.CentralConfigResolver] over a
+// fixed set of centrals, standing in for the store-backed resolver in tests.
+func resolverFromCentrals(centrals ...config.CentralConfig) adapter.CentralConfigResolver {
+	byName := make(map[string]config.CentralConfig, len(centrals))
+	for i := range centrals {
+		byName[centrals[i].Name] = centrals[i]
+	}
+	return func(_ context.Context, name string) (config.CentralConfig, bool) {
+		cc, ok := byName[name]
+		return cc, ok
+	}
+}
 
 // ---------------------------------------------------------------------------
 // ccuImageBaseURL
@@ -108,7 +122,7 @@ func TestDeviceIconProxy_Icon_HappyPath(t *testing.T) {
 	locate := func(_ string) (string, string, bool) {
 		return iconFile, "ccu", true
 	}
-	proxy := newDeviceIconProxyWith(locate, []config.CentralConfig{cc})
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	data, ct, ok := proxy.Icon(context.Background(), "AABB0001")
 	if !ok {
@@ -149,7 +163,7 @@ func TestDeviceIconProxy_Icon_HitCached(t *testing.T) {
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
 	locate := func(_ string) (string, string, bool) { return iconFile, "ccu", true }
-	proxy := newDeviceIconProxyWith(locate, []config.CentralConfig{cc})
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	// First call — fetches from server.
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
@@ -184,7 +198,7 @@ func TestDeviceIconProxy_Icon_MissCached_NonOKUpstream(t *testing.T) {
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
 	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
-	proxy := newDeviceIconProxyWith(locate, []config.CentralConfig{cc})
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	// First call — server returns 404 → miss.
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
@@ -221,7 +235,7 @@ func TestDeviceIconProxy_Icon_UnknownDevice_Returns_False(t *testing.T) {
 	defer srv.Close()
 
 	locate := func(_ string) (string, string, bool) { return "", "", false }
-	proxy := newDeviceIconProxyWith(locate, nil)
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
 
 	_, _, ok := proxy.Icon(context.Background(), "UNKNOWN")
 	if ok {
@@ -261,7 +275,7 @@ func TestDeviceIconProxy_Icon_UnsafeFilename_Returns_False(t *testing.T) {
 			// note: NOT t.Parallel() here — we share the hit counter
 			filename := tc.filename
 			locate := func(_ string) (string, string, bool) { return filename, "ccu", true }
-			proxy := newDeviceIconProxyWith(locate, []config.CentralConfig{cc})
+			proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 			_, _, ok := proxy.Icon(context.Background(), "DEV-"+filename)
 			if ok {
@@ -290,7 +304,7 @@ func TestDeviceIconProxy_Icon_MissingCentralConfig_Returns_False(t *testing.T) {
 
 	// locate returns "unknown" as central name, but no such central in configs.
 	locate := func(_ string) (string, string, bool) { return "swdo.png", "unknown", true }
-	proxy := newDeviceIconProxyWith(locate, nil) // empty central list
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
 
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
 	if ok {
@@ -317,7 +331,7 @@ func TestDeviceIconProxy_Icon_Non200Upstream_Returns_False(t *testing.T) {
 	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
 
 	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
-	proxy := newDeviceIconProxyWith(locate, []config.CentralConfig{cc})
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
 
 	_, _, ok := proxy.Icon(context.Background(), "AABB0001")
 	if ok {
