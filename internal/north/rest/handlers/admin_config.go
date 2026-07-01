@@ -141,14 +141,16 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.mcp.path":         {},
 	// The outbound webhook bridge is wired once at boot, so every webhook
 	// field is restart-required.
-	"north.webhook.enabled":        {},
-	"north.webhook.url":            {},
-	"north.webhook.secret":         {},
-	"north.webhook.events":         {},
-	"north.webhook.centrals":       {},
-	"north.webhook.parameter_glob": {},
-	"north.webhook.timeout_ms":     {},
-	"centrals":                     {},
+	"north.webhook.enabled":         {},
+	"north.webhook.url":             {},
+	"north.webhook.secret":          {},
+	"north.webhook.events":          {},
+	"north.webhook.centrals":        {},
+	"north.webhook.parameter_glob":  {},
+	"north.webhook.timeout_ms":      {},
+	"north.webhook.inbound.enabled": {},
+	"north.webhook.inbound.token":   {},
+	"centrals":                      {},
 	// CCU-delegated login: the login chain (incl. the CCU auth provider)
 	// is wired once at boot, so any field in the block is restart-required.
 	// Mirrors config.RestartRequiredDiff's whole-block diff.

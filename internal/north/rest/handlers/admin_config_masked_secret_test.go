@@ -265,3 +265,83 @@ func TestPutConfigSection_EmptyComplexSecretPlaceholder(t *testing.T) {
 		t.Errorf("auth.users should stay empty, got: %#v", saved.Auth.Users)
 	}
 }
+
+// TestGetConfigSection_MasksInboundWebhookToken verifies the nested secret
+// north.webhook.inbound.token is masked on GET so the bearer token is never
+// sent to the browser even though it lives one struct level deeper than the
+// outbound webhook secret.
+func TestGetConfigSection_MasksInboundWebhookToken(t *testing.T) {
+	t.Parallel()
+
+	fake := &fakeConfigAdminSvc{
+		getSectionRow: sqlitestore.SectionRow{
+			Section:   "north.webhook",
+			ValueJSON: []byte(`{"enabled":true,"inbound":{"enabled":true,"token":"s3cr3t"}}`),
+		},
+	}
+	w := getSection(fake, "north.webhook")
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "s3cr3t") {
+		t.Fatalf("cleartext inbound token leaked to the GET response: %s", w.Body.String())
+	}
+	var got map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("response not valid JSON: %v", err)
+	}
+	inbound, ok := got["inbound"].(map[string]any)
+	if !ok {
+		t.Fatalf("inbound field missing or wrong type: %v", got["inbound"])
+	}
+	if inbound["token"] != "***" {
+		t.Errorf("inbound.token should be masked to ***, got %v", inbound["token"])
+	}
+	if got["enabled"] != true {
+		t.Errorf("non-secret field must pass through unchanged, got %v", got["enabled"])
+	}
+}
+
+// TestPutConfigSection_RestoresInboundWebhookToken verifies the masked nested
+// secret north.webhook.inbound.token is restored from the current config when
+// the SPA echoes back "***", so editing an adjacent field does not overwrite
+// the real token with the sentinel.
+func TestPutConfigSection_RestoresInboundWebhookToken(t *testing.T) {
+	t.Parallel()
+
+	current := &config.Config{
+		North: config.NorthConfig{
+			Webhook: config.NorthWebhook{
+				Enabled: true,
+				Inbound: config.NorthWebhookInbound{
+					Enabled: true,
+					Token:   "real-inbound-key",
+				},
+			},
+		},
+	}
+	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: current}}
+
+	// Operator toggled outbound enabled; SPA echoes masked sentinel for Inbound.Token.
+	body := `{"enabled":false,"inbound":{"enabled":true,"token":"***"}}`
+	w := putSection(fake, "north.webhook", body)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
+	}
+	if !fake.putCalled {
+		t.Fatal("PutSection was never called — the save silently aborted")
+	}
+
+	var saved config.NorthWebhook
+	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
+		t.Fatalf("persisted section JSON is invalid: %v", err)
+	}
+	if saved.Enabled {
+		t.Errorf("edited enabled field not persisted: want false, got true")
+	}
+	if saved.Inbound.Token != "real-inbound-key" {
+		t.Errorf("masked inbound token not restored: %q", saved.Inbound.Token)
+	}
+}

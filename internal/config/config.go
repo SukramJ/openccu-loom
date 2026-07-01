@@ -362,6 +362,11 @@ type NorthWebhook struct {
 	// TimeoutMs is the per-delivery HTTP timeout in milliseconds. Zero or
 	// negative falls back to the 10s default.
 	TimeoutMs int `yaml:"timeout_ms" json:"timeout_ms" cfg:"expert"`
+
+	// Inbound is the reverse direction: a REST surface external systems POST
+	// to in order to set a datapoint value or trigger a program. Disabled by
+	// default and independent of the outbound endpoint above.
+	Inbound NorthWebhookInbound `yaml:"inbound" json:"inbound" cfg:"basic"`
 }
 
 // Timeout returns the configured per-delivery timeout, or the 10s default
@@ -371,6 +376,25 @@ func (w NorthWebhook) Timeout() time.Duration {
 		return 10 * time.Second
 	}
 	return time.Duration(w.TimeoutMs) * time.Millisecond
+}
+
+// NorthWebhookInbound configures the inbound webhook REST surface — the
+// endpoints external systems POST to in order to set a datapoint value
+// (`POST /api/v1/webhook/value`) or trigger a program
+// (`POST /api/v1/webhook/program`). These are real device writes / program
+// runs, so they carry the same authorization weight as the equivalent REST
+// calls. Disabled by default; the routes are mounted only when Enabled, so
+// toggling it is restart-required (mirrors the outbound bridge).
+type NorthWebhookInbound struct {
+	// Enabled is the feature flag. Default false; while disabled the daemon
+	// mounts no inbound webhook route (404).
+	Enabled bool `yaml:"enabled" json:"enabled" cfg:"basic"`
+
+	// Token is an optional inbound-specific bearer token accepted in addition
+	// to the normal REST auth chain, so a header-only caller (e.g. a doorbell)
+	// can POST without a session or user token. Empty means only the normal
+	// auth chain applies. Sent as `Authorization: Bearer <token>`.
+	Token string `yaml:"token" json:"token" cfg:"secret"`
 }
 
 // NorthMCP configures the Model Context Protocol server — a north-bound

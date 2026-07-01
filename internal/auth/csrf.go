@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"net/http"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
@@ -88,6 +89,18 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			// A raw `Authorization: Bearer` header is exempt even when it did
+			// not resolve to a known identity (e.g. the inbound-webhook token,
+			// which is validated by a route-scoped middleware rather than the
+			// global token store). The double-submit defence is about ambient
+			// cookie credentials; a browser cannot set the Authorization header
+			// on a cross-origin form/simple request, so a Bearer request is not
+			// a CSRF vector. An invalid token still fails auth downstream (401),
+			// so skipping the CSRF check here grants nothing.
+			if hasBearerAuthHeader(r) {
+				next.ServeHTTP(w, r)
+				return
+			}
 			submitted := r.Header.Get(CSRFHeaderName)
 			if submitted == "" {
 				// Cap the form body before parsing — a malicious POST
@@ -106,6 +119,15 @@ func CSRFMiddleware(secure bool) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// hasBearerAuthHeader reports whether the request carries a non-empty
+// `Authorization: Bearer <token>` header. Such requests are CSRF-exempt
+// regardless of whether the token resolved to a known identity — see the
+// rationale at the call site.
+func hasBearerAuthHeader(r *http.Request) bool {
+	h := r.Header.Get("Authorization")
+	return strings.HasPrefix(h, "Bearer ") && strings.TrimSpace(strings.TrimPrefix(h, "Bearer ")) != ""
 }
 
 // csrfSchemeExempt reports whether an authenticated scheme bypasses

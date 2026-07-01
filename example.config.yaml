@@ -164,6 +164,12 @@ north:
   #   centrals: []           # CCU-name allowlist; empty = all
   #   parameter_glob: ""     # e.g. "*TEMPERATURE*"; empty = no filter
   #   timeout_ms: 10000      # per-delivery HTTP timeout
+  #   # Inbound direction: external systems POST to set a value / run a
+  #   # program. Off by default; routes mounted only when enabled
+  #   # (restart-required). Requires an operator identity OR the token below.
+  #   inbound:
+  #     enabled: false
+  #     token: change-me     # optional Bearer token for header-only callers
 
 # First-run setup safety. The /setup wizard always refuses once
 # there is at least one admin user; this toggle lets you keep the
