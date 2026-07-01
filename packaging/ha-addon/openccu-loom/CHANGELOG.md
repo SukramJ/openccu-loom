@@ -1,5 +1,28 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.22.0
+
+- **New Energy view** (`#/energy`) — per-device power/energy consumption and
+  feed-in, backed by new persistent hourly/daily history rollup tiers with
+  configurable retention.
+- **Add or remove a CCU without restarting the add-on.** Adopting or dropping
+  a CCU from the Config UI now takes effect immediately.
+- **New cross-CCU Fleet view** (`#/fleet`) — see every configured CCU, its
+  online status, interfaces and device count at a glance.
+- **New whole-home Overview** (`#/overview`) — every device's tile in one
+  grouped, filterable dashboard.
+- **New Access Control view** (`#/access`) — manage Basic-auth users and API
+  tokens from the browser instead of editing the config file.
+- **`hmcli` admin CLI** gained `devices`, `sysvar`, `program`, `paramset` and
+  `events tail` command groups for scripting against a running daemon.
+- **Scheduled, automatic CCU backups** with per-CCU retention (`backup:`
+  config section, off by default).
+- **Inbound and outbound webhooks** — trigger a value/program change via a
+  webhook call, and/or have the add-on POST signed events to your own
+  endpoint (both opt-in, off by default).
+- **Matter bridge**: commissioning-window commands now correctly require a
+  timed interaction window, matching Matter's conformance rules.
+
 ## 0.21.3
 
 - **All ports are now configurable in the add-on options.** Set `rest_port`
