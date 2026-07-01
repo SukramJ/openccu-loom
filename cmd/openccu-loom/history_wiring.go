@@ -62,13 +62,15 @@ func wireHistoryRecorder(
 	hc := cfg.Persistence.History
 	exporter := buildHistoryExporter(hc.Export, logger)
 	rec := history.New(store, history.Options{
-		EnabledFor:    hc.HistoryEnabled,
-		Include:       hc.Include,
-		Exclude:       hc.Exclude,
-		FlushInterval: hc.FlushInterval,
-		Retention:     hc.Retention,
-		Exporter:      exporter,
-		Logger:        logger,
+		EnabledFor:      hc.HistoryEnabled,
+		Include:         hc.Include,
+		Exclude:         hc.Exclude,
+		FlushInterval:   hc.FlushInterval,
+		Retention:       hc.Retention,
+		RetentionHourly: hc.RetentionHourlyOrDefault(),
+		RetentionDaily:  hc.RetentionDailyOrDefault(),
+		Exporter:        exporter,
+		Logger:          logger,
 	})
 	stop := rec.Wire(reg)
 

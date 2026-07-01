@@ -480,3 +480,117 @@ func TestProvenanceGuard_DeviceNotInRegistry(t *testing.T) {
 		t.Errorf("Rows = %d, want 0 (unknown device must not be recorded)", stats.Rows)
 	}
 }
+
+// ============================================================
+// rollup() — the hourly/daily fold that must run before purge()
+// ============================================================
+
+// TestRollup_FoldsRawIntoHourlyTier verifies that Recorder.rollup folds a
+// raw sample older than rollupHourlyLag into the hourly rollup tier. Driven
+// directly against a store with seeded raw rows (rather than through the
+// ticker-based loop), which is sufficient to prove the fold happens and is
+// far less flaky than asserting on wall-clock ticker timing.
+func TestRollup_FoldsRawIntoHourlyTier(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+
+	old := time.Now().Add(-2 * time.Hour)
+	if err := store.SaveBatch(ctx, []sqlite.MeasurementSample{
+		{CentralName: "ccu-01", InterfaceID: "HmIP-RF", ChannelAddress: "DEV008:1", Parameter: "POWER", TS: old, Value: 42},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	r := New(store, Options{})
+	r.rollup(ctx)
+
+	var hourlyRows int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM measurements_hourly`).Scan(&hourlyRows); err != nil {
+		t.Fatalf("count measurements_hourly: %v", err)
+	}
+	if hourlyRows != 1 {
+		t.Errorf("measurements_hourly rows = %d, want 1", hourlyRows)
+	}
+
+	stats, err := store.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.Rows != 1 {
+		t.Errorf("raw rows after rollup = %d, want 1 (rollup never deletes raw rows)", stats.Rows)
+	}
+}
+
+// TestRollup_RunsBeforePurge_RawRowSurvivesFold verifies the ordering
+// contract at the center of the rollup design: calling rollup(ctx) then
+// purge(ctx) — the same sequence the loop's shared ticker case uses — must
+// fold a raw row into the hourly tier before purge deletes it from the raw
+// table. If purge ran first, the row's energy would be lost with nothing
+// in the hourly tier to show for it.
+func TestRollup_RunsBeforePurge_RawRowSurvivesFold(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+
+	// Older than both the 1h rollup lag and the recorder's retention, so
+	// a rollup-after-purge bug would show up as a raw row disappearing
+	// with no corresponding hourly row.
+	old := time.Now().Add(-2 * time.Hour)
+	if err := store.SaveBatch(ctx, []sqlite.MeasurementSample{
+		{CentralName: "ccu-01", InterfaceID: "HmIP-RF", ChannelAddress: "DEV009:1", Parameter: "ENERGY_COUNTER", TS: old, Value: 7},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	r := New(store, Options{Retention: time.Hour})
+	r.rollup(ctx)
+	r.purge(ctx)
+
+	var hourlyRows int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM measurements_hourly`).Scan(&hourlyRows); err != nil {
+		t.Fatalf("count measurements_hourly: %v", err)
+	}
+	if hourlyRows != 1 {
+		t.Fatalf("measurements_hourly rows = %d, want 1 (rollup must have run before purge)", hourlyRows)
+	}
+
+	stats, err := store.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.Rows != 0 {
+		t.Errorf("raw rows after purge = %d, want 0 (purge should have removed the folded row)", stats.Rows)
+	}
+}
+
+// TestRollup_DailyRetentionZero_KeepsDailyForever verifies that
+// RetentionDaily <= 0 (the documented "keep forever" sentinel) skips the
+// daily-tier delete: a daily row older than any plausible cutoff must
+// survive a rollup() call when RetentionDaily is left at its zero value.
+func TestRollup_DailyRetentionZero_KeepsDailyForever(t *testing.T) {
+	store := openStore(t)
+	ctx := context.Background()
+
+	veryOld := time.Now().Add(-365 * 24 * time.Hour)
+	if err := store.SaveBatch(ctx, []sqlite.MeasurementSample{
+		{CentralName: "ccu-01", InterfaceID: "HmIP-RF", ChannelAddress: "DEV010:1", Parameter: "POWER", TS: veryOld, Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := store.RollupHourly(ctx, veryOld.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := store.RollupDaily(ctx, veryOld.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	r := New(store, Options{RetentionHourly: time.Hour}) // RetentionDaily left at zero
+	r.rollup(ctx)
+
+	var dailyRows int
+	if err := store.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM measurements_daily`).Scan(&dailyRows); err != nil {
+		t.Fatalf("count measurements_daily: %v", err)
+	}
+	if dailyRows != 1 {
+		t.Errorf("measurements_daily rows = %d, want 1 (RetentionDaily<=0 must never purge the daily tier)", dailyRows)
+	}
+}
