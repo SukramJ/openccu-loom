@@ -193,6 +193,7 @@ part of the respective plans.
   (`internal/north/rest/handlers/discovery.go`) can be adopted live.
   Split out of the (dropped) "extend hot-reload" idea — this is the one
   structural-reload case with real user value. *Effort: L.*
+  *Plan: [`docs/plans/L-live-ccu-adopt.md`](./plans/L-live-ccu-adopt.md).*
 - **Read-only cross-CCU overview.** A new SPA route showing all CCUs,
   their interfaces, health and device counts at a glance — additive on
   the existing per-central data (`CentralsAdmin.svelte`, the device
