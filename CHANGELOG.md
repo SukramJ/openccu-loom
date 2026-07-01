@@ -19,6 +19,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `http://localhost:8119` (was `:2121`). (More command groups — `sysvar`,
   `program`, `paramset`, `events tail` — are follow-ups.)
 
+- **`hmcli` gains an `events tail` command.** Connects to the daemon's
+  `/api/v1/events` WebSocket stream and prints live events until interrupted.
+  `--topics` (comma-separated; default `*`) controls the subscribe filter;
+  `--json` emits each event as a compact JSONL line for scripting; `--classify`
+  requests inline `category`/`data_point_type` on datapoint value-changed
+  payloads. `--timeout` bounds the handshake only — the stream itself runs
+  indefinitely until the connection closes or Ctrl-C / SIGTERM. This completes
+  the B1 `hmcli` command surface: `devices`, `sysvar`, `program`, `paramset`,
+  `events`. No daemon change.
+
 - **`hmcli` gains `sysvar`, `program`, and `paramset` command groups.** Three
   new command groups extend the admin CLI: `hmcli sysvar list|get|set|fetch`
   manages CCU system variables (list with type/value table, read, write a
