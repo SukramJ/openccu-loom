@@ -624,6 +624,15 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The browser-facing bootstrap surface is folded into the REST server
 	// above (ADR 0044) — there is no separate UI listener.
 
+	// Registration-completeness observation point (ADR 0047 §7): every
+	// north-bound surface is now registered (MQTT + webhook above, Matter and
+	// REST during their wiring). The guard test inspects the registry here to
+	// pin that no surface is hand-wired past the registry and that the
+	// reverse-stop order is stable. No-op in production (deps/hook nil).
+	if deps != nil && deps.onNorthBridges != nil {
+		deps.onNorthBridges(northBridges)
+	}
+
 	// Start the PhaseLate north-bound surfaces — the webhook, Matter and the
 	// REST/HTTP server — now that the daemon is fully up (router assembled,
 	// devices hydrated). StartAll skips the already-started PhaseEarly MQTT

@@ -1,6 +1,10 @@
 # Implementation plan — North-bound bridges onto `bridge.Registry` (architecturally complete)
 
-**Status**: prioritised, not started. **Effort: M.**
+**Status**: ✅ **DONE** (2026-07-01). All north-bound surfaces are on the
+registry with a phased start + reverse-order teardown, and the ADR §7
+registration-completeness + ordering guard is in place. Shipped across:
+PR0 phased-start Registry (#235), REST (#236), Matter (#237), MQTT (#238),
+webhook→PhaseLate (#239), registration guard (this PR). **Effort was: M.**
 **Decision of record**: [ADR 0047 — North-bound bridges as `Service`s owned
 by a `Registry`](../adr/0047-northbound-bridge-registry.md). Read it first;
 this plan executes it.
@@ -287,12 +291,16 @@ Special handling:
 These are mandatory, not optional. They are the difference between a real
 architectural lock and a cosmetic move.
 
-1. **Registration-completeness guard (the structural lock).** A daemon-level
-   wiring test that boots a minimal daemon (test config, in-process, no live
-   CCU) and asserts `Registry.Services()` contains exactly the expected
-   north-bound surfaces for that config — e.g. webhook+mqtt+rest present;
-   matter present only when enabled; MCP **absent** as a service (it is a
-   REST sub-mount). This fails the moment someone hand-wires a new surface
+1. **Registration-completeness guard (the structural lock) — DONE.**
+   `cmd/openccu-loom/bridge_registration_guard_test.go` boots a minimal daemon
+   (test config, in-process, no live CCU) via a `reloadDeps.onNorthBridges`
+   observation hook and asserts `Registry.Services()` is exactly the expected
+   set + order for that config: `["mqtt", "webhook-outbound", "rest"]` with
+   Matter off, and Matter present (and REST absent when disabled) with the
+   enabled-gate flipped — proving completeness, the reverse-stop order (mqtt
+   first ⇒ stops last; rest/matter last ⇒ stops first) AND the enabled-gating.
+   MCP is **absent** as a service (it is a REST sub-mount). This fails the
+   moment someone hand-wires a new surface
    instead of registering it. Lives in `tests/contract/` or a
    `cmd/openccu-loom` wiring test.
 2. **Ordering characterization (golden).** Assert `StartAll` start order
