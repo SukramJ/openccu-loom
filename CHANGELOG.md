@@ -6,11 +6,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0]
+
 ### Added
 
+- **Persistent hourly/daily measurement-history rollup tiers.** Two new
+  aggregate tables (`measurements_hourly`, `measurements_daily`) fold raw
+  history rows into low-resolution buckets (sum/min/max/count plus
+  first/last, needed for cumulative `ENERGY_COUNTER` deltas) so long-term
+  history stays cheap. An hourly job rolls raw rows into the hourly tier
+  and re-aggregates hourly→daily exactly (never average-of-averages)
+  before the existing raw-row purge runs, so nothing is dropped before it
+  is folded. Two new opt-in retention knobs bound each tier independently:
+  `persistence.history.retention_hourly` (default 13 months) and
+  `persistence.history.retention_daily` (`0` = keep forever). This is the
+  backend foundation the `/api/v1/energy` endpoint below reads from.
+
 - **`GET /api/v1/energy` — per-device power/energy breakdown.** Reads the
-  hourly/daily measurement-history rollup tiers (added in the previous
-  release) and folds them into a per-device breakdown: `POWER` samples
+  hourly/daily measurement-history rollup tiers (this release, see below)
+  and folds them into a per-device breakdown: `POWER` samples
   become `avg_power_w`/`peak_power_w`, `ENERGY_COUNTER`/
   `ENERGY_COUNTER_FEED_IN` become `consumed_wh`/`feed_in_wh` bucket deltas.
   A meter reset within a bucket (`last < first`) reports the delta as the
@@ -103,6 +117,63 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   restart-required (the bridge is wired once at boot). A new `incident.recorded`
   event lets reliability incidents flow to the webhook alongside the existing
   diagnostics surface.
+
+- **Energy view (`#/energy`).** A new SPA route renders the `/api/v1/energy`
+  aggregation: a central + group (hour/day/month) selector with 24h/7d/30d/12mo
+  range presets, total consumed/feed-in cards (Wh→kWh), an inline
+  consumption-over-time chart with an all-devices/per-device toggle, and a
+  per-device breakdown table (consumed/feed-in kWh, avg/peak power). Buckets
+  where a meter reset occurred carry a reset badge. Shows a "history recording
+  is off" state with a settings link when the history feature is disabled.
+
+- **Cross-CCU fleet overview (`#/fleet`).** A new read-only SPA route lists
+  every configured CCU at a glance: online/offline availability, host +
+  CCU-reported hostname, model/version/serial, per-central device count, a
+  chip per configured interface, and an "Open CCU WebUI" link. Reflects
+  CCUs adopted live (see below) without a page reload. No REST/API change.
+
+- **Access-control view (`#/access`).** A new admin-only SPA route manages
+  Basic-auth users and API tokens from the browser instead of hand-editing
+  `config.yaml`: add/edit a user (role `viewer`/`operator`/`admin` + optional
+  password), delete via the shared confirm dialog, create an API token with a
+  copy-once plaintext reveal, and delete a token by fingerprint. Frontend-only
+  — the underlying REST CRUD routes already existed.
+
+- **Whole-home device overview (`#/overview`).** A new top-of-nav SPA route
+  renders the existing auto-tile dashboard across every device at once,
+  grouped by room / function / CCU and filterable, with per-group lazy
+  loading so the page starts interactive immediately. Rooms are never merged
+  across CCUs. No new REST endpoint.
+
+- **Live CCU adopt / remove — no daemon restart.** Adding or removing a CCU
+  through the REST central-admin path (`POST /api/v1/centrals`, `DELETE
+  /api/v1/centrals/{name}`) now brings the southbound connection, model,
+  scheduler jobs, and CCU auth up or down live, instead of only taking effect
+  after a restart. `centrals` no longer appears in the config
+  restart-required diff for a pure add or remove — only an in-place edit of
+  an existing central still requires a restart. Device-icon proxying and the
+  cross-CCU fleet list (`GET /api/v1/system/ccu`) resolve a runtime-adopted
+  central immediately as well.
+
+- **Matter bridge enforces server-side timed-interaction conformance.** A
+  command tagged "Timed Required" in the Matter model (currently
+  `AdministratorCommissioning`'s `OpenCommissioningWindow` /
+  `OpenBasicCommissioningWindow` / `RevokeCommissioning`, Matter §8.7) is now
+  rejected with `NEEDS_TIMED_INTERACTION` when invoked outside a timed window,
+  even if the controller left the request's own Timed flag clear. Previously
+  the bridge only honoured the controller-asserted flag.
+
+### Changed
+
+- **North-bound bridges (MQTT, Matter, REST, MCP, webhook) migrated onto a
+  shared, phased-start `bridge.Registry`.** Each surface now registers as a
+  `Service` (`Name`/`Start`/`Stop`) instead of being hand-wired in
+  `cmd/openccu-loom`; the registry starts `PhaseEarly` services (MQTT, so the
+  boot-time retained-state snapshot still reaches the broker before
+  southbound hydration) before `PhaseLate` ones (Matter, REST, webhook),
+  rolls back already-started services on a mid-start error, and stops
+  everything in reverse order on shutdown. Internal lifecycle unification —
+  no user-facing behaviour change.
 
 ## [0.21.3]
 
