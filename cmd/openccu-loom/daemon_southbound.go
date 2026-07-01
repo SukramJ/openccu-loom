@@ -88,14 +88,73 @@ func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx
 	}
 }
 
+// wireCentralNorthbound runs the per-central north-bound hooks that must fire
+// AFTER a central's southbound bring-up (WireCentrals) has populated its
+// InterfaceClient registry and SystemInformation: health subscriptions +
+// state re-evaluation, the registry-cleanup on-stop hook, device-availability
+// propagation, climate link-peer refresh, and the MQTT hub-info stamp. It
+// returns the device-availability and climate closers so the caller can chain
+// them into teardown (nil when the corresponding wiring is inactive).
+//
+// Factored out of wireSouthbound's inline per-central loops so the same wiring
+// can be run for a single central added at runtime — the foundation for live
+// CCU adopt (docs/plans/L-live-ccu-adopt.md). The per-central hooks are
+// independent across centrals, so running them one-central-at-a-time is
+// equivalent to the previous hook-at-a-time loops.
+func wireCentralNorthbound(d southboundWiringDeps, u *central.Unit) (availCloser, climateCloser func()) {
+	// Health subscriptions must be live before the state re-evaluation:
+	// WireCentrals connected the interfaces before this ran, so the startup
+	// ClientStateChanged transitions fired with no health subscriber and the
+	// central kept the FAILED evaluation taken at boot (before any interface
+	// connected) — surfacing as a permanently "degraded" CCU. Re-evaluate now
+	// that the InterfaceClient registry reflects the connected clients.
+	_ = adapter.WireHealth(u)
+	u.EvaluateCentralState("post_wire", true)
+
+	// Clean up the shared registry entry once Stop() transitions to STOPPED so a
+	// stopped central is no longer visible to north-bound adapters.
+	centralName := u.Name()
+	u.AddOnStopHook(func() {
+		d.reg.Unregister(centralName)
+	})
+
+	// Device-availability propagation: when an InterfaceClient reports
+	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
+	// forced-availability override flipped so HA / REST / SPA stop showing stale
+	// "online" entities after a CCU-side disconnect.
+	availCloser = adapter.WireDeviceAvailability(u)
+
+	// Climate link-peer activity-source refresh: on RecoveryCompletedEvent
+	// re-subscribe Climate custom DPs on the recovered interface to their linked
+	// valve/switch peer channels; LinkPeerChangedEvent re-wires on topology
+	// changes.
+	climateCloser = adapter.WireClimateLinkPeerRefresh(u)
+
+	// Stamp HubInfo onto the MQTT-Discovery builder now that SystemInformation
+	// is populated so per-device configuration_url and the synthetic hub
+	// device's metadata are filled. Multi-CCU: each central contributes its own
+	// entry, looked up per `central`.
+	if d.mqttWiring != nil {
+		si := u.SystemInformation()
+		d.mqttWiring.Bridge().SetHubInfoFor(u.Name(), mqtt.HubInfo{
+			Name:    u.Name(),
+			Model:   si.Model,
+			Version: si.Version,
+			Serial:  si.Serial,
+			URL:     si.URL,
+		})
+	}
+	return availCloser, climateCloser
+}
+
 // wireSouthbound performs the southbound wiring phase of the composition
 // root: it builds the backup adapter, runs WireCentrals (per-central
 // XML-RPC/BIN-RPC client wiring, device pipeline, paramset hydration),
 // starts the persistent VALUES-cache flusher and its health gauges,
 // wires per-central health / availability / climate-link refresh
-// subscriptions, applies visibility un-ignore lists, stamps HubInfo and
-// runs the boot-time MQTT retain/orphan cleanup plus the initial
-// snapshot, and starts the periodic unobserved-DP sweep.
+// subscriptions (via wireCentralNorthbound), applies visibility un-ignore
+// lists, stamps HubInfo and runs the boot-time MQTT retain/orphan cleanup
+// plus the initial snapshot, and starts the periodic unobserved-DP sweep.
 //
 // It is a behavior-preserving extraction: same operations, order and
 // nil-handling as the inline phase. The returned teardown folds the
@@ -224,36 +283,37 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		teardowns = append(teardowns, bringUpMgr.Teardown)
 	}
 
-	// Wire per-central health subscriptions AFTER WireCentrals so
-	// the InterfaceClient registry is populated when the initial-
-	// sync pass walks `unit.Clients.List()`. Without this hook,
-	// ClientStateChanged / CircuitBreakerStateChanged / Recovery
-	// events fly past with no Tracker subscriber, leaving the
-	// diagnostics dump's `clients[]` array permanently empty.
+	// Wire the per-central north-bound hooks AFTER WireCentrals so the
+	// InterfaceClient registry + SystemInformation are populated. Each central
+	// is wired independently via wireCentralNorthbound (also used by the
+	// live-adopt path); the device-availability + climate closers are chained
+	// into teardown. Availability closers go through the caller-owned
+	// *availClosers pointer so the later Matter-phase appends are included.
+	var climateClosers []func()
 	for _, u := range reg.List() {
-		_ = adapter.WireHealth(u)
-		// WireCentrals connected the interfaces BEFORE WireHealth
-		// subscribed, so the startup ClientStateChanged transitions fired
-		// with no health subscriber and the central kept the FAILED
-		// evaluation taken at boot (before any interface was connected) —
-		// surfacing as a permanently "degraded" CCU even though the
-		// interfaces are connected and callbacks are flowing. Re-evaluate
-		// now that the InterfaceClient registry reflects the connected
-		// clients so the central state matches reality.
-		u.EvaluateCentralState("post_wire", true)
+		availCloser, climateCloser := wireCentralNorthbound(d, u)
+		if availCloser != nil {
+			*availClosers = append(*availClosers, availCloser)
+		}
+		if climateCloser != nil {
+			climateClosers = append(climateClosers, climateCloser)
+		}
 	}
-
-	// Register a post-stop hook on each central so the shared registry
-	// entry is cleaned up after Stop() transitions to STOPPED. This
-	// ensures that a central which has been stopped (e.g. due to a
-	// fatal init error or a graceful reload) is no longer visible to
-	// north-bound adapters that iterate the registry.
-	for _, u := range reg.List() {
-		centralName := u.Name()
-		u.AddOnStopHook(func() {
-			reg.Unregister(centralName)
-		})
-	}
+	// Appended in this order so shutdown (LIFO) drains climate closers before
+	// availability closers — matching the original two inline defers.
+	teardowns = append(
+		teardowns,
+		func() {
+			for _, close := range *availClosers {
+				close()
+			}
+		},
+		func() {
+			for _, close := range climateClosers {
+				close()
+			}
+		},
+	)
 
 	// Apply the per-central un_ignore lists from SQLite (seeded from
 	// config.yaml when the table is empty) onto the shared visibility
@@ -263,76 +323,14 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 	// and visibility_wiring.go.
 	applyVisibilityUnIgnore(ctx, cfg, reg, d.visibilityUnIgnoreStore, d.visReg, logger)
 
-	// Wire device-availability propagation: when an InterfaceClient reports
-	// CONNECTED / DISCONNECTED / FAILED, every device on that interface gets its
-	// forced-availability override flipped accordingly so HA / REST / SPA stop
-	// showing stale "online" entities after a CCU-side disconnect. Per-central
-	// because the registry holds one Unit per CCU; closer is chained into
-	// the daemon shutdown.
-	for _, u := range reg.List() {
-		if closer := adapter.WireDeviceAvailability(u); closer != nil {
-			*availClosers = append(*availClosers, closer)
-		}
-	}
-	// Drain the caller-owned availability-closer slice through the pointer
-	// so the Matter phase's later appends are included. Registered here so
-	// it runs at the same LIFO position as the original inline defer.
-	teardowns = append(teardowns, func() {
-		for _, close := range *availClosers {
-			close()
-		}
-	})
-
-	// Wire climate link-peer activity-source refresh: on every successful
-	// RecoveryCompletedEvent the wiring re-subscribes all Climate custom DPs
-	// on the recovered interface to their linked valve/switch peer channels
-	// (LEVEL / STATE) so the activity field stays accurate after a reconnect.
-	// LinkPeerChangedEvent re-wires on topology changes (links.add / remove).
-	// Per-central, closer chained into daemon shutdown.
-	var climateClosers []func()
-	for _, u := range reg.List() {
-		if closer := adapter.WireClimateLinkPeerRefresh(u); closer != nil {
-			climateClosers = append(climateClosers, closer)
-		}
-	}
-	teardowns = append(teardowns, func() {
-		for _, close := range climateClosers {
-			close()
-		}
-	})
-
-	// Stamp HubInfo onto the MQTT-Discovery builder now that
-	// SystemInformation has been populated by WireCentrals (it set
-	// the URL; model / version / serial follow once the JSON-RPC
-	// system-info calls land). Without this the per-device
-	// `configuration_url` and the synthetic hub device's metadata
-	// stay empty.
-	//
-	// Multi-CCU: each registered central contributes its own HubInfo
-	// entry. The discovery builder looks it up per `central` argument
-	// so two CCUs display the right Name / Model / sw_version /
-	// serial / configuration_url in HA.
-	if d.mqttWiring != nil {
-		bridge := d.mqttWiring.Bridge()
-		for _, u := range reg.List() {
-			si := u.SystemInformation()
-			bridge.SetHubInfoFor(u.Name(), mqtt.HubInfo{
-				Name:    u.Name(),
-				Model:   si.Model,
-				Version: si.Version,
-				Serial:  si.Serial,
-				URL:     si.URL,
-			})
-		}
-		// Re-run the hub publisher now that every central's serial is
-		// registered: hub discovery payloads embed the serial in their
-		// unique_ids and are skipped while it is unknown (the boot-time
-		// Start ran before WireCentrals populated SystemInformation).
-		// Start is idempotent (Stop + rewire) and re-publishes the
-		// retained hub discovery + state for every central.
-		if d.hubMQTT != nil {
-			d.hubMQTT.Start(ctx)
-		}
+	// Re-run the hub publisher now that every central's serial is registered
+	// (wireCentralNorthbound stamped each central's HubInfo above): hub
+	// discovery payloads embed the serial in their unique_ids and are skipped
+	// while it is unknown (the boot-time Start ran before WireCentrals
+	// populated SystemInformation). Start is idempotent (Stop + rewire) and
+	// re-publishes the retained hub discovery + state for every central.
+	if d.mqttWiring != nil && d.hubMQTT != nil {
+		d.hubMQTT.Start(ctx)
 	}
 
 	// Boot-time stale cleanup — clear retained channel-aggregate
