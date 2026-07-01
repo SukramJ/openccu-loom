@@ -255,9 +255,20 @@ Special handling:
 - **REST**: `matter`/southbound handlers must be mounted before `Start`;
   `Stop` is a context-bounded `http.Server.Shutdown`. MCP mount stays inside
   the REST service's router assembly.
-- **MQTT**: encapsulate `mqttSup` + EventBridge + HubMQTT in
-  `mqtt.Service`; preserve the `OnConnect` reconnect-republish; leave the
-  config-watcher's reload seam pointing at the service's reload method.
+- **MQTT — DONE (teardown-managed PhaseEarly).** `mqttService`
+  (`cmd/openccu-loom/mqtt_service.go`) owns the ordered teardown of the
+  fan-out components (HubMQTTPublisher then EventBridge — the previous LIFO
+  order), registered **first** on the registry so it stops **last** in the
+  reverse-order StopAll (before `mqttSup.Shutdown`, which stays in the
+  sharedInfra defer). Start is a no-op: the EventBridge + HubMQTTPublisher
+  self-start early (pre-hydration) so the boot-time initial snapshot
+  publishes onto a live bridge, and their start carries the
+  `mqttSup.OnConnect` reconnect-republish hooks. The broker **supervisor**
+  (`mqttSup`) is genuinely shared infrastructure with the config-watcher
+  hot-reload (`Swap`) path, so it stays in `wireSharedInfrastructure` — the
+  Service owns teardown of the two fan-out components only. Same
+  teardown-managed/no-op-Start divergence as Matter, documented in
+  `mqtt_service.go`.
 
 ---
 
