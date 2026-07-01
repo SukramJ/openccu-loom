@@ -165,6 +165,19 @@ type HistoryConfig struct {
 	// older than now-Retention.
 	Retention time.Duration `yaml:"retention,omitempty" json:"retention,omitempty" cfg:"expert"`
 
+	// RetentionHourly bounds how long the hourly rollup tier
+	// (measurements_hourly) is kept. Zero falls back to
+	// [RetentionHourlyDefault] (13 months). The rollup job purges hourly
+	// rows older than now-RetentionHourly, always after they have been
+	// folded into the daily tier.
+	RetentionHourly time.Duration `yaml:"retention_hourly,omitempty" json:"retention_hourly,omitempty" cfg:"expert"`
+
+	// RetentionDaily bounds how long the daily rollup tier
+	// (measurements_daily) is kept. Zero means keep forever — daily rows
+	// are tiny (one row per data point per day), so there is no default
+	// expiry.
+	RetentionDaily time.Duration `yaml:"retention_daily,omitempty" json:"retention_daily,omitempty" cfg:"expert"`
+
 	// FlushInterval overrides the recorder's batch-flush cadence. Zero
 	// falls back to the daemon default (5s).
 	FlushInterval time.Duration `yaml:"flush_interval,omitempty" json:"flush_interval,omitempty" cfg:"expert"`
@@ -235,6 +248,29 @@ func (c HistoryConfig) HistoryEnabled(centralName string) bool {
 // history.db and wire the retention job.
 func (c HistoryConfig) HistoryFeatureEnabled() bool {
 	return c.Enabled != nil && *c.Enabled
+}
+
+// RetentionHourlyDefault is how long the hourly rollup tier is kept when
+// the operator did not override it: 13 months, chosen so a full year of
+// hourly resolution survives even a slightly late rollout of the daily
+// tier's consumers (e.g. the energy view's month-over-month comparisons).
+const RetentionHourlyDefault = 13 * 30 * 24 * time.Hour
+
+// RetentionHourlyOrDefault returns RetentionHourly, falling back to
+// [RetentionHourlyDefault] when unset.
+func (c HistoryConfig) RetentionHourlyOrDefault() time.Duration {
+	if c.RetentionHourly > 0 {
+		return c.RetentionHourly
+	}
+	return RetentionHourlyDefault
+}
+
+// RetentionDailyOrDefault returns RetentionDaily. Unlike the raw and
+// hourly tiers, zero is a genuine value here (keep daily rows forever),
+// not a "use the default" sentinel — so this is a passthrough kept for
+// symmetry with [HistoryConfig.RetentionHourlyOrDefault] at call sites.
+func (c HistoryConfig) RetentionDailyOrDefault() time.Duration {
+	return c.RetentionDaily
 }
 
 // ValuesCacheConfig overrides the defaults baked into the wire-DP

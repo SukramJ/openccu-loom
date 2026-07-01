@@ -527,6 +527,11 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// retention window is global. Per-central deletes use DeleteDevice
 		// (which DOES carry central) instead. See ADR 0040.
 		"MeasurementStore:DeleteOlderThan": "reason: retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
+		// The hourly/daily rollup tiers are purged the same way as the raw
+		// tier above: a global time-based cutoff over history.db, not a
+		// per-central operation. See ADR 0040.
+		"MeasurementStore:DeleteHourlyOlderThan": "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
+		"MeasurementStore:DeleteDailyOlderThan":  "reason: rollup retention is a global time-based purge across all centrals in history.db; central scoping would be incorrect",
 	}
 
 	dir := filepath.Join(repoRoot(t), "internal", "store", "sqlite")

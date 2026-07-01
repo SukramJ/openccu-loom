@@ -621,6 +621,19 @@ func TestMeasurement_NilStore_NoOps(t *testing.T) {
 		t.Errorf("nil Stats: %v", err)
 	}
 
+	if n, err := s.RollupHourly(ctx, now); err != nil || n != 0 {
+		t.Errorf("nil RollupHourly: n=%d err=%v", n, err)
+	}
+	if n, err := s.RollupDaily(ctx, now); err != nil || n != 0 {
+		t.Errorf("nil RollupDaily: n=%d err=%v", n, err)
+	}
+	if n, err := s.DeleteHourlyOlderThan(ctx, now); err != nil || n != 0 {
+		t.Errorf("nil DeleteHourlyOlderThan: n=%d err=%v", n, err)
+	}
+	if n, err := s.DeleteDailyOlderThan(ctx, now); err != nil || n != 0 {
+		t.Errorf("nil DeleteDailyOlderThan: n=%d err=%v", n, err)
+	}
+
 	m := s.MetricsSnapshot()
 	if m.RowsWritten != 0 || m.Batches != 0 || m.RetentionDeleted != 0 {
 		t.Errorf("nil MetricsSnapshot: got %+v, want zero", m)
@@ -644,6 +657,360 @@ func TestMeasurement_SaveBatch_Empty_IsNoOp(t *testing.T) {
 	m := s.MetricsSnapshot()
 	if m.Batches != 0 || m.RowsWritten != 0 {
 		t.Errorf("empty SaveBatch bumped counters: %+v", m)
+	}
+}
+
+// rollupRow is a scanned measurements_hourly / measurements_daily row, used
+// only by tests to assert on the rollup tiers directly (the store has no
+// public reader for them yet — that lands with the energy query endpoint).
+type rollupRow struct {
+	BucketTS      int64
+	Sum, Min, Max float64
+	Count         int64
+	First, Last   float64
+}
+
+// queryHourly returns every measurements_hourly row for the given key,
+// ordered by bucket_ts.
+func queryHourly(t *testing.T, s *MeasurementStore, central, iface, ch, param string) []rollupRow {
+	t.Helper()
+	rows, err := s.db.QueryContext(context.Background(), `
+        SELECT bucket_ts, sum, min, max, count, first, last
+          FROM measurements_hourly
+         WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND parameter = ?
+         ORDER BY bucket_ts`, central, iface, ch, param)
+	if err != nil {
+		t.Fatalf("queryHourly: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []rollupRow
+	for rows.Next() {
+		var r rollupRow
+		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last); err != nil {
+			t.Fatalf("queryHourly scan: %v", err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// queryDaily returns every measurements_daily row for the given key,
+// ordered by bucket_ts.
+func queryDaily(t *testing.T, s *MeasurementStore, central, iface, ch, param string) []rollupRow {
+	t.Helper()
+	rows, err := s.db.QueryContext(context.Background(), `
+        SELECT bucket_ts, sum, min, max, count, first, last
+          FROM measurements_daily
+         WHERE central_name = ? AND interface_id = ? AND channel_address = ? AND parameter = ?
+         ORDER BY bucket_ts`, central, iface, ch, param)
+	if err != nil {
+		t.Fatalf("queryDaily: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []rollupRow
+	for rows.Next() {
+		var r rollupRow
+		if err := rows.Scan(&r.BucketTS, &r.Sum, &r.Min, &r.Max, &r.Count, &r.First, &r.Last); err != nil {
+			t.Fatalf("queryDaily scan: %v", err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// TestMeasurement_RollupHourly_AggregatesCorrectly verifies that
+// RollupHourly folds three raw rows in the same hour into one
+// measurements_hourly row with exact sum/min/max/count and first/last set
+// to the value observed at the earliest/latest ts in the bucket.
+func TestMeasurement_RollupHourly_AggregatesCorrectly(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(20 * time.Minute), Value: 5},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(50 * time.Minute), Value: 30},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	folded, err := s.RollupHourly(ctx, base.Add(time.Hour))
+	if err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if folded != 3 {
+		t.Errorf("RollupHourly folded = %d, want 3", folded)
+	}
+
+	rows := queryHourly(t, s, central, iface, ch, param)
+	if len(rows) != 1 {
+		t.Fatalf("hourly rows = %d, want 1", len(rows))
+	}
+	r := rows[0]
+	wantBucket := base.Truncate(time.Hour).UnixMilli()
+	if r.BucketTS != wantBucket {
+		t.Errorf("bucket_ts = %d, want %d", r.BucketTS, wantBucket)
+	}
+	if r.Sum != 45 || r.Min != 5 || r.Max != 30 || r.Count != 3 {
+		t.Errorf("sum/min/max/count = %v/%v/%v/%v, want 45/5/30/3", r.Sum, r.Min, r.Max, r.Count)
+	}
+	if r.First != 10 {
+		t.Errorf("first = %v, want 10 (value at earliest ts)", r.First)
+	}
+	if r.Last != 30 {
+		t.Errorf("last = %v, want 30 (value at latest ts)", r.Last)
+	}
+}
+
+// TestMeasurement_RollupHourly_Idempotent verifies that running
+// RollupHourly twice against the same raw rows (nothing deleted in
+// between) produces exactly one unchanged hourly row: the fold recomputes
+// the whole bucket from source every run rather than accumulating, so a
+// re-run is a no-op overwrite, not a double-count.
+func TestMeasurement_RollupHourly_Idempotent(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "ENERGY_COUNTER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(30 * time.Minute), Value: 150},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	cutoff := base.Add(time.Hour)
+	n1, err := s.RollupHourly(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("RollupHourly (1st): %v", err)
+	}
+	first := queryHourly(t, s, central, iface, ch, param)
+	if len(first) != 1 {
+		t.Fatalf("hourly rows after 1st run = %d, want 1", len(first))
+	}
+
+	n2, err := s.RollupHourly(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("RollupHourly (2nd): %v", err)
+	}
+	second := queryHourly(t, s, central, iface, ch, param)
+	if len(second) != 1 {
+		t.Fatalf("hourly rows after 2nd run = %d, want 1 (idempotent)", len(second))
+	}
+	if n1 != n2 {
+		t.Errorf("folded count changed across re-runs: %d then %d", n1, n2)
+	}
+	if first[0] != second[0] {
+		t.Errorf("hourly row changed across re-runs: %+v then %+v", first[0], second[0])
+	}
+}
+
+// TestMeasurement_Rollup_MultiCCU_Isolation verifies that two centrals
+// writing the same (interface, channel, parameter) within the same hour
+// bucket produce two independent hourly rows, never merged.
+func TestMeasurement_Rollup_MultiCCU_Isolation(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		iface = "HmIP-RF"
+		ch    = "SHARED:1"
+		param = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: "ccu1", InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 10},
+		{CentralName: "ccu2", InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 999},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	r1 := queryHourly(t, s, "ccu1", iface, ch, param)
+	r2 := queryHourly(t, s, "ccu2", iface, ch, param)
+	if len(r1) != 1 || r1[0].Sum != 10 {
+		t.Errorf("ccu1 hourly = %+v, want one row with sum=10", r1)
+	}
+	if len(r2) != 1 || r2[0].Sum != 999 {
+		t.Errorf("ccu2 hourly = %+v, want one row with sum=999", r2)
+	}
+}
+
+// TestMeasurement_RollupDaily_ReAggregatesHourlyRows verifies that
+// RollupDaily folds two hourly buckets from the same UTC day into one
+// daily row: sum/count are additive, min/max fold across buckets, first
+// comes from the earliest hourly bucket and last from the latest.
+func TestMeasurement_RollupDaily_ReAggregatesHourlyRows(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "ENERGY_COUNTER"
+	)
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	// Two raw samples an hour apart so they fold into two distinct hourly
+	// buckets on the same UTC day.
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day.Add(1 * time.Hour), Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day.Add(3 * time.Hour), Value: 400},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, day.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	hourly := queryHourly(t, s, central, iface, ch, param)
+	if len(hourly) != 2 {
+		t.Fatalf("hourly rows = %d, want 2", len(hourly))
+	}
+
+	folded, err := s.RollupDaily(ctx, day.Add(48*time.Hour))
+	if err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+	if folded != 2 {
+		t.Errorf("RollupDaily folded = %d, want 2", folded)
+	}
+
+	daily := queryDaily(t, s, central, iface, ch, param)
+	if len(daily) != 1 {
+		t.Fatalf("daily rows = %d, want 1", len(daily))
+	}
+	d := daily[0]
+	if d.BucketTS != day.UnixMilli() {
+		t.Errorf("daily bucket_ts = %d, want %d", d.BucketTS, day.UnixMilli())
+	}
+	if d.Sum != 500 || d.Count != 2 || d.Min != 100 || d.Max != 400 {
+		t.Errorf("sum/count/min/max = %v/%v/%v/%v, want 500/2/100/400", d.Sum, d.Count, d.Min, d.Max)
+	}
+	if d.First != 100 {
+		t.Errorf("first = %v, want 100 (earliest hourly bucket)", d.First)
+	}
+	if d.Last != 400 {
+		t.Errorf("last = %v, want 400 (latest hourly bucket)", d.Last)
+	}
+}
+
+// TestMeasurement_DeleteHourlyOlderThan_RespectsCutoff verifies that
+// DeleteHourlyOlderThan removes only measurements_hourly rows whose
+// bucket_ts is before cutoff, leaves newer hourly rows and the daily tier
+// untouched.
+func TestMeasurement_DeleteHourlyOlderThan_RespectsCutoff(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	old := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	recent := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: old, Value: 1},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: recent, Value: 2},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, recent.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, recent.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	cutoff := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	n, err := s.DeleteHourlyOlderThan(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("DeleteHourlyOlderThan: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("deleted = %d, want 1 (only the old bucket)", n)
+	}
+
+	remaining := queryHourly(t, s, central, iface, ch, param)
+	if len(remaining) != 1 || remaining[0].BucketTS != recent.Truncate(time.Hour).UnixMilli() {
+		t.Errorf("remaining hourly rows = %+v, want only the recent bucket", remaining)
+	}
+	daily := queryDaily(t, s, central, iface, ch, param)
+	if len(daily) != 2 {
+		t.Errorf("daily rows = %d, want 2 (daily tier untouched by hourly delete)", len(daily))
+	}
+}
+
+// TestMeasurement_DeleteDailyOlderThan_RespectsCutoff verifies that
+// DeleteDailyOlderThan removes only measurements_daily rows whose
+// bucket_ts is before cutoff.
+func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	oldDay := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	recentDay := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: oldDay, Value: 1},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: recentDay, Value: 2},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, recentDay.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, recentDay.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	cutoff := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	n, err := s.DeleteDailyOlderThan(ctx, cutoff)
+	if err != nil {
+		t.Fatalf("DeleteDailyOlderThan: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("deleted = %d, want 1 (only the old day)", n)
+	}
+
+	remaining := queryDaily(t, s, central, iface, ch, param)
+	if len(remaining) != 1 || remaining[0].BucketTS != recentDay.Truncate(24*time.Hour).UnixMilli() {
+		t.Errorf("remaining daily rows = %+v, want only the recent day", remaining)
+	}
+	hourly := queryHourly(t, s, central, iface, ch, param)
+	if len(hourly) != 2 {
+		t.Errorf("hourly rows = %d, want 2 (hourly tier untouched by daily delete)", len(hourly))
 	}
 }
 

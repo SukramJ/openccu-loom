@@ -33,15 +33,31 @@ const (
 	// long-term archival is the exporter's job.
 	DefaultRetention = 720 * time.Hour
 
+	// DefaultRetentionHourly is how long the hourly rollup tier is kept
+	// by default (13 months) — long enough that a year of hourly
+	// resolution survives even a slightly late read of the tier.
+	DefaultRetentionHourly = 13 * 30 * 24 * time.Hour
+
 	// DefaultMaxBuffer bounds the in-memory sample buffer between
 	// flushes. On overflow the oldest sample is dropped so the event
 	// handler never blocks and the daemon never OOMs.
 	DefaultMaxBuffer = 8192
 
-	// retentionInterval is how often the retention purge runs. Hourly is
-	// frequent enough for a day-to-week window and cheap on a single
-	// indexed DELETE.
+	// retentionInterval is how often the retention purge (and the rollup
+	// step that must precede it) runs. Hourly is frequent enough for a
+	// day-to-week window and cheap on a single indexed DELETE; it also
+	// matches the hourly rollup tier's own bucket width.
 	retentionInterval = time.Hour
+
+	// rollupHourlyLag is how far behind "now" a raw sample must be before
+	// it is eligible for the hourly fold. An hour of slack means a bucket
+	// is never rolled up while it could still receive a late-arriving
+	// sample for the same hour.
+	rollupHourlyLag = time.Hour
+
+	// rollupDailyLag is the equivalent slack before an hourly bucket is
+	// eligible for the daily fold.
+	rollupDailyLag = 24 * time.Hour
 )
 
 // liveSourced is the subset of the wire data-point surface the recorder
@@ -54,15 +70,17 @@ type liveSourced interface {
 // then Wire it against the central registry. Multi-CCU safe: every
 // sample is tagged with its central name and canonical interface id.
 type Recorder struct {
-	store         *sqlite.MeasurementStore
-	exporter      MeasurementExporter
-	enabledFor    func(centralName string) bool
-	include       []string
-	exclude       []string
-	flushInterval time.Duration
-	retention     time.Duration
-	maxBuffer     int
-	logger        *slog.Logger
+	store           *sqlite.MeasurementStore
+	exporter        MeasurementExporter
+	enabledFor      func(centralName string) bool
+	include         []string
+	exclude         []string
+	flushInterval   time.Duration
+	retention       time.Duration
+	retentionHourly time.Duration
+	retentionDaily  time.Duration
+	maxBuffer       int
+	logger          *slog.Logger
 
 	mu  sync.Mutex
 	buf []sqlite.MeasurementSample
@@ -85,6 +103,16 @@ type Options struct {
 	Retention     time.Duration
 	MaxBuffer     int
 	Logger        *slog.Logger
+	// RetentionHourly overrides how long the hourly rollup tier is kept.
+	// <= 0 falls back to [DefaultRetentionHourly] (13 months). Callers
+	// typically thread this from the config layer's
+	// HistoryConfig.RetentionHourlyOrDefault().
+	RetentionHourly time.Duration
+	// RetentionDaily overrides how long the daily rollup tier is kept.
+	// <= 0 means keep the daily tier forever (never purged) — unlike
+	// every other retention knob, zero is a genuine value here, not a
+	// "use the default" sentinel.
+	RetentionDaily time.Duration
 	// Exporter, when non-nil, receives every recorded sample for
 	// forwarding to an external time-series store. Optional.
 	Exporter MeasurementExporter
@@ -94,15 +122,17 @@ type Options struct {
 // whose Wire is a no-op, so callers can wire unconditionally.
 func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 	r := &Recorder{
-		store:         store,
-		exporter:      opts.Exporter,
-		enabledFor:    opts.EnabledFor,
-		include:       opts.Include,
-		exclude:       opts.Exclude,
-		flushInterval: opts.FlushInterval,
-		retention:     opts.Retention,
-		maxBuffer:     opts.MaxBuffer,
-		logger:        opts.Logger,
+		store:           store,
+		exporter:        opts.Exporter,
+		enabledFor:      opts.EnabledFor,
+		include:         opts.Include,
+		exclude:         opts.Exclude,
+		flushInterval:   opts.FlushInterval,
+		retention:       opts.Retention,
+		retentionHourly: opts.RetentionHourly,
+		retentionDaily:  opts.RetentionDaily,
+		maxBuffer:       opts.MaxBuffer,
+		logger:          opts.Logger,
 	}
 	if r.enabledFor == nil {
 		r.enabledFor = func(string) bool { return true }
@@ -113,6 +143,11 @@ func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 	if r.retention <= 0 {
 		r.retention = DefaultRetention
 	}
+	if r.retentionHourly <= 0 {
+		r.retentionHourly = DefaultRetentionHourly
+	}
+	// retentionDaily <= 0 is a genuine "keep forever" value, never
+	// defaulted.
 	if r.maxBuffer <= 0 {
 		r.maxBuffer = DefaultMaxBuffer
 	}
@@ -184,14 +219,19 @@ func (r *Recorder) Wire(reg *central.Registry) func() {
 	}
 }
 
-// loop runs the periodic batch flush and the retention purge until ctx
-// is cancelled, then performs one final flush.
+// loop runs the periodic batch flush, the rollup fold, and the retention
+// purge until ctx is cancelled, then performs one final flush. The rollup
+// ticker and the retention ticker share the same cadence and fire on the
+// same case arm, in fixed order (rollup, then purge), so a raw row is
+// always folded into the hourly tier before it can be purged — running
+// them from two independent tickers would risk the purge winning a race
+// on a tick that fires both.
 func (r *Recorder) loop(ctx context.Context, done chan<- struct{}) {
 	defer close(done)
 	flushTicker := time.NewTicker(r.flushInterval)
 	defer flushTicker.Stop()
-	retentionTicker := time.NewTicker(retentionInterval)
-	defer retentionTicker.Stop()
+	rollupTicker := time.NewTicker(retentionInterval)
+	defer rollupTicker.Stop()
 
 	for {
 		select {
@@ -204,7 +244,8 @@ func (r *Recorder) loop(ctx context.Context, done chan<- struct{}) {
 			return
 		case <-flushTicker.C:
 			r.flush(ctx)
-		case <-retentionTicker.C:
+		case <-rollupTicker.C:
+			r.rollup(ctx)
 			r.purge(ctx)
 		}
 	}
@@ -310,6 +351,45 @@ func (r *Recorder) flush(ctx context.Context) {
 		return
 	}
 	r.recorded.Add(int64(len(batch)))
+}
+
+// rollup folds raw samples into the hourly tier, then hourly buckets into
+// the daily tier, then purges rollup rows past their own retention —
+// always in that order, and always before [Recorder.purge] runs on the
+// raw table, so no raw row is ever deleted before its value has been
+// folded into the hourly tier (see docs/plans/A2-timeseries-energy.md
+// "Where the rollup runs").
+func (r *Recorder) rollup(ctx context.Context) {
+	now := time.Now()
+
+	if n, err := r.store.RollupHourly(ctx, now.Add(-rollupHourlyLag)); err != nil {
+		r.logger.Warn("history.rollup_hourly_err", slog.String("err", err.Error()))
+	} else if n > 0 {
+		r.logger.Debug("history.rolled_up_hourly", slog.Int64("rows", n))
+	}
+
+	if n, err := r.store.RollupDaily(ctx, now.Add(-rollupDailyLag)); err != nil {
+		r.logger.Warn("history.rollup_daily_err", slog.String("err", err.Error()))
+	} else if n > 0 {
+		r.logger.Debug("history.rolled_up_daily", slog.Int64("rows", n))
+	}
+
+	if r.retentionHourly > 0 {
+		if n, err := r.store.DeleteHourlyOlderThan(ctx, now.Add(-r.retentionHourly)); err != nil {
+			r.logger.Warn("history.purge_hourly_err", slog.String("err", err.Error()))
+		} else if n > 0 {
+			r.logger.Debug("history.purged_hourly", slog.Int64("rows", n))
+		}
+	}
+
+	// retentionDaily <= 0 means keep the daily tier forever.
+	if r.retentionDaily > 0 {
+		if n, err := r.store.DeleteDailyOlderThan(ctx, now.Add(-r.retentionDaily)); err != nil {
+			r.logger.Warn("history.purge_daily_err", slog.String("err", err.Error()))
+		} else if n > 0 {
+			r.logger.Debug("history.purged_daily", slog.Int64("rows", n))
+		}
+	}
 }
 
 // purge drops samples older than the retention window.

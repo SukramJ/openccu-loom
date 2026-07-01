@@ -453,6 +453,8 @@ const EN: Catalog = {
   "config.field.backup.keep_last": "Keep last N backups",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
+  "config.field.persistence.history.retention_hourly": "Hourly rollup retention",
+  "config.field.persistence.history.retention_daily": "Daily rollup retention",
   "config.field.persistence.history.flush_interval": "History flush interval",
   "config.field.persistence.history.include": "Include parameters",
   "config.field.persistence.history.exclude": "Exclude parameters",
@@ -658,6 +660,10 @@ const EN: Catalog = {
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
     "How long raw samples are kept; zero falls back to 30 days (720 h), after which the retention job purges older rows.",
+  "config.help.persistence.history.retention_hourly":
+    "How long the hourly rollup tier is kept; zero falls back to 13 months. Hourly rows are folded into the daily tier before this cutoff removes them.",
+  "config.help.persistence.history.retention_daily":
+    "How long the daily rollup tier is kept; zero (default) keeps daily rows forever since they are tiny (one row per data point per day).",
   "config.help.persistence.history.flush_interval":
     "How often the recorder flushes a batch of samples to history.db; zero falls back to the daemon default of 5 s.",
   "config.help.persistence.history.include":
@@ -2370,6 +2376,8 @@ const DE: Catalog = {
   "config.field.backup.keep_last": "Letzte N Backups behalten",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
+  "config.field.persistence.history.retention_hourly": "Aufbewahrung Stunden-Rollup",
+  "config.field.persistence.history.retention_daily": "Aufbewahrung Tages-Rollup",
   "config.field.persistence.history.flush_interval": "Verlaufs-Flush-Intervall",
   "config.field.persistence.history.include": "Parameter einschließen",
   "config.field.persistence.history.exclude": "Parameter ausschließen",
@@ -2575,6 +2583,10 @@ const DE: Catalog = {
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":
     "Wie lange Rohmesswerte aufbewahrt werden; 0 = Standardwert von 30 Tagen (720 h), ältere Zeilen werden vom Retention-Job gelöscht.",
+  "config.help.persistence.history.retention_hourly":
+    "Wie lange die Stunden-Rollup-Ebene aufbewahrt wird; 0 = Standardwert von 13 Monaten. Stunden-Zeilen werden vor diesem Cutoff in die Tages-Ebene gefaltet.",
+  "config.help.persistence.history.retention_daily":
+    "Wie lange die Tages-Rollup-Ebene aufbewahrt wird; 0 (Standard) = für immer, da Tages-Zeilen sehr klein sind (eine Zeile pro Datenpunkt und Tag).",
   "config.help.persistence.history.flush_interval":
     "Wie oft der Recorder einen Batch von Messwerten in history.db schreibt; 0 = Daemon-Standard von 5 s.",
   "config.help.persistence.history.include":

@@ -278,6 +278,226 @@ func (s *MeasurementStore) DeleteOlderThan(ctx context.Context, cutoff time.Time
 	return n, nil
 }
 
+// rollupHourlySelectSQL aggregates raw rows into one row per (data point,
+// hour bucket). It is written as a single window-function pass rather than
+// a GROUP BY + correlated subquery for two reasons: (1) SQLite evaluates
+// window functions after GROUP BY, so a plain aggregate query cannot also
+// expose the ungrouped `value`/`ts` columns that FIRST_VALUE/LAST_VALUE
+// need; (2) computing every aggregate as a window function over the same
+// partition in one pass, then collapsing the redundant per-row copies with
+// DISTINCT, matches an aggregate GROUP BY plan performance-wise for SQLite's
+// optimizer while keeping first/last exact.
+//
+// `w` (no ORDER BY) gives whole-partition SUM/MIN/MAX/COUNT. FIRST_VALUE
+// uses the default frame (RANGE UNBOUNDED PRECEDING .. CURRENT ROW), which —
+// because the frame's lower bound never moves — always resolves to the
+// partition's earliest row when ordered by ts ascending. LAST_VALUE needs an
+// explicit ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING frame;
+// its default frame would otherwise return the *current* row, not the last.
+//
+// The WHERE clause re-selects every raw row below the cutoff on every call,
+// so re-running the fold against the same source rows recomputes the exact
+// same aggregate — the ON CONFLICT DO UPDATE overwrite is idempotent, never
+// additive.
+const rollupHourlySelectSQL = `
+    SELECT DISTINCT
+        central_name, interface_id, channel_address, parameter, bucket_ts,
+        SUM(value) OVER w,
+        MIN(value) OVER w,
+        MAX(value) OVER w,
+        COUNT(*) OVER w,
+        FIRST_VALUE(value) OVER (
+            PARTITION BY central_name, interface_id, channel_address, parameter, bucket_ts
+            ORDER BY ts
+        ),
+        LAST_VALUE(value) OVER (
+            PARTITION BY central_name, interface_id, channel_address, parameter, bucket_ts
+            ORDER BY ts
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        )
+      FROM (
+        SELECT central_name, interface_id, channel_address, parameter, ts, value,
+               ts - (ts % 3600000) AS bucket_ts
+          FROM measurements
+         WHERE ts < ?
+      )
+    WINDOW w AS (PARTITION BY central_name, interface_id, channel_address, parameter, bucket_ts)
+`
+
+// RollupHourly folds raw measurement rows with ts < olderThan into the
+// hourly rollup tier (measurements_hourly), one row per (data point, hour
+// bucket): bucket_ts = ts - (ts % 3600000). See [rollupHourlySelectSQL] for
+// why the aggregate is a single window-function pass and why re-running it
+// is idempotent. Returns the number of raw rows folded (source rows read,
+// not buckets written) so callers can log fold volume.
+func (s *MeasurementStore) RollupHourly(ctx context.Context, olderThan time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	cutoff := olderThan.UnixMilli()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("measurements.RollupHourly begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var folded int64
+	row := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM measurements WHERE ts < ?`, cutoff)
+	if err := row.Scan(&folded); err != nil {
+		return 0, fmt.Errorf("measurements.RollupHourly count: %w", err)
+	}
+	if folded == 0 {
+		if err := tx.Commit(); err != nil {
+			return 0, fmt.Errorf("measurements.RollupHourly commit: %w", err)
+		}
+		return 0, nil
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO measurements_hourly
+            (central_name, interface_id, channel_address, parameter, bucket_ts,
+             sum, min, max, count, first, last)
+        `+rollupHourlySelectSQL+`
+        ON CONFLICT (central_name, interface_id, channel_address, parameter, bucket_ts) DO UPDATE SET
+            sum   = excluded.sum,
+            min   = excluded.min,
+            max   = excluded.max,
+            count = excluded.count,
+            first = excluded.first,
+            last  = excluded.last
+    `, cutoff); err != nil {
+		return 0, fmt.Errorf("measurements.RollupHourly insert: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("measurements.RollupHourly commit: %w", err)
+	}
+	return folded, nil
+}
+
+// rollupDailySelectSQL re-aggregates hourly rows into one row per (data
+// point, UTC day bucket): sum/count are additive (Σsum, Σcount) and remain
+// exact because the hourly tier already carries sum+count rather than an
+// average. min/max fold with MIN/MAX-of-MIN/MAX. first/last are the first
+// hourly bucket's `first` and the last hourly bucket's `last` in the day,
+// ordered by the hourly bucket_ts — the same window-function shape as
+// [rollupHourlySelectSQL] and idempotent for the same reason (the WHERE
+// clause re-reads every hourly row below the cutoff on every call).
+const rollupDailySelectSQL = `
+    SELECT DISTINCT
+        central_name, interface_id, channel_address, parameter, day_bucket,
+        SUM(sum) OVER w,
+        MIN(min) OVER w,
+        MAX(max) OVER w,
+        SUM(count) OVER w,
+        FIRST_VALUE(first) OVER (
+            PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket
+            ORDER BY bucket_ts
+        ),
+        LAST_VALUE(last) OVER (
+            PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket
+            ORDER BY bucket_ts
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        )
+      FROM (
+        SELECT central_name, interface_id, channel_address, parameter,
+               bucket_ts, sum, min, max, count, first, last,
+               bucket_ts - (bucket_ts % 86400000) AS day_bucket
+          FROM measurements_hourly
+         WHERE bucket_ts < ?
+      )
+    WINDOW w AS (PARTITION BY central_name, interface_id, channel_address, parameter, day_bucket)
+`
+
+// RollupDaily folds hourly rollup rows with bucket_ts < olderThan into the
+// daily rollup tier (measurements_daily): day_bucket = bucket_ts -
+// (bucket_ts % 86400000), UTC day boundaries. Returns the number of hourly
+// rows folded (source rows read, not buckets written).
+func (s *MeasurementStore) RollupDaily(ctx context.Context, olderThan time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	cutoff := olderThan.UnixMilli()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("measurements.RollupDaily begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var folded int64
+	row := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM measurements_hourly WHERE bucket_ts < ?`, cutoff)
+	if err := row.Scan(&folded); err != nil {
+		return 0, fmt.Errorf("measurements.RollupDaily count: %w", err)
+	}
+	if folded == 0 {
+		if err := tx.Commit(); err != nil {
+			return 0, fmt.Errorf("measurements.RollupDaily commit: %w", err)
+		}
+		return 0, nil
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+        INSERT INTO measurements_daily
+            (central_name, interface_id, channel_address, parameter, bucket_ts,
+             sum, min, max, count, first, last)
+        `+rollupDailySelectSQL+`
+        ON CONFLICT (central_name, interface_id, channel_address, parameter, bucket_ts) DO UPDATE SET
+            sum   = excluded.sum,
+            min   = excluded.min,
+            max   = excluded.max,
+            count = excluded.count,
+            first = excluded.first,
+            last  = excluded.last
+    `, cutoff); err != nil {
+		return 0, fmt.Errorf("measurements.RollupDaily insert: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("measurements.RollupDaily commit: %w", err)
+	}
+	return folded, nil
+}
+
+// DeleteHourlyOlderThan drops every measurements_hourly row whose bucket
+// start is before cutoff. Mirrors [MeasurementStore.DeleteOlderThan];
+// called only after the daily rollup has folded the affected hourly rows,
+// so their sum/count survive in the daily tier. Returns the number of rows
+// removed.
+func (s *MeasurementStore) DeleteHourlyOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM measurements_hourly WHERE bucket_ts < ?`, cutoff.UnixMilli())
+	if err != nil {
+		return 0, fmt.Errorf("measurements.DeleteHourlyOlderThan: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	s.metricRetentionDeleted.Add(n)
+	return n, nil
+}
+
+// DeleteDailyOlderThan drops every measurements_daily row whose bucket
+// start is before cutoff. Mirrors [MeasurementStore.DeleteOlderThan].
+// Callers should skip calling this when the daily-retention config is 0
+// (keep daily rows forever — they are tiny). Returns the number of rows
+// removed.
+func (s *MeasurementStore) DeleteDailyOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM measurements_daily WHERE bucket_ts < ?`, cutoff.UnixMilli())
+	if err != nil {
+		return 0, fmt.Errorf("measurements.DeleteDailyOlderThan: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	s.metricRetentionDeleted.Add(n)
+	return n, nil
+}
+
 // DeleteDevice removes every measurement for every channel of the given
 // device. Used on device-remove / unpair so history cannot keep growing
 // for an address that no longer exists. Prefix-safe ("DEVICE" never
