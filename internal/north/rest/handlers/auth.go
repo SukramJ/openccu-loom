@@ -33,7 +33,7 @@ type AuthDeps struct {
 	AuditRecorder audit.Recorder
 	// LoginUsers, when non-nil, overrides the concrete Users
 	// store for the [Login] handler. Wired by the daemon to the
-	// chained SQLite+Memory store (Wave wiring) so wizard-created
+	// chained SQLite+Memory store so wizard-created
 	// admins can sign in. When nil, [Login] falls back to the
 	// concrete [auth.MemoryUserStore] field above.
 	LoginUsers auth.UserStore
@@ -51,9 +51,11 @@ type UserListEntry struct {
 	Role     string `json:"role"`
 }
 
-// ListUsers renders the registered Basic-auth users. Admin-only — the
-// SPA gates the route accordingly. Adding/removing users in this
-// release happens via config.yaml; live edits are a planned future feature.
+// ListUsers renders the registered Basic-auth users as a read-only
+// fallback. Admin-only — the SPA gates the route accordingly.
+// The live-edit path (add / update / delete) is the UserAdmin-backed
+// /users CRUD mounted when a UserAdmin store is wired; this handler
+// serves the legacy in-memory store when no UserAdmin is present.
 func ListUsers(d *AuthDeps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if d == nil || d.Users == nil {

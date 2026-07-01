@@ -368,13 +368,14 @@ expectations, and the release workflow. Before opening a PR, please
 open an issue so we agree on scope, especially when the change touches
 the wire layer or the device profile catalogue.
 
-> **A note on how this is built.** Parts of OpenCCU-Loom are
-> developed with agentic AI assistance, primarily
-> [Claude Code](https://www.anthropic.com/claude-code). Submitted
-> issues are also triaged and analysed with agentic help. Every change
-> is still reviewed by a human maintainer and has to pass the full
-> test, contract, and parity suites before it lands — the AI
-> accelerates the work, it doesn't replace the review gate.
+## Development
+
+Parts of OpenCCU-Loom are developed with agentic AI assistance,
+primarily [Claude Code](https://www.anthropic.com/claude-code).
+Submitted issues are also triaged and analysed with agentic help.
+Every change is still reviewed by a human maintainer and has to pass
+the full test, contract, and parity suites before it lands — the AI
+accelerates the work, it doesn't replace the review gate.
 
 ## Acknowledgements
 

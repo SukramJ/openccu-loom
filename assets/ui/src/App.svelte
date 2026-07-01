@@ -22,6 +22,7 @@
   import FirmwareList from "./routes/FirmwareList.svelte";
   import SignalQualityList from "./routes/SignalQualityList.svelte";
   import UnIgnoreList from "./routes/UnIgnoreList.svelte";
+  import AccessControl from "./routes/AccessControl.svelte";
   // Imported statically (not code-split): DeviceDetail's history tab
   // already pulls AuditLog into the main chunk, so a dynamic import here
   // would be ineffective (and warns at build time).
@@ -126,6 +127,7 @@
     | { kind: "signal" }
     | { kind: "matter"; subpath: string }
     | { kind: "visibility" }
+    | { kind: "access" }
     | { kind: "unknown" };
 
   const route = $derived.by<Route>(() => {
@@ -143,6 +145,7 @@
     if (path === "/firmware") return { kind: "firmware" };
     if (path === "/signal") return { kind: "signal" };
     if (path === "/visibility") return { kind: "visibility" };
+    if (path === "/access") return { kind: "access" };
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
     }
@@ -174,6 +177,7 @@
     route.kind === "logs" ? t("page.title.logs") :
     route.kind === "list" || route.kind === "detail" ? t("page.title.devices") :
     route.kind === "settings" ? t("page.title.settings") :
+    route.kind === "access" ? t("page.title.access") :
     t("page.title.default")
   }</title>
 </svelte:head>
@@ -304,6 +308,16 @@
           {/await}
         {:else if route.kind === "visibility"}
           <UnIgnoreList />
+        {:else if route.kind === "access"}
+          {#if authStore.identity?.role === "admin"}
+            <AccessControl />
+          {:else}
+            <section class="mx-auto max-w-6xl px-6 py-8">
+              <div class="rounded-lg border border-[var(--ha-divider-color)] bg-[var(--ha-secondary-background-color)] px-4 py-3 text-sm text-[var(--ha-secondary-text-color)]">
+                {t("access.forbidden")}
+              </div>
+            </section>
+          {/if}
         {:else}
           <section class="mx-auto max-w-6xl px-6 py-8">
             <h1 class="text-2xl font-semibold">{t("app.not_found")}</h1>
