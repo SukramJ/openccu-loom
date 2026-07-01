@@ -4,7 +4,9 @@
 package main
 
 import (
+	"context"
 	"log/slog"
+	"os"
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -13,6 +15,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/configstore"
+	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
 // ccuAuthEnabled resolves the tri-state enable flag: an explicit value
@@ -36,13 +40,18 @@ func ccuAuthPrimary(cc config.CCUAuthConfig) bool {
 
 // buildCCUAuthStore returns an [auth.UserStore] that validates logins
 // against the CCU's own user database (ADR 0043), or nil when the
-// feature is disabled or no central registry is available.
-func buildCCUAuthStore(cfg *config.Config, reg *central.Registry, logger *slog.Logger) auth.UserStore {
+// feature is disabled or no central registry is available. centrals is
+// the persisted centrals store used to resolve a central's connection
+// config live, so a runtime-adopted central is authenticatable without
+// a daemon restart; it may be nil (e.g. persistence unavailable), in
+// which case the resolver falls back to the boot-time cfg.Centrals
+// snapshot.
+func buildCCUAuthStore(cfg *config.Config, reg *central.Registry, centrals *sqlitestore.CentralsStore, logger *slog.Logger) auth.UserStore {
 	cc := cfg.North.REST.Auth.CCU
 	if !ccuAuthEnabled(cc) || reg == nil {
 		return nil
 	}
-	domain := adapter.NewCCUAuthDomain(reg, cfg.Centrals, logger)
+	domain := adapter.NewCCUAuthDomain(reg, newCCUAuthCentralResolver(cfg, centrals), logger)
 	store := ccuauth.New(domain, ccuauth.Config{
 		Central:      cc.Central,
 		MinUserLevel: cc.MinUserLevel,
@@ -99,4 +108,63 @@ func parseCCURoleMapping(m map[string]string, logger *slog.Logger) map[int]auth.
 		}
 	}
 	return out
+}
+
+// newCCUAuthCentralResolver builds the live [adapter.CentralConfigResolver]
+// consumed by CCUAuthDomain. It resolves against the persisted centrals
+// store — the same table a runtime central-adopt (POST/PUT
+// /admin/centrals) writes to — so a central adopted after boot is
+// authenticatable without a restart. When centrals is nil (persistence
+// unavailable) it falls back to the boot-time cfg.Centrals snapshot,
+// preserving pre-existing behaviour for that degraded mode.
+//
+// A disabled or unknown central, or any store error, resolves to
+// (zero, false): the caller treats that as "central not found" and the
+// login is rejected. This is the fail-closed direction and must not be
+// widened.
+func newCCUAuthCentralResolver(cfg *config.Config, centrals *sqlitestore.CentralsStore) adapter.CentralConfigResolver {
+	return func(ctx context.Context, name string) (config.CentralConfig, bool) {
+		if centrals == nil {
+			return centralConfigFromSnapshot(cfg.Centrals, name)
+		}
+		if name != "" {
+			row, err := centrals.Get(ctx, name)
+			if err != nil || !row.Enabled {
+				return config.CentralConfig{}, false
+			}
+			cc, _ := configstore.RowToCentralConfig(row, os.Getenv)
+			return cc, true
+		}
+		rows, err := centrals.List(ctx)
+		if err != nil {
+			return config.CentralConfig{}, false
+		}
+		for i := range rows {
+			row := &rows[i]
+			if row.Enabled {
+				cc, _ := configstore.RowToCentralConfig(*row, os.Getenv)
+				return cc, true
+			}
+		}
+		return config.CentralConfig{}, false
+	}
+}
+
+// centralConfigFromSnapshot replicates the pre-store resolution rule
+// (empty name → first entry; otherwise find-by-name) against a fixed
+// []config.CentralConfig slice — the fallback path used when no
+// centrals store is available.
+func centralConfigFromSnapshot(centrals []config.CentralConfig, name string) (config.CentralConfig, bool) {
+	if len(centrals) == 0 {
+		return config.CentralConfig{}, false
+	}
+	if name == "" {
+		return centrals[0], true
+	}
+	for i := range centrals {
+		if centrals[i].Name == name {
+			return centrals[i], true
+		}
+	}
+	return config.CentralConfig{}, false
 }

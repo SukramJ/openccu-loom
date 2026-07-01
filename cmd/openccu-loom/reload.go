@@ -32,7 +32,10 @@ import (
 //
 // Restart-required (any change in these fields logs and is ignored):
 //
-//   - centrals (count, name, host, credentials, interfaces)
+//   - centrals: only an in-place modification of a central present in both
+//     the previous and next config (same name, changed host / credentials /
+//     interfaces / …). Adding or removing a central is a live
+//     orchestrator operation and is not restart-required.
 //   - callback.host / port / bin_port (callback servers bind once)
 //   - north.rest.listen / north.mqtt.listen
 //   - north.rest.public_url (add-on hint file is written once at boot)
@@ -178,12 +181,16 @@ func hotReloadHandler(logger *slog.Logger, deps *reloadDeps) config.ReloadHandle
 			restart++
 			logger.Warn("daemon.reload.restart_required", slog.String("field", "north.rest.openapi_validate"))
 		}
-		if len(prev.Centrals) != len(next.Centrals) {
+		// Add/remove of a central is a live orchestrator operation now, so
+		// only an in-place modification of a central present in both the
+		// previous and next config (same name, different fields) is
+		// restart-required — a pure count change (add or remove) is not.
+		if config.CentralsModifiedInPlace(prev.Centrals, next.Centrals) {
 			restart++
 			logger.Warn("daemon.reload.restart_required",
-				slog.String("field", "centrals.count"),
-				slog.Int("prev", len(prev.Centrals)),
-				slog.Int("next", len(next.Centrals)))
+				slog.String("field", "centrals"),
+				slog.Int("prev_count", len(prev.Centrals)),
+				slog.Int("next_count", len(next.Centrals)))
 		}
 
 		logger.Info("daemon.reload.applied",

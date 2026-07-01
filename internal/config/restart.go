@@ -50,11 +50,37 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	// keep-count captured then, so a change takes effect only after a restart.
 	add(boot.Backup.Schedule != eff.Backup.Schedule, "backup.schedule")
 	add(boot.Backup.KeepLast != eff.Backup.KeepLast, "backup.keep_last")
-	add(!reflect.DeepEqual(boot.Centrals, eff.Centrals), "centrals")
+	// Adding or removing a central is a live coordinator-lifecycle
+	// operation (the orchestrator adopts/tears down without a restart),
+	// so only an in-place modification of a central present in both
+	// configs is restart-required.
+	add(CentralsModifiedInPlace(boot.Centrals, eff.Centrals), "centrals")
 	// The login chain (incl. the CCU auth provider) is wired once at
 	// boot, so any change to the CCU-auth block is restart-required.
 	add(!reflect.DeepEqual(boot.North.REST.Auth.CCU, eff.North.REST.Auth.CCU), "north.rest.auth.ccu")
 	// The HA Ingress auth-passthrough middleware is also wired once at boot.
 	add(!reflect.DeepEqual(boot.North.REST.Auth.HAIngress, eff.North.REST.Auth.HAIngress), "north.rest.auth.ha_ingress")
 	return out
+}
+
+// CentralsModifiedInPlace reports whether some central name is present
+// in both boot and eff with a differing config. A central present in
+// only one of the two slices is a pure add or remove — both are live
+// operations now, so neither counts as a modification here.
+func CentralsModifiedInPlace(boot, eff []CentralConfig) bool {
+	byName := make(map[string]*CentralConfig, len(boot))
+	for i := range boot {
+		byName[boot[i].Name] = &boot[i]
+	}
+	for i := range eff {
+		next := &eff[i]
+		prev, ok := byName[next.Name]
+		if !ok {
+			continue
+		}
+		if !reflect.DeepEqual(prev, next) {
+			return true
+		}
+	}
+	return false
 }

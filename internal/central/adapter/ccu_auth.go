@@ -19,6 +19,16 @@ import (
 // cannot be resolved.
 var ErrCCUAuthCentralNotFound = errors.New("ccu-auth: central not found")
 
+// CentralConfigResolver resolves the CentralConfig used to build the
+// transient validation client / locate the live unit for a named
+// central. An empty name selects the caller's notion of "the default
+// central" (implementation-defined — the production resolver picks the
+// first enabled one); a miss (unknown or disabled central) returns
+// false so the caller fails closed. Implementations must read the
+// *live* source of truth (not a boot-time snapshot) so a runtime-adopted
+// central is authenticatable without a daemon restart.
+type CentralConfigResolver func(ctx context.Context, name string) (config.CentralConfig, bool)
+
 // CCUAuthDomain validates login credentials against a CCU's own user
 // database and reads a user's permission level. It is the production
 // implementation of the CCU authentication port consumed by
@@ -31,34 +41,27 @@ var ErrCCUAuthCentralNotFound = errors.New("ccu-auth: central not found")
 // service account is admin and may read ID_USERS).
 type CCUAuthDomain struct {
 	registry *central.Registry
-	centrals []config.CentralConfig
+	resolve  CentralConfigResolver
 	logger   *slog.Logger
 }
 
-// NewCCUAuthDomain constructs the domain. centrals provides the host /
-// port / TLS used to build the transient validation client.
-func NewCCUAuthDomain(r *central.Registry, centrals []config.CentralConfig, logger *slog.Logger) *CCUAuthDomain {
+// NewCCUAuthDomain constructs the domain. resolve supplies the host /
+// port / TLS used to build the transient validation client, resolved
+// against the live central source of truth rather than a fixed slice.
+func NewCCUAuthDomain(r *central.Registry, resolve CentralConfigResolver, logger *slog.Logger) *CCUAuthDomain {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &CCUAuthDomain{registry: r, centrals: centrals, logger: logger}
+	return &CCUAuthDomain{registry: r, resolve: resolve, logger: logger}
 }
 
-// centralConfig resolves the target CentralConfig by name; an empty name
-// selects the first configured central.
-func (d *CCUAuthDomain) centralConfig(name string) (config.CentralConfig, bool) {
-	if len(d.centrals) == 0 {
+// centralConfig resolves the target CentralConfig by name via the
+// configured resolver; a nil resolver fails closed.
+func (d *CCUAuthDomain) centralConfig(ctx context.Context, name string) (config.CentralConfig, bool) {
+	if d.resolve == nil {
 		return config.CentralConfig{}, false
 	}
-	if name == "" {
-		return d.centrals[0], true
-	}
-	for i := range d.centrals {
-		if d.centrals[i].Name == name {
-			return d.centrals[i], true
-		}
-	}
-	return config.CentralConfig{}, false
+	return d.resolve(ctx, name)
 }
 
 // ValidateCredentials opens a transient CCU session with the supplied
@@ -67,7 +70,7 @@ func (d *CCUAuthDomain) centralConfig(name string) (config.CentralConfig, bool) 
 // wrapping hmerr.ErrAuthFailure; any other error is a transient failure
 // (CCU unreachable, etc.) that the caller maps to "unauthenticated".
 func (d *CCUAuthDomain) ValidateCredentials(ctx context.Context, centralName, username, password string) error {
-	cc, ok := d.centralConfig(centralName)
+	cc, ok := d.centralConfig(ctx, centralName)
 	if !ok {
 		return fmt.Errorf("%w: %q", ErrCCUAuthCentralNotFound, centralName)
 	}
@@ -97,7 +100,7 @@ func (d *CCUAuthDomain) ValidateCredentials(ctx context.Context, centralName, us
 // username on the named central, via the privileged service session.
 // username must be pre-sanitised by the caller.
 func (d *CCUAuthDomain) UserLevel(ctx context.Context, centralName, username string) (int, error) {
-	cc, ok := d.centralConfig(centralName)
+	cc, ok := d.centralConfig(ctx, centralName)
 	if !ok {
 		return -1, fmt.Errorf("%w: %q", ErrCCUAuthCentralNotFound, centralName)
 	}
