@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 )
 
 // reloadDeps is the late-bound reference bag the config-watcher's
@@ -25,6 +26,15 @@ type reloadDeps struct {
 	mqttSup atomic.Pointer[mqttSupervisor]
 	curCfg  atomic.Pointer[config.Config]
 	reseed  atomic.Pointer[mqttReseedHook]
+
+	// onNorthBridges is a test-only observation hook invoked once during
+	// boot, after every north-bound surface has been registered on the
+	// registry and before the late StartAll. It lets a wiring test assert
+	// the registration-completeness + reverse-stop order (ADR 0047 §7)
+	// without exposing the registry through the production return path. Nil
+	// in production (set only by the guard test). Read once on the boot
+	// goroutine, so it needs no atomic.
+	onNorthBridges func(*northbridge.Registry)
 }
 
 // mqttReseedHook re-publishes the full MQTT snapshot (Discovery
