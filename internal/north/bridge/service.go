@@ -38,3 +38,20 @@ type HealthReporter interface {
 	// a short human-readable reason, surfaced when ok is false.
 	Healthy() (ok bool, detail string)
 }
+
+// Phase groups Services by when in the daemon boot sequence they must start.
+// The north-bound surfaces do not all start at one point: the MQTT bridge
+// must be live BEFORE southbound hydration (so the boot-time initial snapshot
+// of retained CCU state reaches the broker), whereas Matter and the REST HTTP
+// server start AFTER hydration. The registry starts phase-by-phase so this
+// real, non-uniform dependency graph is honoured explicitly instead of being
+// implicit in defer placement. See ADR 0047 §2.
+type Phase int
+
+const (
+	// PhaseEarly services start before southbound hydration (MQTT).
+	PhaseEarly Phase = iota
+	// PhaseLate services start after hydration and after the router is
+	// assembled (Matter, REST, webhook). It is the default for Register.
+	PhaseLate
+)

@@ -119,25 +119,64 @@ drift).
 - **Webhook** — already a package-owned `bridge.Service`
   (`internal/north/webhook/outbound.go`), already registered. The template.
 
-### 3.1 Boot-dependency graph (the crux — analyse before moving anything)
+### 3.1 Boot-dependency graph (the crux — scouted; drives the phased start)
 
-The single hardest part is that surfaces have **start preconditions**, and
-registration order must encode them (ADR 0047 §2). Map the real graph from
-`daemon.go` before the first PR:
+A boot-order scout of `cmd/openccu-loom/daemon.go` (`daemonServeWithDeps`)
+established the real, **non-uniform** start requirements. Verify line numbers
+before editing; they drift.
 
-- The **event-bus consumers** (MQTT EventBridge/Hub, webhook) need the
-  centrals registered (their event buses exist) — today they start mid-boot,
-  after `reg` is populated.
-- The **HTTP/REST service** needs the fully-assembled router (every handler,
-  incl. the MCP mount and the southbound-backed handlers) before it binds.
-- **Matter** needs its store open and the bridge composed.
+**Start sequence today (top = earliest):**
 
-Produce a written ordering (start order top-to-bottom; stop is its reverse)
-and justify each edge. That ordering becomes the registration order **and**
-the golden the ordering test pins (§7). If a surface genuinely cannot start
-at the unified `StartAll` point, that is a real boot-sequencing fact to
-encode in the order — **not** a license to leave it hand-wired (the rejected
-escape hatch from the earlier draft).
+1. `reg.StartAll(ctx)` (~152) — central event buses go live.
+2. `wireSharedInfrastructure` (~178) — builds + `Start`s the **MQTT
+   supervisor** (`mqttSup`, `daemon_infra.go`).
+3. **MQTT EventBridge** `bridge.Start(ctx)` (~215) — **before southbound
+   hydration**, because the boot-time initial snapshot published *during*
+   `wireSouthbound` must land on a live bridge (retained CCU state → broker).
+4. **MQTT HubMQTTPublisher** `hubMQTT.Start(ctx)` (~244); `mqttSup.OnConnect`
+   reconnect hooks re-publish hub state + raw snapshot (~246, ~266).
+5. **webhook** `northBridges.StartAll(ctx)` (~279) — currently pre-hydration.
+6. XML-RPC/BIN-RPC callback servers (~288).
+7. `wireSouthbound` (~321) — device pipeline, paramset hydration, **boot-time
+   MQTT initial snapshot** (depends on steps 3–4 being live).
+8. domain adapters (~354–520); `wireREST` builds the `serverGroup` (~388).
+9. **Matter** `wireMatterRuntime` (~454) — after hydration (endpoint topology
+   is built from hydrated devices); default-off gate `cfg.North.Matter.Enabled`.
+10. `mountRESTServer` (~547) assembles the full router (incl. MCP mount) into
+    a `rest.Server` added to `serverGroup`.
+11. **REST HTTP** `servers.startAll()` (~609) — **last**, binds the listener.
+
+**Teardown today** is LIFO across scattered defers: `servers.stopAll` (REST) →
+mDNS advertiser → sysStatus → Matter (`bridge.Stop`→`subMgr.Stop`→`db.Close`)
+→ … → `northBridges.StopAll` (webhook) → EventBridge `Stop` → HubMQTT `Stop`
+→ `sharedInfraTeardown` (`mqttSup.Shutdown`).
+
+**The decisive constraint:** MQTT (step 3) must start **before** hydration
+(step 7); Matter (9) and REST (11) **after**. A single end-of-boot `StartAll`
+cannot express this — it would move MQTT past hydration and drop the retained
+publish. **Therefore the registry starts in phases** (ADR 0047 §2):
+
+- **`PhaseEarly`** (before `wireSouthbound`): MQTT (supervisor + EventBridge +
+  HubMQTTPublisher, wrapped as one `mqtt` Service).
+- **`PhaseLate`** (after Matter wiring, at the `servers.startAll()` point):
+  Matter, REST, and the webhook.
+
+`StartAll(ctx, phase)` starts only that phase's services in registration
+order; `StopAll` stops **every** started service in one reverse pass at
+shutdown. The phase + within-phase order is the golden the ordering test pins
+(§7). No surface is left hand-wired — a genuine "cannot start at the unified
+point" fact is encoded as its phase, not as an escape hatch.
+
+**`serverGroup`** (`daemon_north.go:33`) is already a mini-registry for the
+HTTP server (`add`/`startAll`/`stopAll`). The REST-surface PR reconciles it
+with the bridge registry (either the REST Service wraps `serverGroup`, or
+`serverGroup` is retired in favour of the registry).
+
+**Suggested first PR (lowest risk, best fit):** **REST**. It already starts
+last and stops first, which is exactly the registry's late-phase +
+reverse-stop semantics — so wrapping the `rest.Server` as a `PhaseLate`
+`Service` is behaviour-preserving with no reorder. Do REST before Matter/MQTT.
+(This refines the "Matter first" ordering below, which predates the scout.)
 
 ---
 
@@ -175,10 +214,15 @@ escape hatch from the earlier draft).
 
 ## 5. Implementation steps — one surface per PR
 
-Order: **Matter → REST(+MCP) → MQTT** (increasing risk; MQTT last for the
-supervisor). Precede PR1 with the §3.1 ordering analysis (can be a tiny
-doc-only PR that also adds the *failing* ordering/registration guard tests
-as the target to make green).
+Order (refined by the §3.1 scout): **phased-start foundation → REST(+MCP) →
+Matter → MQTT → webhook-to-late-phase**. REST goes first because it already
+starts last / stops first (a `PhaseLate` Service with no reorder); MQTT last
+because its supervisor + pre-hydration `PhaseEarly` start are the subtlest;
+the webhook's move to `PhaseLate` is last because it carries the documented
+boot-hydration-event behaviour decision (ADR 0047 §2). PR0 lands the
+phased-start `Registry` support + the *failing* ordering/registration guard
+tests as the target to make green. (This supersedes the earlier
+"Matter → REST → MQTT" ordering, which predates the boot-order scout.)
 
 Per surface:
 

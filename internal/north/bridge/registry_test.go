@@ -294,3 +294,169 @@ func assertLog(t *testing.T, got, want []string) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Phased-start tests
+// ---------------------------------------------------------------------------
+
+// TestStartPhaseStartsOnlyThatPhase verifies that StartPhase(Early) starts
+// only early-phase services in registration order, leaving late-phase services
+// untouched.
+func TestStartPhaseStartsOnlyThatPhase(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.RegisterPhase(newPlain("e1", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l1", &log), PhaseLate)
+	reg.RegisterPhase(newPlain("e2", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l2", &log), PhaseLate)
+
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early): unexpected error: %v", err)
+	}
+
+	want := []string{"start:e1", "start:e2"}
+	assertLog(t, log, want)
+}
+
+// TestTwoPhaseStartThenReverseStop verifies that starting Early then Late
+// produces the correct interleaved start order and that StopAll reverses it
+// fully across phase boundaries.
+func TestTwoPhaseStartThenReverseStop(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.RegisterPhase(newPlain("e1", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l1", &log), PhaseLate)
+	reg.RegisterPhase(newPlain("e2", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l2", &log), PhaseLate)
+
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early): %v", err)
+	}
+	if err := reg.StartPhase(context.Background(), PhaseLate); err != nil {
+		t.Fatalf("StartPhase(Late): %v", err)
+	}
+
+	// Start order must be: e1, e2 (from Early phase), then l1, l2 (from Late phase).
+	wantStart := []string{"start:e1", "start:e2", "start:l1", "start:l2"}
+	assertLog(t, log, wantStart)
+
+	log = log[:0] // clear to inspect only stops
+	reg.StopAll(context.Background())
+
+	// StopAll must reverse the actual start order: l2, l1, e2, e1.
+	wantStop := []string{"stop:l2", "stop:l1", "stop:e2", "stop:e1"}
+	assertLog(t, log, wantStop)
+}
+
+// TestStartPhaseIsIdempotent verifies that calling StartPhase(Early) twice
+// starts the early services exactly once; the second call is a no-op.
+func TestStartPhaseIsIdempotent(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.RegisterPhase(newPlain("e1", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("e2", &log), PhaseEarly)
+
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early) first call: %v", err)
+	}
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early) second call: %v", err)
+	}
+
+	// Each early service must appear exactly once.
+	want := []string{"start:e1", "start:e2"}
+	assertLog(t, log, want)
+}
+
+// TestStartAllAfterStartPhaseStartsOnlyRemainder verifies that StartAll after
+// StartPhase(Early) starts only the not-yet-started late services, never
+// re-starting the early ones.
+func TestStartAllAfterStartPhaseStartsOnlyRemainder(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.RegisterPhase(newPlain("e1", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l1", &log), PhaseLate)
+	reg.RegisterPhase(newPlain("e2", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l2", &log), PhaseLate)
+
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early): %v", err)
+	}
+	if err := reg.StartAll(context.Background()); err != nil {
+		t.Fatalf("StartAll: %v", err)
+	}
+
+	// Early services appear exactly once; late services are appended by StartAll.
+	want := []string{"start:e1", "start:e2", "start:l1", "start:l2"}
+	assertLog(t, log, want)
+}
+
+// TestStartPhaseRollbackAcrossPhases verifies that a failure during
+// StartPhase(Late) rolls back every started service across all phases,
+// including ones started in a prior StartPhase(Early) call.
+func TestStartPhaseRollbackAcrossPhases(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.RegisterPhase(newPlain("e1", &log), PhaseEarly)
+	reg.RegisterPhase(newPlain("l1", &log), PhaseLate)
+	reg.RegisterPhase(newFailing("l2", &log, errors.New("boom")), PhaseLate)
+
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early): unexpected error: %v", err)
+	}
+
+	err := reg.StartPhase(context.Background(), PhaseLate)
+	if err == nil {
+		t.Fatal("StartPhase(Late): expected error, got nil")
+	}
+	if err.Error() != "boom" {
+		t.Fatalf("StartPhase(Late): wrong error %q", err)
+	}
+
+	// Expected sequence:
+	//   start:e1  (from earlier StartPhase(Early))
+	//   start:l1  (l1 started ok before l2 failed)
+	//   start:l2  (l2's Start was called and recorded before returning the error)
+	//   stop:l1   (rollback in reverse start order)
+	//   stop:e1   (rollback continues across phases)
+	// l2 itself must NOT appear in stops (it never completed Start successfully).
+	want := []string{
+		"start:e1",
+		"start:l1",
+		"start:l2",
+		"stop:l1",
+		"stop:e1",
+	}
+	assertLog(t, log, want)
+
+	// After rollback, StopAll must be a no-op.
+	log = log[:0]
+	reg.StopAll(context.Background())
+	if len(log) != 0 {
+		t.Fatalf("StopAll after rollback: expected empty log, got %v", log)
+	}
+}
+
+// TestDefaultRegisterPhaseIsLate verifies that Register (without an explicit
+// phase) registers the service as PhaseLate: it is NOT started by
+// StartPhase(Early) but IS started by StartPhase(Late).
+func TestDefaultRegisterPhaseIsLate(t *testing.T) {
+	var log []string
+	reg := NewRegistry(nil)
+	reg.Register(newPlain("default", &log))
+
+	// StartPhase(Early) must not start the default-registered service.
+	if err := reg.StartPhase(context.Background(), PhaseEarly); err != nil {
+		t.Fatalf("StartPhase(Early): %v", err)
+	}
+	if len(log) != 0 {
+		t.Fatalf("StartPhase(Early) started a PhaseLate service; got log %v", log)
+	}
+
+	// StartPhase(Late) must start it.
+	if err := reg.StartPhase(context.Background(), PhaseLate); err != nil {
+		t.Fatalf("StartPhase(Late): %v", err)
+	}
+	want := []string{"start:default"}
+	assertLog(t, log, want)
+}
