@@ -63,6 +63,7 @@ import {
   MoreVertical,
   MousePointerClick,
   Move,
+  Network,
   Palette,
   Pencil,
   Percent,
@@ -151,6 +152,7 @@ export type IconName =
   | "mdi:save"
   | "mdi:search"
   | "mdi:server"
+  | "mdi:server-network"
   | "mdi:settings"
   | "mdi:shield"
   | "mdi:signal"
@@ -231,6 +233,7 @@ const REGISTRY: Record<IconName, Component> = {
   "mdi:save": Save,
   "mdi:search": Search,
   "mdi:server": Server,
+  "mdi:server-network": Network,
   "mdi:settings": Settings,
   "mdi:shield": Shield,
   "mdi:signal": Signal,

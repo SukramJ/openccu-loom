@@ -282,6 +282,7 @@ const EN: Catalog = {
   "nav.favorites": "Favorites",
   "nav.firmware": "Firmware",
   "nav.inbox": "Inbox",
+  "nav.fleet": "Fleet",
   "favorites.title": "Favorites",
   "favorites.subtitle": "Your pinned devices and system variables, synced across browsers.",
   "favorites.empty": "No favorites yet. Pin a device from its detail page.",
@@ -1430,6 +1431,7 @@ const EN: Catalog = {
   "page.title.overview": "Overview — OpenCCU-Loom",
   "page.title.diagnostics": "Diagnostics — OpenCCU-Loom",
   "page.title.energy": "Energy — OpenCCU-Loom",
+  "page.title.fleet": "Fleet — OpenCCU-Loom",
   "page.title.logs": "Logs — OpenCCU-Loom",
   "page.title.settings": "Settings — OpenCCU-Loom",
   // --- Profile selector ---
@@ -1966,6 +1968,20 @@ const EN: Catalog = {
   "access.password_leave_blank": "Leave blank to keep current",
   "access.forbidden": "Admin access required.",
   "access.degraded_note": "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
+  // --- Fleet (read-only cross-CCU overview) ---
+  "fleet.title": "Fleet",
+  "fleet.subtitle": "All configured CCUs, their status, interfaces and device counts at a glance.",
+  "fleet.empty": "No CCUs configured yet.",
+  "fleet.load_error": "Could not load the CCU fleet: {error}",
+  "fleet.status.online": "Online",
+  "fleet.status.offline": "Offline",
+  "fleet.field.host": "Host",
+  "fleet.field.model": "Model",
+  "fleet.field.version": "Firmware version",
+  "fleet.field.serial": "Serial",
+  "fleet.field.devices": "Devices",
+  "fleet.field.interfaces": "Interfaces",
+  "fleet.open_webui": "Open CCU WebUI",
 };
 
 const DE: Catalog = {
@@ -2247,6 +2263,7 @@ const DE: Catalog = {
   "favorites.kind.device": "Gerät",
   "favorites.kind.sysvar": "Systemvariable",
   "nav.inbox": "Posteingang",
+  "nav.fleet": "CCUs",
   "nav.logout": "Abmelden",
   "nav.messages": "Meldungen",
   "nav.programs": "Programme",
@@ -3385,6 +3402,7 @@ const DE: Catalog = {
   "page.title.overview": "Übersicht — OpenCCU-Loom",
   "page.title.diagnostics": "Diagnose — OpenCCU-Loom",
   "page.title.energy": "Energie — OpenCCU-Loom",
+  "page.title.fleet": "CCUs — OpenCCU-Loom",
   "page.title.logs": "Protokoll — OpenCCU-Loom",
   "page.title.settings": "Einstellungen — OpenCCU-Loom",
   "profile.select": "Profil",
@@ -3897,6 +3915,20 @@ const DE: Catalog = {
   "access.password_leave_blank": "Leer lassen um beizubehalten",
   "access.forbidden": "Administratorzugriff erforderlich.",
   "access.degraded_note": "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Benutzer über config.yaml verwalten.",
+  // --- CCU-Flotte (schreibgeschützte CCU-übergreifende Übersicht) ---
+  "fleet.title": "CCUs",
+  "fleet.subtitle": "Alle konfigurierten CCUs mit Status, Schnittstellen und Geräteanzahl auf einen Blick.",
+  "fleet.empty": "Noch keine CCUs konfiguriert.",
+  "fleet.load_error": "CCU-Flotte konnte nicht geladen werden: {error}",
+  "fleet.status.online": "Online",
+  "fleet.status.offline": "Offline",
+  "fleet.field.host": "Host",
+  "fleet.field.model": "Modell",
+  "fleet.field.version": "Firmware-Version",
+  "fleet.field.serial": "Seriennummer",
+  "fleet.field.devices": "Geräte",
+  "fleet.field.interfaces": "Schnittstellen",
+  "fleet.open_webui": "CCU-WebUI öffnen",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };

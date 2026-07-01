@@ -405,6 +405,12 @@ export type ConfigSnapshot = components["schemas"]["ConfigSnapshot"];
 // LinkableChannel re-exported from generated schema.
 export type LinkableChannel = components["schemas"]["LinkableChannel"];
 
+// SystemCCUEntry re-exported from generated schema — per-central fleet
+// metadata (name/host/availability/model/version/config-URL/configured
+// interfaces) served by GET /api/v1/system/ccu. Backs the read-only
+// cross-CCU overview (Fleet.svelte).
+export type SystemCCUEntry = components["schemas"]["SystemCCUEntry"];
+
 // Per-device RF reception strength from `GET /diagnostics/rssi`, read from
 // the maintenance-channel RSSI_DEVICE / RSSI_PEER data points (works for HmIP
 // and BidCos). rssi_device / rssi_peer are null when the device does not
