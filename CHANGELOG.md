@@ -19,6 +19,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `http://localhost:8119` (was `:2121`). (More command groups — `sysvar`,
   `program`, `paramset`, `events tail` — are follow-ups.)
 
+- **`hmcli` gains `sysvar`, `program`, and `paramset` command groups.** Three
+  new command groups extend the admin CLI: `hmcli sysvar list|get|set|fetch`
+  manages CCU system variables (list with type/value table, read, write a
+  runtime value, force re-pull with optional `--central` scope); `hmcli program
+  list|get|run|enable|disable` lists programs, reads one, triggers execution,
+  and toggles the active flag; `hmcli paramset get|set` reads or writes a device
+  paramset (VALUES, MASTER, LINK) as a sorted key=value table. All commands
+  support `--json` for scripting and share the same `--host`/`--token`/`--user`/
+  `--password`/`--timeout` connection flags. Pure REST client — no daemon change.
+
 - **Scheduled / automatic CCU backups (`backup:`).** A new opt-in config
   section runs an automatic backup of each configured CCU on an interval
   (`backup.schedule`, e.g. `24h`; off by default) via a per-central
