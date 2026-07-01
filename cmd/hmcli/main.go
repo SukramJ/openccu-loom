@@ -107,6 +107,9 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 		newDelegateCmd("cache", "Clear CCU-derivable caches (online) or SQLite rows (--offline)", cmdCache, stdout, stderr),
 		newDelegateCmd("devices", "List and drive devices (list, get, get-value, set)", cmdDevices, stdout, stderr),
 		newDelegateCmd("export-def", "Download a device-definition zip from a daemon", cmdExportDef, stdout, stderr),
+		newDelegateCmd("sysvar", "Manage system variables (list, get, set, fetch)", cmdSysvar, stdout, stderr),
+		newDelegateCmd("program", "Manage CCU programs (list, get, run, enable, disable)", cmdProgram, stdout, stderr),
+		newDelegateCmd("paramset", "Read and write device paramsets (get, set)", cmdParamset, stdout, stderr),
 	)
 	return root
 }
