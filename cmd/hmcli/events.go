@@ -227,14 +227,22 @@ func readEvents(ctx context.Context, conn *websocket.Conn, writeMu *sync.Mutex, 
 	for {
 		msgType, data, err := conn.ReadMessage()
 		if err != nil {
-			// A clean close triggered by our own signal handler is not an error.
+			// Interrupted by the user (SIGINT/SIGTERM): clean exit.
+			if streamCtx.Err() != nil {
+				return nil //nolint:nilerr // context cancelled by signal is a clean exit, not an error
+			}
+			// Clean server-initiated close: exit silently.
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				return nil
 			}
-			if streamCtx.Err() != nil {
-				return nil //nolint:nilerr // context cancelled by SIGINT/SIGTERM is a clean exit, not an error
-			}
-			return fmt.Errorf("events tail: read: %w", err)
+			// Any other read error after a live subscription means the stream
+			// ended: the daemon went away, the network dropped, or the peer
+			// closed the socket abruptly (some platforms surface that as
+			// ECONNRESET / wsarecv rather than a WebSocket close frame). For a
+			// tail that is end-of-stream, not a command failure — note it on
+			// stderr and exit cleanly so scripts still see exit 0.
+			_, _ = fmt.Fprintf(stderr, "events tail: stream ended: %v\n", err)
+			return nil
 		}
 		if msgType != websocket.TextMessage {
 			continue

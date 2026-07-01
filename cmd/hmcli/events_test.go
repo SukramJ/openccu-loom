@@ -52,8 +52,20 @@ func fakeEventServer(t *testing.T, frames [][]byte) (*httptest.Server, <-chan ev
 				return
 			}
 		}
-		_ = conn.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"))
+		// Graceful close: send the close frame, then drain the client's echoed
+		// close (bounded by a read deadline) before tearing down the TCP socket.
+		// Returning immediately lets the socket teardown race ahead of the
+		// client reading the close frame, which some platforms surface as an
+		// abrupt reset rather than a clean WS close.
+		_ = conn.WriteControl(websocket.CloseMessage,
+			websocket.FormatCloseMessage(websocket.CloseNormalClosure, "done"),
+			time.Now().Add(time.Second))
+		_ = conn.SetReadDeadline(time.Now().Add(time.Second))
+		for {
+			if _, _, err := conn.ReadMessage(); err != nil {
+				break
+			}
+		}
 	}))
 	t.Cleanup(srv.Close)
 	return srv, ch
