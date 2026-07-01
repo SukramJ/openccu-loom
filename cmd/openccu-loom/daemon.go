@@ -404,7 +404,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		restResolve:    restResolve,
 		sessionResolve: sessionResolve,
 	})
-	servers := rw.servers
 	restStatusMetrics := rw.statusMetrics
 	restAuth := rw.auth
 	configAdminSvc := rw.configAdmin
@@ -544,7 +543,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// No-op when REST is disabled. Extracted into mountRESTServer
 	// (daemon_rest_mount.go); the returned teardown folds the inline mDNS
 	// stop defer.
-	restMountTeardown := mountRESTServer(ctx, cfg, logger, servers, restMountDeps{
+	restMountTeardown := mountRESTServer(ctx, cfg, logger, northBridges, restMountDeps{
 		reg:                     reg,
 		bootstrap:               bootstrapRouter,
 		noUsers:                 noUsers,
@@ -606,16 +605,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// The browser-facing bootstrap surface is folded into the REST server
 	// above (ADR 0044) — there is no separate UI listener.
 
-	if err := servers.startAll(); err != nil { //nolint:contextcheck // startAll has no ctx parameter; individual servers manage their own lifecycle
-		return fmt.Errorf("server start: %w", err)
+	// Start the PhaseLate north-bound surfaces (REST/HTTP; the webhook is
+	// already started above). StartAll skips the already-started webhook.
+	if err := northBridges.StartAll(ctx); err != nil {
+		return fmt.Errorf("north bridge start: %w", err)
 	}
 
 	// --- shutdown wait ---------------------------------------
 	// Block until ctx is cancelled, then run the graceful shutdown
-	// sequence (Matter ShutDown emit + bounded server stop). Extracted
+	// sequence (Matter ShutDown emit + bounded reverse-order StopAll, which
+	// stops REST first — registered last — then the webhook). Extracted
 	// into awaitShutdown (daemon_north.go).
-	awaitShutdown(ctx, logger, matter, servers)
+	awaitShutdown(ctx, logger, matter, northBridges)
 	return nil
 }
-
-// serverGroup bundles the REST + UI server lifecycles.

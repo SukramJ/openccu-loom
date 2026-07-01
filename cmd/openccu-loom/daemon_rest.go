@@ -53,7 +53,6 @@ type restWiringDeps struct {
 // values the REST router/server build (and the shutdown path) read
 // later in the composition root.
 type restWiring struct {
-	servers       *serverGroup
 	statusMetrics *middleware.StatusMetrics
 	auth          *handlers.AuthDeps
 	configAdmin   handlers.ConfigAdminService
@@ -94,7 +93,6 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	ccuStore := buildCCUAuthStore(cfg, d.reg, logger)
 	ccuPrimary := ccuAuthPrimary(cfg.North.REST.Auth.CCU)
 
-	servers := newServerGroup(logger)
 	if d.auditDB != nil && d.healthTracker != nil {
 		stopProbe := sqlitestore.StartHealthProbe(ctx, d.auditDB, d.healthTracker, sqlitestore.DefaultProbeInterval)
 		_ = stopProbe // daemon shutdown handled by the parent context cancel
@@ -211,7 +209,6 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	}
 
 	return restWiring{
-		servers:       servers,
 		statusMetrics: restStatusMetrics,
 		auth:          restAuth,
 		configAdmin:   configAdminSvc,
