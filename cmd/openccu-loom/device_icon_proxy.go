@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/config"
 )
 
@@ -39,7 +40,7 @@ var safeIconName = regexp.MustCompile(`^[\w\-./]+\.png$`)
 type deviceIconProxy struct {
 	// locate maps a device address to its icon filename and central name.
 	locate   func(address string) (filename, centralName string, ok bool)
-	configs  map[string]config.CentralConfig
+	resolve  adapter.CentralConfigResolver
 	secure   *http.Client
 	insecure *http.Client
 
@@ -53,7 +54,10 @@ type cachedIcon struct {
 }
 
 // newDeviceIconProxy wires the proxy against the live central registry.
-func newDeviceIconProxy(reg *central.Registry, centrals []config.CentralConfig) *deviceIconProxy {
+// resolve looks up a central's connection config against the live
+// central-config source (see [adapter.CentralConfigResolver]) so a
+// central adopted at runtime is served without a daemon restart.
+func newDeviceIconProxy(reg *central.Registry, resolve adapter.CentralConfigResolver) *deviceIconProxy {
 	locate := func(address string) (string, string, bool) {
 		if reg == nil {
 			return "", "", false
@@ -68,22 +72,18 @@ func newDeviceIconProxy(reg *central.Registry, centrals []config.CentralConfig) 
 		}
 		return "", "", false
 	}
-	return newDeviceIconProxyWith(locate, centrals)
+	return newDeviceIconProxyWith(locate, resolve)
 }
 
 // newDeviceIconProxyWith is the testable constructor — it takes the
 // address→(filename, central) resolver directly instead of a registry.
 func newDeviceIconProxyWith(
 	locate func(address string) (filename, centralName string, ok bool),
-	centrals []config.CentralConfig,
+	resolve adapter.CentralConfigResolver,
 ) *deviceIconProxy {
-	configs := make(map[string]config.CentralConfig, len(centrals))
-	for i := range centrals {
-		configs[centrals[i].Name] = centrals[i]
-	}
 	return &deviceIconProxy{
 		locate:  locate,
-		configs: configs,
+		resolve: resolve,
 		secure:  &http.Client{Timeout: 15 * time.Second},
 		insecure: &http.Client{
 			Timeout: 15 * time.Second,
@@ -122,7 +122,10 @@ func (p *deviceIconProxy) fetch(ctx context.Context, address string) (data []byt
 	if !ok || filename == "" || strings.Contains(filename, "..") || !safeIconName.MatchString(filename) {
 		return nil, ""
 	}
-	cc, ok := p.configs[centralName]
+	if p.resolve == nil {
+		return nil, ""
+	}
+	cc, ok := p.resolve(ctx, centralName)
 	if !ok || cc.Host == "" {
 		return nil, ""
 	}

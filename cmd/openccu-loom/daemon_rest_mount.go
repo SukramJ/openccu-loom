@@ -124,6 +124,12 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if cfg.North.REST.OpenAPIValidateEnabled() {
 		openapiValidator = buildOpenAPIValidator(cfg, logger) //nolint:contextcheck // NewOpenAPIValidator/Validate uses context.Background() internally; non-owned code
 	}
+	// Shared live central-config resolver (see ccu_auth_wiring.go): reads the
+	// persisted centrals store — the same table a runtime central-adopt
+	// writes to — falling back to the boot-time cfg.Centrals snapshot when
+	// no store is available. Both the icon proxy and the system-CCU listing
+	// need the same by-name lookup, so a single instance is built here.
+	centralResolve := newCCUAuthCentralResolver(cfg, d.sqCentrals)
 	// RPC session recorder (XML/JSON-RPC replay capture). Resume a
 	// recording that was running before a restart, then expose it.
 	rpcRecorder := adapter.NewRPCRecorderAdapter(d.reg, cfg.DataDir)
@@ -162,7 +168,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		Devices:               d.devicesAdapter,
 		DeviceAdmin:           d.deviceAdminDomain,
 		DeviceInstallMode:     d.deviceAdminDomain,
-		DeviceIcons:           newDeviceIconProxy(d.reg, cfg.Centrals),
+		DeviceIcons:           newDeviceIconProxy(d.reg, centralResolve),
 		RefreshDevices:        d.devicesAdapter,
 		Reloader:              d.deviceReloader,
 		DPWriter:              d.dpWriterAdapter,
@@ -219,7 +225,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		RequireAdmin: func(next http.Handler) http.Handler {
 			return d.authMw.RequireRole(auth.RoleAdmin, next)
 		},
-		SystemCCU: newSystemCCUAdapter(d.reg, cfg),
+		SystemCCU: newSystemCCUAdapter(d.reg, centralResolve),
 		RateLimit: buildRateLimitConfig(cfg),
 		Capabilities: runtimeCapabilityDetector{
 			mqtt:              d.mqttAvailable,
