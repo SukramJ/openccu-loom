@@ -174,7 +174,18 @@ func WireCentrals(
 	bringUpCtx, cancelBringUp := context.WithCancel(ctx)
 	mgr := newBringUpManager()
 	mgr.parentCancel = cancelBringUp
+	// Capture the shared wiring inputs so a single central can be built + started
+	// at runtime (BringUpManager.AddCentral) exactly as at boot.
+	mgr.parentCtx = bringUpCtx
+	mgr.cfg = cfg
+	mgr.deps = deps
+	mgr.logger = logger
 
+	// Callback-handler routing is local (no CCU I/O), registered synchronously up
+	// front inside buildAndStart; the actual init()/announce to the CCU happens
+	// inside the gated bring-up when the interface backends come up. The routing
+	// is permanent for the central's life — it survives a re-init (only the gated
+	// bring-up generation is cycled).
 	for i := range cfg.Centrals {
 		cc := &cfg.Centrals[i]
 		unit, ok := reg.Get(cc.Name)
@@ -182,27 +193,8 @@ func WireCentrals(
 			logger.Warn("wire.central.not_registered", slog.String("central", cc.Name))
 			continue
 		}
-		// Callback-handler routing is local (no CCU I/O), so register it
-		// synchronously up front; the actual init()/announce to the CCU happens
-		// inside the gated bring-up when the interface backends come up. The
-		// routing is permanent for the central's life — it survives a re-init
-		// (only the gated bring-up generation is cycled).
-		callbackURL, binRPCCallbackAddr, deregister := registerCentralCallbacks(deps, cc, unit, logger)
-
-		b := &centralBringUp{
-			cfg:                cfg,
-			cc:                 *cc,
-			unit:               unit,
-			deps:               deps,
-			callbackURL:        callbackURL,
-			binRPCCallbackAddr: binRPCCallbackAddr,
-			logger:             logger,
-			parentCtx:          bringUpCtx,
-		}
-		b.addPermanentCloser(deregister)
-		//nolint:contextcheck // start runs the gated bring-up on the handle's teardown-bounded parent ctx, not the short-lived wiring ctx
-		b.start()
-		mgr.add(b)
+		//nolint:contextcheck // buildAndStart→start runs the gated bring-up on the handle's teardown-bounded parent ctx, not the short-lived wiring ctx
+		mgr.add(mgr.buildAndStart(cc, unit))
 	}
 
 	// Bring-up is asynchronous: there is no synchronous aggregate error to
