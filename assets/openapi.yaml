@@ -497,6 +497,10 @@ paths:
         "202": { description: Accepted }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: |
+            Inbound webhook disabled (`north.webhook.inbound.enabled` is
+            false) — the route is not mounted.
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
