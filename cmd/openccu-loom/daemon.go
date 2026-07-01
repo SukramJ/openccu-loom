@@ -209,11 +209,19 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// source for MQTT discovery names and the Matter NodeLabel suffix.
 	parameterLabels := adapter.NewParameterLabelAdapter(translations, cfg.Locale)
 
+	// North-bound bridge registry — the uniform lifecycle owner for the
+	// north-bound surfaces (ADR 0047). Created here (before the MQTT fan-out)
+	// so the MQTT service registers FIRST and therefore stops LAST in the
+	// reverse-order StopAll, matching the previous LIFO defer placement.
+	northBridges := northbridge.NewRegistry(logger)
+
 	bridge := adapter.NewEventBridge(reg, wsHub, mqttWiring).
 		WithVisibility(visFilter).
 		WithParameterLabels(adapter.NewMqttParameterLabelAdapter(parameterLabels))
+	// EventBridge starts here (PhaseEarly, before southbound hydration) so the
+	// boot-time initial snapshot publishes onto a live bridge; its ordered
+	// teardown is owned by northBridges via the mqttService registered below.
 	bridge.Start(ctx)
-	defer bridge.Stop()
 
 	// Expose the snapshot re-seed to the config-watcher's reload
 	// handler. A runtime MQTT swap rebuilds the bridge from scratch
@@ -242,7 +250,6 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	if mqttWiring != nil {
 		hubMQTT = adapter.NewHubMQTTPublisher(reg, mqttWiring, logger)
 		hubMQTT.Start(ctx)
-		defer hubMQTT.Stop()
 		mqttSup.OnConnect(func(ctx context.Context) {
 			hubMQTT.Start(ctx)
 		})
@@ -269,12 +276,13 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}
 
 	// --- north-bound bridge registry ---------------------------
-	// Uniform lifecycle for north-bound adapters (ADR-pending bridge
-	// contract). The outbound webhook is the first registered service;
-	// the established bridges (MQTT, Matter, MCP) are migrated onto the
-	// registry incrementally. Start is a no-op when the webhook is
-	// disabled, so registering it unconditionally is safe.
-	northBridges := northbridge.NewRegistry(logger)
+	// Uniform lifecycle for the north-bound surfaces (ADR 0047). The MQTT
+	// fan-out (EventBridge + optional HubMQTTPublisher) is registered FIRST
+	// so it stops LAST in the reverse-order StopAll (it self-started above,
+	// pre-hydration; the Service owns its teardown). The webhook is a real
+	// Service. Matter and REST register later (PhaseLate). StartAll is a
+	// no-op for the already-started MQTT service and for a disabled webhook.
+	northBridges.Register(newMQTTService(bridge, hubMQTT))
 	northBridges.Register(webhook.NewOutbound(reg, cfg.North.Webhook, logger))
 	if err := northBridges.StartAll(ctx); err != nil {
 		logger.Warn("north.bridge.start", slog.String("err", err.Error()))
