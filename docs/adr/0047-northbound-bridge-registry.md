@@ -66,13 +66,28 @@ wrap:
    registers.
 
 2. **Registration order is the boot-dependency order, made explicit and
-   testable.** Some surfaces can only start once a precondition holds (the
-   HTTP server only after the router — including the MCP mount — is
-   assembled; the event-bus consumers only after the centrals are
-   registered). The registry models exactly this: `StartAll` starts in
-   registration order, `StopAll` stops in reverse. The order is therefore
-   chosen to honour the real dependency graph and is pinned by a
-   characterization test, instead of being implicit in `defer` placement.
+   testable — via *phased* start, not one `StartAll`.** A boot-order scout
+   (see the plan §3.1) established that the surfaces do **not** all start at
+   one point: the **MQTT EventBridge must start *before* southbound
+   hydration** (that is how retained CCU state is published to the broker
+   during boot), whereas **Matter** and the **REST HTTP server** must start
+   *after* hydration (Matter builds its endpoint topology from hydrated
+   devices; REST binds last, after the whole router incl. the MCP mount is
+   assembled). A single end-of-boot `StartAll` would therefore silently
+   move MQTT's start past hydration and drop the retained-state publish — a
+   behaviour change. **Decision: the composition root starts the registry
+   in phases** — an *early* phase (before southbound hydration: MQTT) and a
+   *late* phase (after: Matter, REST, and the webhook). Each service
+   declares its phase; the registry starts phase-by-phase in registration
+   order and stops **all** services in one reverse pass at shutdown. So the
+   ordering is still explicit and test-pinned (a characterization test fixes
+   the phase + within-phase order), but it honours the real, non-uniform
+   dependency graph instead of being implicit in `defer` placement. The
+   webhook currently starts pre-hydration; moving it to the late phase drops
+   boot-hydration events from its stream — treat that as an explicit,
+   documented behaviour decision in the webhook-migration PR (it is
+   arguably desirable — no initial-state POST flood on restart — but it is a
+   change, not a silent move).
 
 3. **The MQTT supervisor is an implementation detail of the MQTT Service.**
    MQTT carries a runtime supervisor (`mqtt_supervisor.go`, `SwapBridge`,
