@@ -732,6 +732,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/webhook/value": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inbound webhook — set a datapoint value
+         * @description Set a datapoint value from an external system. Mounted only when
+         *     `north.webhook.inbound.enabled` is set (off by default → 404).
+         *     Authorization: an operator identity via the normal auth chain OR the
+         *     configured inbound bearer token (`north.webhook.inbound.token`). This
+         *     is a real device write — the same authorization weight as
+         *     `PUT /devices/.../value`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WebhookValueRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthorized"];
+                /**
+                 * @description Inbound webhook disabled (`north.webhook.inbound.enabled` is
+                 *     false) — the route is not mounted.
+                 */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                502: components["responses"]["BadGateway"];
+                503: components["responses"]["ServiceUnavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/webhook/program": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inbound webhook — run a program
+         * @description Run a CCU program from an external system. Mounted only when
+         *     `north.webhook.inbound.enabled` is set (off by default → 404).
+         *     Authorization: an operator identity OR the configured inbound bearer
+         *     token. `central` is required when more than one CCU is configured.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["WebhookProgramRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                400: components["responses"]["BadRequest"];
+                401: components["responses"]["Unauthorized"];
+                404: components["responses"]["NotFound"];
+                502: components["responses"]["BadGateway"];
+                503: components["responses"]["ServiceUnavailable"];
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/sysvars": {
         parameters: {
             query?: never;
@@ -1461,6 +1570,46 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * First-run onboarding probe
+         * @description Reports whether first-run onboarding is still required — true only when no authentication source exists yet (no local admin, no YAML user, no CCU-delegated login, no OIDC). The SPA probes this on boot to decide between the onboarding wizard and the login screen. Unauthenticated.
+         */
+        get: operations["setupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finalize first-run onboarding
+         * @description Atomically persists the admin account, locale preference, optional CCU, and optional MQTT broker collected by the SPA onboarding wizard. Unauthenticated by necessity (no admin exists yet) but hard-gated: once any authentication source exists it returns 409, so a second admin can never be registered through this endpoint. On success the SPA returns to the login screen and the operator signs in with the new admin account.
+         */
+        post: operations["setup"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2546,6 +2695,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/energy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-device power/energy breakdown over time
+         * @description Per-device power/energy breakdown for the energy view, read from the hourly/daily measurement-history rollup tiers (month re-aggregates the daily tier). Requires the opt-in history feature (persistence.history.enabled); the route is absent and returns 404 when disabled. POWER is averaged/peaked per bucket; ENERGY_COUNTER and ENERGY_COUNTER_FEED_IN are reported as the bucket's cumulative-counter delta (last-first) in Wh. A counter that went backwards within a bucket (meter reset on re-pair / firmware event) reports the delta as `last` (never negative) and sets `reset` on that bucket.
+         */
+        get: operations["getEnergy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/incidents": {
         parameters: {
             query?: never;
@@ -3464,6 +3633,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/centrals/discovered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List CCUs found via SSDP/UPnP discovery
+         * @description Central units discovered on the LAN via active SSDP/UPnP, excluding the ones the operator ignored. Each entry is flagged whether it is already configured (matched by host). Empty when discovery is disabled.
+         */
+        get: operations["listDiscoveredCentrals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/discovered/ignored": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the discovered CCUs the operator has ignored */
+        get: operations["listIgnoredCentrals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/centrals/discovered/{serial}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ignore a discovered CCU (admin)
+         * @description Hide a discovered CCU so it stops appearing in the discovery list.
+         */
+        post: operations["ignoreDiscoveredCentral"];
+        /** Un-ignore a discovered CCU (admin) */
+        delete: operations["unignoreDiscoveredCentral"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/centrals/{name}": {
         parameters: {
             query?: never;
@@ -4214,6 +4443,17 @@ export interface components {
              *     summary or snapshot without recomputing the key. Always present and non-empty: a central serves no entity until its CCU serial (the central-id slot of the key) is resolved by the bring-up readiness gate.
              */
             unique_id: string;
+            /**
+             * @description Optional enriched model metadata for data points that provide
+             *     it (e.g. the calculated operating-voltage sensor's battery
+             *     type / quantity / low-voltage limits). Absent for plain scalar
+             *     data points. Mirrors the optional `additional_information`
+             *     object on the per-DP MQTT state topic. Additive — existing
+             *     responses are unchanged.
+             */
+            additional_information?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * @description Body of `POST /ui/event` — anonymous fire-and-forget
@@ -4233,6 +4473,32 @@ export interface components {
             value: unknown;
             /** @enum {string} */
             priority?: "critical" | "high" | "default" | "low";
+        };
+        /** @description Body of POST /webhook/value (inbound webhook value write). */
+        WebhookValueRequest: {
+            /**
+             * @description Optional CCU name. Device addresses are globally unique, so the
+             *     writer resolves the owning CCU from `address`; `central` is
+             *     informational.
+             */
+            central?: string;
+            /** @description Channel address, e.g. "0001D3C99C1234:1". */
+            address: string;
+            /** @description Wire parameter name, e.g. "STATE" or "LEVEL". */
+            parameter: string;
+            value: unknown;
+            /** @enum {string} */
+            priority?: "critical" | "high" | "default" | "low";
+        };
+        /** @description Body of POST /webhook/program (inbound webhook program run). */
+        WebhookProgramRequest: {
+            /**
+             * @description CCU name. Required when more than one CCU is configured, since
+             *     program IDs are not unique across CCUs.
+             */
+            central?: string;
+            /** @description Program ID to run. */
+            program: string;
         };
         ProgramSummary: {
             /** @description CCU this program belongs to (multi-central grouping). */
@@ -4335,6 +4601,59 @@ export interface components {
              * @description Number of raw samples aggregated into this bucket.
              */
             count: number;
+        };
+        /** @description One bucketed point of a device's energy breakdown: the cumulative-counter delta over the bucket (Wh) plus the instantaneous POWER summary (W). */
+        EnergyBucket: {
+            /**
+             * Format: date-time
+             * @description Start of the bucket's time span (UTC).
+             */
+            ts: string;
+            /** @description ENERGY_COUNTER delta over the bucket, in Wh. Never negative — see `reset`. */
+            consumed_wh: number;
+            /** @description ENERGY_COUNTER_FEED_IN delta over the bucket, in Wh. Never negative — see `reset`. */
+            feed_in_wh: number;
+            /** @description Mean POWER sample over the bucket, in W. */
+            avg_power_w: number;
+            /** @description Maximum POWER sample over the bucket, in W. */
+            peak_power_w: number;
+            /** @description True when a cumulative counter went backwards within this bucket (meter reset on re-pair / firmware event); the reported delta is the counter's value at the end of the bucket (energy accumulated since the reset), not a negative delta. */
+            reset: boolean;
+        };
+        /** @description One device's bucketed energy breakdown plus its range totals. */
+        EnergyDevice: {
+            /** @description Bare device address. */
+            address: string;
+            /** @description Device display name (falls back to the address when unknown). */
+            name: string;
+            buckets: components["schemas"]["EnergyBucket"][];
+            /** @description Sum of `consumed_wh` across every bucket, in Wh. */
+            total_consumed_wh: number;
+            /** @description Sum of `feed_in_wh` across every bucket, in Wh. */
+            total_feed_in_wh: number;
+        };
+        /** @description `GET /api/v1/energy` response body: one bucketed breakdown per device plus central totals, in Wh (the SPA divides by 1000 to render kWh). */
+        EnergyResponse: {
+            /**
+             * @description Bucket granularity actually used.
+             * @enum {string}
+             */
+            group: "hour" | "day" | "month";
+            /**
+             * Format: date-time
+             * @description Inclusive lower bound of the requested range (UTC).
+             */
+            from: string;
+            /**
+             * Format: date-time
+             * @description Exclusive upper bound of the requested range (UTC).
+             */
+            to: string;
+            devices: components["schemas"]["EnergyDevice"][];
+            /** @description Sum of every device's `total_consumed_wh`, in Wh. */
+            total_consumed_wh: number;
+            /** @description Sum of every device's `total_feed_in_wh`, in Wh. */
+            total_feed_in_wh: number;
         };
         /** @description One recorded user-initiated configuration change. */
         AuditEntry: {
@@ -5251,6 +5570,8 @@ export interface components {
             name: string;
             /** @description CCU hostname or IP address. */
             host: string;
+            /** @description CCU hardware serial, set when the central is adopted from SSDP/UPnP discovery. Empty for YAML / manually-entered rows. Lets discovery mark a CCU "already configured" by serial regardless of its host. */
+            serial?: string;
             /** @description Legacy single-port override applied to all interfaces when ports map is absent. */
             port?: number;
             /** @description HTTP port for JSON-RPC and web endpoints. 0 defaults to 80 (plain) / 443 (TLS). */
@@ -6045,6 +6366,80 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    setupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Onboarding requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        required: boolean;
+                    };
+                };
+            };
+        };
+    };
+    setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    admin: {
+                        username: string;
+                        password: string;
+                    };
+                    locale: {
+                        /** @enum {string} */
+                        locale: "de" | "en";
+                        /** @enum {string} */
+                        theme: "light" | "dark" | "system";
+                    };
+                    /** @description Optional first CCU. Omit to skip. */
+                    ccu?: {
+                        name: string;
+                        host: string;
+                        username?: string;
+                        password?: string;
+                        interfaces: string[];
+                    };
+                    /** @description Optional MQTT broker. Omit to skip. */
+                    mqtt?: {
+                        broker_url: string;
+                        username?: string;
+                        password?: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Onboarding completed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["UnprocessableEntity"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     login: {
@@ -7956,6 +8351,40 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getEnergy: {
+        parameters: {
+            query: {
+                /** @description Central (CCU) name that owns the energy devices. */
+                central: string;
+                /** @description Inclusive lower bound (RFC3339). */
+                from: string;
+                /** @description Exclusive upper bound (RFC3339). Must be after from. */
+                to: string;
+                /** @description Bucket granularity. Absent uses the default (day). */
+                group?: "hour" | "day" | "month";
+                /** @description Bare device address to scope the breakdown to one device. Omitted returns every energy device on the central. */
+                device?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-device power/energy breakdown for the requested range. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
     listIncidents: {
         parameters: {
             query?: never;
@@ -9602,6 +10031,111 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             500: components["responses"]["InternalError"];
+        };
+    };
+    listDiscoveredCentrals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Discovered CCUs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        serial: string;
+                        name: string;
+                        host: string;
+                        /** @description Address the SPA pre-fills on adoption. Differs from host when a stabler value applies — "localhost" for a CCU on the daemon's own host, or a reverse-resolved docker hostname for a co-located HA add-on. Equals host otherwise. */
+                        suggested_host: string;
+                        manufacturer?: string;
+                        model?: string;
+                        /** Format: date-time */
+                        last_seen: string;
+                        already_configured: boolean;
+                    }[];
+                };
+            };
+        };
+    };
+    listIgnoredCentrals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ignored CCUs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        serial: string;
+                        name?: string;
+                        host?: string;
+                        /** Format: date-time */
+                        ignored_at: string;
+                        ignored_by?: string;
+                    }[];
+                };
+            };
+        };
+    };
+    ignoreDiscoveredCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ignored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    unignoreDiscoveredCentral: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Un-ignored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            500: components["responses"]["InternalError"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getCentral: {

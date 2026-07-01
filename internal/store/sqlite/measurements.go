@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/pressly/goose/v3"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
 //go:embed migrations_history/*.sql
@@ -257,6 +259,167 @@ func (s *MeasurementStore) QueryBuckets(
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("measurements.QueryBuckets rows: %w", err)
+	}
+	return out, nil
+}
+
+// energyParameters is the fixed set of parameters the energy endpoint
+// aggregates: instantaneous load plus the two cumulative meter counters
+// (consumption, feed-in). POWER is instantaneous (W, averaged); the two
+// ENERGY_COUNTER parameters are cumulative meters (Wh) whose per-bucket
+// consumption is last-first.
+var energyParameters = []string{
+	string(hmenum.ParameterPower),
+	string(hmenum.ParameterEnergyCounter),
+	string(hmenum.ParameterEnergyCounterFeedIn),
+}
+
+// EnergyRow is one raw (channel, parameter, bucket) rollup row returned by
+// [MeasurementStore.QueryEnergy]. The handler folds these into per-device
+// consumed/feed-in Wh and avg/peak W — see the ENERGY_COUNTER delta and
+// counter-reset rule in internal/north/rest/handlers/energy.go.
+type EnergyRow struct {
+	ChannelAddress string
+	Parameter      string
+	BucketTS       time.Time
+	Sum            float64
+	Min            float64
+	Max            float64
+	First          float64
+	Last           float64
+	Count          int64
+}
+
+// queryEnergyTierSQL reads one rollup tier (measurements_hourly or
+// measurements_daily) directly: each row is already one (channel,
+// parameter, bucket) aggregate, so group=hour and group=day need no
+// further folding — only the parameter/central/device/range filter.
+const queryEnergyTierSQL = `
+    SELECT channel_address, parameter, bucket_ts, sum, min, max, first, last, count
+      FROM %s
+     WHERE central_name = ?
+       AND parameter IN (?, ?, ?)
+       AND bucket_ts >= ?
+       AND bucket_ts < ?
+       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+     ORDER BY channel_address, parameter, bucket_ts
+`
+
+// queryEnergyMonthSQL re-aggregates measurements_daily rows into UTC
+// calendar-month buckets in SQL rather than in the handler: SQLite has no
+// single "truncate to month" function, but `strftime('%s', ts, 'unixepoch',
+// 'start of month')` composes cleanly with the same window-function
+// fold-per-partition shape [rollupDailySelectSQL] already uses for the
+// daily rollup, so the exact-first/last invariant carries over unchanged
+// instead of being re-derived ad hoc in Go. sum/count stay additive
+// (Σsum, Σcount) so avg recomputed from them is exact; min/max fold with
+// MIN/MAX-of-MIN/MAX; first/last are the first daily bucket's `first` and
+// the last daily bucket's `last` within the month, ordered by bucket_ts.
+const queryEnergyMonthSQL = `
+    SELECT DISTINCT
+        channel_address, parameter, month_bucket,
+        SUM(sum) OVER w,
+        MIN(min) OVER w,
+        MAX(max) OVER w,
+        FIRST_VALUE(first) OVER (
+            PARTITION BY channel_address, parameter, month_bucket
+            ORDER BY bucket_ts
+        ),
+        LAST_VALUE(last) OVER (
+            PARTITION BY channel_address, parameter, month_bucket
+            ORDER BY bucket_ts
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        ),
+        SUM(count) OVER w
+      FROM (
+        SELECT channel_address, parameter, bucket_ts, sum, min, max, count, first, last,
+               CAST(strftime('%s', bucket_ts / 1000, 'unixepoch', 'start of month') AS INTEGER) * 1000
+                   AS month_bucket
+          FROM measurements_daily
+         WHERE central_name = ?
+           AND parameter IN (?, ?, ?)
+           AND bucket_ts >= ?
+           AND bucket_ts < ?
+           AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+      )
+    WINDOW w AS (PARTITION BY channel_address, parameter, month_bucket)
+    ORDER BY channel_address, parameter, month_bucket
+`
+
+// QueryEnergy reads the rollup tier matching group ("hour"|"day"|"month")
+// for the energy parameters (POWER, ENERGY_COUNTER,
+// ENERGY_COUNTER_FEED_IN) in [from, to), scoped to centralName and —
+// when deviceAddr is non-empty — to that device's channels
+// (deviceAddr or deviceAddr+":*"). "hour" and "day" read the matching
+// rollup table directly (each row is already one bucket); "month" has no
+// persisted tier, so it re-aggregates measurements_daily to calendar-month
+// buckets in SQL (see [queryEnergyMonthSQL]) rather than fetching daily
+// rows and folding them in Go — the fold is exact-once in SQL and mirrors
+// the existing RollupDaily window-function shape instead of duplicating
+// the first/last logic in the handler. Rows are ordered by
+// (channel_address, parameter, bucket_ts) so the handler can fold them by
+// device without re-sorting. The caller (the energy handler) folds
+// per-channel rows into per-device totals and applies the
+// counter-reset rule for cumulative parameters.
+func (s *MeasurementStore) QueryEnergy(
+	ctx context.Context,
+	centralName, deviceAddr string,
+	from, to time.Time,
+	group string,
+) ([]EnergyRow, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	fromMs, toMs := from.UnixMilli(), to.UnixMilli()
+	if !to.After(from) {
+		return nil, errors.New("measurements.QueryEnergy: to must be after from")
+	}
+	prefix := deviceAddr + ":%"
+
+	var (
+		rows *sql.Rows
+		err  error
+	)
+	switch group {
+	case "hour":
+		rows, err = s.db.QueryContext(ctx,
+			fmt.Sprintf(queryEnergyTierSQL, "measurements_hourly"),
+			centralName, energyParameters[0], energyParameters[1], energyParameters[2],
+			fromMs, toMs, deviceAddr, deviceAddr, prefix)
+	case "day":
+		rows, err = s.db.QueryContext(ctx,
+			fmt.Sprintf(queryEnergyTierSQL, "measurements_daily"),
+			centralName, energyParameters[0], energyParameters[1], energyParameters[2],
+			fromMs, toMs, deviceAddr, deviceAddr, prefix)
+	case "month":
+		rows, err = s.db.QueryContext(ctx, queryEnergyMonthSQL,
+			centralName, energyParameters[0], energyParameters[1], energyParameters[2],
+			fromMs, toMs, deviceAddr, deviceAddr, prefix)
+	default:
+		return nil, fmt.Errorf("measurements.QueryEnergy: unsupported group %q", group)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("measurements.QueryEnergy: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []EnergyRow
+	for rows.Next() {
+		var (
+			r        EnergyRow
+			bucketMs int64
+		)
+		if err := rows.Scan(
+			&r.ChannelAddress, &r.Parameter, &bucketMs,
+			&r.Sum, &r.Min, &r.Max, &r.First, &r.Last, &r.Count,
+		); err != nil {
+			return nil, fmt.Errorf("measurements.QueryEnergy scan: %w", err)
+		}
+		r.BucketTS = time.UnixMilli(bucketMs)
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("measurements.QueryEnergy rows: %w", err)
 	}
 	return out, nil
 }

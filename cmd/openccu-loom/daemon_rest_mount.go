@@ -301,6 +301,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		EnableRestartEndpoint: detectSupervisedRestart(),
 		ValuesCache:           newValuesCacheHandlerAdapter(d.valuesCacheStore),
 		History:               newHistoryHandlerAdapter(d.historyStore),
+		Energy:                newEnergyHandlerAdapter(d.historyStore, d.reg),
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,

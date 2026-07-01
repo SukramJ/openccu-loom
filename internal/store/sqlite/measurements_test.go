@@ -1016,3 +1016,279 @@ func TestMeasurement_DeleteDailyOlderThan_RespectsCutoff(t *testing.T) {
 
 // Ensure errors package is used (satisfies golangci-lint if errors.New is referenced).
 var _ = errors.New
+
+// energyRowFor returns the single row matching (channel, parameter) from
+// rows, or fails the test if there isn't exactly one.
+func energyRowFor(t *testing.T, rows []EnergyRow, channel, parameter string) EnergyRow {
+	t.Helper()
+	var out []EnergyRow
+	for _, r := range rows {
+		if r.ChannelAddress == channel && r.Parameter == parameter {
+			out = append(out, r)
+		}
+	}
+	if len(out) != 1 {
+		t.Fatalf("energyRowFor(%s, %s): got %d rows, want 1 (rows=%+v)", channel, parameter, len(out), rows)
+	}
+	return out[0]
+}
+
+// TestMeasurement_QueryEnergy_HourGroupReadsHourlyTier verifies that
+// group="hour" reads measurements_hourly directly (one row per bucket,
+// no re-aggregation) and that non-energy parameters are filtered out.
+func TestMeasurement_QueryEnergy_HourGroupReadsHourlyTier(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV0001:4"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: "ENERGY_COUNTER", TS: base, Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: "ENERGY_COUNTER", TS: base.Add(30 * time.Minute), Value: 150},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: "POWER", TS: base, Value: 20},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: "POWER", TS: base.Add(30 * time.Minute), Value: 40},
+		// Non-energy parameter must never surface in the response.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: "ACTUAL_TEMPERATURE", TS: base, Value: 21.5},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(2*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "", base.Add(-time.Hour), base.Add(2*time.Hour), "hour")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2 (POWER + ENERGY_COUNTER, temperature excluded): %+v", len(rows), rows)
+	}
+	energy := energyRowFor(t, rows, ch, "ENERGY_COUNTER")
+	if energy.First != 100 || energy.Last != 150 {
+		t.Errorf("ENERGY_COUNTER first/last = %v/%v, want 100/150", energy.First, energy.Last)
+	}
+	power := energyRowFor(t, rows, ch, "POWER")
+	if power.Sum != 60 || power.Count != 2 || power.Max != 40 {
+		t.Errorf("POWER sum/count/max = %v/%v/%v, want 60/2/40", power.Sum, power.Count, power.Max)
+	}
+}
+
+// TestMeasurement_QueryEnergy_DayGroupReadsDailyTier verifies that
+// group="day" reads measurements_daily directly.
+func TestMeasurement_QueryEnergy_DayGroupReadsDailyTier(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV0001:4"
+		param   = "ENERGY_COUNTER"
+	)
+	day := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day.Add(1 * time.Hour), Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day.Add(3 * time.Hour), Value: 400},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, day.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, day.Add(48*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "", day.Add(-24*time.Hour), day.Add(48*time.Hour), "day")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %d, want 1 daily bucket: %+v", len(rows), rows)
+	}
+	if rows[0].BucketTS.UnixMilli() != day.UnixMilli() {
+		t.Errorf("bucket_ts = %v, want %v", rows[0].BucketTS, day)
+	}
+	if rows[0].First != 100 || rows[0].Last != 400 || rows[0].Sum != 500 {
+		t.Errorf("first/last/sum = %v/%v/%v, want 100/400/500", rows[0].First, rows[0].Last, rows[0].Sum)
+	}
+}
+
+// TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily verifies that
+// group="month" folds every measurements_daily bucket within a UTC
+// calendar month into one row per (channel, parameter), exactly
+// reproducing sum/count and preserving the earliest first / latest last.
+func TestMeasurement_QueryEnergy_MonthGroupReAggregatesDaily(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV0001:4"
+		param   = "ENERGY_COUNTER"
+	)
+	day1 := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 3, 15, 10, 0, 0, 0, time.UTC) // same month as day1
+	day3 := time.Date(2026, 4, 2, 10, 0, 0, 0, time.UTC)  // next month
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1, Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day2, Value: 300},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day3, Value: 500},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	cutoff := day3.Add(24 * time.Hour)
+	if _, err := s.RollupHourly(ctx, cutoff); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, cutoff); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "", day1.Add(-24*time.Hour), cutoff, "month")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2 (one per calendar month): %+v", len(rows), rows)
+	}
+	// energyRowFor assumes one row per (channel,parameter); this test has
+	// two month buckets for the same pair, so pick March explicitly.
+	var march EnergyRow
+	var found bool
+	for _, r := range rows {
+		if r.BucketTS.Month() == time.March {
+			march, found = r, true
+		}
+	}
+	if !found {
+		t.Fatalf("no March bucket in %+v", rows)
+	}
+	if march.First != 100 || march.Last != 300 || march.Sum != 400 || march.Count != 2 {
+		t.Errorf("March bucket = %+v, want first=100 last=300 sum=400 count=2", march)
+	}
+	for _, r := range rows {
+		if r.BucketTS.Month() == time.April {
+			if r.First != 500 || r.Last != 500 || r.Sum != 500 || r.Count != 1 {
+				t.Errorf("April bucket = %+v, want first=last=sum=500 count=1", r)
+			}
+		}
+	}
+}
+
+// TestMeasurement_QueryEnergy_DeviceAddressPrefixFilter verifies that a
+// non-empty deviceAddr restricts rows to that device's channels
+// (address or address+":N"), never a device whose address merely shares
+// a prefix.
+func TestMeasurement_QueryEnergy_DeviceAddressPrefixFilter(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: "DEV0001:4", Parameter: param, TS: base, Value: 10},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: "DEV0001X:4", Parameter: param, TS: base, Value: 999},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: "OTHER:1", Parameter: param, TS: base, Value: 5},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "DEV0001", base.Add(-time.Hour), base.Add(time.Hour), "hour")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ChannelAddress != "DEV0001:4" {
+		t.Fatalf("rows = %+v, want exactly DEV0001:4 (not DEV0001X:4 or OTHER:1)", rows)
+	}
+}
+
+// TestMeasurement_QueryEnergy_CentralScoping verifies that two centrals
+// with the same channel/parameter never bleed into each other's result.
+func TestMeasurement_QueryEnergy_CentralScoping(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		iface = "HmIP-RF"
+		ch    = "SHARED:1"
+		param = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	samples := []MeasurementSample{
+		{CentralName: "ccu1", InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 10},
+		{CentralName: "ccu2", InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 999},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, base.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	rows1, err := s.QueryEnergy(ctx, "ccu1", "", base.Add(-time.Hour), base.Add(time.Hour), "hour")
+	if err != nil {
+		t.Fatalf("QueryEnergy ccu1: %v", err)
+	}
+	if len(rows1) != 1 || rows1[0].Sum != 10 {
+		t.Errorf("ccu1 rows = %+v, want one row sum=10", rows1)
+	}
+	rows2, err := s.QueryEnergy(ctx, "ccu2", "", base.Add(-time.Hour), base.Add(time.Hour), "hour")
+	if err != nil {
+		t.Fatalf("QueryEnergy ccu2: %v", err)
+	}
+	if len(rows2) != 1 || rows2[0].Sum != 999 {
+		t.Errorf("ccu2 rows = %+v, want one row sum=999", rows2)
+	}
+}
+
+// TestMeasurement_QueryEnergy_ErrorPaths verifies the range guard and the
+// unsupported-group guard.
+func TestMeasurement_QueryEnergy_ErrorPaths(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	if _, err := s.QueryEnergy(ctx, "ccu1", "", base, base, "day"); err == nil {
+		t.Error("expected error when to == from")
+	}
+	if _, err := s.QueryEnergy(ctx, "ccu1", "", base.Add(time.Hour), base, "day"); err == nil {
+		t.Error("expected error when to before from")
+	}
+	if _, err := s.QueryEnergy(ctx, "ccu1", "", base, base.Add(time.Hour), "week"); err == nil {
+		t.Error("expected error for unsupported group")
+	}
+}
+
+// TestMeasurement_QueryEnergy_NilStore_NoOps verifies the nil-safety
+// contract shared with the other MeasurementStore accessors.
+func TestMeasurement_QueryEnergy_NilStore_NoOps(t *testing.T) {
+	t.Parallel()
+	var s *MeasurementStore
+	rows, err := s.QueryEnergy(context.Background(), "ccu1", "", time.Now(), time.Now().Add(time.Hour), "day")
+	if rows != nil || err != nil {
+		t.Errorf("nil store QueryEnergy = (%v, %v), want (nil, nil)", rows, err)
+	}
+}
