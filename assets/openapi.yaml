@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.10.0
+  version: 2.11.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -470,6 +470,63 @@ paths:
           description: Accepted
         "404":
           $ref: "#/components/responses/NotFound"
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /webhook/value:
+    post:
+      tags: [webhook]
+      summary: Inbound webhook — set a datapoint value
+      description: |
+        Set a datapoint value from an external system. Mounted only when
+        `north.webhook.inbound.enabled` is set (off by default → 404).
+        Authorization: an operator identity via the normal auth chain OR the
+        configured inbound bearer token (`north.webhook.inbound.token`). This
+        is a real device write — the same authorization weight as
+        `PUT /devices/.../value`.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookValueRequest" }
+      responses:
+        "202": { description: Accepted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: |
+            Inbound webhook disabled (`north.webhook.inbound.enabled` is
+            false) — the route is not mounted.
+        "502": { $ref: "#/components/responses/BadGateway" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+
+  /webhook/program:
+    post:
+      tags: [webhook]
+      summary: Inbound webhook — run a program
+      description: |
+        Run a CCU program from an external system. Mounted only when
+        `north.webhook.inbound.enabled` is set (off by default → 404).
+        Authorization: an operator identity OR the configured inbound bearer
+        token. `central` is required when more than one CCU is configured.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - openIdConnect: [operator]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookProgramRequest" }
+      responses:
+        "202": { description: Accepted }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
 
@@ -5197,6 +5254,40 @@ components:
         priority:
           type: string
           enum: [critical, high, default, low]
+    WebhookValueRequest:
+      type: object
+      required: [address, parameter, value]
+      description: Body of POST /webhook/value (inbound webhook value write).
+      properties:
+        central:
+          type: string
+          description: |
+            Optional CCU name. Device addresses are globally unique, so the
+            writer resolves the owning CCU from `address`; `central` is
+            informational.
+        address:
+          type: string
+          description: Channel address, e.g. "0001D3C99C1234:1".
+        parameter:
+          type: string
+          description: Wire parameter name, e.g. "STATE" or "LEVEL".
+        value: {}
+        priority:
+          type: string
+          enum: [critical, high, default, low]
+    WebhookProgramRequest:
+      type: object
+      required: [program]
+      description: Body of POST /webhook/program (inbound webhook program run).
+      properties:
+        central:
+          type: string
+          description: |
+            CCU name. Required when more than one CCU is configured, since
+            program IDs are not unique across CCUs.
+        program:
+          type: string
+          description: Program ID to run.
     ProgramSummary:
       type: object
       required: [id, unique_id, name]

@@ -69,6 +69,13 @@ type Deps struct {
 	Reloader  handlers.ReloaderService
 	DPWriter  handlers.DataPointWriter
 	Paramsets handlers.ParamsetService
+	// WebhookInboundEnabled mounts the inbound webhook routes
+	// (POST /webhook/value, POST /webhook/program) when true; off means the
+	// routes are not mounted (404). Restart-required (mirrors north.mcp).
+	WebhookInboundEnabled bool
+	// WebhookInboundToken is the optional inbound bearer token accepted in
+	// addition to the normal operator auth chain on the inbound webhook routes.
+	WebhookInboundToken string
 	// DataPointVis is the outbound visibility filter for the
 	// GET .../data-points endpoint. Nil means "expose everything"
 	// (backward-compatible with un-wired call sites). See ADR 0005.
@@ -542,6 +549,19 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			r.With(admin).Post("/auth/tokens", handlers.CreateToken(d.Auth))
 			r.With(admin).Delete("/auth/tokens/{id}", handlers.DeleteToken(d.Auth))
 		}
+		// Inbound webhook: external systems POST to set a value or run a
+		// program. Mounted OUTSIDE the AuthRequire group (like /auth/login)
+		// because the InboundWebhookAuth middleware is the full gate — it
+		// admits an operator identity (resolved by the global AuthResolve) OR
+		// the configured inbound bearer token, so a header-only caller is not
+		// pre-rejected by the blanket AuthRequire. Only mounted when enabled
+		// (restart-required). These are real device writes / program runs.
+		if d.WebhookInboundEnabled {
+			inboundAuth := handlers.InboundWebhookAuth(d.WebhookInboundToken)
+			r.With(inboundAuth).Post("/webhook/value", handlers.WebhookInboundValue(d.DPWriter))
+			r.With(inboundAuth).Post("/webhook/program", handlers.WebhookInboundProgram(d.Hub))
+		}
+
 		r.Group(func(pr chi.Router) {
 			if d.AuthRequire != nil {
 				pr.Use(d.AuthRequire)

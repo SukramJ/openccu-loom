@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Inbound webhook (`north.webhook.inbound`).** Two new REST endpoints let
+  external systems drive the CCU: `POST /api/v1/webhook/value` sets a datapoint
+  value and `POST /api/v1/webhook/program` runs a program. Disabled by default;
+  the routes are mounted only when `north.webhook.inbound.enabled` is set
+  (restart-required, 404 otherwise). Authorization requires an operator identity
+  via the normal auth chain **or** the optional inbound bearer token
+  (`north.webhook.inbound.token`, constant-time compared) — so a header-only
+  caller (e.g. a doorbell) can POST without a session or user login. These are
+  real device writes / program runs, reusing the same write/trigger paths as the
+  equivalent REST endpoints. REST `APIVersion` → **2.11.0**.
+
 - **`additional_information` on per-DP MQTT state and the REST datapoint DTO.**
   Data points that expose enriched model metadata (currently the calculated
   operating-voltage sensor's battery info — type, quantity, low-voltage limits)

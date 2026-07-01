@@ -44,6 +44,8 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(!reflect.DeepEqual(boot.North.Webhook.Centrals, eff.North.Webhook.Centrals), "north.webhook.centrals")
 	add(boot.North.Webhook.ParameterGlob != eff.North.Webhook.ParameterGlob, "north.webhook.parameter_glob")
 	add(boot.North.Webhook.TimeoutMs != eff.North.Webhook.TimeoutMs, "north.webhook.timeout_ms")
+	add(boot.North.Webhook.Inbound.Enabled != eff.North.Webhook.Inbound.Enabled, "north.webhook.inbound.enabled")
+	add(boot.North.Webhook.Inbound.Token != eff.North.Webhook.Inbound.Token, "north.webhook.inbound.token")
 	add(!reflect.DeepEqual(boot.Centrals, eff.Centrals), "centrals")
 	// The login chain (incl. the CCU auth provider) is wired once at
 	// boot, so any change to the CCU-auth block is restart-required.
