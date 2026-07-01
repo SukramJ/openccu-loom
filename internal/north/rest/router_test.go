@@ -69,6 +69,11 @@ func (f *fakeBackup) Restore(_ context.Context, id string) (string, error) {
 	return id, nil
 }
 
+func (f *fakeBackup) TriggerBackupForCentral(context.Context, string) (string, error) {
+	return "job-1", nil
+}
+func (f *fakeBackup) Prune(context.Context, string, int) error { return nil }
+
 // ---------------------------------------------------------------------------
 // Fakes for router branch-coverage tests (dep-guarded routes).
 // ---------------------------------------------------------------------------

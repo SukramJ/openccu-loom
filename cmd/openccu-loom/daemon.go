@@ -355,6 +355,10 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	}, &availClosers)
 	defer southboundTeardown()
 	backupAdapter := sb.backupAdapter
+	// Automatic scheduled CCU backups (opt-in via cfg.Backup.Schedule). Wired
+	// here, after the storage-backed backupAdapter exists; the scheduler is
+	// already running, so the first backup fires one interval in, not at boot.
+	registerScheduledBackupJobs(reg, cfg, backupAdapter, logger)
 	// Cache-reset service (ADR 0042) — drives POST /admin/cache/clear.
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.

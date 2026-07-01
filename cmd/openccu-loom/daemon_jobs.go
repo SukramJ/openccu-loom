@@ -9,9 +9,11 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
+	"github.com/SukramJ/openccu-loom/internal/scheduler"
 )
 
 // registerStandardJobs registers the standard per-central background jobs
@@ -89,6 +91,42 @@ func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slo
 			logger.Warn("central.standard_jobs.register_failed",
 				slog.String("central", u.Name()),
 				slog.String("err", err.Error()))
+		}
+	}
+}
+
+// registerScheduledBackupJobs adds the per-central automatic-backup job to
+// each unit's scheduler. Off unless cfg.Backup.Schedule > 0. Called AFTER the
+// storage-wired backupAdapter exists (post StartAll); the scheduler launches a
+// post-Start, non-RunOnStart job on its interval, so the first backup fires
+// one interval in — never at boot. Each central backs up its own CCU and (when
+// KeepLast > 0) prunes its own oldest backups.
+func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, backupAdapter *adapter.BackupAdapter, logger *slog.Logger) {
+	if cfg == nil || cfg.Backup.Schedule <= 0 || backupAdapter == nil {
+		return
+	}
+	for _, u := range reg.List() {
+		if u == nil {
+			continue
+		}
+		name := u.Name()
+		keepLast := cfg.Backup.KeepLast
+		run := func(ctx context.Context) error {
+			if _, err := backupAdapter.TriggerBackupForCentral(ctx, name); err != nil {
+				return err
+			}
+			if keepLast > 0 {
+				return backupAdapter.Prune(ctx, name, keepLast)
+			}
+			return nil
+		}
+		if err := u.Scheduler.Add(scheduler.Job{
+			Name:     "central.scheduled_backup",
+			Interval: cfg.Backup.Schedule,
+			Run:      run,
+		}); err != nil {
+			logger.Warn("scheduled_backup.register.failed",
+				slog.String("central", name), slog.String("err", err.Error()))
 		}
 	}
 }

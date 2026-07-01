@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,6 +87,53 @@ func (a *BackupAdapter) TriggerBackup(_ context.Context) (string, error) {
 	return "", ErrUnimplemented
 }
 
+// TriggerBackupForCentral implements [interfaces.BackupService]. It backs up
+// exactly the named central (multi-CCU-correct), minting an id and launching
+// the detached create-and-download flow like [BackupAdapter.TriggerBackup].
+func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName string) (string, error) {
+	if a.registry == nil {
+		return "", ErrUnimplemented
+	}
+	u, ok := a.registry.Get(centralName)
+	if !ok || u == nil {
+		return "", fmt.Errorf("backup: unknown central %q", centralName)
+	}
+	id := backupID(u.Name())
+	go a.runBackup(u, id) //nolint:gosec,contextcheck // G118: detached on purpose; runBackup uses its own backupRunTimeout context so the trigger context cannot cancel the backup; see #20
+	return id, nil
+}
+
+// Prune implements [interfaces.BackupService]. It keeps the newest keepLast
+// backups for the named central and deletes the rest. keepLast <= 0 (or no
+// storage) is a no-op.
+func (a *BackupAdapter) Prune(ctx context.Context, centralName string, keepLast int) error {
+	if keepLast <= 0 || a.storage == nil {
+		return nil
+	}
+	entries, err := a.storage.List(ctx)
+	if err != nil {
+		return fmt.Errorf("backup: prune list: %w", err)
+	}
+	safe := backupSafeName(centralName)
+	mine := make([]hmapi.BackupEntry, 0, len(entries))
+	for _, e := range entries {
+		if backupBelongsTo(e.ID, safe) {
+			mine = append(mine, e)
+		}
+	}
+	if len(mine) <= keepLast {
+		return nil
+	}
+	// Newest first, then delete everything past keepLast.
+	sort.Slice(mine, func(i, j int) bool { return mine[i].CreatedAt.After(mine[j].CreatedAt) })
+	for _, e := range mine[keepLast:] {
+		if err := a.storage.Delete(ctx, e.ID); err != nil {
+			return fmt.Errorf("backup: prune delete %s: %w", e.ID, err)
+		}
+	}
+	return nil
+}
+
 // runBackup executes the create-and-download flow on a detached context and
 // persists the resulting archive. It is the asynchronous tail of
 // [BackupAdapter.TriggerBackup]; failures are logged, not surfaced to the
@@ -122,11 +170,19 @@ func (a *BackupAdapter) runBackup(u *central.Unit, id string) {
 		slog.Int("bytes", len(data)))
 }
 
-// backupID derives a storage-safe id from the central name and the current
-// time. Any character outside [A-Za-z0-9_-] is replaced so the id is a valid
-// single-segment filename for [BackupStorage].
-func backupID(centralName string) string {
-	ts := time.Now().UTC().Format("20060102-150405")
+// backupTimestampLayout is the fixed-width UTC timestamp appended to every
+// backup id. Its rendered length (incl. the leading separator, see
+// backupID) is backupIDSuffixLen.
+const backupTimestampLayout = "20060102-150405"
+
+// backupIDSuffixLen is the length of the "-<timestamp>" suffix backupID
+// appends: one separator + the 15-char timestamp = 16. backupBelongsTo strips
+// exactly this to recover the central's safe name.
+const backupIDSuffixLen = 1 + len(backupTimestampLayout)
+
+// backupSafeName sanitises a central name into a single filename segment: any
+// character outside [A-Za-z0-9_-] becomes '_'. Empty maps to "ccu".
+func backupSafeName(centralName string) string {
 	safe := strings.Map(func(r rune) rune {
 		switch {
 		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '_':
@@ -138,7 +194,25 @@ func backupID(centralName string) string {
 	if safe == "" {
 		safe = "ccu"
 	}
-	return fmt.Sprintf("%s-%s", safe, ts)
+	return safe
+}
+
+// backupID derives a storage-safe id from the central name and the current
+// time: "<safe-name>-<timestamp>". A valid single-segment filename for
+// [BackupStorage].
+func backupID(centralName string) string {
+	return fmt.Sprintf("%s-%s", backupSafeName(centralName), time.Now().UTC().Format(backupTimestampLayout))
+}
+
+// backupBelongsTo reports whether a backup id was minted for the central
+// whose safe name is safe — i.e. id is "<safe>-<timestamp>". It strips the
+// fixed-width timestamp suffix and compares the remainder, so a central named
+// "ccu" is not confused with "ccu-01".
+func backupBelongsTo(id, safe string) bool {
+	if len(id) <= backupIDSuffixLen {
+		return false
+	}
+	return id[:len(id)-backupIDSuffixLen] == safe
 }
 
 // List implements handlers.BackupService. When a [BackupStorage] is

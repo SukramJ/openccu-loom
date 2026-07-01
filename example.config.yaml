@@ -177,6 +177,14 @@ north:
 bootstrap:
   allow_first_run_setup: true
 
+# Automatic, scheduled CCU backups. Off by default (a backup touches the
+# CCU and produces files, so it is opt-in). Each configured central is
+# backed up independently; the archives appear in the same Backups view as
+# manual backups. The first automatic backup runs one interval after start.
+# backup:
+#   schedule: 24h     # how often each CCU is backed up; empty/0 = disabled
+#   keep_last: 7      # retain the newest N per CCU (0 = keep all)
+
 # KEY=VALUE file the daemon loads at startup. Use it to keep CCU /
 # MQTT / OIDC passwords out of YAML and out of the database. The
 # file is optional (the daemon does not fail when it is missing).

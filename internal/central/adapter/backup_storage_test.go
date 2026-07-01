@@ -23,12 +23,14 @@ import (
 // ---------------------------------------------------------------------------
 
 type stubBackupStorage struct {
-	entries []hmapi.BackupEntry
-	content map[string]string // id → raw content
-	openErr error
-	saveErr error
-	saved   map[string][]byte // id → saved bytes; populated by Save
-	mu      sync.Mutex
+	entries   []hmapi.BackupEntry
+	content   map[string]string // id → raw content
+	openErr   error
+	saveErr   error
+	deleteErr error
+	saved     map[string][]byte // id → saved bytes; populated by Save
+	deleted   []string          // ids passed to Delete, in call order
+	mu        sync.Mutex
 }
 
 func (s *stubBackupStorage) List(_ context.Context) ([]hmapi.BackupEntry, error) {
@@ -44,6 +46,25 @@ func (s *stubBackupStorage) Open(_ context.Context, id string) (io.ReadCloser, e
 		return nil, errors.New("stub: not found")
 	}
 	return io.NopCloser(strings.NewReader(body)), nil
+}
+
+// Delete implements [BackupStorage]. Records the id in s.deleted, drops it
+// from s.entries, and returns s.deleteErr (nil by default).
+func (s *stubBackupStorage) Delete(_ context.Context, id string) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deleted = append(s.deleted, id)
+	kept := s.entries[:0]
+	for _, e := range s.entries {
+		if e.ID != id {
+			kept = append(kept, e)
+		}
+	}
+	s.entries = kept
+	return nil
 }
 
 // Save implements [BackupStorage]. Records the payload in s.saved and returns

@@ -8,6 +8,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Scheduled / automatic CCU backups (`backup:`).** A new opt-in config
+  section runs an automatic backup of each configured CCU on an interval
+  (`backup.schedule`, e.g. `24h`; off by default) via a per-central
+  `central.scheduled_backup` scheduler job. Old backups are rotated per CCU
+  (`backup.keep_last`, keep the newest N; `0` keeps all). The archives appear
+  in the same Backups view as manual backups; a failed backup surfaces on the
+  `scheduler.failures` gauge and is retried on the next tick without crashing
+  the daemon. Off-box targets (S3/WebDAV) remain out of scope. No API change.
+
 - **Inbound webhook (`north.webhook.inbound`).** Two new REST endpoints let
   external systems drive the CCU: `POST /api/v1/webhook/value` sets a datapoint
   value and `POST /api/v1/webhook/program` runs a program. Disabled by default;

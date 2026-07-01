@@ -29,6 +29,9 @@ type BackupStorage interface {
 	// implementation appends its own extension. Overwrites an existing
 	// backup with the same id.
 	Save(ctx context.Context, id string, data []byte) error
+	// Delete removes the backup stored under id. A missing backup is not an
+	// error (idempotent). Used by the scheduled-backup rotation (Prune).
+	Delete(ctx context.Context, id string) error
 }
 
 // BackupRestorer uploads a backup payload back to the CCU. The
@@ -119,6 +122,18 @@ func (s *FilesystemBackupStorage) Save(_ context.Context, id string, data []byte
 	}
 	if err := os.WriteFile(path, data, 0o640); err != nil { // #nosec G306 — backup archives are operator-readable, not world
 		return fmt.Errorf("backup: write %s: %w", path, err)
+	}
+	return nil
+}
+
+// Delete implements [BackupStorage]. A missing file is not an error.
+func (s *FilesystemBackupStorage) Delete(_ context.Context, id string) error {
+	path, err := s.pathForID(id)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("backup: delete %s: %w", path, err)
 	}
 	return nil
 }

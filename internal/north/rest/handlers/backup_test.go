@@ -41,6 +41,12 @@ func (s *stubBackupService) Restore(_ context.Context, _ string) (string, error)
 	return s.restoreID, s.restoreErr
 }
 
+func (s *stubBackupService) TriggerBackupForCentral(_ context.Context, _ string) (string, error) {
+	return s.triggerID, s.triggerErr
+}
+
+func (s *stubBackupService) Prune(_ context.Context, _ string, _ int) error { return nil }
+
 func (s *stubBackupService) Stream(_ context.Context, _ string, w io.Writer) error {
 	if s.streamErr != nil {
 		return s.streamErr

@@ -46,6 +46,10 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(boot.North.Webhook.TimeoutMs != eff.North.Webhook.TimeoutMs, "north.webhook.timeout_ms")
 	add(boot.North.Webhook.Inbound.Enabled != eff.North.Webhook.Inbound.Enabled, "north.webhook.inbound.enabled")
 	add(boot.North.Webhook.Inbound.Token != eff.North.Webhook.Inbound.Token, "north.webhook.inbound.token")
+	// The scheduled-backup job is registered once at boot with the interval +
+	// keep-count captured then, so a change takes effect only after a restart.
+	add(boot.Backup.Schedule != eff.Backup.Schedule, "backup.schedule")
+	add(boot.Backup.KeepLast != eff.Backup.KeepLast, "backup.keep_last")
 	add(!reflect.DeepEqual(boot.Centrals, eff.Centrals), "centrals")
 	// The login chain (incl. the CCU auth provider) is wired once at
 	// boot, so any change to the CCU-auth block is restart-required.

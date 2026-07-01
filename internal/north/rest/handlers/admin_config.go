@@ -150,7 +150,10 @@ var restartRequiredPaths = map[string]struct{}{
 	"north.webhook.timeout_ms":      {},
 	"north.webhook.inbound.enabled": {},
 	"north.webhook.inbound.token":   {},
-	"centrals":                      {},
+	// The scheduled-backup job is wired once at boot.
+	"backup.schedule":  {},
+	"backup.keep_last": {},
+	"centrals":         {},
 	// CCU-delegated login: the login chain (incl. the CCU auth provider)
 	// is wired once at boot, so any field in the block is restart-required.
 	// Mirrors config.RestartRequiredDiff's whole-block diff.
