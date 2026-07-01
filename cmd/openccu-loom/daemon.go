@@ -330,7 +330,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// down; the helper appends through the pointer and its returned
 	// teardown drains the slice at exit, after the Matter append landed.
 	var availClosers []func() //nolint:prealloc // length unknown: appended per-central in wireSouthbound and again by the Matter phase
-	sb, southboundTeardown := wireSouthbound(ctx, southboundWiringDeps{
+	// sbDeps is a named local (not an inline literal) so the live-CCU-adopt
+	// orchestrator (central_adopt.go) can capture the same wiring deps and
+	// call [wireCentralNorthbound] for a runtime-added central exactly as
+	// this boot-time call does — see docs/plans/L-live-ccu-adopt.md PR3.
+	sbDeps := southboundWiringDeps{
 		cfg:                     cfg,
 		reg:                     reg,
 		logger:                  logger,
@@ -352,7 +356,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		mqttWiring:              mqttWiring,
 		bridge:                  bridge,
 		hubMQTT:                 hubMQTT,
-	}, &availClosers)
+	}
+	sb, southboundTeardown := wireSouthbound(ctx, sbDeps, &availClosers)
 	defer southboundTeardown()
 	backupAdapter := sb.backupAdapter
 	// Automatic scheduled CCU backups (opt-in via cfg.Backup.Schedule). Wired
@@ -363,6 +368,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.
 	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, sb.bringUpManager, auditBuf, logger)
+
+	// Live CCU adopt (docs/plans/L-live-ccu-adopt.md PR3): the orchestrator
+	// that lets POST/DELETE /admin/centrals bring a CCU's southbound + model
+	// + scheduler-jobs up or down without a daemon restart. instanceName is
+	// recomputed (not threaded out of central.Bootstrap) — it is a pure
+	// function of cfg, identical to the one Bootstrap.Build used for the
+	// boot-time centrals. Nil when south-bound never came up; the decorator
+	// below then leaves the plain SQLite-backed service in place.
+	instanceName := cfg.North.Discovery.MDNS.ResolveInstanceName()
+	centralOrch := newCentralOrchestrator(reg, sb.bringUpManager, sbDeps, cfg, logger, instanceName,
+		valuesCacheStore, masterValuesStore, historyStore)
 
 	// --- adapters ----------------------------------------------
 	devicesAdapter := adapter.NewDevicesAdapter(reg).WithWriter(valueWriter)
@@ -438,7 +454,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		prefSvc = sqlitestore.NewUserPreferencesStore(auditDB)
 	}
 	tokenAdminSvc := rw.tokenAdmin
-	centralAdminSvc := rw.centralAdmin
+	// Wrap the persisted CentralAdminService so POST/PUT/DELETE
+	// /admin/centrals also drive the live orchestrator built above — the
+	// REST injection seam for live CCU adopt. No-op wrap (returns rw.centralAdmin
+	// unchanged) when persistence or the orchestrator is unavailable.
+	centralAdminSvc := newLiveCentralAdmin(rw.centralAdmin, centralOrch, logger)
 	authMw = rw.authMw
 	restResolve = rw.authResolve
 
