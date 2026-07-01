@@ -266,9 +266,27 @@ and move the rationale from the code comment into a `by_design.md` entry
 (code comments must not read like deferral TODOs — see
 `CLAUDE.md` §"Comments in code").
 
-### Step 4 — OTA Software Update Provider cluster (Effort: M)
+### Step 4 — OTA Software Update Provider cluster (Effort: M) — DEFERRED
 
-**Design decision (locked): schema-correct "NotAvailable" responder.**
+> **SCOPE CORRECTION (verified against matter.js, 2026-07): the locked
+> "NotAvailable responder mounted on RootNode/Aggregator" premise is
+> unsafe, so this step is DEFERRED — see
+> `docs/parity/by_design.md` BD-Matter-OTAProvider-NotExposed.** matter.js
+> composes the Provider cluster (0x0029) on **no** endpoint: it is
+> mandatory on the `OtaProvider` device type (id 0x14,
+> `ota-provider.element.ts:13`), NOT on RootNode (0x0016) or Aggregator
+> (0x000E). Mounting 0x0029 on the RootNode makes Apple Home reject the
+> node (the exact reason the existing Requestor 0x002A stays unmounted —
+> `daemon_matter.go` buildRootClusters). A bridge also has no Matter-OTA
+> consumer (HomeMatic devices update via the CCU; the daemon via
+> Docker/GoReleaser). So the only safe exposure is a dedicated
+> device-type-0x14 endpoint — a large composition matter.js itself does
+> not ship and out of scope here. Implementing an unmounted responder
+> would be unreachable dead code (silent stub). The command IDs / TLV
+> shapes below stay accurate for that future device-type work.
+
+**Design decision (originally locked, now superseded by the correction
+above): schema-correct "NotAvailable" responder.**
 The provider cluster is a minimal, fully schema-conformant responder —
 it answers `QueryImage` with `status = NotAvailable` and never offers an
 image. There is **NO BDX hosting and no real firmware transfer**; the
