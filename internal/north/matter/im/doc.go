@@ -33,8 +33,14 @@
 //
 //   - Cluster-attribute encoding — lives in
 //     internal/north/matter/cluster/*.
-//   - Subscription state persistence — currently in-memory only.
-//   - Timed Request / Timed Action — not yet implemented.
+//   - Subscription state across a daemon restart — the SQLite store
+//     lives in internal/north/matter/store; cross-restart resumption is
+//     deferred by design (docs/parity/by_design.md).
+//
+// This package DOES own the Timed Request / Timed Action handshake
+// (timed.go: TimedRequest, UnmarshalTimedRequestTLV, StatusResponse per
+// Matter §8.7); the Write/Invoke Timed-flag gate is enforced in
+// bridge/receive.go (checkTimedGate → StatusNeedsTimedInteraction).
 //
 // # Wildcard semantics
 //

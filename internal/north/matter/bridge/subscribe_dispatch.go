@@ -157,8 +157,11 @@ func (b *Bridge) registerSubscription(
 	req im.SubscribeRequest,
 	initialReport *im.ReportData,
 ) uint32 {
-	// Subscribe in the manager so quotas + cadence math happen even
-	// when the report-pump is not yet wired.
+	// Subscribe in the manager so quota + cadence bookkeeping is
+	// centralised there. The report pump is wired in the daemon bring-up
+	// (SetEventReporter / SubscriptionReporter in daemon_matter.go); the
+	// manager's engine tick drives delivery through the per-subscription
+	// subTarget.
 	var subID uint32
 	if m := b.subscriptionManagerLocked(); m != nil {
 		fabricIndex := b.resolveSessionFabric(requestHdr.SessionID)
