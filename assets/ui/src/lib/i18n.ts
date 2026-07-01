@@ -1890,6 +1890,18 @@ const EN: Catalog = {
   "audit.col.user": "User",
   "audit.col.target": "Target",
   "audit.col.changes": "Changes",
+  // --- Access control view ---
+  "nav.access": "Access Control",
+  "page.title.access": "Access Control — OpenCCU-Loom",
+  "access.title": "Access Control",
+  "access.subtitle": "Manage users and API tokens.",
+  "access.users_title": "Users",
+  "access.tokens_title": "API tokens",
+  "access.add_user": "Add user",
+  "access.edit_user_title": "Edit user",
+  "access.password_leave_blank": "Leave blank to keep current",
+  "access.forbidden": "Admin access required.",
+  "access.degraded_note": "The live user store is not available. Users shown are from the bootstrap list and cannot be edited here. Manage users via config.yaml.",
 };
 
 const DE: Catalog = {
@@ -3745,6 +3757,18 @@ const DE: Catalog = {
   "audit.col.user": "Benutzer",
   "audit.col.target": "Ziel",
   "audit.col.changes": "Änderungen",
+  // --- Zugangskontrolle ---
+  "nav.access": "Zugangskontrolle",
+  "page.title.access": "Zugangskontrolle — OpenCCU-Loom",
+  "access.title": "Zugangskontrolle",
+  "access.subtitle": "Benutzer und API-Token verwalten.",
+  "access.users_title": "Benutzer",
+  "access.tokens_title": "API-Token",
+  "access.add_user": "Benutzer hinzufügen",
+  "access.edit_user_title": "Benutzer bearbeiten",
+  "access.password_leave_blank": "Leer lassen um beizubehalten",
+  "access.forbidden": "Administratorzugriff erforderlich.",
+  "access.degraded_note": "Der Live-Benutzerspeicher ist nicht verfügbar. Die angezeigten Benutzer stammen aus der Bootstrap-Liste und können hier nicht bearbeitet werden. Benutzer über config.yaml verwalten.",
 };
 
 const catalogs: Record<string, Catalog> = { en: EN, de: DE };

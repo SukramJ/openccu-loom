@@ -50,6 +50,7 @@
     | "signal"
     | "matter"
     | "visibility"
+    | "access"
     | "unknown";
 
   type Props = {
@@ -225,6 +226,16 @@
           label: t("nav.visibility"),
           matches: ["visibility"],
         },
+        ...(authStore.identity?.role === "admin"
+          ? [
+              {
+                href: "#/access",
+                icon: "mdi:shield" as const,
+                label: t("nav.access"),
+                matches: ["access"] as RouteKind[],
+              },
+            ]
+          : []),
         {
           href: "#/settings",
           icon: "mdi:settings",
