@@ -14,6 +14,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 )
 
@@ -305,10 +306,37 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 	return nil
 }
 
+// anyTimedRequiredInvoke reports whether any command in req targets a
+// timed-required (cluster, command) pair per matter.js (schema.IsTimedInvoke).
+// A batched invoke is timed-required as a whole if any of its commands is.
+func anyTimedRequiredInvoke(req im.InvokeRequest) bool {
+	for i := range req.Invokes {
+		p := req.Invokes[i].Path
+		if schema.IsTimedInvoke(p.Cluster, p.Command) {
+			return true
+		}
+	}
+	return false
+}
+
 // dispatchInvokeRequest handles a decoded InvokeRequest. The TLV decode and
 // dispatcher nil-check are done by the caller (handleIMOpcode).
+//
+// Server-side timed-required conformance: a command marked "T" in the matter.js
+// model (schema.IsTimedInvoke) must be invoked inside a valid timed window even
+// when the controller left the InvokeRequest's own Timed flag clear. Folding it
+// into the gate flag makes a timed-required command with no window yield
+// NEEDS_TIMED_INTERACTION, mirroring matter.js CommandInvokeResponse.ts:266
+// `if (limits.timed && !this.session.timed)`. For a non-timed command the flag
+// is unchanged, so the existing flag-vs-window mismatch handling is preserved.
 func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, dispatcher im.Dispatcher, req im.InvokeRequest) error {
-	if status, gated := b.checkTimedGate(req.TimedRequest, requestHdr.SessionID, proto.ExchangeID); gated {
+	// Server-side timed-required conformance: a command marked "T" in the
+	// matter.js model (schema.IsTimedInvoke) must be invoked inside a valid
+	// timed window even when the controller left the InvokeRequest's own Timed
+	// flag clear. Fold it into the gate flag so a timed-required command with no
+	// window yields NEEDS_TIMED_INTERACTION. Mirrors matter.js
+	// CommandInvokeResponse.ts:266 `if (limits.timed && !this.session.timed)`.
+	if status, gated := b.checkTimedGate(req.TimedRequest || anyTimedRequiredInvoke(req), requestHdr.SessionID, proto.ExchangeID); gated {
 		return b.replyTimedStatus(src, requestHdr, proto, "invoke", status)
 	}
 	// Stamp the FabricIndex into the context so cluster handlers
