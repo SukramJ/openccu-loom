@@ -281,6 +281,236 @@ export async function mockEmptyDevices(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Multi-device, multi-central fleet for the Overview route (roadmap
+ * B8). Covers both tile-dispatch paths: `AAA0000001` carries a
+ * registered CDP (kind "switch") on channel 4, `AAA0000002` carries an
+ * orphan sensor channel with no CDP so it falls through to the
+ * AutoTile composer. `BBB0000001` lives on a second central so the
+ * central filter + the "never merge rooms across CCUs" rule are
+ * exercised (its "Office" room/central pair is distinct from any
+ * ccu1 room, even if the name happened to collide).
+ */
+export async function mockOverviewFleet(page: Page): Promise<void> {
+  const devices = [
+    {
+      address: 'AAA0000001',
+      central: 'ccu1',
+      interface: 'HmIP-RF',
+      interface_id: 'ccu1-HmIP-RF',
+      model: 'HmIP-PSM',
+      model_label: 'Switch Actuator',
+      name: 'Living Room Switch',
+      available: true,
+      channels_count: 2,
+      updatable: false,
+      update_available: false,
+      rooms: ['Living Room'],
+      functions: ['Lighting'],
+      master_pushes_config_pending: false,
+      has_sub_devices: false,
+    },
+    {
+      address: 'AAA0000002',
+      central: 'ccu1',
+      interface: 'HmIP-RF',
+      interface_id: 'ccu1-HmIP-RF',
+      model: 'HmIP-STHO',
+      model_label: 'Temperature and Humidity Sensor',
+      name: 'Kitchen Sensor',
+      available: true,
+      channels_count: 2,
+      updatable: false,
+      update_available: false,
+      rooms: ['Kitchen'],
+      functions: ['Climate'],
+      master_pushes_config_pending: false,
+      has_sub_devices: false,
+    },
+    {
+      address: 'BBB0000001',
+      central: 'ccu2',
+      interface: 'HmIP-RF',
+      interface_id: 'ccu2-HmIP-RF',
+      model: 'HmIP-BSL',
+      model_label: 'Switch and Dimming Actuator with Signal Lamp',
+      name: 'Office Lamp',
+      available: true,
+      channels_count: 1,
+      updatable: false,
+      update_available: false,
+      rooms: ['Office'],
+      functions: ['Lighting'],
+      master_pushes_config_pending: false,
+      has_sub_devices: false,
+    },
+  ];
+
+  const details: Record<string, unknown> = {
+    AAA0000001: {
+      ...devices[0],
+      firmware: {},
+      availability: { IsReachable: true },
+      channels: [
+        {
+          address: 'AAA0000001:0',
+          number: 0,
+          name: '',
+          type: 'MAINTENANCE',
+          type_label: 'Maintenance',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 3,
+        },
+        {
+          address: 'AAA0000001:4',
+          number: 4,
+          name: 'Switch',
+          type: 'SWITCH_VIRTUAL_RECEIVER',
+          type_label: 'Switch',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 1,
+          custom_dp_name: 'STATE@4',
+        },
+      ],
+    },
+    AAA0000002: {
+      ...devices[1],
+      firmware: {},
+      availability: { IsReachable: true },
+      channels: [
+        {
+          address: 'AAA0000002:0',
+          number: 0,
+          name: '',
+          type: 'MAINTENANCE',
+          type_label: 'Maintenance',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 3,
+        },
+        {
+          address: 'AAA0000002:1',
+          number: 1,
+          name: 'Temperature',
+          type: 'CLIMATE_TRANSCEIVER',
+          type_label: 'Temperature Sensor',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 1,
+        },
+      ],
+    },
+    BBB0000001: {
+      ...devices[2],
+      firmware: {},
+      availability: { IsReachable: true },
+      channels: [
+        {
+          address: 'BBB0000001:0',
+          number: 0,
+          name: '',
+          type: 'MAINTENANCE',
+          type_label: 'Maintenance',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 2,
+        },
+        {
+          address: 'BBB0000001:1',
+          number: 1,
+          name: 'Lamp',
+          type: 'SWITCH_VIRTUAL_RECEIVER',
+          type_label: 'Switch',
+          paramset_key: 'VALUES',
+          paramset_keys: ['VALUES'],
+          data_points_count: 1,
+        },
+      ],
+    },
+  };
+
+  const cdpsByAddress: Record<string, unknown[]> = {
+    AAA0000001: [
+      {
+        name: 'STATE@4',
+        category: 'switch',
+        channel_no: 4,
+        supported_operations: ['turn_on', 'turn_off'],
+        kind: 'switch',
+        channels: [4],
+      },
+    ],
+    AAA0000002: [],
+    BBB0000001: [],
+  };
+
+  const dataPointsByChannel: Record<string, unknown[]> = {
+    'AAA0000001:4': [
+      {
+        parameter: 'STATE',
+        unique_id: 'ccu1/AAA0000001:4/STATE',
+        observed: true,
+        value: false,
+        type: 'BOOL',
+        operations: { read: true, write: true, event: true },
+      },
+    ],
+    'AAA0000002:1': [
+      {
+        parameter: 'TEMPERATURE',
+        parameter_label: 'Temperature',
+        unique_id: 'ccu1/AAA0000002:1/TEMPERATURE',
+        observed: true,
+        value: 21.5,
+        type: 'FLOAT',
+        unit: '°C',
+        operations: { read: true, write: false, event: true },
+        ui_hint: { icon: 'mdi:thermometer', semantic: 'temperature' },
+      },
+    ],
+    'BBB0000001:1': [
+      {
+        parameter: 'STATE',
+        unique_id: 'ccu2/BBB0000001:1/STATE',
+        observed: true,
+        value: true,
+        type: 'BOOL',
+        operations: { read: true, write: true, event: true },
+      },
+    ],
+  };
+
+  await page.route('**/api/v1/devices*', (route) =>
+    route.fulfill({ json: { items: devices, total: devices.length, page: 1, per_page: 50 } }),
+  );
+
+  // Per-device detail — registered as a regex so it only matches the
+  // single-segment `/devices/{addr}` path, never `/devices/{addr}/cdps`
+  // or the channels sub-path.
+  await page.route(/\/api\/v1\/devices\/([^/?]+)(\?.*)?$/, (route) => {
+    const m = route.request().url().match(/\/devices\/([^/?]+)/);
+    const addr = m ? decodeURIComponent(m[1]) : '';
+    const detail = details[addr];
+    if (!detail) return route.fulfill({ status: 404, json: { detail: 'not found' } });
+    return route.fulfill({ json: detail });
+  });
+
+  await page.route(/\/api\/v1\/devices\/([^/]+)\/cdps$/, (route) => {
+    const m = route.request().url().match(/\/devices\/([^/]+)\/cdps/);
+    const addr = m ? decodeURIComponent(m[1]) : '';
+    return route.fulfill({ json: cdpsByAddress[addr] ?? [] });
+  });
+
+  await page.route(/\/api\/v1\/devices\/([^/]+)\/channels\/(\d+)\/data-points$/, (route) => {
+    const m = route.request().url().match(/\/devices\/([^/]+)\/channels\/(\d+)\/data-points/);
+    const addr = m ? decodeURIComponent(m[1]) : '';
+    const ch = m ? m[2] : '';
+    return route.fulfill({ json: dataPointsByChannel[`${addr}:${ch}`] ?? [] });
+  });
+}
+
 export async function mockEmptySysvars(page: Page): Promise<void> {
   await page.route('**/api/v1/sysvars', (route) =>
     route.fulfill({ json: [] }),
