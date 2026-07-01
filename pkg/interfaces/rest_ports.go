@@ -20,6 +20,13 @@ type BackupService interface {
 	// returned id is the (re-used) backup id so the caller can poll
 	// for completion via the same job-tracking endpoints.
 	Restore(ctx context.Context, id string) (string, error)
+	// TriggerBackupForCentral backs up exactly one central by name and
+	// returns the backup/job id. Used by the per-central scheduled-backup
+	// job so a multi-CCU daemon backs up each CCU independently.
+	TriggerBackupForCentral(ctx context.Context, centralName string) (string, error)
+	// Prune deletes a central's oldest backups, keeping the newest keepLast.
+	// keepLast <= 0 is a no-op (keep all).
+	Prune(ctx context.Context, centralName string, keepLast int) error
 }
 
 // SysvarRefreshService is the facade `POST /sysvars/fetch` depends on.

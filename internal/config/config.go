@@ -116,6 +116,21 @@ type Config struct {
 	Centrals    []CentralConfig   `yaml:"centrals" json:"centrals" cfg:"basic"`
 	Reliability ReliabilityConfig `yaml:"reliability,omitempty" json:"reliability,omitzero" cfg:"expert"`
 	Persistence PersistenceConfig `yaml:"persistence,omitempty" json:"persistence,omitzero" cfg:"expert"`
+	Backup      BackupConfig      `yaml:"backup,omitempty" json:"backup,omitzero" cfg:"expert"`
+}
+
+// BackupConfig configures automatic, scheduled CCU backups. Off by default
+// (a backup touches the CCU and produces files, so it is opt-in). A change to
+// either field is hot-reloaded — it only re-tunes a scheduler job interval.
+type BackupConfig struct {
+	// Schedule is how often each configured central is backed up
+	// automatically. Zero disables scheduled backups (manual backups via the
+	// REST/UI surface still work).
+	Schedule time.Duration `yaml:"schedule,omitempty" json:"schedule,omitzero" cfg:"expert"`
+	// KeepLast bounds the number of scheduled backups retained per central:
+	// after a successful backup the oldest beyond this count are pruned. Zero
+	// keeps all.
+	KeepLast int `yaml:"keep_last,omitempty" json:"keep_last,omitzero" cfg:"expert"`
 }
 
 // PersistenceConfig groups the cross-cutting persistence-tuning knobs

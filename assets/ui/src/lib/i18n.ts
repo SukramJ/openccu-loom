@@ -424,6 +424,8 @@ const EN: Catalog = {
   "config.field.persistence.values_cache.enabled": "Enable VALUES cache",
   "config.field.persistence.values_cache.flush_interval": "Cache flush interval",
   "config.field.persistence.values_cache.disabled_centrals": "Excluded CCUs",
+  "config.field.backup.schedule": "Automatic backup interval",
+  "config.field.backup.keep_last": "Keep last N backups",
   "config.field.persistence.history.enabled": "Enable history recorder",
   "config.field.persistence.history.retention": "Sample retention period",
   "config.field.persistence.history.flush_interval": "History flush interval",
@@ -623,6 +625,10 @@ const EN: Catalog = {
     "How often to flush queued cache writes to disk. Default 60 s — short enough to survive a crash with minimal loss, long enough to coalesce bursts.",
   "config.help.persistence.values_cache.disabled_centrals":
     "List of central names (one per line) whose data points are kept out of the cache. Useful for test rigs in a multi-CCU deployment.",
+  "config.help.backup.schedule":
+    "How often each configured CCU is backed up automatically (e.g. 24h). Zero disables scheduled backups; manual backups via the Backups view still work. The first automatic backup runs one interval after start, not immediately.",
+  "config.help.backup.keep_last":
+    "Bounds how many scheduled backups are retained per CCU: after each successful backup the oldest beyond this count are deleted. Zero keeps all.",
   "config.help.persistence.history.enabled":
     "Master switch for the measurement-history recorder; off by default (opt-in) — when enabled the daemon opens history.db and starts the retention job.",
   "config.help.persistence.history.retention":
@@ -2297,6 +2303,8 @@ const DE: Catalog = {
   "config.field.persistence.values_cache.enabled": "VALUES-Cache aktiv",
   "config.field.persistence.values_cache.flush_interval": "Cache-Flush-Intervall",
   "config.field.persistence.values_cache.disabled_centrals": "Ausgeschlossene CCUs",
+  "config.field.backup.schedule": "Intervall für automatische Backups",
+  "config.field.backup.keep_last": "Letzte N Backups behalten",
   "config.field.persistence.history.enabled": "Verlaufsaufzeichnung aktiv",
   "config.field.persistence.history.retention": "Aufbewahrungszeitraum",
   "config.field.persistence.history.flush_interval": "Verlaufs-Flush-Intervall",
@@ -2496,6 +2504,10 @@ const DE: Catalog = {
     "Wie oft gepufferte Schreibvorgänge auf Disk geschrieben werden. Default 60 s — kurz genug, um einen Crash gut zu überstehen, lang genug, um Bursts zu sammeln.",
   "config.help.persistence.values_cache.disabled_centrals":
     "Liste von Central-Namen (eine pro Zeile), deren Datenpunkte NICHT gecached werden. Praktisch für Test-Rigs in Multi-CCU-Setups.",
+  "config.help.backup.schedule":
+    "Wie oft jede konfigurierte CCU automatisch gesichert wird (z. B. 24h). Null deaktiviert geplante Backups; manuelle Backups über die Backups-Ansicht funktionieren weiter. Das erste automatische Backup läuft ein Intervall nach dem Start, nicht sofort.",
+  "config.help.backup.keep_last":
+    "Begrenzt, wie viele geplante Backups pro CCU aufbewahrt werden: nach jedem erfolgreichen Backup werden die ältesten darüber hinaus gelöscht. Null behält alle.",
   "config.help.persistence.history.enabled":
     "Hauptschalter der Messwerthistorie. Standardmäßig aus (Opt-in) — wenn aktiv, öffnet der Daemon history.db und startet den Retention-Job.",
   "config.help.persistence.history.retention":
