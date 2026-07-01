@@ -301,6 +301,20 @@ func (s *MeasurementStore) DeleteDevice(
 	return nil
 }
 
+// DeleteForCentral removes every measurement recorded for the given central,
+// across every interface and device. Used on live central removal (see
+// docs/plans/L-live-ccu-adopt.md PR3) so a removed CCU's history does not
+// linger under a name that could later be reused by an unrelated CCU.
+func (s *MeasurementStore) DeleteForCentral(ctx context.Context, centralName string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM measurements WHERE central_name = ?`, centralName); err != nil {
+		return fmt.Errorf("measurements.DeleteForCentral: %w", err)
+	}
+	return nil
+}
+
 // DeleteAll empties the history. Used by the global reset endpoint and by
 // tests.
 func (s *MeasurementStore) DeleteAll(ctx context.Context) error {

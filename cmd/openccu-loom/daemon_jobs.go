@@ -26,72 +26,84 @@ import (
 // cadence, no caller need invoke it.
 func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slog.Logger) {
 	for _, u := range reg.List() {
-		jobs := central.StandardJobs{}
-		// Apply per-central overrides from the configuration. Zero means
-		// "use the compiled-in default".
-		for i := range cfg.Centrals {
-			cc := &cfg.Centrals[i]
-			if cc.Name != u.Name() {
-				continue
-			}
-			if cc.CheckConnectionInterval > 0 {
-				jobs.CheckConnectionInterval = cc.CheckConnectionInterval
-			}
-			if cc.Behavior.SysvarScanInterval > 0 {
-				jobs.SysvarRefreshInterval = cc.Behavior.SysvarScanInterval
-			}
+		registerStandardJobsFor(u, cfg, logger)
+	}
+}
+
+// registerStandardJobsFor registers one central's standard background jobs.
+// Factored out of registerStandardJobs's per-unit loop body so the live
+// CCU-adopt orchestrator (central_adopt.go) can register the same jobs for a
+// single runtime-added central — see docs/plans/L-live-ccu-adopt.md PR3.
+// cfg.Centrals is the boot-time static array; a runtime-added central absent
+// from it simply gets no override (falls back to compiled-in defaults),
+// which is the same "zero means default" behavior a boot-time central with
+// no override section gets.
+func registerStandardJobsFor(u *central.Unit, cfg *config.Config, logger *slog.Logger) {
+	jobs := central.StandardJobs{}
+	// Apply per-central overrides from the configuration. Zero means
+	// "use the compiled-in default".
+	for i := range cfg.Centrals {
+		cc := &cfg.Centrals[i]
+		if cc.Name != u.Name() {
+			continue
 		}
-		if u.Hub != nil {
-			// Hub-Refresh-Hooks delegate through the HubCoordinator's
-			// RefreshXxx methods. The inner hooks (loadPrograms,
-			// loadSysvars, …) are wired by WireHub after the JSON-RPC
-			// session comes up; until then RefreshXxx returns nil. By
-			// registering the jobs unconditionally here, the scheduler
-			// picks up the cadence and starts firing the moment WireHub
-			// installs the closures.
-			jobs.ProgramRefresh = u.Hub.RefreshPrograms
-			jobs.SysvarRefresh = u.Hub.RefreshSysvars
-			jobs.InboxRefresh = u.Hub.RefreshInbox
-			jobs.ServiceMessagesRefresh = u.Hub.RefreshServiceMessages
-			jobs.AlarmMessagesRefresh = u.Hub.RefreshAlarmMessages
-			jobs.SystemUpdateRefresh = u.Hub.RefreshSystemUpdate
-			jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
-			jobs.HubMetricsRefresh = u.Hub.RefreshMetrics
-			jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
+		if cc.CheckConnectionInterval > 0 {
+			jobs.CheckConnectionInterval = cc.CheckConnectionInterval
 		}
-		// MetricLastEventAgeSecs: seconds since the most recent CCU callback
-		// across the central's interfaces. The metric and its MetricHubSensor
-		// are wired, but nothing observes the value without this job.
-		if u.Events != nil && u.HubModel != nil {
-			jobs.LastEventAgeRefresh = func(_ context.Context) error {
-				if age, ok := u.Events.NewestEventAge(time.Now()); ok {
-					u.HubModel.Metrics.Observe(hub.MetricLastEventAgeSecs, age)
-				}
-				return nil
+		if cc.Behavior.SysvarScanInterval > 0 {
+			jobs.SysvarRefreshInterval = cc.Behavior.SysvarScanInterval
+		}
+	}
+	if u.Hub != nil {
+		// Hub-Refresh-Hooks delegate through the HubCoordinator's
+		// RefreshXxx methods. The inner hooks (loadPrograms,
+		// loadSysvars, …) are wired by WireHub after the JSON-RPC
+		// session comes up; until then RefreshXxx returns nil. By
+		// registering the jobs unconditionally here, the scheduler
+		// picks up the cadence and starts firing the moment WireHub
+		// installs the closures.
+		jobs.ProgramRefresh = u.Hub.RefreshPrograms
+		jobs.SysvarRefresh = u.Hub.RefreshSysvars
+		jobs.InboxRefresh = u.Hub.RefreshInbox
+		jobs.ServiceMessagesRefresh = u.Hub.RefreshServiceMessages
+		jobs.AlarmMessagesRefresh = u.Hub.RefreshAlarmMessages
+		jobs.SystemUpdateRefresh = u.Hub.RefreshSystemUpdate
+		jobs.InstallModeRefresh = u.Hub.RefreshInstallMode
+		jobs.HubMetricsRefresh = u.Hub.RefreshMetrics
+		jobs.HubConnectivityRefresh = u.Hub.RefreshConnectivity
+	}
+	// MetricLastEventAgeSecs: seconds since the most recent CCU callback
+	// across the central's interfaces. The metric and its MetricHubSensor
+	// are wired, but nothing observes the value without this job.
+	if u.Events != nil && u.HubModel != nil {
+		jobs.LastEventAgeRefresh = func(_ context.Context) error {
+			if age, ok := u.Events.NewestEventAge(time.Now()); ok {
+				u.HubModel.Metrics.Observe(hub.MetricLastEventAgeSecs, age)
 			}
+			return nil
 		}
-		// Wire and register the Reconciler so the slow-cadence
-		// connectivity/health pass emits ConnectivityChangedEvent on
-		// drift. The Connectivity and Metrics slots come from the Hub
-		// aggregate (wired by WireHub once the JSON-RPC session is up,
-		// nil-tolerant before then). Without these the per-job
-		// reconcileConnectivity / reconcileSystemHealth passes would
-		// land on nil and short-circuit — the slow drift sweep would
-		// never fire even though the job slot was registered.
-		if u.Reconciler == nil {
-			u.Reconciler = &coordinators.Reconciler{
-				CentralName:  u.Name(),
-				Bus:          u.EventBus,
-				Connectivity: u.HubModel.ConnectivityDataPoints(),
-				Metrics:      u.HubModel.Metrics,
-			}
+	}
+	// Wire and register the Reconciler so the slow-cadence
+	// connectivity/health pass emits ConnectivityChangedEvent on
+	// drift. The Connectivity and Metrics slots come from the Hub
+	// aggregate (wired by WireHub once the JSON-RPC session is up,
+	// nil-tolerant before then). Without these the per-job
+	// reconcileConnectivity / reconcileSystemHealth passes would
+	// land on nil and short-circuit — the slow drift sweep would
+	// never fire even though the job slot was registered.
+	if u.Reconciler == nil {
+		u.Reconciler = &coordinators.Reconciler{
+			CentralName:  u.Name(),
+			Bus:          u.EventBus,
+			Connectivity: u.HubModel.ConnectivityDataPoints(),
+			Metrics:      u.HubModel.Metrics,
 		}
-		jobs.Reconcile = u.Reconciler.Reconcile
-		if _, err := central.RegisterStandardJobs(u, jobs); err != nil {
-			logger.Warn("central.standard_jobs.register_failed",
-				slog.String("central", u.Name()),
-				slog.String("err", err.Error()))
-		}
+	}
+	jobs.Reconcile = u.Reconciler.Reconcile
+	if _, err := central.RegisterStandardJobs(u, jobs); err != nil {
+		logger.Warn("central.standard_jobs.register_failed",
+			slog.String("central", u.Name()),
+			slog.String("err", err.Error()))
 	}
 }
 

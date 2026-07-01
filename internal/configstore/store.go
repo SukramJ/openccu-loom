@@ -436,39 +436,54 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 		if !r.Enabled {
 			continue
 		}
-		// Password resolution per central, env-var wins over the
-		// plaintext fallback. PasswordEnv is the *name* of the env
-		// variable; the value comes from envLookup at runtime so
-		// the plaintext never round-trips through this layer when
-		// the operator chose the env path.
-		password := r.PasswordPlain
-		if r.PasswordEnv != "" {
-			if v := s.envLookup(r.PasswordEnv); v != "" {
-				password = v
-				srcs["centrals."+r.Name+".password"] = SourceEnv
-			}
+		cc, usedEnv := RowToCentralConfig(*r, s.envLookup)
+		if usedEnv {
+			srcs["centrals."+r.Name+".password"] = SourceEnv
 		}
-		out = append(out, config.CentralConfig{
-			Name:                  r.Name,
-			Host:                  r.Host,
-			Port:                  r.Port,
-			JSONRPCPort:           r.JSONRPCPort,
-			Username:              r.Username,
-			Password:              password,
-			Interfaces:            r.Interfaces,
-			Ports:                 r.Ports,
-			TLS:                   r.TLS,
-			TLSInsecureSkipVerify: r.TLSInsecureSkipVerify,
-			PrimaryInterface:      r.PrimaryInterface,
-			Visibility:            r.Visibility,
-			Behavior:              r.Behavior,
-		})
+		out = append(out, cc)
 	}
 	if len(out) > 0 {
 		cfg.Centrals = out
 		srcs["centrals"] = SourceDB
 	}
 	return nil
+}
+
+// RowToCentralConfig converts one persisted [sqlite.CentralRow] into the
+// in-memory [config.CentralConfig] shape a [*central.Unit] is built from.
+// Mirrors the per-row mapping [layerCentrals] applies at boot, and is the
+// shared converter the live-CCU-adopt orchestrator uses to turn a freshly
+// PUT admin/centrals row into the config the runtime adopt path needs — see
+// docs/plans/L-live-ccu-adopt.md PR3.
+//
+// envLookup resolves PasswordEnv (the *name* of an env var); production
+// callers pass [os.Getenv]. usedEnv reports whether the env var was applied
+// (non-empty), so a caller that tracks field-source attribution (as
+// [layerCentrals] does) can record it — the plaintext fallback never
+// round-trips through this layer when the operator chose the env path.
+func RowToCentralConfig(r sqlite.CentralRow, envLookup func(string) string) (cc config.CentralConfig, usedEnv bool) {
+	password := r.PasswordPlain
+	if r.PasswordEnv != "" {
+		if v := envLookup(r.PasswordEnv); v != "" {
+			password = v
+			usedEnv = true
+		}
+	}
+	return config.CentralConfig{
+		Name:                  r.Name,
+		Host:                  r.Host,
+		Port:                  r.Port,
+		JSONRPCPort:           r.JSONRPCPort,
+		Username:              r.Username,
+		Password:              password,
+		Interfaces:            r.Interfaces,
+		Ports:                 r.Ports,
+		TLS:                   r.TLS,
+		TLSInsecureSkipVerify: r.TLSInsecureSkipVerify,
+		PrimaryInterface:      r.PrimaryInterface,
+		Visibility:            r.Visibility,
+		Behavior:              r.Behavior,
+	}, usedEnv
 }
 
 // resolveEnvSecrets walks the in-memory config and overlays env-var

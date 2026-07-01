@@ -7,7 +7,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
@@ -579,6 +581,126 @@ func TestStoreEffectiveAppliesSectionCCUAuth(t *testing.T) {
 	}
 	if res.Sources[string(SectionCCUAuth)] != SourceDB {
 		t.Errorf("Sources[north.rest.auth.ccu]=%q want db", res.Sources[string(SectionCCUAuth)])
+	}
+}
+
+// TestRowToCentralConfigPlaintextPassword verifies that a row with
+// PasswordPlain set and no PasswordEnv configured passes the plaintext
+// password through unchanged and reports usedEnv == false.
+func TestRowToCentralConfigPlaintextPassword(t *testing.T) {
+	t.Parallel()
+	row := sqlite.CentralRow{
+		Name:          "ccu1",
+		PasswordPlain: "plaintext-secret",
+	}
+	cc, usedEnv := RowToCentralConfig(row, func(string) string { return "" })
+	if cc.Password != "plaintext-secret" {
+		t.Errorf("Password=%q want plaintext-secret", cc.Password)
+	}
+	if usedEnv {
+		t.Error("usedEnv=true, want false (no PasswordEnv configured)")
+	}
+}
+
+// TestRowToCentralConfigEnvPasswordResolved verifies that a row with
+// PasswordEnv set, resolved by envLookup to a non-empty value, prefers
+// the env value over PasswordPlain and reports usedEnv == true.
+func TestRowToCentralConfigEnvPasswordResolved(t *testing.T) {
+	t.Parallel()
+	row := sqlite.CentralRow{
+		Name:          "ccu1",
+		PasswordPlain: "plaintext-fallback",
+		PasswordEnv:   "CCU1_PASSWORD",
+	}
+	lookup := func(key string) string {
+		if key == "CCU1_PASSWORD" {
+			return "env-resolved-secret"
+		}
+		return ""
+	}
+	cc, usedEnv := RowToCentralConfig(row, lookup)
+	if cc.Password != "env-resolved-secret" {
+		t.Errorf("Password=%q want env-resolved-secret", cc.Password)
+	}
+	if !usedEnv {
+		t.Error("usedEnv=false, want true (env var resolved)")
+	}
+}
+
+// TestRowToCentralConfigEnvPasswordUnsetFallsBackToPlaintext verifies
+// that a row with PasswordEnv set, but envLookup returning "" (var
+// unset in the process environment), falls back to PasswordPlain and
+// reports usedEnv == false.
+func TestRowToCentralConfigEnvPasswordUnsetFallsBackToPlaintext(t *testing.T) {
+	t.Parallel()
+	row := sqlite.CentralRow{
+		Name:          "ccu1",
+		PasswordPlain: "plaintext-fallback",
+		PasswordEnv:   "CCU1_PASSWORD_UNSET",
+	}
+	cc, usedEnv := RowToCentralConfig(row, func(string) string { return "" })
+	if cc.Password != "plaintext-fallback" {
+		t.Errorf("Password=%q want plaintext-fallback", cc.Password)
+	}
+	if usedEnv {
+		t.Error("usedEnv=true, want false (env var unset)")
+	}
+}
+
+// TestRowToCentralConfigFieldsRoundTrip verifies that every
+// non-password field on a [sqlite.CentralRow] round-trips unchanged
+// into the returned [config.CentralConfig] — Name, Host, Port,
+// JSONRPCPort, Username, Interfaces, Ports, TLS,
+// TLSInsecureSkipVerify, PrimaryInterface, Visibility, and Behavior.
+func TestRowToCentralConfigFieldsRoundTrip(t *testing.T) {
+	t.Parallel()
+	sysvarInterval := 90 * time.Second
+	enableSysvarScan := true
+	row := sqlite.CentralRow{
+		Name:                  "distinctive-name",
+		Host:                  "10.9.8.7",
+		Port:                  2010,
+		JSONRPCPort:           2011,
+		Username:              "distinctive-user",
+		PasswordPlain:         "distinctive-password",
+		Interfaces:            []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2010}, {Name: "BidCos-RF"}},
+		Ports:                 map[string]int{"HmIP-RF": 2010, "BidCos-RF": 2000},
+		TLS:                   true,
+		TLSInsecureSkipVerify: true,
+		PrimaryInterface:      "HmIP-RF",
+		Visibility:            config.VisibilityConfig{UnIgnore: []string{"*:*:LOWBAT"}},
+		Behavior: config.CentralBehavior{
+			EnableSysvarScan:   &enableSysvarScan,
+			SysvarScanInterval: sysvarInterval,
+		},
+		Enabled: true,
+	}
+
+	cc, usedEnv := RowToCentralConfig(row, func(string) string { return "" })
+	if usedEnv {
+		t.Error("usedEnv=true, want false (no PasswordEnv configured)")
+	}
+
+	want := config.CentralConfig{
+		Name:                  "distinctive-name",
+		Host:                  "10.9.8.7",
+		Port:                  2010,
+		JSONRPCPort:           2011,
+		Username:              "distinctive-user",
+		Password:              "distinctive-password",
+		Interfaces:            []config.InterfaceSpec{{Name: "HmIP-RF", Port: 2010}, {Name: "BidCos-RF"}},
+		Ports:                 map[string]int{"HmIP-RF": 2010, "BidCos-RF": 2000},
+		TLS:                   true,
+		TLSInsecureSkipVerify: true,
+		PrimaryInterface:      "HmIP-RF",
+		Visibility:            config.VisibilityConfig{UnIgnore: []string{"*:*:LOWBAT"}},
+		Behavior: config.CentralBehavior{
+			EnableSysvarScan:   &enableSysvarScan,
+			SysvarScanInterval: sysvarInterval,
+		},
+	}
+	if !reflect.DeepEqual(cc, want) {
+		t.Errorf("RowToCentralConfig field mismatch:\n got: %+v\nwant: %+v", cc, want)
 	}
 }
 

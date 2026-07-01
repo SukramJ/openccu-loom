@@ -355,6 +355,83 @@ func TestMeasurement_DeleteDevice_PrefixSafety(t *testing.T) {
 	}
 }
 
+// TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral verifies that
+// DeleteForCentral removes every row for the named central across all its
+// interfaces/devices while leaving another central's history untouched.
+func TestMeasurement_DeleteForCentral_RemovesOnlyThatCentral(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	ts := time.UnixMilli(1000)
+
+	samples := []MeasurementSample{
+		{CentralName: "central-a", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1", Parameter: "TEMP", TS: ts, Value: 1},
+		{CentralName: "central-a", InterfaceID: "BidCos-RF", ChannelAddress: "DEV:2", Parameter: "HUMIDITY", TS: ts, Value: 2},
+		{CentralName: "central-b", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1", Parameter: "TEMP", TS: ts, Value: 3},
+	}
+	if err := s.SaveBatch(ctx, samples); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	if err := s.DeleteForCentral(ctx, "central-a"); err != nil {
+		t.Fatalf("DeleteForCentral: %v", err)
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Rows != 1 {
+		t.Errorf("Stats.Rows = %d after DeleteForCentral(central-a), want 1 (only central-b must survive)", st.Rows)
+	}
+
+	buckets, err := s.QueryBuckets(ctx, "central-b", "HmIP-RF", "DEV:1", "TEMP",
+		time.UnixMilli(0), time.UnixMilli(2000), 1)
+	if err != nil {
+		t.Fatalf("QueryBuckets central-b: %v", err)
+	}
+	if len(buckets) != 1 || buckets[0].Count != 1 {
+		t.Errorf("central-b history was incorrectly removed by DeleteForCentral(central-a)")
+	}
+
+	buckets, err = s.QueryBuckets(ctx, "central-a", "HmIP-RF", "DEV:1", "TEMP",
+		time.UnixMilli(0), time.UnixMilli(2000), 1)
+	if err != nil {
+		t.Fatalf("QueryBuckets central-a: %v", err)
+	}
+	if len(buckets) != 0 {
+		t.Errorf("central-a history survived DeleteForCentral(central-a): %v", buckets)
+	}
+}
+
+// TestMeasurement_DeleteForCentral_NoRowsForCentral verifies that calling
+// DeleteForCentral for a central with no recorded rows is a harmless no-op
+// that leaves other centrals' history untouched.
+func TestMeasurement_DeleteForCentral_NoRowsForCentral(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+	ts := time.UnixMilli(1000)
+
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: "central-b", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1", Parameter: "TEMP", TS: ts, Value: 1},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+
+	if err := s.DeleteForCentral(ctx, "central-never-seen"); err != nil {
+		t.Fatalf("DeleteForCentral on absent central: %v", err)
+	}
+
+	st, err := s.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if st.Rows != 1 {
+		t.Errorf("Stats.Rows = %d after no-op DeleteForCentral, want 1 (central-b must survive)", st.Rows)
+	}
+}
+
 // TestMeasurement_DeleteAll_EmptiesTable verifies that DeleteAll removes every
 // row and Stats().Rows returns zero afterwards.
 func TestMeasurement_DeleteAll_EmptiesTable(t *testing.T) {
@@ -530,6 +607,10 @@ func TestMeasurement_NilStore_NoOps(t *testing.T) {
 
 	if err := s.DeleteDevice(ctx, "c", "i", "dev"); err != nil {
 		t.Errorf("nil DeleteDevice: %v", err)
+	}
+
+	if err := s.DeleteForCentral(ctx, "c"); err != nil {
+		t.Errorf("nil DeleteForCentral: %v", err)
 	}
 
 	if err := s.DeleteAll(ctx); err != nil {
