@@ -18,6 +18,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/diagnostics"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/filter"
 	"github.com/SukramJ/openccu-loom/internal/north/mcp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
@@ -113,7 +114,7 @@ type restMountDeps struct {
 // advertiser at daemon exit. When REST is disabled it is a no-op returning a
 // no-op teardown. The returned teardown folds the inline mDNS-stop defer that
 // previously lived in the composition root.
-func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logger, servers *serverGroup, d restMountDeps) (teardown func()) { //nolint:funlen // length is dominated by the flat rest.Deps assembly literal, not control flow
+func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logger, northBridges *northbridge.Registry, d restMountDeps) (teardown func()) { //nolint:funlen // length is dominated by the flat rest.Deps assembly literal, not control flow
 	teardown = func() {}
 	if !cfg.North.REST.IsEnabled() {
 		return teardown
@@ -307,7 +308,12 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 	if tlsReloader != nil {
 		restServer.EnableTLS(tlsReloader)
 	}
-	servers.add("rest", restServer)
+	// The REST/HTTP surface is a PhaseLate bridge.Service: it starts last
+	// (after the router — incl. the MCP mount — is assembled) and, being
+	// registered after the webhook, stops first in the reverse-order StopAll,
+	// preserving the graceful-REST-shutdown-before-teardown behaviour the old
+	// serverGroup gave. See ADR 0047.
+	northBridges.Register(rest.NewService(restServer, logger))
 
 	if cfg.North.Discovery.MDNS.IsEnabled() {
 		if adv, err := startMDNSAdvertiser(ctx, cfg, len(d.reg.Names()), logger); err != nil {

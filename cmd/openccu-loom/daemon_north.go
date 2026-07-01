@@ -5,13 +5,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -20,8 +18,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	northbridge "github.com/SukramJ/openccu-loom/internal/north/bridge"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
-	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/middleware"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
@@ -30,48 +28,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-type serverGroup struct {
-	logger  *slog.Logger
-	mu      sync.Mutex
-	servers map[string]*rest.Server
-	errs    chan error
-}
-
-func newServerGroup(logger *slog.Logger) *serverGroup {
-	return &serverGroup{logger: logger, servers: make(map[string]*rest.Server), errs: make(chan error, 4)}
-}
-
-func (g *serverGroup) add(name string, s *rest.Server) {
-	g.mu.Lock()
-	g.servers[name] = s
-	g.mu.Unlock()
-}
-
-func (g *serverGroup) startAll() error {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for name, s := range g.servers {
-		go func() {
-			if err := s.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				g.logger.Error("server.exit", slog.String("name", name), slog.String("err", err.Error()))
-				g.errs <- err
-			}
-		}()
-	}
-	// Wait a beat so Listen gets a chance to fail-fast on bind issues.
-	time.Sleep(20 * time.Millisecond)
-	return nil
-}
-
-func (g *serverGroup) stopAll(ctx context.Context) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
-	for name, s := range g.servers {
-		if err := s.Shutdown(ctx); err != nil {
-			g.logger.Warn("server.shutdown", slog.String("name", name), slog.String("err", err.Error()))
-		}
-	}
-}
+// The REST/HTTP server lifecycle is owned by the north-bound bridge.Registry
+// as a PhaseLate rest.Service (ADR 0047); the former serverGroup helper was
+// retired when REST moved onto the registry.
 
 // authStores bundles the in-memory auth state the composition root builds
 // before the REST phase. The SQLite-backed stores are layered on top inside
@@ -216,7 +175,7 @@ func firstRunNeedsSetup(cfg *config.Config, localUserCount int) bool {
 // every north-bound server with a bounded timeout. Production wires ctx to
 // SIGINT/SIGTERM via signal.NotifyContext in main.go; tests pass a
 // context.WithCancel ctx so they can drive shutdown without signals.
-func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, servers *serverGroup) {
+func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring, northBridges *northbridge.Registry) {
 	logger.Info("daemon.ready")
 	<-ctx.Done()
 	// context.Cause is non-nil once ctx is cancelled (guaranteed here by the
@@ -239,7 +198,10 @@ func awaitShutdown(ctx context.Context, logger *slog.Logger, matter matterWiring
 	//nolint:contextcheck // shutdown path must not inherit the cancelled daemon ctx
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	servers.stopAll(shutdownCtx) //nolint:contextcheck // shutdown path: shutdownCtx intentionally not derived from daemon ctx
+	// Reverse-order StopAll: the REST/HTTP surface (registered last) stops
+	// first — a graceful drain before the rest of the daemon tears down,
+	// matching the old serverGroup.stopAll placement — then the webhook.
+	northBridges.StopAll(shutdownCtx) //nolint:contextcheck // shutdown path: shutdownCtx intentionally not derived from daemon ctx
 }
 
 func buildTokenMap(cfg *config.Config) map[string]auth.Identity {
