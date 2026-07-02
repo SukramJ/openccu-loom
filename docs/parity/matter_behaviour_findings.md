@@ -125,6 +125,31 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 - **Fix:** extend `sigma.ResumptionRecord` with FabricIndex/PeerNodeID/CATs; in `tryResume` set peerSessionID from `sigma1.InitiatorSessionID`, peerNodeID/CATs from the record, resolve identity by the record's FabricIndex, retain the fresh resumptionId + shared secret; the adapter passes `r.PeerSessionID()`; the daemon persists the fresh id. Test: full CASE → resume → assert traffic decrypts, session fabric == record fabric, store row updated.
 
 ### C6 — Multi-admin broken: PAKE verifier ignored + ECM window never advertised
+
+> **Status: FOUNDATION done (Unreleased); wiring + mDNS remain.** Added
+> `spake2.NewVerifierFromValue(w0[32], L[65])` — reconstructs a device-side PASE
+> verifier directly from a Matter §3.10.5 passcode verifier (mirrors matter.js
+> `PaseServer.fromVerificationValue`), validating L on-curve. Proven by a
+> round-trip test (verifier-from-value ↔ prover-with-passcode → same Ke) plus
+> wrong-passcode and malformed/off-curve negatives.
+>
+> **Remaining (needs chip-tool live validation):**
+> 1. **(a) install path.** `CommissioningWindow.OpenWindow`
+>    (`internal/north/matter/bridge/commissioning_window.go`) receives
+>    `params.PAKEPasscodeVerifier` + `Iterations` + `Salt` but discards them. Add
+>    a `PaseVerifierInstaller` hook (bridge interface, daemon implements) that
+>    builds a `PaseAdapter` from `NewVerifierFromValue(verifier[:32], verifier[32:97])`
+>    + the supplied PBKDF params and installs it as the active PASE acceptor for
+>    the window lifetime, wiring the restore closure through `setRestore` exactly
+>    like the ephemeral path. Note the two open paths: the REST/local
+>    `CommissioningWindowOpener` (generates its own passcode — unchanged) vs the
+>    Matter cluster command path (`AdministratorCommissioning` →
+>    `WindowController.OpenWindow` with the supplied verifier — the one to fix).
+> 2. **(b) ECM mDNS.** On the Enhanced-window transition, call
+>    `AnnounceCommissioning` with `CommissioningMode=2` + the ECM discriminator
+>    (`_L<disc>` subtype), mirroring matter.js `DeviceCommissioner.ts:166`
+>    (currently only the REST opener announces, hard-coded CM=1).
+
 - **(a) Verifier — Go:** `bridge/commissioning_window.go:218` validates the `PAKEPasscodeVerifier` then discards it; `spake2` has no constructor from raw `(w0, L)`. **matter.js:** `packages/node/src/behaviors/administrator-commissioning/AdministratorCommissioningServer.ts:103` `PaseServer.fromVerificationValue(...)`, `packages/protocol/src/session/pase/PaseServer.ts:52` splits `w0 = slice(0,32)`, `L = slice(32,97)`.
 - **(b) mDNS — Go:** `AnnounceCommissioning` is called only by the REST opener with a hard-coded `CommissioningMode: 1` (`cmd/openccu-loom/daemon_matter.go:2524`); the ECM transition (`bridge/commissioning_window.go:197`) never publishes `CM=2` / `_L<discriminator>`. **matter.js:** `packages/protocol/src/protocol/DeviceCommissioner.ts:166` advertises the enhanced mode.
 - **Failure:** "add to another ecosystem" (Apple → Google) fails twice — the second controller cannot find the bridge (b), and even on discovery Pake2 `cB` mismatches (a).
