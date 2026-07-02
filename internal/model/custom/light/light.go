@@ -71,6 +71,11 @@ type Light struct {
 	// correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
+	// timed is the OnOff cluster LT timed-command engine (OnTime /
+	// OffWaitTime countdowns + StartUpOnOff store). Owned here so the
+	// countdowns survive cluster-server reconstruction.
+	timed timedOnOffState
+
 	mu         sync.RWMutex
 	lastLevel  float64
 	groupLevel *generic.Float // optional GROUP_LEVEL sensor (set via SetGroupLevel)

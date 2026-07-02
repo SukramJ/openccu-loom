@@ -44,6 +44,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: OnOff implements the OnWithTimedOff engine and writable
+  LT attributes.** OnWithTimedOff previously collapsed to a plain On — the
+  timed-off countdown, the AcceptOnlyWhenOn gate and the delayed-off guard
+  period were all dropped, and the OnTime / OffWaitTime / StartUpOnOff
+  attributes were read-only constants. Lights now run the full matter.js
+  `OnOffServer` state machine: OnTime counts down in 100 ms ticks and turns
+  the device off at expiry, an Off during a timed-on phase enters the
+  delayed-off guard, AcceptOnlyWhenOn is honoured while off, and all three
+  LT attributes are writable (StartUpOnOff requiring Manage privilege;
+  parking a countdown at 0/0xFFFF stops it).
 - **Matter bridge: DoorLock emits the mandatory LockOperation event.** A
   successful remote LockDoor / UnlockDoor / UnboltDoor produced no event, so
   controllers tracking lock activity (Apple Home notifications, event

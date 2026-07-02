@@ -102,6 +102,13 @@ linters:
       - linters:
           - gosec
         path: cmd/
+      # The OnOff timed-command countdown engine (Matter OnWithTimedOff)
+      # is deliberately detached from the arming invoke's context: the
+      # countdown outlives the command response, so its tick loop writes
+      # on a fresh background context by design.
+      - linters:
+          - contextcheck
+        text: "matterTimedLoop"
       # Generated profile registry: a large hand-unmaintained table.
       - linters:
           - funlen

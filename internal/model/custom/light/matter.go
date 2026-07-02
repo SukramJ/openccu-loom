@@ -227,19 +227,23 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		// so it stays true (read-only on this projection).
 		return true, true
 	case matterAttrOnOffOnTime:
-		// OnTime (uint16, conformance LT): timed-off countdown. The bridge
-		// has no on-timer engine; defaults to 0 ("no timed off active").
-		// matter.js OnOffServer.ts:102 resets onTime to 0.
-		return uint16(0), true
+		// OnTime (uint16, conformance LT): remaining timed-on countdown
+		// in tenths of a second, driven by the OnWithTimedOff engine.
+		// matter.js OnOffServer.ts:239 #timedOnTick.
+		return s.l.matterOnTime(), true
 	case matterAttrOnOffOffWaitTime:
-		// OffWaitTime (uint16, conformance LT): delayed-off wait. 0 = none.
-		// matter.js OnOffServer.ts:80 resets offWaitTime to 0.
-		return uint16(0), true
+		// OffWaitTime (uint16, conformance LT): remaining delayed-off
+		// guard in tenths of a second. matter.js OnOffServer.ts:312
+		// #delayedOffTick.
+		return s.l.matterOffWaitTime(), true
 	case matterAttrOnOffStartUpOnOff:
 		// StartUpOnOff (StartUpOnOffEnum, conformance LT, quality "X N"):
 		// nullable; null = "keep last state on startup". matter.js
-		// OnOffServer.ts:39 reads `this.state.startUpOnOff ?? null` —
-		// null is the default. (nil, true) encodes the TLV null.
+		// OnOffServer.ts:39 reads `this.state.startUpOnOff ?? null`.
+		// (nil, true) encodes the TLV null.
+		if v := s.l.matterStartUpOnOff(); v != nil {
+			return *v, true
+		}
 		return nil, true
 	case matterAttrFeatureMap:
 		// LT (Lighting) feature, bit 0 (0x01). OnOffLight / DimmableLight
@@ -255,39 +259,100 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
-	if attrID != matterAttrOnOffOnOff {
+	switch attrID {
+	case matterAttrOnOffOnOff:
+		on, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
+		}
+		var err error
+		if on {
+			err = s.l.TurnOn(ctx, priority)
+		} else {
+			err = s.l.TurnOff(ctx, priority)
+		}
+		if err != nil {
+			return err
+		}
+		s.l.dataVersion.Bump()
+		return nil
+	case matterAttrOnOffOnTime, matterAttrOnOffOffWaitTime:
+		// OnTime / OffWaitTime are RW (on-off.element.ts:31-32). A write
+		// updates the countdown attribute; parking it at 0 or the 0xFFFF
+		// hold ends a running countdown, and writes never start one —
+		// matter.js OnOffServer.ts:66-84 #stopHeldTimer.
+		v, ok := matterWriteUint16(value)
+		if !ok {
+			return fmt.Errorf("%w: OnTime/OffWaitTime write expected uint16, got %T", errMatterValueType, value)
+		}
+		if attrID == matterAttrOnOffOnTime {
+			s.l.matterSetOnTime(v)
+		} else {
+			s.l.matterSetOffWaitTime(v)
+		}
+		s.l.dataVersion.Bump()
+		return nil
+	case matterAttrOnOffStartUpOnOff:
+		// StartUpOnOff is RW VM, nullable, enum 0..2 (on-off.element.ts:33-36).
+		// The value is stored on the projection; the physical power-on
+		// behaviour of an HM device stays governed by its own device
+		// configuration.
+		if value == nil {
+			s.l.matterSetStartUpOnOff(nil)
+			s.l.dataVersion.Bump()
+			return nil
+		}
+		v, ok := matterWriteUint8(value)
+		if !ok {
+			return fmt.Errorf("%w: StartUpOnOff write expected enum8, got %T", errMatterValueType, value)
+		}
+		if v > 2 {
+			return fmt.Errorf("%w: StartUpOnOff constraint 0..2, got %d", errMatterValueType, v)
+		}
+		s.l.matterSetStartUpOnOff(&v)
+		s.l.dataVersion.Bump()
+		return nil
+	default:
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
-	on, ok := value.(bool)
-	if !ok {
-		return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
-	}
-	var err error
-	if on {
-		err = s.l.TurnOn(ctx, priority)
-	} else {
-		err = s.l.TurnOff(ctx, priority)
-	}
-	if err != nil {
-		return err
-	}
-	s.l.dataVersion.Bump()
-	return nil
 }
 
-func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: StartUpOnOff is
+// RW VM per on-off.element.ts:34 (write access Manage); the countdown
+// attributes stay at the RW VO default.
+func (s lightOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
+	if attrID == matterAttrOnOffStartUpOnOff {
+		return 4 // Manage
+	}
+	return 3 // Operate
+}
+
+func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdOff:
 		err = s.l.TurnOff(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOff()
+		}
 	case matterCmdOn:
 		err = s.l.TurnOn(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOn()
+		}
 	case matterCmdToggle:
 		on, observed := s.l.IsOn()
 		if !observed || !on {
 			err = s.l.TurnOn(ctx, priority)
+			if err == nil {
+				s.l.matterTimedHandleOn()
+			}
 		} else {
 			err = s.l.TurnOff(ctx, priority)
+			if err == nil {
+				s.l.matterTimedHandleOff()
+			}
 		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): the bridge has no dimming-effect
@@ -295,16 +360,25 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any,
 		// device is turned off plainly. matter.js OnOffServer.ts treats
 		// the effect as best-effort. on-off.element.ts:41.
 		err = s.l.TurnOff(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOff()
+		}
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
 		err = s.l.TurnOn(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOn()
+		}
 	case matterCmdOnWithTimedOff:
-		// OnWithTimedOff (LT, mandatory): the bridge has no on-timer, so
-		// the timed-off semantics are dropped and the device is turned on
-		// for the duration of the controller's own scheduling.
-		// on-off.element.ts:51.
-		err = s.l.TurnOn(ctx, priority)
+		// OnWithTimedOff (LT, mandatory): full timed-off engine —
+		// AcceptOnlyWhenOn gate, delayed-off guard, OnTime/OffWaitTime
+		// countdowns. matter.js OnOffServer.ts:198-225.
+		control, onTime, offWaitTime, ferr := extractOnWithTimedOff(fields)
+		if ferr != nil {
+			return nil, ferr
+		}
+		err = s.l.matterOnWithTimedOff(ctx, control, onTime, offWaitTime, priority)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -780,4 +854,85 @@ func wireUint8(raw any) (uint8, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// wireUint16 is the 16-bit sibling of [wireUint8].
+func wireUint16(raw any) (uint16, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint16(n & 0xFFFF), true
+	case uint16:
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+// matterWriteUint16 coerces an attribute-write value into uint16. The
+// IM write layer delivers decoded TLV unsigned ints as uint64; the
+// narrower types keep in-package callers working.
+func matterWriteUint16(value any) (uint16, bool) {
+	return wireUint16(value)
+}
+
+// matterWriteUint8 coerces an attribute-write value into uint8.
+func matterWriteUint8(value any) (uint8, bool) {
+	return wireUint8(value)
+}
+
+// extractOnWithTimedOff pulls the OnWithTimedOff (0x42) fields out of
+// the bridge-decoded payload. Tags per on-off.element.ts:50-55:
+// [0] OnOffControl (bitmap8, constraint "0 to 1"), [1] OnTime
+// (uint16, max 65534), [2] OffWaitTime (uint16, max 65534). All three
+// are conformance M; absent fields default to 0 for robustness. The
+// constraints reject the reserved 0xFFFF hold value on the command
+// path — it is reachable only via an attribute write.
+func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint16, err error) {
+	read := func(rawControl, rawOnTime, rawOffWait any) error {
+		if rawControl != nil {
+			v, ok := wireUint8(rawControl)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OnOffControl expected integer, got %T", errMatterValueType, rawControl)
+			}
+			control = v
+		}
+		if rawOnTime != nil {
+			v, ok := wireUint16(rawOnTime)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OnTime expected integer, got %T", errMatterValueType, rawOnTime)
+			}
+			onTime = v
+		}
+		if rawOffWait != nil {
+			v, ok := wireUint16(rawOffWait)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OffWaitTime expected integer, got %T", errMatterValueType, rawOffWait)
+			}
+			offWaitTime = v
+		}
+		return nil
+	}
+	switch v := fields.(type) {
+	case map[uint8]any:
+		err = read(v[0], v[1], v[2])
+	case map[string]any:
+		err = read(v["on_off_control"], v["on_time"], v["off_wait_time"])
+	case nil:
+		// No fields decoded — all defaults.
+	default:
+		return 0, 0, 0, fmt.Errorf("%w: OnWithTimedOff expected map[uint8]any, got %T", errMatterValueType, fields)
+	}
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if control > 1 {
+		return 0, 0, 0, fmt.Errorf("%w: OnOffControl constraint 0..1, got %d", errMatterValueType, control)
+	}
+	if onTime > 0xFFFE {
+		return 0, 0, 0, fmt.Errorf("%w: OnTime constraint max 65534, got %d", errMatterValueType, onTime)
+	}
+	if offWaitTime > 0xFFFE {
+		return 0, 0, 0, fmt.Errorf("%w: OffWaitTime constraint max 65534, got %d", errMatterValueType, offWaitTime)
+	}
+	return control, onTime, offWaitTime, nil
 }
