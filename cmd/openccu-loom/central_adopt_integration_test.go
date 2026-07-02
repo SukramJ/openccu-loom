@@ -3,9 +3,8 @@
 
 //go:build integration
 
-// This file is the headline proof for live CCU adopt
-// (docs/plans/L-live-ccu-adopt.md PR3): a SECOND central is adopted at
-// runtime — via [centralOrchestrator], the same orchestrator
+// This file is the headline proof for live CCU adopt: a SECOND central is
+// adopted at runtime — via [centralOrchestrator], the same orchestrator
 // CreateCentral/DeleteCentral drive through [liveCentralAdmin] — against a
 // live godevccu instance, alongside a first central that came up through
 // the normal boot-time WireCentrals path. Its devices must appear in the

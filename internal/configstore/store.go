@@ -453,8 +453,7 @@ func (s *Store) layerCentrals(ctx context.Context, cfg *config.Config, srcs map[
 // in-memory [config.CentralConfig] shape a [*central.Unit] is built from.
 // Mirrors the per-row mapping [layerCentrals] applies at boot, and is the
 // shared converter the live-CCU-adopt orchestrator uses to turn a freshly
-// PUT admin/centrals row into the config the runtime adopt path needs — see
-// docs/plans/L-live-ccu-adopt.md PR3.
+// PUT admin/centrals row into the config the runtime adopt path needs.
 //
 // envLookup resolves PasswordEnv (the *name* of an env var); production
 // callers pass [os.Getenv]. usedEnv reports whether the env var was applied

@@ -357,8 +357,7 @@ func (r *Recorder) flush(ctx context.Context) {
 // the daily tier, then purges rollup rows past their own retention —
 // always in that order, and always before [Recorder.purge] runs on the
 // raw table, so no raw row is ever deleted before its value has been
-// folded into the hourly tier (see docs/plans/A2-timeseries-energy.md
-// "Where the rollup runs").
+// folded into the hourly tier.
 func (r *Recorder) rollup(ctx context.Context) {
 	now := time.Now()
 

@@ -98,7 +98,7 @@ func serialBackfiller(store *sqlite.CentralsStore, logger *slog.Logger) func(ctx
 //
 // Factored out of wireSouthbound's inline per-central loops so the same wiring
 // can be run for a single central added at runtime — the foundation for live
-// CCU adopt (docs/plans/L-live-ccu-adopt.md). The per-central hooks are
+// CCU adopt. The per-central hooks are
 // independent across centrals, so running them one-central-at-a-time is
 // equivalent to the previous hook-at-a-time loops.
 func wireCentralNorthbound(d southboundWiringDeps, u *central.Unit) (availCloser, climateCloser func()) {

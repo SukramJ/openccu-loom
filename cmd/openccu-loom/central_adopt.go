@@ -37,9 +37,9 @@ type centralHandle struct {
 	climate func()
 }
 
-// centralOrchestrator is the live-CCU-adopt composition seam
-// (docs/plans/L-live-ccu-adopt.md PR3): it drives one central's southbound +
-// model + scheduler-jobs lifecycle up or down at runtime, reusing exactly
+// centralOrchestrator is the live-CCU-adopt composition seam: it drives one
+// central's southbound + model + scheduler-jobs lifecycle up or down at
+// runtime, reusing exactly
 // the primitives boot uses (central.New, Registry.Register/Unregister,
 // BringUpManager.AddCentral/RemoveCentral, wireCentralNorthbound,
 // registerStandardJobsFor) so a live-adopted central is wired identically to
@@ -279,8 +279,7 @@ func purgeCentralState(
 // liveCentralAdmin wraps a persisted [handlers.CentralAdminService] (the
 // *sqlite.CentralsStore the router mounts by default) so POST/PUT/DELETE
 // /admin/centrals also drive [centralOrchestrator] — the REST injection
-// seam for live CCU adopt (docs/plans/L-live-ccu-adopt.md PR3). Get/List
-// pass through unchanged.
+// seam for live CCU adopt. Get/List pass through unchanged.
 type liveCentralAdmin struct {
 	store  handlers.CentralAdminService
 	orch   *centralOrchestrator
@@ -308,7 +307,7 @@ func (l *liveCentralAdmin) List(ctx context.Context) ([]sqlite.CentralRow, error
 // Put persists row (create or full-replace update) then adopts it live when
 // enabled. An update to an already-registered central (boot-time or already
 // live-adopted) skips adopt — live in-place reconfiguration of a running
-// central is out of scope for PR3 (see docs/plans/L-live-ccu-adopt.md) — so
+// central is out of scope for now — so
 // PUT stays a safe no-op-adopt for the common "edit an already-live central"
 // case instead of surfacing central.ErrAlreadyRegistered to the operator.
 func (l *liveCentralAdmin) Put(ctx context.Context, row sqlite.CentralRow) error {

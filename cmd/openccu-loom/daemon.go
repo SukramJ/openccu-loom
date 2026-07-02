@@ -333,7 +333,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// sbDeps is a named local (not an inline literal) so the live-CCU-adopt
 	// orchestrator (central_adopt.go) can capture the same wiring deps and
 	// call [wireCentralNorthbound] for a runtime-added central exactly as
-	// this boot-time call does — see docs/plans/L-live-ccu-adopt.md PR3.
+	// this boot-time call does.
 	sbDeps := southboundWiringDeps{
 		cfg:                     cfg,
 		reg:                     reg,
@@ -369,7 +369,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// then stays unmounted.
 	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, sb.bringUpManager, auditBuf, logger)
 
-	// Live CCU adopt (docs/plans/L-live-ccu-adopt.md PR3): the orchestrator
+	// Live CCU adopt: the orchestrator
 	// that lets POST/DELETE /admin/centrals bring a CCU's southbound + model
 	// + scheduler-jobs up or down without a daemon restart. instanceName is
 	// recomputed (not threaded out of central.Bootstrap) — it is a pure

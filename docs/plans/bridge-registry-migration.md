@@ -369,9 +369,10 @@ architectural lock and a cosmetic move.
 
 - [ADR 0047 — North-bound bridges as `Service`s owned by a `Registry`](../adr/0047-northbound-bridge-registry.md)
   (decision of record).
-- [`docs/plans/A4-webhook-plugin-contract.md`](./A4-webhook-plugin-contract.md)
-  §3a (the contract this completes; note: its "thin adapter" phrasing is the
-  *minimum*; ADR 0047 raises the bar to package-owned services).
+- The webhook/plugin northbound contract this completes (shipped; the
+  `bridge.Service` + `Registry` types now live in
+  `internal/north/bridge/`). Its original "thin adapter" phrasing was the
+  *minimum*; ADR 0047 raises the bar to package-owned services.
 - Contract + reference consumer: `internal/north/bridge/service.go`,
   `registry.go`, `registry_test.go`; `internal/north/webhook/outbound.go`.
 - Current wiring to refactor: `cmd/openccu-loom/daemon.go`,
