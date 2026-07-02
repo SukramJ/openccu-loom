@@ -88,6 +88,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: only one PASE commissioning handshake runs at a time.**
+  A second commissioner's PBKDFParamRequest arriving mid-handshake silently
+  replaced the first one's in-flight verifier state; the bridge now rejects the
+  overlapping request (self-expiring after 60 s so a crashed commissioner
+  cannot lock the window), matching matter.js's single-active-PASE rule.
+- **Matter bridge: PASE honours and advertises MRP session parameters.** The
+  commissioner's InitiatorMRPParams (PBKDFParamRequest tag 5) is now applied to
+  the PASE session's retransmit timing, and the bridge advertises its own
+  ResponderMRPParams in the response — previously both were ignored, so
+  retransmissions used spec defaults regardless of what either side asked for.
+- **Matter bridge: MRP message counters resist nonce reuse.** New session
+  counters seed in the low 28 bits (so a fresh counter never starts near
+  exhaustion) and secure-session counters refuse to roll over past
+  0xFFFFFFFF (a wrapped counter would reuse an AES-CCM nonce under the live
+  key); the session is retired instead, matching matter.js. Reliable-send and
+  subscription bookkeeping are now keyed per session, closing a
+  cross-session counter-collision.
+- **Matter bridge: NodeLabel and Location survive a restart.** A commissioner
+  write to either attribute (both non-volatile per spec) is now persisted and
+  restored at boot, instead of reverting to the configured default.
+- **Matter bridge: event numbers stay monotonic across restarts.** The
+  EventNumber counter was in-memory and reset to 1 on every boot, so
+  controllers filtering on the last number they saw silently dropped every
+  fresh event; it now persists a counter ceiling and resumes past it.
+- **Matter bridge: device-type ACL targets are honoured.** An AccessControl
+  entry whose target names only a device type previously always denied; it now
+  matches endpoints advertising that device type, mirroring matter.js/chip.
+- **Matter bridge: the periodic mDNS re-announce no longer churns caches.** The
+  30-minute operational re-announce re-registered every record, emitting TTL-0
+  goodbye packets that made Apple flush and re-learn the bridge each interval;
+  unchanged records are now left in place and only real changes re-register.
 - **Matter bridge: bridged endpoints report a stable DataVersion.** Bridged
   cluster servers are rebuilt on every dispatch, and each rebuild installed a
   fresh random DataVersion — the same cluster reported a different version on
