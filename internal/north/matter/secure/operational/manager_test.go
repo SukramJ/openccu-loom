@@ -432,7 +432,8 @@ func TestManager_PersistAndLookupResumption(t *testing.T) {
 		secret[i] = byte(i + 50)
 	}
 
-	if err := m.PersistResumption(ctx, 1, 0xABCD, rid, secret); err != nil {
+	cats := []uint32{0x0001_0002, 0xABCD_0001}
+	if err := m.PersistResumption(ctx, 1, 0xABCD, rid, secret, cats); err != nil {
 		t.Fatalf("PersistResumption: %v", err)
 	}
 
@@ -445,6 +446,17 @@ func TestManager_PersistAndLookupResumption(t *testing.T) {
 	}
 	if !bytes.Equal(got.SharedSecret, secret) {
 		t.Error("SharedSecret mismatch")
+	}
+	// CATs must survive the round-trip — the resume path re-grants them
+	// without re-validating the NOC, so a persist that drops them
+	// silently strips CAT-scoped ACL privilege from resumed sessions.
+	if len(got.CASEAuthTags) != len(cats) {
+		t.Fatalf("CASEAuthTags length=%d, want %d", len(got.CASEAuthTags), len(cats))
+	}
+	for i, want := range cats {
+		if got.CASEAuthTags[i] != want {
+			t.Errorf("CASEAuthTags[%d]=%#x, want %#x", i, got.CASEAuthTags[i], want)
+		}
 	}
 }
 

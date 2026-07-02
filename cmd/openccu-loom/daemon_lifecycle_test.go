@@ -689,6 +689,7 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("buildRootClusters with vendor attestation: %v", err)
@@ -800,6 +801,7 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

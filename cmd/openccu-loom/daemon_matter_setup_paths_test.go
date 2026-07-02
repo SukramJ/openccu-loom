@@ -232,6 +232,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 		nil,
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("buildRootClusters: %v", err)
@@ -288,6 +289,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 			called = true
 			mu.Unlock()
 		},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -638,6 +640,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

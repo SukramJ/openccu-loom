@@ -131,6 +131,13 @@ type Entry struct {
 	peerIdleIntervalMs    uint32
 	peerActiveIntervalMs  uint32
 	peerActiveThresholdMs uint32
+	// isPase marks a session established via the PASE handshake. The
+	// marker survives [Manager.AdoptFabricIndex] (the session stays a
+	// PASE session even after AddNOC rewrites its FabricIndex) so
+	// [Manager.ClosePASESessions] can honour Matter §11.10.6.6 step 4.
+	// Mirrors matter.js SessionManager.ts:484 getPaseSession, which
+	// identifies the PASE session by type, not by fabric.
+	isPase bool
 	// mu guards the mutable fields above for concurrent Rx/Tx updates.
 	mu sync.Mutex
 }
@@ -400,6 +407,7 @@ func (m *Manager) OpenFromPase(localNodeID, peerNodeID uint64, peerSessionID uin
 		FabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
+		isPase:               true,
 	}
 	m.sessions[id] = entry
 	m.mu.Unlock()
@@ -441,6 +449,7 @@ func (m *Manager) OpenFromPaseWithID(id uint16, localNodeID, peerNodeID uint64, 
 		FabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
+		isPase:               true,
 	}
 	m.mu.Lock()
 	// The pre-allocated id is in m.sessions as a placeholder Entry
@@ -543,6 +552,30 @@ func (m *Manager) CloseFabricExcept(fabricIndex uint8, exceptSessionID uint16) {
 	m.mu.Unlock()
 	closeStaleEntries(victims)
 	m.fireOnSessionClose(victims)
+}
+
+// ClosePASESessions tears down every session established via PASE —
+// including sessions whose FabricIndex was later rewritten by
+// [Manager.AdoptFabricIndex] (adoption does not change the session's
+// PASE nature). Matter §11.10.6.6 step 4 requires the server to clear
+// any still-established PASE session on a successful
+// CommissioningComplete, and the fail-safe expiry path does the same.
+// Mirrors matter.js FailsafeContext.ts:154 (completeCommission) and
+// :291 (fail-safe expired) → closePaseSession. Returns the number of
+// sessions closed.
+func (m *Manager) ClosePASESessions() int {
+	m.mu.Lock()
+	victims := make([]*Entry, 0, 1)
+	for id, entry := range m.sessions {
+		if entry.isPase {
+			victims = append(victims, entry)
+			delete(m.sessions, id)
+		}
+	}
+	m.mu.Unlock()
+	closeStaleEntries(victims)
+	m.fireOnSessionClose(victims)
+	return len(victims)
 }
 
 // ClosePeer tears down every live session matching the
@@ -673,17 +706,22 @@ func (m *Manager) reapIdle(idleTimeout time.Duration) {
 
 // PersistResumption stores a resumption-id pre-shared secret so a
 // returning peer can resume via Sigma1.ResumptionID. resumptionID
-// must be 16 bytes; sharedSecret must be 32 bytes. Wired in daemon.go
-// (matter init) and called from both CASE-onEstablished paths after
-// every successful OpenFromSigmaWithID. Mirrors matter.js
+// must be 16 bytes; sharedSecret must be 32 bytes. peerCATs carries
+// the CASE Authenticated Tags from the peer's verified NOC — the
+// resume path re-grants them without re-validating the NOC, so
+// dropping them here silently strips CAT-scoped ACL privilege from
+// every resumed session. Wired in daemon.go (matter init) and called
+// from both CASE-onEstablished paths after every successful
+// OpenFromSigmaWithID. Mirrors matter.js
 // packages/protocol/src/session/case/CaseServer.ts:210
 // `this.#sessions.saveResumptionRecord(cx.resumptionRecord)`.
-func (m *Manager) PersistResumption(ctx context.Context, fabricIndex uint8, peerNodeID uint64, resumptionID, sharedSecret []byte) error {
+func (m *Manager) PersistResumption(ctx context.Context, fabricIndex uint8, peerNodeID uint64, resumptionID, sharedSecret []byte, peerCATs []uint32) error {
 	return m.store.UpsertResumption(ctx, store.ResumptionRecord{
 		FabricIndex:  fabricIndex,
 		PeerNodeID:   peerNodeID,
 		ResumptionID: resumptionID,
 		SharedSecret: sharedSecret,
+		CASEAuthTags: peerCATs,
 	})
 }
 

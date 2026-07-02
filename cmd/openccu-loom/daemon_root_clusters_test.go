@@ -45,6 +45,7 @@ func TestBuildRootClusters_WithLiveBridge(t *testing.T) {
 		slog.New(slog.DiscardHandler),
 		func(_ context.Context, _ uint8, _, _ uint64, _ []byte) {},
 		nil,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("buildRootClusters: %v", err)
@@ -91,6 +92,7 @@ func TestBuildRootClusters_NilStore(t *testing.T) {
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

@@ -375,3 +375,82 @@ func TestCaseDestinationResolver_NoMatchingDestination_LogsUnresolved(t *testing
 		t.Errorf("expected identity_unresolved debug log; got:\n%s", buf.String())
 	}
 }
+
+// ── caseDestinationResolver.ResolveFabricIndex ───────────────────────────────
+//
+// ResolveFabricIndex is the Sigma2_Resume-path companion lookup: the
+// resumption record names its fabric directly (no DestinationID to
+// recompute), so the resolver is just a map read keyed by fabric index.
+
+func TestCaseDestinationResolver_ResolveFabricIndex_NilFabrics_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: nil,
+		logger:  slog.Default(),
+	}
+	_, _, ok := resolver.ResolveFabricIndex(7)
+	if ok {
+		t.Error("expected ok=false for nil fabrics map pointer")
+	}
+}
+
+func TestCaseDestinationResolver_ResolveFabricIndex_UnknownIndex_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	m := map[uint8]*caseFabricEntry{
+		1: {identity: &sigma.Identity{FabricIndex: 1}, verifier: trustAnyPeerVerifier{}, fabricIndex: 1},
+	}
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  slog.Default(),
+	}
+	_, _, ok := resolver.ResolveFabricIndex(7)
+	if ok {
+		t.Error("expected ok=false for an index absent from the fabrics map")
+	}
+}
+
+func TestCaseDestinationResolver_ResolveFabricIndex_NilEntry_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	m := map[uint8]*caseFabricEntry{
+		7: nil, // entry present but nil — must be treated as a miss, not a panic
+	}
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  slog.Default(),
+	}
+	_, _, ok := resolver.ResolveFabricIndex(7)
+	if ok {
+		t.Error("expected ok=false for a nil entry at the requested fabric index")
+	}
+}
+
+func TestCaseDestinationResolver_ResolveFabricIndex_Hit_ReturnsIdentityAndVerifier(t *testing.T) {
+	t.Parallel()
+	var mu sync.RWMutex
+	identity := &sigma.Identity{FabricIndex: 7}
+	verifier := trustAnyPeerVerifier{}
+	m := map[uint8]*caseFabricEntry{
+		7: {identity: identity, verifier: verifier, fabricIndex: 7},
+	}
+	resolver := caseDestinationResolver{
+		mu:      &mu,
+		fabrics: &m,
+		logger:  slog.Default(),
+	}
+	gotIdentity, gotVerifier, ok := resolver.ResolveFabricIndex(7)
+	if !ok {
+		t.Fatal("expected ok=true for a present fabric index")
+	}
+	if gotIdentity != identity {
+		t.Error("returned identity does not match the stored entry")
+	}
+	if gotVerifier != verifier {
+		t.Error("returned verifier does not match the stored entry")
+	}
+}

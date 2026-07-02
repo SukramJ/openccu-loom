@@ -8,6 +8,50 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Matter bridge: UpdateNOC validates the new certificate before persisting
+  it.** The handler previously stored whatever NOC bytes the commissioner sent
+  — no chain verification against the fabric's trust root, no check that the
+  certificate covers the pending CSR key, no FabricID pinning. A defective (or
+  malicious) UpdateNOC could replace a fabric's identity with an unusable or
+  foreign certificate. The handler now mirrors matter.js/chip: chain
+  verification against the stored root, `InvalidPublicKey` when the NOC does
+  not certify the pending CSR key, `InvalidNOC` on a FabricID change. A NodeID
+  change now propagates to the fabric record, the CASE identity, and mDNS (old
+  instance withdrawn, new instance announced), and the fabric's CASE
+  resumption records are invalidated as the spec requires.
+- **Matter bridge: AddNOC rejects duplicate fabrics and wrong-key NOCs.**
+  Installing the same `(FabricID, root public key)` pair twice now returns
+  `FabricConflict` before touching the store, and a NOC whose subject key does
+  not match the pending CSR key returns `InvalidPublicKey` — both previously
+  unreachable status codes that matter.js/chip emit.
+- **Matter bridge: removing a fabric withdraws its operational mDNS record.**
+  RemoveFabric only triggered a republish, which cannot retire a record the
+  advertiser still holds — the removed fabric's `_matter._tcp` instance kept
+  answering and commissioners resolved a dead identity. The instance is now
+  explicitly withdrawn (and the same path retires the old-NodeID instance
+  after an UpdateNOC).
+- **Matter bridge: PASE sessions are cleared on CommissioningComplete and
+  fail-safe expiry.** Matter §11.10.6.6 step 4 requires the server to drop any
+  still-established PASE session once commissioning completes; the expiry path
+  does the same, so a failed commissioner's channel no longer outlives its
+  fail-safe.
+- **Matter bridge: CASE session resumption (Sigma2_Resume) now establishes a
+  live, correctly-scoped session.** The resume fast path derived fresh keys but
+  never adopted the peer's identity: the resumed session registered with
+  peer-node-id 0 (every inbound decrypt failed the AES-CCM nonce check),
+  peer-session-id set to the bridge's own id (every reply was dropped by the
+  controller), no fabric scoping, and no CASE Authenticated Tags — and the
+  fresh resumption id was never persisted, so the controller's next resume
+  attempt referenced a stale id. A controller reconnect that offered
+  resumption (Apple Home after idle timeout or reboot) hit a dead session
+  until it gave up and re-ran the full handshake. The resume path now mirrors
+  matter.js `CaseServer.ts` — session identity (fabric, peer node id, peer
+  session id, CATs) comes from the stored resumption record, the responder
+  identity is resolved by the record's fabric, and the rotated resumption id
+  is written back. Resumption records also persist the peer's CATs now;
+  previously every persist wiped them, silently stripping CAT-scoped ACL
+  privilege from resumed sessions.
+
 - **Matter bridge: AccessControl.ACL rejects out-of-range Privilege / AuthMode
   values.** An ACL write with an invalid `Privilege` (outside View..Administer)
   or `AuthMode` (outside PASE/CASE/Group) enum value was persisted unchecked; it
@@ -44,6 +88,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: bridged endpoints report a stable DataVersion.** Bridged
+  cluster servers are rebuilt on every dispatch, and each rebuild installed a
+  fresh random DataVersion — the same cluster reported a different version on
+  every read, so controllers' DataVersionFilters never matched and Apple
+  re-transferred all endpoints on every re-subscribe. The version now lives on
+  the persistent endpoint keyed by cluster, is stable across reads, and is
+  bumped on real state changes (value pushes from the CCU, reachability
+  flips, successful writes), matching matter.js's once-per-lifetime /
+  increment-per-change semantics.
 - **Matter bridge: GroupKeyManagement enforces the per-fabric key-set
   budget.** KeySetWrite accepted unlimited new key sets; adding one beyond
   MaxGroupKeysPerFabric now returns ResourceExhausted (updates of an existing
