@@ -32,19 +32,30 @@ var ErrAckWaitTimeout = errors.New("bridge: outbound ack wait: timeout")
 // of [mrp.AckTracker] which goes in the opposite direction (we owe
 // peer an ACK for an inbound reliable).
 //
-// The pending map is keyed on MessageCounter — Matter §4.12.3 says
-// that the ACK on a reliable message carries the counter of the
-// acknowledged message in the protocol-header AckCounter field, so
-// dispatch needs only the counter to find the entry.
+// The pending map is keyed on (SessionID, MessageCounter). Matter
+// §4.12.3 says the ACK carries the acknowledged message's counter in
+// the protocol-header AckCounter field, but that counter is only
+// unique WITHIN a session — two concurrent sessions each seed their
+// MRP counter from an independent random (Matter §4.5.4), so a bare
+// counter key lets session A's ACK clear session B's pending entry
+// when their counters happen to coincide. Keying on the session too
+// mirrors matter.js's per-session ExchangeManager bookkeeping
+// (ExchangeManager.ts:287). The inbound ACK path supplies the session
+// from the received message header.
+type outboundKey struct {
+	sessionID uint16
+	counter   uint32
+}
+
 type outboundReliableTracker struct {
 	mu      sync.Mutex
-	pending map[uint32]*outboundEntry
+	pending map[outboundKey]*outboundEntry
 	// waiters lets callers block on Ack via [WaitForAck] — used by the
 	// Subscribe-initial chunked send path so the bridge mirrors
 	// matter.js's per-chunk handshake (one ReportData → wait for
 	// StatusResponse(SUCCESS) → next ReportData). Closed by [Ack] /
 	// [Tick] when the entry is resolved or abandoned.
-	waiters map[uint32]chan error
+	waiters map[outboundKey]chan error
 	// baseIntervalFor resolves the peer-appropriate MRP base interval
 	// for the session (peer-advertised active/idle interval selected
 	// by peer activity — matter.js MRP.ts:129). nil, or a session the
@@ -75,8 +86,8 @@ type outboundEntry struct {
 // default as its base interval.
 func newOutboundReliableTracker(baseIntervalFor func(sessionID uint16, now time.Time) time.Duration) *outboundReliableTracker {
 	return &outboundReliableTracker{
-		pending:         make(map[uint32]*outboundEntry),
-		waiters:         make(map[uint32]chan error),
+		pending:         make(map[outboundKey]*outboundEntry),
+		waiters:         make(map[outboundKey]chan error),
 		baseIntervalFor: baseIntervalFor,
 	}
 }
@@ -109,7 +120,7 @@ func (t *outboundReliableTracker) Track(counter uint32, sessionID, exchangeID ui
 	delay := mrp.BackoffDuration(t.baseInterval(sessionID, now), 0, rand.Float64)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.pending[counter] = &outboundEntry{
+	t.pending[outboundKey{sessionID, counter}] = &outboundEntry{
 		counter:    counter,
 		sessionID:  sessionID,
 		exchangeID: exchangeID,
@@ -136,13 +147,13 @@ func (t *outboundReliableTracker) AbandonExchange(exchangeID uint16) int {
 	t.mu.Lock()
 	cleared := 0
 	wakers := make([]chan error, 0)
-	for counter, entry := range t.pending {
+	for key, entry := range t.pending {
 		if entry.exchangeID != exchangeID {
 			continue
 		}
-		delete(t.pending, counter)
-		if ch, has := t.waiters[counter]; has {
-			delete(t.waiters, counter)
+		delete(t.pending, key)
+		if ch, has := t.waiters[key]; has {
+			delete(t.waiters, key)
 			wakers = append(wakers, ch)
 		}
 		cleared++
@@ -160,18 +171,21 @@ func (t *outboundReliableTracker) AbandonExchange(exchangeID uint16) int {
 	return cleared
 }
 
-// Ack removes the pending entry with counter `acked`. Returns true
+// Ack removes the pending entry for (sessionID, acked). Returns true
 // when an entry was found, false on stray / duplicate ACK. Wakes any
-// [WaitForAck] caller blocked on `acked`.
-func (t *outboundReliableTracker) Ack(acked uint32) bool {
+// [WaitForAck] caller blocked on the same key. sessionID comes from
+// the received message header — an ACK is only valid within its own
+// session (see the outboundKey rationale).
+func (t *outboundReliableTracker) Ack(sessionID uint16, acked uint32) bool {
+	key := outboundKey{sessionID, acked}
 	t.mu.Lock()
-	if _, ok := t.pending[acked]; !ok {
+	if _, ok := t.pending[key]; !ok {
 		// Release the waiter even on stray ACKs — the chunked-send path
 		// always installs a waiter before the datagram leaves, so a fast
 		// Ack from the peer can land before Track() (or after a quirky
 		// retransmit that re-acks an already-cleared counter).
-		if ch, has := t.waiters[acked]; has {
-			delete(t.waiters, acked)
+		if ch, has := t.waiters[key]; has {
+			delete(t.waiters, key)
 			t.mu.Unlock()
 			close(ch)
 			return false
@@ -179,10 +193,10 @@ func (t *outboundReliableTracker) Ack(acked uint32) bool {
 		t.mu.Unlock()
 		return false
 	}
-	delete(t.pending, acked)
-	ch, has := t.waiters[acked]
+	delete(t.pending, key)
+	ch, has := t.waiters[key]
 	if has {
-		delete(t.waiters, acked)
+		delete(t.waiters, key)
 	}
 	t.mu.Unlock()
 	if has {
@@ -200,16 +214,17 @@ func (t *outboundReliableTracker) Ack(acked uint32) bool {
 // [ErrAckWaitTimeout] if the deadline elapses without movement; the
 // abandon-error (typically [mrp.ErrMaxRetransmissionsReached]) when
 // Tick gives up.
-func (t *outboundReliableTracker) WaitForAck(ctx context.Context, counter uint32) error {
+func (t *outboundReliableTracker) WaitForAck(ctx context.Context, sessionID uint16, counter uint32) error {
+	key := outboundKey{sessionID, counter}
 	t.mu.Lock()
-	if _, pending := t.pending[counter]; !pending {
+	if _, pending := t.pending[key]; !pending {
 		t.mu.Unlock()
 		return nil // already acked / never tracked
 	}
-	ch, exists := t.waiters[counter]
+	ch, exists := t.waiters[key]
 	if !exists {
 		ch = make(chan error, 1)
-		t.waiters[counter] = ch
+		t.waiters[key] = ch
 	}
 	t.mu.Unlock()
 
@@ -223,11 +238,11 @@ func (t *outboundReliableTracker) WaitForAck(ctx context.Context, counter uint32
 		t.mu.Lock()
 		// Best-effort cleanup so a cancelled wait doesn't leak the
 		// waiter channel forever — the next Ack/abandon for this
-		// counter would otherwise leave a stranded entry. Only delete
+		// key would otherwise leave a stranded entry. Only delete
 		// our own channel; if the wait raced with another caller
 		// installing a fresh chan we don't touch theirs.
-		if cur, has := t.waiters[counter]; has && cur == ch {
-			delete(t.waiters, counter)
+		if cur, has := t.waiters[key]; has && cur == ch {
+			delete(t.waiters, key)
 		}
 		t.mu.Unlock()
 		return ctx.Err()
@@ -243,8 +258,9 @@ func (t *outboundReliableTracker) Pending() int {
 
 // outboundTickResult enumerates the outcome of a single Tick sweep.
 type outboundTickResult struct {
-	Counter uint32
-	Err     error // nil = re-sent; mrp.ErrMaxRetransmissionsReached = abandoned
+	SessionID uint16
+	Counter   uint32
+	Err       error // nil = re-sent; mrp.ErrMaxRetransmissionsReached = abandoned
 }
 
 // Tick walks every entry whose nextSendAt has elapsed: re-sends via
@@ -262,23 +278,23 @@ func (t *outboundReliableTracker) Tick(now time.Time, send func(*net.UDPAddr, []
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	var out []outboundTickResult
-	for counter, p := range t.pending {
+	for key, p := range t.pending {
 		if now.Before(p.nextSendAt) {
 			continue
 		}
 		if p.retries >= mrp.MaxRetransmissions {
-			delete(t.pending, counter)
-			if ch, has := t.waiters[counter]; has {
-				delete(t.waiters, counter)
+			delete(t.pending, key)
+			if ch, has := t.waiters[key]; has {
+				delete(t.waiters, key)
 				ch <- mrp.ErrMaxRetransmissionsReached
 				close(ch)
 			}
-			out = append(out, outboundTickResult{Counter: counter, Err: mrp.ErrMaxRetransmissionsReached})
+			out = append(out, outboundTickResult{SessionID: key.sessionID, Counter: key.counter, Err: mrp.ErrMaxRetransmissionsReached})
 			continue
 		}
 		p.retries++
 		if err := send(p.dest, p.datagram); err != nil {
-			out = append(out, outboundTickResult{Counter: counter, Err: err})
+			out = append(out, outboundTickResult{SessionID: key.sessionID, Counter: key.counter, Err: err})
 			continue
 		}
 		// Full spec backoff per Matter §4.12.2.1: peer-appropriate
@@ -288,7 +304,7 @@ func (t *outboundReliableTracker) Tick(now time.Time, send func(*net.UDPAddr, []
 		// matter.js MRP.ts:125-146 retransmissionIntervalOf.
 		delay := mrp.BackoffDuration(t.baseInterval(p.sessionID, now), p.retries, rand.Float64)
 		p.nextSendAt = now.Add(delay)
-		out = append(out, outboundTickResult{Counter: counter})
+		out = append(out, outboundTickResult{SessionID: key.sessionID, Counter: key.counter})
 	}
 	return out
 }

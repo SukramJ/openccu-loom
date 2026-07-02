@@ -171,7 +171,15 @@ func (s *Session) Encrypt(header *message.Header, secFlags uint8, plaintext []by
 	if s.closed {
 		return nil, ErrSessionInactive
 	}
-	counter := s.out.Next()
+	// Secure-session counters must never roll over — a wrapped value
+	// reuses an AES-CCM nonce under the live key (Matter §4.6.6). An
+	// exhausted counter makes the session permanently unusable; the
+	// peer re-establishes via CASE/PASE. matter.js closes the session
+	// before rollover (NodeSession.ts:111).
+	counter, err := s.out.NextNoRollover()
+	if err != nil {
+		return nil, fmt.Errorf("channel: %w", err)
+	}
 	header.MessageCounter = counter
 	header.HasSourceNodeID = true
 	header.SourceNodeID = s.localNodeID

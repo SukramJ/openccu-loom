@@ -181,8 +181,8 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 		b.mu.RLock()
 		outbound := b.outboundReliable
 		b.mu.RUnlock()
-		if outbound != nil && outbound.Ack(proto.AckCounter) {
-			b.releaseReportCounter(proto.AckCounter)
+		if outbound != nil && outbound.Ack(hdr.SessionID, proto.AckCounter) {
+			b.releaseReportCounter(hdr.SessionID, proto.AckCounter)
 		}
 	}
 

@@ -217,7 +217,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 		return
 	}
 	if counter != 0 {
-		b.reportCounterOwner.Store(counter, sub.ID)
+		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.event_report",
 		slog.Int("subscription_id", int(sub.ID)),
@@ -425,7 +425,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 	// the subscription if the peer never ACKs. Best-effort sends
 	// (NeedsAck=false / no tracker) return counter=0; skip in that case.
 	if counter != 0 {
-		b.reportCounterOwner.Store(counter, sub.ID)
+		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.report",
 		slog.Int("subscription_id", int(sub.ID)),
@@ -439,8 +439,8 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 // it belonged to is therefore unreachable; close it in the manager
 // (so quotas free up and the engine stops ticking it) and drop the
 // target.
-func (b *Bridge) closeSubscriptionByCounter(counter uint32) {
-	raw, ok := b.reportCounterOwner.LoadAndDelete(counter)
+func (b *Bridge) closeSubscriptionByCounter(sessionID uint16, counter uint32) {
+	raw, ok := b.reportCounterOwner.LoadAndDelete(reportCounterKey(sessionID, counter))
 	if !ok {
 		return
 	}
@@ -460,13 +460,24 @@ func (b *Bridge) closeSubscriptionByCounter(counter uint32) {
 	}
 }
 
-// releaseReportCounter clears the counter→subID mapping after a
-// successful peer ACK. Caller is the inbound HasAck pipeline.
-func (b *Bridge) releaseReportCounter(counter uint32) {
+// releaseReportCounter clears the (session, counter)→subID mapping
+// after a successful peer ACK. Caller is the inbound HasAck pipeline,
+// which supplies the session from the received message header.
+func (b *Bridge) releaseReportCounter(sessionID uint16, counter uint32) {
 	if counter == 0 {
 		return
 	}
-	b.reportCounterOwner.Delete(counter)
+	b.reportCounterOwner.Delete(reportCounterKey(sessionID, counter))
+}
+
+// reportCounterKey composes (sessionID, counter) into the
+// [Bridge.reportCounterOwner] map key. Two concurrent sessions can
+// legitimately reuse the same 32-bit MRP counter (each is seeded from
+// an independent random per Matter §4.5.4), so the subscription-owner
+// lookup must be session-scoped — otherwise session A's ACK could
+// release / reap the subscription session B owns.
+func reportCounterKey(sessionID uint16, counter uint32) uint64 {
+	return uint64(sessionID)<<32 | uint64(counter)
 }
 
 // captureSubTarget records the routing metadata for sub on the bridge

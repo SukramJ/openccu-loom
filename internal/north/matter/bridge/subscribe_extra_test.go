@@ -146,8 +146,8 @@ func TestCloseSubscriptionByCounter_WrongType_IsNoop(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
 	// Store a string instead of uint32 to force the type-assertion failure.
-	b.reportCounterOwner.Store(uint32(55), "not-a-uint32")
-	b.closeSubscriptionByCounter(55)
+	b.reportCounterOwner.Store(reportCounterKey(0, 55), "not-a-uint32")
+	b.closeSubscriptionByCounter(0, 55)
 }
 
 // TestCloseSubscriptionByCounter_ZeroSubID_IsNoop verifies that a stored
@@ -155,10 +155,10 @@ func TestCloseSubscriptionByCounter_WrongType_IsNoop(t *testing.T) {
 func TestCloseSubscriptionByCounter_ZeroSubID_IsNoop(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
-	b.reportCounterOwner.Store(uint32(66), uint32(0))
-	b.closeSubscriptionByCounter(66)
+	b.reportCounterOwner.Store(reportCounterKey(0, 66), uint32(0))
+	b.closeSubscriptionByCounter(0, 66)
 	// entry must be gone
-	if _, ok := b.reportCounterOwner.Load(uint32(66)); ok {
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(0, 66)); ok {
 		t.Error("reportCounterOwner still has entry after closeSubscriptionByCounter with subID=0")
 	}
 }
@@ -169,9 +169,9 @@ func TestReleaseReportCounter_ZeroIsNoop(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
 	// Pre-store something to confirm nothing is deleted for counter=0.
-	b.reportCounterOwner.Store(uint32(1), uint32(42))
-	b.releaseReportCounter(0) // must not panic, must not touch counter=1
-	if _, ok := b.reportCounterOwner.Load(uint32(1)); !ok {
+	b.reportCounterOwner.Store(reportCounterKey(0, 1), uint32(42))
+	b.releaseReportCounter(0, 0) // must not panic, must not touch counter=1
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(0, 1)); !ok {
 		t.Error("releaseReportCounter(0) deleted an unrelated counter entry")
 	}
 }
@@ -181,9 +181,9 @@ func TestReleaseReportCounter_ZeroIsNoop(t *testing.T) {
 func TestReleaseReportCounter_NonZeroDeletesEntry(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
-	b.reportCounterOwner.Store(uint32(99), uint32(7))
-	b.releaseReportCounter(99)
-	if _, ok := b.reportCounterOwner.Load(uint32(99)); ok {
+	b.reportCounterOwner.Store(reportCounterKey(0, 99), uint32(7))
+	b.releaseReportCounter(0, 99)
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(0, 99)); ok {
 		t.Error("releaseReportCounter(99): entry still present, expected deleted")
 	}
 }

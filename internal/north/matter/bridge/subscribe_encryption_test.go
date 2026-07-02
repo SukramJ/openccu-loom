@@ -171,7 +171,7 @@ func TestSendUnsolicitedIM_EncryptedRoundTrip(t *testing.T) {
 	if got := b.outboundReliable.Pending(); got != 1 {
 		t.Errorf("outboundReliable.Pending = %d, want 1", got)
 	}
-	if !b.outboundReliable.Ack(counter) {
+	if !b.outboundReliable.Ack(sessionID, counter) {
 		t.Error("Ack on tracked counter returned false")
 	}
 }

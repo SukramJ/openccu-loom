@@ -25,14 +25,14 @@ func TestOutboundReliable_TrackAck(t *testing.T) {
 	if tr.Pending() != 1 {
 		t.Errorf("Pending after Track: got %d, want 1", tr.Pending())
 	}
-	if !tr.Ack(101) {
+	if !tr.Ack(0, 101) {
 		t.Error("Ack: returned false on a tracked counter")
 	}
 	if tr.Pending() != 0 {
 		t.Errorf("Pending after Ack: got %d, want 0", tr.Pending())
 	}
 	// Stray Ack on a counter we never tracked.
-	if tr.Ack(999) {
+	if tr.Ack(0, 999) {
 		t.Error("Ack on stray counter: returned true, want false")
 	}
 }
@@ -150,7 +150,7 @@ func TestOutboundReliable_AbandonExchange(t *testing.T) {
 	// unblocked when AbandonExchange runs.
 	waitErrCh := make(chan error, 1)
 	go func() {
-		waitErrCh <- tr.WaitForAck(t.Context(), 2)
+		waitErrCh <- tr.WaitForAck(t.Context(), 0, 2)
 	}()
 	// Ensure the goroutine has installed its waiter channel.
 	time.Sleep(10 * time.Millisecond)
@@ -163,10 +163,10 @@ func TestOutboundReliable_AbandonExchange(t *testing.T) {
 		t.Errorf("Pending after abandon: got %d, want 2", tr.Pending())
 	}
 	// Confirm survivors are the otherExchange counters.
-	if !tr.Ack(3) {
+	if !tr.Ack(0, 3) {
 		t.Error("Ack(3) after abandon: returned false, want survivor on otherExchange")
 	}
-	if !tr.Ack(5) {
+	if !tr.Ack(0, 5) {
 		t.Error("Ack(5) after abandon: returned false, want survivor on otherExchange")
 	}
 	if tr.Pending() != 0 {
@@ -246,7 +246,7 @@ func TestOutboundReliable_PerSessionBaseInterval(t *testing.T) {
 	}
 	// Clear session7's entry so it cannot re-fire and confuse the
 	// session9 assertions below.
-	tr.Ack(701)
+	tr.Ack(sessionFast, 701)
 
 	// Before session9's minimum bound: nothing left to fire.
 	if got := tr.Tick(t0.Add(minSlow-time.Millisecond), send); len(got) != 0 {
@@ -260,6 +260,56 @@ func TestOutboundReliable_PerSessionBaseInterval(t *testing.T) {
 	}
 }
 
+// TestOutboundReliable_AckIsSessionScoped verifies the H4 fix: two
+// entries tracked under the SAME MessageCounter value but DIFFERENT
+// SessionIDs are independent pending entries. Ack for session A must
+// clear only session A's entry — leaving session B's still pending —
+// and a subsequent Ack for session B then clears B's. Before the
+// (sessionID, counter) keying this was a cross-session counter
+// collision: acking session A's message could also (or instead) clear
+// session B's still-in-flight entry whenever their independently
+// seeded MRP counters (Matter §4.5.4) happened to coincide.
+func TestOutboundReliable_AckIsSessionScoped(t *testing.T) {
+	t.Parallel()
+	tr := newOutboundReliableTracker(nil)
+	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 4141}
+	const sessionA = uint16(11)
+	const sessionB = uint16(22)
+	const sharedCounter = uint32(555)
+
+	tr.Track(sharedCounter, sessionA, 0, []byte{0xA1}, dest, time.Now())
+	tr.Track(sharedCounter, sessionB, 0, []byte{0xB2}, dest, time.Now())
+	if tr.Pending() != 2 {
+		t.Fatalf("Pending after tracking both sessions: got %d, want 2", tr.Pending())
+	}
+
+	// Acking session A's counter must not touch session B's entry that
+	// shares the same bare counter value.
+	if !tr.Ack(sessionA, sharedCounter) {
+		t.Error("Ack(sessionA, sharedCounter): returned false, want true")
+	}
+	if tr.Pending() != 1 {
+		t.Errorf("Pending after acking session A: got %d, want 1 (session B must survive)", tr.Pending())
+	}
+	// Acking the same counter again under session A must now be a
+	// stray (already cleared) — proves the first Ack did not
+	// accidentally clear both entries.
+	if tr.Ack(sessionA, sharedCounter) {
+		t.Error("second Ack(sessionA, sharedCounter): returned true, want false (already cleared)")
+	}
+	if tr.Pending() != 1 {
+		t.Errorf("Pending after stray re-Ack: got %d, want 1", tr.Pending())
+	}
+
+	// Acking session B's counter now clears the remaining entry.
+	if !tr.Ack(sessionB, sharedCounter) {
+		t.Error("Ack(sessionB, sharedCounter): returned false, want true")
+	}
+	if tr.Pending() != 0 {
+		t.Errorf("Pending after acking session B: got %d, want 0", tr.Pending())
+	}
+}
+
 // TestSubscription_AutoCloseOnMaxRetries verifies that when an
 // outbound report counter hits the retransmit cap and the bridge has
 // recorded its counter→subscription mapping, the bookkeeping is
@@ -269,18 +319,57 @@ func TestOutboundReliable_PerSessionBaseInterval(t *testing.T) {
 func TestSubscription_AutoCloseOnMaxRetries(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
+	const sessionID = uint16(0)
 	const counter = uint32(99)
 	const subID = uint32(7)
-	b.reportCounterOwner.Store(counter, subID)
+	b.reportCounterOwner.Store(reportCounterKey(sessionID, counter), subID)
 	b.subTargets.Store(subID, subTarget{})
 
-	b.closeSubscriptionByCounter(counter)
+	b.closeSubscriptionByCounter(sessionID, counter)
 
-	if _, ok := b.reportCounterOwner.Load(counter); ok {
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionID, counter)); ok {
 		t.Error("counter→subID mapping still present after close")
 	}
 	if _, ok := b.subTargets.Load(subID); ok {
 		t.Error("subTarget still present after close")
+	}
+}
+
+// TestCloseSubscriptionByCounter_IsSessionScoped verifies the H4 fix
+// on the bridge's reportCounterOwner bookkeeping: two subscriptions
+// whose ongoing reports happen to reuse the same bare MessageCounter
+// value under different SessionIDs are independent. Reaping session
+// A's counter (retransmit-cap eviction) must not also reap session
+// B's still-healthy subscription that shares the counter value.
+func TestCloseSubscriptionByCounter_IsSessionScoped(t *testing.T) {
+	t.Parallel()
+	b := &Bridge{}
+	const sessionA = uint16(11)
+	const sessionB = uint16(22)
+	const sharedCounter = uint32(321)
+	const subA = uint32(101)
+	const subB = uint32(202)
+
+	b.reportCounterOwner.Store(reportCounterKey(sessionA, sharedCounter), subA)
+	b.reportCounterOwner.Store(reportCounterKey(sessionB, sharedCounter), subB)
+	b.subTargets.Store(subA, subTarget{})
+	b.subTargets.Store(subB, subTarget{})
+
+	b.closeSubscriptionByCounter(sessionA, sharedCounter)
+
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionA, sharedCounter)); ok {
+		t.Error("session A counter→subID mapping still present after close")
+	}
+	if _, ok := b.subTargets.Load(subA); ok {
+		t.Error("session A subTarget still present after close")
+	}
+	// Session B's entries — sharing the bare counter value — must
+	// survive untouched.
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionB, sharedCounter)); !ok {
+		t.Error("session B counter→subID mapping was reaped by session A's close")
+	}
+	if _, ok := b.subTargets.Load(subB); !ok {
+		t.Error("session B subTarget was reaped by session A's close")
 	}
 }
 
@@ -291,12 +380,13 @@ func TestSubscription_AutoCloseOnMaxRetries(t *testing.T) {
 func TestSubscription_ReleaseCounterOnPeerAck(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
+	const sessionID = uint16(0)
 	const counter = uint32(0xCAFE)
-	b.reportCounterOwner.Store(counter, uint32(42))
+	b.reportCounterOwner.Store(reportCounterKey(sessionID, counter), uint32(42))
 
-	b.releaseReportCounter(counter)
+	b.releaseReportCounter(sessionID, counter)
 
-	if _, ok := b.reportCounterOwner.Load(counter); ok {
+	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionID, counter)); ok {
 		t.Error("counter mapping still present after release")
 	}
 }
@@ -309,12 +399,13 @@ func TestOutboundReliable_AckStrayWithWaiter(t *testing.T) {
 	tr := newOutboundReliableTracker(nil)
 	// Install a waiter directly without a matching pending entry.
 	ch := make(chan error, 1)
+	const sessionID = uint16(0)
 	tr.mu.Lock()
-	tr.waiters[888] = ch
+	tr.waiters[outboundKey{sessionID: sessionID, counter: 888}] = ch
 	tr.mu.Unlock()
 
 	// Ack the counter — no pending entry, but waiter exists.
-	if got := tr.Ack(888); got {
+	if got := tr.Ack(sessionID, 888); got {
 		t.Error("Ack returned true for stray counter; want false")
 	}
 	// Channel must be closed.
@@ -366,7 +457,7 @@ func TestWaitForAck_NotPending_ReturnsNilImmediately(t *testing.T) {
 	// Counter 999 was never tracked.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if err := tr.WaitForAck(ctx, 999); err != nil {
+	if err := tr.WaitForAck(ctx, 0, 999); err != nil {
 		t.Errorf("not-pending counter: want nil, got %v", err)
 	}
 }
@@ -382,7 +473,7 @@ func TestWaitForAck_ContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- tr.WaitForAck(ctx, 77)
+		errCh <- tr.WaitForAck(ctx, 0, 77)
 	}()
 	// Cancel the context — unblocks WaitForAck.
 	cancel()
@@ -411,11 +502,11 @@ func TestWaitForAck_AckClosesChannel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	go func() {
-		errCh <- tr.WaitForAck(ctx, counter)
+		errCh <- tr.WaitForAck(ctx, 0, counter)
 	}()
 	// Give the goroutine time to install its waiter then Ack.
 	time.Sleep(5 * time.Millisecond)
-	tr.Ack(counter)
+	tr.Ack(0, counter)
 
 	select {
 	case err := <-errCh:
@@ -464,7 +555,7 @@ func TestSubscription_CloseUnknownCounterNoOp(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
 	// Must not panic; Pending stays empty.
-	b.closeSubscriptionByCounter(uint32(0xDEAD))
+	b.closeSubscriptionByCounter(0, uint32(0xDEAD))
 	count := 0
 	b.subTargets.Range(func(_, _ any) bool { count++; return true })
 	if count != 0 {

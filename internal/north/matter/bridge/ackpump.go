@@ -310,7 +310,7 @@ func (b *Bridge) tickOutboundReliable(outbound *outboundReliableTracker, now tim
 			continue
 		}
 		if errors.Is(r.Err, mrp.ErrMaxRetransmissionsReached) {
-			b.closeSubscriptionByCounter(r.Counter)
+			b.closeSubscriptionByCounter(r.SessionID, r.Counter)
 			continue
 		}
 		b.logger.Debug("matter.tx.reliable.retransmit",
