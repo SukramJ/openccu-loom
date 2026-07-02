@@ -709,6 +709,12 @@ func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, su
 		// Fail closed: an ACL that cannot be evaluated must not grant access.
 		return im.StatusUnsupportedAccess
 	}
+	// Resolve the endpoint once for device-type-restricted targets;
+	// nil (no topology / unknown endpoint) conservatively fails those.
+	var ep *Endpoint
+	if d.topology != nil {
+		ep = d.topology.FindByID(endpoint)
+	}
 	var best store.Privilege
 	for _, e := range entries {
 		// Operational unicast sessions are CASE-authenticated; only CASE
@@ -719,7 +725,7 @@ func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, su
 		if !aclSubjectMatches(e.Subjects, subjectNodeID, subjectCATs) {
 			continue
 		}
-		if !aclTargetMatches(e.Targets, endpoint, clusterID) {
+		if !aclTargetMatches(e.Targets, ep, endpoint, clusterID) {
 			continue
 		}
 		if e.Privilege > best {
@@ -813,9 +819,36 @@ func matchesCATSubject(entryCAT uint32, subjectCATs []uint32) bool {
 	return false
 }
 
+// endpointHasDeviceType reports whether ep advertises deviceType in
+// its Descriptor DeviceTypeList — the resolver behind device-type ACL
+// targets (chip AccessControl.h:53 DeviceTypeResolver /
+// ProviderDeviceTypeResolver.h:34, backed by the data model's
+// per-endpoint device-type list). The list mirrors what the Descriptor
+// cluster serves: RootNode for EP 0, Aggregator for EP 1, and the
+// primary device type + BridgedNode for bridged endpoints (see
+// materialize.go DeviceTypeList assembly).
+func endpointHasDeviceType(ep *Endpoint, deviceType uint32) bool {
+	if ep == nil {
+		return false
+	}
+	switch {
+	case ep.IsRoot():
+		return deviceType == deviceTypeRootNode
+	case ep.IsAggregator():
+		return deviceType == deviceTypeAggregator
+	default:
+		return deviceType == uint32(ep.DeviceType) || deviceType == matterDeviceTypeBridgedNode
+	}
+}
+
 // aclTargetMatches reports whether an ACL entry's target list covers
 // (endpoint, cluster). An empty list means "all targets" (Matter §9.10.4.5).
-func aclTargetMatches(targets []store.ACLTarget, endpoint uint16, clusterID uint32) bool {
+// A DeviceType field restricts the target to endpoints hosting that
+// device type — chip AccessControl.cpp:529-530
+// `IsDeviceTypeOnEndpoint(target.deviceType, requestPath.endpoint)`;
+// ep may be nil (unknown endpoint), which conservatively fails any
+// device-type-restricted target.
+func aclTargetMatches(targets []store.ACLTarget, ep *Endpoint, endpoint uint16, clusterID uint32) bool {
 	if len(targets) == 0 {
 		return true
 	}
@@ -826,10 +859,7 @@ func aclTargetMatches(targets []store.ACLTarget, endpoint uint16, clusterID uint
 		if t.Endpoint != nil && *t.Endpoint != endpoint {
 			continue
 		}
-		// A DeviceType-only target (no cluster, no endpoint) is not matched
-		// here — the dispatcher has no per-target device-type index, and
-		// conservatively not broadening access is the safe choice.
-		if t.Cluster == nil && t.Endpoint == nil && t.DeviceType != nil {
+		if t.DeviceType != nil && !endpointHasDeviceType(ep, *t.DeviceType) {
 			continue
 		}
 		return true

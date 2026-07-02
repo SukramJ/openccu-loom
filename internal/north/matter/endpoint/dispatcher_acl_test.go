@@ -211,3 +211,78 @@ func TestTopologyDispatcher_ImplementsACLChecker(t *testing.T) {
 	t.Parallel()
 	var _ im.ACLChecker = (*TopologyDispatcher)(nil)
 }
+
+// TestEndpointHasDeviceType verifies the device-type resolver behind
+// DeviceType-restricted ACL targets: the root endpoint reports RootNode,
+// the aggregator endpoint (ID 1) reports AggregatorEndpoint, and a
+// bridged endpoint reports both its own primary device type and the
+// universal BridgedNode tag. A nil endpoint (unresolved) never matches.
+// Mirrors chip AccessControl.h:53 DeviceTypeResolver /
+// ProviderDeviceTypeResolver.h:34.
+func TestEndpointHasDeviceType(t *testing.T) {
+	t.Parallel()
+	root := &Endpoint{ID: 0}
+	agg := &Endpoint{ID: 1}
+	bridged := &Endpoint{ID: 5, DeviceType: 0x0100} // OnOffLight
+
+	cases := []struct {
+		name       string
+		ep         *Endpoint
+		deviceType uint32
+		want       bool
+	}{
+		{"root matches RootNode", root, deviceTypeRootNode, true},
+		{"root denies AggregatorEndpoint", root, deviceTypeAggregator, false},
+		{"aggregator matches AggregatorEndpoint", agg, deviceTypeAggregator, true},
+		{"aggregator denies RootNode", agg, deviceTypeRootNode, false},
+		{"bridged matches own primary type", bridged, 0x0100, true},
+		{"bridged matches BridgedNode", bridged, matterDeviceTypeBridgedNode, true},
+		{"bridged denies an unrelated type", bridged, 0x0102, false},
+		{"nil endpoint denies", nil, deviceTypeRootNode, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := endpointHasDeviceType(tc.ep, tc.deviceType); got != tc.want {
+				t.Errorf("endpointHasDeviceType(ep, 0x%04X) = %v, want %v", tc.deviceType, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAclTargetMatches_DeviceTypeOnly verifies that an ACLTarget whose
+// only restriction is DeviceType (chip AccessControl.cpp:529-530
+// `IsDeviceTypeOnEndpoint(target.deviceType, requestPath.endpoint)`)
+// matches an endpoint hosting that device type — either as its primary
+// type or via the universal BridgedNode tag — and denies both a
+// non-hosted type and an unresolved (nil) endpoint.
+func TestAclTargetMatches_DeviceTypeOnly(t *testing.T) {
+	t.Parallel()
+	const hostedType uint32 = 0x0100 // OnOffLight — the fixture endpoint's primary type
+	const otherType uint32 = 0x0102  // not hosted by the fixture endpoint
+	const ep uint16 = 5
+	const anyCluster uint32 = 0x0006
+
+	bridged := &Endpoint{ID: ep, DeviceType: 0x0100}
+
+	cases := []struct {
+		name   string
+		ep     *Endpoint
+		target store.ACLTarget
+		want   bool
+	}{
+		{"matches bridged primary device type", bridged, store.ACLTarget{DeviceType: new(hostedType)}, true},
+		{"matches via BridgedNode", bridged, store.ACLTarget{DeviceType: new(matterDeviceTypeBridgedNode)}, true},
+		{"denies a non-hosted device type", bridged, store.ACLTarget{DeviceType: new(otherType)}, false},
+		{"nil endpoint denies", nil, store.ACLTarget{DeviceType: new(hostedType)}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := aclTargetMatches([]store.ACLTarget{tc.target}, tc.ep, ep, anyCluster)
+			if got != tc.want {
+				t.Errorf("aclTargetMatches(...) = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
