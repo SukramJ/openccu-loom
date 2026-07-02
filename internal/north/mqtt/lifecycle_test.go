@@ -86,6 +86,63 @@ func TestMQTTReconnectAfterTCPReset(t *testing.T) {
 	}
 }
 
+// TestMQTTReconnectAfterPingTimeout verifies the PINGRESP watchdog: when
+// the broker goes silent on a half-open socket (accepts the TCP write of
+// the PINGREQ but never answers and never sends FIN/RST), the read-loop
+// stays blocked in ReadFrame and would otherwise never detect the dead
+// connection. The keep-alive loop must notice the unanswered PINGREQ and
+// declare the connection lost so the lifecycle reconnects.
+func TestMQTTReconnectAfterPingTimeout(t *testing.T) {
+	broker := newLifecycleMockBroker(t)
+
+	client := NewTCPClient(TCPConfig{
+		BrokerURL: broker.URL(),
+		ClientID:  "lc-ping-timeout-test",
+		KeepAlive: 30 * time.Second, // sent in CONNECT; watchdog uses pingInterval below
+	})
+	// Shrink the ping interval so the watchdog fires in tens of ms rather
+	// than the spec-floored 15 s (KeepAlive/2). Set before Start so the
+	// first keepAliveLoop picks it up.
+	client.pingInterval = 40 * time.Millisecond
+
+	cfg := fastLifecycleCfg()
+	lc := NewLifecycle(cfg, client)
+
+	runCtx, cancelRun := context.WithCancel(context.Background())
+	defer cancelRun()
+
+	if err := lc.Start(runCtx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() {
+		cancelRun()
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer stopCancel()
+		_ = lc.Stop(stopCtx)
+	})
+
+	// Confirm initial connection.
+	if !waitCondition(2*time.Second, func() bool { return broker.ConnCount() >= 1 }) {
+		t.Fatal("broker never saw initial connection")
+	}
+
+	// Half-open: broker keeps the socket open but stops answering PINGs.
+	broker.DropPings(true)
+
+	// The watchdog trips on the tick after the unanswered PINGREQ, calls
+	// handleConnectionLost, and the lifecycle re-dials.
+	if !waitCondition(3*time.Second, func() bool { return broker.ConnCount() >= 2 }) {
+		t.Fatalf("watchdog never tripped; conn count = %d", broker.ConnCount())
+	}
+
+	// Recovery: once the broker answers PINGs again, the reconnected
+	// session stays up instead of being torn down every interval.
+	broker.DropPings(false)
+	if !waitCondition(2*time.Second, func() bool { return client.IsConnected() }) {
+		t.Fatal("client did not settle into a healthy connection after recovery")
+	}
+}
+
 // TestMQTTConnackFailureBackoff verifies that a non-zero CONNACK return
 // code causes the lifecycle to back off and does NOT spam connect
 // attempts faster than InitialBackoff.

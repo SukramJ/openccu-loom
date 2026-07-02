@@ -70,6 +70,16 @@ type TCPClient struct {
 
 	sendMu sync.Mutex // serialises frame writes
 
+	// pingInterval is how often keepAliveLoop sends a PINGREQ; it also
+	// bounds the PINGRESP watchdog window. Defaults to KeepAlive/2 in
+	// NewTCPClient; tests override it directly to avoid the 30 s floor.
+	pingInterval time.Duration
+	// pingOutstanding is true between sending a PINGREQ and receiving
+	// its PINGRESP. If it is still set when the next ticker fires, the
+	// broker has gone silent on a half-open socket and the connection
+	// is declared lost.
+	pingOutstanding atomic.Bool
+
 	stop    chan struct{}
 	stopped atomic.Bool
 	wg      sync.WaitGroup
@@ -114,11 +124,12 @@ func NewTCPClient(cfg TCPConfig) *TCPClient {
 		cfg.AckTimeout = 20 * time.Second
 	}
 	return &TCPClient{
-		cfg:         cfg,
-		logger:      cfg.Logger,
-		acks:        make(map[uint16]chan struct{}),
-		subscribers: make(map[string]subscriberEntry),
-		stop:        make(chan struct{}),
+		cfg:          cfg,
+		logger:       cfg.Logger,
+		acks:         make(map[uint16]chan struct{}),
+		subscribers:  make(map[string]subscriberEntry),
+		stop:         make(chan struct{}),
+		pingInterval: cfg.KeepAlive / 2,
 	}
 }
 
@@ -193,6 +204,7 @@ func (c *TCPClient) Connect(ctx context.Context) error { //nolint:funlen // sing
 	c.stop = make(chan struct{})
 	stopCh := c.stop
 	c.stopped.Store(false)
+	c.pingOutstanding.Store(false)
 	c.mu.Unlock()
 	now := time.Now()
 	c.connectedAt.Store(&now)
@@ -447,7 +459,9 @@ func (c *TCPClient) readLoop(stop <-chan struct{}) {
 				c.ackMu.Unlock()
 			}
 		case protocol.PacketPingresp:
-			// heartbeat ack — no state to update
+			// Heartbeat ack: the broker is alive, so clear the
+			// watchdog flag set when keepAliveLoop sent the PINGREQ.
+			c.pingOutstanding.Store(false)
 		case protocol.PacketSuback, protocol.PacketUnsuback:
 			// non-blocking in our MVP; the subscribe/unsubscribe
 			// calls return as soon as the frame is on the wire.
@@ -457,13 +471,26 @@ func (c *TCPClient) readLoop(stop <-chan struct{}) {
 
 func (c *TCPClient) keepAliveLoop(stop <-chan struct{}) {
 	defer c.wg.Done()
-	ticker := time.NewTicker(c.cfg.KeepAlive / 2)
+	ticker := time.NewTicker(c.pingInterval)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-stop:
 			return
 		case <-ticker.C:
+			// Watchdog: a PINGREQ from the previous tick that never
+			// drew a PINGRESP means the socket is half-open — the
+			// broker or network vanished without a TCP FIN/RST, so
+			// readLoop stays blocked in ReadFrame forever and never
+			// trips handleConnectionLost. Declare the connection lost
+			// so the lifecycle reconnects. Without this, publishes
+			// silently time out on a dead socket until a manual
+			// restart.
+			if c.pingOutstanding.Load() {
+				c.logger.Warn("mqtt.tcp.ping_timeout")
+				c.handleConnectionLost()
+				return
+			}
 			c.sendMu.Lock()
 			c.mu.Lock()
 			writer := c.writer
@@ -484,6 +511,8 @@ func (c *TCPClient) keepAliveLoop(stop <-chan struct{}) {
 				c.handleConnectionLost()
 				return
 			}
+			// Arm the watchdog only after the PINGREQ is on the wire.
+			c.pingOutstanding.Store(true)
 			c.sendMu.Unlock()
 		}
 	}
