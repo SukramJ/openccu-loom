@@ -195,6 +195,27 @@ func (t *AckTracker) LookupAndDischarge(sessionID, exchangeID uint16) (uint32, b
 	return obl.AckCounter, true
 }
 
+// ExpediteDue makes the pending obligation for the (session, exchange)
+// pair immediately due, so the next pump pass emits its StandaloneAck
+// without waiting out the piggyback grace window. Used on authentic
+// duplicates: the peer is retransmitting precisely because it never
+// saw an ack, so delaying the fresh ack by the grace window invites
+// further retransmits. Mirrors matter.js MessageExchange.ts:428-433
+// (duplicate + requiresAck → sendStandaloneAckForMessage immediately).
+// Returns whether an obligation existed.
+func (t *AckTracker) ExpediteDue(sessionID, exchangeID uint16) bool {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	obl, ok := t.pending[key]
+	if !ok {
+		return false
+	}
+	obl.DueAt = time.Time{}
+	t.pending[key] = obl
+	return true
+}
+
 // Pending reports the count of in-flight obligations.
 func (t *AckTracker) Pending() int {
 	t.mu.Lock()

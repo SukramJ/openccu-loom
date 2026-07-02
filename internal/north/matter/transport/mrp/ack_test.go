@@ -226,3 +226,40 @@ func TestAckTrackerSessionScopedExchangeCollision(t *testing.T) {
 		t.Fatalf("Pending() = %d after both sessions discharged, want 0", got)
 	}
 }
+
+// TestAckTrackerExpediteDue verifies that ExpediteDue rewrites a pending
+// obligation's DueAt to immediately-due without waiting out the piggyback
+// grace delay, and that it reports false for a (session, exchange) pair with
+// no pending obligation. Mirrors matter.js MessageExchange.ts:428-433, where
+// a duplicate + requiresAck message triggers sendStandaloneAckForMessage
+// without delay rather than through the normal piggyback path.
+func TestAckTrackerExpediteDue(t *testing.T) {
+	const delay = 200 * time.Millisecond
+	tracker := mrp.NewAckTracker(delay)
+	tracker.Owe(100, 0, 1, true, t0)
+
+	// Grace window has not elapsed yet — nothing due.
+	if got := tracker.Due(t0); len(got) != 0 {
+		t.Fatalf("Due at t0 before ExpediteDue: got %d obligations, want 0", len(got))
+	}
+
+	if !tracker.ExpediteDue(0, 1) {
+		t.Fatal("ExpediteDue(0, 1) = false, want true (obligation existed)")
+	}
+
+	// Still evaluated at t0 (the grace window has NOT elapsed by wall-clock
+	// time) — the obligation must be due anyway because ExpediteDue zeroed
+	// its DueAt.
+	obligations := tracker.Due(t0)
+	if len(obligations) != 1 {
+		t.Fatalf("Due at t0 after ExpediteDue: got %d obligations, want 1", len(obligations))
+	}
+	if obligations[0].AckCounter != 100 {
+		t.Errorf("AckCounter = %d, want 100", obligations[0].AckCounter)
+	}
+
+	// Unknown (session, exchange) pair — no obligation to expedite.
+	if tracker.ExpediteDue(0, 999) {
+		t.Error("ExpediteDue(0, 999) = true, want false (no obligation exists)")
+	}
+}

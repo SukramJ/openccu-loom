@@ -176,6 +176,20 @@ func (b *Bridge) dischargeOwedAck(sessionID, exchangeID uint16) {
 	b.exchangeSrcs.Delete(mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID})
 }
 
+// expediteDuplicateAck rewrites the just-registered obligation for a
+// duplicate to due-now so the caller's immediate pump pass emits the
+// StandaloneAck without waiting out the piggyback grace window. No-op
+// when no tracker is wired or no obligation exists.
+func (b *Bridge) expediteDuplicateAck(sessionID, exchangeID uint16) {
+	b.mu.RLock()
+	tracker := b.ackTracker
+	b.mu.RUnlock()
+	if tracker == nil {
+		return
+	}
+	tracker.ExpediteDue(sessionID, exchangeID)
+}
+
 // armStatusResponseWait registers a per-exchange rendezvous channel
 // the caller can <-receive on to block until the peer's next
 // IM:StatusResponse arrives on this exchange (Matter §8.6.2). Used by

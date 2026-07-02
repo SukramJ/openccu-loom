@@ -438,6 +438,85 @@ func TestTickOutboundReliable_NilListener(t *testing.T) {
 	// Nothing to assert beyond no panic.
 }
 
+// TestAckPump_ExpediteDuplicateAck verifies that expediteDuplicateAck makes
+// a just-registered obligation immediately due, so the following
+// RunAckPumpOnce call emits its StandaloneAck without waiting out the
+// piggyback grace window. The tracker is wired with
+// [mrp.DefaultStandaloneAckDelay] (not 0) so the negative control is
+// meaningful: a zero-delay fixture would make every obligation immediately
+// due regardless of expediting, masking a regression of the underlying fix.
+// Mirrors matter.js MessageExchange.ts:428-433 (duplicate + requiresAck →
+// sendStandaloneAckForMessage immediately).
+func TestAckPump_ExpediteDuplicateAck(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 88
+		msgCounter uint32 = 0x4242
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := buildMsgHdr(msgCounter)
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+
+	// Negative control: the grace window has not elapsed, so an immediate
+	// pump pass must emit nothing.
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Fatalf("RunAckPumpOnce before expedite: want 0 (grace window not elapsed), got %d", n)
+	}
+
+	// Simulate the duplicate-retransmit path: expedite, then pump.
+	b.expediteDuplicateAck(0, exchangeID)
+	if n := b.RunAckPumpOnce(time.Now()); n != 1 {
+		t.Fatalf("RunAckPumpOnce after expedite: want 1, got %d", n)
+	}
+
+	if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	nRead, _, err := peerConn.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v (no StandaloneAck datagram received)", err)
+	}
+	_, hdrLen, err := message.UnmarshalHeader(buf[:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	rxProto, _, err := message.UnmarshalProtocolHeader(buf[hdrLen:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rxProto.Opcode != mrp.StandaloneAckOpcode {
+		t.Errorf("Opcode = 0x%02X, want StandaloneAckOpcode (0x%02X)", rxProto.Opcode, mrp.StandaloneAckOpcode)
+	}
+	if rxProto.AckCounter != msgCounter {
+		t.Errorf("AckCounter = %d, want %d", rxProto.AckCounter, msgCounter)
+	}
+}
+
+// TestAckPump_ExpediteDuplicateAck_UnknownObligationNoOp verifies that
+// expediteDuplicateAck is a no-op (no panic, nothing emitted) when called
+// for a (session, exchange) pair with no pending obligation — the shape a
+// duplicate arriving without a prior owedInboundAck registration would take.
+func TestAckPump_ExpediteDuplicateAck_UnknownObligationNoOp(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
+	b.AttachAckTracker(tracker)
+
+	b.expediteDuplicateAck(0, 4242)
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Errorf("RunAckPumpOnce after expediting an unknown obligation: want 0, got %d", n)
+	}
+}
+
 // TestAckPump_AttachAckTrackerAlsoSetsAckHandler verifies that after
 // AttachAckTracker, the bridge's AckHandler (wired via AttachAckHandler
 // internally) discharges through the same tracker when dispatchSecureChannel

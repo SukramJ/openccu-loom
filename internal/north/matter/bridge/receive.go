@@ -152,11 +152,15 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	// handler when the original arrived. Re-running would corrupt
 	// fabric-scoped state (e.g. AddNOC twice) — but the peer is
 	// retransmitting because it never saw our previous ack, so we
-	// MUST send a fresh StandaloneAck for THIS counter. The pump
-	// goroutine fires it per-exchange via owedInboundAck above; flush
-	// the pump immediately so the ack hits the wire before the peer's
-	// next retransmit, then drop processing.
+	// MUST send a fresh StandaloneAck for THIS counter, and
+	// immediately: the obligation owedInboundAck registered above
+	// carries the piggyback grace window, behind which a duplicate
+	// ack must not hide (the peer would retransmit again meanwhile).
+	// Expedite it to due-now, flush the pump, drop processing.
+	// Mirrors matter.js MessageExchange.ts:428-433 (duplicate +
+	// requiresAck → sendStandaloneAckForMessage without delay).
 	if duplicate {
+		b.expediteDuplicateAck(hdr.SessionID, proto.ExchangeID)
 		b.RunAckPumpOnce(time.Now())
 		b.logger.Debug("matter.rx.duplicate_acked",
 			slog.String("src", srcString(src)),

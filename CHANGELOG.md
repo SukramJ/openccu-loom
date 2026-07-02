@@ -44,6 +44,11 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: duplicates are acknowledged immediately.** The standalone
+  ACK for a retransmitted (duplicate) reliable message was queued behind the
+  200 ms piggyback grace window, so a peer that had already waited out its
+  retransmission timeout kept retransmitting; the ACK now goes out
+  immediately, matching matter.js.
 - **Matter bridge: a Subscribe matching nothing is rejected.** A Subscribe
   request naming no attribute/event paths, or whose (wildcard) paths matched
   zero attributes and events, was accepted and registered as a dead
