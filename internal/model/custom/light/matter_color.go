@@ -298,23 +298,48 @@ func (s ctColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hm
 }
 
 func (s ctColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
-	if cmdID != matterCmdColorMoveToColorTemperature {
+	switch cmdID {
+	case matterCmdColorMoveToColorTemperature:
+		mireds, err := extractColorTempMireds(fields)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority); err != nil {
+			return nil, err
+		}
+		s.l.dataVersion.Bump()
+		return nil, nil
+	case wire.ColorCtrlCmdMoveColorTemperature, wire.ColorCtrlCmdStepColorTemperature, wire.ColorCtrlCmdStopMoveStep:
+		// HM lights have no continuous-rate colour-temperature sweep;
+		// accept the mandatory Move/Step/Stop commands as no-ops so the
+		// cluster advertises + honours its full CT command set.
+		return nil, nil
+	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
-	mireds, err := extractColorTempMireds(fields)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority); err != nil {
-		return nil, err
-	}
-	s.l.dataVersion.Bump()
-	return nil, nil
 }
 
 func (s ctColorServer) MatterReportable() []uint32 {
 	return []uint32{matterAttrColorColorTemperatureMireds}
 }
+
+// MatterAcceptedCommands lists the ColorControl commands mandatory with
+// the CT feature (color-control.element.ts: MoveToColorTemperature,
+// MoveColorTemperature, StepColorTemperature all "CT"; StopMoveStep "O").
+// Without this the dispatcher advertises an empty AcceptedCommandList and
+// a conformance controller rejects the CT cluster.
+func (s ctColorServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdColorMoveToColorTemperature,
+		wire.ColorCtrlCmdMoveColorTemperature,
+		wire.ColorCtrlCmdStepColorTemperature,
+		wire.ColorCtrlCmdStopMoveStep,
+	}
+}
+
+// MatterGeneratedCommands returns nil — ColorControl commands carry no
+// response payload.
+func (s ctColorServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // MatterAttributes lists every ColorControl (0x0300) attribute the
 // CT server implements via MatterRead. Apple Home's HAP service rebuild
@@ -403,6 +428,12 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 			return nil, e
 		}
 		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), priority)
+	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,
+		wire.ColorCtrlCmdMoveSaturation, wire.ColorCtrlCmdStepSaturation,
+		wire.ColorCtrlCmdStopMoveStep:
+		// HM has no continuous-rate hue/saturation sweep; accept the
+		// mandatory Move/Step/Stop commands as no-ops.
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -416,6 +447,27 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 func (s hsColorServer) MatterReportable() []uint32 {
 	return []uint32{matterAttrColorCurrentHue, matterAttrColorCurrentSaturation}
 }
+
+// MatterAcceptedCommands lists the ColorControl commands mandatory with
+// the HS feature (color-control.element.ts: MoveToHue, MoveHue, StepHue,
+// MoveToSaturation, MoveSaturation, StepSaturation, MoveToHueAndSaturation
+// all "HS"; StopMoveStep "O").
+func (s hsColorServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdColorMoveToHue,
+		wire.ColorCtrlCmdMoveHue,
+		wire.ColorCtrlCmdStepHue,
+		matterCmdColorMoveToSaturation,
+		wire.ColorCtrlCmdMoveSaturation,
+		wire.ColorCtrlCmdStepSaturation,
+		matterCmdColorMoveToHueAndSaturation,
+		wire.ColorCtrlCmdStopMoveStep,
+	}
+}
+
+// MatterGeneratedCommands returns nil — ColorControl commands carry no
+// response payload.
+func (s hsColorServer) MatterGeneratedCommands() []uint32 { return nil }
 
 // MatterAttributes lists every ColorControl (0x0300) attribute the
 // HS server implements via MatterRead. Apple Home's HAP service rebuild
@@ -517,6 +569,20 @@ func (s rgbwColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ 
 func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
 	switch cmdID {
+	case matterCmdColorMoveToHue:
+		hue, e := extractHueOnly(fields)
+		if e != nil {
+			return nil, e
+		}
+		_, sat, _ := s.l.Color()
+		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, priority)
+	case matterCmdColorMoveToSaturation:
+		sat, e := extractSaturationOnly(fields)
+		if e != nil {
+			return nil, e
+		}
+		hue, _, _ := s.l.Color()
+		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), priority)
 	case matterCmdColorMoveToHueAndSaturation:
 		hue, sat, e := extractHueAndSaturation(fields)
 		if e != nil {
@@ -529,6 +595,13 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 			return nil, e
 		}
 		err = s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority)
+	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,
+		wire.ColorCtrlCmdMoveSaturation, wire.ColorCtrlCmdStepSaturation,
+		wire.ColorCtrlCmdMoveColorTemperature, wire.ColorCtrlCmdStepColorTemperature,
+		wire.ColorCtrlCmdStopMoveStep:
+		// HM has no continuous-rate hue/saturation/CT sweep; accept the
+		// mandatory Move/Step/Stop commands as no-ops.
+		return nil, nil
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -538,6 +611,28 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 	s.l.dataVersion.Bump()
 	return nil, nil
 }
+
+// MatterAcceptedCommands lists the ColorControl commands mandatory with the
+// HS + CT features combined (color-control.element.ts).
+func (s rgbwColorServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdColorMoveToHue,
+		wire.ColorCtrlCmdMoveHue,
+		wire.ColorCtrlCmdStepHue,
+		matterCmdColorMoveToSaturation,
+		wire.ColorCtrlCmdMoveSaturation,
+		wire.ColorCtrlCmdStepSaturation,
+		matterCmdColorMoveToHueAndSaturation,
+		matterCmdColorMoveToColorTemperature,
+		wire.ColorCtrlCmdMoveColorTemperature,
+		wire.ColorCtrlCmdStepColorTemperature,
+		wire.ColorCtrlCmdStopMoveStep,
+	}
+}
+
+// MatterGeneratedCommands returns nil — ColorControl commands carry no
+// response payload.
+func (s rgbwColorServer) MatterGeneratedCommands() []uint32 { return nil }
 
 func (s rgbwColorServer) MatterReportable() []uint32 {
 	return []uint32{

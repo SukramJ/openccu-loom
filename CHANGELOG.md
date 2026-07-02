@@ -61,6 +61,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   NotFound.** Reading or removing a non-existent group key set returned a
   generic failure (KeySetRemove even succeeded silently); both now return the
   spec `NotFound` status, matching matter.js.
+- **Matter bridge: colour lights advertise and accept their mandatory
+  ColorControl commands.** The mounted CT / HS / RGBW colour servers advertised
+  an empty `AcceptedCommandList` and rejected the mandatory Move / Step /
+  StopMoveStep commands, so a conformance controller (and Alexa's hue-only
+  changes on an RGBW light) failed. Each server now lists its
+  feature-appropriate command set and accepts the continuous-rate commands as
+  no-ops (HM lights have no rate sweep), matching matter.js.
 - **Matter bridge: colour-temperature lights advertise the mandatory
   `StartUpColorTemperatureMireds` + `CoupleColorTempToLevelMinMireds`
   attributes.** They were missing from the ColorControl read surface, so a
