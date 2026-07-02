@@ -20,8 +20,7 @@ import "context"
 // the ordered teardown (run in the registry's reverse-order StopAll, after
 // REST and before the webhook) — Start is a no-op. This partial migration
 // (teardown-managed, self-started) is a documented divergence from the
-// "Service.Start does the starting" ideal; see
-// docs/plans/bridge-registry-migration.md and ADR 0047.
+// "Service.Start does the starting" ideal; see ADR 0047.
 //
 // The BasicInformation ShutDown event (Matter spec §11.1.6.2) is emitted by
 // awaitShutdown BEFORE StopAll, so it still precedes bridge.Stop.

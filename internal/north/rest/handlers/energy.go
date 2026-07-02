@@ -19,8 +19,8 @@ const energyDefaultGroup = "day"
 // energyParameterPower/EnergyCounter/EnergyCounterFeedIn mirror
 // pkg/hmenum's parameter constants without importing hmenum here — the
 // handler package folds rows purely by the parameter string the store
-// already filtered on. See docs/plans/A2-timeseries-energy.md "Power vs.
-// energy (the key distinction)".
+// already filtered on. POWER is an instantaneous reading; the ENERGY_*
+// counters are monotonic totals — the two are folded differently.
 const (
 	energyParameterPower               = "POWER"
 	energyParameterEnergyCounter       = "ENERGY_COUNTER"
@@ -191,8 +191,8 @@ func deviceAddressOf(channelAddress string) string {
 
 // FoldEnergyRows folds per-channel per-bucket rollup rows into the
 // per-device [EnergyResponse] shape. This is the correctness-critical
-// part of the energy endpoint (docs/plans/A2-timeseries-energy.md "Power
-// vs. energy (the key distinction)") — kept here, in the handler
+// part of the energy endpoint — instantaneous POWER and monotonic
+// ENERGY_* counters fold differently — kept here, in the handler
 // package, rather than in the cmd-layer adapter, so it is unit-testable
 // without a live store or central registry:
 //

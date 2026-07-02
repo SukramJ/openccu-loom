@@ -55,8 +55,7 @@ func buildPurgeTestStores(t *testing.T) (*sqlitestore.ValuesCacheStore, *sqlites
 // TestPurgeCentralStateDeletesOnlyTheNamedCentral seeds VALUES-cache,
 // MASTER-cache and history rows for two centrals sharing an interface name,
 // purges one, and asserts the other central's rows are untouched — the
-// live-remove path (docs/plans/L-live-ccu-adopt.md PR3) must never bleed
-// into a peer central's persisted state.
+// live-remove path must never bleed into a peer central's persisted state.
 func TestPurgeCentralStateDeletesOnlyTheNamedCentral(t *testing.T) {
 	t.Parallel()
 	valuesStore, masterStore, historyStore := buildPurgeTestStores(t)
@@ -136,7 +135,7 @@ func TestPurgeCentralStateNilStoresAreSafe(t *testing.T) {
 // TestCentralBringUp_ClearModelClearsDescriptionAndParamsetRegistries) —
 // evictModel replicates clearModel's sequence via Unit's exported
 // registries because clearModel itself is unexported to the adapter
-// package (see docs/plans/L-live-ccu-adopt.md PR3).
+// package.
 func TestEvictModelRemovesDevicesDescriptionsAndParamsets(t *testing.T) {
 	t.Parallel()
 	unit, err := central.New(central.Config{Name: "evict-test"})

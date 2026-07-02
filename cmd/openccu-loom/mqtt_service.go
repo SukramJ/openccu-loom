@@ -22,7 +22,7 @@ import (
 // infrastructure with its own lifecycle and the config-watcher hot-reload
 // (Swap) path, so it stays in wireSharedInfrastructure; this Service owns the
 // teardown of the two fan-out components only. Start is therefore a no-op;
-// see docs/plans/bridge-registry-migration.md and ADR 0047.
+// see ADR 0047.
 type mqttService struct {
 	bridge  *adapter.EventBridge
 	hubMQTT *adapter.HubMQTTPublisher // nil when no broker is configured

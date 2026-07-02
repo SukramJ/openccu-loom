@@ -36,14 +36,10 @@ import (
 func TestPortRangePicksFirstAvailableInRange(t *testing.T) {
 	t.Parallel()
 
-	// Hold one listener as the occupier and probe a wide range above it.
-	// A 50-port window is wide enough that at least one mid-port is
-	// free even when other tests in the same binary are simultaneously
-	// dialling ephemeral ports.
-	listeners, ports := acquireHeldListeners(t, 1)
+	// Hold one listener as the occupier and probe a window above it that
+	// is confirmed to contain a free port (see heldWindowWithFreePort).
+	listeners, lo, hi := heldWindowWithFreePort(t, 50)
 	defer closeListeners(listeners)
-	lo := ports[0]
-	hi := loWindowHi(lo, 50)
 
 	// listenInRange must return any port in (lo, hi].
 	ln, got, err := listenInRange("127.0.0.1", lo, hi)
@@ -58,11 +54,37 @@ func TestPortRangePicksFirstAvailableInRange(t *testing.T) {
 }
 
 // loWindowHi returns a port close to lo+window but capped at the top
-// of the legal port range. The 50-port window is wide enough that at
-// least one port in (lo, hi] is free during normal CI load.
+// of the legal port range.
 func loWindowHi(lo, window int) int {
 	hi := min(lo+window, 65535)
 	return hi
+}
+
+// heldWindowWithFreePort returns a held occupier listener at lo plus a
+// (lo, hi] window that is confirmed to currently contain a bindable port.
+// The naive "50-port window above an OS-assigned lo" is flaky on busy
+// Windows runners: lo lands in the ephemeral range, so the OS can have the
+// whole window saturated with its own transient sockets, and listenInRange
+// legitimately reports ErrNoPortInRange. Re-picking a fresh window until one
+// has a free port removes that flake without weakening what the tests check
+// (listenInRange still has to skip the busy lo-port and find a free one).
+// The caller closes the returned listeners.
+func heldWindowWithFreePort(t *testing.T, window int) (occupier []net.Listener, lo, hi int) {
+	t.Helper()
+	for attempt := 0; attempt < 25; attempt++ {
+		listeners, ports := acquireHeldListeners(t, 1)
+		lo = ports[0]
+		hi = loWindowHi(lo, window)
+		// Confirm a bindable port exists in the window right now; free it
+		// again so the actual test can use it, and keep the occupier held.
+		if probe, _, err := listenInRange("127.0.0.1", lo, hi); err == nil {
+			_ = probe.Close()
+			return listeners, lo, hi
+		}
+		closeListeners(listeners)
+	}
+	t.Fatalf("no bindable port in a %d-port window after 25 attempts", window)
+	return nil, 0, 0
 }
 
 // TestXMLRPCServerPortRangePicksFirstAvailable verifies end-to-end:
@@ -70,10 +92,8 @@ func loWindowHi(lo, window int) int {
 func TestXMLRPCServerPortRangePicksFirstAvailable(t *testing.T) {
 	t.Parallel()
 
-	listeners, ports := acquireHeldListeners(t, 1)
+	listeners, lo, hi := heldWindowWithFreePort(t, 50)
 	defer closeListeners(listeners)
-	lo := ports[0]
-	hi := loWindowHi(lo, 50)
 
 	srv, err := NewXMLRPCServer(XMLRPCConfig{
 		Addr:      "127.0.0.1:0",
@@ -97,10 +117,8 @@ func TestXMLRPCServerPortRangePicksFirstAvailable(t *testing.T) {
 func TestBINRPCServerPortRangePicksFirstAvailable(t *testing.T) {
 	t.Parallel()
 
-	listeners, ports := acquireHeldListeners(t, 1)
+	listeners, lo, hi := heldWindowWithFreePort(t, 50)
 	defer closeListeners(listeners)
-	lo := ports[0]
-	hi := loWindowHi(lo, 50)
 
 	srv, err := NewBINRPCServer(BINRPCConfig{
 		Addr:      "127.0.0.1:0",

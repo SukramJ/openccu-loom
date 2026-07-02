@@ -33,7 +33,7 @@ func registerStandardJobs(reg *central.Registry, cfg *config.Config, logger *slo
 // registerStandardJobsFor registers one central's standard background jobs.
 // Factored out of registerStandardJobs's per-unit loop body so the live
 // CCU-adopt orchestrator (central_adopt.go) can register the same jobs for a
-// single runtime-added central — see docs/plans/L-live-ccu-adopt.md PR3.
+// single runtime-added central.
 // cfg.Centrals is the boot-time static array; a runtime-added central absent
 // from it simply gets no override (falls back to compiled-in defaults),
 // which is the same "zero means default" behavior a boot-time central with

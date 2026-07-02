@@ -179,9 +179,9 @@ func TestRegisterStandardJobsForAppliesSysvarScanIntervalOverride(t *testing.T) 
 // across every unit in a [*central.Registry]) must register exactly the
 // same set of job names, per unit, as calling registerStandardJobsFor
 // directly on an equivalent freshly constructed unit. This is what proves
-// the registerStandardJobsFor factor-out (docs/plans/L-live-ccu-adopt.md
-// PR3, needed so the live-adopt orchestrator can register jobs for a single
-// runtime-added central) did not change registerStandardJobs' aggregate
+// the registerStandardJobsFor factor-out (needed so the live-adopt
+// orchestrator can register jobs for a single runtime-added central) did
+// not change registerStandardJobs' aggregate
 // behavior across a multi-CCU registry.
 func TestRegisterStandardJobsMatchesPerUnitExtraction(t *testing.T) {
 	logger := slog.New(slog.DiscardHandler)
