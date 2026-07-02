@@ -28,6 +28,16 @@ const (
 	DoorLockCmdUnboltDoor uint32 = 0x27 // Matter 1.3+ "open latch"
 )
 
+// DoorLock event IDs per Matter §5.2.10. All three carry conformance M
+// and priority critical; DoorStateChange (0x01, DPS) and LockUserChange
+// (0x04, USR) are feature-gated and absent from this projection.
+// Mirrors matter.js door-lock-cluster.element.ts:172-198.
+const (
+	DoorLockEventDoorLockAlarm      uint32 = 0x00
+	DoorLockEventLockOperation      uint32 = 0x02
+	DoorLockEventLockOperationError uint32 = 0x03
+)
+
 // ErrDoorLockMalformed is returned for malformed DoorLock command
 // payloads.
 var ErrDoorLockMalformed = errors.New("wire: DoorLock command malformed")

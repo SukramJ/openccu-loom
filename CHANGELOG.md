@@ -44,6 +44,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: DoorLock emits the mandatory LockOperation event.** A
+  successful remote LockDoor / UnlockDoor / UnboltDoor produced no event, so
+  controllers tracking lock activity (Apple Home notifications, event
+  subscribers) saw state flips without the spec-mandated operation record.
+  The bridge now emits LockOperation (priority critical) with the operation
+  type (UnboltDoor reports Unlatch), OperationSource=Remote and the invoking
+  fabric + node, matching matter.js `DoorLockServer`. The DoorLock EventList
+  now advertises the three conformance-mandatory events.
 - **Matter bridge: LevelControl honours ExecuteIfOff and the MinLevel/MaxLevel
   bounds.** A plain `MoveToLevel` / `Step` (the non-WithOnOff variants) sent to
   a light that is off executed anyway and turned it on; per Matter they must be
