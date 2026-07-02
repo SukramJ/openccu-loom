@@ -15,6 +15,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/model/generic"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
@@ -1404,14 +1405,31 @@ func TestLightLevelServerWriteAndInvoke(t *testing.T) {
 func TestExtractMoveToLevelBranches(t *testing.T) {
 	// Bare uint8.
 	v, err := extractMoveToLevel(uint8(42))
-	if err != nil || v != 42 {
-		t.Errorf("extractMoveToLevel(uint8) = (%d, %v), want (42, nil)", v, err)
+	if err != nil || v.Level != 42 {
+		t.Errorf("extractMoveToLevel(uint8) = (%+v, %v), want (Level:42, nil)", v, err)
 	}
 
 	// Map with level.
 	v, err = extractMoveToLevel(map[string]any{"level": uint8(10)})
-	if err != nil || v != 10 {
-		t.Errorf("extractMoveToLevel(map{level:10}) = (%d, %v), want (10, nil)", v, err)
+	if err != nil || v.Level != 10 {
+		t.Errorf("extractMoveToLevel(map{level:10}) = (%+v, %v), want (Level:10, nil)", v, err)
+	}
+
+	// wire.MoveToLevelRequest passthrough — the bridge-decoded shape carries
+	// the Options bitmaps + nullable TransitionTime through unchanged, since
+	// lightLevelServer.MatterInvoke needs OptionsMask/OptionsOverride for the
+	// ExecuteIfOff gate (matter.js LevelControlServer.ts:596).
+	tt := uint16(25)
+	req := wire.MoveToLevelRequest{Level: 77, TransitionTime: &tt, OptionsMask: 1, OptionsOverride: 1}
+	v, err = extractMoveToLevel(req)
+	if err != nil {
+		t.Fatalf("extractMoveToLevel(wire.MoveToLevelRequest): unexpected error %v", err)
+	}
+	if v.Level != 77 || v.OptionsMask != 1 || v.OptionsOverride != 1 {
+		t.Errorf("extractMoveToLevel(wire.MoveToLevelRequest) = %+v, want Level:77 OptionsMask:1 OptionsOverride:1", v)
+	}
+	if v.TransitionTime == nil || *v.TransitionTime != 25 {
+		t.Errorf("extractMoveToLevel(wire.MoveToLevelRequest).TransitionTime = %v, want pointer to 25", v.TransitionTime)
 	}
 
 	// Map missing level key.

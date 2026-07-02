@@ -357,9 +357,14 @@ func (s lightOnOffServer) MatterGeneratedCommands() []uint32 {
 //
 // Transition time is currently ignored; it would map to HM's RAMP_TIME
 // parameter via [Light.TurnOnWith] / [Light.TurnOffWithRamp].
-// MoveToLevel and MoveToLevelWithOnOff differ in whether OnOff state
-// is also affected; on the HM side both collapse to SetLevel because
-// LEVEL=0 implicitly turns the device off and LEVEL>0 turns it on.
+// The non-WithOnOff command variants are gated on the effective
+// ExecuteIfOff option while the device is off (matter.js
+// LevelControlServer.ts:596 #optionsAllowExecution); the WithOnOff
+// variants couple a MinLevel target to Off (LevelControlServer.ts:500).
+// HM dimmers carry a single LEVEL knob (LEVEL=0 implicitly off,
+// LEVEL>0 on), so both couplings collapse onto SetLevel — an
+// ExecuteIfOff level change while off still powers the device on,
+// which is the closest single-knob projection of the Matter state pair.
 type lightLevelServer struct{ l *Light }
 
 func (s lightLevelServer) MatterClusterID() uint32 { return matterClusterLevelControl }
@@ -434,26 +439,54 @@ func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value 
 func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	switch cmdID {
 	case matterCmdMoveToLevel, matterCmdMoveToLevelWithOnOff:
-		level, err := extractMoveToLevel(fields)
+		req, err := extractMoveToLevel(fields)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.l.SetLevel(ctx, matterLevelToHM(level), priority); err != nil {
+		withOnOff := cmdID == matterCmdMoveToLevelWithOnOff
+		if !withOnOff && !s.levelOptionsAllowExecution(req.OptionsMask, req.OptionsOverride) {
+			// matter.js LevelControlServer.ts:245 returns without acting
+			// when the effective options forbid execution while the device
+			// is off — a silent Success, not an error status.
+			return nil, nil
+		}
+		level := cropMatterLevel(req.Level)
+		target := matterLevelToHM(level)
+		if withOnOff && level == matterLevelMinDefault {
+			// The WithOnOff variant couples MinLevel to Off: matter.js
+			// LevelControlServer.ts:500 (couple) and chip
+			// LevelControlCluster.cpp:344 flip the OnOff state off when
+			// the target level equals minLevel (Matter §1.6.4.1.2).
+			// HM dimmers carry a single LEVEL knob, so "CurrentLevel=min +
+			// OnOff=false" projects to LEVEL=0.
+			target = 0
+		}
+		if err := s.l.SetLevel(ctx, target, priority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
 		return nil, nil
 
 	case matterCmdMove, matterCmdMoveWithOnOff:
-		// HM has no continuous-rate dimming; treat Move as a no-op that
-		// returns Success so conformance checkers accept the command.
-		// A future implementation could map Rate to RAMP_TIME on devices
-		// that expose it.
+		// A zero rate is rejected before anything else, mirroring
+		// matter.js LevelControlServer.ts:271 (#assertRateValue →
+		// StatusResponseError InvalidCommand); a null/absent rate would
+		// fall back to DefaultMoveRate there and is accepted here.
+		// HM has no continuous-rate dimming; a valid Move is a no-op
+		// that returns Success so conformance checkers accept the
+		// command. A future implementation could map Rate to RAMP_TIME
+		// on devices that expose it.
+		if rate, ok := extractMoveRate(fields); ok && rate == 0 {
+			return nil, errors.New("matter: Move: invalid command argument: rate must not be 0")
+		}
 		return nil, nil
 
 	case matterCmdStep, matterCmdStepWithOnOff:
-		// Apply a discrete brightness step.  StepSize is in the same 0–254
-		// range as CurrentLevel.  The step is clamped by SetLevel to [0,1].
+		// Apply a discrete brightness step. StepSize is in the same
+		// 1–254 range as CurrentLevel; the target is clamped to
+		// [MinLevel, MaxLevel] = [1, 254], mirroring matter.js
+		// Transitions.ts:139 (min/max property clamp) — a plain Step
+		// can therefore never turn the device off.
 		stepSize, err := extractStepSize(fields)
 		if err != nil {
 			return nil, err
@@ -462,14 +495,24 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		if err != nil {
 			return nil, err
 		}
+		if cmdID == matterCmdStep {
+			// Fields decode first, gate second — matter.js validates the
+			// payload before the options check reaches the handler.
+			mask, override := extractLevelOptions(fields)
+			if !s.levelOptionsAllowExecution(mask, override) {
+				// Silent Success while off; LevelControlServer.ts:387.
+				return nil, nil
+			}
+		}
 		b, _ := s.l.Brightness()
 		current := brightnessToMatter(b)
 		var next uint8
 		if stepMode == wire.LevelStepModeDown {
-			if stepSize >= current {
-				next = 0
+			diff := int(current) - int(stepSize)
+			if diff < int(matterLevelMinDefault) {
+				next = matterLevelMinDefault
 			} else {
-				next = current - stepSize
+				next = uint8(diff) //nolint:gosec // clamped above; see #20
 			}
 		} else {
 			sum := int(current) + int(stepSize)
@@ -479,7 +522,17 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 				next = uint8(sum) //nolint:gosec // clamped above; see #20
 			}
 		}
-		if err := s.l.SetLevel(ctx, matterLevelToHM(next), priority); err != nil {
+		target := matterLevelToHM(next)
+		if cmdID == matterCmdStepWithOnOff && next == matterLevelMinDefault {
+			// StepWithOnOff clamped to MinLevel turns the device off
+			// (Matter §1.6.7.6: new CurrentLevel == minimum → OnOff
+			// FALSE). Mirrors chip LevelControlCluster.cpp:508, which
+			// compares the post-clamp target; matter.js couple()
+			// compares the pre-clamp target and would stay on — chip +
+			// spec win here. Single-LEVEL-knob projection: LEVEL=0.
+			target = 0
+		}
+		if err := s.l.SetLevel(ctx, target, priority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
@@ -539,29 +592,116 @@ func (s lightLevelServer) MatterGeneratedCommands() []uint32 {
 	return nil
 }
 
-// extractMoveToLevel pulls the Level field out of a MoveToLevel /
-// MoveToLevelWithOnOff request. The bridge has already TLV-decoded the
-// payload; we accept either a bare uint8 (the minimal "level only"
-// shape) or a map carrying a "level" key. A typed request struct from
-// internal/north/matter/cluster/levelcontrol/ may replace this once
-// that package exists.
-func extractMoveToLevel(fields any) (uint8, error) {
+// levelOptionsAllowExecution mirrors matter.js LevelControlServer.ts:581
+// (#calculateEffectiveOptions) + :596 (#optionsAllowExecution) for the
+// non-WithOnOff command variants: while the device is off, the command
+// only executes when the effective ExecuteIfOff option (bit 0) is set.
+// The Options attribute is a constant 0 on this projection, so the
+// effective option reduces to "mask bit set AND override bit set". An
+// unobserved OnOff data point counts as off, consistent with
+// lightOnOffServer.MatterRead's FALSE default.
+func (s lightLevelServer) levelOptionsAllowExecution(optionsMask, optionsOverride uint8) bool {
+	const executeIfOffBit = 0x01
+	if optionsMask&executeIfOffBit != 0 && optionsOverride&executeIfOffBit != 0 {
+		return true
+	}
+	on, _ := s.l.IsOn()
+	return on
+}
+
+// cropMatterLevel crops a requested level into [MinLevel, MaxLevel] =
+// [1, 254]. Mirrors matter.js LevelControlServer.ts:249
+// cropValueRange(level, this.minLevel, this.maxLevel) with the LT
+// feature's minLevel=1 / maxLevel=254 defaults (LevelControlServer.ts:64-70).
+func cropMatterLevel(level uint8) uint8 {
+	if level < matterLevelMinDefault {
+		return matterLevelMinDefault
+	}
+	if level > matterLevelMax {
+		return matterLevelMax
+	}
+	return level
+}
+
+// extractMoveToLevel pulls the MoveToLevel / MoveToLevelWithOnOff
+// request out of the bridge-decoded fields. The wire path delivers the
+// typed [wire.MoveToLevelRequest]; a bare uint8 and the map carrying a
+// "level" key are legacy shapes kept for in-package callers (both
+// carry no Options, so the ExecuteIfOff gate sees an all-zero bitmap).
+func extractMoveToLevel(fields any) (wire.MoveToLevelRequest, error) {
 	switch v := fields.(type) {
-	case uint8:
+	case wire.MoveToLevelRequest:
 		return v, nil
+	case uint8:
+		return wire.MoveToLevelRequest{Level: v}, nil
 	case map[string]any:
 		raw, ok := v["level"]
 		if !ok {
-			return 0, fmt.Errorf("%w: MoveToLevel missing level field", errMatterValueType)
+			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel missing level field", errMatterValueType)
 		}
 		level, ok := raw.(uint8)
 		if !ok {
-			return 0, fmt.Errorf("%w: MoveToLevel level expected uint8, got %T", errMatterValueType, raw)
+			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel level expected uint8, got %T", errMatterValueType, raw)
 		}
-		return level, nil
+		return wire.MoveToLevelRequest{Level: level}, nil
 	default:
-		return 0, fmt.Errorf("%w: MoveToLevel expected uint8 or map[string]any, got %T", errMatterValueType, fields)
+		return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel expected wire.MoveToLevelRequest, uint8 or map[string]any, got %T", errMatterValueType, fields)
 	}
+}
+
+// extractMoveRate pulls the nullable Rate field (context tag 1) out of
+// a Move / MoveWithOnOff payload. Returns ok=false when the field is
+// absent or null — matter.js substitutes DefaultMoveRate then
+// (LevelControlServer.ts:274). The wire path lands here as
+// decodeGenericTagMap's map[uint8]any; the string-keyed shape serves
+// in-package tests.
+func extractMoveRate(fields any) (uint8, bool) {
+	switch v := fields.(type) {
+	case map[uint8]any:
+		raw, ok := v[1]
+		if !ok || raw == nil {
+			return 0, false
+		}
+		return wireUint8(raw)
+	case map[string]any:
+		raw, ok := v["rate"]
+		if !ok || raw == nil {
+			return 0, false
+		}
+		r, ok := raw.(uint8)
+		return r, ok
+	default:
+		return 0, false
+	}
+}
+
+// extractLevelOptions pulls the OptionsMask / OptionsOverride bitmaps
+// (context tags 3 / 4 per Matter §1.6.7.3) out of a Step payload.
+// Absent fields default to 0, matching the spec default. The wire path
+// lands here as decodeGenericTagMap's map[uint8]any; the string-keyed
+// shape serves in-package tests.
+func extractLevelOptions(fields any) (mask, override uint8) {
+	switch v := fields.(type) {
+	case map[uint8]any:
+		if raw, ok := v[3]; ok {
+			if m, mok := wireUint8(raw); mok {
+				mask = m
+			}
+		}
+		if raw, ok := v[4]; ok {
+			if o, ook := wireUint8(raw); ook {
+				override = o
+			}
+		}
+	case map[string]any:
+		if raw, ok := v["options_mask"].(uint8); ok {
+			mask = raw
+		}
+		if raw, ok := v["options_override"].(uint8); ok {
+			override = raw
+		}
+	}
+	return mask, override
 }
 
 // extractStepSize pulls the StepSize field (context tag 1) out of a

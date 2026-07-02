@@ -44,6 +44,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: LevelControl honours ExecuteIfOff and the MinLevel/MaxLevel
+  bounds.** A plain `MoveToLevel` / `Step` (the non-WithOnOff variants) sent to
+  a light that is off executed anyway and turned it on; per Matter they must be
+  a silent no-op unless the command's options set ExecuteIfOff. The requested
+  level is now also cropped to the spec range [1, 254] (a plain `Step` down can
+  no longer switch the light off — it floors at MinLevel), the WithOnOff
+  variants couple a MinLevel target to Off, and `Move` with a zero rate returns
+  `InvalidCommand`, all matching matter.js `LevelControlServer`.
 - **Matter bridge: device reachability updates reach attribute-subscribers.**
   When a bridged HomeMatic device went (un)reachable the bridge fired the
   `ReachableChanged` event but did not mark the `Reachable` attribute changed,

@@ -84,29 +84,41 @@ func commandFieldsReader(path im.ConcreteCommandPath, dec *tlv.Decoder, _ tlv.El
 }
 
 // decodeMoveToLevelRequest reads LevelControl.MoveToLevel /
-// MoveToLevelWithOnOff fields (Matter §1.6.6). The only required
-// field is tag 0 Level (uint8); TransitionTime / OptionsMask /
-// OptionsOverride are spec-optional and ignored by the bridge's
-// current handler. Returns the bare Level so the existing
-// custom/light.extractMoveToLevel uint8-case applies.
-func decodeMoveToLevelRequest(dec *tlv.Decoder) (uint8, error) {
-	var level uint8
+// MoveToLevelWithOnOff fields (Matter §1.6.7.1). Tags: [0] uint8
+// Level, [1] uint16 TransitionTime (nullable), [2] bitmap8
+// OptionsMask, [3] bitmap8 OptionsOverride. The Options bitmaps must
+// reach the cluster server: matter.js gates the non-WithOnOff variant
+// on the effective ExecuteIfOff option (LevelControlServer.ts:596
+// #optionsAllowExecution), so the server needs the full
+// [wire.MoveToLevelRequest], not the bare Level byte.
+func decodeMoveToLevelRequest(dec *tlv.Decoder) (wire.MoveToLevelRequest, error) {
+	var req wire.MoveToLevelRequest
 	for {
 		el, err := dec.Next()
 		if err != nil {
-			return 0, fmt.Errorf("MoveToLevel: %w", err)
+			return req, fmt.Errorf("MoveToLevel: %w", err)
 		}
 		if el.IsEndContainer {
-			return level, nil
+			return req, nil
 		}
 		if el.Tag.Kind != tlv.TagKindContext {
 			continue
 		}
-		if uint8(el.Tag.Number&0xFF) == 0 {
+		switch uint8(el.Tag.Number & 0xFF) {
+		case 0:
 			if el.Uint > 0xFF {
-				return 0, fmt.Errorf("MoveToLevel: Level %d > uint8 max", el.Uint)
+				return req, fmt.Errorf("MoveToLevel: Level %d > uint8 max", el.Uint)
 			}
-			level = uint8(el.Uint & 0xFF)
+			req.Level = uint8(el.Uint & 0xFF)
+		case 1:
+			if !el.IsNull {
+				v := uint16(el.Uint & 0xFFFF)
+				req.TransitionTime = &v
+			}
+		case 2:
+			req.OptionsMask = uint8(el.Uint & 0xFF)
+		case 3:
+			req.OptionsOverride = uint8(el.Uint & 0xFF)
 		}
 	}
 }
