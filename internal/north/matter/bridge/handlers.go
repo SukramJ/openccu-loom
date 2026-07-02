@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
@@ -625,9 +626,10 @@ func (a *MRPAckAdapter) Discharge(sessionID, exchangeID uint16) bool {
 // non-nil `fabricFor` closure — Subscribe, ACL checks and any other
 // fabric-scoped logic can then resolve `(sessionID → fabricIndex)`.
 type OperationalSessionLookup struct {
-	get        func(sessionID uint16) (*channel.Session, bool)
-	fabricFor  func(sessionID uint16) (uint8, bool)
-	subjectFor func(sessionID uint16) (uint64, []uint32, bool)
+	get         func(sessionID uint16) (*channel.Session, bool)
+	fabricFor   func(sessionID uint16) (uint8, bool)
+	subjectFor  func(sessionID uint16) (uint64, []uint32, bool)
+	intervalFor func(sessionID uint16, now time.Time) (time.Duration, bool)
 }
 
 // SessionFabricResolver is an optional capability a [SessionLookup]
@@ -640,6 +642,17 @@ type OperationalSessionLookup struct {
 // need a fabric usually fall back to 0 (pre-fabric semantics).
 type SessionFabricResolver interface {
 	FabricFor(sessionID uint16) (uint8, bool)
+}
+
+// SessionRetransmitIntervalResolver is an optional capability a
+// [SessionLookup] can implement so the outbound-reliable tracker can
+// size its retransmission backoff to the peer's advertised MRP
+// session parameters (active/idle interval selected by peer
+// activity — matter.js MRP.ts:129 retransmissionIntervalOf). Sessions
+// the resolver does not know (session 0 / PASE) return (_, false)
+// and the tracker falls back to the spec idle default.
+type SessionRetransmitIntervalResolver interface {
+	RetransmitBaseInterval(sessionID uint16, now time.Time) (time.Duration, bool)
 }
 
 // SessionSubjectResolver is an optional capability a [SessionLookup]
@@ -706,6 +719,30 @@ func (l *OperationalSessionLookup) WithSubjectResolver(subjectFor func(sessionID
 	}
 	l.subjectFor = subjectFor
 	return l
+}
+
+// WithRetransmitIntervalResolver wires the optional
+// RetransmitBaseInterval side of the adapter. Pass a closure that
+// resolves the peer-appropriate MRP base interval (typically
+// `operational.Entry.RetransmitBaseInterval`) for known sessions and
+// returns `(0, false)` for unknown ones. Returns the receiver so
+// callers can chain.
+func (l *OperationalSessionLookup) WithRetransmitIntervalResolver(intervalFor func(sessionID uint16, now time.Time) (time.Duration, bool)) *OperationalSessionLookup {
+	if l == nil {
+		return nil
+	}
+	l.intervalFor = intervalFor
+	return l
+}
+
+// RetransmitBaseInterval implements [SessionRetransmitIntervalResolver].
+// Returns (0, false) when the adapter was built without an interval
+// resolver closure.
+func (l *OperationalSessionLookup) RetransmitBaseInterval(sessionID uint16, now time.Time) (time.Duration, bool) {
+	if l == nil || l.intervalFor == nil {
+		return 0, false
+	}
+	return l.intervalFor(sessionID, now)
 }
 
 // SubjectFor implements [SessionSubjectResolver]. Returns (0, nil,

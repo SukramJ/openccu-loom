@@ -51,9 +51,27 @@ func (b *Bridge) AttachAckTracker(t *mrp.AckTracker) {
 	b.mu.Lock()
 	b.ackTracker = t
 	if b.outboundReliable == nil {
-		b.outboundReliable = newOutboundReliableTracker()
+		b.outboundReliable = newOutboundReliableTracker(b.outboundBaseInterval)
 	}
 	b.mu.Unlock()
+}
+
+// outboundBaseInterval resolves the peer-appropriate MRP base
+// interval for an outbound retransmission on sessionID. Delegates to
+// the session lookup's optional
+// [SessionRetransmitIntervalResolver] capability; a lookup without
+// the capability, an unknown session, or session 0 (unsecured PASE)
+// returns 0 and the tracker falls back to the spec idle default.
+func (b *Bridge) outboundBaseInterval(sessionID uint16, now time.Time) time.Duration {
+	b.mu.RLock()
+	sessions := b.sessions
+	b.mu.RUnlock()
+	if r, ok := sessions.(SessionRetransmitIntervalResolver); ok {
+		if d, ok := r.RetransmitBaseInterval(sessionID, now); ok && d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // exchangeReplyTarget captures the per-exchange routing state the

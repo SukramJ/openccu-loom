@@ -183,7 +183,7 @@ func (b *Bridge) sendReplyOpts(
 			return fmt.Errorf("%w: %w", ErrReplySend, err)
 		}
 		if needsAck {
-			tracker.Track(counter, requestProto.ExchangeID, datagram, src, time.Now())
+			tracker.Track(counter, requestHdr.SessionID, requestProto.ExchangeID, datagram, src, time.Now())
 		}
 		return nil
 	}
@@ -220,7 +220,7 @@ func (b *Bridge) sendReplyOpts(
 		return fmt.Errorf("%w: %w", ErrReplySend, err)
 	}
 	if needsAck {
-		tracker.Track(counter, requestProto.ExchangeID, datagram, src, time.Now())
+		tracker.Track(counter, requestHdr.SessionID, requestProto.ExchangeID, datagram, src, time.Now())
 	}
 	return nil
 }

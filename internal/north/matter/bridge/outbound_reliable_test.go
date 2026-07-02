@@ -19,9 +19,9 @@ import (
 // counter, Ack it, Pending drops to zero.
 func TestOutboundReliable_TrackAck(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 4242}
-	tr.Track(101, 0, []byte{0xDE, 0xAD}, dest, time.Now())
+	tr.Track(101, 0, 0, []byte{0xDE, 0xAD}, dest, time.Now())
 	if tr.Pending() != 1 {
 		t.Errorf("Pending after Track: got %d, want 1", tr.Pending())
 	}
@@ -41,12 +41,18 @@ func TestOutboundReliable_TrackAck(t *testing.T) {
 // pending entry is re-emitted by Tick once nextSendAt has elapsed,
 // the retry counter advances, and the next Tick uses a wider
 // backoff window.
+//
+// Session 0 (unknown / PASE) resolves no per-session base interval, so
+// the tracker falls back to [mrp.SessionIdleIntervalDefault] (500 ms)
+// per matter.js SessionIntervals.ts:45-49 — the deadline window here
+// must clear that base's jitter ceiling
+// (500ms × 1.1 × 1.25 = 687.5ms), not the old flat 300 ms.
 func TestOutboundReliable_TickRetransmits(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 2), Port: 5151}
 	now := time.Unix(0, 0)
-	tr.Track(7, 0, []byte{0xAA}, dest, now)
+	tr.Track(7, 0, 0, []byte{0xAA}, dest, now)
 
 	calls := 0
 	send := func(addr *net.UDPAddr, payload []byte) error {
@@ -68,8 +74,9 @@ func TestOutboundReliable_TickRetransmits(t *testing.T) {
 		t.Errorf("send calls before deadline: %d, want 0", calls)
 	}
 
-	// Tick after deadline → re-emit + advance retry counter.
-	due := now.Add(mrp.MRPBackoffBase + time.Millisecond)
+	// Tick after deadline → re-emit + advance retry counter. 700ms
+	// clears the 687.5ms jitter ceiling of the 500ms idle-default base.
+	due := now.Add(700 * time.Millisecond)
 	if got := tr.Tick(due, send); len(got) != 1 || got[0].Err != nil {
 		t.Errorf("Tick at deadline: %+v, want 1 success", got)
 	}
@@ -87,8 +94,8 @@ func TestOutboundReliable_TickRetransmits(t *testing.T) {
 // associated subscription.
 func TestOutboundReliable_TickGivesUp(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
-	tr.Track(3, 0, []byte{0x01}, &net.UDPAddr{}, time.Unix(0, 0))
+	tr := newOutboundReliableTracker(nil)
+	tr.Track(3, 0, 0, []byte{0x01}, &net.UDPAddr{}, time.Unix(0, 0))
 
 	// Drive past every retry: keep advancing time and ticking.
 	now := time.Unix(0, 0)
@@ -123,17 +130,17 @@ func TestOutboundReliable_TickGivesUp(t *testing.T) {
 // must stop retransmitting the now-superseded Sigma2 datagrams.
 func TestOutboundReliable_AbandonExchange(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 3), Port: 5353}
 	const targetExchange = uint16(0xABCD)
 	const otherExchange = uint16(0x1234)
 
 	// Three entries on the target exchange, two on a different one.
-	tr.Track(1, targetExchange, []byte{0x01}, dest, time.Now())
-	tr.Track(2, targetExchange, []byte{0x02}, dest, time.Now())
-	tr.Track(3, otherExchange, []byte{0x03}, dest, time.Now())
-	tr.Track(4, targetExchange, []byte{0x04}, dest, time.Now())
-	tr.Track(5, otherExchange, []byte{0x05}, dest, time.Now())
+	tr.Track(1, 0, targetExchange, []byte{0x01}, dest, time.Now())
+	tr.Track(2, 0, targetExchange, []byte{0x02}, dest, time.Now())
+	tr.Track(3, 0, otherExchange, []byte{0x03}, dest, time.Now())
+	tr.Track(4, 0, targetExchange, []byte{0x04}, dest, time.Now())
+	tr.Track(5, 0, otherExchange, []byte{0x05}, dest, time.Now())
 
 	if tr.Pending() != 5 {
 		t.Fatalf("Pending before abandon: got %d, want 5", tr.Pending())
@@ -184,6 +191,75 @@ func TestOutboundReliable_AbandonExchange(t *testing.T) {
 	}
 }
 
+// TestOutboundReliable_PerSessionBaseInterval verifies that Track /
+// Tick honour a per-session base-interval resolver: a session with a
+// short resolved base (100ms) becomes due well before a session that
+// falls back to the spec idle default (500ms, resolver returns 0).
+// Bounds are computed from the deterministic min/max of
+// [mrp.BackoffDuration] at transmission 0 (jitter ∈ [0, 0.25)) so the
+// due/not-due boundary is asserted without sleeping or depending on
+// the jitter draw. Mirrors matter.js MRP.ts:129
+// retransmissionIntervalOf's per-peer base-interval selection.
+func TestOutboundReliable_PerSessionBaseInterval(t *testing.T) {
+	t.Parallel()
+	const sessionFast = uint16(7)
+	const sessionSlow = uint16(9)
+	baseFor := func(sessionID uint16, _ time.Time) time.Duration {
+		if sessionID == sessionFast {
+			return 100 * time.Millisecond
+		}
+		return 0 // unresolved → tracker falls back to the spec idle default (500ms)
+	}
+	tr := newOutboundReliableTracker(baseFor)
+	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 4040}
+	t0 := time.Unix(0, 0)
+
+	tr.Track(701, sessionFast, 0, []byte{0x01}, dest, t0)
+	tr.Track(702, sessionSlow, 0, []byte{0x02}, dest, t0)
+
+	var fired []uint32
+	send := func(_ *net.UDPAddr, payload []byte) error {
+		fired = append(fired, uint32(payload[0]))
+		return nil
+	}
+
+	// Deterministic min/max for transmission 0: base × MARGIN (jitter=0)
+	// .. base × MARGIN × (1 + JITTER_FACTOR) (jitter→1, exclusive).
+	minFast := 100 * time.Millisecond * 11 / 10         // 110ms
+	maxFast := 100 * time.Millisecond * 11 / 10 * 5 / 4 // 137.5ms
+	minSlow := 500 * time.Millisecond * 11 / 10         // 550ms
+	maxSlow := 500 * time.Millisecond * 11 / 10 * 5 / 4 // 687.5ms
+
+	// Before session7's minimum bound: neither entry can be due.
+	if got := tr.Tick(t0.Add(minFast-time.Millisecond), send); len(got) != 0 {
+		t.Fatalf("Tick before session7 min bound: %d results, want 0 (got %+v)", len(got), got)
+	}
+
+	// Past session7's maximum bound: session7 MUST be due, session9
+	// (min bound 550ms) must NOT.
+	got := tr.Tick(t0.Add(maxFast+time.Millisecond), send)
+	if len(got) != 1 || got[0].Counter != 701 {
+		t.Fatalf("Tick past session7 max bound: got %+v, want exactly counter=701", got)
+	}
+	if len(fired) != 1 || fired[0] != 0x01 {
+		t.Fatalf("fired payloads = %v, want [0x01]", fired)
+	}
+	// Clear session7's entry so it cannot re-fire and confuse the
+	// session9 assertions below.
+	tr.Ack(701)
+
+	// Before session9's minimum bound: nothing left to fire.
+	if got := tr.Tick(t0.Add(minSlow-time.Millisecond), send); len(got) != 0 {
+		t.Fatalf("Tick before session9 min bound: %d results, want 0 (got %+v)", len(got), got)
+	}
+
+	// Past session9's maximum bound: session9 MUST be due.
+	got = tr.Tick(t0.Add(maxSlow+time.Millisecond), send)
+	if len(got) != 1 || got[0].Counter != 702 {
+		t.Fatalf("Tick past session9 max bound: got %+v, want exactly counter=702", got)
+	}
+}
+
 // TestSubscription_AutoCloseOnMaxRetries verifies that when an
 // outbound report counter hits the retransmit cap and the bridge has
 // recorded its counter→subscription mapping, the bookkeeping is
@@ -230,7 +306,7 @@ func TestSubscription_ReleaseCounterOnPeerAck(t *testing.T) {
 // and returns false.
 func TestOutboundReliable_AckStrayWithWaiter(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	// Install a waiter directly without a matching pending entry.
 	ch := make(chan error, 1)
 	tr.mu.Lock()
@@ -257,15 +333,17 @@ func TestOutboundReliable_AckStrayWithWaiter(t *testing.T) {
 // (it will be retried on the next tick).
 func TestOutboundReliable_TickSendError(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5353}
 	now := time.Unix(0, 0)
-	tr.Track(42, 0, []byte{0xAA}, dest, now)
+	tr.Track(42, 0, 0, []byte{0xAA}, dest, now)
 
 	sendErr := errors.New("simulated send failure")
 	failSend := func(*net.UDPAddr, []byte) error { return sendErr }
 
-	due := now.Add(mrp.MRPBackoffBase + time.Millisecond)
+	// 700ms clears the 687.5ms jitter ceiling of the 500ms idle-default
+	// base a session-0 (unknown) entry falls back to.
+	due := now.Add(700 * time.Millisecond)
 	results := tr.Tick(due, failSend)
 	if len(results) != 1 {
 		t.Fatalf("Tick: %d results, want 1", len(results))
@@ -284,7 +362,7 @@ func TestOutboundReliable_TickSendError(t *testing.T) {
 // returns nil immediately without blocking.
 func TestWaitForAck_NotPending_ReturnsNilImmediately(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	// Counter 999 was never tracked.
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -297,9 +375,9 @@ func TestWaitForAck_NotPending_ReturnsNilImmediately(t *testing.T) {
 // ctx.Err() when the context is cancelled before the ACK arrives.
 func TestWaitForAck_ContextCancelled(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 1234}
-	tr.Track(77, 0, []byte{0x01}, dest, time.Now())
+	tr.Track(77, 0, 0, []byte{0x01}, dest, time.Now())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
@@ -324,10 +402,10 @@ func TestWaitForAck_ContextCancelled(t *testing.T) {
 // blocked on the wait.
 func TestWaitForAck_AckClosesChannel(t *testing.T) {
 	t.Parallel()
-	tr := newOutboundReliableTracker()
+	tr := newOutboundReliableTracker(nil)
 	dest := &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5678}
 	const counter = uint32(88)
-	tr.Track(counter, 0, []byte{0xAA}, dest, time.Now())
+	tr.Track(counter, 0, 0, []byte{0xAA}, dest, time.Now())
 
 	errCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

@@ -329,9 +329,13 @@ type Responder struct {
 	peerSessionID uint16   // initiatorSessionID from Sigma1; the value we stamp into outbound Header.SessionID
 	peerNodeID    uint64   // NodeID extracted from the peer's NOC at Sigma3 verification; feeds the AES-CCM nonce
 	peerCATs      []uint32 // CASE Authenticated Tags from the peer's NOC subject; feeds the ACL gate's per-subject match
-	sigma2        Sigma2
-	sigma2Bytes   []byte // full Sigma2 wire bytes; reused for S3K + final salts
-	shared        []byte
+	// peerSessionParams retains the initiator's MRP tuning hints from
+	// Sigma1 tag 5 so the operational session can size its
+	// retransmission backoff to the peer (matter.js MRP.ts:129).
+	peerSessionParams *SessionParameters
+	sigma2            Sigma2
+	sigma2Bytes       []byte // full Sigma2 wire bytes; reused for S3K + final salts
+	shared            []byte
 
 	keys  SessionKeys
 	state responderState
@@ -347,6 +351,20 @@ func (r *Responder) PeerSessionID() uint16 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.peerSessionID
+}
+
+// PeerSessionParameters returns the initiator's MRP tuning hints from
+// Sigma1 (tag 5) and whether the initiator supplied any. Session-open
+// callers copy them onto the operational entry so the retransmission
+// backoff honours the peer's advertised idle/active intervals
+// (matter.js MRP.ts:129 retransmissionIntervalOf).
+func (r *Responder) PeerSessionParameters() (SessionParameters, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.peerSessionParams == nil {
+		return SessionParameters{}, false
+	}
+	return *r.peerSessionParams, true
 }
 
 // PeerNodeID returns the operational NodeID of the peer extracted
@@ -475,6 +493,7 @@ func (r *Responder) ProcessSigma1WithResume(sigma1Bytes []byte) (Sigma1ProcessRe
 	if err != nil {
 		return Sigma1ProcessResult{}, err
 	}
+	r.peerSessionParams = sigma1.InitiatorSessionParams
 
 	// Attempt resume path only when Sigma1 carries both optional fields
 	// AND a store is wired. Mirrors matter.js CaseServer.ts:#handleSigma1:
@@ -691,6 +710,7 @@ func (r *Responder) processSigma1Locked(sigma1Bytes []byte) (Sigma2, error) { //
 	if err != nil {
 		return Sigma2{}, err
 	}
+	r.peerSessionParams = sigma1.InitiatorSessionParams
 	// Multi-fabric identity resolution. Apple Home Multi-Admin keeps
 	// two fabrics live concurrently; Sigma1's DestinationID =
 	// HMAC(opIPK, random||rootPub||fabricID||nodeID) tells us which

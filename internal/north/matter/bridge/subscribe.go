@@ -627,7 +627,7 @@ func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byt
 		return 0, err
 	}
 	if tracker != nil && respProto.NeedsAck {
-		tracker.Track(counter, target.exchangeID, datagram, target.src, time.Now())
+		tracker.Track(counter, target.sessionID, target.exchangeID, datagram, target.src, time.Now())
 		return counter, nil
 	}
 	return 0, nil

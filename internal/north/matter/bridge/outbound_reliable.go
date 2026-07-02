@@ -6,6 +6,7 @@ package bridge
 import (
 	"context"
 	"errors"
+	"math/rand/v2"
 	"net"
 	"sync"
 	"time"
@@ -44,6 +45,12 @@ type outboundReliableTracker struct {
 	// StatusResponse(SUCCESS) → next ReportData). Closed by [Ack] /
 	// [Tick] when the entry is resolved or abandoned.
 	waiters map[uint32]chan error
+	// baseIntervalFor resolves the peer-appropriate MRP base interval
+	// for the session (peer-advertised active/idle interval selected
+	// by peer activity — matter.js MRP.ts:129). nil, or a session the
+	// resolver does not know, falls back to the spec idle default.
+	// Set once at construction; read without the mutex.
+	baseIntervalFor func(sessionID uint16, now time.Time) time.Duration
 }
 
 // outboundEntry captures one in-flight reliable datagram and the
@@ -51,9 +58,11 @@ type outboundReliableTracker struct {
 // counter so [outboundReliableTracker.AbandonExchange] can drop every
 // pending entry of an exchange in one shot — used by the CASE Sigma3
 // receive path to stop redundant Sigma2 retransmits once the
-// commissioner has progressed past Sigma2.
+// commissioner has progressed past Sigma2. The sessionID feeds the
+// per-peer MRP interval selection on every retransmit.
 type outboundEntry struct {
 	counter    uint32
+	sessionID  uint16
 	exchangeID uint16
 	datagram   []byte
 	dest       *net.UDPAddr
@@ -62,11 +71,26 @@ type outboundEntry struct {
 }
 
 // newOutboundReliableTracker returns a fresh, empty tracker.
-func newOutboundReliableTracker() *outboundReliableTracker {
+// baseIntervalFor may be nil — every send then uses the spec idle
+// default as its base interval.
+func newOutboundReliableTracker(baseIntervalFor func(sessionID uint16, now time.Time) time.Duration) *outboundReliableTracker {
 	return &outboundReliableTracker{
-		pending: make(map[uint32]*outboundEntry),
-		waiters: make(map[uint32]chan error),
+		pending:         make(map[uint32]*outboundEntry),
+		waiters:         make(map[uint32]chan error),
+		baseIntervalFor: baseIntervalFor,
 	}
+}
+
+// baseInterval resolves the MRP base interval for sessionID, falling
+// back to the spec SESSION_IDLE_INTERVAL default when no resolver is
+// wired (tests) or the session is unknown (session 0 / PASE).
+func (t *outboundReliableTracker) baseInterval(sessionID uint16, now time.Time) time.Duration {
+	if t.baseIntervalFor != nil {
+		if d := t.baseIntervalFor(sessionID, now); d > 0 {
+			return d
+		}
+	}
+	return mrp.SessionIdleIntervalDefault
 }
 
 // Track records a freshly-sent reliable datagram. counter is the
@@ -75,17 +99,23 @@ func newOutboundReliableTracker() *outboundReliableTracker {
 // caller pools / reuses are safe). Subsequent inbound HasAck with
 // AckCounter=counter clears the entry; otherwise the next ACK pump
 // tick resends it after the Matter §4.12.6 backoff.
-func (t *outboundReliableTracker) Track(counter uint32, exchangeID uint16, datagram []byte, dest *net.UDPAddr, now time.Time) {
+func (t *outboundReliableTracker) Track(counter uint32, sessionID, exchangeID uint16, datagram []byte, dest *net.UDPAddr, now time.Time) {
 	cp := make([]byte, len(datagram))
 	copy(cp, datagram)
+	// The initial wait before the first retransmit uses the full spec
+	// formula at transmission 0 — matter.js MRP.ts:129 evaluates the
+	// peer-appropriate base interval for every transmission including
+	// the first.
+	delay := mrp.BackoffDuration(t.baseInterval(sessionID, now), 0, rand.Float64)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.pending[counter] = &outboundEntry{
 		counter:    counter,
+		sessionID:  sessionID,
 		exchangeID: exchangeID,
 		datagram:   cp,
 		dest:       dest,
-		nextSendAt: now.Add(mrp.MRPBackoffBase),
+		nextSendAt: now.Add(delay),
 	}
 }
 
@@ -251,26 +281,14 @@ func (t *outboundReliableTracker) Tick(now time.Time, send func(*net.UDPAddr, []
 			out = append(out, outboundTickResult{Counter: counter, Err: err})
 			continue
 		}
-		// Linear-but-jittered backoff per Matter §4.12.6 — for the
-		// ongoing-pump use case the fancy math/rand jitter from
-		// mrp.Retransmitter is overkill; a fixed 1.6× growth keeps
-		// the bookkeeping simple and matches MRPBackoffThreshold.
-		delay := time.Duration(float64(mrp.MRPBackoffBase) * pow(mrp.MRPBackoffThreshold, p.retries))
+		// Full spec backoff per Matter §4.12.2.1: peer-appropriate
+		// base interval (re-evaluated per retransmission — the peer
+		// may have gone idle since the last attempt), margin,
+		// exponential growth past the threshold, and jitter. Mirrors
+		// matter.js MRP.ts:125-146 retransmissionIntervalOf.
+		delay := mrp.BackoffDuration(t.baseInterval(p.sessionID, now), p.retries, rand.Float64)
 		p.nextSendAt = now.Add(delay)
 		out = append(out, outboundTickResult{Counter: counter})
 	}
 	return out
-}
-
-// pow is a tiny float-power helper. math.Pow would do, but pulling
-// in math for a single call inflates the import surface.
-func pow(base float64, exp int) float64 {
-	if exp <= 0 {
-		return 1
-	}
-	v := base
-	for i := 1; i < exp; i++ {
-		v *= base
-	}
-	return v
 }

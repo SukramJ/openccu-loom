@@ -27,7 +27,37 @@ const (
 	// MaxRetransmissions is the default cap on retries before the
 	// caller surfaces a delivery failure.
 	MaxRetransmissions = 4
+
+	// SessionIdleIntervalDefault is the SESSION_IDLE_INTERVAL fallback
+	// used when a peer never advertised its MRP parameters. Mirrors
+	// matter.js SessionIntervals.ts:45-49 defaults.
+	SessionIdleIntervalDefault = 500 * time.Millisecond
+	// SessionActiveIntervalDefault is the SESSION_ACTIVE_INTERVAL
+	// fallback.
+	SessionActiveIntervalDefault = 300 * time.Millisecond
+	// SessionActiveThresholdDefault is the SESSION_ACTIVE_THRESHOLD
+	// fallback: a peer that sent a message within this window counts
+	// as active and gets the shorter active interval.
+	SessionActiveThresholdDefault = 4 * time.Second
 )
+
+// BackoffDuration computes the wait before (re)transmission number
+// `transmission` (0 = the initial send) from the peer-appropriate
+// base interval per Matter §4.12.2.1:
+//
+//	interval = base × MARGIN × BASE^max(0, n-1) × (1 + uniform[0, JITTER))
+//
+// rand01 supplies the jitter draw in [0, 1); pass a deterministic
+// func in tests. Mirrors matter.js MRP.ts retransmissionIntervalOf
+// (:125-146) and chip ReliableMessageMgr.cpp GetBackoff — the
+// exponent threshold means the first retransmit still waits the
+// un-grown base interval.
+func BackoffDuration(base time.Duration, transmission int, rand01 func() float64) time.Duration {
+	exp := max(transmission-1, 0)
+	factor := math.Pow(MRPBackoffThreshold, float64(exp))
+	jitter := 1 + rand01()*MRPBackoffJitterFactor
+	return time.Duration(float64(base) * MRPBackoffMargin * factor * jitter)
+}
 
 // ErrMaxRetransmissionsReached is returned by [Retransmitter.Tick] for
 // every entry whose retry count has exceeded [MaxRetransmissions].
@@ -169,9 +199,5 @@ func (r *Retransmitter) Tick(now time.Time) []TickResult {
 // already, which is ~1.6× too aggressive and shows up in Apple's
 // "Dropping message" rate under CASE handshake load.
 func (r *Retransmitter) backoff(retries int) time.Duration {
-	exp := max(retries-1, 0)
-	factor := math.Pow(MRPBackoffThreshold, float64(exp))
-	jitter := 1 + r.rng.Float64()*MRPBackoffJitterFactor
-	d := float64(MRPBackoffBase) * MRPBackoffMargin * factor * jitter
-	return time.Duration(d)
+	return BackoffDuration(MRPBackoffBase, retries, r.rng.Float64)
 }

@@ -94,7 +94,7 @@ func TestSendUnsolicitedIM_EncryptedRoundTrip(t *testing.T) {
 		}
 		return nil, false
 	})
-	b.outboundReliable = newOutboundReliableTracker()
+	b.outboundReliable = newOutboundReliableTracker(nil)
 
 	target := subTarget{
 		src:                 peerAddr,

@@ -466,6 +466,15 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			return 0, nil, false
 		}
 		return entry.Session.PeerNodeID(), entry.Session.PeerCATs(), true
+	}).WithRetransmitIntervalResolver(func(id uint16, now time.Time) (time.Duration, bool) {
+		// Resolves the peer-appropriate MRP base interval so outbound
+		// retransmissions honour the peer's advertised session
+		// parameters (matter.js MRP.ts:129 retransmissionIntervalOf).
+		entry, err := opMgr.Get(id)
+		if err != nil || entry == nil {
+			return 0, false
+		}
+		return entry.RetransmitBaseInterval(now), true
 	})
 	bridge.AttachSessionLookup(sessionLookup)
 
@@ -772,6 +781,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					opMgr.ReleaseID(sessID)
 					return openErr
 				}
+				// Carry the initiator's Sigma1 MRP hints onto the session
+				// so outbound retransmissions honour the peer's intervals
+				// (matter.js MRP.ts:129).
+				if resp := adapter.SnapshotResponder(); resp != nil {
+					if sp, ok := resp.PeerSessionParameters(); ok {
+						entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+					}
+				}
 				logger.Info("matter.bridge.case.session_established",
 					slog.Int("session_id", int(entry.SessionID)),
 					slog.Int("fabric_index", int(resolvedFabric)),
@@ -921,6 +938,14 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 		entry, err := mgr.OpenFromSigma(fabricIndex, nodeID, peerNodeID, keys)
 		if err != nil {
 			return err
+		}
+		// Carry the initiator's Sigma1 MRP hints onto the session so
+		// outbound retransmissions honour the peer's intervals
+		// (matter.js MRP.ts:129).
+		if resp := caseAdapter.SnapshotResponder(); resp != nil {
+			if sp, ok := resp.PeerSessionParameters(); ok {
+				entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+			}
 		}
 		logger.Info("matter.bridge.case.session_established",
 			slog.Int("session_id", int(entry.SessionID)),

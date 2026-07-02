@@ -211,6 +211,13 @@ type Sigma1 struct {
 	// initiator holds the prior shared secret (Matter §4.14.2.3 tag 7).
 	// Nil if not present.
 	InitiatorResumeMIC []byte
+	// InitiatorSessionParams carries the initiator's MRP tuning hints
+	// (Matter §4.14.2.3 tag 5). Nil when the initiator omitted the
+	// struct. The responder sizes its retransmission backoff to the
+	// initiator's advertised idle/active intervals — matter.js
+	// MRP.ts:129 retransmissionIntervalOf reads them from the
+	// session's parameters.
+	InitiatorSessionParams *SessionParameters
 }
 
 // Marshal serialises Sigma1 as a Matter TLV anonymous structure per
@@ -289,12 +296,15 @@ func UnmarshalSigma1(b []byte) (Sigma1, error) {
 			}
 			s.InitiatorEphPubKey = append([]byte(nil), val.octets...)
 		case 5:
-			// initiatorSessionParams container — drain without surfacing
-			// (session-timing negotiation is handled separately).
+			// initiatorSessionParams container — the initiator's MRP
+			// tuning hints; retained so the responder's retransmission
+			// backoff can honour them (matter.js MRP.ts:129).
 			if val.container {
-				if err := dec.skipContainer(); err != nil {
-					return s, fmt.Errorf("%w: skip sessionParams (tag=5): %w", ErrSessionState, err)
+				sp, err := parseSessionParameters(dec)
+				if err != nil {
+					return s, fmt.Errorf("%w: sessionParams (tag=5): %w", ErrSessionState, err)
 				}
+				s.InitiatorSessionParams = &sp
 			}
 		case 6:
 			// resumptionId — 16 bytes; present only on a resume attempt.
@@ -383,6 +393,45 @@ type SessionParameters struct {
 	InteractionModelRevision uint16 // [5] Matter Interaction Model revision; 0 = omit
 	SpecificationVersion     uint32 // [6] Matter specification version (e.g. 0x01040000); 0 = omit
 	MaxPathsPerInvoke        uint16 // [7] maximum paths per InvokeRequests list; 0 = omit
+}
+
+// parseSessionParameters reads a SessionParameters container the
+// decoder has just entered (Sigma1 initiatorSessionParams, tag 5).
+// Field tags mirror the encode side above; unknown tags are skipped
+// so future spec additions do not break the handshake.
+func parseSessionParameters(dec *sigmaDecoder) (SessionParameters, error) {
+	var sp SessionParameters
+	for {
+		tag, val, end, err := dec.next()
+		if err != nil {
+			return sp, err
+		}
+		if end {
+			return sp, nil
+		}
+		if val.container {
+			if err := dec.skipContainer(); err != nil {
+				return sp, err
+			}
+			continue
+		}
+		switch tag {
+		case 1:
+			sp.SessionIdleInterval = uint32(val.u & 0xFFFFFFFF)
+		case 2:
+			sp.SessionActiveInterval = uint32(val.u & 0xFFFFFFFF)
+		case 3:
+			sp.SessionActiveThreshold = uint16(val.u & 0xFFFF)
+		case 4:
+			sp.DataModelRevision = uint16(val.u & 0xFFFF)
+		case 5:
+			sp.InteractionModelRevision = uint16(val.u & 0xFFFF)
+		case 6:
+			sp.SpecificationVersion = uint32(val.u & 0xFFFFFFFF)
+		case 7:
+			sp.MaxPathsPerInvoke = uint16(val.u & 0xFFFF)
+		}
+	}
 }
 
 // isEmpty reports whether the SessionParameters carries no hint at

@@ -44,6 +44,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: outbound retransmissions honour the peer's MRP session
+  parameters.** The retransmit schedule used a fixed 300 ms base and a bare
+  1.6× growth; the intervals a controller advertises during PASE/CASE session
+  establishment were parsed and thrown away. The initiator's Sigma1 session
+  parameters are now stored on the operational session, the base interval is
+  selected per transmission from the peer's active/idle interval (active when
+  the peer sent within its active threshold; spec defaults 300 ms / 500 ms /
+  4 s otherwise), and the full spec backoff formula (margin, exponential
+  growth past the threshold, jitter) applies — matching matter.js `MRP` and
+  chip `GetMRPBaseTimeout`. Retransmits to a sleepy or slow controller no
+  longer fire ~40 % too early, and active peers get snappier recovery.
+- **Matter bridge: chunked WriteRequests are validated.** The
+  MoreChunkedMessages flag was ignored entirely; a chunked write combined
+  with SuppressResponse, or inside a timed interaction, is now rejected with
+  InvalidAction per spec, and each valid chunk is answered with its own
+  WriteResponse (matching matter.js, which responds per chunk).
 - **Matter bridge: MRP ack bookkeeping is session-scoped.** ACK obligations,
   standalone-ack reply routes and the per-chunk StatusResponse rendezvous were
   keyed on the bare 16-bit exchange ID, which is only unique per session — two
