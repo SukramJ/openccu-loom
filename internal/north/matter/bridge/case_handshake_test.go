@@ -470,13 +470,15 @@ func TestCaseAdapter_ProcessSigma1_ResumeFastPath(t *testing.T) {
 	a.SetOnSessionEstablished(func(keys sigma.SessionKeys, peerSessionID uint16) error {
 		cbCalls++
 		gotKeys = keys
-		// The resume branch (handlers.go) hands back the RESPONDER's
-		// sessionID (0x2001 above) — distinct from the full-Sigma
-		// branch which uses the initiator's. Asymmetric but
-		// deliberate: matches matter.js CaseServer.ts:200-202 where
-		// the resumed session is installed under the responder slot.
-		if peerSessionID != 0x2001 {
-			t.Errorf("peerSessionID=%#x, want 0x2001 (responder sessionID)", peerSessionID)
+		// The resume branch must hand back the INITIATOR's session id
+		// (Sigma1.initiatorSessionID, 0x1234 in buildResumeSigma1) —
+		// same as the full-Sigma branch. matter.js CaseServer.ts:179
+		// `peerSessionId: cx.peerSessionId`. The responder's own id
+		// (0x2001) travels in the Sigma2Resume payload instead; using
+		// it here registered the session under a peer id the initiator
+		// never allocated, so every outbound reply was dropped.
+		if peerSessionID != 0x1234 {
+			t.Errorf("peerSessionID=%#x, want 0x1234 (Sigma1.initiatorSessionID)", peerSessionID)
 		}
 		return nil
 	})

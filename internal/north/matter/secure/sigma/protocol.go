@@ -85,6 +85,22 @@ type ResumptionRecord struct {
 	// ResumptionID is the 16-byte id stored in TBE2 of the original Sigma2
 	// and presented back by the initiator in Sigma1 tag 6.
 	ResumptionID []byte
+	// FabricIndex scopes the record to the fabric the original CASE
+	// session was established under. The resumed session is registered
+	// under this fabric — matter.js CaseServer.ts:151 destructures
+	// `fabric` straight from the record; there is no Sigma3 on the
+	// resume path, so the fabric can come from nowhere else.
+	FabricIndex uint8
+	// PeerNodeID is the peer's operational NodeID from the original
+	// session. It feeds the AES-CCM nonce of the resumed session
+	// (Matter §4.5.1.4 builds the nonce from the source NodeID);
+	// leaving it zero makes every inbound decrypt fail.
+	PeerNodeID uint64
+	// PeerCATs carries the CASE Authenticated Tags from the peer's NOC
+	// captured at the original Sigma3. The resume path re-grants them
+	// without re-validating the NOC — matter.js CaseServer.ts:151
+	// `caseAuthenticatedTags` from the record.
+	PeerCATs []uint32
 }
 
 // ResumptionStore is the read side the Responder requires during
@@ -559,6 +575,24 @@ func (r *Responder) tryResume(sigma1 Sigma1) (Sigma1ProcessResult, bool, error) 
 		return Sigma1ProcessResult{}, false, nil
 	}
 
+	// Resolve the responder identity by the record's FabricIndex. The
+	// resume path has no Sigma3 (no NOC exchange), so the fabric is
+	// authoritative from the record alone — matter.js CaseServer.ts:151
+	// `const { sharedSecret, fabric, peerNodeId, caseAuthenticatedTags }
+	// = cx.resumptionRecord`. A resolver miss means the fabric was
+	// removed after the record was written; treat like an unknown id
+	// and fall through to Full Sigma.
+	if r.identityResolver != nil {
+		if fir, ok := r.identityResolver.(FabricIndexResolver); ok {
+			id, ver, found := fir.ResolveFabricIndex(rec.FabricIndex)
+			if !found {
+				return Sigma1ProcessResult{}, false, nil
+			}
+			r.identity = id
+			r.verifier = ver
+		}
+	}
+
 	// Generate a fresh 16-byte local resumption id for the response.
 	freshResumptionID := make([]byte, ResumptionIDSize)
 	if _, err := rand.Read(freshResumptionID); err != nil {
@@ -599,6 +633,26 @@ func (r *Responder) tryResume(sigma1 Sigma1) (Sigma1ProcessResult, bool, error) 
 	copy(keys.I2RKey[:], finalMat[0:SessionKeySize])
 	copy(keys.R2IKey[:], finalMat[SessionKeySize:2*SessionKeySize])
 	copy(keys.AttestationChallenge[:], finalMat[2*SessionKeySize:3*SessionKeySize])
+
+	// Adopt the resumed session's identity so the post-resume accessors
+	// (PeerSessionID / PeerNodeID / PeerCATs / SessionIdentity /
+	// ECDHSharedSecret / ResumptionID) describe THIS session, exactly as
+	// they would after a full Sigma3. matter.js CaseServer.ts:171-186
+	// creates the secure session from `peerNodeId`, `peerSessionId:
+	// cx.peerSessionId`, `sharedSecret` and `caseAuthenticatedTags`,
+	// then persists the fresh resumption id (`:212`). Without these the
+	// resumed session registers with peerNodeID=0 (every inbound
+	// AES-CCM verify fails, Matter §4.5.1.4 nonce) and peerSessionID=0
+	// (every outbound reply stamps a session id the initiator never
+	// allocated) — a dead session until the controller gives up on
+	// resumption and re-runs Full Sigma.
+	r.peerSessionID = sigma1.InitiatorSessionID
+	r.peerNodeID = rec.PeerNodeID
+	r.peerCATs = append([]uint32(nil), rec.PeerCATs...)
+	r.shared = append([]byte(nil), rec.SharedSecret...)
+	r.resumptionID = freshResumptionID
+	r.keys = keys
+	r.state = responderStateFinished
 
 	s2r := Sigma2Resume{
 		ResumptionID:       freshResumptionID,

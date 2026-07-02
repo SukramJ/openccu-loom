@@ -493,7 +493,14 @@ func (a *CaseAdapter) ProcessSigma1(payload []byte) (opcode uint8, respPayload [
 		a.established = true
 		a.mu.Unlock()
 		if firstEstablish && a.onEstablished != nil {
-			if err := a.onEstablished(result.ResumeKeys, result.Sigma2Resume.ResponderSessionID); err != nil {
+			// The callback's second argument is the PEER's session id
+			// (Sigma1.initiatorSessionID) — the id the initiator expects
+			// stamped into Header.SessionID of every outbound packet.
+			// matter.js CaseServer.ts:179 `peerSessionId: cx.peerSessionId`.
+			// Passing our own ResponderSessionID here registered the
+			// resumed session under a peer id the initiator never
+			// allocated, so it dropped every reply.
+			if err := a.onEstablished(result.ResumeKeys, r.PeerSessionID()); err != nil {
 				return 0, nil, fmt.Errorf("bridge: CASE resume session pickup: %w", err)
 			}
 		}

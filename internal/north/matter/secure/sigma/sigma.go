@@ -196,6 +196,21 @@ type IdentityResolver interface {
 	ResolveSigma1Destination(destinationID [32]byte, initiatorRandom [RandomSize]byte) (*Identity, PeerVerifier, bool)
 }
 
+// FabricIndexResolver is the optional companion to [IdentityResolver]
+// used on the Sigma2_Resume path. A resuming Sigma1 carries no
+// DestinationID worth trusting for identity selection — the fabric is
+// authoritative from the stored [ResumptionRecord] instead (matter.js
+// CaseServer.ts:151 destructures `fabric` from the record). Resolvers
+// that manage multiple fabric identities should implement this so the
+// resumed session is registered under the record's fabric; a resolver
+// that only implements [IdentityResolver] keeps the responder's
+// baseline identity (single-fabric / test path). Returning
+// (_, _, false) means the record's fabric no longer has an installed
+// identity — the responder then falls through to Full Sigma.
+type FabricIndexResolver interface {
+	ResolveFabricIndex(fabricIndex uint8) (*Identity, PeerVerifier, bool)
+}
+
 // --- Sigma1 ---
 
 // Sigma1 is the first message: plaintext on the wire.
