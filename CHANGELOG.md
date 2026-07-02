@@ -29,6 +29,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: multi-admin "add to another ecosystem" now works.** An
+  Enhanced Commissioning Window opened by a second controller
+  (`AdministratorCommissioning.OpenCommissioningWindow`) supplies a PAKE
+  verifier derived from a passcode that controller chose. The bridge validated
+  the verifier and then discarded it, so PASE ran against the bridge's own
+  passcode and every "add to Google/Alexa/…" attempt failed at the Pake2
+  confirmation. The bridge now installs a PASE acceptor built from the supplied
+  verifier for the window lifetime (restoring the configured acceptor on close)
+  and advertises the Enhanced window over mDNS with `CM=2` + its discriminator
+  so the second controller can discover it — mirroring matter.js.
+
 - **Matter bridge: ArmFailSafe ownership is now enforced.** A commissioning
   fail-safe armed by one fabric could previously be re-armed or disarmed by a
   different fabric, and a CASE session could arm the fail-safe during another

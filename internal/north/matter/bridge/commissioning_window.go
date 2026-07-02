@@ -48,6 +48,27 @@ type FailSafeArmer interface {
 	ArmFailSafeFor(ctx context.Context, seconds uint32, fabricIndex uint8) error
 }
 
+// PaseVerifierInstaller is the optional daemon-side hook CommissioningWindow
+// calls when an Enhanced Commissioning Window is opened with a
+// commissioner-supplied PAKE passcode verifier (Matter §11.19 / §3.10.5).
+// It installs a PASE acceptor built from that verifier for the window
+// lifetime — so the bridge accepts PASE against the passcode the
+// commissioner chose, not the bridge's configured passcode — and returns a
+// restore closure that re-installs the configured acceptor when the window
+// closes. Mirrors matter.js AdministratorCommissioningServer
+// openCommissioningWindow → PaseServer.fromVerificationValue.
+//
+// When no installer is wired (Basic Commissioning Window, or no verifier
+// supplied), OpenWindow leaves the configured acceptor in place.
+type PaseVerifierInstaller interface {
+	// InstallVerifier installs a window-lifetime PASE acceptor from the
+	// 97-byte Matter PAKE passcode verifier (w0 || L) plus the PBKDF
+	// iterations + salt the commissioner supplied. Returns a restore
+	// closure (re-installs the prior acceptor) or an error if the verifier
+	// is malformed.
+	InstallVerifier(verifier []byte, iterations uint32, salt []byte) (restore func(), err error)
+}
+
 // PaseSessionCloser is the optional bridge-side hook CommissioningWindow
 // calls at the start of RevokeWindow. Matter §11.19.7.3 step 1 mandates
 // closing any open PASE session regardless of window state. The bridge's
@@ -95,6 +116,14 @@ type CommissioningWindow struct {
 	// when true, it is BasicWindowOpen (2).
 	isBasicWindow bool
 
+	// hasVerifier records whether the current window was opened with a
+	// commissioner-supplied PAKE verifier (the Matter cluster Enhanced
+	// Commissioning Window path). It distinguishes a true ECW — which the
+	// daemon advertises over mDNS with CM=2 — from the REST/operator open
+	// (also Enhanced status, but its own passcode, advertised CM=1 by the
+	// window opener). See [CommissioningWindow.HasSuppliedVerifier].
+	hasVerifier bool
+
 	// closeTimer fires when the window expires so the bridge auto-
 	// reverts to "no PASE acceptor". Cancelled when RevokeWindow
 	// closes the window early.
@@ -131,6 +160,11 @@ type CommissioningWindow struct {
 	// paseSessionCloser, when non-nil, is called at the start of
 	// RevokeWindow to evict any open PASE session per Matter §11.19.7.3.
 	paseSessionCloser PaseSessionCloser
+
+	// paseVerifierInstaller, when non-nil, installs a window-lifetime PASE
+	// acceptor from a commissioner-supplied PAKE verifier on the Enhanced
+	// Commissioning Window path (see [PaseVerifierInstaller]).
+	paseVerifierInstaller PaseVerifierInstaller
 }
 
 // NewCommissioningWindow returns a fresh, closed window.
@@ -166,6 +200,37 @@ func (w *CommissioningWindow) SetPaseSessionCloser(c PaseSessionCloser) {
 	w.mu.Lock()
 	w.paseSessionCloser = c
 	w.mu.Unlock()
+}
+
+// SetPaseVerifierInstaller wires (or clears, when nil) the hook that
+// installs a window-lifetime PASE acceptor from a commissioner-supplied
+// PAKE verifier on the Enhanced Commissioning Window path (see
+// [PaseVerifierInstaller]). Safe to call concurrently with [OpenWindow].
+func (w *CommissioningWindow) SetPaseVerifierInstaller(i PaseVerifierInstaller) {
+	w.mu.Lock()
+	w.paseVerifierInstaller = i
+	w.mu.Unlock()
+}
+
+// Discriminator returns the 12-bit discriminator of the currently-open
+// window (0 when closed). Used by the daemon's transition hook to build
+// the CM=2 commissionable advertisement for an Enhanced Commissioning
+// Window.
+func (w *CommissioningWindow) Discriminator() uint16 {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.discriminator
+}
+
+// HasSuppliedVerifier reports whether the currently-open window was opened
+// with a commissioner-supplied PAKE verifier (a true Matter Enhanced
+// Commissioning Window), as opposed to the REST/operator open (also
+// Enhanced status but the bridge's own passcode). The daemon advertises
+// CM=2 only for the former; the REST path advertises CM=1 via the opener.
+func (w *CommissioningWindow) HasSuppliedVerifier() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.hasVerifier
 }
 
 // SetTransitionHook wires the optional callback fired on Open / Close.
@@ -264,6 +329,7 @@ func (w *CommissioningWindow) OpenWindow(ctx context.Context, params wire.OpenWi
 	// reflect them via AdminFabricIndex / AdminVendorId attributes
 	// per Matter §11.19.5.2.
 	w.isBasicWindow = params.IsBasicWindow
+	w.hasVerifier = !params.IsBasicWindow && len(params.PAKEPasscodeVerifier) > 0
 	if params.AdminFabricIndex != 0 {
 		w.adminFabric = params.AdminFabricIndex
 		w.adminFabricSet = true
@@ -280,6 +346,7 @@ func (w *CommissioningWindow) OpenWindow(ctx context.Context, params wire.OpenWi
 		w.adminFabricSet = false
 		w.adminVendorSet = false
 		w.isBasicWindow = false
+		w.hasVerifier = false
 		closeHook := w.onTransition
 		restore := w.restore
 		w.restore = nil
@@ -306,6 +373,37 @@ func (w *CommissioningWindow) OpenWindow(ctx context.Context, params wire.OpenWi
 	if armer != nil {
 		_ = armer.ArmFailSafeFor(ctx, uint32(params.CommissioningTimeoutSeconds), 0) //nolint:gosec // G115: timeout fits uint32 by spec; see #20
 	}
+
+	// Enhanced Commissioning Window: install a PASE acceptor built from the
+	// commissioner-supplied PAKE verifier for the window lifetime, so PASE
+	// runs against the passcode the commissioner chose (not the bridge's
+	// configured passcode). Mirrors matter.js
+	// AdministratorCommissioningServer.openCommissioningWindow →
+	// PaseServer.fromVerificationValue. The install happens before OpenWindow
+	// returns — the cluster InvokeResponse, and therefore the commissioner's
+	// first PASE datagram, come after — and the configured acceptor is
+	// restored on close via setRestore (both the timer and RevokeWindow fire
+	// w.restore). Basic windows and the REST/local passcode path carry no
+	// verifier and keep the configured acceptor untouched.
+	w.mu.RLock()
+	installer := w.paseVerifierInstaller
+	w.mu.RUnlock()
+	if installer != nil && !params.IsBasicWindow && len(params.PAKEPasscodeVerifier) > 0 {
+		restore, err := installer.InstallVerifier(params.PAKEPasscodeVerifier, params.Iterations, params.Salt)
+		if err != nil {
+			// The window is useless without the acceptor — revoke to avoid a
+			// dangling open state (RevokeWindow disarms the fail-safe too),
+			// then surface the error to the cluster handler.
+			_ = w.RevokeWindow(ctx)
+			return fmt.Errorf("install PASE verifier: %w", err)
+		}
+		if !w.setRestore(restore) {
+			// Lost the race with the close timer — restore inline so the
+			// verifier acceptor never lingers past the already-closed window.
+			restore()
+		}
+	}
+
 	if hook != nil {
 		hook()
 	}
@@ -379,6 +477,7 @@ func (w *CommissioningWindow) RevokeWindow(ctx context.Context) error {
 	w.adminFabricSet = false
 	w.adminVendorSet = false
 	w.isBasicWindow = false
+	w.hasVerifier = false
 	if w.closeTimer != nil {
 		w.closeTimer.Stop()
 		w.closeTimer = nil

@@ -126,29 +126,28 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 
 ### C6 — Multi-admin broken: PAKE verifier ignored + ECM window never advertised
 
-> **Status: FOUNDATION done (Unreleased); wiring + mDNS remain.** Added
-> `spake2.NewVerifierFromValue(w0[32], L[65])` — reconstructs a device-side PASE
-> verifier directly from a Matter §3.10.5 passcode verifier (mirrors matter.js
-> `PaseServer.fromVerificationValue`), validating L on-curve. Proven by a
-> round-trip test (verifier-from-value ↔ prover-with-passcode → same Ke) plus
-> wrong-passcode and malformed/off-curve negatives.
+> **Status: FIXED (Unreleased); interop confirmation pending.** Both halves
+> landed and are hermetically tested:
+> - **(a) verifier install.** `spake2.NewVerifierFromValue(w0[32], L[65])`
+>   reconstructs the device verifier (mirrors matter.js
+>   `PaseServer.fromVerificationValue`, on-curve L validation). A new
+>   `PaseVerifierInstaller` hook (bridge interface, daemon
+>   `matterVerifierInstaller`) builds a `PaseAdapter` via
+>   `buildPaseAdapterFromVerifier` and installs it as the window-lifetime PASE
+>   acceptor in `CommissioningWindow.OpenWindow`, restoring the configured
+>   acceptor on close via `setRestore`. Only the Matter cluster path (supplied
+>   verifier) installs it; the REST opener keeps its own passcode.
+> - **(b) ECM mDNS.** The window transition hook advertises a verifier-backed
+>   Enhanced window with `CM=2` + its discriminator (`matterWindowTransitionHook`),
+>   gated on a new `HasSuppliedVerifier()` flag so the REST path's CM=1 announce
+>   is untouched. Mirrors matter.js `DeviceCommissioner.ts:166`.
 >
-> **Remaining (needs chip-tool live validation):**
-> 1. **(a) install path.** `CommissioningWindow.OpenWindow`
->    (`internal/north/matter/bridge/commissioning_window.go`) receives
->    `params.PAKEPasscodeVerifier` + `Iterations` + `Salt` but discards them. Add
->    a `PaseVerifierInstaller` hook (bridge interface, daemon implements) that
->    builds a `PaseAdapter` from `NewVerifierFromValue(verifier[:32], verifier[32:97])`
->    + the supplied PBKDF params and installs it as the active PASE acceptor for
->    the window lifetime, wiring the restore closure through `setRestore` exactly
->    like the ephemeral path. Note the two open paths: the REST/local
->    `CommissioningWindowOpener` (generates its own passcode — unchanged) vs the
->    Matter cluster command path (`AdministratorCommissioning` →
->    `WindowController.OpenWindow` with the supplied verifier — the one to fix).
-> 2. **(b) ECM mDNS.** On the Enhanced-window transition, call
->    `AnnounceCommissioning` with `CommissioningMode=2` + the ECM discriminator
->    (`_L<disc>` subtype), mirroring matter.js `DeviceCommissioner.ts:166`
->    (currently only the REST opener announces, hard-coded CM=1).
+> Tests: spake2 round-trip (verifier-from-value ↔ prover-with-passcode → same
+> Ke) + wrong-passcode/off-curve negatives; bridge wiring
+> (install/restore/basic-skip/error-revoke); daemon `buildPaseAdapterFromVerifier`
+> smoke + wrong-length. **Interop confirmation** (real Apple + Google multi-admin,
+> or chip-tool on Linux — NOT required on macOS) is decoupled and pending; the
+> Matter bridge is opt-in/default-off so this lands behind that gate.
 
 - **(a) Verifier — Go:** `bridge/commissioning_window.go:218` validates the `PAKEPasscodeVerifier` then discards it; `spake2` has no constructor from raw `(w0, L)`. **matter.js:** `packages/node/src/behaviors/administrator-commissioning/AdministratorCommissioningServer.ts:103` `PaseServer.fromVerificationValue(...)`, `packages/protocol/src/session/pase/PaseServer.ts:52` splits `w0 = slice(0,32)`, `L = slice(32,97)`.
 - **(b) mDNS — Go:** `AnnounceCommissioning` is called only by the REST opener with a hard-coded `CommissioningMode: 1` (`cmd/openccu-loom/daemon_matter.go:2524`); the ECM transition (`bridge/commissioning_window.go:197`) never publishes `CM=2` / `_L<discriminator>`. **matter.js:** `packages/protocol/src/protocol/DeviceCommissioner.ts:166` advertises the enhanced mode.

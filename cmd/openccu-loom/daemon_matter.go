@@ -2163,6 +2163,39 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 	if err != nil {
 		return nil, fmt.Errorf("spake2 verifier context: %w", err)
 	}
+	return buildPaseAdapterFromContext(vc, salt, iterations, mgr, opCreds, gc, logger)
+}
+
+// buildPaseAdapterFromVerifier builds a PASE adapter from a Matter
+// §3.10.5 passcode verifier (w0 || L) instead of a passcode. This is the
+// Enhanced Commissioning Window path: a multi-admin commissioner derives
+// the verifier from a passcode it chose and supplies only (w0, L) in
+// OpenCommissioningWindow, so the bridge accepts PASE against that
+// passcode without ever seeing it. Mirrors matter.js
+// PaseServer.fromVerificationValue
+// (packages/protocol/src/session/pase/PaseServer.ts:52-61).
+// gc is intentionally omitted: the Enhanced Commissioning Window is
+// driven by a commissioner that sends its own ArmFailSafe, so the
+// defensive AutoArmOnPaseEstablished hook (which needs GeneralCommissioning)
+// is not wired on this path — matching the ephemeral provider, which also
+// passes a nil gc.
+func buildPaseAdapterFromVerifier(verifier, salt []byte, iterations int, mgr *operational.Manager, opCreds *mattercore.OperationalCredentials, logger *slog.Logger) (*matterbridge.PaseAdapter, error) {
+	const want = spake2.VerifierW0Size + spake2.VerifierLSize // 97 bytes, Matter §3.10.5
+	if len(verifier) != want {
+		return nil, fmt.Errorf("matter: PAKE passcode verifier length=%d, want %d", len(verifier), want)
+	}
+	vc, err := spake2.NewVerifierFromValue(verifier[:spake2.VerifierW0Size], verifier[spake2.VerifierW0Size:])
+	if err != nil {
+		return nil, fmt.Errorf("spake2 verifier from value: %w", err)
+	}
+	return buildPaseAdapterFromContext(vc, salt, iterations, mgr, opCreds, nil, logger)
+}
+
+// buildPaseAdapterFromContext wires a fully-configured [matterbridge.PaseAdapter]
+// around a prepared SPAKE2+ verifier context — the shared tail of
+// buildPaseAdapterFromCreds (passcode path) and buildPaseAdapterFromVerifier
+// (supplied-verifier / Enhanced Commissioning Window path).
+func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterations int, mgr *operational.Manager, opCreds *mattercore.OperationalCredentials, gc *mattercore.GeneralCommissioning, logger *slog.Logger) (*matterbridge.PaseAdapter, error) {
 	// Pre-allocate the operational session id BEFORE the adapter is
 	// constructed. The id is embedded in PBKDFParamResponse as
 	// ResponderSessionID; the commissioner echoes it back as
@@ -2227,6 +2260,36 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 }
 
 // --- commissioning-window hook adapters ----------------------------------
+
+// matterWindowTransitionHook returns the [matterbridge.CommissioningWindow]
+// transition callback. On a transition into an Enhanced Commissioning Window
+// opened with a commissioner-supplied verifier it advertises the window over
+// mDNS with CM=2 + the ECW discriminator (so a second controller can
+// discover the multi-admin window); on a transition into the closed state it
+// withdraws the commissionable record. An Enhanced window opened via the
+// REST opener (its own passcode, CM=1) carries no supplied verifier and is
+// left to the opener's own announce. `enhancedAdvert` is the CM=2 template;
+// the discriminator is stamped per fire. Mirrors matter.js
+// DeviceCommissioner.ts:166 (enterCommissioningMode with Enhanced).
+func matterWindowTransitionHook(mb *matterbridge.Bridge, window *matterbridge.CommissioningWindow, enhancedAdvert matterbridge.CommissioningAdvertisement, logger *slog.Logger) func() {
+	return func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
+		if mb == nil {
+			return
+		}
+		snap := window.CurrentWindow()
+		if snap.Status == matterwire.WindowStatusEnhanced && window.HasSuppliedVerifier() {
+			adv := enhancedAdvert
+			adv.Discriminator = window.Discriminator()
+			if err := mb.AnnounceCommissioning(context.Background(), adv); err != nil {
+				logger.Warn("matter.bridge.commissioning.enhanced_announce", slog.String("err", err.Error()))
+			}
+			return
+		}
+		if snap.Status != matterwire.WindowStatusEnhanced {
+			mb.WithdrawCommissioning(context.Background())
+		}
+	}
+}
 
 // failSafeArmerAdapter wires the Matter fail-safe arm hook to
 // GeneralCommissioning. Matter §11.19.6 mandates that
@@ -2482,6 +2545,34 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			opMgr:  bundle.opMgr,
 			logger: logger,
 		})
+		// Wire the Enhanced Commissioning Window PASE-verifier installer: when
+		// a Matter commissioner opens a window via the AdministratorCommissioning
+		// cluster command with a supplied PAKE verifier (multi-admin), install a
+		// PASE acceptor built from that verifier for the window lifetime
+		// (Matter §11.19 / §3.10.5). Wired independently of the operator's
+		// EphemeralWindow REST preference — the cluster path does not go through
+		// the REST opener. In ConcurrentPairings mode the restore rebuilds the
+		// configured per-exchange provider; otherwise it re-arms the configured
+		// singleton adapter (bundle.configuredPase, nil → noop between windows).
+		var verifierConfiguredFactory func() *matterbridge.PaseAdapter
+		if cfg.North.Matter.Commissioning.ConcurrentPairings {
+			cmCopy := cfg.North.Matter.Commissioning
+			opMgrLocal := bundle.opMgr
+			opCredsLocal := bundle.opCreds
+			gcLocal := bundle.rootRefs.GeneralCommissioning
+			loggerLocal := logger
+			verifierConfiguredFactory = func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed by interface; buildPaseAdapter has no ctx
+				a, err := buildPaseAdapter(cmCopy, opMgrLocal, opCredsLocal, gcLocal, loggerLocal)
+				if err != nil {
+					loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
+					return nil
+				}
+				return a
+			}
+		}
+		window.SetPaseVerifierInstaller(newMatterVerifierInstaller(
+			mb, bundle.opMgr, bundle.opCreds, bundle.configuredPase, verifierConfiguredFactory, logger,
+		))
 		opener := matterbridge.NewCommissioningWindowOpener(
 			window,
 			cfg.North.Matter.Discriminator,
@@ -2540,17 +2631,20 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				DeviceTypeID: 0x0016, // §10.3 RootNode — DT=0x000E empirically worse for Apple Multi-Admin flow
 			},
 		}
-		// Withdraw the commissionable record on every transition into
-		// "closed" so commissioners stop discovering the bridge once
-		// the window has expired or been revoked.
-		window.SetTransitionHook(func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
-			if mb == nil {
-				return
-			}
-			if window.CurrentWindow().Status != matterwire.WindowStatusEnhanced {
-				mb.WithdrawCommissioning(context.Background())
-			}
-		})
+		// Transition hook: advertise an Enhanced Commissioning Window opened
+		// with a supplied verifier (CM=2) and withdraw the commissionable
+		// record when the window closes. Extracted to keep this function's
+		// cyclomatic complexity in check.
+		//nolint:contextcheck // the returned hook fires asynchronously on a window state change; there is no caller ctx to thread, so the mDNS announce/withdraw use context.Background()
+		window.SetTransitionHook(matterWindowTransitionHook(mb, window, matterbridge.CommissioningAdvertisement{
+			InstanceID:        instanceID,
+			VendorID:          cfg.North.Matter.VendorID,
+			ProductID:         cfg.North.Matter.ProductID,
+			NodeLabel:         cfg.North.Matter.NodeLabel,
+			RotatingID:        rotatingID,
+			CommissioningMode: 2, // §4.3.1.4 CM=2: enhanced commissioning window
+			DeviceTypeID:      0x0016,
+		}, logger))
 
 		// Ephemeral-window mode: each OpenCommissioningWindow call
 		// generates a fresh discriminator + passcode + Spake2+ verifier
