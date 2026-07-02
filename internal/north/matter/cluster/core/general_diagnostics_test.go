@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -162,6 +163,51 @@ func TestGenDiag_InvokeReturnsError(t *testing.T) {
 		_, err := g.MatterInvoke(ctx, cmdID, nil, hmenum.CommandPriorityHigh)
 		if err == nil {
 			t.Errorf("MatterInvoke(0x%02X) expected error, got nil", cmdID)
+		}
+	}
+}
+
+// genDiagStatusCoder is a local alias for the MatterStatusCode() method
+// [im.StatusCodeError] carries. Deliberately does not embed Error() so
+// errorlint does not mistake the assertion below for an error-unwrap check —
+// mirrors the statusCoder helper in matter_negative_write_parity_test.go.
+type genDiagStatusCoder interface {
+	MatterStatusCode() im.StatusCode
+}
+
+// TestGenDiag_TestEventTrigger_ReturnsConstraintError asserts that invoking
+// TestEventTrigger (0x00, conformance M) fails with a typed
+// [im.StatusCodeError] carrying [im.StatusConstraintError] — the bridge
+// configures no test-event enable key, so every invocation is rejected the
+// same way matter.js's #validateTestEnabledKey rejects an all-zero /
+// non-matching key (GeneralDiagnosticsServer.ts:99,104).
+func TestGenDiag_TestEventTrigger_ReturnsConstraintError(t *testing.T) {
+	t.Parallel()
+	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
+	_, err := g.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("TestEventTrigger: expected error, got nil")
+	}
+	sc, ok := err.(genDiagStatusCoder)
+	if !ok {
+		t.Fatalf("TestEventTrigger error %v (%T) does not implement im.StatusCodeError", err, err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode() = %v, want StatusConstraintError", got)
+	}
+}
+
+// TestGenDiag_MatterAcceptedCommands_IncludesTestEventTrigger asserts that
+// TestEventTrigger (0x00, conformance M) is enumerated in
+// MatterAcceptedCommands alongside TimeSnapshot (0x01) — the mandatory
+// command must be advertised even though the handler always rejects it.
+func TestGenDiag_MatterAcceptedCommands_IncludesTestEventTrigger(t *testing.T) {
+	t.Parallel()
+	g := core.NewGeneralDiagnostics(core.BootReasonPowerOnReboot)
+	list := g.MatterAcceptedCommands()
+	for _, want := range []uint32{0x00, 0x01} {
+		if !slices.Contains(list, want) {
+			t.Errorf("MatterAcceptedCommands() = %v — missing 0x%02X", list, want)
 		}
 	}
 }

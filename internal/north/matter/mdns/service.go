@@ -318,10 +318,15 @@ type CommissionableServiceConfig struct {
 // of the Matter §4.3.1.6 PairingHintBitmap — value 0x0033.
 const PairingHintDefault uint16 = 0x0033
 
-// defaultCommissionableSII is the recommended Session Idle Interval in
-// milliseconds per Matter §4.3.1.6 and matter.js
-// packages/protocol/src/session/SessionIntervals.ts MATTER_COMMISSION_SII_DEFAULT.
-const defaultCommissionableSII uint32 = 5000
+// defaultCommissionableSII is the Session Idle Interval in milliseconds
+// advertised on the commissionable record (Matter §4.3.1.6). matter.js
+// uses the same idle interval for every advertisement — 500 ms per
+// packages/protocol/src/session/SessionIntervals.ts
+// (SessionIntervals.defaults.idleInterval = Millis(500)); there is no
+// separate 5000 ms commissioning default. A too-large SII makes
+// commissioners space their PASE retransmits ~10× too slowly on a lossy
+// link, slowing pairing.
+const defaultCommissionableSII uint32 = 500
 
 // defaultCommissionableSAI is the recommended Session Active Interval
 // in milliseconds per Matter §4.3.1.6 and matter.js

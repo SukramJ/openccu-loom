@@ -8,6 +8,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Matter bridge: OperationalCredentials.NOCs requires Administer to read.**
+  The NOC / ICAC certificate bytes were readable — and streamable via a
+  wildcard subscribe — at View privilege. Reading them now requires Administer,
+  matching matter.js (`operational-credentials.element.ts` access "R F A").
 - **Matter bridge: PASE pairing failures are now capped.** An open
   commissioning window accepted unlimited passcode guesses for its whole
   duration (up to 15 minutes commissioned, or 48 hours for an uncommissioned
@@ -36,6 +40,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: read-event timestamps are correct.** Out-of-band event reads
+  stamped the EpochTimestamp in microseconds instead of the spec-mandated POSIX
+  milliseconds, so a read event's time read ~1000× off (and inconsistent with
+  the subscribe path, which was already correct). Both paths now emit
+  milliseconds.
+- **Matter bridge: GeneralDiagnostics.TestEventTrigger is now enumerated.** The
+  mandatory command was missing from `AcceptedCommandList` and returned a
+  generic failure; it is now listed and returns `ConstraintError` (the bridge
+  configures no test-event enable key), matching matter.js.
+- **Matter bridge: commissionable mDNS Session Idle Interval corrected to
+  500 ms** (was 5000 ms, from a non-existent matter.js default). A too-large SII
+  made commissioners space PASE retransmits ~10× too slowly on a lossy link.
 - **Matter bridge: multi-admin "add to another ecosystem" now works.** An
   Enhanced Commissioning Window opened by a second controller
   (`AdministratorCommissioning.OpenCommissioningWindow`) supplies a PAKE

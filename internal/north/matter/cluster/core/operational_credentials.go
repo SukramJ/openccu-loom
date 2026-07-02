@@ -474,6 +474,19 @@ var (
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (o *OperationalCredentials) MatterClusterID() uint32 { return opcredsClusterID }
 
+// MinReadPrivilege implements [interfaces.MatterClusterAttributeReadPrivilege].
+// NOCs (0x0000) requires Administer (5) per Matter §11.18.5.7 (access
+// "R F A") — the NOC / ICAC certificate bytes must not be readable by a
+// merely-View subject (nor streamed to one via a wildcard subscribe). Every
+// other OperationalCredentials attribute is View. Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts:24.
+func (*OperationalCredentials) MinReadPrivilege(attrID uint32) uint8 {
+	if attrID == opcredsAttrNOCs {
+		return 5 // Administer
+	}
+	return 1 // View
+}
+
 // MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
 // Every OperationalCredentials command requires Administer (5) per
 // Matter §11.18 (access "A" / "F A"). Mirrors matter.js

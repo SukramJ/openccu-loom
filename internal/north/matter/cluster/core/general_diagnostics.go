@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -305,12 +306,13 @@ func (g *GeneralDiagnostics) MatterWrite(_ context.Context, attrID uint32, _ any
 //   - 0x01 TimeSnapshot — returns SystemTimeMs (monotonic since boot)
 //     and PosixTimeMs (wall clock; null when the bridge is pre-time-sync).
 //
-// Not implemented (rejected with UnsupportedCommand):
-//   - 0x00 TestEventTrigger — openccu-loom does not implement test
-//     triggers in v1.1.
-//   - 0x03 PayloadTestRequest — DMTEST conformance only.
+// TestEventTrigger (0x00, conformance M) is enumerated but always fails
+// enable-key validation with ConstraintError (see the handler); the bridge
+// configures no test-event enable key. PayloadTestRequest (0x03, DMTEST) is
+// not implemented.
 func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any, _ hmenum.CommandPriority) (any, error) {
-	if cmdID == gendiagCmdTimeSnapshot {
+	switch cmdID {
+	case gendiagCmdTimeSnapshot:
 		systemMs := uint64(time.Since(g.startTime).Milliseconds()) //nolint:gosec // G115: wall-clock millis are non-negative for any valid host time; see #20
 		// Mirrors matter.js packages/node/src/behaviors/general-diagnostics/
 		// GeneralDiagnosticsServer.ts::timeSnapshot — PosixTimeMs is
@@ -322,9 +324,32 @@ func (g *GeneralDiagnostics) MatterInvoke(_ context.Context, cmdID uint32, _ any
 			SystemTimeMs: systemMs,
 			PosixTimeMs:  &posixMs,
 		}, nil
+	case gendiagCmdTestEventTrigger:
+		// TestEventTrigger is mandatory (conformance M) but the bridge
+		// configures no test-event enable key, so every invocation fails
+		// enable-key validation with ConstraintError. Mirrors matter.js
+		// GeneralDiagnosticsServer.ts #validateTestEnabledKey (an all-zero
+		// or non-matching enable key → Status.ConstraintError,
+		// GeneralDiagnosticsServer.ts:99,104). Enumerating the command in
+		// AcceptedCommandList satisfies the mandatory-command conformance;
+		// it simply never enables a trigger on the bridge.
+		return nil, gendiagConstraintErr{}
 	}
 	return nil, fmt.Errorf("matter: GeneralDiagnostics command 0x%02X not supported", cmdID)
 }
+
+// gendiagConstraintErr is the typed [im.StatusCodeError] returned by
+// TestEventTrigger. Maps to IM ConstraintError (0x87), matching matter.js's
+// enable-key rejection.
+type gendiagConstraintErr struct{}
+
+func (gendiagConstraintErr) Error() string {
+	return "matter: GeneralDiagnostics TestEventTrigger: no test-event enable key configured"
+}
+
+func (gendiagConstraintErr) MatterStatusCode() im.StatusCode { return im.StatusConstraintError }
+
+var _ im.StatusCodeError = gendiagConstraintErr{}
 
 // TimeSnapshotResponse mirrors Matter §11.12.7.3.
 // Mirrors matter.js packages/model/src/standard/elements/
@@ -343,12 +368,13 @@ type TimeSnapshotResponse struct {
 // Mirrors matter.js packages/model/src/standard/elements/
 // general-diagnostics.element.ts accepted commands.
 //
-// Note: TestEventTrigger (0x00) and PayloadTestRequest (0x03) are NOT listed
-// — they are not implemented in v1.1 and the handler returns UnsupportedCommand
-// for both.
+// TestEventTrigger (0x00) is mandatory (conformance M) and is enumerated;
+// the handler always rejects it with ConstraintError (no enable key). Only
+// PayloadTestRequest (0x03, DMTEST) stays unlisted.
 func (g *GeneralDiagnostics) MatterAcceptedCommands() []uint32 {
 	return []uint32{
-		gendiagCmdTimeSnapshot, // 0x01
+		gendiagCmdTestEventTrigger, // 0x00
+		gendiagCmdTimeSnapshot,     // 0x01
 	}
 }
 

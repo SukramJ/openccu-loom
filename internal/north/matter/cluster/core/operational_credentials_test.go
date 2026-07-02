@@ -50,6 +50,48 @@ func TestOpcreds_ClusterRevision(t *testing.T) {
 	}
 }
 
+// TestOpcreds_MinReadPrivilege_NOCsRequiresAdminister asserts that NOCs
+// (0x0000) requires Administer (5), not View — the certificate bytes in the
+// NOC/ICAC list must not be readable or subscribable by a merely-View
+// subject. Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts:24
+// (access "R F A").
+func TestOpcreds_MinReadPrivilege_NOCsRequiresAdminister(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	if got := oc.MinReadPrivilege(0x0000); got != 5 {
+		t.Fatalf("MinReadPrivilege(NOCs) = %d, want 5 (Administer)", got)
+	}
+}
+
+// TestOpcreds_MinReadPrivilege_OtherAttributesAreView asserts that every
+// OperationalCredentials attribute other than NOCs stays at the default
+// View (1) privilege.
+func TestOpcreds_MinReadPrivilege_OtherAttributesAreView(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	for _, attrID := range []uint32{0x0001, 0x0002, 0x0004} {
+		if got := oc.MinReadPrivilege(attrID); got != 1 {
+			t.Errorf("MinReadPrivilege(0x%04X) = %d, want 1 (View)", attrID, got)
+		}
+	}
+}
+
+// TestOpcreds_MinReadPrivilege_NilReceiver asserts that MinReadPrivilege is
+// a pure attrID switch that never dereferences its receiver, so it also
+// works on a nil *OperationalCredentials — no server construction required
+// to determine the read-privilege table.
+func TestOpcreds_MinReadPrivilege_NilReceiver(t *testing.T) {
+	t.Parallel()
+	var oc *core.OperationalCredentials
+	if got := oc.MinReadPrivilege(0x0000); got != 5 {
+		t.Fatalf("MinReadPrivilege(NOCs) on nil receiver = %d, want 5", got)
+	}
+	if got := oc.MinReadPrivilege(0x0001); got != 1 {
+		t.Fatalf("MinReadPrivilege(Fabrics) on nil receiver = %d, want 1", got)
+	}
+}
+
 func TestOpcreds_NewOperationalCredentials_NilStore(t *testing.T) {
 	t.Parallel()
 	_, err := core.NewOperationalCredentials(nil, core.OpcredsConfig{})

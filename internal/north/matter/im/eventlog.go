@@ -11,8 +11,9 @@ import (
 // EventRecord is one persisted event entry.
 // Mirrors matter.js packages/protocol/src/interaction/EventHandler.ts::EventRecord.
 //
-// EpochUS is microseconds since the Unix epoch (Matter §10.6.6.1
-// EpochTimestamp); Priority mirrors the [EventPriority] constants.
+// EpochMS is milliseconds since the Unix epoch (Matter §10.6.6.1
+// EpochTimestamp is POSIX milliseconds — matter.js TlvPosixMs); Priority
+// mirrors the [EventPriority] constants.
 type EventRecord struct {
 	// Number is the bridge-wide monotonic event counter stamped onto
 	// every emitted event. Matter §10.6.6.5 requires the number to be
@@ -27,8 +28,9 @@ type EventRecord struct {
 	Cluster uint32
 	// EventID is the event ID within the cluster.
 	EventID uint32
-	// EpochUS is microseconds since the Unix epoch.
-	EpochUS uint64
+	// EpochMS is milliseconds since the Unix epoch (Matter §10.6.6.1
+	// EpochTimestamp, POSIX milliseconds).
+	EpochMS uint64
 	// Payload is the cluster-specific event struct (e.g. StartUpEvent,
 	// ReachableChangedEvent). Encoding is handled by the cluster-specific
 	// value writer in [bridge/reply.go]. `any` is justified: event
@@ -99,8 +101,8 @@ func (l *EventLog) Append(rec EventRecord) uint64 {
 	defer l.mu.Unlock()
 	l.next++
 	rec.Number = l.next
-	if rec.EpochUS == 0 {
-		rec.EpochUS = uint64(time.Now().UnixMicro()) //nolint:gosec // time.Now() is non-negative; see #20
+	if rec.EpochMS == 0 {
+		rec.EpochMS = uint64(time.Now().UnixMilli()) //nolint:gosec // time.Now() is non-negative; see #20
 	}
 	switch rec.Priority {
 	case EventPriorityCritical:

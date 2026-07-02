@@ -195,6 +195,17 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 
 ## Tier 2 — MEDIUM
 
+> **Batch 1 FIXED (Unreleased):** OperationalCredentials.NOCs read privilege →
+> Administer (security); GeneralDiagnostics.TestEventTrigger enumerated +
+> returns ConstraintError (conformance M); event read EpochTimestamp µs→ms
+> (`im/eventlog.go` `EpochUS`→`EpochMS`); commissionable mDNS SII 5000→500 ms.
+> All with tests. **Skipped with reason:** SetRegulatoryConfig CountryCode → the
+> Go decoder deliberately leaves CountryCode empty because a non-empty value was
+> observed to make Apple Home send RemoveFabric ~80 s after Subscribe-Initial
+> (documented in `bridge/fields_reader.go`); applying it needs the same
+> real-controller interop validation as C6, so it is deferred, not
+> forgotten. The bullets below are the remaining Tier-2 backlog.
+
 **TLV / message codec**
 - Vendor-qualified protocol IDs collide with standard dispatch (VendorID parsed but never consulted). `bridge/receive.go:195` vs `MessageCodec.ts:377`. Fix: treat `HasVendorID` as `ErrUnknownProtocol` before the switch.
 - Security-flags decoded with a 5-bit session-type mask, no reject of unknown types / Control flag; Control/Privacy echoed into replies. `transport/message/message.go:40`, `bridge/reply.go:148` vs `MessageCodec.ts:150` / `:195` / `:212`. Fix: 2-bit mask, error on type ∉ {0,1} and on C-flag, drop the echo; keep the raw security-flags byte for AEAD fidelity.
