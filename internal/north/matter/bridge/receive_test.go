@@ -206,6 +206,64 @@ func TestDispatch_UnknownProtocolID(t *testing.T) {
 	}
 }
 
+// TestDispatch_VendorQualifiedProtocolCollisionRejected verifies that a
+// datagram whose protocol header carries a non-zero vendor id is rejected
+// with ErrUnknownProtocol even when its low 16-bit ProtocolID collides
+// with SecureChannel (0x0000) — a vendor-specific protocol must never
+// route into the Common-vendor PASE/IM handlers just because the low bits
+// match. Mirrors matter.js MessageCodec.ts:377, which keys dispatch on
+// the full 32-bit (vendorId*0x10000 + protocolId) identifier. Also
+// confirms the PASE handler that a naive ProtocolID-only switch would
+// have invoked never sees the forged frame.
+func TestDispatch_VendorQualifiedProtocolCollisionRejected(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	h := &recordingPaseHandler{}
+	b.AttachPaseHandler(h)
+
+	hdr := buildHeader(0, 10)
+	proto := message.ProtocolHeader{
+		HasVendorID: true,
+		VendorID:    0xFFF1,
+		ProtocolID:  mrp.SecureChannelProtocolID, // 0x0000 — collides with SecureChannel
+		Opcode:      mrp.SCOpcodePake1,
+		ExchangeID:  1,
+	}.Marshal()
+	payload := []byte{0x01}
+	buf := buildDatagram(hdr, proto, payload)
+
+	err := b.dispatch(context.Background(), buf, nil)
+	if !errors.Is(err, ErrUnknownProtocol) {
+		t.Errorf("want ErrUnknownProtocol, got %v", err)
+	}
+	if got := h.pake1Calls.Load(); got != 0 {
+		t.Errorf("pake1Calls = %d, want 0 — vendor-qualified protocol must not reach the PASE handler", got)
+	}
+}
+
+// TestDispatch_VendorIDZeroStillRoutesNormally verifies the boundary of
+// the vendor-qualified guard: HasVendorID=true with VendorID=0x0000 (the
+// Common vendor id) is NOT treated as vendor-specific — [Bridge.dispatch]
+// only rejects a non-zero vendor id. A datagram shaped this way must
+// still route into the IM handler as usual.
+func TestDispatch_VendorIDZeroStillRoutesNormally(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	hdr := buildHeader(0, 11)
+	proto := message.ProtocolHeader{
+		HasVendorID: true,
+		VendorID:    0,
+		ProtocolID:  im.InteractionModelProtocolID,
+		Opcode:      im.OpcodeReadRequest,
+		ExchangeID:  1,
+	}.Marshal()
+	payload := buildIMReadRequestPayload(t)
+	buf := buildDatagram(hdr, proto, payload)
+	if err := b.dispatch(context.Background(), buf, loopbackSrc()); err != nil {
+		t.Errorf("expected nil for VendorID=0 (Common vendor), got %v", err)
+	}
+}
+
 // ─── SessionID != 0 (encrypted) routing ──────────────────────────────────
 
 // TestDispatch_SessionMissingSurfaces verifies that a non-zero SessionID

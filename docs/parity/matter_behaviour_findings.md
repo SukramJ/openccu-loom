@@ -205,6 +205,23 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 > (documented in `bridge/fields_reader.go`); applying it needs the same
 > real-controller interop validation as C6, so it is deferred, not
 > forgotten. The bullets below are the remaining Tier-2 backlog.
+>
+> **Batch 2 FIXED (Unreleased):** BridgedDeviceBasicInformation.Reachable attribute
+> is now marked dirty on a reachability flip (`NotifyDeviceReachable`), not just
+> the event; empty subscription keepalives set `SuppressResponse=true`
+> (`reportSubscription`); vendor-qualified protocol datagrams (`HasVendorID` +
+> non-Common vendor) are rejected before the IM/SecureChannel dispatch switch
+> (`receive.go`).
+>
+> **Batch 3 FIXED (Unreleased):** ColorControl CT servers (`ctColorServer`,
+> `rgbwColorServer`) now serve the mandatory `CoupleColorTempToLevelMinMireds`
+> (0x400D = PhysicalMinMireds) and `StartUpColorTemperatureMireds` (0x4010 =
+> null) attributes, which were missing from the read surface
+> (`matter_color.go`). Additional skips-with-reason: CASE unresolvable
+> destinationId fallback is a documented deliberate pre-AddNOC single-fabric
+> path (`sigma/protocol.go` comment); CASE per-session attestation challenge and
+> WindowCovering TargetPosition mirror are commissioning-crypto / documented
+> items deferred for care.
 
 **TLV / message codec**
 - Vendor-qualified protocol IDs collide with standard dispatch (VendorID parsed but never consulted). `bridge/receive.go:195` vs `MessageCodec.ts:377`. Fix: treat `HasVendorID` as `ErrUnknownProtocol` before the switch.

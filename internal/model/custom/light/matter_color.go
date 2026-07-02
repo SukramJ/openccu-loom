@@ -51,6 +51,14 @@ const (
 	matterAttrColorColorCapabilities       uint32 = 0x400A
 	matterAttrColorColorTempPhysicalMinMir uint32 = 0x400B
 	matterAttrColorColorTempPhysicalMaxMir uint32 = 0x400C
+	// CoupleColorTempToLevelMinMireds (0x400D, "R V") and
+	// StartUpColorTemperatureMireds (0x4010, "RW VM", nullable X, persistent
+	// N) are both mandatory once the CT feature + ColorTemperatureMireds are
+	// advertised (color-control.element.ts:183-190, conformance
+	// "CT & ColorTemperatureMireds"). Missing them makes a cert read return
+	// UNSUPPORTED_ATTRIBUTE.
+	matterAttrColorCoupleColorTempToLevelMinMir uint32 = 0x400D
+	matterAttrColorStartUpColorTempMireds       uint32 = 0x4010
 
 	matterCmdColorMoveToHue              uint32 = 0x00
 	matterCmdColorMoveToSaturation       uint32 = 0x03
@@ -268,6 +276,14 @@ func (s ctColorServer) MatterRead(attrID uint32) (any, bool) {
 		return kelvinToMireds(s.l.MaxKelvin), true // higher Kelvin → lower mireds
 	case matterAttrColorColorTempPhysicalMaxMir:
 		return kelvinToMireds(s.l.MinKelvin), true
+	case matterAttrColorCoupleColorTempToLevelMinMir:
+		// Without the CoupleColorTempToLevel feature the spec floors this
+		// at ColorTempPhysicalMinMireds (§3.2.6.4.5).
+		return kelvinToMireds(s.l.MaxKelvin), true
+	case matterAttrColorStartUpColorTempMireds:
+		// Nullable (quality X); the bridge stores no start-up colour
+		// temperature, so it reports null.
+		return nil, true
 	case matterAttrFeatureMap:
 		return matterColorFeatureCT, true
 	case matterAttrClusterRevision:
@@ -314,6 +330,8 @@ func (s ctColorServer) MatterAttributes() []uint32 {
 		matterAttrColorColorCapabilities,
 		matterAttrColorColorTempPhysicalMinMir,
 		matterAttrColorColorTempPhysicalMaxMir,
+		matterAttrColorCoupleColorTempToLevelMinMir,
+		matterAttrColorStartUpColorTempMireds,
 	}
 }
 
@@ -477,6 +495,12 @@ func (s rgbwColorServer) MatterRead(attrID uint32) (any, bool) {
 		return matterMinMireds, true
 	case matterAttrColorColorTempPhysicalMaxMir:
 		return matterMaxMireds, true
+	case matterAttrColorCoupleColorTempToLevelMinMir:
+		// No CoupleColorTempToLevel feature → floors at PhysicalMinMireds.
+		return matterMinMireds, true
+	case matterAttrColorStartUpColorTempMireds:
+		// Nullable; no stored start-up colour temperature.
+		return nil, true
 	case matterAttrFeatureMap:
 		return matterColorFeatureHS | matterColorFeatureCT, true
 	case matterAttrClusterRevision:
@@ -539,6 +563,8 @@ func (s rgbwColorServer) MatterAttributes() []uint32 {
 		matterAttrColorColorCapabilities,
 		matterAttrColorColorTempPhysicalMinMir,
 		matterAttrColorColorTempPhysicalMaxMir,
+		matterAttrColorCoupleColorTempToLevelMinMir,
+		matterAttrColorStartUpColorTempMireds,
 	}
 }
 

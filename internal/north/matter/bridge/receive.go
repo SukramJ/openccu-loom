@@ -192,6 +192,24 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	}
 	payload := plain[bodyOffset:]
 
+	// Interaction Model (0x0001) and Secure Channel (0x0000) are
+	// Common-vendor protocols. A datagram that carries a vendor id (the
+	// exchange V flag, VendorID != Common 0x0000) belongs to a
+	// vendor-specific protocol the bridge does not implement — even if its
+	// low 16-bit protocol id collides with IM/SC. matter.js keys dispatch on
+	// the full 32-bit id (vendorId*0x10000 + protocolId,
+	// MessageCodec.ts:377), so a vendor-qualified protocol never routes into
+	// the common handlers; reject it before the switch rather than feeding a
+	// forged frame into the PASE/IM machinery.
+	if proto.HasVendorID && proto.VendorID != 0 {
+		err := fmt.Errorf("%w: vendor=0x%04X protocol=0x%04X", ErrUnknownProtocol, proto.VendorID, proto.ProtocolID)
+		b.logger.Debug("matter.rx.vendor_protocol",
+			slog.String("src", srcString(src)),
+			slog.Int("vendor_id", int(proto.VendorID)),
+			slog.Int("protocol_id", int(proto.ProtocolID)))
+		return err
+	}
+
 	switch proto.ProtocolID {
 	case im.InteractionModelProtocolID:
 		return b.handleIMOpcode(ctx, src, &hdr, proto, payload)
@@ -431,6 +449,7 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 	if topo == nil {
 		return
 	}
+	mgr := b.subscriptionManagerLocked()
 	for _, ep := range topo.Bridged() {
 		if ep == nil {
 			continue
@@ -443,6 +462,22 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 			core.EventReachableChanged,
 			core.ReachableChangedEvent{ReachableNewValue: reachable},
 			interfaces.MatterEventPriorityCritical)
+		// Also dirty the Reachable ATTRIBUTE (BDBI 0x0039 / 0x0011), not
+		// just fire the event: a controller subscribed to the attribute
+		// (Google Home tracks it) otherwise shows stale reachability until
+		// it re-subscribes. matter.js's reactive state marks the attribute
+		// dirty on the same change. Mirrors the Descriptor.PartsList
+		// dirty-mark pattern in bridge.go.
+		if mgr != nil {
+			mgr.OnAttributeChanged(im.ConcreteAttributePath{
+				Endpoint:     ep.ID,
+				Cluster:      core.BridgedDeviceBasicInformationClusterID,
+				Attribute:    0x0011, // Reachable (§9.13.5)
+				HasEndpoint:  true,
+				HasCluster:   true,
+				HasAttribute: true,
+			})
+		}
 		b.logger.Debug("matter.bridge.reachable_changed",
 			slog.Int("endpoint_id", int(ep.ID)),
 			slog.String("central", centralName),

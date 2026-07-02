@@ -362,6 +362,14 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 		}
 	}
 
+	// An empty report is a max-interval keepalive (nothing changed, or every
+	// dirty path was dropped by the ACL gate). matter.js ships empty
+	// DataReports with SuppressResponse=true (ServerSubscription.ts:782) so
+	// the controller does not owe an IM StatusResponse for a no-op heartbeat.
+	if len(report.Reports) == 0 {
+		report.SuppressResponse = true
+	}
+
 	body, err := EncodeReportData(report)
 	if err != nil {
 		debugReplyError(b.logger, "encode_ongoing_report", target.src, err)

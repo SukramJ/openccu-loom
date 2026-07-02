@@ -40,6 +40,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: device reachability updates reach attribute-subscribers.**
+  When a bridged HomeMatic device went (un)reachable the bridge fired the
+  `ReachableChanged` event but did not mark the `Reachable` attribute changed,
+  so a controller tracking the attribute (Google Home) showed stale
+  reachability until it re-subscribed. The attribute is now marked dirty too.
+- **Matter bridge: vendor-specific protocol datagrams are rejected, not
+  misrouted.** A datagram carrying a vendor id whose low protocol id collided
+  with Interaction Model / Secure Channel was fed into those handlers; it is now
+  rejected as an unknown protocol, matching matter.js's full 32-bit protocol
+  dispatch.
+- **Matter bridge: empty subscription keepalives set SuppressResponse.** A
+  no-op max-interval heartbeat no longer asks the controller for an IM
+  StatusResponse, matching matter.js.
+- **Matter bridge: colour-temperature lights advertise the mandatory
+  `StartUpColorTemperatureMireds` + `CoupleColorTempToLevelMinMireds`
+  attributes.** They were missing from the ColorControl read surface, so a
+  conformance/controller read of them returned UNSUPPORTED_ATTRIBUTE. Both are
+  now served (CoupleColorTempToLevelMinMireds = PhysicalMinMireds;
+  StartUpColorTemperatureMireds = null), matching matter.js.
 - **Matter bridge: read-event timestamps are correct.** Out-of-band event reads
   stamped the EpochTimestamp in microseconds instead of the spec-mandated POSIX
   milliseconds, so a read event's time read ~1000× off (and inconsistent with
