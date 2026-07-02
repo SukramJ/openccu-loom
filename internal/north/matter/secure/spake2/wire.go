@@ -245,13 +245,19 @@ type PBKDFParamRequest struct {
 	// responder omits the [PBKDFParamResponse.PBKDFParameters]
 	// field; when false, the responder MUST include it.
 	HasPBKDFParameters bool
+	// InitiatorMRPParams carries the commissioner's MRP retransmit
+	// tuning from tag 5, or nil when the field was absent. The PASE
+	// session opener stamps these onto the operational entry so
+	// retransmissions honour the peer's advertised intervals —
+	// matter.js PaseServer.ts:155-157 `session.timingParameters =
+	// initiatorSessionParams`.
+	InitiatorMRPParams *MRPParameters
 }
 
 // DecodePBKDFParamRequest parses a Matter PBKDFParamRequest TLV
-// payload. The optional InitiatorMRPParams field (tag 5) is
-// silently skipped — the bridge's MRP defaults match Matter's
-// recommended values and operators have no knob to override
-// commissioner-side params.
+// payload, including the optional InitiatorMRPParams field (tag 5)
+// so the eventual PASE session can honour the commissioner's
+// retransmit intervals (matter.js PaseServer.ts:135-157).
 func DecodePBKDFParamRequest(payload []byte) (PBKDFParamRequest, error) {
 	var req PBKDFParamRequest
 	dec := tlv.NewDecoder(payload)
@@ -283,12 +289,12 @@ func DecodePBKDFParamRequest(payload []byte) (PBKDFParamRequest, error) {
 		case tagPBKDFReqHasPBKDFParameters:
 			req.HasPBKDFParameters = el.Bool
 		case tagPBKDFReqInitiatorMRPParams:
-			// Skip the nested Structure if present — when a
-			// commissioner sends MRP params we use defaults instead.
 			if el.IsContainer {
-				if err := skipContainer(dec); err != nil {
-					return req, fmt.Errorf("%w: %w", ErrWireMalformed, err)
+				params, perr := decodeMRPParameters(dec)
+				if perr != nil {
+					return req, perr
 				}
+				req.InitiatorMRPParams = &params
 			}
 		}
 	}
@@ -538,25 +544,4 @@ func decodeMRPParameters(dec *tlv.Decoder) (MRPParameters, error) {
 		}
 	}
 	return p, nil
-}
-
-// skipContainer drains a nested container element by consuming
-// elements until the matching EndContainer arrives. Used when the
-// decoder must skip optional fields (e.g. MRPParams).
-func skipContainer(dec *tlv.Decoder) error {
-	depth := 1
-	for depth > 0 {
-		el, err := dec.Next()
-		if err != nil {
-			return fmt.Errorf("skipContainer: %w", err)
-		}
-		if el.IsContainer {
-			depth++
-			continue
-		}
-		if el.IsEndContainer {
-			depth--
-		}
-	}
-	return nil
 }

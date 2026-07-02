@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
@@ -132,10 +133,13 @@ func (noopAckHandler) Discharge(uint16, uint16) bool { return false }
 // wired the singleton handler is ignored.
 func (b *Bridge) AttachPaseHandler(h PaseHandler) {
 	// A fresh acceptor marks a commissioning-window boundary; give the new
-	// window its own PASE brute-force budget.
+	// window its own PASE brute-force budget and a free
+	// single-active-PASE slot.
 	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.paseInFlightExchange = 0
+	b.paseInFlightSince = time.Time{}
 	if h == nil {
 		b.paseHandler = noopPaseHandler{}
 		return
@@ -161,10 +165,13 @@ type PaseHandlerProvider func(exchangeID uint16) PaseHandler
 // the singleton handler.
 func (b *Bridge) AttachPaseHandlerProvider(p PaseHandlerProvider) {
 	// A fresh acceptor marks a commissioning-window boundary; give the new
-	// window its own PASE brute-force budget.
+	// window its own PASE brute-force budget and a free
+	// single-active-PASE slot.
 	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.paseInFlightExchange = 0
+	b.paseInFlightSince = time.Time{}
 	b.paseProvider = p
 }
 
@@ -294,6 +301,19 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		return nil
 
 	case mrp.SCOpcodePBKDFParamRequest:
+		if !b.claimPaseInFlight(proto.ExchangeID) {
+			// Single-active-PASE (Matter §4.13.1): a second
+			// commissioner's PBKDFParamRequest while a handshake is in
+			// progress is IGNORED — matter.js PaseServer.ts:80-86
+			// onNewExchange logs "Pairing already in progress" and
+			// drops the exchange. The MRP layer has already acked the
+			// datagram; the rejected commissioner times out and
+			// retries after the active handshake finished or expired.
+			b.logger.Info("matter.rx.sc.pase_busy",
+				slog.String("src", srcString(src)),
+				slog.Int("exchange_id", int(proto.ExchangeID)))
+			return nil
+		}
 		h := b.resolvePaseHandler(proto.ExchangeID)
 		return b.handlePase(src, requestHdr, proto, payload, "pbkdf_param_req",
 			h.ProcessPBKDFParamRequest)
@@ -303,8 +323,15 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			h.ProcessPake1)
 	case mrp.SCOpcodePake3:
 		h := b.resolvePaseHandler(proto.ExchangeID)
-		return b.handlePase(src, requestHdr, proto, payload, "pake3",
+		err := b.handlePase(src, requestHdr, proto, payload, "pake3",
 			h.ProcessPake3)
+		// Pake3 terminates the handshake either way (success installs
+		// the session, failure aborts the attempt) — release the
+		// single-active-PASE claim so the next commissioner can start.
+		// matter.js clears #pairingMessenger in the finally block of
+		// onNewExchange (PaseServer.ts:112-118).
+		b.releasePaseInFlight(proto.ExchangeID)
+		return err
 
 	case mrp.SCOpcodeSigma1:
 		// Apple iOS multicasts the same Sigma1 onto IPv4 + IPv6-LL +
@@ -388,6 +415,41 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 // attacker on the LAN could hammer passcode guesses for the whole window
 // — up to 900 s commissioned, or 48 h for an uncommissioned bridge.
 const paseMaxErrors = 20
+
+// pasePairingTimeout bounds how long a single PASE handshake may hold
+// the single-active-PASE claim. Mirrors matter.js PaseServer.ts:33
+// PASE_PAIRING_TIMEOUT (60 s) — an abandoned handshake (commissioner
+// crashed between PBKDFParamRequest and Pake3) self-expires so pairing
+// is not locked out for the rest of the window.
+const pasePairingTimeout = 60 * time.Second
+
+// claimPaseInFlight attempts to claim the single-active-PASE slot for
+// exchangeID. Returns true when the claim succeeds: the slot was idle,
+// expired, or already owned by the SAME exchange (PBKDFParamRequest
+// retransmit). Mirrors matter.js PaseServer.ts:80-86 onNewExchange.
+func (b *Bridge) claimPaseInFlight(exchangeID uint16) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := time.Now()
+	idle := b.paseInFlightSince.IsZero() || now.Sub(b.paseInFlightSince) > pasePairingTimeout
+	if !idle && b.paseInFlightExchange != exchangeID {
+		return false
+	}
+	b.paseInFlightExchange = exchangeID
+	b.paseInFlightSince = now
+	return true
+}
+
+// releasePaseInFlight clears the single-active-PASE claim held by
+// exchangeID. A claim held by a DIFFERENT exchange stays untouched.
+func (b *Bridge) releasePaseInFlight(exchangeID uint16) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.paseInFlightExchange == exchangeID {
+		b.paseInFlightExchange = 0
+		b.paseInFlightSince = time.Time{}
+	}
+}
 
 // recordPaseFailure increments the PASE failure counter and, when it
 // reaches [paseMaxErrors], revokes the open commissioning window and

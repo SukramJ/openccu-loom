@@ -323,6 +323,20 @@ type Bridge struct {
 	// when the cap fires. See [Bridge.recordPaseFailure].
 	paseFailures atomic.Int32
 
+	// paseInFlightExchange / paseInFlightSince implement the
+	// single-active-PASE invariant (Matter §4.13.1): while one PASE
+	// handshake is in progress the bridge SHALL NOT accept another —
+	// otherwise a second commissioner's PBKDFParamRequest silently
+	// replaces the first one's in-flight verifier state. Guarded by
+	// b.mu; zero exchange + zero time = idle. An abandoned handshake
+	// self-expires after [pasePairingTimeout] so a crashed
+	// commissioner cannot lock pairing out for the whole window.
+	// Mirrors matter.js PaseServer.ts:80-86 onNewExchange (reject
+	// while a pairing messenger / timer is active) + :127 the 60 s
+	// pairing timer.
+	paseInFlightExchange uint16
+	paseInFlightSince    time.Time
+
 	// unsecuredWindows holds a per-source-node-id [mrp.Window] duplicate
 	// detector for unsecured (SessionID==0, PASE) traffic, so a
 	// retransmitted Pake1/Pake3 is acked without re-invoking the handshake
