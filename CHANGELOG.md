@@ -44,6 +44,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: a Subscribe matching nothing is rejected.** A Subscribe
+  request naming no attribute/event paths, or whose (wildcard) paths matched
+  zero attributes and events, was accepted and registered as a dead
+  subscription burning engine ticks; both cases now return InvalidAction
+  before registration, matching matter.js. Re-subscribes whose reports are
+  fully suppressed by DataVersionFilters still establish.
 - **Matter bridge: outbound retransmissions honour the peer's MRP session
   parameters.** The retransmit schedule used a fixed 300 ms base and a bare
   1.6× growth; the intervals a controller advertises during PASE/CASE session

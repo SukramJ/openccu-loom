@@ -666,17 +666,14 @@ func (b *Bridge) handleSubscribeRequest(
 	// matter.js InteractionServer.ts validateReadPaths (#3926, Matter
 	// §8.4.3.2), which gates Read and Subscribe through the same check.
 	if im.ValidateReadPaths(req.AttributeRequests, req.EventRequests) != im.StatusSuccess {
-		body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
-		if err != nil {
-			debugReplyError(b.logger, "encode_subscribe_path_reject", src, err)
-			return err
-		}
-		if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
-			debugReplyError(b.logger, "send_subscribe_path_reject", src, err)
-			return err
-		}
-		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
-		return nil
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "path")
+	}
+
+	// A Subscribe naming no attribute and no event paths at all is
+	// InvalidAction — matter.js InteractionServer.ts:628-633 ("No
+	// attributes or events requested").
+	if len(req.AttributeRequests) == 0 && len(req.EventRequests) == 0 {
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "empty")
 	}
 
 	// Stamp the FabricFiltered flag + requesting FabricIndex into the
@@ -691,12 +688,42 @@ func (b *Bridge) handleSubscribeRequest(
 	subCtx := im.WithFabricFilter(ctx, req.FabricFiltered, subFabricIndex)
 	subCtx = im.WithSubject(subCtx, subSubjectNodeID, subSubjectCATs)
 
-	initialReport := b.buildInitialReport(subCtx, dispatcher, req)
+	initialReport, matchedPaths := b.buildInitialReport(subCtx, dispatcher, req)
+	// A Subscribe whose (possibly wildcard) paths match zero attributes
+	// AND zero events cannot be established — matter.js
+	// ServerSubscription.ts:610-614 rejects it with InvalidAction. The
+	// matched count is taken BEFORE DataVersionFilter suppression, so a
+	// legitimately quiet re-subscribe (all clusters cached) still
+	// establishes.
+	if matchedPaths == 0 {
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "no_match")
+	}
 	subID := b.registerSubscription(src, requestHdr, proto, req, &initialReport)
 	if err := b.streamInitialReportChunks(src, requestHdr, proto, subID, initialReport); err != nil {
 		return err
 	}
 	return b.sendSubscribeResponse(src, requestHdr, proto, req, subID, initialReport)
+}
+
+// rejectSubscribeInvalidAction ships a top-level
+// StatusResponse(InvalidAction) for a Subscribe that cannot be
+// established (illegal paths, no paths, or zero matching paths) and
+// discharges the owed MRP ack. stage tags the debug log line.
+func (b *Bridge) rejectSubscribeInvalidAction(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, stage string) error {
+	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
+	if err != nil {
+		debugReplyError(b.logger, "encode_subscribe_reject_"+stage, src, err)
+		return err
+	}
+	if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+		debugReplyError(b.logger, "send_subscribe_reject_"+stage, src, err)
+		return err
+	}
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.logger.Debug("matter.rx.im.subscribe.reject",
+		slog.String("src", srcString(src)),
+		slog.String("stage", stage))
+	return nil
 }
 
 // subscriptionManagerLocked is a small helper to read b.subManager

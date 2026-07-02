@@ -241,7 +241,7 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 - Event EpochTimestamp: read path microseconds, subscribe path milliseconds; the wire wants POSIX ms. `im/eventlog.go:103`, `im/subscription/engine.go:87` vs `TlvEventData.ts:22`. Fix: store ms on both paths.
 - EventNumber resets to 1 after restart (in-memory only). `im/eventlog.go:64` vs `OccurrenceManager.ts:34`. Fix: persist the counter in the SQLite store.
 - Empty keepalive reports sent with SuppressResponse=false. `bridge/subscribe.go:244` vs `ServerSubscription.ts:782`. Fix: set true when `len(paths)==0`.
-- Subscribe matching zero attributes/events not rejected. `bridge/subscribe_dispatch.go:29` vs `ServerSubscription.ts:610`. Fix: StatusResponse(InvalidAction).
+- Subscribe matching zero attributes/events not rejected. `bridge/subscribe_dispatch.go:29` vs `ServerSubscription.ts:610`. **FIXED (Unreleased):** two gates in `handleSubscribeRequest` — an empty request (no attribute and no event paths, `InteractionServer.ts:628-633`) and a request whose paths match zero attributes+events (`ServerSubscription.ts:610-614`) both return StatusResponse(InvalidAction) without registering a subscription. The matched count is taken before DataVersionFilter suppression so an all-cached re-subscribe still establishes. Shared `rejectSubscribeInvalidAction` helper also carries the pre-existing illegal-path reject.
 
 **Core clusters**
 - CommissioningComplete / expiry skip PASE cleanup. `cluster/core/general_commissioning.go:657` vs `FailsafeContext.ts:153`.

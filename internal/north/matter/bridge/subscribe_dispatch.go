@@ -22,7 +22,11 @@ import (
 // by running each requested attribute path through the dispatcher, merging
 // cached EventReports, sorting the result, and emitting per-attribute
 // diagnostic log lines. Returns the assembled report with
-// HasSubscription=false (the caller stamps that after registerSubscription).
+// HasSubscription=false (the caller stamps that after registerSubscription)
+// plus the count of matched attribute/event paths — taken BEFORE
+// DataVersionFilter suppression, so the caller can reject a
+// zero-matching Subscribe (ServerSubscription.ts:610-614) without
+// misfiring on an all-cached re-subscribe.
 //
 // Mirrors matter.js InteractionServer.ts:startReadInteraction for the
 // Subscribe path (attribute reading + event merging + sort).
@@ -30,7 +34,7 @@ func (b *Bridge) buildInitialReport(
 	subCtx context.Context,
 	dispatcher im.Dispatcher,
 	req im.SubscribeRequest,
-) im.ReportData {
+) (report im.ReportData, matchedPaths int) {
 	// Build the initial ReportData by running each requested path
 	// through the dispatcher and collecting the results into one
 	// AttributeReport list. Mirrors HandleReadRequest at the path
@@ -40,6 +44,7 @@ func (b *Bridge) buildInitialReport(
 		HasSubscription: false, // overwritten below when manager wires the subscription
 		Reports:         nil,
 	}
+	matched := 0
 	for _, path := range req.AttributeRequests {
 		// Authorize each result against the requesting subject (subCtx
 		// carries fabric + subject from handleSubscribeRequest). Without
@@ -47,6 +52,7 @@ func (b *Bridge) buildInitialReport(
 		// attributes (ACL, NOCs) to a View-only / ACE-less subject, the
 		// same bypass reportSubscription closes for ongoing reports.
 		for _, rr := range b.readAuthorizedResults(subCtx, dispatcher, path) {
+			matched++
 			// DataVersionFilter evaluation: skip attributes whose cluster
 			// DataVersion matches the controller's cached version.
 			// Matter §10.6.5 — the controller infers "no change since
@@ -96,6 +102,7 @@ func (b *Bridge) buildInitialReport(
 	if len(req.EventRequests) > 0 {
 		evs := im.BuildEventReports(req.EventRequests, b.eventLog, req.EventFilters)
 		initialReport.EventReports = evs
+		matched += len(evs)
 	}
 	// Sort reports by (endpoint, cluster, attribute) ascending. Apple
 	// Home's MTRDevice processes the wildcard Subscribe-Initial in
@@ -142,7 +149,7 @@ func (b *Bridge) buildInitialReport(
 			slog.String("value_type", valueType),
 			slog.Any("value", valuePreview))
 	}
-	return initialReport
+	return initialReport, matched
 }
 
 // registerSubscription registers the subscribe request in the subscription

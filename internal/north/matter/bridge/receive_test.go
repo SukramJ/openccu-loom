@@ -335,18 +335,63 @@ func TestDispatch_IMResponseOpcodeIsUnsupported(t *testing.T) {
 	}
 }
 
-// TestDispatch_IMSubscribeReplies verifies that a valid SubscribeRequest
-// is decoded AND replied to (initial ReportData + SubscribeResponse).
-// Uses loopbackSrc because the reply path now sends two datagrams.
+// TestDispatch_IMSubscribeReplies verifies that a SubscribeRequest is
+// decoded AND replied to at the dispatch() → handleSubscribeRequest
+// routing boundary. buildIMSubscribeRequestPayload builds an empty
+// request (no AttributeRequests, no EventRequests), which the
+// matched-path gate in handleSubscribeRequest (subscribe.go) rejects
+// with a top-level StatusResponse(InvalidAction) rather than
+// establishing — matter.js InteractionServer.ts:628-633 ("No
+// attributes or events requested"). A Subscribe naming a real matching
+// path establishes normally instead; see
+// TestHandleSubscribeRequest_MatchingPath_EstablishesAndReplies
+// (subscribe_establish_test.go) for that positive-control case, and
+// TestHandleSubscribeRequest_EmptyRequest_RejectsInvalidAction
+// (subscribe_reject_test.go) for the same rejection driven directly
+// against handleSubscribeRequest rather than through the wire-decode
+// path exercised here.
 func TestDispatch_IMSubscribeReplies(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
+
+	peerConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		t.Fatalf("ListenUDP: %v", err)
+	}
+	t.Cleanup(func() { _ = peerConn.Close() })
+	peerAddr, ok := peerConn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		t.Fatalf("unexpected peer addr type %T", peerConn.LocalAddr())
+	}
+
 	hdr := buildHeader(0, 7)
 	proto := buildProtocolHeader(im.InteractionModelProtocolID, im.OpcodeSubscribeRequest)
 	payload := buildIMSubscribeRequestPayload(t)
 	buf := buildDatagram(hdr, proto, payload)
-	if err := b.dispatch(context.Background(), buf, loopbackSrc()); err != nil {
+	if err := b.dispatch(context.Background(), buf, peerAddr); err != nil {
 		t.Errorf("expected nil for SubscribeRequest, got %v", err)
+	}
+
+	_ = peerConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	rbuf := make([]byte, 1500)
+	n, _, err := peerConn.ReadFromUDP(rbuf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v", err)
+	}
+	got := rbuf[:n]
+	_, hdrLen, err := message.UnmarshalHeader(got)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	rproto, protoLen, err := message.UnmarshalProtocolHeader(got[hdrLen:])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rproto.Opcode != im.OpcodeStatusResponse {
+		t.Fatalf("reply opcode = 0x%02X, want StatusResponse (0x%02X) — an empty Subscribe must be rejected, not established", rproto.Opcode, im.OpcodeStatusResponse)
+	}
+	if status := decodeStatusResponseCode(t, got[hdrLen+protoLen:]); status != im.StatusInvalidAction {
+		t.Errorf("StatusResponse status = %v, want StatusInvalidAction (0x80)", status)
 	}
 }
 
