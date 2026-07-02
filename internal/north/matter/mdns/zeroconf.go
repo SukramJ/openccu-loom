@@ -52,6 +52,16 @@ type Zeroconf struct {
 	// responder is wired the [Zeroconf] keeps publishing primaries
 	// without subtype support, matching pre-1.1 behaviour.
 	responder *SubtypeResponder
+	// published maps a primary key to the fingerprint of the record
+	// set last handed to the zeroconf library (TXT + port + host +
+	// address list + subtypes). Publish skips the teardown + re-register
+	// cycle when the fingerprint is unchanged: the library's Shutdown
+	// emits TTL-0 goodbye packets, so an unconditional re-register on
+	// the periodic re-announce made Apple flush and re-learn the whole
+	// record set every interval. matter.js re-broadcasts records
+	// without expiring them and sends goodbyes only on real unpublish
+	// (MdnsAdvertisement.ts broadcast() vs expire()).
+	published map[string]string
 	closed    bool
 }
 
@@ -60,9 +70,10 @@ type Zeroconf struct {
 // during the daemon's shutdown sequence).
 func NewZeroconf() *Zeroconf {
 	return &Zeroconf{
-		servers:  make(map[string]*zeroconf.Server),
-		items:    make(map[string]Service),
-		subFQDNs: make(map[string][]string),
+		servers:   make(map[string]*zeroconf.Server),
+		items:     make(map[string]Service),
+		subFQDNs:  make(map[string][]string),
+		published: make(map[string]string),
 	}
 }
 
@@ -161,7 +172,6 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 		return errors.New("mdns: zeroconf advertiser is closed")
 	}
 	key := noopKey(svc.InstanceName, svc.ServiceType)
-	z.shutdownByKeyLocked(key)
 
 	domain := svc.Domain
 	if domain == "" {
@@ -196,6 +206,22 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 		}
 	}
 	ips := primaryHostIPs()
+	// Skip the teardown + re-register cycle when nothing changed: the
+	// library's Shutdown broadcasts TTL-0 goodbyes, so re-registering
+	// an identical record set on every periodic re-announce made
+	// Apple's cache flush + re-learn the bridge every interval. A real
+	// change (TXT bump, port, host rename, address change, subtype
+	// set) still re-registers — the goodbye is then correct. Mirrors
+	// matter.js MdnsAdvertisement.ts: broadcast() re-announces without
+	// expiring; expire() (goodbye) fires only on unpublish.
+	fp := fmt.Sprintf("%s|%d|%s|%s|%s",
+		strings.Join(txt, "\x1f"), svc.Port, host,
+		strings.Join(ips, ","), strings.Join(svc.Subtypes, ","))
+	if _, alive := z.servers[key]; alive && z.published[key] == fp {
+		z.items[key] = svc
+		return nil
+	}
+	z.shutdownByKeyLocked(key)
 	server, err := zeroconf.RegisterProxy(
 		svc.InstanceName,
 		svc.ServiceType,
@@ -211,6 +237,7 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 	}
 	z.servers[key] = server
 	z.items[key] = svc
+	z.published[key] = fp
 
 	// Subtypes are emitted as `_<sub>._sub.<service>.local.` PTR
 	// records pointing at the primary instance FQDN. Apple Home and
@@ -256,6 +283,7 @@ func (z *Zeroconf) shutdownByKeyLocked(key string) {
 		}
 	}
 	delete(z.subFQDNs, key)
+	delete(z.published, key)
 }
 
 // Withdraw implements [Advertiser]. The library emits goodbye packets
