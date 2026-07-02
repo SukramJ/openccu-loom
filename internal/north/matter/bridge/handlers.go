@@ -605,11 +605,11 @@ func NewMRPAckAdapter(t *mrp.AckTracker) *MRPAckAdapter {
 }
 
 // Discharge forwards to [mrp.AckTracker.Discharge].
-func (a *MRPAckAdapter) Discharge(exchangeID uint16) bool {
+func (a *MRPAckAdapter) Discharge(sessionID, exchangeID uint16) bool {
 	if a.tracker == nil {
 		return false
 	}
-	return a.tracker.Discharge(exchangeID)
+	return a.tracker.Discharge(sessionID, exchangeID)
 }
 
 // OperationalSessionLookup wraps a session-lookup function from the

@@ -44,6 +44,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: MRP ack bookkeeping is session-scoped.** ACK obligations,
+  standalone-ack reply routes and the per-chunk StatusResponse rendezvous were
+  keyed on the bare 16-bit exchange ID, which is only unique per session — two
+  concurrent controllers (or an old and a new CASE session of one controller)
+  sharing an exchange ID could discharge each other's pending ACKs, hijack the
+  synthesised standalone-ack route, or release the wrong chunk-streaming
+  waiter. All three maps now key on (session, exchange), matching matter.js's
+  session-scoped exchange resolution.
 - **Matter bridge: WindowCovering reports a real TargetPosition.** The
   TargetPositionLift/TiltPercent100ths attributes always mirrored the current
   position, so controllers never saw where a moving cover was heading (Apple

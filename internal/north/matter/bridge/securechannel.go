@@ -77,11 +77,13 @@ type CaseHandler interface {
 // that carries HasAck=true regardless of opcode, so the IM and
 // SecureChannel paths share this hook.
 type AckHandler interface {
-	// Discharge marks the obligation for exchangeID as fulfilled
-	// (the peer ACKed our outbound message). Returns whether an
-	// obligation existed (informational; the router does not branch
-	// on the result).
-	Discharge(exchangeID uint16) bool
+	// Discharge marks the obligation for the (session, exchange)
+	// pair as fulfilled (the peer ACKed our outbound message).
+	// Exchange IDs are only unique per session, so the session half
+	// keeps concurrent controllers from discharging each other's
+	// obligations. Returns whether an obligation existed
+	// (informational; the router does not branch on the result).
+	Discharge(sessionID, exchangeID uint16) bool
 }
 
 // noopPaseHandler is the default when no PASE handler is wired.
@@ -118,7 +120,7 @@ func (noopCaseHandler) ProcessSigma2Resume([]byte) (opcode uint8, payload []byte
 // every Discharge returns false (obligation never existed).
 type noopAckHandler struct{}
 
-func (noopAckHandler) Discharge(uint16) bool { return false }
+func (noopAckHandler) Discharge(uint16, uint16) bool { return false }
 
 // AttachPaseHandler wires the PASE port. Pass nil to revert to noop.
 // Calling this twice replaces the previous handler.
@@ -277,7 +279,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		ack := b.ackHandler
 		b.mu.RUnlock()
 		if ack != nil {
-			ack.Discharge(proto.ExchangeID)
+			ack.Discharge(requestHdr.SessionID, proto.ExchangeID)
 		}
 	}
 
@@ -496,7 +498,7 @@ func (b *Bridge) handlePase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 
@@ -576,7 +578,7 @@ func (b *Bridge) handleCase(
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 

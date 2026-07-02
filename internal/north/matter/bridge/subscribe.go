@@ -675,7 +675,7 @@ func (b *Bridge) handleSubscribeRequest(
 			debugReplyError(b.logger, "send_subscribe_path_reject", src, err)
 			return err
 		}
-		b.dischargeOwedAck(proto.ExchangeID)
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 		return nil
 	}
 

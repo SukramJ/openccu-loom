@@ -342,7 +342,7 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// Arm the per-exchange StatusResponse waiter BEFORE the send
 		// to avoid a missed-wakeup race: Apple can reply faster than
 		// our scheduler returns from sendReplyReliable.
-		waitCh := b.armStatusResponseWait(proto.ExchangeID)
+		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries the
 		// stale SubscribeRequest counter, and python-matter-server's
@@ -352,7 +352,7 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		chunkHdr := *requestHdr
 		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			debugReplyError(b.logger, "send_initial_report", src, err)
 			return err
 		}
@@ -370,9 +370,9 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// diagnostic only.
 		select {
 		case <-waitCh:
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			b.logger.Debug("matter.tx.subscribe.chunk_ack_timeout",
 				slog.String("src", srcString(src)),
 				slog.Int("chunk", i),
@@ -456,7 +456,7 @@ func (b *Bridge) sendSubscribeResponse(
 	ackTracker := b.ackTracker
 	b.mu.RUnlock()
 	if ackTracker != nil {
-		if counter, ok := ackTracker.LookupAndDischarge(proto.ExchangeID); ok {
+		if counter, ok := ackTracker.LookupAndDischarge(requestHdr.SessionID, proto.ExchangeID); ok {
 			subRespHdr.MessageCounter = counter
 		}
 	}

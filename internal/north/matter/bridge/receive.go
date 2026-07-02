@@ -323,7 +323,7 @@ func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHd
 	case imGateProceed:
 		// fall through to decode + dispatch below
 	case imGateAbsorbStatusResp:
-		return b.absorbStatusResponse(src, proto)
+		return b.absorbStatusResponse(src, requestHdr, proto)
 	case imGateRejectUnsupported:
 		return b.rejectUnsupportedOpcode(src, proto)
 	case imGateRejectGroupSession:
@@ -499,7 +499,7 @@ func (b *Bridge) replyTimedStatus(src *net.UDPAddr, requestHdr *message.Header, 
 		debugReplyError(b.logger, "send_timed_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.timed_reject",
 		slog.String("src", srcString(src)),
 		slog.String("stage", stage),

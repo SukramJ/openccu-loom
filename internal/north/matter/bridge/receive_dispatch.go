@@ -28,7 +28,7 @@ import (
 // retransmits its previous request indefinitely after pairing,
 // which Apple eventually surfaces as "device added" → immediate
 // disconnect.
-func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, proto message.ProtocolHeader) error {
+func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader) error {
 	// Do NOT call dischargeOwedAck here. The previous code did
 	// — the rationale "we just piggyback-acked on an outbound reply"
 	// is correct for *request* opcodes that immediately produce a
@@ -52,7 +52,7 @@ func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, proto message.ProtocolHe
 	// fires past Apple's state-machine and
 	// `ProcessSubscribeResponse` never triggers (Run 19 of the
 	// Apple-pair-diagnose cycle).
-	b.signalStatusResponseRX(proto.ExchangeID)
+	b.signalStatusResponseRX(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.status_ack",
 		slog.String("src", srcString(src)),
 		slog.Int("exchange", int(proto.ExchangeID)))
@@ -87,7 +87,7 @@ func (b *Bridge) rejectGroupSession(src *net.UDPAddr, requestHdr *message.Header
 		debugReplyError(b.logger, "send_group_reject", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 			debugReplyError(b.logger, "send_read_path_reject", src, err)
 			return err
 		}
-		b.dischargeOwedAck(proto.ExchangeID)
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 		return nil
 	}
 	// Stamp the FabricFiltered flag + the requesting FabricIndex
@@ -185,7 +185,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		// `ProcessReadResponse` state machine drops late chunks.
 		// Subscribe path applied this fix as P15; this closes
 		// the symmetric drift on Read.
-		waitCh := b.armStatusResponseWait(proto.ExchangeID)
+		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries
 		// the stale ReadRequest counter, and python-matter-server's
@@ -196,15 +196,15 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		chunkHdr := *requestHdr
 		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			debugReplyError(b.logger, "send_report", src, err)
 			return err
 		}
 		select {
 		case <-waitCh:
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			b.logger.Debug("matter.tx.read.chunk_ack_timeout",
 				slog.String("src", srcString(src)),
 				slog.Int("chunk", i),
@@ -219,7 +219,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 			slog.Int("bytes", len(body)),
 			slog.Bool("more", chunk.MoreChunkedMessages))
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.read",
 		slog.String("src", srcString(src)),
 		slog.Int("attribute_reports", len(report.Reports)),
@@ -265,7 +265,7 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 	// drive the side-effects (cluster writes already happened
 	// inside HandleWriteRequest) and discharge any owed MRP ack.
 	if req.SuppressResponse {
-		b.dischargeOwedAck(proto.ExchangeID)
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 		b.logger.Debug("matter.rx.im.write.suppressed",
 			slog.String("src", srcString(src)),
 			slog.Int("attribute_statuses", len(resp.Responses)))
@@ -287,7 +287,7 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 		debugReplyError(b.logger, "send_write", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.write",
 		slog.String("src", srcString(src)),
 		slog.Int("attribute_statuses", len(resp.Responses)))
@@ -380,7 +380,7 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 		debugReplyError(b.logger, "send_invoke", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	// Diagnose: capture Endpoint/Cluster/Command per InvokeRequest +
 	// Status per InvokeResponse. Apple retransmit-loops on Invokes
 	// whose response is malformed or contains an unexpected status,
@@ -433,7 +433,7 @@ func (b *Bridge) dispatchTimedRequest(src *net.UDPAddr, requestHdr *message.Head
 		debugReplyError(b.logger, "send_status", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.timed",
 		slog.String("src", srcString(src)),
 		slog.Int("timeout_ms", int(req.TimeoutMs)))
