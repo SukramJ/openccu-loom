@@ -6,6 +6,60 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Matter bridge: writes and command invokes are now gated by the
+  per-element ACL privilege, not a flat Operate.** Previously every write
+  and command was authorised at Operate, so a subject holding an
+  Operate-privilege CASE entry (as controllers issue to household members)
+  could write `AccessControl.ACL` to grant itself Administer, invoke
+  `AdministratorCommissioning.OpenCommissioningWindow` to admit a rogue
+  administrator, or `OperationalCredentials.RemoveFabric` to evict another
+  ecosystem. The IM layer now looks up the required privilege per attribute
+  / command (AccessControl.ACL → Administer, RemoveFabric → Administer,
+  BasicInformation.NodeLabel → Manage, …), mirroring matter.js. Commissioning
+  is unaffected (PASE sessions bypass ACL as before).
+- **Matter bridge: subscriptions now enforce ACL on every report.** The
+  subscription read paths (initial and ongoing, attributes and events)
+  previously called the dispatcher directly, bypassing the access check the
+  one-shot Read path applies — so a View-only or ACE-less subject could
+  subscribe wildcard and stream fabric-sensitive data (`AccessControl.ACL`,
+  `OperationalCredentials.NOCs`). Every subscription result is now authorised
+  against the subscribing subject and fabric-projected, matching matter.js.
+
+### Fixed
+
+- **Matter bridge: ArmFailSafe ownership is now enforced.** A commissioning
+  fail-safe armed by one fabric could previously be re-armed or disarmed by a
+  different fabric, and a CASE session could arm the fail-safe during another
+  admin's open commissioning window — letting one controller roll back another
+  controller's in-progress commissioning. The handler now rejects a re-arm or
+  disarm from any fabric other than the one that armed it, and rejects a CASE
+  arm while a window is open, both with `BusyWithOtherAdmin`, mirroring
+  matter.js. PASE commissioning is unchanged.
+- **Matter bridge: cancelling a commissioning window no longer Busy-locks the
+  next one.** `RevokeCommissioning` (and the internal revoke path) now expires
+  the fail-safe as Matter §11.19.7.3 step 1 requires, so cancelling a pairing
+  in a controller and retrying immediately no longer fails with "busy" for the
+  remainder of the original window (up to 15 minutes).
+
+- **Matter bridge: blinds, colour-temperature, dimmer-step and thermostat
+  setpoint commands now actually execute.** The bridge's command decoder
+  delivers fields as a context-tag-keyed map, but the WindowCovering
+  `GoToLift`/`GoToTiltPercentage`, LevelControl `Step`, ColorControl
+  `MoveToColorTemperature` and Thermostat `SetpointRaiseLower` handlers only
+  accepted a differently-shaped payload, so every real Apple Home / Google
+  Home / chip-tool invocation of those commands was rejected — or, for the
+  thermostat, silently ignored. The handlers now accept the real wire shape;
+  `GoTo*Percentage` values are additionally clamped to their 100.00 % maximum.
+- **Matter bridge: IM responses and CASE/PASE handshake replies are now
+  MRP-reliable.** `WriteResponse`, `InvokeResponse`, the `TimedRequest`
+  `StatusResponse`, and the PASE/CASE continuation replies (Pake2, Sigma2)
+  were shipped best-effort, so a single dropped UDP datagram surfaced as
+  "Not Responding" on a command or aborted commissioning outright. They are
+  now retransmitted until the controller acknowledges them, matching
+  matter.js.
+
 ## [0.22.0]
 
 ### Added

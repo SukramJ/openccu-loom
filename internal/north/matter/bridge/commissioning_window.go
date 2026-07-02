@@ -292,10 +292,17 @@ func (w *CommissioningWindow) OpenWindow(ctx context.Context, params wire.OpenWi
 		}
 	})
 	w.mu.Unlock()
-	// Matter §11.19.6: arm the FailSafe for the window duration after the
-	// window state is committed. fabricIndex=0 — window opened pre-commissioning.
-	// Mirrors matter.js AdministratorCommissioningServer.ts:openCommissioningWindow
-	// → GeneralCommissioningBehavior.armFailSafeLogic(timeoutSeconds).
+	// Defensive fail-safe arm for the window duration (fabricIndex=0 —
+	// window opened pre-commissioning). Note: matter.js does NOT arm the
+	// fail-safe on OpenCommissioningWindow (AdministratorCommissioningServer.ts
+	// openCommissioningWindow only starts the window timer; the fail-safe is
+	// armed when the commissioner sends ArmFailSafe). This arm is a
+	// deliberate divergence that guards the window even before the
+	// commissioner's first ArmFailSafe. It is armed for the window duration,
+	// so on a window TIMEOUT it expires on its own fail-safe timer at the
+	// same moment the window closes; on an EARLY RevokeWindow it is disarmed
+	// explicitly (see RevokeWindow). Either way it never lingers to
+	// Busy-lock the next OpenCommissioningWindow.
 	if armer != nil {
 		_ = armer.ArmFailSafeFor(ctx, uint32(params.CommissioningTimeoutSeconds), 0) //nolint:gosec // G115: timeout fits uint32 by spec; see #20
 	}
@@ -336,6 +343,25 @@ func (w *CommissioningWindow) RevokeWindow(ctx context.Context) error {
 	w.mu.RUnlock()
 	if closer != nil {
 		_ = closer.ClosePaseSessions(ctx)
+	}
+
+	// Matter §11.19.7.3 step 1 ALSO expires the fail-safe, unconditionally
+	// and before the window-state check. An aborted commissioning attempt
+	// that armed the fail-safe (or the window-open arm in OpenWindow) must
+	// be disarmed here — otherwise the fail-safe stays armed for the full
+	// window duration and the next OpenCommissioningWindow is rejected Busy
+	// (the "cancel pairing in Apple Home, retry → BUSY for up to 900 s"
+	// symptom). Mirrors matter.js AdministratorCommissioningServer.ts:146-151
+	// (`failsafeContext.close(...)`) + `#assertCommissioningWindowRequirements`
+	// `isFailsafeArmed → BusyError`. Disarm as fabric 0 — the fabric the
+	// window-open arm and the PASE commissioner both use; the fail-safe
+	// ownership check (general_commissioning.go handleArmFailSafe) permits
+	// the owner (0) to disarm, and the disarm fires the pending-NOC revert.
+	w.mu.RLock()
+	armer := w.failSafeArmer
+	w.mu.RUnlock()
+	if armer != nil {
+		_ = armer.ArmFailSafeFor(ctx, 0, 0)
 	}
 
 	w.mu.Lock()

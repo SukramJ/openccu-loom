@@ -475,7 +475,7 @@ func TestCaptureSubTarget_StoresMetadata(t *testing.T) {
 		Initiator:  true,
 		ExchangeID: 42,
 	}
-	b.captureSubTarget(99, src, hdr, proto)
+	b.captureSubTarget(99, src, hdr, proto, false)
 
 	raw, ok := b.subTargets.Load(uint32(99))
 	if !ok {
@@ -511,9 +511,9 @@ func TestCaptureSubTarget_SkipsZeroOrNil(t *testing.T) {
 	hdr := &message.Header{}
 	proto := message.ProtocolHeader{}
 
-	b.captureSubTarget(0, src, hdr, proto) // subID==0
-	b.captureSubTarget(1, nil, hdr, proto) // nil src
-	b.captureSubTarget(2, src, nil, proto) // nil hdr
+	b.captureSubTarget(0, src, hdr, proto, false) // subID==0
+	b.captureSubTarget(1, nil, hdr, proto, false) // nil src
+	b.captureSubTarget(2, src, nil, proto, false) // nil hdr
 
 	count := 0
 	b.subTargets.Range(func(_, _ any) bool { count++; return true })

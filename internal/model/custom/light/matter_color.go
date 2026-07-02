@@ -596,11 +596,30 @@ func colorTagU8(m map[uint8]any, tag uint8) uint8 {
 	}
 }
 
-// extractColorTempMireds pulls a uint16 colorTempMireds field.
+// extractColorTempMireds pulls the ColorTemperatureMireds field (context
+// tag 0) out of a MoveToColorTemperature request. The bridge decodes
+// this command to a typed [wire.MoveToColorTemperatureRequest] (see
+// decodeMoveToColorTemperatureFields in
+// internal/north/matter/bridge/fields_reader.go), so that is the real
+// wire shape; the map[uint8]any / uint16 / string-keyed cases keep the
+// helper usable from the generic-decode fallback and the in-package
+// tests.
 func extractColorTempMireds(fields any) (uint16, error) {
 	switch v := fields.(type) {
+	case wire.MoveToColorTemperatureRequest:
+		return v.ColorTemperatureMireds, nil
 	case uint16:
 		return v, nil
+	case map[uint8]any:
+		raw, ok := v[0]
+		if !ok {
+			return 0, fmt.Errorf("%w: MoveToColorTemperature missing colorTempMireds (tag 0)", errMatterValueType)
+		}
+		mireds, ok := colorTagU16(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: MoveToColorTemperature mireds expected integer, got %T", errMatterValueType, raw)
+		}
+		return mireds, nil
 	case map[string]any:
 		raw, ok := v["colorTempMireds"]
 		if !ok {
@@ -612,6 +631,22 @@ func extractColorTempMireds(fields any) (uint16, error) {
 		}
 		return mireds, nil
 	default:
-		return 0, fmt.Errorf("%w: MoveToColorTemperature expected uint16 or map, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: MoveToColorTemperature expected typed request or map, got %T", errMatterValueType, fields)
+	}
+}
+
+// colorTagU16 reads an unsigned 16-bit context-tag value from the generic
+// tag-keyed fields map (decodeGenericTagMap stores unsigned ints as
+// uint64). The narrower Go-type cases keep the helper usable from tests.
+func colorTagU16(raw any) (uint16, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint16(n & 0xFFFF), true
+	case uint16:
+		return n, true
+	case uint8:
+		return uint16(n), true
+	default:
+		return 0, false
 	}
 }

@@ -337,14 +337,32 @@ type LeaveEvent struct {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer      = (*BasicInformation)(nil)
-	_ interfaces.MatterClusterEventLister = (*BasicInformation)(nil)
-	_ interfaces.MatterEventReceiver      = (*BasicInformation)(nil)
-	_ interfaces.MatterClusterDataVersion = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterServer                  = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterEventLister             = (*BasicInformation)(nil)
+	_ interfaces.MatterEventReceiver                  = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*BasicInformation)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (b *BasicInformation) MatterClusterID() uint32 { return basicInfoClusterID }
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// NodeLabel and LocalConfigDisabled require Manage (4); Location
+// requires Administer (5). Mirrors matter.js
+// packages/model/src/standard/elements/basic-information.element.ts:36
+// (NodeLabel "RW VM"), :40 (Location "RW VA"), :79
+// (LocalConfigDisabled "RW VM").
+func (b *BasicInformation) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case basicInfoAttrNodeLabel, basicInfoAttrLocalConfigDisabled:
+		return 4 // Manage
+	case basicInfoAttrLocation:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterRead implements [interfaces.MatterClusterServer].
 func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases

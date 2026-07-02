@@ -276,7 +276,14 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 		debugReplyError(b.logger, "encode_write", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeWriteResponse, body); err != nil {
+	// Reliable: a lost WriteResponse leaves the controller waiting and
+	// retrying the whole write. matter.js ships every non-standalone-ack
+	// reply on an MRP session reliably (MessageExchange.ts:602
+	// `requiresAck ?? (session.usesMrp && !isStandaloneAck)`); the ACK
+	// pump retransmits until the peer acks. The response is a pure
+	// outcome report, so it meets sendReplyReliable's idempotency
+	// contract.
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeWriteResponse, body); err != nil {
 		debugReplyError(b.logger, "send_write", src, err)
 		return err
 	}
@@ -363,7 +370,13 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 		debugReplyError(b.logger, "encode_invoke", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeInvokeResponse, body); err != nil {
+	// Reliable: a lost InvokeResponse surfaces to the controller as
+	// "Not Responding" (Apple Home) even though the command executed.
+	// matter.js ships every non-standalone-ack reply on an MRP session
+	// reliably (MessageExchange.ts:602); the ACK pump retransmits the
+	// identical datagram until the peer acks. The response is a pure
+	// outcome report, meeting sendReplyReliable's idempotency contract.
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeInvokeResponse, body); err != nil {
 		debugReplyError(b.logger, "send_invoke", src, err)
 		return err
 	}
@@ -412,7 +425,11 @@ func (b *Bridge) dispatchTimedRequest(src *net.UDPAddr, requestHdr *message.Head
 		debugReplyError(b.logger, "encode_status", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+	// Reliable: this StatusResponse is the go-ahead the controller waits
+	// for before sending its timed Write/Invoke (Matter §8.7). If it is
+	// dropped the timed action never arrives and the exchange dies.
+	// matter.js ships it reliably (MessageExchange.ts:602).
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
 		debugReplyError(b.logger, "send_status", src, err)
 		return err
 	}

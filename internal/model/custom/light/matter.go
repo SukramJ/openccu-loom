@@ -564,11 +564,24 @@ func extractMoveToLevel(fields any) (uint8, error) {
 	}
 }
 
-// extractStepSize pulls the StepSize field (tag 1) out of a Step /
-// StepWithOnOff payload. Accepts a bare uint8 or a map[string]any
-// with a "step_size" key.
+// extractStepSize pulls the StepSize field (context tag 1) out of a
+// Step / StepWithOnOff payload. Step has no typed decoder in the bridge,
+// so the real wire path lands here as the tag-keyed map[uint8]any that
+// decodeGenericTagMap produces (unsigned ints as uint64) — see
+// internal/north/matter/bridge/fields_reader.go. The string-keyed shape
+// is kept for the in-package tests.
 func extractStepSize(fields any) (uint8, error) {
 	switch v := fields.(type) {
+	case map[uint8]any:
+		raw, ok := v[1]
+		if !ok {
+			return 0, fmt.Errorf("%w: Step missing step_size field (tag 1)", errMatterValueType)
+		}
+		s, ok := wireUint8(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_size expected integer, got %T", errMatterValueType, raw)
+		}
+		return s, nil
 	case map[string]any:
 		raw, ok := v["step_size"]
 		if !ok {
@@ -580,24 +593,51 @@ func extractStepSize(fields any) (uint8, error) {
 		}
 		return s, nil
 	default:
-		return 0, fmt.Errorf("%w: Step expected map[string]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: Step expected map[uint8]any, got %T", errMatterValueType, fields)
 	}
 }
 
-// extractStepMode pulls the StepMode field (tag 0) out of a Step /
-// StepWithOnOff payload. Returns [wire.LevelStepModeUp] (0) when absent.
+// extractStepMode pulls the StepMode field (context tag 0) out of a
+// Step / StepWithOnOff payload. Returns [wire.LevelStepModeUp] (0) when
+// absent, matching the pre-decoded default.
 func extractStepMode(fields any) (uint8, error) {
-	m, ok := fields.(map[string]any)
-	if !ok {
+	switch m := fields.(type) {
+	case map[uint8]any:
+		raw, ok := m[0]
+		if !ok {
+			return wire.LevelStepModeUp, nil
+		}
+		mode, ok := wireUint8(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_mode expected integer, got %T", errMatterValueType, raw)
+		}
+		return mode, nil
+	case map[string]any:
+		raw, ok := m["step_mode"]
+		if !ok {
+			return wire.LevelStepModeUp, nil
+		}
+		mode, ok := raw.(uint8)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_mode expected uint8, got %T", errMatterValueType, raw)
+		}
+		return mode, nil
+	default:
 		return wire.LevelStepModeUp, nil
 	}
-	raw, ok := m["step_mode"]
-	if !ok {
-		return wire.LevelStepModeUp, nil
+}
+
+// wireUint8 reads an unsigned integer out of a value decoded from the
+// generic tag-keyed fields map, where decodeGenericTagMap stores
+// unsigned ints as uint64. The narrower Go-type cases keep the helper
+// usable from tests that pass those directly.
+func wireUint8(raw any) (uint8, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint8(n & 0xFF), true
+	case uint8:
+		return n, true
+	default:
+		return 0, false
 	}
-	mode, ok := raw.(uint8)
-	if !ok {
-		return 0, fmt.Errorf("%w: Step step_mode expected uint8, got %T", errMatterValueType, raw)
-	}
-	return mode, nil
 }

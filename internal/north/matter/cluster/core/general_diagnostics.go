@@ -127,7 +127,7 @@ const (
 	gendiagAttrTestEventTriggersEnabled uint32 = 0x0008
 
 	// Commands per Matter §11.12.7.
-	gendiagCmdTestEventTrigger uint32 = 0x0000 //nolint:unused // not supported on the bridge
+	gendiagCmdTestEventTrigger uint32 = 0x0000
 	gendiagCmdTimeSnapshot     uint32 = 0x0001
 	gendiagCmdTimeSnapshotResp uint32 = 0x0002
 
@@ -200,12 +200,13 @@ type BootReasonEvent struct {
 // event-receiver (emitter wiring) capability, the command-lister capability,
 // and MatterClusterDataVersion.
 var (
-	_ interfaces.MatterClusterServer          = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterEventLister     = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterEventReceiver          = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterCommandLister   = (*GeneralDiagnostics)(nil)
-	_ interfaces.MatterClusterDataVersion     = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterServer                 = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterAttributeLister        = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterEventLister            = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterEventReceiver                 = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterCommandLister          = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterDataVersion            = (*GeneralDiagnostics)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege = (*GeneralDiagnostics)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -219,6 +220,19 @@ func (g *GeneralDiagnostics) MatterDataVersion() uint32 {
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (g *GeneralDiagnostics) MatterClusterID() uint32 { return gendiagClusterID }
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// TestEventTrigger requires Manage (4) per Matter §11.12 (access "M").
+// Mirrors matter.js packages/model/src/standard/elements/
+// general-diagnostics.element.ts:90.
+func (g *GeneralDiagnostics) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case gendiagCmdTestEventTrigger:
+		return 4 // Manage
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterRead implements [interfaces.MatterClusterServer].
 func (g *GeneralDiagnostics) MatterRead(attrID uint32) (any, bool) {

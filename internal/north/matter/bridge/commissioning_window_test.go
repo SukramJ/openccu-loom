@@ -333,6 +333,96 @@ func TestCommissioningWindow_FailSafeArmer_ArmErrorDoesNotAbortWindow(t *testing
 	}
 }
 
+// TestCommissioningWindow_RevokeWindow_DisarmsFailSafe verifies the H9 fix:
+// RevokeWindow disarms the fail-safe (Matter §11.19.7.3 step 1) via a
+// FailSafeArmer.ArmFailSafeFor(ctx, 0, 0) call, unconditionally and before
+// the window-state check. Without this, the fail-safe armed by OpenWindow
+// (or by the commissioner's own ArmFailSafe) stays armed for the full
+// window duration and the next OpenCommissioningWindow is rejected Busy.
+func TestCommissioningWindow_RevokeWindow_DisarmsFailSafe(t *testing.T) {
+	t.Parallel()
+	w := bridge.NewCommissioningWindow()
+	armer := &fakeFailSafeArmer{}
+	w.SetFailSafeArmer(armer)
+
+	const duration uint16 = 600
+	if err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: duration,
+	}); err != nil {
+		t.Fatalf("OpenWindow: unexpected error: %v", err)
+	}
+	if err := w.RevokeWindow(context.Background()); err != nil {
+		t.Fatalf("RevokeWindow: unexpected error: %v", err)
+	}
+
+	// fakeFailSafeArmer records every call (not just the last), so the
+	// slice must hold both the window-open arm and the revoke disarm.
+	if n := armer.calls.Load(); n != 2 {
+		t.Fatalf("ArmFailSafeFor call count = %d, want 2 (one arm on Open + one disarm on Revoke)", n)
+	}
+	if armer.seconds[0] != uint32(duration) || armer.fabric[0] != 0 {
+		t.Errorf("first ArmFailSafeFor (Open) = (seconds=%d, fabric=%d), want (%d, 0)",
+			armer.seconds[0], armer.fabric[0], duration)
+	}
+	// The RevokeWindow disarm must be the last recorded call, with
+	// seconds=0 (disarm) and fabricIndex=0.
+	last := len(armer.seconds) - 1
+	if armer.seconds[last] != 0 {
+		t.Errorf("RevokeWindow disarm seconds = %d, want 0", armer.seconds[last])
+	}
+	if armer.fabric[last] != 0 {
+		t.Errorf("RevokeWindow disarm fabricIndex = %d, want 0", armer.fabric[last])
+	}
+}
+
+// fakeFailSafeArmerChecker implements both FailSafeArmer and
+// FailSafeChecker over shared state, so a test can observe the
+// "armed → Busy" linkage that OpenWindow's FailSafeChecker guard
+// enforces (see TestCommissioningWindow_OpenWindow_RejectsBusyWhenFailSafeArmed)
+// without wiring a real GeneralCommissioning cluster server.
+type fakeFailSafeArmerChecker struct {
+	armed atomic.Bool
+}
+
+func (f *fakeFailSafeArmerChecker) ArmFailSafeFor(_ context.Context, seconds uint32, _ uint8) error {
+	f.armed.Store(seconds != 0)
+	return nil
+}
+
+func (f *fakeFailSafeArmerChecker) FailSafeArmed() bool {
+	return f.armed.Load()
+}
+
+// TestCommissioningWindow_OpenAfterRevoke_NotBusy verifies the end-to-end
+// H9 regression: OpenWindow arms the fail-safe, RevokeWindow disarms it,
+// and a subsequent OpenWindow must succeed rather than being rejected
+// ErrAdmCommBusy by the FailSafeChecker guard. Before the H9 fix,
+// RevokeWindow left the fail-safe armed for the remainder of the window
+// duration, so this second OpenWindow would have hit Busy.
+func TestCommissioningWindow_OpenAfterRevoke_NotBusy(t *testing.T) {
+	t.Parallel()
+	w := bridge.NewCommissioningWindow()
+	fake := &fakeFailSafeArmerChecker{}
+	w.SetFailSafeArmer(fake)
+	w.SetFailSafeChecker(fake)
+
+	if err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: 600,
+	}); err != nil {
+		t.Fatalf("first OpenWindow: unexpected error: %v", err)
+	}
+	if err := w.RevokeWindow(context.Background()); err != nil {
+		t.Fatalf("RevokeWindow: unexpected error: %v", err)
+	}
+
+	err := w.OpenWindow(context.Background(), wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: 600,
+	})
+	if err != nil {
+		t.Errorf("OpenWindow after RevokeWindow: unexpected error %v, want nil (fail-safe must be disarmed)", err)
+	}
+}
+
 // ─── PaseSessionCloser ───────────────────────────────────────────────────────
 
 // TestCommissioningWindow_PaseSessionCloser_CalledOnRevoke verifies that the

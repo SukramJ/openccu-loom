@@ -118,9 +118,11 @@ func NewGroupKeyManagement(s GroupStoreFacade, cfg GroupKeyMgmtConfig) (*GroupKe
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterCommandLister = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterServer                  = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterCommandLister           = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege  = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*GroupKeyManagement)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -134,6 +136,32 @@ func (g *GroupKeyManagement) MatterDataVersion() uint32 {
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (g *GroupKeyManagement) MatterClusterID() uint32 { return groupKeyMgmtClusterID }
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// Every GroupKeyManagement command requires Administer (5) per Matter
+// §11.2.10 (access "F A"). Mirrors matter.js
+// packages/model/src/standard/elements/group-key-management.element.ts:48,54,65,71.
+func (g *GroupKeyManagement) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case groupKeyMgmtCmdKeySetWrite, groupKeyMgmtCmdKeySetRead, groupKeyMgmtCmdKeySetRemove, groupKeyMgmtCmdKeySetReadAllIndices:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// GroupKeyMap (0x0000) requires Manage (4) per Matter §11.2.10 (access
+// "RW F VM"). Mirrors matter.js packages/model/src/standard/elements/
+// group-key-management.element.ts:28.
+func (g *GroupKeyManagement) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case groupKeyMgmtAttrGroupKeyMap:
+		return 4 // Manage
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // GroupKeyMapStruct mirrors Matter §11.2.10.4.1.
 type GroupKeyMapStruct struct {

@@ -514,24 +514,37 @@ func (s garageWCServer) MatterAttributes() []uint32 {
 	}
 }
 
-// extractGoToPercentage pulls a uint16 LiftPercent100thsValue or
-// TiltPercent100thsValue out of the request payload. The bridge has
-// already TLV-decoded the payload; we accept either a bare uint16 (the
-// minimal "percent only" shape) or a map carrying a "percent" key.
-// A typed request struct from
-// internal/north/matter/cluster/windowcovering/ may replace this once
-// that package exists.
+// extractGoToPercentage pulls the LiftPercent100thsValue /
+// TiltPercent100thsValue (context tag 0) out of a GoToLiftPercentage /
+// GoToTiltPercentage request. GoTo*Percentage has no typed decoder in
+// the bridge, so the real wire path lands here as the tag-keyed
+// map[uint8]any that decodeGenericTagMap produces (unsigned ints as
+// uint64) — see internal/north/matter/bridge/fields_reader.go. The
+// bare-uint16 and string-keyed shapes are kept for the in-package
+// tests.
+//
+// The value is clamped to 10000 (Percent100ths max, Matter §5.3):
+// matter.js WindowCoveringServer rejects an out-of-range percentage via
+// the schema constraint, and an unclamped value would otherwise convert
+// to an HM domain level above 1.0.
 //
 // This deliberately ignores the variants that carry an `OptionsMask`
 // and `OptionsOverride` field — those are the v1.0 GoToLiftPercentage
 // shape; Matter 1.3+ (incl. 1.5.1) uses a single Percent100ths field.
-//
-// Unused parameter `fields` is named so the linter knows it is the
-// dispatch input.
 func extractGoToPercentage(fields any) (uint16, error) {
 	switch v := fields.(type) {
 	case uint16:
-		return v, nil
+		return clampPercent100ths(v), nil
+	case map[uint8]any:
+		raw, ok := v[0]
+		if !ok {
+			return 0, fmt.Errorf("%w: GoTo*Percentage missing percent field (tag 0)", errMatterValueType)
+		}
+		pct, ok := wireUint16(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: GoTo*Percentage percent expected integer, got %T", errMatterValueType, raw)
+		}
+		return clampPercent100ths(pct), nil
 	case map[string]any:
 		raw, ok := v["percent"]
 		if !ok {
@@ -541,8 +554,34 @@ func extractGoToPercentage(fields any) (uint16, error) {
 		if !ok {
 			return 0, fmt.Errorf("%w: GoTo*Percentage percent expected uint16, got %T", errMatterValueType, raw)
 		}
-		return pct, nil
+		return clampPercent100ths(pct), nil
 	default:
-		return 0, fmt.Errorf("%w: GoTo*Percentage expected uint16 or map[string]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: GoTo*Percentage expected uint16 or map[uint8]any, got %T", errMatterValueType, fields)
+	}
+}
+
+// clampPercent100ths bounds a Percent100ths value to its spec maximum of
+// 10000 (100.00 %).
+func clampPercent100ths(pct uint16) uint16 {
+	if pct > 10000 {
+		return 10000
+	}
+	return pct
+}
+
+// wireUint16 reads an unsigned integer out of a value decoded from the
+// generic tag-keyed fields map, where decodeGenericTagMap stores
+// unsigned ints as uint64. The uint16/uint8 cases keep the helper usable
+// from tests that pass narrower Go types directly.
+func wireUint16(raw any) (uint16, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint16(n & 0xFFFF), true
+	case uint16:
+		return n, true
+	case uint8:
+		return uint16(n), true
+	default:
+		return 0, false
 	}
 }

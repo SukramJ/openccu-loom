@@ -602,6 +602,62 @@ func (d *TopologyDispatcher) MinReadPrivilege(endpoint uint16, clusterID, attrID
 	return 1
 }
 
+// MinWritePrivilege implements [im.AttributeWritePrivilegeProvider]. It
+// looks up the cluster server for (endpoint, clusterID) and consults the
+// server's [interfaces.MatterClusterAttributeWritePrivilege] optional
+// interface for the given attrID. Returns 3 (Operate) — the Matter
+// §9.10.4.4 default write privilege — when the cluster is not found, does
+// not implement the interface, or reports no elevated requirement.
+// Returns the server-reported value (e.g. 4=Manage for
+// BasicInformation.NodeLabel, 5=Administer for AccessControl.ACL)
+// otherwise. Mirrors the writeAccess bits in matter.js
+// packages/model/src/standard/elements/*.element.ts.
+func (d *TopologyDispatcher) MinWritePrivilege(endpoint uint16, clusterID, attrID uint32) uint8 {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 3
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		priv, ok := srv.(interfaces.MatterClusterAttributeWritePrivilege)
+		if !ok {
+			return 3
+		}
+		return priv.MinWritePrivilege(attrID)
+	}
+	return 3
+}
+
+// MinInvokePrivilege implements [im.CommandInvokePrivilegeProvider]. It
+// looks up the cluster server for (endpoint, clusterID) and consults the
+// server's [interfaces.MatterClusterCommandInvokePrivilege] optional
+// interface for the given cmdID. Returns 3 (Operate) — the Matter
+// §9.10.4.4 default invoke privilege — when the cluster is not found,
+// does not implement the interface, or reports no elevated requirement.
+// Returns the server-reported value (e.g. 5=Administer for
+// OperationalCredentials.RemoveFabric) otherwise. Mirrors the
+// invokeAccess bits in matter.js
+// packages/model/src/standard/elements/*.element.ts.
+func (d *TopologyDispatcher) MinInvokePrivilege(endpoint uint16, clusterID, cmdID uint32) uint8 {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 3
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		priv, ok := srv.(interfaces.MatterClusterCommandInvokePrivilege)
+		if !ok {
+			return 3
+		}
+		return priv.MinInvokePrivilege(cmdID)
+	}
+	return 3
+}
+
 // CheckACL implements [im.ACLChecker] (Matter §9.10). It grants the request
 // when the requesting fabric holds a CASE ACL entry whose subject covers
 // (subjectNodeID, subjectCATs), whose target covers (endpoint, clusterID),

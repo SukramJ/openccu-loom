@@ -435,7 +435,14 @@ func (b *Bridge) handlePase(
 		// happy-path, for instance). Nothing more to do.
 		return nil
 	}
-	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
+	// Reliable: PASE continuation messages (PBKDFParamResponse, Pake2)
+	// are part of the reliable Secure-Channel exchange. A dropped Pake2
+	// aborts commissioning — the commissioner waits for a reply that the
+	// bridge, absent MRP tracking, would never rebroadcast. matter.js
+	// makes every non-standalone-ack reply reliable (MessageExchange.ts:602);
+	// the Sigma3/Pake3 piggyback ack (or a standalone ack) stops the
+	// retransmit via the universal inbound Ack path (receive.go).
+	if err := b.sendReplyReliable(src, requestHdr, proto, respOpcode, respPayload); err != nil {
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
@@ -509,7 +516,13 @@ func (b *Bridge) handleCase(
 	if respPayload == nil {
 		return nil
 	}
-	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
+	// Reliable: Sigma2 is a CASE continuation message on the reliable
+	// Secure-Channel exchange. A dropped Sigma2 aborts CASE — the
+	// commissioner waits for a reply the bridge would otherwise never
+	// rebroadcast. matter.js makes every non-standalone-ack reply
+	// reliable (MessageExchange.ts:602); the Sigma3 piggyback ack stops
+	// the retransmit via the universal inbound Ack path (receive.go).
+	if err := b.sendReplyReliable(src, requestHdr, proto, respOpcode, respPayload); err != nil {
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}

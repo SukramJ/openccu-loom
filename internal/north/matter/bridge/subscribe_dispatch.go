@@ -41,7 +41,12 @@ func (b *Bridge) buildInitialReport(
 		Reports:         nil,
 	}
 	for _, path := range req.AttributeRequests {
-		for _, rr := range dispatcher.Read(subCtx, path) {
+		// Authorize each result against the requesting subject (subCtx
+		// carries fabric + subject from handleSubscribeRequest). Without
+		// this the Subscribe-Initial would leak fabric-sensitive
+		// attributes (ACL, NOCs) to a View-only / ACE-less subject, the
+		// same bypass reportSubscription closes for ongoing reports.
+		for _, rr := range b.readAuthorizedResults(subCtx, dispatcher, path) {
 			// DataVersionFilter evaluation: skip attributes whose cluster
 			// DataVersion matches the controller's cached version.
 			// Matter §10.6.5 — the controller infers "no change since
@@ -235,7 +240,7 @@ func (b *Bridge) registerSubscription(
 			subID = sub.ID
 			initialReport.HasSubscription = true
 			initialReport.SubscriptionID = subID
-			b.captureSubTarget(subID, src, requestHdr, proto)
+			b.captureSubTarget(subID, src, requestHdr, proto, req.FabricFiltered)
 		}
 	}
 	return subID

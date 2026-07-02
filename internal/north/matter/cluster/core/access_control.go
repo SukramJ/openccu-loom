@@ -173,11 +173,12 @@ func NewAccessControl(s ACLStoreFacade) (*AccessControl, error) {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer                 = (*AccessControl)(nil)
-	_ interfaces.FabricScopedReader                  = (*AccessControl)(nil)
-	_ interfaces.MatterEventReceiver                 = (*AccessControl)(nil)
-	_ interfaces.MatterClusterDataVersion            = (*AccessControl)(nil)
-	_ interfaces.MatterClusterAttributeReadPrivilege = (*AccessControl)(nil)
+	_ interfaces.MatterClusterServer                  = (*AccessControl)(nil)
+	_ interfaces.FabricScopedReader                   = (*AccessControl)(nil)
+	_ interfaces.MatterEventReceiver                  = (*AccessControl)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*AccessControl)(nil)
+	_ interfaces.MatterClusterAttributeReadPrivilege  = (*AccessControl)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*AccessControl)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
@@ -202,6 +203,19 @@ func (*AccessControl) MinReadPrivilege(attrID uint32) uint8 {
 		return accessControlPrivilegeAdminister // 5
 	default:
 		return 1 // View — standard default
+	}
+}
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// ACL (0x0000) and Extension (0x0001) require Administer (5) per Matter
+// §9.10.5.3 (access "RW … A"). Mirrors matter.js
+// packages/model/src/standard/elements/access-control.element.ts:28,32.
+func (*AccessControl) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case accessControlAttrACL, accessControlAttrExtension:
+		return accessControlPrivilegeAdminister // 5
+	default:
+		return 3 // Operate — standard default
 	}
 }
 

@@ -180,6 +180,50 @@ type MatterClusterAttributeReadPrivilege interface {
 	MinReadPrivilege(attrID uint32) uint8
 }
 
+// MatterClusterAttributeWritePrivilege is the optional capability a
+// [MatterClusterServer] can implement when one or more of its writable
+// attributes require a write privilege higher than the Operate (3)
+// default. The IM write layer calls MinWritePrivilege for the attribute
+// ID before dispatching the write; the ACLChecker is consulted with the
+// returned privilege, resulting in UnsupportedAccess (0x7e) for
+// insufficiently privileged sessions.
+//
+// Example: AccessControl (0x001F) attributes ACL (0x0000) and Extension
+// (0x0001) require Administer (5) per Matter §9.10.5.3 (access "RW … A");
+// BasicInformation (0x0028) NodeLabel/Location require Manage (4) per
+// access "RW VM". Mirrors matter.js
+// packages/model/src/standard/elements/*.element.ts writeAccess bits.
+type MatterClusterAttributeWritePrivilege interface {
+	// MinWritePrivilege returns the minimum Matter privilege level
+	// required to write the given attribute. Return 3 (Operate) when the
+	// attribute has no elevated requirement (the common case, matching
+	// the default write behaviour). Constants mirror Matter §9.10.4.4:
+	// 1=View, 3=Operate, 4=Manage, 5=Administer.
+	MinWritePrivilege(attrID uint32) uint8
+}
+
+// MatterClusterCommandInvokePrivilege is the optional capability a
+// [MatterClusterServer] can implement when one or more of its commands
+// require an invoke privilege higher than the Operate (3) default. The
+// IM invoke layer calls MinInvokePrivilege for the command ID before
+// dispatching; the ACLChecker is consulted with the returned privilege,
+// resulting in UnsupportedAccess (0x7e) for insufficiently privileged
+// sessions.
+//
+// Example: OperationalCredentials (0x003E) commands (AddNOC, UpdateNOC,
+// RemoveFabric, …) and AdministratorCommissioning (0x003C)
+// OpenCommissioningWindow require Administer (5) per Matter §11.18 /
+// §11.19 (access "A"). Mirrors matter.js
+// packages/model/src/standard/elements/*.element.ts invokeAccess bits.
+type MatterClusterCommandInvokePrivilege interface {
+	// MinInvokePrivilege returns the minimum Matter privilege level
+	// required to invoke the given command. Return 3 (Operate) when the
+	// command has no elevated requirement (the common case, matching the
+	// default invoke behaviour). Constants mirror Matter §9.10.4.4:
+	// 1=View, 3=Operate, 4=Manage, 5=Administer.
+	MinInvokePrivilege(cmdID uint32) uint8
+}
+
 // MatterMeasurementClass classifies Generic.Sensor / BinarySensor and
 // Calculated DP instances by Matter cluster without name-matching at
 // publish time. The model layer computes this once at materialisation

@@ -464,14 +464,37 @@ var errOpcredsFailsafeRequired error = opcredsFailsafeRequiredErr{}
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*OperationalCredentials)(nil)
-	_ interfaces.FabricScopedReader         = (*OperationalCredentials)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*OperationalCredentials)(nil)
-	_ interfaces.MatterClusterCommandLister = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterServer                 = (*OperationalCredentials)(nil)
+	_ interfaces.FabricScopedReader                  = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterDataVersion            = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterCommandLister          = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege = (*OperationalCredentials)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (o *OperationalCredentials) MatterClusterID() uint32 { return opcredsClusterID }
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// Every OperationalCredentials command requires Administer (5) per
+// Matter §11.18 (access "A" / "F A"). Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts.
+func (o *OperationalCredentials) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case opcredsCmdAttestationRequest,
+		opcredsCmdCertificateChainRequest,
+		opcredsCmdCSRRequest,
+		opcredsCmdAddNOC,
+		opcredsCmdUpdateNOC,
+		opcredsCmdUpdateFabricLabel,
+		opcredsCmdRemoveFabric,
+		opcredsCmdAddTrustedRootCertificate,
+		opcredsCmdSetVidVerificationStatement,
+		opcredsCmdSignVidVerificationRequest:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
 // Returns the current per-cluster monotonic counter bumped after every

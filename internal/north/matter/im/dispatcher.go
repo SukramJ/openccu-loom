@@ -85,6 +85,40 @@ type AttributeReadPrivilegeProvider interface {
 	MinReadPrivilege(endpoint uint16, clusterID, attrID uint32) uint8
 }
 
+// AttributeWritePrivilegeProvider is an optional interface a [Dispatcher]
+// may implement to signal that a specific (endpoint, cluster, attribute)
+// path requires a higher write privilege than the default Operate (3).
+// [HandleWriteRequest] calls this before the per-write ACL check so
+// elevated-privilege attributes (e.g. AccessControl.ACL / Extension which
+// require Administer, or BasicInformation.NodeLabel which requires Manage)
+// cannot be written by a merely-Operate subject. Mirrors the writeAccess
+// bits in matter.js packages/model/src/standard/elements/*.element.ts and
+// chip's per-attribute write-ACL guards.
+type AttributeWritePrivilegeProvider interface {
+	// MinWritePrivilege returns the minimum Matter privilege level
+	// required to write attrID on (endpoint, clusterID). Return 3
+	// (Operate) for the common case; return 4 (Manage) / 5 (Administer)
+	// for elevated attributes.
+	MinWritePrivilege(endpoint uint16, clusterID, attrID uint32) uint8
+}
+
+// CommandInvokePrivilegeProvider is an optional interface a [Dispatcher]
+// may implement to signal that a specific (endpoint, cluster, command)
+// requires a higher invoke privilege than the default Operate (3).
+// [HandleInvokeRequest] calls this before the per-invoke ACL check so
+// administrative commands (e.g. OperationalCredentials.RemoveFabric,
+// AdministratorCommissioning.OpenCommissioningWindow) cannot be invoked
+// by a merely-Operate subject. Mirrors the invokeAccess bits in matter.js
+// packages/model/src/standard/elements/*.element.ts and chip's
+// per-command invoke-ACL guards.
+type CommandInvokePrivilegeProvider interface {
+	// MinInvokePrivilege returns the minimum Matter privilege level
+	// required to invoke cmdID on (endpoint, clusterID). Return 3
+	// (Operate) for the common case; return 4 (Manage) / 5 (Administer)
+	// for elevated commands.
+	MinInvokePrivilege(endpoint uint16, clusterID, cmdID uint32) uint8
+}
+
 // Dispatcher is the cluster-server-side surface the IM layer routes
 // Read / Write / Invoke requests through. The endpoint assembler in
 // [..]/north/matter/endpoint constructs and registers a Dispatcher
