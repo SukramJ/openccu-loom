@@ -287,6 +287,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now retransmitted until the controller acknowledges them, matching
   matter.js. Unsecured (PASE) retransmits are also now detected as duplicates
   and acknowledged without re-running the handshake handler.
+- **MQTT: detect half-open broker connections via a PINGRESP watchdog.**
+  The keep-alive loop sent `PINGREQ` but never checked for the matching
+  `PINGRESP`, and the read loop blocks in `ReadFrame` without a deadline.
+  On a half-open socket (broker or network gone without a TCP FIN/RST) the
+  read loop stayed blocked forever, `handleConnectionLost` never fired, and
+  the lifecycle never reconnected — QoS-1 publishes (HA discovery, command
+  acks) then timed out with "context deadline exceeded" on a dead socket
+  until a manual restart. The keep-alive loop now arms an outstanding-ping
+  flag after each `PINGREQ`; if the next tick still sees it unanswered, the
+  connection is declared lost so the lifecycle re-dials.
 
 ## [0.22.0]
 

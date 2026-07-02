@@ -42,6 +42,12 @@ type lifecycleMockBroker struct {
 	// non-zero CONNACK return code (connection refused / 0x05).
 	rejectNextConnect atomic.Bool
 
+	// dropPings, when true, makes the broker swallow PINGREQ frames
+	// without replying — simulating a half-open socket where the broker
+	// or network has vanished without a TCP FIN/RST. Exercises the
+	// client's PINGRESP watchdog.
+	dropPings atomic.Bool
+
 	// subCount is the total number of SUBSCRIBE frames received across
 	// all connections.
 	subCount atomic.Int32
@@ -90,6 +96,13 @@ func (b *lifecycleMockBroker) InjectTCPReset() {
 // incoming CONNECT packet, then revert to accepting.
 func (b *lifecycleMockBroker) RejectNextConnect() {
 	b.rejectNextConnect.Store(true)
+}
+
+// DropPings toggles whether the broker ignores PINGREQ frames. When
+// enabled, the client's keep-alive PINGs go unanswered, driving the
+// PINGRESP watchdog to declare the connection lost.
+func (b *lifecycleMockBroker) DropPings(v bool) {
+	b.dropPings.Store(v)
 }
 
 // SubscribeCount returns the total number of SUBSCRIBE frames received
@@ -158,6 +171,9 @@ func (b *lifecycleMockBroker) serve(conn net.Conn) {
 			_ = bw.Flush()
 
 		case protocol.PacketPingreq:
+			if b.dropPings.Load() {
+				continue // half-open simulation: never answer the ping
+			}
 			_ = lcmWritePacket(bw, byte(protocol.PacketPingresp)<<4, nil)
 			_ = bw.Flush()
 
