@@ -466,6 +466,10 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 			core.EventReachableChanged,
 			core.ReachableChangedEvent{ReachableNewValue: reachable},
 			interfaces.MatterEventPriorityCritical)
+		// Advance the endpoint-hosted BDBI DataVersion — the reachability
+		// flip is a cluster state change, so DataVersionFilters must miss
+		// afterwards (matter.js Datasource.ts:949).
+		ep.BumpClusterDataVersion(core.BridgedDeviceBasicInformationClusterID)
 		// Also dirty the Reachable ATTRIBUTE (BDBI 0x0039 / 0x0011), not
 		// just fire the event: a controller subscribed to the attribute
 		// (Google Home tracks it) otherwise shows stale reachability until

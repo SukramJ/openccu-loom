@@ -944,7 +944,7 @@ func TestSynthesizeGlobalRead_AcceptedCommandList_WithLister(t *testing.T) {
 		accepted:       []uint32{0x00, 0x01, 0x02},
 		generated:      []uint32{0x03},
 	}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalAcceptedCommandList))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalAcceptedCommandList))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -966,7 +966,7 @@ func TestSynthesizeGlobalRead_GeneratedCommandList_WithLister(t *testing.T) {
 		accepted:       []uint32{0x00},
 		generated:      []uint32{0x10, 0x11},
 	}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalGeneratedCommandList))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalGeneratedCommandList))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -984,7 +984,7 @@ func TestSynthesizeGlobalRead_GeneratedCommandList_WithLister(t *testing.T) {
 func TestSynthesizeGlobalRead_EventList_ReturnsUnsupported(t *testing.T) {
 	t.Parallel()
 	srv := &fakeServerFull{id: 0x0006, readOK: false}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalEventList))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalEventList))
 	if r.Status != im.StatusUnsupportedAttribute {
 		t.Errorf("status = %v, want StatusUnsupportedAttribute for EventList", r.Status)
 	}
@@ -995,7 +995,7 @@ func TestSynthesizeGlobalRead_EventList_ReturnsUnsupported(t *testing.T) {
 func TestReadOne_SynthesizeGlobal(t *testing.T) {
 	t.Parallel()
 	srv := &fakeServerFull{id: 0x0006, readOK: false}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalAcceptedCommandList))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, cluster.AttrGlobalAcceptedCommandList))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess for synthetic global", r.Status)
 	}
@@ -1102,7 +1102,7 @@ var (
 func TestReadOne_FabricScoped_NonNilValue(t *testing.T) {
 	t.Parallel()
 	srv := &fabricScopedServer{id: 0x0006, fVal: uint8(1), fOK: true}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, 0x0000))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, 0x0000))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -1116,7 +1116,7 @@ func TestReadOne_FabricScoped_NonNilValue(t *testing.T) {
 func TestReadOne_FabricScoped_NilValue(t *testing.T) {
 	t.Parallel()
 	srv := &fabricScopedServer{id: 0x0006, fVal: nil, fOK: true}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, 0x0000))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, 0x0000))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -1136,7 +1136,7 @@ func TestReadOne_FabricScoped_FallThrough(t *testing.T) {
 		readVal: uint8(7),
 		readOK:  true,
 	}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, 0x0000))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, 0x0000))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -1150,7 +1150,7 @@ func TestReadOne_FabricScoped_FallThrough(t *testing.T) {
 func TestReadOne_MatterRead_NilValue(t *testing.T) {
 	t.Parallel()
 	srv := &fakeServerFull{id: 0x0006, readVal: nil, readOK: true}
-	r := readOne(context.Background(), srv, makeConcretePath(2, 0x0006, 0x0000))
+	r := readOne(context.Background(), nil, srv, makeConcretePath(2, 0x0006, 0x0000))
 	if r.Status != im.StatusSuccess {
 		t.Errorf("status = %v, want StatusSuccess", r.Status)
 	}
@@ -1173,39 +1173,32 @@ func TestCurrentDataVersion_ClusterNotFound(t *testing.T) {
 	}
 }
 
-// TestCurrentDataVersion_NoVersionInterface verifies (0, false) when the
-// cluster server does not implement MatterClusterDataVersion.
-func TestCurrentDataVersion_NoVersionInterface(t *testing.T) {
+// TestCurrentDataVersion_BridgedStableAcrossCalls verifies that a
+// bridged endpoint's DataVersion comes from the endpoint-hosted
+// tracker: non-zero, ok=true, and IDENTICAL across calls — regardless
+// of what the (per-dispatch throwaway) server instance reports.
+// Mirrors matter.js Datasource.ts:349 (version set once per lifetime).
+func TestCurrentDataVersion_BridgedStableAcrossCalls(t *testing.T) {
 	t.Parallel()
+	// Server WITHOUT the version interface — previously (0, false);
+	// the endpoint-hosted tracker now answers regardless.
 	srv := &fakeServerFull{id: 0x0006}
 	d := NewTopologyDispatcher(makeTopology(makeEndpointFull(2, srv)))
-	v, ok := d.CurrentDataVersion(context.Background(), 2, 0x0006)
-	if ok || v != 0 {
-		t.Errorf("expected (0, false), got (%d, %v)", v, ok)
+	v1, ok := d.CurrentDataVersion(context.Background(), 2, 0x0006)
+	if !ok || v1 == 0 {
+		t.Fatalf("expected stable non-zero version, got (%d, %v)", v1, ok)
+	}
+	v2, ok := d.CurrentDataVersion(context.Background(), 2, 0x0006)
+	if !ok || v2 != v1 {
+		t.Errorf("second call returned (%d, %v), want (%d, true) — version must be stable across dispatches", v2, ok, v1)
 	}
 }
 
-// TestCurrentDataVersion_ZeroVersion verifies (0, false) when the server
-// implements the interface but returns version 0 (untracked).
-func TestCurrentDataVersion_ZeroVersion(t *testing.T) {
-	t.Parallel()
-	srv := &dvServer{id: 0x0006, ver: 0}
-	ep2 := &Endpoint{ID: 2, Source: dvSource{srv: srv}}
-	top := &Topology{
-		Endpoints: []*Endpoint{
-			{ID: 0}, {ID: 1, DeviceType: 0x000E}, ep2,
-		},
-		VendorID: 0xFFF1, ProductID: 0x8000, NodeLabel: "t",
-	}
-	d := NewTopologyDispatcher(top)
-	v, ok := d.CurrentDataVersion(context.Background(), 2, 0x0006)
-	if ok || v != 0 {
-		t.Errorf("expected (0, false) for version=0, got (%d, %v)", v, ok)
-	}
-}
-
-// TestCurrentDataVersion_NonZeroVersion verifies (ver, true) for non-zero version.
-func TestCurrentDataVersion_NonZeroVersion(t *testing.T) {
+// TestCurrentDataVersion_BridgedIgnoresInstanceTracker verifies the
+// instance-embedded version of a bridged server is NOT consulted —
+// bridged servers are rebuilt per dispatch, so their embedded tracker
+// carries a fresh random per materialisation and must be bypassed.
+func TestCurrentDataVersion_BridgedIgnoresInstanceTracker(t *testing.T) {
 	t.Parallel()
 	srv := &dvServer{id: 0x0006, ver: 7}
 	ep := &Endpoint{ID: 2, Source: dvSource{srv: srv}}
@@ -1217,8 +1210,39 @@ func TestCurrentDataVersion_NonZeroVersion(t *testing.T) {
 	}
 	d := NewTopologyDispatcher(top)
 	v, ok := d.CurrentDataVersion(context.Background(), 2, 0x0006)
-	if !ok || v != 7 {
-		t.Errorf("expected (7, true), got (%d, %v)", v, ok)
+	if !ok || v == 0 {
+		t.Fatalf("expected endpoint-hosted version, got (%d, %v)", v, ok)
+	}
+	v2, _ := d.CurrentDataVersion(context.Background(), 2, 0x0006)
+	if v2 != v {
+		t.Errorf("version changed across calls: %d → %d", v, v2)
+	}
+}
+
+// TestCurrentDataVersion_RootUsesInstanceTracker verifies root-endpoint
+// servers (persistent instances) keep their instance-hosted semantics:
+// no interface / version 0 → (0, false); non-zero → (ver, true).
+func TestCurrentDataVersion_RootUsesInstanceTracker(t *testing.T) {
+	t.Parallel()
+	noIface := &fakeServerFull{id: 0x0006}
+	zero := &dvServer{id: 0x0007, ver: 0}
+	seven := &dvServer{id: 0x0008, ver: 7}
+	top := &Topology{
+		Endpoints: []*Endpoint{
+			{ID: 0, RootClusterServers: []interfaces.MatterClusterServer{noIface, zero, seven}},
+			{ID: 1, DeviceType: 0x000E},
+		},
+		VendorID: 0xFFF1, ProductID: 0x8000, NodeLabel: "t",
+	}
+	d := NewTopologyDispatcher(top)
+	if v, ok := d.CurrentDataVersion(context.Background(), 0, 0x0006); ok || v != 0 {
+		t.Errorf("no-interface root server: expected (0, false), got (%d, %v)", v, ok)
+	}
+	if v, ok := d.CurrentDataVersion(context.Background(), 0, 0x0007); ok || v != 0 {
+		t.Errorf("zero-version root server: expected (0, false), got (%d, %v)", v, ok)
+	}
+	if v, ok := d.CurrentDataVersion(context.Background(), 0, 0x0008); !ok || v != 7 {
+		t.Errorf("root server: expected (7, true), got (%d, %v)", v, ok)
 	}
 }
 

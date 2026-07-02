@@ -827,12 +827,25 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 		}
 		withPaths++
 		epID := ep.ID
+		epRef := ep
 		logger := b.logger
 		unsub := notifier.OnMatterValueChanged(func() {
 			if logger != nil {
 				logger.Debug("matter.bridge.measurement.notify",
 					slog.Int("endpoint", int(epID)),
 					slog.Int("paths", len(pathSet)))
+			}
+			// Advance the endpoint-hosted DataVersion of every cluster
+			// this change touches BEFORE dirty-marking, so the report
+			// the manager ships carries the post-change version and
+			// controllers' DataVersionFilters miss on the next read.
+			// Mirrors matter.js Datasource.ts:949 (increment per change).
+			bumped := make(map[uint32]struct{}, 1)
+			for _, p := range pathSet {
+				if _, done := bumped[p.Cluster]; !done {
+					epRef.BumpClusterDataVersion(p.Cluster)
+					bumped[p.Cluster] = struct{}{}
+				}
 			}
 			for _, p := range pathSet {
 				mgr.OnAttributeChanged(p)
