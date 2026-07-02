@@ -44,6 +44,14 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: WindowCovering reports a real TargetPosition.** The
+  TargetPositionLift/TiltPercent100ths attributes always mirrored the current
+  position, so controllers never saw where a moving cover was heading (Apple
+  Home shows "Opening…"/"Closing…" from the target-vs-current delta). The
+  attributes now carry the commanded destination — set by UpOrOpen /
+  DownOrClose / GoToLift- / GoToTiltPercentage, snapped back to the current
+  position by StopMotion — matching matter.js `WindowCoveringServer` across
+  the cover, blind (lift + tilt) and garage projections.
 - **Matter bridge: OnOff implements the OnWithTimedOff engine and writable
   LT attributes.** OnWithTimedOff previously collapsed to a plain On — the
   timed-off countdown, the AcceptOnlyWhenOn gate and the delayed-off guard
