@@ -1196,6 +1196,37 @@ func (b *Bridge) AnnounceFabric(ctx context.Context, compressedFabricID [8]byte,
 		slog.String("instance", svc.InstanceName))
 }
 
+// WithdrawFabric retracts the operational `_matter._tcp` instance for
+// the given (compressedFabricID, nodeID) identity — the counterpart to
+// [Bridge.AnnounceFabric] for RemoveFabric and for an UpdateNOC that
+// changed the NodeID. A republish alone cannot retire the record: the
+// advertiser re-announces what it still holds, so the stale
+// <compressedID>-<nodeID> instance keeps answering until its TTL and
+// commissioners resolve an identity that no longer exists. Mirrors
+// matter.js DeviceAdvertiser.ts:76-86 (close the fabric's
+// advertisements on update/delete before re-advertising).
+func (b *Bridge) WithdrawFabric(ctx context.Context, compressedFabricID [8]byte, nodeID uint64) {
+	if b.advertiser == nil {
+		return
+	}
+	wCtx, cancel := context.WithTimeout(ctx, b.cfg.AdvertiseTimeout)
+	defer cancel()
+	svc := mdns.BuildOperationalService(mdns.OperationalServiceConfig{
+		CompressedFabricID: compressedFabricID,
+		NodeID:             nodeID,
+		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
+		HostName:           "",
+	})
+	if err := b.advertiser.Withdraw(wCtx, svc.InstanceName, svc.ServiceType); err != nil {
+		b.logger.Debug("matter.mdns.fabric_withdraw",
+			slog.String("instance", svc.InstanceName),
+			slog.String("err", err.Error()))
+		return
+	}
+	b.logger.Info("matter.mdns.fabric_withdrawn",
+		slog.String("instance", svc.InstanceName))
+}
+
 // CommissioningAdvertisement describes the parameters the bridge
 // publishes on `_matterc._udp` while a commissioning window is open.
 // All fields are stamped from the configured / ephemeral

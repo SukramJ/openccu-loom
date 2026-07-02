@@ -9,9 +9,11 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"sync"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
 	mstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 
@@ -77,6 +79,18 @@ func (f *fakeStore) UpdateFabricLabel(_ context.Context, fabricIndex uint8, labe
 		return mstore.ErrFabricNotFound
 	}
 	r.Label = label
+	f.fabrics[fabricIndex] = r
+	return nil
+}
+
+func (f *fakeStore) UpdateFabricNodeID(_ context.Context, fabricIndex uint8, nodeID uint64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, ok := f.fabrics[fabricIndex]
+	if !ok {
+		return mstore.ErrFabricNotFound
+	}
+	r.NodeID = nodeID
 	f.fabrics[fabricIndex] = r
 	return nil
 }
@@ -220,13 +234,26 @@ const (
 	testSigAlgoECDSA    uint64 = 1
 	testPubAlgoEC       uint64 = 1
 	testCurvePrime256v1 uint64 = 1
+
+	// testDefaultFabricID / testDefaultNodeID are the subject identity
+	// [buildCoreTestTBSForSubject] / [buildCoreSignedCert] stamp when a caller does
+	// not need to control them explicitly. Kept as named constants (rather
+	// than repeating the hex literal) so tests that must keep the same
+	// FabricID stable across an AddNOC → UpdateNOC pair — while varying
+	// NodeID — reference one source of truth.
+	testDefaultFabricID uint64 = 0xBBBB
+	testDefaultNodeID   uint64 = 0xAAAA
 )
 
 func marshalTestPub(priv *ecdsa.PrivateKey) []byte {
 	return elliptic.Marshal(elliptic.P256(), priv.PublicKey.X, priv.PublicKey.Y) //nolint:staticcheck // SA1019: canonical raw-point encoding for Matter TLV test fixtures
 }
 
-func buildCoreTestTBS(t *testing.T, pub []byte, isRoot bool) []byte {
+// buildCoreTestTBSForSubject builds the TLV to-be-signed cert body,
+// stamping the caller-supplied fabricID/nodeID into the NOC subject.
+// isRoot==true ignores both (root certs carry an RCAC-ID subject, not
+// a FabricID/NodeID pair).
+func buildCoreTestTBSForSubject(t *testing.T, pub []byte, isRoot bool, fabricID, nodeID uint64) []byte {
 	t.Helper()
 	e := tlv.NewEncoder()
 	e.StartStruct(tlv.AnonymousTag())
@@ -249,8 +276,8 @@ func buildCoreTestTBS(t *testing.T, pub []byte, isRoot bool) []byte {
 		e.PutUint(tlv.ContextTag(20), uint64(0x0001)) // RCAC-ID → IsRoot()
 	} else {
 		// NOC: NodeID (tag 17) + FabricID (tag 21)
-		e.PutUint(tlv.ContextTag(17), uint64(0xAAAA)) // NodeID
-		e.PutUint(tlv.ContextTag(21), uint64(0xBBBB)) // FabricID
+		e.PutUint(tlv.ContextTag(17), nodeID)
+		e.PutUint(tlv.ContextTag(21), fabricID)
 	}
 	if err := e.EndContainer(); err != nil {
 		t.Fatalf("EndContainer subject: %v", err)
@@ -291,15 +318,42 @@ func buildCoreTestTBS(t *testing.T, pub []byte, isRoot bool) []byte {
 
 func buildCoreSignedCert(t *testing.T, priv *ecdsa.PrivateKey, isRoot bool, signerPriv *ecdsa.PrivateKey) []byte {
 	t.Helper()
-	pub := marshalTestPub(priv)
-	tbs := buildCoreTestTBS(t, pub, isRoot)
+	return buildCoreSignedCertForSubject(t, marshalTestPub(priv), isRoot, signerPriv, testDefaultFabricID, testDefaultNodeID)
+}
+
+// buildCoreSignedCertForPubKey mints a certificate over pub — a raw
+// 65-byte uncompressed EC-P256 point — rather than deriving the point
+// from a private key the test holds. Real commissioners work this way:
+// the CSRResponse's embedded PKCS#10 request carries the device's own
+// pending public key (see [extractPendingCSRPubKey]), and the CA signs
+// a certificate over THAT key, never a throwaway key of its own. A NOC
+// minted over any other key fails openccu-loom's
+// AddNOC/UpdateNOC "public key must match the pending CSR" check —
+// which is the correct rejection path for tests that intentionally
+// exercise it (see [buildTestNOCAndRoot]), but the wrong fixture for
+// tests that need a NOC that actually installs.
+//
+// fabricID/nodeID let the caller pin the subject identity explicitly,
+// which UpdateNOC-flow tests need to hold FabricID stable across
+// AddNOC → UpdateNOC while varying NodeID (UpdateNOC permits a NodeID
+// change but rejects a FabricID change per Matter §11.18.6.9).
+func buildCoreSignedCertForPubKey(t *testing.T, pub []byte, isRoot bool, signerPriv *ecdsa.PrivateKey, fabricID, nodeID uint64) []byte {
+	t.Helper()
+	return buildCoreSignedCertForSubject(t, pub, isRoot, signerPriv, fabricID, nodeID)
+}
+
+// buildCoreSignedCertForSubject is the shared implementation behind
+// [buildCoreSignedCert] and [buildCoreSignedCertForPubKey].
+func buildCoreSignedCertForSubject(t *testing.T, pub []byte, isRoot bool, signerPriv *ecdsa.PrivateKey, fabricID, nodeID uint64) []byte {
+	t.Helper()
+	tbs := buildCoreTestTBSForSubject(t, pub, isRoot, fabricID, nodeID)
 
 	// Build a probe cert with a zero-placeholder signature so Decode
 	// succeeds; then derive the DER TBS bytes and sign over those.
 	// This matches the verification path in mattercert.Verifier which
 	// hashes TBSToDER(cert) — not the raw TLV bytes.
 	if len(tbs) == 0 || tbs[len(tbs)-1] != 0x18 {
-		t.Fatalf("buildCoreTestTBS: trailing byte not End-of-Container, got %#x", tbs[len(tbs)-1])
+		t.Fatalf("buildCoreTestTBSForSubject: trailing byte not End-of-Container, got %#x", tbs[len(tbs)-1])
 	}
 	probeRaw := append([]byte(nil), tbs[:len(tbs)-1]...)
 	probeRaw = append(probeRaw, 0x30, 11, 0x40)
@@ -343,8 +397,8 @@ func buildCoreSignedCert(t *testing.T, priv *ecdsa.PrivateKey, isRoot bool, sign
 	if isRoot {
 		e.PutUint(tlv.ContextTag(20), uint64(0x0001))
 	} else {
-		e.PutUint(tlv.ContextTag(17), uint64(0xAAAA))
-		e.PutUint(tlv.ContextTag(21), uint64(0xBBBB))
+		e.PutUint(tlv.ContextTag(17), nodeID)
+		e.PutUint(tlv.ContextTag(21), fabricID)
 	}
 	if err := e.EndContainer(); err != nil {
 		t.Fatalf("EndContainer subject2: %v", err)
@@ -381,6 +435,17 @@ func buildCoreSignedCert(t *testing.T, priv *ecdsa.PrivateKey, isRoot bool, sign
 }
 
 // buildTestNOCAndRoot returns rootRaw, nocRaw, rootPriv for AddNOC tests.
+//
+// nocRaw is minted over a throwaway key that is NOT the pending CSR
+// key any CSRRequest call would install — it is a validly-signed NOC
+// chained to rootRaw, but its embedded public key never matches
+// whatever AddNOC/UpdateNOC currently holds as the pending key. That
+// makes this fixture correct for exactly one purpose: exercising the
+// NOCStatusInvalidPublicKey rejection path (chip
+// FabricTable.cpp:890 / matter.js Fabric.ts:524-526). Tests that need
+// a NOC that actually installs must mint over the cluster's real
+// pending key instead — see [commissionTestFabric],
+// [issueCSRPendingPubKey], and [buildCoreSignedCertForPubKey].
 func buildTestNOCAndRoot(t *testing.T) (
 	rootRaw []byte,
 	nocRaw []byte,
@@ -404,4 +469,136 @@ func buildTestNOCAndRoot(t *testing.T) (
 	nocRaw = buildCoreSignedCert(t, nocPriv, false, rootPriv)
 
 	return rootRaw, nocRaw, rootPriv
+}
+
+// extractPendingCSRPubKey decodes a CSRResponse.NOCSRElements payload
+// (Matter §11.18.7.6: an anonymous Structure with context tag 1 = DER
+// PKCS#10 CSR, tag 2 = the echoed nonce), parses the CSR, and returns
+// the embedded ECDSA public key both as the raw uncompressed EC-P256
+// point (65 bytes, 0x04-prefixed — the shape [buildCoreSignedCertForPubKey]
+// expects) and in typed form. This is the public key a real
+// commissioner signs the follow-up NOC over.
+func extractPendingCSRPubKey(t *testing.T, nocsrElements []byte) (raw []byte, pub *ecdsa.PublicKey) {
+	t.Helper()
+
+	dec := tlv.NewDecoder(nocsrElements)
+	outer, err := dec.Next()
+	if err != nil {
+		t.Fatalf("NOCSRElements: decode outer element: %v", err)
+	}
+	if outer.Type != tlv.TypeStructure {
+		t.Fatalf("NOCSRElements: outer element type = %v, want Structure", outer.Type)
+	}
+
+	var csrDER []byte
+	for {
+		el, err := dec.Next()
+		if err != nil {
+			t.Fatalf("NOCSRElements: decode field: %v", err)
+		}
+		if el.IsEndContainer {
+			break
+		}
+		if el.Tag.Kind == tlv.TagKindContext && el.Tag.Number == 1 {
+			csrDER = el.Octets
+		}
+	}
+	if len(csrDER) == 0 {
+		t.Fatal("NOCSRElements: CSR (context tag 1) missing or empty")
+	}
+
+	csr, err := x509.ParseCertificateRequest(csrDER)
+	if err != nil {
+		t.Fatalf("ParseCertificateRequest: %v", err)
+	}
+	ecdsaPub, ok := csr.PublicKey.(*ecdsa.PublicKey)
+	if !ok {
+		t.Fatalf("CSR public key type = %T, want *ecdsa.PublicKey", csr.PublicKey)
+	}
+	raw = elliptic.Marshal(elliptic.P256(), ecdsaPub.X, ecdsaPub.Y) //nolint:staticcheck // SA1019: canonical raw-point encoding matches the NOC subject public-key wire field
+	return raw, ecdsaPub
+}
+
+// issueCSRPendingPubKey invokes CSRRequest (opcode 0x04) against oc and
+// returns the raw 65-byte EC-P256 public key from the returned
+// CSRResponse — the key a real commissioner would sign the follow-up
+// NOC over. forUpdate mirrors [core.CSRRequest.IsForUpdateNOC]; callers
+// issuing an UpdateNOC-bound CSR pass a ctx that already carries the
+// CASE fabric filter (see [im.WithFabricFilter]).
+func issueCSRPendingPubKey(ctx context.Context, t *testing.T, oc *core.OperationalCredentials, forUpdate bool) []byte {
+	t.Helper()
+
+	resp, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{
+		CSRNonce:       make([]byte, 32),
+		IsForUpdateNOC: forUpdate,
+	}, 0)
+	if err != nil {
+		t.Fatalf("CSRRequest(IsForUpdateNOC=%v): %v", forUpdate, err)
+	}
+	csrResp, ok := resp.(core.CSRResponse)
+	if !ok {
+		t.Fatalf("CSRRequest response type = %T, want core.CSRResponse", resp)
+	}
+	raw, _ := extractPendingCSRPubKey(t, csrResp.NOCSRElements)
+	return raw
+}
+
+// commissionTestFabric drives the real commissioning sequence —
+// AddTrustedRootCertificate → CSRRequest → AddNOC with a NOC minted
+// over the CSR's actual pending public key — against oc, and returns
+// the trust root (raw Matter Certificate TLV bytes + private key) plus
+// the FabricIndex AddNOC installed. Fails the test immediately if
+// AddNOC does not return NOCStatusOK, so callers can treat the return
+// values as a successfully committed fabric.
+func commissionTestFabric(ctx context.Context, t *testing.T, oc *core.OperationalCredentials) (rootRaw []byte, rootPriv *ecdsa.PrivateKey, fabricIndex uint8) {
+	t.Helper()
+
+	var err error
+	rootPriv, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	rootRaw = buildCoreSignedCert(t, rootPriv, true, rootPriv)
+
+	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
+		RootCACertificate: rootRaw,
+	}, 0); err != nil {
+		t.Fatalf("AddTrustedRootCertificate: %v", err)
+	}
+
+	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+	nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
+
+	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
+		NOCValue:         nocRaw,
+		IPKValue:         make([]byte, 16),
+		CaseAdminSubject: 0xABCD,
+		AdminVendorID:    0x1234,
+	}, 0)
+	if err != nil {
+		t.Fatalf("AddNOC: %v", err)
+	}
+	nr, ok := resp.(core.NOCResponse)
+	if !ok {
+		t.Fatalf("AddNOC response type = %T, want core.NOCResponse", resp)
+	}
+	if nr.StatusCode != core.NOCStatusOK {
+		t.Fatalf("AddNOC StatusCode = %d (%s), want OK", nr.StatusCode, nr.DebugText)
+	}
+	return rootRaw, rootPriv, nr.FabricIndex
+}
+
+// mintUpdateNOC issues an IsForUpdateNOC CSR against fabCtx (a context
+// already carrying the CASE fabric filter for fabricIndex — see
+// [im.WithFabricFilter]) and mints a NOC over the resulting pending
+// key, signed by signerPriv and stamped with fabricID/nodeID. Returns
+// the raw NOC bytes ready for an UpdateNOC (0x07) invoke on the same
+// fabCtx. Used by UpdateNOC behaviour tests that need to vary the
+// signer / FabricID / NodeID independently while still minting over
+// the cluster's real pending key.
+func mintUpdateNOC(fabCtx context.Context, t *testing.T, oc *core.OperationalCredentials, signerPriv *ecdsa.PrivateKey, fabricID, nodeID uint64) []byte {
+	t.Helper()
+
+	pendingPub := issueCSRPendingPubKey(fabCtx, t, oc, true)
+	return buildCoreSignedCertForPubKey(t, pendingPub, false, signerPriv, fabricID, nodeID)
 }

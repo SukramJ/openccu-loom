@@ -44,6 +44,8 @@ func (stubOpCredsStore) AddFabric(_ context.Context, _ store.FabricRecord) (uint
 
 func (stubOpCredsStore) UpdateFabricLabel(_ context.Context, _ uint8, _ string) error { return nil }
 
+func (stubOpCredsStore) UpdateFabricNodeID(_ context.Context, _ uint8, _ uint64) error { return nil }
+
 func (stubOpCredsStore) RemoveFabric(_ context.Context, _ uint8) error { return nil }
 
 func (stubOpCredsStore) UpsertIdentity(_ context.Context, _ store.IdentityRecord) error { return nil }
