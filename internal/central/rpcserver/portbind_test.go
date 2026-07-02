@@ -71,7 +71,7 @@ func loWindowHi(lo, window int) int {
 // The caller closes the returned listeners.
 func heldWindowWithFreePort(t *testing.T, window int) (occupier []net.Listener, lo, hi int) {
 	t.Helper()
-	for attempt := 0; attempt < 25; attempt++ {
+	for range 25 {
 		listeners, ports := acquireHeldListeners(t, 1)
 		lo = ports[0]
 		hi = loWindowHi(lo, window)
