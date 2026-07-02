@@ -554,6 +554,136 @@ func TestGKM_KeySetWriteValidation(t *testing.T) {
 	}
 }
 
+// keySetWriteFields builds a minimally valid KeySetWriteRequest for
+// budget tests — only GroupKeySetID varies; EpochKey0/EpochStartTime0
+// satisfy the mandatory-field validation so the request reaches
+// enforceKeySetBudget.
+func keySetWriteFields(id uint16) core.KeySetWriteRequest {
+	return core.KeySetWriteRequest{
+		GroupKeySet: core.GroupKeySetStruct{
+			GroupKeySetID:          id,
+			GroupKeySecurityPolicy: 0, // TrustFirst
+			EpochKey0:              make([]byte, 16),
+			EpochStartTime0:        1,
+		},
+	}
+}
+
+// mustBeResourceExhausted fails the test unless err is a typed
+// [im.StatusCodeError] mapping to ResourceExhausted (0x89). Follows the
+// statusCoder pattern used by TestGKM_KeySetRead_NotFoundStatusCode /
+// TestGKM_KeySetRemove_NotFoundStatusCode above.
+func mustBeResourceExhausted(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	type statusCoder interface{ MatterStatusCode() im.StatusCode }
+	var sc statusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("error %v does not implement MatterStatusCode()", err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusResourceExhausted {
+		t.Errorf("MatterStatusCode() = 0x%02X, want 0x%02X (ResourceExhausted)", uint8(got), uint8(im.StatusResourceExhausted))
+	}
+}
+
+// TestGKM_KeySetWriteBudget_CapReached pins that KeySetWrite ADD
+// operations succeed up to MaxGroupKeysPerFabric key sets and that the
+// write which would push the fabric over the cap fails with a typed
+// [im.StatusCodeError] mapping to ResourceExhausted (0x89), not a
+// generic error. Mirrors matter.js
+// GroupKeyManagementServer.ts:386-394, which counts the fabric's
+// persisted key sets (state entries + 1 for the implicit IPK key set
+// 0) and rejects once that count reaches maxGroupKeysPerFabric.
+func TestGKM_KeySetWriteBudget_CapReached(t *testing.T) {
+	t.Parallel()
+	const budgetCap = 3
+	gkm, err := core.NewGroupKeyManagement(newFakeStore(), core.GroupKeyMgmtConfig{MaxGroupKeysPerFabric: budgetCap})
+	if err != nil {
+		t.Fatalf("NewGroupKeyManagement: %v", err)
+	}
+	gkm.SetCurrentFabric(1)
+	ctx := context.Background()
+
+	// Writes up to the cap (three distinct new ids) must all succeed.
+	for _, id := range []uint16{1, 2, 3} {
+		if _, err := gkm.MatterInvoke(ctx, 0x00 /*KeySetWrite*/, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("KeySetWrite id=%d: unexpected error: %v", id, err)
+		}
+	}
+
+	// The next ADD (a new, fourth id) must be rejected: len(existing) ==
+	// cap already.
+	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(4), hmenum.CommandPriorityHigh)
+	mustBeResourceExhausted(t, err)
+}
+
+// TestGKM_KeySetWriteBudget_UpdateAtCapSucceeds pins that an UPDATE of
+// an already-existing key set id is always allowed, even when the
+// fabric is already at its MaxGroupKeysPerFabric cap — only ADDing a
+// new id is budget-limited. Mirrors matter.js
+// GroupKeyManagementServer.ts:378-382 (existingIndex !== -1 branch
+// updates in place, bypassing the budget check entirely).
+func TestGKM_KeySetWriteBudget_UpdateAtCapSucceeds(t *testing.T) {
+	t.Parallel()
+	const budgetCap = 3
+	gkm, err := core.NewGroupKeyManagement(newFakeStore(), core.GroupKeyMgmtConfig{MaxGroupKeysPerFabric: budgetCap})
+	if err != nil {
+		t.Fatalf("NewGroupKeyManagement: %v", err)
+	}
+	gkm.SetCurrentFabric(1)
+	ctx := context.Background()
+
+	for _, id := range []uint16{1, 2, 3} {
+		if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("KeySetWrite id=%d: unexpected error: %v", id, err)
+		}
+	}
+
+	// Re-writing an existing id (an UPDATE, not an ADD) at the cap must
+	// still succeed.
+	if _, err := gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(2), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("KeySetWrite update of existing id=2 at cap: unexpected error: %v", err)
+	}
+
+	// A genuinely new id at the cap must still be rejected.
+	_, err = gkm.MatterInvoke(ctx, 0x00, keySetWriteFields(9), hmenum.CommandPriorityHigh)
+	mustBeResourceExhausted(t, err)
+}
+
+// TestGKM_KeySetWriteBudget_CrossFabricIsolation pins that the budget
+// is enforced per fabric: a fabric already at its cap must not block a
+// different fabric's KeySetWrite. Mirrors matter.js
+// GroupKeyManagementServer.ts:386-394, which filters
+// state.groupKeySets by fabricIndex before counting — the same
+// per-fabric scoping [GroupStoreFacade.ListGroupKeySets] applies here.
+func TestGKM_KeySetWriteBudget_CrossFabricIsolation(t *testing.T) {
+	t.Parallel()
+	const budgetCap = 3
+	gkm, err := core.NewGroupKeyManagement(newFakeStore(), core.GroupKeyMgmtConfig{MaxGroupKeysPerFabric: budgetCap})
+	if err != nil {
+		t.Fatalf("NewGroupKeyManagement: %v", err)
+	}
+	ctxA := im.WithFabricFilter(context.Background(), true, 1)
+	ctxB := im.WithFabricFilter(context.Background(), true, 2)
+
+	// Fill fabric A to its cap.
+	for _, id := range []uint16{1, 2, 3} {
+		if _, err := gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(id), hmenum.CommandPriorityHigh); err != nil {
+			t.Fatalf("fabric A KeySetWrite id=%d: unexpected error: %v", id, err)
+		}
+	}
+	// Fabric A is now exhausted.
+	_, err = gkm.MatterInvoke(ctxA, 0x00, keySetWriteFields(4), hmenum.CommandPriorityHigh)
+	mustBeResourceExhausted(t, err)
+
+	// Fabric B, still empty, must accept its own writes.
+	if _, err := gkm.MatterInvoke(ctxB, 0x00, keySetWriteFields(1), hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("fabric B KeySetWrite id=1: unexpected error, cross-fabric budget leaked: %v", err)
+	}
+}
+
 // containsStr is a small helper to avoid importing strings in the test file.
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || sub == "" ||

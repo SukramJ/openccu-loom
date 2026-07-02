@@ -89,6 +89,20 @@ func (groupKeyNotFoundErr) MatterStatusCode() im.StatusCode { return im.StatusNo
 
 var _ im.StatusCodeError = groupKeyNotFoundErr{}
 
+// groupKeyExhaustedErr is the typed error a KeySetWrite raises when
+// adding a new key set would exceed the fabric's MaxGroupKeysPerFabric
+// budget. Maps to IM ResourceExhausted (0x89), matching matter.js
+// GroupKeyManagementServer.ts:386-394.
+type groupKeyExhaustedErr struct{ maxKeys uint16 }
+
+func (e groupKeyExhaustedErr) Error() string {
+	return fmt.Sprintf("matter: GroupKeyManagement key sets exhausted: max=%d per fabric", e.maxKeys)
+}
+
+func (groupKeyExhaustedErr) MatterStatusCode() im.StatusCode { return im.StatusResourceExhausted }
+
+var _ im.StatusCodeError = groupKeyExhaustedErr{}
+
 // GroupKeyMgmtConfig drives [NewGroupKeyManagement]. Defaults mirror
 // matter.js HEAD GroupKeyManagementServer.ts:531-532
 // (maxGroupKeysPerFabric = 20, maxGroupsPerFabric = 21). Spec floors
@@ -554,6 +568,10 @@ func (g *GroupKeyManagement) handleKeySetWrite(ctx context.Context, fabric uint8
 		return nil, errors.New("matter: KeySetWrite: invalid command argument: GroupKeySecurityPolicy must be TrustFirst")
 	}
 
+	if err := g.enforceKeySetBudget(ctx, fabric, gks.GroupKeySetID); err != nil {
+		return nil, err
+	}
+
 	rec := store.GroupKeySet{
 		FabricIndex:    fabric,
 		GroupKeySetID:  gks.GroupKeySetID,
@@ -572,6 +590,29 @@ func (g *GroupKeyManagement) handleKeySetWrite(ctx context.Context, fabric uint8
 	// evaluation correctly detects the cluster changed.
 	g.dataVersion.Bump()
 	return nil, nil
+}
+
+// enforceKeySetBudget rejects ADDING a new key-set id once the
+// fabric's MaxGroupKeysPerFabric budget is reached — updating an
+// existing key set is always allowed. matter.js
+// GroupKeyManagementServer.ts:386-394 counts the fabric's key sets
+// plus the implicit IPK key set 0 and rejects with ResourceExhausted
+// at the cap; our store persists the IPK as key set 0 (installed by
+// AddNOC), so the plain list length carries the same total.
+func (g *GroupKeyManagement) enforceKeySetBudget(ctx context.Context, fabric uint8, id uint16) error {
+	existing, err := g.store.ListGroupKeySets(ctx, fabric)
+	if err != nil {
+		return fmt.Errorf("matter: KeySetWrite: %w", err)
+	}
+	for _, ks := range existing {
+		if ks.GroupKeySetID == id {
+			return nil
+		}
+	}
+	if uint16(len(existing)) >= g.maxGroupKeysPerFabric { //nolint:gosec // key-set counts stay far below uint16 max
+		return groupKeyExhaustedErr{maxKeys: g.maxGroupKeysPerFabric}
+	}
+	return nil
 }
 
 func (g *GroupKeyManagement) handleKeySetRead(ctx context.Context, fabric uint8, fields any) (any, error) {

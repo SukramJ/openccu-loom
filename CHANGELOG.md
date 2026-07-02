@@ -44,6 +44,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter bridge: GroupKeyManagement enforces the per-fabric key-set
+  budget.** KeySetWrite accepted unlimited new key sets; adding one beyond
+  MaxGroupKeysPerFabric now returns ResourceExhausted (updates of an existing
+  key set stay allowed), matching matter.js.
 - **Matter bridge: duplicates are acknowledged immediately.** The standalone
   ACK for a retransmitted (duplicate) reliable message was queued behind the
   200 ms piggyback grace window, so a peer that had already waited out its
