@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0]
+
 ### Security
 
 - **Matter bridge: UpdateNOC validates the new certificate before persisting
