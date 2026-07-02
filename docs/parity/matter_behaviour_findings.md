@@ -105,13 +105,20 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 
 ### C4 — Replies are not MRP-reliable; duplicates never re-trigger the reply
 
-> **Status: PART 1 FIXED (Unreleased).** WriteResponse, InvokeResponse, the
+> **Status: FIXED (Unreleased).** Part 1: WriteResponse, InvokeResponse, the
 > TimedRequest StatusResponse, and the PASE/CASE continuation replies (Pake2,
-> Sigma2) now ship via `sendReplyReliable` (retransmitted until acked);
-> `reply_reliability_test.go` guards it. **Part 2 still open:** re-sending the
-> cached last reply on a duplicate request / Sigma1-replay, plus session-0
-> duplicate detection (see the MRP Tier-2 items) — deferred as a separate
-> change since Part 1 already retransmits replies independently.
+> Sigma2) ship via `sendReplyReliable` (retransmitted until acked);
+> `reply_reliability_test.go` guards it. Part 2: session-0 (unsecured/PASE)
+> duplicate detection added — `decryptIfNeeded` now runs a per-source-node-id
+> `mrp.Window` so a retransmitted Pake1/Pake3 is acked without re-invoking the
+> handshake handler (`receive_unsecured_dup_test.go`), cleared on each PASE
+> acceptor swap. **Correction on matter.js re-read:** the finding's other Part-2
+> half — "cache and re-send the full reply on a duplicate" — does NOT match
+> matter.js. `MessageExchange.ts:409-415` sends only a *standalone ack* on a
+> `duplicate` and does not re-send the reply (the `:416` reply-resend is a
+> narrow non-duplicate edge, and Part 1's independent reliable retransmit
+> already delivers the lost reply). Go already sends a standalone ack on
+> duplicates, so no divergent reply-datagram cache was added.
 
 - **Go:** `bridge/reply.go:55` `sendReply` uses `NeedsAck=false` for WriteResponse/InvokeResponse/StatusResponse (`bridge/receive_dispatch.go:279`, `:366`, `:415`) and all PASE/CASE replies (`bridge/securechannel.go:438`, `:512`). Duplicates are ack-only; a Sigma1 replay is dropped without re-sending Sigma2.
 - **matter.js:** `packages/protocol/src/protocol/MessageExchange.ts:602` makes every reply reliable, and `:416` re-sends the previous reply (which carries the ack) on a received retransmission.

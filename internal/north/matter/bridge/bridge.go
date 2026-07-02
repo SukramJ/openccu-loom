@@ -323,6 +323,15 @@ type Bridge struct {
 	// when the cap fires. See [Bridge.recordPaseFailure].
 	paseFailures atomic.Int32
 
+	// unsecuredWindows holds a per-source-node-id [mrp.Window] duplicate
+	// detector for unsecured (SessionID==0, PASE) traffic, so a
+	// retransmitted Pake1/Pake3 is acked without re-invoking the handshake
+	// handler. Keyed by SourceNodeID (uint64) → *mrp.Window. Cleared on
+	// each PASE-acceptor swap (a commissioning-window boundary) so it stays
+	// bounded to the current window's transient commissioners. Mirrors
+	// matter.js UnsecuredSession's MessageReceptionState.
+	unsecuredWindows sync.Map
+
 	// commissioningInstanceName remembers the mDNS instance name the
 	// bridge published via [Bridge.AnnounceCommissioning] so the
 	// matching [Bridge.WithdrawCommissioning] call can target the

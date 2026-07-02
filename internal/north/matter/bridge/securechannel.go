@@ -409,12 +409,15 @@ func (b *Bridge) recordPaseFailure() {
 	_ = win.RevokeWindow(context.Background())
 }
 
-// resetPaseFailures clears the PASE failure counter. Called when a fresh
-// PASE acceptor is installed ([Bridge.AttachPaseHandler] /
+// resetPaseFailures clears the per-window PASE state — the failure counter
+// and the unsecured duplicate-detection windows. Called when a fresh PASE
+// acceptor is installed ([Bridge.AttachPaseHandler] /
 // [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
-// so each window gets its own [paseMaxErrors] budget.
+// so each window gets its own [paseMaxErrors] budget and a clean set of
+// per-source dedup windows.
 func (b *Bridge) resetPaseFailures() {
 	b.paseFailures.Store(0)
+	b.unsecuredWindows.Clear()
 }
 
 // handlePase + handleCase share the handler-invocation + reply-send

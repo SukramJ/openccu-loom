@@ -220,6 +220,19 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 // stop the peer's retransmit storm — but skip handler dispatch.
 func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []byte, duplicate bool, err error) {
 	if hdr.SessionID == 0 {
+		// Unsecured (PASE / pre-fabric) traffic. Detect MRP retransmits per
+		// source node id so a duplicate Pake1/Pake3 is acked without
+		// re-invoking the handshake handler, mirroring matter.js
+		// UnsecuredSession's MessageReceptionState
+		// (packages/protocol/src/session/UnsecuredSession.ts). Without a
+		// source node id there is nothing stable to key on — treat as fresh
+		// (the handshake handler's own state-replay guard still catches it).
+		if hdr.HasSourceNodeID && hdr.SourceNodeID != 0 {
+			raw, _ := b.unsecuredWindows.LoadOrStore(hdr.SourceNodeID, mrp.NewWindow())
+			if w, ok := raw.(*mrp.Window); ok && !w.Accept(hdr.MessageCounter) {
+				return body, true, nil
+			}
+		}
 		return body, false, nil
 	}
 	b.mu.RLock()

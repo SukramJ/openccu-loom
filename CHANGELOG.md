@@ -76,7 +76,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   were shipped best-effort, so a single dropped UDP datagram surfaced as
   "Not Responding" on a command or aborted commissioning outright. They are
   now retransmitted until the controller acknowledges them, matching
-  matter.js.
+  matter.js. Unsecured (PASE) retransmits are also now detected as duplicates
+  and acknowledged without re-running the handshake handler.
 
 ## [0.22.0]
 
