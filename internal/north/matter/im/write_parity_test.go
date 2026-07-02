@@ -197,6 +197,65 @@ func TestWriteParity_SuppressResponse(t *testing.T) {
 	}
 }
 
+// TestWriteParity_MoreChunkedMessages_Preserved mirrors matter.js
+// packages/protocol/src/action/request/Write.ts moreChunkedMessages
+// field (Matter §10.6.5 tag 3): a WriteRequestMessage that sets tag 3
+// true MUST decode with MoreChunkedMessages==true so the dispatch
+// layer can enforce the chunked-write InvalidAction rules
+// (InteractionServer.ts:397-402, :408-413).
+func TestWriteParity_MoreChunkedMessages_Preserved(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())   // top WriteRequestMessage
+	enc.PutBool(tlv.ContextTag(0), false) // SuppressResponse
+	enc.PutBool(tlv.ContextTag(1), false) // TimedRequest
+	enc.StartArray(tlv.ContextTag(2))     // WriteRequests (empty)
+	_ = enc.EndContainer()                // end WriteRequests
+	enc.PutBool(tlv.ContextTag(3), true)  // MoreChunkedMessages: true
+	_ = enc.EndContainer()                // end top
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	dec := tlv.NewDecoder(wire)
+	out, err := UnmarshalWriteRequestTLV(dec, nil)
+	if err != nil {
+		t.Fatalf("UnmarshalWriteRequestTLV: %v", err)
+	}
+	if !out.MoreChunkedMessages {
+		t.Fatal("MoreChunkedMessages flag not preserved after round-trip")
+	}
+}
+
+// TestWriteParity_MoreChunkedMessages_DefaultFalse verifies that a
+// WriteRequestMessage omitting tag 3 (MoreChunkedMessages) decodes
+// with the field left at its zero value — a request with no
+// following chunks is the common case and must not accidentally
+// trip the chunked-write InvalidAction rules.
+func TestWriteParity_MoreChunkedMessages_DefaultFalse(t *testing.T) {
+	t.Parallel()
+	enc := tlv.NewEncoder()
+	enc.StartStruct(tlv.AnonymousTag())   // top WriteRequestMessage
+	enc.PutBool(tlv.ContextTag(0), false) // SuppressResponse
+	enc.PutBool(tlv.ContextTag(1), false) // TimedRequest
+	enc.StartArray(tlv.ContextTag(2))     // WriteRequests (empty)
+	_ = enc.EndContainer()                // end WriteRequests
+	// tag 3 (MoreChunkedMessages) intentionally omitted.
+	_ = enc.EndContainer() // end top
+	wire, err := enc.Bytes()
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	dec := tlv.NewDecoder(wire)
+	out, err := UnmarshalWriteRequestTLV(dec, nil)
+	if err != nil {
+		t.Fatalf("UnmarshalWriteRequestTLV: %v", err)
+	}
+	if out.MoreChunkedMessages {
+		t.Fatal("MoreChunkedMessages flag set true without tag 3 present, want default false")
+	}
+}
+
 // TestWriteParity_InvalidMessage_EmptyWriteRequest mirrors
 // chip src/app/tests/TestWriteInteraction.cpp:812
 // (TestWriteHandlerReceiveEmptyWriteRequest).

@@ -35,6 +35,14 @@ type WriteRequest struct {
 	SuppressResponse bool
 	TimedRequest     bool
 	Writes           []AttributeWrite
+	// MoreChunkedMessages signals that further WriteRequest chunks
+	// follow on the same exchange (Matter §10.6.5 tag 3). Each chunk
+	// is answered with its own WriteResponse — matter.js
+	// InteractionServer.ts:521-532 sends a per-chunk WriteResponse
+	// and then reads the next chunk. The flag is invalid in
+	// combination with SuppressResponse or a timed interaction
+	// (InteractionServer.ts:397/:408 → InvalidAction).
+	MoreChunkedMessages bool
 }
 
 // AttributeWrite is one entry in WriteRequests — a (path, value)
@@ -90,6 +98,8 @@ func UnmarshalWriteRequestTLV(dec *tlv.Decoder, valueReader AttributeValueReader
 			req.SuppressResponse = el.Bool
 		case tagWriteReqTimedRequest:
 			req.TimedRequest = el.Bool
+		case tagWriteReqMoreChunked:
+			req.MoreChunkedMessages = el.Bool
 		case tagWriteReqWriteRequests:
 			if !el.IsContainer || el.Type != tlv.TypeArray {
 				return WriteRequest{}, fmt.Errorf("%w: WriteRequests not array", ErrInvalidWriteRequest)
