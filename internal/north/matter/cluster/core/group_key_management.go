@@ -72,10 +72,22 @@ const (
 )
 
 // Errors.
-var (
-	errGroupKeyMgmtInvalidArg = errors.New("matter: GroupKeyManagement invalid argument")
-	errGroupKeyMgmtNotFound   = errors.New("matter: GroupKeyManagement key set not found")
-)
+var errGroupKeyMgmtInvalidArg = errors.New("matter: GroupKeyManagement invalid argument")
+
+// groupKeyNotFoundErr is the typed [im.StatusCodeError] returned when a
+// KeySetRead / KeySetRemove targets a group key set that does not exist on
+// the fabric. Maps to IM NotFound (0x8b), matching matter.js
+// GroupKeyManagementServer.ts (Status.NotFound) rather than a generic
+// failure.
+type groupKeyNotFoundErr struct{ id uint16 }
+
+func (e groupKeyNotFoundErr) Error() string {
+	return fmt.Sprintf("matter: GroupKeyManagement key set not found: id=%d", e.id)
+}
+
+func (groupKeyNotFoundErr) MatterStatusCode() im.StatusCode { return im.StatusNotFound }
+
+var _ im.StatusCodeError = groupKeyNotFoundErr{}
 
 // GroupKeyMgmtConfig drives [NewGroupKeyManagement]. Defaults mirror
 // matter.js HEAD GroupKeyManagementServer.ts:531-532
@@ -569,7 +581,7 @@ func (g *GroupKeyManagement) handleKeySetRead(ctx context.Context, fabric uint8,
 	}
 	rec, err := g.store.GetGroupKeySet(ctx, fabric, req.GroupKeySetID)
 	if errors.Is(err, store.ErrGroupKeySetNotFound) {
-		return nil, fmt.Errorf("%w: id=%d", errGroupKeyMgmtNotFound, req.GroupKeySetID)
+		return nil, groupKeyNotFoundErr{req.GroupKeySetID}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("matter: KeySetRead: %w", err)
@@ -602,6 +614,15 @@ func (g *GroupKeyManagement) handleKeySetRemove(ctx context.Context, fabric uint
 	// `invokeErrorStatus` in dispatcher.go.
 	if req.GroupKeySetID == 0 {
 		return nil, errors.New("matter: KeySetRemove: invalid command argument: GroupKeySet 0 (IPK) cannot be removed")
+	}
+	// Removing a non-existent key set must return NotFound, not silent
+	// success. matter.js GroupKeyManagementServer.ts throws Status.NotFound
+	// (the bridge's store RemoveGroupKeySet is idempotent, so an existence
+	// check is needed to surface the correct status).
+	if _, err := g.store.GetGroupKeySet(ctx, fabric, req.GroupKeySetID); errors.Is(err, store.ErrGroupKeySetNotFound) {
+		return nil, groupKeyNotFoundErr{req.GroupKeySetID}
+	} else if err != nil {
+		return nil, fmt.Errorf("matter: KeySetRemove: %w", err)
 	}
 	if err := g.store.RemoveGroupKeySet(ctx, fabric, req.GroupKeySetID); err != nil {
 		return nil, fmt.Errorf("matter: KeySetRemove: %w", err)

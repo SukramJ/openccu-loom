@@ -8,6 +8,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Matter bridge: AccessControl.ACL rejects out-of-range Privilege / AuthMode
+  values.** An ACL write with an invalid `Privilege` (outside View..Administer)
+  or `AuthMode` (outside PASE/CASE/Group) enum value was persisted unchecked; it
+  is now rejected with `ConstraintError`, matching matter.js schema validation.
 - **Matter bridge: OperationalCredentials.NOCs requires Administer to read.**
   The NOC / ICAC certificate bytes were readable — and streamable via a
   wildcard subscribe — at View privilege. Reading them now requires Administer,
@@ -53,6 +57,10 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Matter bridge: empty subscription keepalives set SuppressResponse.** A
   no-op max-interval heartbeat no longer asks the controller for an IM
   StatusResponse, matching matter.js.
+- **Matter bridge: GroupKeyManagement.KeySetRead / KeySetRemove return
+  NotFound.** Reading or removing a non-existent group key set returned a
+  generic failure (KeySetRemove even succeeded silently); both now return the
+  spec `NotFound` status, matching matter.js.
 - **Matter bridge: colour-temperature lights advertise the mandatory
   `StartUpColorTemperatureMireds` + `CoupleColorTempToLevelMinMireds`
   attributes.** They were missing from the ColorControl read surface, so a

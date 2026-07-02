@@ -222,6 +222,15 @@ extraction — give both to one agent. C2 and H7 are the same defect.
 > path (`sigma/protocol.go` comment); CASE per-session attestation challenge and
 > WindowCovering TargetPosition mirror are commissioning-crypto / documented
 > items deferred for care.
+>
+> **Batch 4 FIXED (Unreleased):** AccessControl.ACL write now rejects
+> out-of-range `Privilege` (not 1..5) / `AuthMode` (not 1..3) enum values with
+> ConstraintError (`access_control.go`); GroupKeyManagement KeySetRead /
+> KeySetRemove of a missing key set return NotFound via a typed
+> `groupKeyNotFoundErr` (`group_key_management.go`) — KeySetRemove previously
+> succeeded silently. **Deferred:** DeviceType-only ACL targets always deny
+> (needs the endpoint device-type-**list** plumbed into `aclTargetMatches`; rare
+> use case).
 
 **TLV / message codec**
 - Vendor-qualified protocol IDs collide with standard dispatch (VendorID parsed but never consulted). `bridge/receive.go:195` vs `MessageCodec.ts:377`. Fix: treat `HasVendorID` as `ErrUnknownProtocol` before the switch.

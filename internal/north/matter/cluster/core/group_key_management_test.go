@@ -5,6 +5,7 @@ package core_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
@@ -229,6 +230,54 @@ func TestGKM_KeySetRemove(t *testing.T) {
 	_, err = gkm.MatterInvoke(ctx, 0x01, core.KeySetReadRequest{GroupKeySetID: 7}, hmenum.CommandPriorityHigh)
 	if err == nil {
 		t.Fatal("expected error for KeySetRead after remove, got nil")
+	}
+}
+
+// TestGKM_KeySetRead_NotFoundStatusCode pins that KeySetRead of a group
+// key set id that was never written returns a typed [im.StatusCodeError]
+// mapping to NotFound (0x8b), not a generic error. Mirrors matter.js
+// GroupKeyManagementServer.ts throwing Status.NotFound for a missing
+// GroupKeySetID.
+func TestGKM_KeySetRead_NotFoundStatusCode(t *testing.T) {
+	t.Parallel()
+	gkm := newGKM(t)
+	gkm.SetCurrentFabric(1)
+
+	_, err := gkm.MatterInvoke(context.Background(), 0x01 /*KeySetRead*/, core.KeySetReadRequest{GroupKeySetID: 9999}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("KeySetRead of never-written id: expected error, got nil")
+	}
+	type statusCoder interface{ MatterStatusCode() im.StatusCode }
+	var sc statusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("KeySetRead error %v does not implement MatterStatusCode()", err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusNotFound {
+		t.Errorf("MatterStatusCode() = 0x%02X, want 0x%02X (NotFound)", uint8(got), uint8(im.StatusNotFound))
+	}
+}
+
+// TestGKM_KeySetRemove_NotFoundStatusCode pins that KeySetRemove of a
+// group key set id that was never written returns a typed
+// [im.StatusCodeError] mapping to NotFound (0x8b) instead of succeeding
+// silently. id 0 is the IPK and is rejected for a different reason
+// (InvalidCommand), so this uses a non-zero id.
+func TestGKM_KeySetRemove_NotFoundStatusCode(t *testing.T) {
+	t.Parallel()
+	gkm := newGKM(t)
+	gkm.SetCurrentFabric(1)
+
+	_, err := gkm.MatterInvoke(context.Background(), 0x03 /*KeySetRemove*/, core.KeySetRemoveRequest{GroupKeySetID: 55}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("KeySetRemove of never-written id: expected error, got nil")
+	}
+	type statusCoder interface{ MatterStatusCode() im.StatusCode }
+	var sc statusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("KeySetRemove error %v does not implement MatterStatusCode()", err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusNotFound {
+		t.Errorf("MatterStatusCode() = 0x%02X, want 0x%02X (NotFound)", uint8(got), uint8(im.StatusNotFound))
 	}
 }
 
