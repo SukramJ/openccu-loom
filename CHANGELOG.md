@@ -8,6 +8,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Security
 
+- **Matter bridge: PASE pairing failures are now capped.** An open
+  commissioning window accepted unlimited passcode guesses for its whole
+  duration (up to 15 minutes commissioned, or 48 hours for an uncommissioned
+  bridge), letting a LAN attacker brute-force the setup passcode. The bridge
+  now counts pairing failures and revokes the window after 20, mirroring
+  matter.js `PaseServer`'s `PASE_COMMISSIONING_MAX_ERRORS`; the counter resets
+  when a new window opens.
 - **Matter bridge: writes and command invokes are now gated by the
   per-element ACL privilege, not a flat Operate.** Previously every write
   and command was authorised at Operate, so a subject holding an

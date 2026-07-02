@@ -316,6 +316,13 @@ type Bridge struct {
 	// Wired via [AttachCommissioningWindow].
 	commissioningWindow *CommissioningWindow
 
+	// paseFailures counts consecutive real PASE pairing errors so the
+	// bridge can abort the commissioning window after too many, mirroring
+	// matter.js PaseServer's PASE_COMMISSIONING_MAX_ERRORS brute-force cap.
+	// Reset when a new PASE acceptor is installed (a window boundary) and
+	// when the cap fires. See [Bridge.recordPaseFailure].
+	paseFailures atomic.Int32
+
 	// commissioningInstanceName remembers the mDNS instance name the
 	// bridge published via [Bridge.AnnounceCommissioning] so the
 	// matching [Bridge.WithdrawCommissioning] call can target the

@@ -129,6 +129,9 @@ func (noopAckHandler) Discharge(uint16) bool { return false }
 // [Bridge.AttachPaseHandlerProvider] instead; when a provider is
 // wired the singleton handler is ignored.
 func (b *Bridge) AttachPaseHandler(h PaseHandler) {
+	// A fresh acceptor marks a commissioning-window boundary; give the new
+	// window its own PASE brute-force budget.
+	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if h == nil {
@@ -155,6 +158,9 @@ type PaseHandlerProvider func(exchangeID uint16) PaseHandler
 // for every inbound PASE opcode. Pass nil to clear and fall back to
 // the singleton handler.
 func (b *Bridge) AttachPaseHandlerProvider(p PaseHandlerProvider) {
+	// A fresh acceptor marks a commissioning-window boundary; give the new
+	// window its own PASE brute-force budget.
+	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.paseProvider = p
@@ -374,6 +380,43 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 	}
 }
 
+// paseMaxErrors is the number of PASE pairing failures within a
+// commissioning window that aborts the window. Mirrors matter.js
+// PaseServer.ts PASE_COMMISSIONING_MAX_ERRORS (= 20). Without this cap an
+// attacker on the LAN could hammer passcode guesses for the whole window
+// — up to 900 s commissioned, or 48 h for an uncommissioned bridge.
+const paseMaxErrors = 20
+
+// recordPaseFailure increments the PASE failure counter and, when it
+// reaches [paseMaxErrors], revokes the open commissioning window and
+// resets the counter. Mirrors matter.js PaseServer.ts:95-110 (count →
+// MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
+// (tooManyPaseErrors → endCommissioning). Called from the handlePase
+// error path for genuine pairing failures only (not missing-handler or
+// state-replay retransmits).
+func (b *Bridge) recordPaseFailure() {
+	if b.paseFailures.Add(1) < paseMaxErrors {
+		return
+	}
+	b.paseFailures.Store(0)
+	win := b.CommissioningWindow()
+	if win == nil {
+		return
+	}
+	b.logger.Warn("matter.rx.sc.pase_bruteforce",
+		slog.Int("max_errors", paseMaxErrors),
+		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
+	_ = win.RevokeWindow(context.Background())
+}
+
+// resetPaseFailures clears the PASE failure counter. Called when a fresh
+// PASE acceptor is installed ([Bridge.AttachPaseHandler] /
+// [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
+// so each window gets its own [paseMaxErrors] budget.
+func (b *Bridge) resetPaseFailures() {
+	b.paseFailures.Store(0)
+}
+
 // handlePase + handleCase share the handler-invocation + reply-send
 // pattern. Pulled into helpers so the opcode switch stays a flat
 // table and the reply-path bookkeeping (errors, log scoping) lives
@@ -427,6 +470,10 @@ func (b *Bridge) handlePase(
 					slog.String("stage", stage),
 					slog.String("err", sendErr.Error()))
 			}
+			// Brute-force protection: a genuine pairing failure (bad Pake1
+			// decode, confirmation mismatch, …). Count it and abort the
+			// window once too many accumulate.
+			b.recordPaseFailure()
 		}
 		return err
 	}
