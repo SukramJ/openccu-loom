@@ -13,7 +13,9 @@ import (
 // newTestClient returns a *TCPClient pointed at the supplied broker
 // URL. KeepAlive is set via cfg, but NewTCPClient floors anything below
 // 30 s — the test mutates c.cfg.KeepAlive after construction to bypass
-// the floor when the test wants fast keep-alive ticks.
+// the floor when the test wants fast keep-alive ticks. It also overrides
+// pingInterval (which NewTCPClient fixes at KeepAlive/2 = 15 s) to match,
+// since the keep-alive ticker is driven by pingInterval, not cfg.KeepAlive.
 func newTestClient(brokerURL string, fastKeepAlive time.Duration) *TCPClient {
 	c := NewTCPClient(TCPConfig{
 		BrokerURL:    brokerURL,
@@ -25,6 +27,7 @@ func newTestClient(brokerURL string, fastKeepAlive time.Duration) *TCPClient {
 	})
 	if fastKeepAlive > 0 {
 		c.cfg.KeepAlive = fastKeepAlive // sidestep the 30-s floor for tests
+		c.pingInterval = fastKeepAlive / 2
 	}
 	return c
 }
