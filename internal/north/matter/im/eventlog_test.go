@@ -281,3 +281,146 @@ func TestHandleReadEventRequest(t *testing.T) {
 		}
 	})
 }
+
+// ---- TestEventLog_SeedNumber ----------------------------------------------
+
+// TestEventLog_SeedNumber_AdvancesCounter verifies that SeedNumber raises
+// the event-number counter so the next Append is assigned base+1 — used at
+// boot to resume numbering past the persisted ceiling (Matter §7.14.2.1
+// monotonicity).
+func TestEventLog_SeedNumber_AdvancesCounter(t *testing.T) {
+	t.Parallel()
+	log := NewEventLog()
+	log.SeedNumber(1000)
+
+	num := log.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	if num != 1001 {
+		t.Fatalf("Append after SeedNumber(1000): Number=%d, want 1001", num)
+	}
+}
+
+// TestEventLog_SeedNumber_IgnoresLowerBase verifies that SeedNumber never
+// moves the counter backwards — a base at or below the current counter is
+// a no-op.
+func TestEventLog_SeedNumber_IgnoresLowerBase(t *testing.T) {
+	t.Parallel()
+	log := NewEventLog()
+
+	// Advance the counter to 5 via five appends.
+	var last uint64
+	for range 5 {
+		last = log.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	}
+	if last != 5 {
+		t.Fatalf("setup: last Number=%d, want 5", last)
+	}
+
+	log.SeedNumber(3) // below current counter — must be ignored
+
+	num := log.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	if num != 6 {
+		t.Fatalf("Append after SeedNumber(3) (below current): Number=%d, want 6 (counter must not move backwards)", num)
+	}
+}
+
+// ---- TestEventLog_SetCounterPersistence -----------------------------------
+
+// TestEventLog_SetCounterPersistence_CeilingAheadOfHandedOutNumber verifies
+// that whenever the persist fn fires, the ceiling it is handed is strictly
+// greater than the Number the triggering Append just handed out, and that
+// successive ceilings are monotonically increasing. This is the crash-
+// safety property: the ceiling must always cover the number a caller can
+// already observe.
+func TestEventLog_SetCounterPersistence_CeilingAheadOfHandedOutNumber(t *testing.T) {
+	t.Parallel()
+	log := NewEventLog()
+
+	type call struct {
+		atNumber uint64 // the Number the triggering Append handed out
+		ceiling  uint64
+	}
+	var calls []call
+	var lastNumber uint64
+	log.SetCounterPersistence(func(ceiling uint64) {
+		calls = append(calls, call{atNumber: lastNumber + 1, ceiling: ceiling})
+	}, 16)
+
+	const n = 40
+	for range n {
+		lastNumber = log.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	}
+
+	if len(calls) == 0 {
+		t.Fatal("SetCounterPersistence: persist fn never called across 40 appends")
+	}
+	prevCeiling := uint64(0)
+	for i, c := range calls {
+		if c.ceiling <= c.atNumber {
+			t.Errorf("call %d: ceiling=%d must be > handed-out number %d", i, c.ceiling, c.atNumber)
+		}
+		if c.ceiling <= prevCeiling {
+			t.Errorf("call %d: ceiling=%d not monotonically increasing over previous %d", i, c.ceiling, prevCeiling)
+		}
+		prevCeiling = c.ceiling
+	}
+}
+
+// TestEventLog_SetCounterPersistence_CalledAtMostOncePerEpoch verifies the
+// call count over N appends matches the epoch cadence — the persist fn
+// fires once when SetCounterPersistence forces an initial persist, then
+// again every epoch handed-out numbers, not once per Append.
+func TestEventLog_SetCounterPersistence_CalledAtMostOncePerEpoch(t *testing.T) {
+	t.Parallel()
+	log := NewEventLog()
+
+	var callCount int
+	log.SetCounterPersistence(func(uint64) { callCount++ }, 16)
+
+	const n = 40
+	for range n {
+		log.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	}
+
+	// Ceiling starts at 0 (forced first-persist), then re-persists every
+	// 16 handed-out numbers: triggers at Number=1, 17, 33 for n=40.
+	const want = 3
+	if callCount != want {
+		t.Fatalf("persist called %d times over %d appends, want %d", callCount, n, want)
+	}
+}
+
+// TestEventLog_CrashRestart_NeverReusesNumber simulates a crash-restart: a
+// fresh log seeded from the last ceiling persisted by a previous log
+// instance must never hand out a Number the previous instance already
+// handed to a caller, even when the crash happens immediately after the
+// last successful Append (so the previous instance's own in-memory
+// counter, one past the ceiling's safety margin, is lost).
+func TestEventLog_CrashRestart_NeverReusesNumber(t *testing.T) {
+	t.Parallel()
+
+	log1 := NewEventLog()
+	var lastCeiling uint64
+	log1.SetCounterPersistence(func(ceiling uint64) { lastCeiling = ceiling }, 16)
+
+	var lastHandedOut uint64
+	// Stop right before the second ceiling would be persisted (that
+	// happens on the 17th append) — the tightest margin between the
+	// persisted ceiling (17, from the first append) and the last
+	// number actually handed out (16).
+	for range 16 {
+		lastHandedOut = log1.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+	}
+	if lastCeiling == 0 {
+		t.Fatal("setup: persist fn was never called")
+	}
+
+	// log1 "crashes" here — its in-memory counter is lost, only the
+	// last persisted ceiling survives.
+	log2 := NewEventLog()
+	log2.SeedNumber(lastCeiling)
+	next := log2.Append(EventRecord{Priority: EventPriorityCritical, Endpoint: 0, Cluster: 0x0028, EventID: 0x00})
+
+	if next <= lastHandedOut {
+		t.Fatalf("log2 handed out Number=%d, which is <= log1's last handed-out Number=%d — reuse after crash-restart", next, lastHandedOut)
+	}
+}

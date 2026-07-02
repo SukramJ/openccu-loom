@@ -70,6 +70,23 @@ type EventLog struct {
 	capCrit  int
 	capInfo  int
 	capDebug int
+
+	// persistCeiling / persistEpoch / persistFn implement the
+	// crash-safe monotonic EventNumber (Matter §7.14.2.1: event
+	// numbers SHALL be monotonic and SHALL NOT reset on reboot —
+	// controllers use EventMin filters keyed on the last number they
+	// saw, so a reset makes them silently drop every fresh event).
+	// Whenever the counter reaches persistCeiling, a new ceiling
+	// (next + persistEpoch) is persisted BEFORE the number is handed
+	// out; after a crash the log reseeds from the ceiling, skipping at
+	// most one epoch of numbers but never reusing one. Mirrors chip's
+	// EventManagement counter-epoch pattern
+	// (CHIP_DEVICE_CONFIG_EVENT_ID_COUNTER_EPOCH) and the durable
+	// numbering matter.js delegates to its EventStore
+	// (OccurrenceManager.ts).
+	persistCeiling uint64
+	persistEpoch   uint64
+	persistFn      func(ceiling uint64)
 }
 
 // NewEventLog constructs an EventLog with the default priority-bucket
@@ -101,6 +118,13 @@ func (l *EventLog) Append(rec EventRecord) uint64 {
 	defer l.mu.Unlock()
 	l.next++
 	rec.Number = l.next
+	// Persist a fresh ceiling BEFORE handing the number out so a crash
+	// can never reuse it (see the persistCeiling field doc). The write
+	// happens at most once per epoch, not per event.
+	if l.persistFn != nil && l.next >= l.persistCeiling {
+		l.persistCeiling = l.next + l.persistEpoch
+		l.persistFn(l.persistCeiling)
+	}
 	if rec.EpochMS == 0 {
 		rec.EpochMS = uint64(time.Now().UnixMilli()) //nolint:gosec // time.Now() is non-negative; see #20
 	}
@@ -113,6 +137,37 @@ func (l *EventLog) Append(rec EventRecord) uint64 {
 		l.debug = appendEvict(l.debug, rec, l.capDebug)
 	}
 	return rec.Number
+}
+
+// SeedNumber raises the event-number counter to at least base. Called
+// at boot with the persisted ceiling so numbering resumes past every
+// number that may have been handed out before the previous shutdown
+// (Matter §7.14.2.1 monotonicity). A base at or below the current
+// counter is ignored — the counter never moves backwards.
+func (l *EventLog) SeedNumber(base uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if base > l.next {
+		l.next = base
+	}
+}
+
+// SetCounterPersistence wires the durable half of the EventNumber
+// counter: persist is invoked (under the log's lock, at most once per
+// epoch) with the new ceiling whenever the counter reaches the current
+// one. epoch <= 0 selects the default 0x10000, chip's
+// CHIP_DEVICE_CONFIG_EVENT_ID_COUNTER_EPOCH. Pass nil to detach.
+func (l *EventLog) SetCounterPersistence(persist func(ceiling uint64), epoch uint64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if epoch == 0 {
+		epoch = 0x10000
+	}
+	l.persistFn = persist
+	l.persistEpoch = epoch
+	// Force a persist on the next Append so the ceiling reflects the
+	// freshly-seeded counter even when no prior ceiling existed.
+	l.persistCeiling = l.next
 }
 
 // appendEvict appends rec to buf; if len(buf) > limit after append, the

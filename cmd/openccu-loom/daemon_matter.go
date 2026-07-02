@@ -396,7 +396,23 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		}
 		return opMgrSlot.ClosePASESessions()
 	}
-	rootServers, opCreds, rootRefs, err := buildRootClusters(mc, store, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric, closePaseSessions)
+	// Seed the EventNumber counter from the persisted ceiling and wire
+	// the ceiling persistence BEFORE any event (StartUp / BootReason)
+	// is emitted. Matter §7.14.2.1: event numbers SHALL NOT reset on
+	// reboot — controllers filter reads/subscribes with EventMin keyed
+	// on the last number they saw, so a reset makes them drop every
+	// fresh event silently.
+	if store != nil {
+		if ceiling, ok, gerr := store.GetMetadataCounter(ctx, matterstore.MetadataKeyEventNumber); gerr == nil && ok {
+			bridge.EventLog().SeedNumber(ceiling)
+		}
+		bridge.EventLog().SetCounterPersistence(func(ceiling uint64) { //nolint:contextcheck // fires from the event-emit hot path with no caller ctx; a background ctx is correct for the fire-and-forget ceiling write
+			if perr := store.SetMetadataCounter(context.Background(), matterstore.MetadataKeyEventNumber, ceiling); perr != nil {
+				logger.Warn("matter.bridge.eventlog.persist_ceiling", slog.String("err", perr.Error()))
+			}
+		}, 0)
+	}
+	rootServers, opCreds, rootRefs, err := buildRootClusters(ctx, mc, store, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric, closePaseSessions)
 	if err != nil {
 		logger.Warn("matter.bridge.root_clusters.build", slog.String("err", err.Error()))
 	} else {
@@ -1413,7 +1429,7 @@ type rootClusterRefs struct {
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
 // single misconfigured cluster cannot block the rest.
-func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8), closePaseSessions func() int) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
+func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8), closePaseSessions func() int) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
 	out := make([]interfaces.MatterClusterServer, 0, 8)
 	var opCreds *mattercore.OperationalCredentials
 	var refs rootClusterRefs
@@ -1451,6 +1467,34 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 	})
 	if err != nil {
 		return nil, nil, refs, fmt.Errorf("BasicInformation: %w", err)
+	}
+	if store != nil {
+		// Restore commissioner-written NodeLabel / Location — both carry
+		// Matter §11.1.6 "N" (non-volatile) quality, so a value a
+		// controller wrote must survive the restart and override the
+		// config default. matter.js restores them via its persistent
+		// behavior state.
+		if v, ok, gerr := store.GetSetting(ctx, matterstore.SettingNodeLabel); gerr == nil && ok {
+			if serr := bi.SetNodeLabel(v); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.restore_node_label", slog.String("err", serr.Error()))
+			}
+		}
+		if v, ok, gerr := store.GetSetting(ctx, matterstore.SettingLocation); gerr == nil && ok {
+			if serr := bi.SetLocation(v); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.restore_location", slog.String("err", serr.Error()))
+			}
+		}
+		bi.SetOnPersistentWrite(func(nodeLabel, location string) { //nolint:contextcheck // fires from an inbound Matter write with no caller ctx; a background ctx is correct for the fire-and-forget persist
+			persistCtx := context.Background()
+			if serr := store.SetSetting(persistCtx, matterstore.SettingNodeLabel, nodeLabel); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.persist_node_label", slog.String("err", serr.Error()))
+			}
+			if location != "" {
+				if serr := store.SetSetting(persistCtx, matterstore.SettingLocation, location); serr != nil {
+					logger.Warn("matter.bridge.basicinfo.persist_location", slog.String("err", serr.Error()))
+				}
+			}
+		})
 	}
 	out = append(out, bi)
 	refs.BasicInformation = bi
@@ -2339,6 +2383,18 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 	// pre-allocated sessID as ResponderSessionID so the commissioner
 	// echoes back the correct id on post-PASE IM traffic.
 	paseAdapter.SetPBKDFParams(uint32(iterations), salt, sessID) //nolint:gosec // iterations was validated by NewVerifierContext; see #20
+	// Advertise the bridge's MRP profile as PBKDFParamResponse tag 5 —
+	// the same idle/active/threshold triplet Sigma2 tag 5 and the mDNS
+	// SII/SAI keys carry. Mirrors matter.js PaseServer.ts:151.
+	sp := bridgeSessionParameters()
+	idle := uint16(sp.SessionIdleInterval)     //nolint:gosec // bridgeSessionParameters values are spec defaults ≤ 4000
+	active := uint16(sp.SessionActiveInterval) //nolint:gosec // see above
+	thresh := sp.SessionActiveThreshold
+	paseAdapter.SetResponderMRPParams(&spake2.MRPParameters{
+		IdleRetransTimeoutMs:   &idle,
+		ActiveRetransTimeoutMs: &active,
+		ActiveThresholdTimeMs:  &thresh,
+	})
 	paseAdapter.SetOnSessionEstablished(func(sharedSecret []byte, peerSessionID uint16) error {
 		// PASE pre-dates the operational fabric; both node ids ride
 		// as the bridge-allocated PASE-temporary values per Matter
@@ -2350,6 +2406,23 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 		if err != nil {
 			mgr.ReleaseID(sessID)
 			return err
+		}
+		// Honour the commissioner's InitiatorMRPParams (tag 5) so
+		// outbound retransmissions on the PASE session use the peer's
+		// advertised intervals. Mirrors matter.js PaseServer.ts:155-157
+		// `session.timingParameters = initiatorSessionParams`.
+		if pm := paseAdapter.PeerMRPParams(); pm != nil {
+			var idleMs, activeMs, threshMs uint32
+			if pm.IdleRetransTimeoutMs != nil {
+				idleMs = uint32(*pm.IdleRetransTimeoutMs)
+			}
+			if pm.ActiveRetransTimeoutMs != nil {
+				activeMs = uint32(*pm.ActiveRetransTimeoutMs)
+			}
+			if pm.ActiveThresholdTimeMs != nil {
+				threshMs = uint32(*pm.ActiveThresholdTimeMs)
+			}
+			entry.SetPeerMRPIntervals(idleMs, activeMs, threshMs)
 		}
 		// Plumb the AttestationChallenge into OperationalCredentials
 		// so AttestationRequest / CSRRequest signatures bind to the

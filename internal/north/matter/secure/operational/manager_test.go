@@ -499,6 +499,52 @@ func TestOpenFromPase_AllocatesSessionID(t *testing.T) {
 	}
 }
 
+// TestClosePASESessions_ClosesOnlyPASE verifies ClosePASESessions
+// tears down PASE sessions — including one whose FabricIndex was
+// rewritten by AdoptFabricIndex — while leaving CASE sessions intact
+// (Matter §11.10.6.6 step 4; matter.js FailsafeContext closePaseSession).
+func TestClosePASESessions_ClosesOnlyPASE(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager()
+	secret := make([]byte, 16)
+	for i := range secret {
+		secret[i] = byte(i + 3)
+	}
+
+	pase, err := m.OpenFromPase(1, 2, 0, secret)
+	if err != nil {
+		t.Fatalf("OpenFromPase: %v", err)
+	}
+	// A CASE session (any non-PASE Entry).
+	var keys sigma.SessionKeys
+	for i := range keys.I2RKey {
+		keys.I2RKey[i] = byte(i + 1)
+		keys.R2IKey[i] = byte(i + 40)
+	}
+	caseEntry, err := m.OpenFromSigma(1, 100, 200, keys)
+	if err != nil {
+		t.Fatalf("OpenFromSigma: %v", err)
+	}
+	// Adopt a fabric onto the PASE session (as AddNOC does) — it must
+	// still count as PASE for the cleanup.
+	if err := m.AdoptFabricIndex(pase.SessionID, 1); err != nil {
+		t.Fatalf("AdoptFabricIndex: %v", err)
+	}
+
+	if got := m.Active(); got != 2 {
+		t.Fatalf("Active before close = %d, want 2", got)
+	}
+	if n := m.ClosePASESessions(); n != 1 {
+		t.Errorf("ClosePASESessions closed %d, want 1", n)
+	}
+	if _, err := m.Get(pase.SessionID); err == nil {
+		t.Error("PASE session still present after ClosePASESessions")
+	}
+	if _, err := m.Get(caseEntry.SessionID); err != nil {
+		t.Errorf("CASE session was closed by ClosePASESessions: %v", err)
+	}
+}
+
 // TestOpenFromPase_AllocatesDistinctIDs — two consecutive calls with
 // the same sharedSecret must produce different SessionIDs.
 func TestOpenFromPase_AllocatesDistinctIDs(t *testing.T) {

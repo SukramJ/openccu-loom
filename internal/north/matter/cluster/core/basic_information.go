@@ -56,6 +56,11 @@ type BasicInformation struct {
 	// Mutable.
 	nodeLabel string
 	location  string
+	// onPersistentWrite, when non-nil, fires after every successful
+	// Matter write to a non-volatile attribute (NodeLabel / Location)
+	// so the daemon can persist the value across restarts. See
+	// [BasicInformation.SetOnPersistentWrite].
+	onPersistentWrite func(nodeLabel, location string)
 
 	// Capability metadata.
 	capabilityMinima     CapabilityMinimaStruct
@@ -529,6 +534,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 		b.nodeLabel = s
 		b.mu.Unlock()
 		b.dataVersion.Bump()
+		b.firePersistentWrite()
 		return nil
 	case basicInfoAttrLocation:
 		s, ok := value.(string)
@@ -542,6 +548,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 		b.location = s
 		b.mu.Unlock()
 		b.dataVersion.Bump()
+		b.firePersistentWrite()
 		return nil
 	case basicInfoAttrLocalConfigDisabled:
 		// Persistent across reboots per Matter §11.1.6.17. openccu-loom
@@ -624,8 +631,10 @@ func (b *BasicInformation) MatterAttributes() []uint32 {
 }
 
 // SetNodeLabel updates NodeLabel out-of-band (e.g. from the config
-// UI, not from a Matter write). Goes through the same length check
-// as the Matter write path.
+// UI or the boot-time restore of a persisted commissioner write, not
+// from a Matter write). Goes through the same length check as the
+// Matter write path. Does NOT fire the persistence hook — restores
+// must not echo back into the store.
 func (b *BasicInformation) SetNodeLabel(s string) error {
 	if len(s) > 32 {
 		return errors.New("matter: NodeLabel exceeds 32 utf-8 bytes")
@@ -634,6 +643,44 @@ func (b *BasicInformation) SetNodeLabel(s string) error {
 	b.nodeLabel = s
 	b.mu.Unlock()
 	return nil
+}
+
+// SetLocation updates Location out-of-band (boot-time restore of a
+// persisted commissioner write). Same validation as the Matter write
+// path; does NOT fire the persistence hook.
+func (b *BasicInformation) SetLocation(s string) error {
+	if len(s) != 2 {
+		return fmt.Errorf("matter: Location must be ISO-3166 2-letter (got len=%d)", len(s))
+	}
+	b.mu.Lock()
+	b.location = s
+	b.mu.Unlock()
+	return nil
+}
+
+// SetOnPersistentWrite wires a hook fired after every successful
+// Matter write to a non-volatile ("N" quality, Matter §11.1.6)
+// attribute — NodeLabel and Location — with the cluster's current
+// values. The daemon persists them so a commissioner-set label
+// survives a restart; matter.js gets the same via its persistent
+// behavior state. Pass nil to detach.
+func (b *BasicInformation) SetOnPersistentWrite(fn func(nodeLabel, location string)) {
+	b.mu.Lock()
+	b.onPersistentWrite = fn
+	b.mu.Unlock()
+}
+
+// firePersistentWrite snapshots the current NodeLabel/Location and
+// invokes the persistence hook outside the cluster lock.
+func (b *BasicInformation) firePersistentWrite() {
+	b.mu.RLock()
+	fn := b.onPersistentWrite
+	label := b.nodeLabel
+	loc := b.location
+	b.mu.RUnlock()
+	if fn != nil {
+		fn(label, loc)
+	}
 }
 
 // MatterEvents implements [interfaces.MatterClusterEventLister] so the
