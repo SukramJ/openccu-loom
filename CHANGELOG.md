@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.1]
+
 ### Changed
 
 - **MQTT transport extracted to the shared `github.com/SukramJ/go-mqtt`
