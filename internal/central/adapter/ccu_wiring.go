@@ -334,7 +334,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Per-central interface→backend lookup, populated by wireInterface as each
 	// iface comes up. The CONFIG_PENDING hook resolves the backend lazily.
 	backendsByInterface := newBackendRegistry()
-	wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger) //nolint:contextcheck // hook installs a background goroutine that must outlive the wiring ctx
+	wireConfigPendingHook(ctx, unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger)
 
 	// Source-token lifecycle on the central's bus: ConnectionLost → stale,
 	// RecoveryCompleted → live.
@@ -473,7 +473,15 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 		callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
 		centralName := cc.Name
 		srv := deps.CallbackServer
-		deregister = func() { srv.Deregister(centralName) }
+		cbHandlers := handlers
+		// Deregister the route first so no new callback can be dispatched, then
+		// Stop() the handler to cancel its context and drain the in-flight
+		// self-reload / device-refresh goroutines. Without the Stop() call those
+		// background goroutines would leak past a live RemoveCentral / shutdown.
+		deregister = func() {
+			srv.Deregister(centralName)
+			cbHandlers.Stop()
+		}
 	case deps.CallbackServer != nil && callbackHost == "":
 		logger.Warn("wire.callback.no_host",
 			slog.String("central", cc.Name),

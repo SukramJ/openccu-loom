@@ -131,15 +131,25 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		return fmt.Errorf("central_adopt: register %s: %w", cc.Name, err)
 	}
 
-	// rollback undoes every step already performed once Register succeeded.
-	// bringUp.RemoveCentral and Unit.Stop are both safe to call on a handle /
-	// unit that never reached that step (RemoveCentral no-ops when the name
-	// is not managed; Stop is idempotent).
-	rollback := func() { //nolint:contextcheck // Unit.Stop takes no ctx parameter; shutdown always runs to completion regardless of the caller's ctx
-		o.bringUp.RemoveCentral(cc.Name)
+	// rollback unwinds only the steps that actually succeeded, in reverse
+	// order. Each undo closure is appended after its step completes, so a
+	// failed adopt never tears down state it did not create — critically,
+	// bringUp.RemoveCentral is registered ONLY after a successful AddCentral,
+	// so a rollback triggered by AddCentral returning false (the name is
+	// already managed by a pre-existing, e.g. boot-time, bring-up handle)
+	// never evicts that foreign handle. The unwind order matches
+	// removeCentral's teardown: bringUp.RemoveCentral (drain southbound)
+	// before Unit.Stop.
+	var undo []func()
+	rollback := func() {
+		for i := len(undo) - 1; i >= 0; i-- {
+			undo[i]()
+		}
+	}
+	undo = append(undo, func() { //nolint:contextcheck // Unit.Stop takes no ctx parameter; shutdown always runs to completion regardless of the caller's ctx
 		unit.Stop()
 		o.reg.Unregister(cc.Name)
-	}
+	})
 
 	// Wire the devices-created gate BEFORE the scheduler starts, mirroring
 	// bootstrap + daemon.go's boot-time ordering (daemon.go: WireDevicesCreatedGate
@@ -164,6 +174,8 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 		rollback()
 		return fmt.Errorf("central_adopt: %s already managed by bring-up", cc.Name)
 	}
+	undo = append(undo, func() { o.bringUp.RemoveCentral(cc.Name) })
+
 	avail, climate := wireCentralNorthbound(o.sbDeps, unit)
 
 	o.mu.Lock()
@@ -177,9 +189,16 @@ func (o *centralOrchestrator) adoptCentral(ctx context.Context, cc config.Centra
 // removeCentral tears one live-adopted central down at runtime: deregister
 // its callback routes and drain southbound goroutines first (so no further
 // callback can arrive while the rest of teardown runs), then run the
-// north-bound closers, stop the Unit (whose StopTierExternal hook —
-// installed by wireCentralNorthbound — unregisters it from the shared
-// registry), evict its in-memory model, and purge its derived SQLite rows.
+// north-bound closers, evict its in-memory model, stop the Unit (whose
+// StopTierExternal hook — installed by wireCentralNorthbound — unregisters it
+// from the shared registry), and purge its derived SQLite rows.
+//
+// The model is evicted BEFORE Unit.Stop: evictModel publishes a
+// DeviceRemovedEvent per device, and Unit.Stop clears every EventBus
+// subscription. Stopping first would land those retractions on a bus with no
+// subscribers, so HA/MQTT discovery configs for the removed central's devices
+// would never be retracted (orphaned entities). Mirrors centralBringUp.reinit's
+// teardown-then-clearModel ordering (internal/central/adapter/central_bringup.go).
 // Returns [errCentralNotLive] when name was never adopted through this
 // orchestrator (or was already removed) — the caller decides whether that is
 // fatal.
@@ -206,8 +225,8 @@ func (o *centralOrchestrator) removeCentral(ctx context.Context, name string) er
 	}
 
 	if unit, live := o.reg.Get(name); live {
-		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
 		evictModel(unit)
+		unit.Stop() //nolint:contextcheck // Unit.Stop takes no ctx parameter; teardown always runs to completion regardless of the caller's ctx
 	}
 
 	purgeCentralState(ctx, o.valuesCacheStore, o.masterValuesStore, o.historyStore, h.cc, o.logger)

@@ -164,6 +164,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 
 	// Register BIN-RPC callback handlers so CUxD push events land.
 	var callbackURL string
+	var cbHandlers *CallbackHandlers
 	if binrpcCallbackServer != nil && binrpcCallbackAddr != "" {
 		handlers := NewCallbackHandlers(unit, logger)
 		if writer != nil {
@@ -172,10 +173,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		handlers.SetDelayNewDeviceCreation(cc.Behavior.DelayNewDeviceCreationEnabled())
 		binrpcCallbackServer.Register(initID, handlers)
 		callbackURL = "binary://" + binrpcCallbackAddr
-		closerSrv := binrpcCallbackServer
-		capturedInitID := initID
-		_ = closerSrv // avoid unused-var lint for deregister call in closer
-		_ = capturedInitID
+		cbHandlers = handlers
 	}
 
 	poller := newMasterPollerForInterface(iface, unit, backend, masterValues, wireID, cc.Name, logger) //nolint:contextcheck // poller callback uses context.Background(); outlives the wiring ctx by design
@@ -237,6 +235,12 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 					slog.String("interface", initID), slog.String("err", err.Error()))
 			}
 			binrpcCallbackServer.Deregister(initID)
+		}
+		// Drain the callback handler's background goroutines (self-reload /
+		// device-refresh) after the route is deregistered, mirroring the
+		// XML-RPC deregister path in registerCentralCallbacks.
+		if cbHandlers != nil {
+			cbHandlers.Stop()
 		}
 		if poller != nil {
 			poller.Close()

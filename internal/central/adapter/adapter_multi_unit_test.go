@@ -1455,7 +1455,7 @@ func TestWireConfigPendingHook_NilEvents_NoPanic(t *testing.T) {
 	}
 	// Events is initialised by central.New; set to nil manually.
 	c.Events = nil
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 }
 
 func TestWireConfigPendingHook_WithCentral_NoPanic(t *testing.T) {
@@ -1465,7 +1465,7 @@ func TestWireConfigPendingHook_WithCentral_NoPanic(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	// Should install the hook without panicking.
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -1827,7 +1827,7 @@ func TestWireConfigPendingHook_Callback_BidCosIgnored(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 	// Fire the callback with a BidCos interface — should be ignored (no panic).
 	if c.Events != nil {
 		c.Events.SetOnConfigSettled(func(interfaceID, deviceAddress string) {
@@ -1842,7 +1842,7 @@ func TestWireConfigPendingHook_Callback_HmIPDeviceNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatalf("central.New: %v", err)
 	}
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 	// After wiring, the unit already has the hook.
 	// Verify no panic when the Events.SetOnConfigSettled is called again.
 	_ = c.Events // verify non-nil after hook installation; second call is harmless
@@ -9103,7 +9103,7 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceFound(t *testing.T) {
 	c.ModelRegistry.Put(d)
 	d.AddChannel("WCPFound1DEV33:1", 1, "CLIMATECONTROL_RECEIVER", hmenum.ParamsetKeyMaster)
 
-	wireConfigPendingHook(c, nil, "", nil, nil) // logger = nil (no debug log)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil) // logger = nil (no debug log)
 
 	// Fire CONFIG_PENDING true first to set "old" cache value.
 	c.Events.HandleRawEvent(context.Background(),
@@ -9128,7 +9128,7 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceNotFound(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	// No device registered.
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 
 	// Fire CONFIG_PENDING true then false for a device that is NOT in the registry.
 	c.Events.HandleRawEvent(context.Background(),
@@ -9157,7 +9157,7 @@ func TestWireConfigPendingHook_ClosureBidCosIgnored(t *testing.T) {
 		Name:        "WCPBidCos1DEV33",
 	})
 	c.ModelRegistry.Put(d)
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 
 	// Fire CONFIG_PENDING true then false for BidCos-RF → hook ignores it.
 	c.Events.HandleRawEvent(context.Background(),
@@ -9318,7 +9318,7 @@ func TestWireConfigPendingHook_ClosureHmIPDeviceFoundLoggerPath(t *testing.T) {
 	ch.SetRefresher(&b34ErrRefresher{})
 
 	// Pass a non-nil logger to exercise the `if logger != nil` debug branch.
-	wireConfigPendingHook(c, nil, "", nil, slog.Default())
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, slog.Default())
 
 	// Fire CONFIG_PENDING true then false to trigger the onConfigSettled closure.
 	c.Events.HandleRawEvent(context.Background(),
@@ -9373,7 +9373,7 @@ func TestWireConfigPendingHook_ClosureWeekProfileLoadError(t *testing.T) {
 	ch.AttachWeekProfile(wp)
 
 	// Pass non-nil logger to exercise the `if logger != nil` debug branch.
-	wireConfigPendingHook(c, nil, "", nil, slog.Default())
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, slog.Default())
 
 	// Fire CONFIG_PENDING true then false to trigger the onConfigSettled closure.
 	c.Events.HandleRawEvent(context.Background(),
@@ -10397,7 +10397,7 @@ func TestLinkClientAdapter_GetLinkInfo_ReturnsNotImplemented(t *testing.T) {
 func TestWireConfigPendingHook_NilUnit_NoPanic(t *testing.T) {
 	t.Parallel()
 	// Nil unit must be handled gracefully.
-	wireConfigPendingHook(nil, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), nil, nil, "", nil, nil)
 }
 
 func TestWireConfigPendingHook_ValidUnit_InstallsHook(t *testing.T) {
@@ -10407,7 +10407,7 @@ func TestWireConfigPendingHook_ValidUnit_InstallsHook(t *testing.T) {
 		t.Fatalf("central.New: %v", err)
 	}
 	// Should not panic and should install the hook.
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 }
 
 // ---------------------------------------------------------------------------
@@ -15060,7 +15060,7 @@ func TestBuildKeypressGroupsAllThree(t *testing.T) {
 
 func TestWireConfigPendingHookNilUnit(t *testing.T) {
 	t.Parallel()
-	wireConfigPendingHook(nil, nil, "", nil, nil) // must not panic
+	wireConfigPendingHook(context.Background(), nil, nil, "", nil, nil) // must not panic
 }
 
 // ============================================================
