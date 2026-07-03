@@ -143,7 +143,11 @@ func TestUserStoreAuthenticateBasicWrongPassword(t *testing.T) {
 }
 
 // TestUserStoreAuthenticateBasicUnknownSubject verifies ErrUnauthenticated
-// for a subject that was never inserted.
+// for a subject that was never inserted. AuthenticateBasic runs a dummy
+// bcrypt comparison on this path before returning so the observable
+// behavior — ErrUnauthenticated, same as a wrong password — is unchanged
+// even though the code now spends comparable wall-clock time on both the
+// unknown-user and wrong-password paths (anti user-enumeration).
 func TestUserStoreAuthenticateBasicUnknownSubject(t *testing.T) {
 	s := newUserStore(t)
 	ctx := context.Background()

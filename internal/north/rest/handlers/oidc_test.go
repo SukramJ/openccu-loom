@@ -4,12 +4,48 @@
 package handlers
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/internal/auth"
+	"github.com/SukramJ/openccu-loom/internal/auth/oidc"
 )
+
+// newTestOIDCClient builds a real [*oidc.Client] backed by a local
+// discovery server, so OIDCStart / OIDCCallback can be exercised past
+// their nil-Client guard. The token endpoint returns 404 for every
+// request, so [oidc.Client.Exchange] always fails — tests that need to
+// go further only assert the callback got past the state-cookie check,
+// not that a full token exchange succeeded.
+func newTestOIDCClient(t *testing.T) *oidc.Client {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/.well-known/openid-configuration" {
+			issuer := "http://" + r.Host
+			_, _ = fmt.Fprintf(w, `{"issuer":%q,"authorization_endpoint":%q,"token_endpoint":%q,"jwks_uri":%q}`,
+				issuer, issuer+"/auth", issuer+"/token", issuer+"/jwks")
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := oidc.New(context.Background(), oidc.Config{
+		Issuer:      srv.URL,
+		ClientID:    "test-client",
+		RedirectURL: "http://localhost/callback",
+	}, srv.Client())
+	if err != nil {
+		t.Fatalf("oidc.New: %v", err)
+	}
+	return client
+}
 
 // --- isSafeRelativeTarget ---
 
@@ -204,5 +240,169 @@ func TestOIDCRedirectError_UnsafePath_FallsBackToApp(t *testing.T) {
 	loc := w.Header().Get("Location")
 	if !strings.HasPrefix(loc, "/app/") {
 		t.Fatalf("unsafe target should fall back to /app/, got %q", loc)
+	}
+}
+
+// --- OIDCStart state cookie ---
+
+// TestOIDCStart_SetsStateCookieMatchingRedirectState verifies that the
+// state value baked into the IdP redirect URL is also carried in a
+// HttpOnly, SameSite=Lax cookie so OIDCCallback can bind the flow to
+// the initiating browser (login-CSRF mitigation).
+func TestOIDCStart_SetsStateCookieMatchingRedirectState(t *testing.T) {
+	t.Parallel()
+	client := newTestOIDCClient(t)
+	d := NewOIDCDeps(client, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/start", http.NoBody)
+	w := httptest.NewRecorder()
+	OIDCStart(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d body=%s", w.Code, w.Body.String())
+	}
+	loc, err := url.Parse(w.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+	state := loc.Query().Get("state")
+	if state == "" {
+		t.Fatal("expected a non-empty state in the redirect URL")
+	}
+
+	var cookie *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Name == oidcStateCookieName {
+			cookie = c
+			break
+		}
+	}
+	if cookie == nil {
+		t.Fatal("expected the oidc state cookie to be set")
+	}
+	if cookie.Value != state {
+		t.Fatalf("cookie value %q must equal the redirect state %q", cookie.Value, state)
+	}
+	if !cookie.HttpOnly {
+		t.Error("state cookie must be HttpOnly")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Errorf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+}
+
+// --- OIDCCallback state-cookie binding ---
+
+// TestOIDCCallback_MatchingStateCookie_ProceedsPastStateCheck verifies
+// that a callback carrying the same value in the state cookie and the
+// state query parameter passes the binding check. The fake IdP's token
+// endpoint always 404s, so the flow still fails later at token exchange
+// — the assertion only requires that the failure is NOT bad_state.
+func TestOIDCCallback_MatchingStateCookie_ProceedsPastStateCheck(t *testing.T) {
+	t.Parallel()
+	client := newTestOIDCClient(t)
+	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
+
+	state, err := d.putState("verifier-1")
+	if err != nil {
+		t.Fatalf("putState: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=abc&state="+state, http.NoBody)
+	req.AddCookie(&http.Cookie{Name: oidcStateCookieName, Value: state})
+	w := httptest.NewRecorder()
+	OIDCCallback(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected a redirect, got %d body=%s", w.Code, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if strings.Contains(loc, "error=bad_state") {
+		t.Fatalf("matching state cookie must pass the binding check, got %q", loc)
+	}
+}
+
+// TestOIDCCallback_MissingStateCookie_RedirectsBadState verifies that a
+// callback with no state cookie at all — e.g. a forged callback replayed
+// into a victim's browser that never started the flow — is rejected.
+func TestOIDCCallback_MissingStateCookie_RedirectsBadState(t *testing.T) {
+	t.Parallel()
+	client := newTestOIDCClient(t)
+	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
+
+	state, err := d.putState("verifier-1")
+	if err != nil {
+		t.Fatalf("putState: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=abc&state="+state, http.NoBody)
+	w := httptest.NewRecorder()
+	OIDCCallback(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected a redirect, got %d body=%s", w.Code, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "error=bad_state") {
+		t.Fatalf("missing state cookie must redirect with error=bad_state, got %q", loc)
+	}
+}
+
+// TestOIDCCallback_MismatchedStateCookie_RedirectsBadState verifies that
+// a state cookie present but not equal to the state query parameter is
+// rejected — the constant-time comparison must not accept a near-miss.
+func TestOIDCCallback_MismatchedStateCookie_RedirectsBadState(t *testing.T) {
+	t.Parallel()
+	client := newTestOIDCClient(t)
+	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
+
+	state, err := d.putState("verifier-1")
+	if err != nil {
+		t.Fatalf("putState: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=abc&state="+state, http.NoBody)
+	req.AddCookie(&http.Cookie{Name: oidcStateCookieName, Value: "some-other-value"})
+	w := httptest.NewRecorder()
+	OIDCCallback(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected a redirect, got %d body=%s", w.Code, w.Body.String())
+	}
+	loc := w.Header().Get("Location")
+	if !strings.Contains(loc, "error=bad_state") {
+		t.Fatalf("mismatched state cookie must redirect with error=bad_state, got %q", loc)
+	}
+}
+
+// --- putState sweep ---
+
+// TestOIDCDeps_PutState_SweepsExpiredEntries verifies that putState
+// reclaims entries older than oidcStateTTL on every insert, so states
+// minted but never completed (abandoned logins) do not accumulate
+// unbounded in the map.
+func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
+	t.Parallel()
+	d := NewOIDCDeps(nil, nil, nil)
+	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	d.now = func() time.Time { return fakeNow }
+
+	firstKey, err := d.putState("v1")
+	if err != nil {
+		t.Fatalf("putState: %v", err)
+	}
+
+	// Advance the clock past the TTL and insert a second state; this must
+	// trigger the sweep that removes the first (now-expired) entry.
+	d.now = func() time.Time { return fakeNow.Add(oidcStateTTL + time.Second) }
+	if _, err := d.putState("v2"); err != nil {
+		t.Fatalf("putState: %v", err)
+	}
+
+	d.mu.Lock()
+	_, stillThere := d.states[firstKey]
+	d.mu.Unlock()
+	if stillThere {
+		t.Fatal("expired state must be swept on the next putState insert")
 	}
 }
