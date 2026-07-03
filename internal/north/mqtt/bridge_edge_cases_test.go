@@ -10,10 +10,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
-	"github.com/SukramJ/openccu-loom/internal/north/mqtt/protocol"
 	pload "github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
@@ -1207,62 +1205,6 @@ func TestCommandSubscriberCDPInvokeBadTopicShape(t *testing.T) {
 	sub.handleCDPInvoke("gh/ccu/wrong/invoke", []byte(`{}`), false)
 	if cdpSink.calls.Load() != 0 {
 		t.Fatalf("bad topic must not call InvokeCustomDP; calls=%d", cdpSink.calls.Load())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// adapter_tcp: Unsubscribe and dispatch (using the existing mock broker)
-// ---------------------------------------------------------------------------
-
-func TestTCPClientUnsubscribeSendsFrame(t *testing.T) {
-	b := newMockBroker(t)
-	c := NewTCPClient(TCPConfig{BrokerURL: b.URL(), ClientID: "unsub-test", KeepAlive: 30 * time.Second})
-	ctx := context.Background()
-	if err := c.Connect(ctx); err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer c.Disconnect(ctx) //nolint:errcheck // teardown
-
-	// Subscribe first so there is something to unsubscribe.
-	if err := c.Subscribe(ctx, "cmd/#", QoS1, func(string, []byte, bool) {}); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
-	// Unsubscribe must not return an error.
-	if err := c.Unsubscribe(ctx, "cmd/#"); err != nil {
-		t.Fatalf("unsubscribe: %v", err)
-	}
-}
-
-func TestTCPClientDispatchRoutesToHandler(t *testing.T) {
-	// dispatch is exercised through the readLoop whenever the mock broker
-	// delivers an inbound PUBLISH. Use the lifecycle mock broker which
-	// can inject publishes after CONNACK.
-	b := newMockBroker(t)
-	c := NewTCPClient(TCPConfig{BrokerURL: b.URL(), ClientID: "dispatch-test", KeepAlive: 30 * time.Second})
-	ctx := context.Background()
-	if err := c.Connect(ctx); err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	defer c.Disconnect(ctx) //nolint:errcheck // teardown
-
-	received := make(chan string, 1)
-	if err := c.Subscribe(ctx, "gh/#", QoS1, func(topic string, _ []byte, _ bool) {
-		received <- topic
-	}); err != nil {
-		t.Fatalf("subscribe: %v", err)
-	}
-
-	// The mock broker doesn't relay publishes back to the client; we test dispatch
-	// by calling it directly — it's a pure dispatch function, not a network path.
-	c.dispatch(&protocol.InboundPublish{Topic: "gh/test", Payload: []byte("x")})
-
-	select {
-	case topic := <-received:
-		if topic != "gh/test" {
-			t.Fatalf("got topic %q, want %q", topic, "gh/test")
-		}
-	case <-time.After(time.Second):
-		t.Fatal("handler not called within 1s")
 	}
 }
 

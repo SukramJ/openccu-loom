@@ -3,45 +3,58 @@
 
 package mqtt
 
-import "context"
+import gomqtt "github.com/SukramJ/go-mqtt"
 
-// QoS mirrors the MQTT QoS enum.
-type QoS byte
-
-// QoS values.
-const (
-	QoS0 QoS = 0
-	QoS1 QoS = 1
-	QoS2 QoS = 2
+// The MQTT transport — wire codec, TCP/TLS adapter, and the reconnecting
+// lifecycle — lives in the standalone github.com/SukramJ/go-mqtt module,
+// shared with the go-*2mqtt bridges. These aliases re-export its surface
+// under this package so the loom-specific side (bridge.go, the command
+// subscriber, HA Discovery, entity descriptions, topic building, hub
+// discovery, and the daemon wiring) keeps importing a single
+// internal/north/mqtt package. Only the transport moved out; everything
+// else in this package stays here.
+type (
+	// QoS mirrors the MQTT QoS enum.
+	QoS = gomqtt.QoS
+	// Publisher is the outbound contract the bridge publishes through.
+	Publisher = gomqtt.Publisher
+	// Subscriber is the inbound subscribe/unsubscribe contract.
+	Subscriber = gomqtt.Subscriber
+	// Client is the combined Publisher+Subscriber role the Bridge uses.
+	Client = gomqtt.Client
+	// MessageHandler is invoked for every message a subscription
+	// receives. The retained flag carries the PUBLISH retain bit so a
+	// side-effecting handler can drop the retained replay the broker
+	// re-delivers on every (re)connect — without it a stale
+	// `mosquitto_pub -r` command would be re-applied to the CCU on every
+	// daemon start.
+	MessageHandler = gomqtt.MessageHandler
+	// Connector is the connect/disconnect contract the Lifecycle drives.
+	Connector = gomqtt.Connector
+	// TCPClient is the pure-Go MQTT 3.1.1 client.
+	TCPClient = gomqtt.TCPClient
+	// TCPConfig wires a TCPClient against a real broker.
+	TCPConfig = gomqtt.TCPConfig
+	// Lifecycle is the reconnect loop around a Connector.
+	Lifecycle = gomqtt.Lifecycle
+	// LifecycleConfig tunes the reconnect backoff.
+	LifecycleConfig = gomqtt.LifecycleConfig
 )
 
-// Publisher is the outbound contract the bridge publishes through.
-// Adapters wrap any MQTT client (paho, nhave, etc.).
-type Publisher interface {
-	Publish(ctx context.Context, topic string, payload []byte, qos QoS, retain bool) error
+// QoS levels.
+const (
+	QoS0 = gomqtt.QoS0
+	QoS1 = gomqtt.QoS1
+	QoS2 = gomqtt.QoS2
+)
+
+// NewTCPClient constructs a broker-backed MQTT client.
+func NewTCPClient(cfg TCPConfig) *TCPClient { return gomqtt.NewTCPClient(cfg) }
+
+// NewLifecycle wraps a Connector in a reconnecting lifecycle.
+func NewLifecycle(cfg LifecycleConfig, connector Connector) *Lifecycle {
+	return gomqtt.NewLifecycle(cfg, connector)
 }
 
-// MessageHandler is invoked for every message a subscription receives.
-// The retained flag carries the MQTT PUBLISH "retain" bit so handlers
-// that perform side-effects on inbound write commands can drop
-// retained replays from the broker — without that filter, an old
-// `mosquitto_pub -r` left over from previous tests or automations
-// would be re-applied to the CCU on every daemon start.
-type MessageHandler func(topic string, payload []byte, retained bool)
-
-// Subscriber is the inbound contract — subscribe to a topic filter
-// and route matching messages to a handler. Wiring typically happens
-// once at startup and stays active for the broker connection's
-// lifetime.
-type Subscriber interface {
-	Subscribe(ctx context.Context, topicFilter string, qos QoS, handler MessageHandler) error
-	Unsubscribe(ctx context.Context, topicFilter string) error
-}
-
-// Client is the combined role the Bridge uses. Most real adapters
-// satisfy both; the split exists to make testing narrow facades
-// easier.
-type Client interface {
-	Publisher
-	Subscriber
-}
+// DefaultLifecycle returns the default reconnect-backoff configuration.
+func DefaultLifecycle() LifecycleConfig { return gomqtt.DefaultLifecycle() }
