@@ -57,6 +57,16 @@ type Switch struct {
 	onTime       atomic.Uint32 // uint16 seconds; 0 = none
 	offWaitTime  atomic.Uint32 // uint16 seconds; 0 = none
 	startUpOnOff atomic.Uint32 // startUpOnOffNull = null (default)
+
+	// globalSceneControl mirrors the LT-gated GlobalSceneControl
+	// attribute (0x4000): true after On / OnWithTimedOff /
+	// OnWithRecallGlobalScene, false after OffWithEffect; a plain Off
+	// leaves it unchanged. Defaults to true. matter.js
+	// packages/node/src/behaviors/on-off/OnOffServer.ts:97-104 (on),
+	// :158-169 (offWithEffect). Held directly on Switch (rather than a
+	// separate cluster-server projection) so the value survives
+	// [Switch.MatterClusterServers] reconstruction.
+	globalSceneControl atomic.Bool
 }
 
 // New constructs a Switch that wraps the channel's existing
@@ -85,6 +95,7 @@ func New(ch *device.Channel) *Switch {
 		groupState: custom.NewGroupState(),
 	}
 	s.startUpOnOff.Store(startUpOnOffNull)
+	s.globalSceneControl.Store(true)
 	s.registerSwitchServices()
 	// Bump the OnOff cluster's DataVersion on every CCU-confirmed STATE
 	// transition (Matter §10.6.5: DataVersion MUST monotonically advance

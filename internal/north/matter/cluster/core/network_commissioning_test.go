@@ -339,3 +339,39 @@ func TestNetcomm_MatterAttributesSurface(t *testing.T) {
 		}
 	}
 }
+
+// TestNetcomm_ReadPrivileges pins the per-attribute read privilege of the
+// NetworkCommissioning cluster. MaxNetworks / Networks / LastNetworkingStatus /
+// LastNetworkId / LastConnectErrorValue are all read-access "R A" (Administer),
+// so a merely-View subject must not read them nor have them streamed via a
+// wildcard subscribe; InterfaceEnabled is "RW VA" (View read). Mirrors matter.js
+// packages/model/src/standard/elements/network-commissioning.element.ts:29-59.
+func TestNetcomm_ReadPrivileges(t *testing.T) {
+	t.Parallel()
+	n := core.NewNetworkCommissioning(core.NetworkCommissioningConfig{})
+
+	const (
+		administer uint8 = 5
+		view       uint8 = 1
+	)
+	cases := []struct {
+		name string
+		attr uint32
+		want uint8
+	}{
+		{"MaxNetworks", 0x0000, administer},
+		{"Networks", 0x0001, administer},
+		{"InterfaceEnabled", 0x0004, view},
+		{"LastNetworkingStatus", 0x0005, administer},
+		{"LastNetworkId", 0x0006, administer},
+		{"LastConnectErrorValue", 0x0007, administer},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := n.MinReadPrivilege(tc.attr); got != tc.want {
+				t.Errorf("MinReadPrivilege(0x%04X %s) = %d, want %d", tc.attr, tc.name, got, tc.want)
+			}
+		})
+	}
+}

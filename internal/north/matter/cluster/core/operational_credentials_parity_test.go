@@ -426,15 +426,15 @@ func TestParityOpcreds_FailSafeRequiredForAddNOC(t *testing.T) {
 
 // TestParityOpcreds_CSRForUpdateNOCRejectedByAddNOC verifies that if
 // CSRRequest was issued with IsForUpdateNOC=true, a subsequent AddNOC
-// (0x06) returns NOCStatusMissingCsr. This prevents a commissioner from
-// using an UpdateNOC-targeted CSR to install a brand-new fabric, which
-// would bypass the fabric-authentication guard on UpdateNOC.
+// (0x06) is rejected with an IM-level Status::ConstraintError (0x87), NOT
+// an in-band NOCResponse. This prevents a commissioner from using an
+// UpdateNOC-targeted CSR to install a brand-new fabric, which would bypass
+// the fabric-authentication guard on UpdateNOC.
 //
-// Source-Origin: derived from matter.js packages/node/src/behaviors/
-// operational-credentials/OperationalCredentialsServer.ts — AddNOC path
-// checks `!csrIsForUpdateNoc` and returns MissingCsr if the flag is true.
-// Mirrors chip operational-credentials-server.cpp mAdminVendorIdForUpdateNoc
-// binding logic.
+// Source-Origin: matter.js packages/node/src/behaviors/
+// operational-credentials/OperationalCredentialsServer.ts:234-239 — the
+// addNoc path raises StatusResponseError("AddNoc is illegal after CsrRequest
+// for UpdateNOC in same failsafe context", Status.ConstraintError).
 func TestParityOpcreds_CSRForUpdateNOCRejectedByAddNOC(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -456,19 +456,20 @@ func TestParityOpcreds_CSRForUpdateNOCRejectedByAddNOC(t *testing.T) {
 	if csrErr != nil {
 		t.Fatalf("CSRRequest (IsForUpdateNOC=true): %v", csrErr)
 	}
-	// Now call AddNOC from the same session — must be rejected.
+	// Now call AddNOC from the same session — must be rejected with an
+	// IM-level ConstraintError (not an in-band NOCResponse).
 	addNOCCtx := core.WithInvokeSessionID(caseCtx, 100)
-	resp, err := oc.MatterInvoke(addNOCCtx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)}, hmenum.CommandPriorityHigh)
-	if err != nil {
-		t.Fatalf("AddNOC invoke error: %v", err)
+	_, err = oc.MatterInvoke(addNOCCtx, 0x06, core.AddNOCRequest{IPKValue: make([]byte, 16)}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("AddNOC with UpdateNOC-targeted CSR: expected IM error, got nil")
 	}
-	nocResp, ok := resp.(core.NOCResponse)
-	if !ok {
-		t.Fatalf("AddNOC response type = %T, want NOCResponse", resp)
+	type statusCoder interface{ MatterStatusCode() im.StatusCode }
+	var sc statusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("AddNOC error %v does not implement MatterStatusCode() — want ConstraintError", err)
 	}
-	if nocResp.StatusCode != core.NOCStatusMissingCsr {
-		t.Errorf("AddNOC with UpdateNOC-targeted CSR: StatusCode=%d, want NOCStatusMissingCsr (%d)",
-			nocResp.StatusCode, core.NOCStatusMissingCsr)
+	if got := sc.MatterStatusCode(); got != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode()=0x%02X, want StatusConstraintError (0x87)", uint8(got))
 	}
 }
 

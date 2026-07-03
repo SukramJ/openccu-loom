@@ -100,9 +100,20 @@ func (b *Bridge) buildInitialReport(
 	// emitted 0+ EventReports per Subscribe-Initial and
 	// Apple flipped to count: 21 + InitialSubscriptionEstablished.
 	if len(req.EventRequests) > 0 {
-		evs := im.BuildEventReports(req.EventRequests, b.eventLog, req.EventFilters)
-		initialReport.EventReports = evs
-		matched += len(evs)
+		raw := im.BuildEventReports(req.EventRequests, b.eventLog, req.EventFilters)
+		// The establish decision (matched > 0) counts raw matched records —
+		// authorization filtering only affects which events are disclosed, not
+		// whether the subscription establishes. Then authorize + fabric-project
+		// the priming events so a wildcard event subscribe from fabric B does
+		// not receive fabric A's AccessControl-change events, and a
+		// non-Administer subject sees no AccessControl events (Matter §8.4.3.2 /
+		// §9.10.7.1). Mirrors matter.js EventReadResponse.ts #readAllowedEvents;
+		// subCtx carries the requesting fabric + subject.
+		matched += len(raw)
+		_, subFabricIndex := im.FabricFilterFromContext(subCtx)
+		subSubjectNodeID, subSubjectCATs := im.SubjectFromContext(subCtx)
+		auth := b.eventReadAuthorizer(dispatcher, subFabricIndex, subSubjectNodeID, subSubjectCATs)
+		initialReport.EventReports = im.AuthorizeEventReports(subCtx, auth, raw)
 	}
 	// Sort reports by (endpoint, cluster, attribute) ascending. Apple
 	// Home's MTRDevice processes the wildcard Subscribe-Initial in

@@ -325,7 +325,15 @@ func TestCaseDestinationResolver_MatchingDestination_ReturnsTrue(t *testing.T) {
 	if !ok {
 		t.Fatal("expected ok=true for matching destination")
 	}
-	if retIdentity != identity {
+	// The resolver returns a copy stamped with the specific IPK
+	// candidate that matched (Matter §11.2.10.6 IPK-rotation grace
+	// window: the matching epoch key may not be the newest one), not
+	// the original pointer — compare the fields this test populates
+	// instead of pointer identity.
+	if retIdentity == nil ||
+		retIdentity.IPK != identity.IPK ||
+		retIdentity.FabricID != identity.FabricID ||
+		retIdentity.NodeID != identity.NodeID {
 		t.Error("returned identity mismatch")
 	}
 	// The logger.Debug call should have fired — check for the key.

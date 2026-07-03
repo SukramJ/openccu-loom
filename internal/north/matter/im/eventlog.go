@@ -182,8 +182,17 @@ func appendEvict(buf []EventRecord, rec EventRecord, limit int) []EventRecord {
 	return buf
 }
 
-// Query returns all EventRecords whose Number > minNumber and that
+// Query returns all EventRecords whose Number >= minNumber and that
 // match the supplied (endpoint, cluster, eventID) filter.
+//
+// The lower bound is INCLUSIVE: minNumber is the EventFilterIB.EventMin
+// the controller sent, and Matter §10.6.9 treats EventMin as the minimum
+// EventNumber of interest — the record whose Number == EventMin is
+// returned, not skipped. Mirrors matter.js
+// packages/protocol/src/events/OccurrenceManager.ts
+// #findMinEventNumberIndex ("first event number that is greater than or
+// equal to eventMin") and chip src/app/EventManagement.cpp
+// IncludeEventInReport (drops only mCurrentEventNumber < mStartingEventNumber).
 //
 // Wildcard semantics follow chip-tool / Apple MTRDevice conventions:
 //   - endpoint == 0xFFFF → match any endpoint
@@ -221,9 +230,10 @@ func (l *EventLog) Query(endpoint uint16, cluster, eventID uint32, minNumber uin
 }
 
 // matchRecord returns true when rec matches the wildcard-aware filter
-// and has a Number > minNumber.
+// and has a Number >= minNumber (EventMin is an inclusive lower bound —
+// see [EventLog.Query]).
 func matchRecord(rec EventRecord, endpoint uint16, cluster, eventID uint32, minNumber uint64) bool {
-	if rec.Number <= minNumber {
+	if rec.Number < minNumber {
 		return false
 	}
 	if endpoint != 0xFFFF && rec.Endpoint != endpoint {

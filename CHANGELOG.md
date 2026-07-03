@@ -6,6 +6,35 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-07-03
+
+### Security
+
+- **Matter bridge: access-control and commissioning hardening from a
+  code-vs-code re-audit against matter.js.** Event reads and subscriptions now
+  enforce ACL and fabric-sensitive filtering, so a controller on one fabric can
+  no longer read another fabric's `AccessControl` change events; partial-wildcard
+  reads re-authorize per resolved endpoint; the PASE brute-force cap now counts
+  wrong-passcode attempts (and Pake1 decode failures) and revokes the window at
+  the limit; CASE Sigma3 verifies the peer NOC's FabricId against the selected
+  fabric; and reserved-range Node IDs / version-0 CATs are rejected as ACL
+  subjects. Writes to read-only Matter attributes (e.g. `OnOff`) are now rejected
+  instead of being dispatched to the CCU.
+
+### Fixed
+
+- **Matter bridge: broad matter.js parity pass.** Tolerate 21-octet
+  operational-certificate serials so LG-TV-class controllers can commission;
+  keep a stable per-endpoint DataVersion across config edits so controllers stop
+  re-downloading the whole bridge on every exposure toggle; require a Timed
+  interaction for `DoorLock` lock/unlock/unbolt; stop heating-only thermostats
+  from advertising cooling controls; correct `WindowCovering` ConfigStatus/Mode,
+  `ColorControl` ExecuteIfOff gating, and `OnOff` GlobalSceneControl behaviour;
+  return the correct Interaction-Model status codes for malformed
+  `OperationalCredentials` commands; and set the mDNS default pairing hint to
+  power-cycle + manual. Every change mirrors matter.js HEAD; intentional and
+  deferred divergences are catalogued in `docs/parity/by_design.md`.
+
 ## [0.23.1]
 
 ### Changed

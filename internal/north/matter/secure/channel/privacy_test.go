@@ -116,7 +116,8 @@ func TestPrivacyMask_BadKeyLength(t *testing.T) {
 	}
 }
 
-// TestPrivacyMask_ShortMIC — a 13-byte MIC returns ErrPrivacyMICShort.
+// TestPrivacyMask_ShortMIC — a 13-byte MIC (short of the 16-byte
+// AES-CCM tag) returns ErrPrivacyMICShort.
 func TestPrivacyMask_ShortMIC(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 16)
@@ -126,12 +127,12 @@ func TestPrivacyMask_ShortMIC(t *testing.T) {
 	}
 }
 
-// TestPrivacyMask_AcceptsExactly14Bytes — a 14-byte MIC is valid and
-// returns a 16-byte mask without error.
-func TestPrivacyMask_AcceptsExactly14Bytes(t *testing.T) {
+// TestPrivacyMask_AcceptsExactly16Bytes — a full 16-byte AES-CCM MIC
+// is valid and returns a 16-byte keystream block without error.
+func TestPrivacyMask_AcceptsExactly16Bytes(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 16)
-	mic := make([]byte, 14)
+	mic := make([]byte, 16)
 	mask, err := channel.PrivacyMask(key, 0x0001, mic)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -141,28 +142,29 @@ func TestPrivacyMask_AcceptsExactly14Bytes(t *testing.T) {
 	}
 }
 
-// TestPrivacyMask_UsesLast14BytesOfLongerMIC — a 16-byte MIC and its
-// last 14 bytes in isolation must produce identical masks (proves
-// mic[len-14:] slicing, not mic[:14]).
-func TestPrivacyMask_UsesLast14BytesOfLongerMIC(t *testing.T) {
+// TestPrivacyMask_UsesLast11BytesOfMIC — the nonce reads mic[5:16], so
+// two MICs that share their last 11 bytes but differ in the first 5
+// must produce identical masks (proves the mic[5:16] slice, not
+// mic[0:11] or mic[len-14:]).
+func TestPrivacyMask_UsesLast11BytesOfMIC(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 16)
-	mic16 := []byte{
-		0xAA, 0xBB, // first 2 bytes — should NOT affect IV
-		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-		0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, // last 14 bytes — these matter
+	base := []byte{
+		0x01, 0x02, 0x03, 0x04, 0x05, // first 5 bytes — NOT in the nonce
+		0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, // last 11 — these matter
 	}
-	mic14 := mic16[len(mic16)-14:]
-	maskFull, err := channel.PrivacyMask(key, 0x0042, mic16)
+	other := append([]byte(nil), base...)
+	other[0], other[1], other[2], other[3], other[4] = 0xFF, 0xFE, 0xFD, 0xFC, 0xFB
+	maskBase, err := channel.PrivacyMask(key, 0x0042, base)
 	if err != nil {
-		t.Fatalf("16-byte mic: %v", err)
+		t.Fatalf("base mic: %v", err)
 	}
-	maskTail, err := channel.PrivacyMask(key, 0x0042, mic14)
+	maskOther, err := channel.PrivacyMask(key, 0x0042, other)
 	if err != nil {
-		t.Fatalf("14-byte mic: %v", err)
+		t.Fatalf("other mic: %v", err)
 	}
-	if !bytes.Equal(maskFull, maskTail) {
-		t.Fatalf("masks differ: % X vs % X", maskFull, maskTail)
+	if !bytes.Equal(maskBase, maskOther) {
+		t.Fatalf("masks differ though last 11 MIC bytes match: % X vs % X", maskBase, maskOther)
 	}
 }
 
@@ -191,7 +193,7 @@ func TestApplyPrivacyMask_RoundTrip(t *testing.T) {
 	t.Parallel()
 	key := make([]byte, 16)
 	key[0] = 0x55
-	mic := make([]byte, 14)
+	mic := make([]byte, 16)
 	mask, err := channel.PrivacyMask(key, 0x0099, mic)
 	if err != nil {
 		t.Fatalf("PrivacyMask: %v", err)

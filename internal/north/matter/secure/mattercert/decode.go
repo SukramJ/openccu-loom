@@ -370,8 +370,12 @@ func skipContainer(d *tlv.Decoder) error {
 // validateMandatory checks the spec-required fields are present and
 // well-formed (Matter §6.5.1).
 func validateMandatory(c *Certificate) error {
-	if len(c.SerialNumber) == 0 || len(c.SerialNumber) > 20 {
-		return fmt.Errorf("%w: serial number length=%d (want 1..20)", ErrMalformed, len(c.SerialNumber))
+	// Matter §6.5 caps the serial number at 20 octets, but matter.js
+	// tolerates 21 (observed in the wild, e.g. some LG TVs) and only
+	// throws above that. Mirrors OperationalBase.ts:44-57 generalVerify:
+	// it warns (does not reject) at 21 octets and rejects only >21.
+	if len(c.SerialNumber) == 0 || len(c.SerialNumber) > 21 {
+		return fmt.Errorf("%w: serial number length=%d (want 1..21)", ErrMalformed, len(c.SerialNumber))
 	}
 	if c.SignatureAlgorithm != SigAlgoECDSAWithSHA256 {
 		return fmt.Errorf("%w: signature algorithm %d", ErrUnsupportedAlgorithm, c.SignatureAlgorithm)

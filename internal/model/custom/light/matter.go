@@ -221,11 +221,12 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		on, _ := s.l.IsOn()
 		return on, true
 	case matterAttrOnOffGlobalSceneControl:
-		// GlobalSceneControl (bool, conformance LT): defaults to true.
-		// matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:75,151
-		// sets globalSceneControl = true; the bridge has no scene engine
-		// so it stays true (read-only on this projection).
-		return true, true
+		// GlobalSceneControl (bool, conformance LT): true after On /
+		// OnWithTimedOff / OnWithRecallGlobalScene, false after
+		// OffWithEffect; a plain Off leaves it unchanged. Defaults to
+		// true. matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:
+		// 97-104 (on), :158-169 (offWithEffect).
+		return s.l.matterGlobalSceneControl(), true
 	case matterAttrOnOffOnTime:
 		// OnTime (uint16, conformance LT): remaining timed-on countdown
 		// in tenths of a second, driven by the OnWithTimedOff engine.
@@ -358,10 +359,13 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		// OffWithEffect (LT, mandatory): the bridge has no dimming-effect
 		// engine, so the effect identifier/variant are ignored and the
 		// device is turned off plainly. matter.js OnOffServer.ts treats
-		// the effect as best-effort. on-off.element.ts:41.
+		// the effect as best-effort. on-off.element.ts:41. matter.js
+		// OnOffServer.ts:158-169 also clears GlobalSceneControl here —
+		// a plain Off never touches it.
 		err = s.l.TurnOff(ctx, priority)
 		if err == nil {
 			s.l.matterTimedHandleOff()
+			s.l.matterClearGlobalSceneControl()
 		}
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so

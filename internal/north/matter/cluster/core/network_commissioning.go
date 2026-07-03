@@ -131,6 +131,7 @@ var (
 	_ interfaces.MatterClusterServer                  = (*NetworkCommissioning)(nil)
 	_ interfaces.MatterClusterAttributeLister         = (*NetworkCommissioning)(nil)
 	_ interfaces.MatterClusterDataVersion             = (*NetworkCommissioning)(nil)
+	_ interfaces.MatterClusterAttributeReadPrivilege  = (*NetworkCommissioning)(nil)
 	_ interfaces.MatterClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
 )
 
@@ -145,6 +146,27 @@ func (n *NetworkCommissioning) MatterDataVersion() uint32 {
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (n *NetworkCommissioning) MatterClusterID() uint32 { return netcommClusterID }
+
+// MinReadPrivilege implements [interfaces.MatterClusterAttributeReadPrivilege].
+// MaxNetworks / Networks / LastNetworkingStatus / LastNetworkId /
+// LastConnectErrorValue are all read-access "R A" (Administer) per Matter
+// §11.9 — a merely-View subject must not read them, nor have them streamed
+// via a wildcard subscribe. InterfaceEnabled is "RW VA" (View read); the
+// WiFi/Thread-only ScanMaxTimeSeconds / ConnectMaxTimeSeconds are "R V".
+// Mirrors matter.js
+// packages/model/src/standard/elements/network-commissioning.element.ts:29-59.
+func (n *NetworkCommissioning) MinReadPrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case netcommAttrMaxNetworks,
+		netcommAttrNetworks,
+		netcommAttrLastNetworkingStatus,
+		netcommAttrLastNetworkID,
+		netcommAttrLastConnectErrorValue:
+		return 5 // Administer
+	default:
+		return 1 // View
+	}
+}
 
 // MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
 // InterfaceEnabled (0x0004) requires Administer (5) per Matter §11.9

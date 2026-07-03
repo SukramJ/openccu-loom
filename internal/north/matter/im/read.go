@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
 )
@@ -68,7 +69,8 @@ type ReadRequest struct {
 	EventRequests     []ConcreteEventPath
 	// EventFilters carries per-source minimum-event-number hints per
 	// Matter §10.6.4 EventFilterIB. The bridge skips events with
-	// Number ≤ EventMin in BuildEventReports.
+	// Number < EventMin in BuildEventReports (EventMin is an inclusive
+	// lower bound — see [EventLog.Query]).
 	EventFilters       []EventMinimumNumber
 	FabricFiltered     bool
 	DataVersionFilters []DataVersionFilter
@@ -394,15 +396,18 @@ func (rep AttributeReport) marshal(enc *tlv.Encoder, valueWriter AttributeValueW
 // Matter §10.6.5 / mirrors matter.js InteractionServer.ts
 // startReadInteraction DataVersionFilter check.
 //
-// ACL gate: when d implements [ACLChecker], each attribute result is
-// checked against the requesting fabric's privilege before inclusion.
-// Denied results are replaced with an AttributeStatusIB carrying
-// UnsupportedAccess (0x7e) per Matter §9.10 and chip
-// reporting/Engine.cpp ValidateReadAttributeACL. PASE sessions
-// (fabricIndex==0) bypass the check — commissioning reads must
-// succeed before the fabric's ACL entry exists. Mirrors matter.js
-// packages/node/src/node/server/OnlineServerInteraction.ts
-// FabricAccessControl.forRequest.
+// ACL gate: when d implements [ACLChecker], every RESOLVED result is
+// authorized at its concrete (endpoint, cluster) using the resolved
+// attribute's read privilege — run per result AFTER path expansion so a
+// wildcard-endpoint read is authorized per concrete endpoint, not once
+// against endpoint 0. A FULLY-CONCRETE path (endpoint + cluster + attribute
+// all named) that is denied returns an AttributeStatusIB carrying
+// UnsupportedAccess (0x7e); a WILDCARD-expanded result that is denied is
+// SILENTLY OMITTED — a wildcard read discloses only authorized paths (Matter
+// §8.4.3.2). PASE sessions (fabricIndex==0) bypass the check — commissioning
+// reads must succeed before the fabric's ACL entry exists. Mirrors matter.js
+// packages/protocol/src/action/server/AttributeReadResponse.ts:238-274
+// (addConcrete → error status) and readAttributeForWildcard (bare return).
 func HandleReadRequest(ctx context.Context, d Dispatcher, req ReadRequest) ReportData {
 	_, fabricIndex := FabricFilterFromContext(ctx)
 	subjectNodeID, subjectCATs := SubjectFromContext(ctx)
@@ -420,51 +425,41 @@ func HandleReadRequest(ctx context.Context, d Dispatcher, req ReadRequest) Repor
 		return 1
 	}
 
-	// clusterReadPrivilege returns the cluster-level minimum privilege
-	// when the attribute is not yet known (wildcard / pre-expansion path).
-	// For a concrete-path pre-check (no attribute ID) we conservatively
-	// use View (1) — per-result checks use the full triplet below.
-	clusterReadPrivilege := func(endpoint uint16, clusterID uint32) uint8 {
-		return readPrivilege(endpoint, clusterID, 0)
-	}
-
 	var rd ReportData
 	for _, path := range req.AttributeRequests {
-		// Per-path ACL pre-check: when the entire path is concrete
-		// (cluster known) we can reject the whole expansion early before
-		// calling Read. Wildcard paths (HasCluster==false) pass through
-		// to the per-result check below so the dispatcher handles
-		// expansion and ACL is enforced per concrete result.
-		if hasACL && fabricIndex != 0 && path.HasCluster {
-			priv := clusterReadPrivilege(path.Endpoint, path.Cluster)
-			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, path.Endpoint, path.Cluster, priv); !status.IsSuccess() {
-				rd.Reports = append(rd.Reports, AttributeReport{
-					Path:     path,
-					IsStatus: true,
-					Status:   StatusIB{Status: status},
-				})
-				continue
-			}
-		}
+		// A fully-concrete path (endpoint + cluster + attribute all named)
+		// returns an explicit AttributeStatusIB(UnsupportedAccess) on ACL
+		// denial; a wildcard path silently omits the results the subject may
+		// not read (Matter §8.4.3.2 — a wildcard read discloses only
+		// authorized paths). Mirrors matter.js AttributeReadResponse.ts
+		// addConcrete (error status) vs readAttributeForWildcard (omit).
+		concretePath := path.HasEndpoint && path.HasCluster && path.HasAttribute
 
 		results := d.Read(ctx, path)
-		// Group results by (endpoint, cluster) so we can apply the
-		// DataVersionFilter once per cluster rather than per attribute.
-		// We also carry the DataVersion from the first result for that
-		// cluster (all attributes of the same cluster share the version).
 		var filtered []AttributeReport
 		for _, r := range results {
-			// Per-result ACL check for wildcard-expanded paths where the
-			// cluster was not known until expansion. PASE (fabricIndex==0)
-			// bypasses — commissioning reads must succeed pre-AddNOC.
-			if hasACL && fabricIndex != 0 && !path.HasCluster {
+			// Per-RESULT ACL check at the RESOLVED concrete (endpoint,
+			// cluster) using the resolved attribute's read privilege — run
+			// for EVERY expanded result, including a wildcard-endpoint +
+			// concrete-cluster read (previously authorized only against
+			// endpoint 0, then expanded to every endpoint with no per-endpoint
+			// recheck). Mirrors matter.js
+			// packages/protocol/src/action/server/AttributeReadResponse.ts:
+			// 238-274 — each resolved location is authorized with the resolved
+			// attribute's readLevel AFTER path resolution. PASE
+			// (fabricIndex==0) bypasses — commissioning reads must succeed
+			// pre-AddNOC.
+			if hasACL && fabricIndex != 0 {
 				priv := readPrivilege(r.Path.Endpoint, r.Path.Cluster, r.Path.Attribute)
 				if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, r.Path.Endpoint, r.Path.Cluster, priv); !status.IsSuccess() {
-					filtered = append(filtered, AttributeReport{
-						Path:     r.Path,
-						IsStatus: true,
-						Status:   StatusIB{Status: status},
-					})
+					if concretePath {
+						filtered = append(filtered, AttributeReport{
+							Path:     r.Path,
+							IsStatus: true,
+							Status:   StatusIB{Status: status},
+						})
+					}
+					// Wildcard-expanded denial: omit, never disclose.
 					continue
 				}
 			}
@@ -498,13 +493,26 @@ func HandleReadRequest(ctx context.Context, d Dispatcher, req ReadRequest) Repor
 		}
 		rd.Reports = append(rd.Reports, filtered...)
 	}
+	// A plain (non-subscribe) Read's ReportData carries SuppressResponse=true:
+	// the controller answers the final chunk with only a Standalone MRP-Ack, not
+	// an IM StatusResponse. Mirrors matter.js
+	// packages/node/src/node/server/InteractionServer.ts:346-350,371-374
+	// (handleReadRequest returns `dataReport: { suppressResponse: true }`) and
+	// chip src/app/ReadHandler.cpp:340 (`responseExpected = IsType(Subscribe) ||
+	// aMoreChunks` → false on a read's final chunk). The chunker propagates this
+	// to the terminal chunk only; intermediate chunks keep SuppressResponse=false
+	// so the per-chunk StatusResponse handshake still runs. Subscribe priming
+	// builds its own report and is unaffected — HandleReadRequest is only called
+	// from the plain-read path.
+	rd.SuppressResponse = true
 	return rd
 }
 
 // minEventNumberFromFilters computes the minimum event-number floor from a
 // set of [EventMinimumNumber] filters. Returns 0 (no filtering) when filters
 // is empty. Takes the minimum across all entries — any event whose Number is
-// ≤ the floor is already known to the controller and shall not be re-sent.
+// < the floor is already known to the controller and shall not be re-sent
+// (EventMin is an inclusive lower bound — see [EventLog.Query]).
 //
 // matter.js: EventHandler.ts getEvents → EventFilters passed to EventHandler.
 // chip: src/app/ReadHandler.cpp:598 ProcessEventFilters — stores per-entry
@@ -540,7 +548,7 @@ func minEventNumberFromFilters(filters []EventMinimumNumber) uint64 {
 // filters carries the EventFilterIB minimum-event-number constraints the
 // controller sent (Matter §10.6.9). Pass nil to return all buffered events.
 // When filters is non-empty the minimum EventMin across all entries is used
-// as the lower bound — events with Number ≤ minNumber are excluded.
+// as the INCLUSIVE lower bound — events with Number < minNumber are excluded.
 // The returned [EventReport].Timestamp is sourced from
 // [EventRecord].EpochMS (POSIX milliseconds — Matter §10.6.6.1
 // EpochTimestamp, encoded at tag 3), matching the millisecond timestamp
@@ -613,6 +621,115 @@ func BuildEventReports(paths []ConcreteEventPath, log *EventLog, filters []Event
 // for minimum-event-number gating.
 func HandleReadEventRequest(req ReadRequest, log *EventLog) []EventReport {
 	return BuildEventReports(req.EventRequests, log, req.EventFilters)
+}
+
+// matterAccessControlClusterID is the AccessControl cluster (Matter §9.10).
+// Its events (AccessControlEntryChanged) are fabric-sensitive: each carries a
+// FabricIndex, must never be disclosed across fabrics (§8.4.3.2 / §9.10.7.1),
+// and requires Administer to read.
+const matterAccessControlClusterID uint32 = 0x001F
+
+// EventReadAuthorizer bundles the accessing subject + ACL checker used to gate
+// event reads and subscriptions, mirroring the (fabricIndex, subject, CATs)
+// tuple the attribute read path threads through [HandleReadRequest]. A zero
+// FabricIndex marks a PASE / pre-commissioning session (ACL not yet
+// applicable); a nil Checker disables enforcement (fail-open, matching the
+// attribute path's "dispatcher without ACLChecker" fallback).
+type EventReadAuthorizer struct {
+	Checker       ACLChecker
+	FabricIndex   uint8
+	SubjectNodeID uint64
+	SubjectCATs   []uint32
+}
+
+// AuthorizeEventReports filters events down to those the accessing subject may
+// read and drops fabric-sensitive records that belong to another fabric.
+// Denied paths/records are SILENTLY OMITTED — a wildcard event read discloses
+// only authorized events (Matter §8.4.3.2), never an error status. A PASE
+// session (FabricIndex==0) or a nil Checker returns every event unchanged.
+//
+// (a) ACL gate: each event is gated at its read privilege — View by default,
+//
+//	Administer for AccessControl (fabric-sensitive, Matter §9.10.7.1).
+//	Mirrors matter.js packages/protocol/src/action/server/EventReadResponse.ts
+//	#addConcrete/#addEventForWildcard (authorize at event.limits.readLevel).
+//
+// (b) Fabric-sensitive drop: a fabric-sensitive record is disclosed only to the
+//
+//	fabric that owns it, independent of the read's FabricFiltered flag. Fails
+//	closed — a record whose fabric cannot be positively matched to the
+//	accessing fabric is never disclosed. Mirrors EventReadResponse.ts
+//	#readAllowedEvents (payload.fabricIndex !== accessingFabricIndex → skip).
+func AuthorizeEventReports(ctx context.Context, auth EventReadAuthorizer, events []EventReport) []EventReport {
+	if auth.FabricIndex == 0 || auth.Checker == nil {
+		return append([]EventReport(nil), events...)
+	}
+	out := make([]EventReport, 0, len(events))
+	for _, ev := range events {
+		priv := eventReadPrivilege(ev.Path.Cluster)
+		if status := auth.Checker.CheckACL(ctx, auth.FabricIndex, auth.SubjectNodeID, auth.SubjectCATs, ev.Path.Endpoint, ev.Path.Cluster, priv); !status.IsSuccess() {
+			continue // subject not permitted to read this event — omit
+		}
+		if isFabricSensitiveEventCluster(ev.Path.Cluster) {
+			recFabric, ok := eventPayloadFabricIndex(ev.Data.Value)
+			if !ok || recFabric != auth.FabricIndex {
+				continue // fabric-sensitive record owned by another fabric — omit
+			}
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
+// eventReadPrivilege returns the minimum privilege required to read events on
+// clusterID: Administer for AccessControl (§9.10.7.1 fabric-sensitive events),
+// View for every other cluster (the Matter default event read privilege).
+func eventReadPrivilege(clusterID uint32) uint8 {
+	if clusterID == matterAccessControlClusterID {
+		return 5 // Administer
+	}
+	return 1 // View
+}
+
+// isFabricSensitiveEventCluster reports whether clusterID's events carry a
+// FabricIndex and must be filtered to the accessing fabric regardless of the
+// read's FabricFiltered flag (Matter §8.4.3.2 / §9.10.7.1).
+func isFabricSensitiveEventCluster(clusterID uint32) bool {
+	return clusterID == matterAccessControlClusterID
+}
+
+// eventPayloadFabricIndex extracts the FabricIndex a fabric-sensitive event
+// payload carries (e.g. AccessControl.AccessControlEntryChanged sets it per
+// §9.10.7.1). Mirrors matter.js EventReadResponse.ts #readAllowedEvents
+// `const fabricIndex = isObject(payload) ? payload.fabricIndex : undefined`:
+// the payload is duck-typed for a FabricIndex field rather than matched to a
+// concrete type (the IM layer stays cluster-blind and cannot import the
+// cluster packages). Returns (0,false) when the payload is not a struct
+// exposing an unsigned FabricIndex field.
+func eventPayloadFabricIndex(payload any) (uint8, bool) {
+	if payload == nil {
+		return 0, false
+	}
+	v := reflect.ValueOf(payload)
+	for v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return 0, false
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return 0, false
+	}
+	f := v.FieldByName("FabricIndex")
+	if !f.IsValid() {
+		return 0, false
+	}
+	switch f.Kind() {
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return uint8(f.Uint() & 0xFF), true
+	default:
+		return 0, false
+	}
 }
 
 // isGlobalAttributeID reports whether attrID is a universal global attribute

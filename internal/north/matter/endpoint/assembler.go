@@ -92,6 +92,11 @@ type Assembler struct {
 	exposures ExposureChecker
 	cfg       Config
 	logger    *slog.Logger
+	// versions owns the per-(endpoint, cluster) DataVersion trackers,
+	// keyed by the stable [store.EndpointKey]. It lives across every
+	// [Assembler.Assemble] so a bridged endpoint's DataVersion survives
+	// reassembly — see [versionRegistry] and [Endpoint.versions].
+	versions *versionRegistry
 }
 
 // New returns an assembler. logger may be nil; the assembler then
@@ -113,6 +118,7 @@ func New(s Store, cfg Config, logger *slog.Logger) (*Assembler, error) {
 		exposures: allowAllExposureChecker{},
 		cfg:       cfg,
 		logger:    logger,
+		versions:  newVersionRegistry(),
 	}, nil
 }
 
@@ -170,6 +176,13 @@ func (a *Assembler) Assemble(ctx context.Context, snapshots []Snapshot) (*Topolo
 	if err := a.gcVanished(ctx, snapshots, seen); err != nil {
 		return nil, err
 	}
+
+	// Release DataVersion trackers for sources that vanished / were
+	// de-exposed this run so a later re-add gets a fresh version (matches
+	// matter.js destroying the Datasource on endpoint removal) and the
+	// registry stays bounded to the live topology. Trackers for endpoints
+	// still present in `seen` are retained, keeping their version stable.
+	a.versions.retain(seen)
 
 	sort.SliceStable(topology.Endpoints, func(i, j int) bool {
 		return topology.Endpoints[i].ID < topology.Endpoints[j].ID
@@ -427,6 +440,9 @@ func (a *Assembler) makeEndpoint(
 		Channel:       ch,
 		Source:        src,
 		SourceKey:     sourceKey,
+		// Reuse the DataVersion tracker set bound to this stable source
+		// key so the endpoint's per-cluster version survives reassembly.
+		versions: a.versions.setFor(sourceKey),
 		// Bridged endpoints are children of the Aggregator (EP 1).
 		// Mirrors chip examples/bridge-app/linux/main.cpp:261-276
 		// AddDeviceEndpoint(..., parentEndpointId=1) and matter.js
@@ -468,6 +484,9 @@ func (a *Assembler) makeMeasurementEndpoint(
 		Source:        nil,
 		Measurement:   meas,
 		SourceKey:     sourceKey,
+		// Reuse the DataVersion tracker set bound to this stable source
+		// key so the endpoint's per-cluster version survives reassembly.
+		versions: a.versions.setFor(sourceKey),
 		// Measurement sub-endpoints are also bridged under the Aggregator
 		// (EP 1). Same parent-chain as source endpoints.
 		ParentEndpointID:    1,

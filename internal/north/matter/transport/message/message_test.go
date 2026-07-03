@@ -29,6 +29,7 @@ func TestHeaderRoundTripUnsecured(t *testing.T) {
 	if n != 8 {
 		t.Errorf("consumed %d bytes, want 8", n)
 	}
+	out.Raw = nil // decode-only AAD cache; not part of the semantic header
 	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
@@ -56,6 +57,7 @@ func TestHeaderWithSourceAndDestNodeID(t *testing.T) {
 	if n != 24 {
 		t.Errorf("consumed %d, want 24", n)
 	}
+	out.Raw = nil // decode-only AAD cache; not part of the semantic header
 	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}
@@ -77,19 +79,20 @@ func TestHeaderWithGroupDest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unmarshal err: %v", err)
 	}
+	out.Raw = nil // decode-only AAD cache; not part of the semantic header
 	if n != 10 || !reflect.DeepEqual(out, in) {
 		t.Errorf("decoded %d/%+v want 10/%+v", n, out, in)
 	}
 }
 
-// TestHeaderSecurityFlagsRoundTrip covers the privacy /
-// control / extension bits.
+// TestHeaderSecurityFlagsRoundTrip covers the privacy / extension bits
+// and the group session type. The Control bit is exercised separately
+// (TestHeaderRejectsControlMessage) because decode rejects it.
 func TestHeaderSecurityFlagsRoundTrip(t *testing.T) {
 	in := Header{
 		MessageCounter: 1,
 		SessionType:    SessionGroup,
 		Privacy:        true,
-		Control:        true,
 		HasExtension:   true,
 	}
 	wire := in.Marshal()
@@ -97,8 +100,58 @@ func TestHeaderSecurityFlagsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if out.SessionType != SessionGroup || !out.Privacy || !out.Control || !out.HasExtension {
+	if out.SessionType != SessionGroup || !out.Privacy || !out.HasExtension {
 		t.Fatalf("flags lost: %+v", out)
+	}
+}
+
+// TestHeaderRejectsControlMessage — the Control (C) security-flag bit is
+// rejected on decode. Mirrors matter.js MessageCodec.ts decodeFixedHeader
+// ("Control Messages not supported").
+func TestHeaderRejectsControlMessage(t *testing.T) {
+	wire := Header{MessageCounter: 1}.Marshal()
+	wire[3] |= 0x40 // Control bit
+	_, _, err := UnmarshalHeader(wire)
+	if !errors.Is(err, ErrControlMessage) {
+		t.Fatalf("err = %v, want ErrControlMessage", err)
+	}
+}
+
+// TestHeaderRejectsUnsupportedSessionType — a Session Type of 2 or 3
+// (reserved) is rejected on decode. Mirrors matter.js MessageCodec.ts
+// decodeFixedHeader ("Unsupported session type").
+func TestHeaderRejectsUnsupportedSessionType(t *testing.T) {
+	for _, st := range []byte{2, 3} {
+		wire := Header{MessageCounter: 1}.Marshal()
+		wire[3] = (wire[3] &^ 0x03) | st
+		_, _, err := UnmarshalHeader(wire)
+		if !errors.Is(err, ErrUnsupportedSessionType) {
+			t.Fatalf("sessionType=%d: err = %v, want ErrUnsupportedSessionType", st, err)
+		}
+	}
+}
+
+// TestHeaderAADIsRawReceivedBytes — after decode, Header.AAD returns the
+// exact received header bytes (not a re-encoded copy), mirroring matter.js
+// authenticating the raw received header (ExchangeManager.ts:196-197).
+func TestHeaderAADIsRawReceivedBytes(t *testing.T) {
+	in := Header{
+		SessionID:       0x1234,
+		MessageCounter:  7,
+		HasSourceNodeID: true,
+		SourceNodeID:    0x1122334455667788,
+	}
+	wire := in.Marshal()
+	out, n, err := UnmarshalHeader(wire)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !bytes.Equal(out.AAD(), wire[:n]) {
+		t.Fatalf("AAD = % X, want raw % X", out.AAD(), wire[:n])
+	}
+	// A header built in memory (Raw nil) falls back to Marshal.
+	if !bytes.Equal(in.AAD(), in.Marshal()) {
+		t.Fatalf("in-memory AAD must equal Marshal()")
 	}
 }
 
@@ -259,6 +312,7 @@ func TestHeaderMessageExtensionRoundTrip(t *testing.T) {
 	if n != len(wire) {
 		t.Errorf("consumed %d, want %d", n, len(wire))
 	}
+	out.Raw = nil // decode-only AAD cache; not part of the semantic header
 	if !reflect.DeepEqual(out, in) {
 		t.Errorf("got %+v, want %+v", out, in)
 	}

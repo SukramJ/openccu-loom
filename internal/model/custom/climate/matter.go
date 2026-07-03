@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -117,6 +118,30 @@ var (
 	errMatterValueType        = errors.New("matter: unexpected value type")
 	errMatterUnsupportedMode  = errors.New("matter: unsupported SystemMode for this device")
 )
+
+// climateSystemModeUnsupportedError is a typed [im.StatusCodeError]
+// returned when a SystemMode write requests Cool or Auto on a Climate
+// whose FeatureMap does not advertise the corresponding feature (e.g.
+// SystemMode=Cool on a heating-only HmIP valve). Mirrors matter.js
+// ThermostatServer.ts:#assertSystemModeChanging, which throws
+// StatusResponse.ConstraintErrorError for a SystemMode value the current
+// feature/ControlSequenceOfOperation configuration forbids —
+// packages/node/src/behaviors/thermostat/ThermostatServer.ts:615-632. The
+// SystemModeEnum conformance table itself ties Cool to "[COOL]" and Auto
+// to "AUTO" — packages/model/src/standard/elements/thermostat-cluster.element.ts:558-559.
+type climateSystemModeUnsupportedError struct{ msg string }
+
+func (e climateSystemModeUnsupportedError) Error() string { return e.msg }
+
+// MatterStatusCode implements [im.StatusCodeError] so the dispatcher
+// encodes ConstraintError instead of falling back to the generic
+// StatusFailure — see internal/north/matter/endpoint/dispatcher.go
+// writeErrorStatus.
+func (climateSystemModeUnsupportedError) MatterStatusCode() im.StatusCode {
+	return im.StatusConstraintError
+}
+
+var _ im.StatusCodeError = climateSystemModeUnsupportedError{}
 
 // celsiusToMatter encodes an HM temperature (°C) into Matter's int16
 // 0.01°C convention. Saturates at int16 bounds rather than wrapping.
@@ -358,7 +383,62 @@ type climateThermostatServer struct{ c *Climate }
 
 func (s climateThermostatServer) MatterClusterID() uint32 { return matterClusterThermostat }
 
+// featureMap computes the Thermostat FeatureMap this server actually
+// reports. Every climate profile registered in init.go sets
+// Capabilities.SupportsCool=false today, so COOL (and therefore AUTO,
+// which requires both HEAT and COOL) never light up in production — but
+// keying off the capability instead of hardcoding means a future
+// heat+cool HM profile flips both bits here automatically, and the
+// attribute gating in MatterRead/MatterAttributes/MatterWrite below
+// follows without further changes. AUTO requires HEAT+COOL per the
+// FeatureMap conformance table (HEAT/COOL: "AUTO, O.a+") — matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:25-26,29.
+func (s climateThermostatServer) featureMap() uint32 {
+	fm := matterThermFeatureHeat
+	if s.c.Capabilities.SupportsCool {
+		fm |= matterThermFeatureCool | matterThermFeatureAuto
+	}
+	return fm
+}
+
+// controlSequenceOfOperation derives the mandatory
+// ControlSequenceOfOperation value (Matter §4.3.7.4.3) from the
+// FeatureMap so a future heat+cool profile reports CoolingAndHeating
+// instead of the previously hardcoded HeatingOnly. The bridge exposes
+// this attribute read-only because it tracks the wrapped HM device's
+// fixed HEAT/COOL capability — there is nothing for a controller to
+// change.
+func controlSequenceOfOperation(fm uint32) uint8 {
+	hasHeat := fm&matterThermFeatureHeat != 0
+	hasCool := fm&matterThermFeatureCool != 0
+	switch {
+	case hasHeat && hasCool:
+		return matterCtrlSeqHeatingAndCooling
+	case hasCool:
+		return matterCtrlSeqCoolingOnly
+	default:
+		return matterCtrlSeqHeatingOnly
+	}
+}
+
+// systemModeAllowed reports whether raw is a legal SystemMode value for
+// the FeatureMap fm reports. Cool(3) conformance is "[COOL]" and Auto(1)
+// conformance is "AUTO" — both disallowed when the corresponding feature
+// bit is absent. Mirrors matter.js
+// packages/model/src/standard/elements/thermostat-cluster.element.ts:558-559.
+func systemModeAllowed(raw uint8, fm uint32) bool {
+	switch raw {
+	case matterSysModeCool:
+		return fm&matterThermFeatureCool != 0
+	case matterSysModeAuto:
+		return fm&matterThermFeatureAuto != 0
+	default:
+		return true
+	}
+}
+
 func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
+	fm := s.featureMap()
 	switch attrID {
 	case matterAttrThermLocalTemperature:
 		// LocalTemperature is mandatory for the Thermostat cluster
@@ -374,47 +454,71 @@ func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
 			return nil, true
 		}
 		return celsiusToMatter(t), true
-	case matterAttrThermOccupiedHeatSp, matterAttrThermOccupiedCoolSp:
-		// HM exposes a single setpoint per Climate; both heat and cool
-		// setpoints in Matter map back to that one value. The
-		// ControlSequenceOfOperation attribute (heating-only) tells
-		// Matter controllers which one is meaningful. Same null-on-
-		// unknown rationale as LocalTemperature above — both
-		// setpoints are mandatory in the matter.js OnOffPlugInUnit
-		// sibling pattern, so Apple Home expects the cluster to
-		// surface them even when the underlying device is offline.
+	case matterAttrThermOccupiedHeatSp:
+		// HM exposes a single setpoint per Climate; the Heat setpoint in
+		// Matter maps back to that one value. Same null-on-unknown
+		// rationale as LocalTemperature above — OccupiedHeatingSetpoint
+		// is mandatory conformance "HEAT" (always present here; every
+		// climate profile sets Capabilities.SupportsHeat).
 		t, ok := s.c.Setpoint()
 		if !ok {
 			return nil, true
 		}
 		return celsiusToMatter(t), true
-	case matterAttrThermMinHeatSp, matterAttrThermMinCoolSp:
+	case matterAttrThermOccupiedCoolSp:
+		// Conformance "COOL" (thermostat-cluster.element.ts:66-68):
+		// disallowed without the COOL feature. Not present on any
+		// registered climate profile today — kept feature-gated so a
+		// future heat+cool HM device lights it up via featureMap alone.
+		if fm&matterThermFeatureCool == 0 {
+			return nil, false
+		}
+		t, ok := s.c.Setpoint()
+		if !ok {
+			return nil, true
+		}
+		return celsiusToMatter(t), true
+	case matterAttrThermMinHeatSp:
 		return celsiusToMatter(s.c.MinTemp()), true
-	case matterAttrThermMaxHeatSp, matterAttrThermMaxCoolSp:
+	case matterAttrThermMaxHeatSp:
+		return celsiusToMatter(s.c.MaxTemp()), true
+	case matterAttrThermMinCoolSp:
+		// Conformance "[COOL]" (thermostat-cluster.element.ts:92-95).
+		if fm&matterThermFeatureCool == 0 {
+			return nil, false
+		}
+		return celsiusToMatter(s.c.MinTemp()), true
+	case matterAttrThermMaxCoolSp:
+		// Conformance "[COOL]" (thermostat-cluster.element.ts:96-98).
+		if fm&matterThermFeatureCool == 0 {
+			return nil, false
+		}
 		return celsiusToMatter(s.c.MaxTemp()), true
 	case matterAttrThermControlSeq:
-		// HmIP heating valves are heating-only. Widening to
-		// HeatingAndCooling requires a cooling-capable HM device
-		// profile that surfaces a SupportsCool capability.
-		return matterCtrlSeqHeatingOnly, true
-	case matterAttrThermSystemMode, matterAttrThermRunningMode:
-		// SystemMode is mandatory; RunningMode is optional but Apple
-		// Home reads both during HAP rebuild. Null-on-unknown so a
-		// briefly-unreachable bridged device doesn't break HAP
-		// service construction (see LocalTemperature comment above).
+		return controlSequenceOfOperation(fm), true
+	case matterAttrThermSystemMode:
+		// SystemMode is mandatory. Null-on-unknown so a briefly-
+		// unreachable bridged device doesn't break HAP service
+		// construction (see LocalTemperature comment above).
+		m, ok := s.c.Mode()
+		if !ok {
+			return nil, true
+		}
+		return hmModeToMatter(m), true
+	case matterAttrThermRunningMode:
+		// Conformance "TEVT & AUTO, [AUTO]" (thermostat-cluster.element.ts:117-120):
+		// disallowed without the AUTO feature. Apple Home reads it during
+		// HAP rebuild only when FeatureMap advertises AUTO.
+		if fm&matterThermFeatureAuto == 0 {
+			return nil, false
+		}
 		m, ok := s.c.Mode()
 		if !ok {
 			return nil, true
 		}
 		return hmModeToMatter(m), true
 	case matterAttrFeatureMap:
-		// HmIP heating valves are heat-only; AUTO requires both HEAT and COOL
-		// (spec feature-conformance table: HEAT conformance "AUTO, O.a+", COOL
-		// conformance "AUTO, O.a+"). Advertising AUTO without COOL violates the
-		// invariant and causes commissioners to negotiate an unsupported
-		// setpoint-deadband attribute (0x0025 MinSetpointDeadBand).
-		// Mirrors matter.js packages/model/src/standard/elements/thermostat-cluster.element.ts:24-28.
-		return matterThermFeatureHeat, true
+		return fm, true
 	case matterAttrClusterRevision:
 		return matterThermClusterRevision, true
 	default:
@@ -425,7 +529,20 @@ func (s climateThermostatServer) MatterRead(attrID uint32) (any, bool) {
 func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
 	var err error
 	switch attrID {
-	case matterAttrThermOccupiedHeatSp, matterAttrThermOccupiedCoolSp:
+	case matterAttrThermOccupiedHeatSp:
+		v, ok := value.(int16)
+		if !ok {
+			return fmt.Errorf("%w: setpoint write expected int16, got %T", errMatterValueType, value)
+		}
+		err = s.c.SetTemperature(ctx, matterToCelsius(v), priority)
+	case matterAttrThermOccupiedCoolSp:
+		// Conformance "COOL" — not a writable attribute at all when the
+		// FeatureMap omits COOL, so this reaches the wire as an unknown
+		// attribute rather than silently retargeting the single HM
+		// heating setpoint.
+		if s.featureMap()&matterThermFeatureCool == 0 {
+			return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+		}
 		v, ok := value.(int16)
 		if !ok {
 			return fmt.Errorf("%w: setpoint write expected int16, got %T", errMatterValueType, value)
@@ -439,6 +556,12 @@ func (s climateThermostatServer) MatterWrite(ctx context.Context, attrID uint32,
 		mode, e := matterToHmMode(raw)
 		if e != nil {
 			return e
+		}
+		fm := s.featureMap()
+		if !systemModeAllowed(raw, fm) {
+			return climateSystemModeUnsupportedError{
+				fmt.Sprintf("matter: SystemMode=%d not supported by FeatureMap 0x%02X", raw, fm),
+			}
 		}
 		err = s.c.SetMode(ctx, mode, priority)
 	default:
@@ -487,30 +610,41 @@ func (s climateThermostatServer) MatterReportable() []uint32 {
 	}
 }
 
-// MatterAttributes lists every Thermostat (0x0201) attribute the
-// server implements via [MatterRead]. Apple Home's HAP service rebuild
-// reads the full attribute set during the post-CommissioningComplete
-// wildcard subscribe and bails with HAPErrorDomain Code=24 if the
-// reported list does not cover the cluster's mandatory surface
-// (LocalTemperature, OccupiedHeatingSetpoint, OccupiedCoolingSetpoint,
-// MinHeat/Cool, MaxHeat/Cool, ControlSequenceOfOperation, SystemMode,
-// LocalTemperatureNotExposed). Without this method the dispatcher
-// falls back to MatterReportable's three-attribute subscription
-// surface — which is fine for change-driven subscribes but starves
-// Apple's HAP mapper.
+// MatterAttributes lists every Thermostat (0x0201) attribute the server
+// implements via [MatterRead], feature-gated against [featureMap] so the
+// advertised set matches conformance exactly: OccupiedCoolingSetpoint /
+// MinCoolSetpointLimit / MaxCoolSetpointLimit require COOL, and
+// ThermostatRunningMode requires AUTO (thermostat-cluster.element.ts:66-68,
+// 92-98, 117-120). Advertising a disallowed attribute is as much a HAP
+// service rebuild hazard for Apple Home as omitting a mandatory one, so
+// on a heating-only device (every profile registered today) this list
+// covers only LocalTemperature, the Heat-gated setpoints/limits,
+// ControlSequenceOfOperation and SystemMode. Without this method the
+// dispatcher falls back to MatterReportable's three-attribute
+// subscription surface — which is fine for change-driven subscribes but
+// starves Apple's HAP mapper.
 func (s climateThermostatServer) MatterAttributes() []uint32 {
-	return []uint32{
+	fm := s.featureMap()
+	attrs := []uint32{
 		matterAttrThermLocalTemperature,
-		matterAttrThermOccupiedCoolSp,
 		matterAttrThermOccupiedHeatSp,
 		matterAttrThermMinHeatSp,
 		matterAttrThermMaxHeatSp,
-		matterAttrThermMinCoolSp,
-		matterAttrThermMaxCoolSp,
 		matterAttrThermControlSeq,
 		matterAttrThermSystemMode,
-		matterAttrThermRunningMode,
 	}
+	if fm&matterThermFeatureCool != 0 {
+		attrs = append(
+			attrs,
+			matterAttrThermOccupiedCoolSp,
+			matterAttrThermMinCoolSp,
+			matterAttrThermMaxCoolSp,
+		)
+	}
+	if fm&matterThermFeatureAuto != 0 {
+		attrs = append(attrs, matterAttrThermRunningMode)
+	}
+	return attrs
 }
 
 // climateThermostatUIServer projects Climate onto the

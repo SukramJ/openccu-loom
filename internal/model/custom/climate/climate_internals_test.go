@@ -10,6 +10,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -1326,14 +1327,28 @@ func TestClimateThermostatServerMatterWriteSetpointBadType(t *testing.T) {
 	}
 }
 
+// TestClimateThermostatServerMatterWriteSystemMode asserts that
+// SystemMode=Auto is rejected on a heating-only Climate: Auto conformance
+// requires the AUTO feature (thermostat-cluster.element.ts:558), and
+// every climate profile registered in init.go reports HEAT only
+// (Capabilities.SupportsCool is false), so FeatureMap never advertises
+// AUTO. The rejection is a ConstraintError, matching matter.js
+// ThermostatServer.ts:#assertSystemModeChanging for an analogous
+// SystemMode/feature mismatch.
 func TestClimateThermostatServerMatterWriteSystemMode(t *testing.T) {
 	w := &stubWriter{}
 	r := newRig(t, "HmIP-BWTH:1", KindIP, w, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
-	// SystemMode write with AUTO (matterSysModeAuto).
 	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto, hmenum.CommandPriorityHigh)
-	if err != nil {
-		t.Fatalf("MatterWrite SystemMode AUTO: %v", err)
+	if err == nil {
+		t.Fatal("MatterWrite SystemMode=Auto on a heating-only device should be rejected")
+	}
+	sc, ok := err.(interface{ MatterStatusCode() im.StatusCode })
+	if !ok {
+		t.Fatalf("error %v does not implement MatterStatusCode()", err)
+	}
+	if sc.MatterStatusCode() != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode() = 0x%02X, want StatusConstraintError (0x87)", sc.MatterStatusCode())
 	}
 }
 
@@ -2069,20 +2084,23 @@ func TestRegisterServicesSetAwayForDuration(t *testing.T) {
 // MatterRead on Thermostat cluster — RunningMode path
 // ---------------------------------------------------------------------------
 
+// TestClimateThermostatServerReadRunningMode confirms
+// ThermostatRunningMode (conformance "TEVT & AUTO, [AUTO]") reads as
+// not-present on a heating-only Climate — every profile registered in
+// init.go reports HEAT only, so FeatureMap never advertises AUTO and the
+// attribute must not appear, observed or not.
 func TestClimateThermostatServerReadRunningMode(t *testing.T) {
 	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
 	srv := findCluster(t, r.climate, 0x0201)
 
 	// Unobserved.
-	v, ok := srv.MatterRead(matterAttrThermRunningMode)
-	if !ok || v != nil {
-		t.Errorf("unobserved RunningMode = (%v, %v), want (nil, true)", v, ok)
+	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+		t.Error("RunningMode must read as not-present without the AUTO feature")
 	}
 
 	r.climate.OnMode(ModeHeat)
-	v, ok = srv.MatterRead(matterAttrThermRunningMode)
-	if !ok || v == nil {
-		t.Errorf("observed RunningMode = (%v, %v), want non-nil", v, ok)
+	if _, ok := srv.MatterRead(matterAttrThermRunningMode); ok {
+		t.Error("RunningMode must remain not-present without the AUTO feature even once observed")
 	}
 }
 

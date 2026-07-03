@@ -126,37 +126,121 @@ type Endpoint struct {
 	// optional) in `packages/node/src/endpoints/aggregator.ts`.
 	AggregatorClusterServers []interfaces.MatterClusterServer
 
-	// dataVersions hosts the per-cluster DataVersion trackers for a
-	// BRIDGED endpoint. Bridged cluster servers are materialised fresh
-	// on every dispatch (see [ClusterServers]) so an instance-embedded
-	// tracker would install a new random initial version per read —
-	// controllers' DataVersionFilters then never match and Apple
-	// re-transfers every endpoint on each re-subscribe. Hosting the
-	// tracker on the persistent Endpoint keyed by cluster id gives the
-	// same (endpoint, cluster) a stable version for the topology's
-	// lifetime, bumped on state changes. Mirrors matter.js
-	// packages/node/src/behavior/state/managed/Datasource.ts:349 (set
-	// once per lifetime) / :949 (increment per change). Root and
-	// Aggregator endpoints keep their persistent instance-hosted
-	// trackers.
-	dataVersionsMu sync.Mutex
-	dataVersions   map[uint32]*hmtypes.DataVersionTracker
+	// versions is the shared per-cluster DataVersion tracker set for a
+	// BRIDGED endpoint (keyed by cluster id). Bridged cluster servers are
+	// materialised fresh on every dispatch (see [ClusterServers]) and the
+	// *Endpoint struct itself is rebuilt on every [Assembler.Assemble], so
+	// an instance-embedded tracker would install a new random initial
+	// version after every reassembly — controllers' DataVersionFilters
+	// then never match and Apple re-transfers every endpoint on each
+	// re-subscribe. The set is owned by the assembler's [versionRegistry]
+	// and keyed there by the endpoint's stable [Endpoint.SourceKey], so
+	// the SAME (device, channel, dp) keeps ONE tracker set across every
+	// reassembly for the process lifetime: an already-paired endpoint's
+	// DataVersion survives an UNRELATED topology change (a sibling
+	// endpoint added / removed), and only a state change on the endpoint
+	// itself bumps it. Mirrors matter.js
+	// packages/node/src/behavior/state/managed/Datasource.ts:349 (version
+	// sampled once per behavior lifetime, bound to the endpoint's own
+	// lifecycle) / :949 (increment per committed change). nil for the
+	// root + aggregator endpoints (they keep their reattached
+	// instance-hosted trackers) and for bare test-constructed endpoints —
+	// [Endpoint.clusterTracker] then lazily installs a private set so the
+	// endpoint still tracks a version in isolation.
+	versionsMu sync.Mutex
+	versions   *clusterVersionSet
 }
 
-// clusterTracker returns (lazily creating) the endpoint-hosted
-// DataVersion tracker for clusterID. Safe for concurrent use.
+// clusterTracker returns (lazily creating) the DataVersion tracker for
+// clusterID. Assembler-built bridged endpoints share the tracker set the
+// [versionRegistry] keyed by [Endpoint.SourceKey], so the version
+// survives reassembly; a bare endpoint (versions nil) gets a private
+// set. Safe for concurrent use.
 func (e *Endpoint) clusterTracker(clusterID uint32) *hmtypes.DataVersionTracker {
-	e.dataVersionsMu.Lock()
-	defer e.dataVersionsMu.Unlock()
-	if e.dataVersions == nil {
-		e.dataVersions = make(map[uint32]*hmtypes.DataVersionTracker)
+	e.versionsMu.Lock()
+	if e.versions == nil {
+		e.versions = newClusterVersionSet()
 	}
-	t := e.dataVersions[clusterID]
+	set := e.versions
+	e.versionsMu.Unlock()
+	return set.tracker(clusterID)
+}
+
+// clusterVersionSet is a shared, concurrency-safe set of per-cluster
+// DataVersion trackers keyed by cluster id. One set is bound to one
+// stable endpoint identity for the process lifetime; the same set is
+// handed to every *Endpoint the assembler rebuilds for that identity so
+// the version survives reassembly. Two *Endpoint instances — the
+// outgoing topology still serving in-flight reads and the incoming one —
+// may reference the same set concurrently, hence the internal mutex.
+type clusterVersionSet struct {
+	mu       sync.Mutex
+	trackers map[uint32]*hmtypes.DataVersionTracker
+}
+
+func newClusterVersionSet() *clusterVersionSet {
+	return &clusterVersionSet{trackers: make(map[uint32]*hmtypes.DataVersionTracker)}
+}
+
+// tracker returns (lazily creating) the tracker for clusterID.
+func (s *clusterVersionSet) tracker(clusterID uint32) *hmtypes.DataVersionTracker {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t := s.trackers[clusterID]
 	if t == nil {
 		t = &hmtypes.DataVersionTracker{}
-		e.dataVersions[clusterID] = t
+		s.trackers[clusterID] = t
 	}
 	return t
+}
+
+// versionRegistry maps a stable endpoint identity ([store.EndpointKey])
+// to its [clusterVersionSet]. It is owned by the [Assembler] and lives
+// across every [Assembler.Assemble], so a bridged endpoint that persists
+// through a reassembly reuses its existing tracker set (stable
+// DataVersion) while a genuinely new endpoint gets a fresh set (fresh
+// random-seeded version). [store.EndpointKey] is the natural key: it is
+// the matter_endpoints primary key — deterministic from the model-side
+// {central, device, channel, dp} identity (stable across reassembly for
+// the same source) and unique per source (two devices never collide). In
+// memory only; a full daemon restart re-randomizes, which matches
+// matter.js re-seeding the Datasource version on reboot.
+type versionRegistry struct {
+	mu   sync.Mutex
+	sets map[store.EndpointKey]*clusterVersionSet
+}
+
+func newVersionRegistry() *versionRegistry {
+	return &versionRegistry{sets: make(map[store.EndpointKey]*clusterVersionSet)}
+}
+
+// setFor returns the tracker set for key, creating it on first use. The
+// returned pointer is stable for key across the registry's lifetime.
+func (r *versionRegistry) setFor(key store.EndpointKey) *clusterVersionSet {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s := r.sets[key]
+	if s == nil {
+		s = newClusterVersionSet()
+		r.sets[key] = s
+	}
+	return s
+}
+
+// retain drops every tracker set whose key is absent from keep. Called
+// after each assembly with the set of keys the assembly produced, so a
+// removed / de-exposed endpoint releases its version — a later re-add
+// then gets a fresh random-seeded one, matching matter.js destroying the
+// Datasource on endpoint removal. Bounds registry growth to the live
+// topology.
+func (r *versionRegistry) retain(keep map[store.EndpointKey]struct{}) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k := range r.sets {
+		if _, ok := keep[k]; !ok {
+			delete(r.sets, k)
+		}
+	}
 }
 
 // ClusterDataVersion returns the stable per-(endpoint, cluster)

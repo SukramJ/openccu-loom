@@ -1280,3 +1280,130 @@ func TestOpcreds_UpdateFabricLabelLabelTooLong(t *testing.T) {
 		t.Fatalf("MatterStatusCode() = %v, want StatusInvalidCommand (0x85)", sce.MatterStatusCode())
 	}
 }
+
+// opcredsStatusCoder is the optional interface a cluster-command error
+// implements when it carries a well-typed Matter IM status code.
+type opcredsStatusCoder interface{ MatterStatusCode() im.StatusCode }
+
+// TestOpcreds_MalformedArgsReturnInvalidCommand pins that a malformed command
+// argument — a wrong-length attestation/CSR nonce or an unknown
+// CertificateChainType — surfaces as IM Status::InvalidCommand (0x85), not a
+// generic Failure. Mirrors matter.js
+// packages/node/src/behaviors/operational-credentials/OperationalCredentialsServer.ts:97-99,120-127
+// (StatusResponseError(..., Status.InvalidCommand)).
+func TestOpcreds_MalformedArgsReturnInvalidCommand(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name   string
+		cmd    uint32
+		fields any
+	}{
+		{"AttestationRequest_bad_nonce", 0x00, core.AttestationRequest{AttestationNonce: make([]byte, 8)}},
+		{"CSRRequest_bad_nonce", 0x04, core.CSRRequest{CSRNonce: make([]byte, 8)}},
+		{"CertificateChainRequest_unknown_type", 0x02, core.CertificateChainRequest{CertificateType: 99}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			oc := newOpcreds(t)
+			_, err := oc.MatterInvoke(context.Background(), tc.cmd, tc.fields, hmenum.CommandPriorityHigh)
+			if err == nil {
+				t.Fatalf("%s: expected error, got nil", tc.name)
+			}
+			var sc opcredsStatusCoder
+			if !errors.As(err, &sc) {
+				t.Fatalf("%s: error %v does not implement MatterStatusCode() — want InvalidCommand", tc.name, err)
+			}
+			if got := sc.MatterStatusCode(); got != im.StatusInvalidCommand {
+				t.Errorf("%s: MatterStatusCode()=0x%02X, want StatusInvalidCommand (0x85)", tc.name, uint8(got))
+			}
+		})
+	}
+}
+
+// TestOpcreds_CSRForAddNOCRejectedByUpdateNOC pins that a CSR issued with
+// IsForUpdateNOC=false (an AddNOC-targeted CSR) cannot be consumed by
+// UpdateNOC: the command fails with an IM-level Status::ConstraintError (0x87),
+// NOT an in-band NOCResponse. Mirrors matter.js
+// OperationalCredentialsServer.ts:316-319 (updateNoc raises
+// StatusResponseError("UpdateNoc is illegal after CsrRequest for AddNOC ...",
+// Status.ConstraintError)).
+func TestOpcreds_CSRForAddNOCRejectedByUpdateNOC(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	// CASE session (fabricIndex=1) with a stamped session ID.
+	caseCtx := core.WithInvokeSessionID(im.WithFabricFilter(context.Background(), true, 1), 100)
+	// Issue an AddNOC-targeted CSR (IsForUpdateNOC=false).
+	if _, err := oc.MatterInvoke(caseCtx, 0x04, core.CSRRequest{
+		CSRNonce:       make([]byte, 32),
+		IsForUpdateNOC: false,
+	}, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("CSRRequest (IsForUpdateNOC=false): %v", err)
+	}
+	// UpdateNOC must reject it with ConstraintError.
+	_, err := oc.MatterInvoke(caseCtx, 0x07, core.UpdateNOCRequest{NOCValue: make([]byte, 8)}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("UpdateNOC with AddNOC-targeted CSR: expected IM error, got nil")
+	}
+	var sc opcredsStatusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("UpdateNOC error %v does not implement MatterStatusCode() — want ConstraintError", err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode()=0x%02X, want StatusConstraintError (0x87)", uint8(got))
+	}
+}
+
+// TestOpcreds_CSRRequestRequiresArmedFailSafe pins that CSRRequest is rejected
+// with Status::FailsafeRequired (0xCA) when no FailSafe window is armed — the
+// generated CSR is FailSafe-scoped ephemeral state. Mirrors matter.js
+// OperationalCredentialsServer.ts:117-118 (`commissioner.failsafeContext`
+// getter → assertFailsafeArmed → Status.FailsafeRequired).
+func TestOpcreds_CSRRequestRequiresArmedFailSafe(t *testing.T) {
+	t.Parallel()
+	oc, err := core.NewOperationalCredentials(newFakeStore(), core.OpcredsConfig{
+		SupportedFabrics: 5,
+		IsFailSafeArmed:  func() bool { return false }, // FailSafe NOT armed
+	})
+	if err != nil {
+		t.Fatalf("NewOperationalCredentials: %v", err)
+	}
+	_, invokeErr := oc.MatterInvoke(context.Background(), 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh)
+	if invokeErr == nil {
+		t.Fatal("CSRRequest without armed FailSafe: expected error, got nil")
+	}
+	var sc opcredsStatusCoder
+	if !errors.As(invokeErr, &sc) {
+		t.Fatalf("CSRRequest error %v does not implement MatterStatusCode() — want FailsafeRequired", invokeErr)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusFailsafeRequired {
+		t.Errorf("MatterStatusCode()=0x%02X, want StatusFailsafeRequired (0xCA)", uint8(got))
+	}
+}
+
+// TestOpcreds_CSRRequestAfterNOCRejected pins that a CSRRequest invoked after
+// AddNOC (or UpdateNOC) has already run in the same FailSafe window is rejected
+// with Status::ConstraintError (0x87) — the fabric slot is already claimed.
+// Mirrors matter.js OperationalCredentialsServer.ts:131-137
+// (`if (failsafeContext.fabricIndex !== undefined) throw ConstraintError`).
+func TestOpcreds_CSRRequestAfterNOCRejected(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	ctx := context.Background()
+	// Full commission installs a fabric via AddNOC → sets the "NOC invoked"
+	// flag for this FailSafe window.
+	commissionTestFabric(ctx, t, oc)
+	// A CSRRequest now — without a fresh FailSafe window — must be rejected.
+	_, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("CSRRequest after AddNOC: expected ConstraintError, got nil")
+	}
+	var sc opcredsStatusCoder
+	if !errors.As(err, &sc) {
+		t.Fatalf("CSRRequest error %v does not implement MatterStatusCode() — want ConstraintError", err)
+	}
+	if got := sc.MatterStatusCode(); got != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode()=0x%02X, want StatusConstraintError (0x87)", uint8(got))
+	}
+}

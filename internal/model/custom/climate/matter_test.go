@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/model/custom"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -179,6 +180,119 @@ func TestThermostatFeatureMapHeatOnly(t *testing.T) {
 	}
 	if got&matterThermFeatureAuto != 0 {
 		t.Errorf("FeatureMap = 0x%08X, must not advertise AUTO without COOL", got)
+	}
+}
+
+// TestThermostatHeatOnlyExcludesCoolAndAutoAttributes locks the
+// conformance-gated MatterAttributes() surface for a heating-only
+// device: OccupiedCoolingSetpoint (0x11), MinCoolSetpointLimit (0x17),
+// MaxCoolSetpointLimit (0x18) require the COOL feature
+// (thermostat-cluster.element.ts:66-68, 92-98) and ThermostatRunningMode
+// (0x1e) requires AUTO (thermostat-cluster.element.ts:117-120) — none of
+// which a heat-only FeatureMap advertises.
+func TestThermostatHeatOnlyExcludesCoolAndAutoAttributes(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	srv := findCluster(t, r.climate, 0x0201)
+	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
+	if !ok {
+		t.Fatal("Thermostat server does not implement MatterClusterAttributeLister")
+	}
+	attrs := lister.MatterAttributes()
+	forbidden := map[uint32]string{
+		matterAttrThermOccupiedCoolSp: "OccupiedCoolingSetpoint",
+		matterAttrThermMinCoolSp:      "MinCoolSetpointLimit",
+		matterAttrThermMaxCoolSp:      "MaxCoolSetpointLimit",
+		matterAttrThermRunningMode:    "ThermostatRunningMode",
+	}
+	for _, id := range attrs {
+		if name, bad := forbidden[id]; bad {
+			t.Errorf("MatterAttributes() lists %s (0x%04X) on a heating-only device", name, id)
+		}
+	}
+}
+
+// TestThermostatHeatOnlyCoolSetpointNotPresent asserts that reading
+// OccupiedCoolingSetpoint (0x11) on a heating-only device reports
+// not-present (ok=false) rather than leaking the shared HM setpoint —
+// the attribute does not exist on the cluster without the COOL feature.
+func TestThermostatHeatOnlyCoolSetpointNotPresent(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	r.setpoint.OnEvent(20.0)
+	srv := findCluster(t, r.climate, 0x0201)
+	if _, ok := srv.MatterRead(matterAttrThermOccupiedCoolSp); ok {
+		t.Error("MatterRead(OccupiedCoolingSetpoint) on a heating-only device should report not-present")
+	}
+	if _, ok := srv.MatterRead(matterAttrThermMinCoolSp); ok {
+		t.Error("MatterRead(MinCoolSetpointLimit) on a heating-only device should report not-present")
+	}
+	if _, ok := srv.MatterRead(matterAttrThermMaxCoolSp); ok {
+		t.Error("MatterRead(MaxCoolSetpointLimit) on a heating-only device should report not-present")
+	}
+}
+
+// TestThermostatSystemModeWriteCoolRejectedHeatOnly asserts that writing
+// SystemMode=Cool on a heating-only device is rejected with a
+// ConstraintError rather than silently retargeting the single HM
+// heating setpoint. Mirrors matter.js
+// ThermostatServer.ts:#assertSystemModeChanging (lines 615-632).
+func TestThermostatSystemModeWriteCoolRejectedHeatOnly(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{})
+	srv := findCluster(t, r.climate, 0x0201)
+	err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeCool, hmenum.CommandPriorityHigh)
+	if err == nil {
+		t.Fatal("MatterWrite SystemMode=Cool on a heating-only device should be rejected")
+	}
+	sc, ok := err.(interface{ MatterStatusCode() im.StatusCode })
+	if !ok {
+		t.Fatalf("error %v does not implement MatterStatusCode()", err)
+	}
+	if sc.MatterStatusCode() != im.StatusConstraintError {
+		t.Errorf("MatterStatusCode() = 0x%02X, want StatusConstraintError (0x87)", sc.MatterStatusCode())
+	}
+}
+
+// TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes proves
+// the gating keys off the FeatureMap rather than a hardcoded exclusion:
+// a Climate whose Capabilities advertise SupportsCool (and therefore, by
+// [climateThermostatServer.featureMap], HEAT+COOL+AUTO) must list and
+// serve the Cool-setpoint and RunningMode attributes, and must accept a
+// SystemMode=Auto write.
+func TestThermostatCoolCapableDeviceAdvertisesCoolAndAutoAttributes(t *testing.T) {
+	r := newRig(t, "HmIP-BWTH:1", KindIP, &stubWriter{}, custom.ClimateCapabilities{SupportsCool: true})
+	srv := findCluster(t, r.climate, 0x0201)
+
+	fm, ok := srv.MatterRead(matterAttrFeatureMap)
+	if !ok || fm.(uint32)&(matterThermFeatureHeat|matterThermFeatureCool|matterThermFeatureAuto) !=
+		matterThermFeatureHeat|matterThermFeatureCool|matterThermFeatureAuto {
+		t.Fatalf("FeatureMap = (%v, %v), want HEAT|COOL|AUTO", fm, ok)
+	}
+
+	lister, ok := srv.(interfaces.MatterClusterAttributeLister)
+	if !ok {
+		t.Fatal("Thermostat server does not implement MatterClusterAttributeLister")
+	}
+	attrs := lister.MatterAttributes()
+	want := map[uint32]string{
+		matterAttrThermOccupiedCoolSp: "OccupiedCoolingSetpoint",
+		matterAttrThermMinCoolSp:      "MinCoolSetpointLimit",
+		matterAttrThermMaxCoolSp:      "MaxCoolSetpointLimit",
+		matterAttrThermRunningMode:    "ThermostatRunningMode",
+	}
+	got := make(map[uint32]bool, len(attrs))
+	for _, id := range attrs {
+		got[id] = true
+	}
+	for id, name := range want {
+		if !got[id] {
+			t.Errorf("MatterAttributes() missing %s (0x%04X) on a heat+cool device", name, id)
+		}
+		if _, ok := srv.MatterRead(id); !ok {
+			t.Errorf("MatterRead(%s / 0x%04X) reports not-present on a heat+cool device", name, id)
+		}
+	}
+
+	if err := srv.MatterWrite(context.Background(), matterAttrThermSystemMode, matterSysModeAuto, hmenum.CommandPriorityHigh); err != nil {
+		t.Errorf("SystemMode=Auto write on a heat+cool device should be accepted, got: %v", err)
 	}
 }
 

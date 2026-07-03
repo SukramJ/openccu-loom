@@ -26,10 +26,10 @@ const matterTimedTickInterval = 100 * time.Millisecond
 
 // timedOnOffState is the OnOff cluster LT (Lighting) timed-command
 // engine state: the OnTime / OffWaitTime countdowns driven by
-// OnWithTimedOff, and the StartUpOnOff attribute store. Owned by
-// [Light] (not the per-assembly lightOnOffServer projection) so the
-// countdowns survive cluster-server reconstruction across
-// MatterClusterServers calls.
+// OnWithTimedOff, the StartUpOnOff attribute store, and the
+// GlobalSceneControl attribute. Owned by [Light] (not the
+// per-assembly lightOnOffServer projection) so this state survives
+// cluster-server reconstruction across MatterClusterServers calls.
 //
 // Semantics are a transliteration of matter.js OnOffServer.ts: the
 // two logical timers (timed-on while the device is on, delayed-off
@@ -46,6 +46,13 @@ type timedOnOffState struct {
 	// restart. The physical power-on level of an HM device stays
 	// governed by its own device configuration.
 	startUpOnOff *uint8
+
+	// globalSceneControl mirrors the LT-gated GlobalSceneControl
+	// attribute (0x4000): true after On / OnWithTimedOff /
+	// OnWithRecallGlobalScene, false after OffWithEffect; a plain Off
+	// leaves it unchanged. Defaults to true (set by [New]). matter.js
+	// OnOffServer.ts:97-104 (on), :158-169 (offWithEffect).
+	globalSceneControl bool
 
 	timedOnActive    bool
 	delayedOffActive bool
@@ -110,14 +117,15 @@ func (t *timedOnOffState) maybeStopLocked() {
 // matterTimedHandleOn applies the LT bookkeeping of a successful On
 // command path (On, Toggle-on, OnWithRecallGlobalScene, and the
 // turn-on tail of OnWithTimedOff). Mirrors matter.js
-// OnOffServer.ts:97-112 on(): while no timed-on phase runs
-// (OnTime == 0) an On cancels the delayed-off guard and clears
-// OffWaitTime; during a timed-on phase (including the 0xFFFF hold)
-// OffWaitTime is retained.
+// OnOffServer.ts:97-112 on(): GlobalSceneControl is unconditionally
+// set true; while no timed-on phase runs (OnTime == 0) an On cancels
+// the delayed-off guard and clears OffWaitTime; during a timed-on
+// phase (including the 0xFFFF hold) OffWaitTime is retained.
 func (l *Light) matterTimedHandleOn() {
 	t := &l.timed
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.globalSceneControl = true
 	if t.onTime == 0 {
 		t.delayedOffActive = false
 		t.offWaitTime = 0
@@ -262,6 +270,25 @@ func (l *Light) matterSetStartUpOnOff(v *uint8) {
 	l.timed.mu.Lock()
 	defer l.timed.mu.Unlock()
 	l.timed.startUpOnOff = v
+}
+
+// matterGlobalSceneControl returns the current GlobalSceneControl
+// attribute value (0x4000).
+func (l *Light) matterGlobalSceneControl() bool {
+	l.timed.mu.Lock()
+	defer l.timed.mu.Unlock()
+	return l.timed.globalSceneControl
+}
+
+// matterClearGlobalSceneControl forces GlobalSceneControl to false —
+// the OffWithEffect side effect. A plain Off never calls this: mirrors
+// matter.js OnOffServer.ts:158-169 offWithEffect(), which flips the
+// attribute in addition to calling off() (off() itself leaves
+// GlobalSceneControl untouched).
+func (l *Light) matterClearGlobalSceneControl() {
+	l.timed.mu.Lock()
+	defer l.timed.mu.Unlock()
+	l.timed.globalSceneControl = false
 }
 
 // matterTimedAdvance applies one 100 ms countdown step. Exposed as a

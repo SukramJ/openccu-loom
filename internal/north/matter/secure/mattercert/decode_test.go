@@ -329,6 +329,41 @@ func TestDecode_IsNOC(t *testing.T) {
 	}
 }
 
+// TestDecode_SerialNumber21OctetsAccepted mirrors matter.js
+// OperationalBase.ts:44-57 generalVerify(), which tolerates a 21-octet
+// serial number (observed in the wild, e.g. some LG TVs) with only a
+// warning, not a rejection.
+func TestDecode_SerialNumber21OctetsAccepted(t *testing.T) {
+	t.Parallel()
+	opts := makeRootCertOpts()
+	opts.serial = make([]byte, 21)
+	for i := range opts.serial {
+		opts.serial[i] = 0xAA
+	}
+	raw := buildTestCert(t, opts)
+	cert, err := Decode(raw)
+	if err != nil {
+		t.Fatalf("Decode with 21-octet serial: unexpected error %v", err)
+	}
+	if len(cert.SerialNumber) != 21 {
+		t.Errorf("SerialNumber length = %d, want 21", len(cert.SerialNumber))
+	}
+}
+
+// TestDecode_SerialNumber22OctetsRejected mirrors matter.js
+// OperationalBase.ts:48-52 generalVerify(), which throws once the
+// serial number exceeds 21 octets.
+func TestDecode_SerialNumber22OctetsRejected(t *testing.T) {
+	t.Parallel()
+	opts := makeRootCertOpts()
+	opts.serial = make([]byte, 22)
+	raw := buildTestCert(t, opts)
+	_, err := Decode(raw)
+	if !errors.Is(err, ErrMalformed) {
+		t.Fatalf("expected ErrMalformed for 22-octet serial, got %v", err)
+	}
+}
+
 func TestDecode_PublicKeyECDSA_NonP256Curve(t *testing.T) {
 	t.Parallel()
 	opts := makeRootCertOpts()

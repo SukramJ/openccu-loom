@@ -6,85 +6,119 @@ package mrp
 import "sync"
 
 // windowSize is the Matter-mandated count of recently-received
-// counters tracked for duplicate detection. Per Core Spec §4.6.6 a
-// 32-entry sliding window is sufficient because the receiver
-// implements Matter §4.5.4.1's "max counter delta" limit at the
-// session layer.
+// counters tracked for duplicate detection. Per Core Spec §4.5.4.1 a
+// 32-entry sliding window is tracked, plus the highest-seen counter
+// itself (kept separately). Mirrors matter.js
+// packages/protocol/src/protocol/MessageReceptionState.ts
+// MSG_COUNTER_WINDOW_SIZE.
 const windowSize = 32
 
-// Window is the sliding-window duplicate detector for inbound
-// message counters. It accepts counters that are larger than the
-// current "highest seen" counter or that fall inside the last
-// [windowSize] valid slots.
+// maxCounterIncrease2Pow31 is the ±2^31 modular-distance threshold used
+// by the rollover reception state to decide whether a counter that is
+// numerically smaller than the maximum is a wrap-around (fresh) or a
+// genuine older value. Mirrors matter.js MAX_COUNTER_INCREASE_2POW31.
+const maxCounterIncrease2Pow31 = int64(1) << 31
+
+// Window is the sliding-window duplicate detector for inbound message
+// counters. It tracks the highest counter seen (max) separately and a
+// 32-bit bitmap where bit i records whether counter (max-(i+1)) has
+// been received — so the full window covers max-1 .. max-32.
 //
-// Concurrency: Window is safe for concurrent use; lookups and
-// updates are serialised through an internal mutex. The protocol's
-// hot path is single-threaded per session in practice, but the
-// listener loop and any session-management goroutine may both
-// touch the window.
+// Two variants exist, mirroring matter.js MessageReceptionState:
+//
+//   - [NewWindow] — the rollover variant used for unsecured sessions.
+//     A counter numerically below max but within 2^31 (modularly) is a
+//     wrap-around and treated as fresh; used where a free-running
+//     counter may legitimately roll over.
+//   - [NewWindowNoRollover] — the no-rollover variant used for secure
+//     sessions, mirroring matter.js
+//     MessageReceptionStateEncryptedWithoutRollover (NodeSession.ts:118).
+//     Diffs are plain subtraction: a counter that appears to roll over
+//     is rejected as a duplicate, because a secure session MUST
+//     re-establish before its counter wraps rather than reuse a nonce.
+//
+// Concurrency: Window is safe for concurrent use; lookups and updates
+// are serialised through an internal mutex.
 type Window struct {
-	mu     sync.Mutex
-	max    uint32 // highest counter seen
-	bitmap uint32 // bit i set ⇒ counter (max-i) was received
-	primed bool   // false until the first counter is recorded
+	mu       sync.Mutex
+	max      uint32 // highest counter seen (tracked separately from the bitmap)
+	bitmap   uint32 // bit i set ⇒ counter (max-(i+1)) was received
+	primed   bool   // false until the first counter is recorded
+	rollover bool   // true ⇒ modular ±2^31 diff; false ⇒ plain subtraction
 }
 
-// NewWindow returns a fresh empty duplicate-detection window.
-func NewWindow() *Window { return &Window{} }
+// NewWindow returns a fresh rollover duplicate-detection window for
+// unsecured sessions.
+func NewWindow() *Window { return &Window{rollover: true} }
+
+// NewWindowNoRollover returns a fresh no-rollover window for secure
+// sessions. A secure-session counter that wraps is rejected rather than
+// accepted, matching matter.js
+// MessageReceptionStateEncryptedWithoutRollover.
+func NewWindowNoRollover() *Window { return &Window{rollover: false} }
+
+// diff computes the signed distance between counter c and the current
+// max. For the rollover variant it applies the ±2^31 modular fold
+// (matter.js MessageReceptionStateEncryptedWithRollover.calculateDiff);
+// for the no-rollover variant it is plain subtraction (matter.js
+// MessageReceptionStateEncryptedWithoutRollover.calculateDiff).
+func (w *Window) diff(c uint32) int64 {
+	d := int64(c) - int64(w.max)
+	if !w.rollover {
+		return d
+	}
+	switch {
+	case d >= maxCounterIncrease2Pow31:
+		d -= int64(1) << 32
+	case d < -maxCounterIncrease2Pow31:
+		d += int64(1) << 32
+	}
+	return d
+}
 
 // Accept records a received counter and reports whether it is fresh
-// (returns true) or a duplicate (returns false). Out-of-window stale
-// counters return false too — the caller drops the message.
-//
-// The 32-bit counter wraps; Window assumes the session-layer ensures
-// consecutive Accept calls stay within ±2^31 of each other (the
-// Matter "valid window" definition). Outside that envelope Accept
-// treats the counter as fresh and resets the window — this is the
-// post-rekey re-establishment path.
+// (returns true) or a duplicate / out-of-window (returns false — the
+// caller drops the message). Mirrors matter.js
+// MessageReceptionState.updateMessageCounter.
 func (w *Window) Accept(c uint32) bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	if !w.primed {
 		w.max = c
-		w.bitmap = 1 // bit 0 records "max" itself.
+		w.bitmap = 0 // no historical counters recorded yet
 		w.primed = true
 		return true
 	}
+	if c == w.max {
+		return false // equals the maximum ⇒ duplicate
+	}
 
-	switch {
-	case c == w.max:
-		return false
-	case wraps(c, w.max):
-		// Counter is "before" max in the modular ordering. Could be
-		// either in-window or stale-out-of-window.
-		delta := w.max - c
-		if delta >= windowSize {
-			return false
+	d := w.diff(c)
+	if d < 0 {
+		// Numerically (or modularly) behind the maximum. -d-1 ∈ [0, 31].
+		if d < -windowSize {
+			return false // beyond the window ⇒ duplicate
 		}
-		mask := uint32(1) << delta
-		if w.bitmap&mask != 0 {
-			return false
+		bit := uint32(1) << (-d - 1)
+		if w.bitmap&bit != 0 {
+			return false // already seen within the window ⇒ duplicate
 		}
-		w.bitmap |= mask
-		return true
-	default:
-		// Counter is "after" max — advance the window.
-		delta := c - w.max
-		if delta >= windowSize {
-			// Big jump: reset bitmap; only `c` is recorded.
-			w.bitmap = 1
-		} else {
-			w.bitmap = (w.bitmap << delta) | 1
-		}
-		w.max = c
+		w.bitmap |= bit
 		return true
 	}
-}
 
-// wraps reports whether c is "before" hi under modular arithmetic
-// (i.e., a smaller-or-equal counter modulo 2^32). The argument is
-// named hi (not max) to avoid shadowing the builtin.
-func wraps(c, hi uint32) bool {
-	return int32(hi-c) > 0 //nolint:gosec // G115: signed delta is the modular-distance test; see #20
+	// Ahead of the maximum: advance the window and record the old max.
+	// d ∈ [1, windowSize] here; d-1 ∈ [0, 31].
+	if d <= windowSize {
+		var shifted uint32
+		if d < windowSize {
+			shifted = w.bitmap << d
+		}
+		w.bitmap = shifted | (uint32(1) << (d - 1))
+	} else {
+		w.bitmap = 0 // jump larger than the window: no prior counters known
+	}
+	w.max = c
+	return true
 }

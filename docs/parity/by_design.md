@@ -1689,11 +1689,51 @@ Go path: `internal/north/rest/router.go`.
 
 ---
 
-### BD-Matter-P1-D9 — WindowCovering.Mode attribute is read-only
+### BD-Matter-P1-D9 — WindowCovering.Mode write is validated but not yet persisted or mapped to HM
 
-**Go path:** `internal/north/matter/cluster/cover/windowcovering_server.go` — `case wire.WindowCoveringAttrMode: return uint8(0), true`.
+**Go path:** `internal/model/custom/cover/matter.go` — `validateWindowCoveringMode` gates all three WindowCovering projections' `MatterWrite`.
 
-**Rationale:** matter.js `window-covering-cluster.element.ts` marks Mode (0x0017) as access "RW VM". The Mode bitmap controls motor-reversal and calibration flags that the HM device exposes through dedicated paramsets, not through a simple writable attribute. Apple Home does not write the Mode attribute on WindowCovering devices in normal operation; neither does chip-tool in the standard pairing suite. Implementing Mode write would require mapping Mode bits to HM MASTER-paramset fields and persisting the state across restarts — deferred to a future release.
+**Rationale:** matter.js `window-covering-cluster.element.ts:79` marks Mode (0x0017) as access "RW VM", constraint "max 15". The projection now accepts a Mode write and validates the bitmap range (0..15, rejecting >15), so a conformant controller's write no longer fails outright. What remains deferred: the written Mode bitmap is not persisted (a subsequent read still echoes the default 0), and its MotorDirectionReversed / calibration bits are not mapped onto the HM device's MASTER-paramset fields. Real controllers (Apple Home, chip-tool standard suite) do not write Mode in normal operation; full persistence + HM MASTER-paramset mapping is deferred to a future release.
+
+---
+
+### BD-Matter-CASE-StalePeerEviction — same-peer sessions evicted on CASE establishment
+
+**Go path:** `internal/north/matter/secure/operational/manager.go` — `collectStalePeerSessionsLocked`, called from `OpenFromSigma` / `OpenFromSigmaWithID`.
+
+**Rationale:** matter.js does NOT evict same-peer sessions when a new CASE session is established — `SessionManager.ts:396` `createSecureSession` retains concurrent `(fabric, peerNode)` sessions and reclaims a session id only on exhaustion (`getNextAvailableSessionId` → `findOldestInactiveSession`, `:455-476`). There is no `removeAllSessionsForNode` in matter.js HEAD. OpenCCU-Loom deliberately diverges: on every CASE establishment it closes any pre-existing session for the same `(fabricIndex, peerNodeID)`. Apple iOS' Matter daemon caches old session keys across daemon restarts and replays them with counter values far above the bridge's in-memory reception window; without eviction the bridge keeps decrypting against the stale entry, fails authentication, and the commissioner aborts the pair attempt with INVALID_PARAMETER. The eviction is locked by dedicated tests (`TestManager_OpenFromSigma_EvictsStalePeerSession` and the DifferentPeer/DifferentFabric keep-existing counter-tests). Reversing it to match matter.js's retain-concurrent behaviour would reintroduce the Apple pairing abort and cannot be validated without live Apple hardware; kept as a deliberate interop divergence.
+
+---
+
+### BD-Matter-mDNS-InstanceIDReuse — operational InstanceID reused across commissioning-window opens
+
+**Go path:** `cmd/openccu-loom/daemon_matter.go` (InstanceID minted once at boot) + `cmd/openccu-loom/matter_window_adapter.go` (`OpenCommissioningWindow`).
+
+**Rationale:** matter.js mints a fresh random 8-byte instance name on every commissioning-window (re)open (`MdnsAdvertiser.ts` `createInstanceId` per `getAdvertisement`). OpenCCU-Loom generates the InstanceID once at daemon boot and reuses it for the process lifetime. Rotating the InstanceID per window was tried and empirically broke Apple Home pairing: a service Apple has begun resolving disappears mid-handshake and Apple silently aborts (the same empirical-Apple-testing pattern as the commissionable `DT` device-type choice). Kept stable as a deliberate interop divergence; a stable instance name is spec-legal.
+
+---
+
+### BD-Matter-mDNS-VPAlwaysAdvertised — VendorID/ProductID not masked after extended announcement
+
+**Go path:** `internal/north/matter/mdns/service.go` — `BuildCommissionableService` always emits the VP TXT key + vendor PTR subtype.
+
+**Rationale:** matter.js `Advertisement.ts:177-191` stops disclosing VendorID/ProductID (VP TXT + vendor PTR) once a commissioning advertisement has run ≥ 15 min (`STANDARD_COMMISSIONING_TIMEOUT`, "extended announcement", Matter §5.4.2.3.1). OpenCCU-Loom's mDNS layer builds stateless, declarative `Service` records with no notion of elapsed advertisement duration — the record builders take no time input. Implementing the privacy mask requires plumbing "time since window opened" through the advertiser/window-lifecycle layer (duration-aware record construction). Low-severity privacy hardening for a bridge that only advertises during operator-initiated commissioning windows; deferred to a future release rather than half-implemented.
+
+---
+
+### BD-Matter-PASE-EstablishedSessionGate — new PASE refused only while a handshake is in flight
+
+**Go path:** `internal/north/matter/bridge/securechannel.go` — `claimPaseInFlight` / `releasePaseInFlight` (the single-active-PASE claim, released on Pake3).
+
+**Rationale:** matter.js `PaseServer.ts:80-81` refuses a new PASE exchange while an established, non-closing PASE session exists (`getPaseSession() !== undefined && !isClosing`), not just while a handshake is mid-flight. The bridge's only gate is the in-flight claim, which `releasePaseInFlight` clears on Pake3 — so a second `PBKDFParamRequest` arriving after the first PASE completes (but before CommissioningComplete) is accepted. A faithful, non-regressive fix needs an `operational.Manager` "active non-closing PASE session" predicate plus a bridge-side gate; a bridge-only heuristic (holding the in-flight claim through Pake3) over-blocks a legitimate retry after a failed post-PASE commissioning inside the window and under-blocks a commission running past the 60 s self-expiry — semantically muddy versus matter.js and a commissioning-flow regression risk that cannot be validated without live commissioner hardware. Defense-in-depth only (`AdministratorCommissioning` already returns `Busy` to a second window-open); deferred to a lane that can validate the manager-predicate approach end-to-end.
+
+---
+
+### BD-Matter-PASE-SessionParametersLegacy — PBKDFParamResponse emits only the legacy MRP triplet
+
+**Go path:** `internal/north/matter/bridge/handlers.go` + `internal/north/matter/secure/spake2/wire.go` — PBKDFParamResponse tag-5 (`ResponderMRPParams`).
+
+**Rationale:** matter.js `PaseMessages.ts:23-50` serialises the full 1.3+ `TlvSessionParameters` (idle/active as UInt32, activeThreshold, dataModelRevision, interactionModelRevision, specificationVersion, maxPathsPerInvoke) into the PBKDFParamResponse's responderSessionParams, and types the initiator's idle/active intervals as UInt32. OpenCCU-Loom's PASE wire layer emits only the legacy 3-field SED/MRP triplet and decodes the initiator's idle/active intervals as uint16 (truncating > 65535 ms). The matter.js-faithful target already exists in-tree as `sigma.SessionParameters` (the CASE Sigma2 path emits the full struct); unifying PASE onto it means reshaping the exported `spake2.MRPParameters` struct, which is consumed by `cmd/openccu-loom/daemon_matter.go`. Practically unreachable in the server-responder role — only a commissioner-initiator's InitiatorMRPParams passes through this decode, and commissioners (phone/hub, non-sleepy) advertise sub-65535 ms intervals. Deferred; recommend unifying PASE onto `sigma.SessionParameters` in a future pass.
 
 ---
 
@@ -2595,6 +2635,8 @@ Go path: `internal/model/weekprofile/datapoint.go::SetScheduleEnabled`.
 
 **Rationale:** Matter §4.3.1.6 lists SAT as a mandatory TXT key on the commissionable `_matterc._udp` record. The parity test `TestParityMdnsServer_CommissionableTXTSchemaLock` enforces this. Always emitting SAT (even at the spec-default 4000 ms) is the correct, spec-conformant behaviour; a conditional gate would violate §4.3.1.6 and break chip-tool and Apple Home commissioning flows that depend on SAT being present. The audit suggestion to gate it as "only if non-default" would constitute a spec regression and is intentionally not applied.
 
+The same reasoning covers the sibling MRP keys **SII and SAI** on both the operational and commissionable records: matter.js `MdnsAdvertisement.ts:183-197` omits each key when its value equals `SessionIntervals.defaults`, but chip — the certified reference stack — emits SII/SAI/SAT whenever a value is configured (it only skips when the MRP config is entirely unset / ICD-LIT), matching OpenCCU-Loom's always-emit. Because chip (the interop-tested stack) sides with always-emitting-when-configured over matter.js's default-equality optimisation, the always-emit choice is the more conservative, interop-safe one and is applied uniformly to SII, SAI and SAT.
+
 ---
 
 ### BD-chip-DiagLogs-NoBDX — DiagnosticLogs cluster does not initiate BDX transfers
@@ -3213,12 +3255,22 @@ because the bridged-cluster surface cannot reach them today:
 
 - **Per-attribute/-command `kTimed` enforcement** (chip
   `WriteHandler.cpp:810-812`): an untimed write/invoke targeting a
-  timed-required attribute must be rejected with NEEDS_TIMED_INTERACTION. None
-  of the bridge's currently exposed attributes/commands (OnOff, LevelControl,
-  sensors, GeneralCommissioning) carry the `kTimed` quality, so the gate
-  (`internal/north/matter/bridge/receive.go`) only enforces the request-level
-  timed flag. A future timed-quality surface (e.g. a DoorLock unlock routed
-  through the bridge) will need the per-path predicate.
+  timed-required attribute or command must be rejected with
+  NEEDS_TIMED_INTERACTION. **Enforced** for commands via the per-path
+  predicate `schema.IsTimedInvoke` (`internal/north/matter/schema/timed.go`),
+  consulted by `anyTimedRequiredInvoke` in
+  `internal/north/matter/bridge/receive_dispatch.go` alongside the
+  request-level timed flag before `checkTimedGate`
+  (`internal/north/matter/bridge/receive.go`). `timedInvokePaths` currently
+  pins AdministratorCommissioning (every command) and DoorLock's
+  LockDoor/UnlockDoor/UnboltDoor (Matter §8.7; matter.js
+  `door-lock-cluster.element.ts:230,234,560` mark them `"O T"`) — a DoorLock
+  unlock routed through the bridge outside a timed window now yields
+  NEEDS_TIMED_INTERACTION instead of succeeding. No currently exposed
+  *attribute* (as opposed to command) carries the `T` access quality, so
+  per-attribute write enforcement remains unbuilt until one does; extend
+  `timedInvokePaths` (and `TestTimedInvokeParity`) the next time a newly
+  exposed cluster ships a timed command or attribute.
 - **Subscribe per-fabric quota eviction** (chip
   `InteractionModelEngine.cpp:1263`): chip evicts an existing subscription to
   guarantee the per-fabric minimum, returning ResourceExhausted only when truly
@@ -3227,9 +3279,12 @@ because the bridged-cluster surface cannot reach them today:
   per-fabric and falls through; with a 1–10 controller bridge fleet the cap is
   effectively unreachable.
 
-Both are documented unbuilt extension points, not dormant wiring — there is no
-implemented-but-unwired capability behind them. They become real work when the
-bridge exposes a timed-quality attribute or targets large controller fleets.
+Both remain documented unbuilt extension points, not dormant wiring — there is
+no implemented-but-unwired capability behind either. Per-command enforcement
+became real work once the bridge mounted a cluster with timed-required
+commands (DoorLock); per-attribute enforcement and quota eviction become real
+work when the bridge exposes a timed-quality attribute or targets large
+controller fleets, respectively.
 (Re-audit 2026-05-31, findings F3 / F4.)
 
 ### BD-Visibility-HiddenAliasesIgnored — IsParameterHidden returns the ignore decision

@@ -308,6 +308,230 @@ func TestAccessControl_ACLWriteValidation(t *testing.T) {
 	}
 }
 
+// ---- TestAccessControl_CASESubjectOperationalNodeIdUpperBound ----
+
+// TestAccessControl_CASESubjectOperationalNodeIdUpperBound pins the
+// operational-node-ID upper bound used to validate a CASE-AuthMode ACL
+// subject. The correct maximum is 0xFFFF_FFEF_FFFF_FFFF; anything above
+// it falls into the reserved ranges (CAT 0xFFFF_FFFD.., Temporary-Local
+// 0xFFFF_FFFE.., Group 0xFFFF_FFFF_FFFF_FF00..) and must NOT be accepted
+// as a plain operational subject. A byte-transposed bound of
+// 0xFFFF_FFFF_FFFF_FFEF would swallow the whole reserved space and
+// accept a Group Node ID as a CASE subject.
+// Mirrors matter.js packages/types/src/datatype/NodeId.ts:27-28
+// (OPERATIONAL_NODE_MIN/MAX) and :57-59 (isOperationalNodeId).
+func TestAccessControl_CASESubjectOperationalNodeIdUpperBound(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		subject uint64
+		wantErr bool
+	}{
+		{
+			name:    "operational_min_accepted",
+			subject: 0x0000_0000_0000_0001,
+			wantErr: false,
+		},
+		{
+			name:    "operational_max_accepted",
+			subject: 0xFFFF_FFEF_FFFF_FFFF, // OPERATIONAL_NODE_MAX
+			wantErr: false,
+		},
+		{
+			name:    "just_above_operational_max_rejected",
+			subject: 0xFFFF_FFF0_0000_0000, // one past OPERATIONAL_NODE_MAX
+			wantErr: true,
+		},
+		{
+			name:    "transposed_bound_value_rejected",
+			subject: 0xFFFF_FFFF_FFFF_FFEF, // the buggy upper bound itself
+			wantErr: true,
+		},
+		{
+			name:    "group_node_id_rejected",
+			subject: 0xFFFF_FFFF_FFFF_FF01, // Group Node ID, not a CASE subject
+			wantErr: true,
+		},
+		{
+			name:    "case_auth_tag_accepted",
+			subject: 0xFFFF_FFFD_0001_0001, // CAT (upper 32 bits == 0xFFFF_FFFD)
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ac := newAccessControl(t)
+			ac.SetCurrentFabric(1)
+
+			err := writeACL(ac, []core.AccessControlEntryStruct{
+				{
+					Privilege:   5, // Administer
+					AuthMode:    2, // CASE
+					Subjects:    []uint64{tc.subject},
+					FabricIndex: 1,
+				},
+			})
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("CASE subject 0x%016X: expected constraint error, got nil", tc.subject)
+				}
+				if !strings.Contains(err.Error(), "constraint error") {
+					t.Fatalf("CASE subject 0x%016X: error %q lacks \"constraint error\"", tc.subject, err.Error())
+				}
+			} else if err != nil {
+				t.Fatalf("CASE subject 0x%016X: unexpected error: %v", tc.subject, err)
+			}
+		})
+	}
+}
+
+// ---- TestAccessControl_CASESubjectCATVersionZeroRejected ----
+
+// TestAccessControl_CASESubjectCATVersionZeroRejected pins that a CASE ACL
+// subject that is a CASE Auth Tag (upper 32 bits == 0xFFFF_FFFD) with a
+// version number of 0 (the low 16 bits) is rejected with a constraint error.
+// A non-zero CAT version is accepted. Mirrors matter.js
+// packages/node/src/behaviors/access-control/AccessControlServer.ts:213-220
+// (CaseAuthenticatedTag.getVersion(cat) === 0 → ConstraintError) and
+// packages/types/src/datatype/CaseAuthenticatedTag.ts:31-33. Matter §6.6.2.1.2.
+func TestAccessControl_CASESubjectCATVersionZeroRejected(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		subject uint64
+		wantErr bool
+	}{
+		{
+			name:    "cat_version_zero_rejected",
+			subject: 0xFFFF_FFFD_0001_0000, // CAT id 0x0001, version 0x0000
+			wantErr: true,
+		},
+		{
+			name:    "cat_version_zero_high_id_rejected",
+			subject: 0xFFFF_FFFD_ABCD_0000, // CAT id 0xABCD, version 0x0000
+			wantErr: true,
+		},
+		{
+			name:    "cat_version_one_accepted",
+			subject: 0xFFFF_FFFD_0001_0001, // CAT id 0x0001, version 0x0001
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ac := newAccessControl(t)
+			ac.SetCurrentFabric(1)
+
+			err := writeACL(ac, []core.AccessControlEntryStruct{
+				{
+					Privilege:   5, // Administer
+					AuthMode:    2, // CASE
+					Subjects:    []uint64{tc.subject},
+					FabricIndex: 1,
+				},
+			})
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("CAT subject 0x%016X: expected constraint error, got nil", tc.subject)
+				}
+				if !strings.Contains(err.Error(), "constraint error") {
+					t.Fatalf("CAT subject 0x%016X: error %q lacks \"constraint error\"", tc.subject, err.Error())
+				}
+			} else if err != nil {
+				t.Fatalf("CAT subject 0x%016X: unexpected error: %v", tc.subject, err)
+			}
+		})
+	}
+}
+
+// ---- TestAccessControl_TargetClusterAndDeviceTypeValidity ----
+
+// TestAccessControl_TargetClusterAndDeviceTypeValidity pins that an ACL
+// Target's Cluster and DeviceType fields are validated as well-formed Matter
+// identifiers. A standard cluster needs a zero vendor prefix + type suffix
+// 0x0000..0x7FFF; a manufacturer-specific cluster needs a non-zero vendor
+// prefix + type suffix 0xFC00..0xFFFE; a DeviceType needs a type suffix
+// 0x0000..0xBFFF. Mirrors matter.js
+// packages/node/src/behaviors/access-control/AccessControlServer.ts:266-278
+// (ClusterId.isValid / DeviceTypeId.isValid). Matter §7.10 / §7.19.2.29.
+func TestAccessControl_TargetClusterAndDeviceTypeValidity(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		target  core.ACLTargetStruct
+		wantErr bool
+	}{
+		{
+			name:    "standard_cluster_valid",
+			target:  core.ACLTargetStruct{Cluster: new(uint32(0x0006))},
+			wantErr: false,
+		},
+		{
+			name:    "ms_cluster_valid",
+			target:  core.ACLTargetStruct{Cluster: new(uint32(0x0001_FC00))}, // vendor 1, suffix 0xFC00
+			wantErr: false,
+		},
+		{
+			name:    "standard_cluster_suffix_out_of_range_rejected",
+			target:  core.ACLTargetStruct{Cluster: new(uint32(0x0000_8000))}, // prefix 0, suffix 0x8000 > 0x7FFF
+			wantErr: true,
+		},
+		{
+			name:    "ms_cluster_suffix_too_low_rejected",
+			target:  core.ACLTargetStruct{Cluster: new(uint32(0x0001_0006))}, // vendor 1, suffix 0x0006 < 0xFC00
+			wantErr: true,
+		},
+		{
+			name:    "devicetype_valid",
+			target:  core.ACLTargetStruct{DeviceType: new(uint32(0x0100))},
+			wantErr: false,
+		},
+		{
+			name:    "devicetype_suffix_out_of_range_rejected",
+			target:  core.ACLTargetStruct{DeviceType: new(uint32(0x0000_C000))}, // suffix 0xC000 > 0xBFFF
+			wantErr: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ac := newAccessControl(t)
+			ac.SetCurrentFabric(1)
+
+			err := writeACL(ac, []core.AccessControlEntryStruct{
+				{
+					Privilege:   5, // Administer
+					AuthMode:    2, // CASE
+					Subjects:    []uint64{1},
+					Targets:     []core.ACLTargetStruct{tc.target},
+					FabricIndex: 1,
+				},
+			})
+
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("target %+v: expected constraint error, got nil", tc.target)
+				}
+				if !strings.Contains(err.Error(), "constraint error") {
+					t.Fatalf("target %+v: error %q lacks \"constraint error\"", tc.target, err.Error())
+				}
+			} else if err != nil {
+				t.Fatalf("target %+v: unexpected error: %v", tc.target, err)
+			}
+		})
+	}
+}
+
 // ---- TestAccessControl_ACLWriteEmitsEntryChanged ----
 
 // TestAccessControl_ACLWriteEmitsEntryChanged verifies that a successful
