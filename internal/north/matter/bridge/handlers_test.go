@@ -69,42 +69,43 @@ func TestPaseAdapter_NilVerifierProcessPake3Errors(t *testing.T) {
 }
 
 // TestPaseAdapter_MalformedPake1Errors — non-nil verifier + malformed
-// payload → StatusReport(FAILURE) emitted; no Go-level error returned.
+// payload → the decode error is RETURNED (not swallowed into a
+// self-emitted StatusReport) so the SecureChannel router counts the
+// attempt toward the PASE brute-force cap. matter.js counts every PASE
+// pairing failure — a malformed Pake1 included — toward
+// PASE_COMMISSIONING_MAX_ERRORS, see PaseServer.ts:172 → :94-95.
 func TestPaseAdapter_MalformedPake1Errors(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(newTestVerifier(t))
 	// Seed the PBKDF context bytes so that computePaseContextLocked
 	// succeeds and the handler reaches the DecodePake1 path. Without
-	// these bytes the precondition check fires first and returns a plain
-	// Go error rather than a StatusReport.
+	// these bytes the precondition check fires first.
 	a.pbkdfReqBytes = []byte{0x01, 0x02}
 	a.pbkdfRespBytes = []byte{0x03, 0x04}
 	opcode, body, err := a.ProcessPake1([]byte{0xFF})
-	if err != nil {
-		t.Fatalf("unexpected Go error from ProcessPake1 with malformed payload: %v", err)
+	if err == nil {
+		t.Fatal("malformed Pake1 must return an error so handlePase counts the brute-force attempt")
 	}
-	if opcode != mrp.SCOpcodeStatusReport {
-		t.Fatalf("opcode = 0x%02X, want SCOpcodeStatusReport (0x%02X)", opcode, mrp.SCOpcodeStatusReport)
-	}
-	if len(body) == 0 {
-		t.Fatal("StatusReport body must be non-empty")
+	if opcode != 0 || body != nil {
+		t.Fatalf("malformed Pake1 returned opcode=0x%02X body_len=%d; want (0, nil) so handlePase emits the single StatusReport", opcode, len(body))
 	}
 }
 
 // TestPaseAdapter_MalformedPake3Errors — non-nil verifier + malformed
-// payload → StatusReport(FAILURE) emitted; no Go-level error returned.
+// payload → the decode error is RETURNED (not swallowed into a
+// self-emitted StatusReport) so the SecureChannel router counts the
+// attempt toward the PASE brute-force cap. matter.js counts every PASE
+// pairing failure toward PASE_COMMISSIONING_MAX_ERRORS — see
+// PaseServer.ts:94-95.
 func TestPaseAdapter_MalformedPake3Errors(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(newTestVerifier(t))
 	opcode, body, err := a.ProcessPake3([]byte{0xFF})
-	if err != nil {
-		t.Fatalf("unexpected Go error from ProcessPake3 with malformed payload: %v", err)
+	if err == nil {
+		t.Fatal("malformed Pake3 must return an error so handlePase counts the brute-force attempt")
 	}
-	if opcode != mrp.SCOpcodeStatusReport {
-		t.Fatalf("opcode = 0x%02X, want SCOpcodeStatusReport (0x%02X)", opcode, mrp.SCOpcodeStatusReport)
-	}
-	if len(body) == 0 {
-		t.Fatal("StatusReport body must be non-empty")
+	if opcode != 0 || body != nil {
+		t.Fatalf("malformed Pake3 returned opcode=0x%02X body_len=%d; want (0, nil) so handlePase emits the single StatusReport", opcode, len(body))
 	}
 }
 
@@ -204,7 +205,7 @@ func TestMRPAckAdapter_DischargeIsSessionScoped(t *testing.T) {
 // sides use passcode 20202021 + the canonical salt and bind their
 // SPAKE2+ context to the negotiated PBKDFParam wire bytes per
 // Matter §4.13.4.
-func paseRoundTrip(t *testing.T, a *PaseAdapter) error {
+func paseRoundTrip(t *testing.T, a *PaseAdapter) (opcode uint8, body []byte, err error) {
 	t.Helper()
 	const (
 		passcode   = uint32(20202021)
@@ -264,8 +265,8 @@ func paseRoundTrip(t *testing.T, a *PaseAdapter) error {
 		t.Fatalf("prover.ProcessPake2: %v", err)
 	}
 
-	_, _, err = a.ProcessPake3(spake2.EncodePake3(cA))
-	return err
+	opcode, body, err = a.ProcessPake3(spake2.EncodePake3(cA))
+	return opcode, body, err
 }
 
 // buildTestPBKDFParamRequest assembles a minimal PBKDFParamRequest
@@ -335,7 +336,7 @@ func TestPaseAdapter_CallbackInvokedOnSuccess(t *testing.T) {
 		return nil
 	})
 
-	if err := paseRoundTrip(t, a); err != nil {
+	if _, _, err := paseRoundTrip(t, a); err != nil {
 		t.Fatalf("PASE round-trip: %v", err)
 	}
 	if cbCalls.Load() != 1 {
@@ -359,7 +360,7 @@ func TestPaseAdapter_CallbackErrorWrapped(t *testing.T) {
 		return errors.New("rejected")
 	})
 
-	err := paseRoundTrip(t, a)
+	_, _, err := paseRoundTrip(t, a)
 	if err == nil {
 		t.Fatal("expected non-nil error when callback returns error")
 	}
@@ -371,8 +372,9 @@ func TestPaseAdapter_CallbackErrorWrapped(t *testing.T) {
 	}
 }
 
-// TestPaseAdapter_NoCallbackOnDecodeError — malformed Pake3 payload
-// must emit StatusReport(FAILURE) and must NOT invoke the session callback.
+// TestPaseAdapter_NoCallbackOnDecodeError — a malformed Pake3 payload
+// must RETURN the decode error (so handlePase counts the brute-force
+// attempt) and must NOT invoke the session callback.
 func TestPaseAdapter_NoCallbackOnDecodeError(t *testing.T) {
 	t.Parallel()
 	a := NewPaseAdapter(newTestVerifier(t))
@@ -382,14 +384,11 @@ func TestPaseAdapter_NoCallbackOnDecodeError(t *testing.T) {
 		return nil
 	})
 	opcode, body, err := a.ProcessPake3([]byte{0xFF}) // malformed
-	if err != nil {
-		t.Fatalf("unexpected Go error from malformed Pake3: %v", err)
+	if err == nil {
+		t.Fatal("malformed Pake3 must return an error so handlePase counts the brute-force attempt")
 	}
-	if opcode != mrp.SCOpcodeStatusReport {
-		t.Fatalf("opcode = 0x%02X, want SCOpcodeStatusReport (0x%02X)", opcode, mrp.SCOpcodeStatusReport)
-	}
-	if len(body) == 0 {
-		t.Fatal("StatusReport body must be non-empty")
+	if opcode != 0 || body != nil {
+		t.Fatalf("malformed Pake3 returned opcode=0x%02X body_len=%d; want (0, nil)", opcode, len(body))
 	}
 	if called.Load() {
 		t.Fatal("callback must not be invoked when Pake3 decode fails")
@@ -798,7 +797,7 @@ func TestPaseAdapter_FactoryInvokedPerPake1(t *testing.T) {
 	}
 
 	// First ProcessPake1 call.
-	if err := paseRoundTrip(t, a); err != nil {
+	if _, _, err := paseRoundTrip(t, a); err != nil {
 		t.Fatalf("first paseRoundTrip: %v", err)
 	}
 	if counter.Load() != 1 {
@@ -808,7 +807,7 @@ func TestPaseAdapter_FactoryInvokedPerPake1(t *testing.T) {
 	// Second ProcessPake1 call via a fresh round trip.
 	// Re-create the adapter from the same factory to allow a second full exchange.
 	a2 := NewPaseAdapterWithFactory(factory)
-	if err := paseRoundTrip(t, a2); err != nil {
+	if _, _, err := paseRoundTrip(t, a2); err != nil {
 		t.Fatalf("second paseRoundTrip: %v", err)
 	}
 	if counter.Load() != 2 {
@@ -839,7 +838,7 @@ func TestPaseAdapter_Pake3SuccessClearsVerifier(t *testing.T) {
 	a := newPaseAdapterWithVerifier(t)
 
 	// Successful round trip.
-	if err := paseRoundTrip(t, a); err != nil {
+	if _, _, err := paseRoundTrip(t, a); err != nil {
 		t.Fatalf("paseRoundTrip: %v", err)
 	}
 
@@ -883,14 +882,16 @@ func TestPaseAdapter_Pake3FailureClearsVerifier(t *testing.T) {
 		t.Fatalf("ProcessPake1: %v", err)
 	}
 
-	// Send malformed Pake3 (wrong-length cA) → StatusReport(FAILURE), no Go error.
+	// Send malformed Pake3 (wrong-length cA) → the decode error is
+	// returned (handlePase turns it into the single StatusReport + a
+	// brute-force count) and the verifier is cleared.
 	badPake3 := spake2.EncodePake3([]byte{0xFF, 0xFE}) // wrong length
-	opcode, _, err := a.ProcessPake3(badPake3)
-	if err != nil {
-		t.Fatalf("unexpected Go error from malformed Pake3: %v", err)
+	opcode, body, err := a.ProcessPake3(badPake3)
+	if err == nil {
+		t.Fatal("first bad Pake3 must return an error so handlePase counts the attempt")
 	}
-	if opcode != mrp.SCOpcodeStatusReport {
-		t.Fatalf("first bad Pake3: opcode = 0x%02X, want StatusReport", opcode)
+	if opcode != 0 || body != nil {
+		t.Fatalf("first bad Pake3 returned opcode=0x%02X body_len=%d; want (0, nil)", opcode, len(body))
 	}
 
 	// Verifier should be cleared: subsequent Pake3 must return no-Pake1 error.

@@ -53,14 +53,32 @@ func (d *Decoder) Next() (Element, error) {
 		return Element{}, fmt.Errorf("%w: control=0x%02X at pos %d", ErrInvalidTagKind, control, d.pos-1)
 	}
 
-	// End-of-container is always anonymous.
-	if etype == TypeEndContainer {
-		return Element{Type: TypeEndContainer, IsEndContainer: true, Tag: AnonymousTag()}, nil
-	}
-
+	// The tag bytes selected by the control byte's tag-control field are
+	// always consumed before the element type is classified -- even for
+	// EndOfContainer. Mirrors matter.js TlvCodec.ts:155-158 readTagType
+	// (calls readTag(reader, tagControl) unconditionally, then
+	// parseTypeLength) and chip TLVReader.cpp:ReadElement (computes
+	// tagBytes from tagControl before inspecting elemType). Consuming the
+	// tag bytes here first keeps the read cursor aligned with both
+	// references for any tag-control value, including on a malformed
+	// stream.
 	tag, err := d.readTag(kind)
 	if err != nil {
 		return Element{}, err
+	}
+
+	if etype == TypeEndContainer {
+		// A conformant encoder always pairs EndOfContainer with an
+		// anonymous tag-control -- see [Encoder.EndContainer], which
+		// emits the bare 0x18 byte. A non-anonymous tag-control here is
+		// a malformed stream; mirrors chip TLVReader.cpp:852-856
+		// VerifyElement (CHIP_ERROR_INVALID_TLV_TAG when
+		// mElemTag != AnonymousTag() for EndOfContainer).
+		if kind != TagKindAnonymous {
+			return Element{}, fmt.Errorf("%w: EndOfContainer with non-anonymous tag-control (kind=%d) at pos %d",
+				ErrStrictTagViolation, kind, d.pos)
+		}
+		return Element{Type: TypeEndContainer, IsEndContainer: true, Tag: AnonymousTag()}, nil
 	}
 
 	el := Element{Tag: tag, Type: etype}

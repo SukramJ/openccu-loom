@@ -25,6 +25,7 @@ func TestParityMatterJS_CTColorDataVersionBumpsOnInvoke(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true},
 	}, 2700, 6500)
+	l.OnLevel(1.0) // on — MoveToColorTemperature gates on ExecuteIfOff while off.
 	before := l.MatterDataVersion()
 
 	var cc ctColorServer
@@ -81,6 +82,7 @@ func TestParityMatterJS_HSColorDataVersionBumpsOnInvoke(t *testing.T) {
 		Writer:       w,
 		Capabilities: custom.LightCapabilities{SupportsColor: true, Dimmable: true},
 	})
+	l.OnLevel(1.0) // on — MoveToHueAndSaturation gates on ExecuteIfOff while off.
 	before := l.MatterDataVersion()
 
 	var hs hsColorServer
@@ -138,6 +140,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnHSInvoke(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
 	l.recordMode("RGB") // enable the HS colour path
+	l.OnLevel(1.0)      // on — MoveToHueAndSaturation gates on ExecuteIfOff while off.
 	before := l.MatterDataVersion()
 
 	var rgbw rgbwColorServer
@@ -167,6 +170,7 @@ func TestParityMatterJS_RGBWColorDataVersionBumpsOnCTInvoke(t *testing.T) {
 		Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true},
 	})
 	l.recordMode("TUNABLE_WHITE")
+	l.OnLevel(1.0) // on — MoveToColorTemperature gates on ExecuteIfOff while off.
 	before := l.MatterDataVersion()
 
 	var rgbw rgbwColorServer

@@ -27,6 +27,16 @@ var (
 	// the adapter cannot answer a commissioner that asks for the
 	// in-band copy of the PBKDF parameters (HasPBKDFParameters=false).
 	ErrPBKDFParamsMissing = errors.New("bridge: PBKDF params not configured")
+
+	// ErrUnsupportedPasscodeID is returned by
+	// [PaseAdapter.ProcessPBKDFParamRequest] when the commissioner's
+	// PBKDFParamRequest carries a non-zero PasscodeId. The default (and
+	// only) commissioning passcode lives at PasscodeId 0
+	// (DEFAULT_PASSCODE_ID per Matter §4.14.1.2); a non-zero id addresses
+	// a multi-passcode onboarding slot the bridge does not implement.
+	// Mirrors matter.js packages/protocol/src/session/pase/PaseServer.ts:144-146
+	// (throw UnexpectedDataError when passcodeId !== DEFAULT_PASSCODE_ID).
+	ErrUnsupportedPasscodeID = errors.New("bridge: unsupported PASE passcode id")
 )
 
 // PaseAdapter wraps a [spake2.Verifier] in the [PaseHandler] port the
@@ -240,6 +250,18 @@ func (a *PaseAdapter) ProcessPBKDFParamRequest(payload []byte) (opcode uint8, re
 	if err != nil {
 		return 0, nil, fmt.Errorf("bridge: PBKDFParamRequest decode: %w", err)
 	}
+	// Reject a non-default PasscodeId before assembling the response.
+	// Commissioning uses DEFAULT_PASSCODE_ID (0); a non-zero id names a
+	// multi-passcode onboarding slot the bridge does not support.
+	// Surfacing the error routes handlePase to emit
+	// StatusReport(InvalidParam) and count the attempt toward the PASE
+	// brute-force cap, exactly as matter.js throws UnexpectedDataError →
+	// #pairingErrors++. Mirrors matter.js
+	// packages/protocol/src/session/pase/PaseServer.ts:144-146 (passcodeId
+	// check) → :94-95 (catch → #pairingErrors++).
+	if req.PasscodeID != 0 {
+		return 0, nil, fmt.Errorf("%w: %d", ErrUnsupportedPasscodeID, req.PasscodeID)
+	}
 	source := a.randomSource
 	if source == nil {
 		source = randPBKDFRandom
@@ -314,25 +336,28 @@ func (a *PaseAdapter) ProcessPake1(payload []byte) (opcode uint8, respPayload []
 	a.verifier = v
 	pA, err := spake2.DecodePake1(payload)
 	if err != nil {
-		// Emit StatusReport(FAILURE, InvalidParameter) so the commissioner
-		// stops retransmitting Pake1. Mirrors chip PASESession.cpp exit-path.
-		body := mrp.EncodeStatusReport(
-			mrp.SCStatusGeneralFailure,
-			uint32(mrp.SecureChannelProtocolID),
-			mrp.SCStatusProtocolInvalidParameter,
-			nil,
-		)
-		return mrp.SCOpcodeStatusReport, body, nil
+		// Clear the freshly-allocated verifier and surface the decode
+		// error so handlePase emits the single StatusReport(FAILURE) AND
+		// counts the attempt toward the PASE brute-force cap. matter.js
+		// counts every PASE pairing failure — a malformed Pake1 included —
+		// toward PASE_COMMISSIONING_MAX_ERRORS; swallowing the error into a
+		// self-emitted StatusReport (returning a nil Go error) let an
+		// attacker hammer Pake1 without ever tripping the cap. Mirrors
+		// matter.js packages/protocol/src/session/pase/PaseServer.ts:172
+		// (readPasePake1) → :94-95 (catch → #pairingErrors++).
+		a.verifier = nil
+		return 0, nil, fmt.Errorf("bridge: Pake1 decode: %w", err)
 	}
 	out, err := v.ProcessPake1(pA)
 	if err != nil {
-		body := mrp.EncodeStatusReport(
-			mrp.SCStatusGeneralFailure,
-			uint32(mrp.SecureChannelProtocolID),
-			mrp.SCStatusProtocolInvalidParameter,
-			nil,
-		)
-		return mrp.SCOpcodeStatusReport, body, nil
+		// Clear the verifier and surface the crypto error (invalid pA
+		// curve point, RNG failure) so handlePase emits the single
+		// StatusReport(FAILURE) and counts the attempt toward the
+		// brute-force cap. Mirrors matter.js
+		// packages/protocol/src/session/pase/PaseServer.ts:174
+		// (computeSecretAndVerifiersFromX) → :94-95 (catch → #pairingErrors++).
+		a.verifier = nil
+		return 0, nil, fmt.Errorf("bridge: Pake1 verify: %w", err)
 	}
 	return mrp.SCOpcodePake2, spake2.EncodePake2(out), nil
 }
@@ -366,9 +391,19 @@ func (a *PaseAdapter) computePaseContextLocked() ([]byte, error) {
 // after Pake3 so a stray follow-up Pake3 (e.g. retransmit) cannot
 // accidentally succeed against stale state.
 //
-// On a verify failure, the adapter returns a StatusReport with
-// GeneralCode=FAILURE so the peer learns the round was rejected
-// rather than waiting on MRP retransmits to time out.
+// On a Pake3 failure — a malformed payload OR a key-confirmation
+// mismatch (the on-wire symptom of a wrong passcode) — the adapter
+// clears the verifier and RETURNS the underlying error (a decode
+// error, or spake2.ErrConfirmationFailed) instead of emitting its own
+// StatusReport. The SecureChannel router's handlePase path then sends
+// exactly one StatusReport(FAILURE) AND counts the attempt toward the
+// PASE brute-force cap. matter.js counts every PASE pairing failure —
+// an incorrect key confirmation included — toward
+// PASE_COMMISSIONING_MAX_ERRORS; swallowing the error here let an
+// attacker guess passcodes without ever tripping the cap. Mirrors
+// matter.js packages/protocol/src/session/pase/PaseServer.ts:178-181
+// (throw UnexpectedDataError on incorrect key confirmation) → :94-95
+// (catch → #pairingErrors++).
 func (a *PaseAdapter) ProcessPake3(payload []byte) (opcode uint8, respPayload []byte, err error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -378,31 +413,21 @@ func (a *PaseAdapter) ProcessPake3(payload []byte) (opcode uint8, respPayload []
 	}
 	cA, err := spake2.DecodePake3(payload)
 	if err != nil {
-		// Clear the verifier on decode failure — a retry after any
-		// Pake3 rejection MUST start fresh from Pake1. Emit a
-		// StatusReport so the commissioner stops retransmitting.
+		// Clear the verifier — a retry after any Pake3 rejection MUST
+		// start fresh from Pake1 — and surface the decode error so
+		// handlePase emits the single StatusReport(FAILURE) and counts
+		// the attempt toward the brute-force cap.
 		a.verifier = nil
-		body := mrp.EncodeStatusReport(
-			mrp.SCStatusGeneralFailure,
-			uint32(mrp.SecureChannelProtocolID),
-			mrp.SCStatusProtocolInvalidParameter,
-			nil,
-		)
-		return mrp.SCOpcodeStatusReport, body, nil
+		return 0, nil, fmt.Errorf("bridge: Pake3 decode: %w", err)
 	}
 	if err := v.ProcessPake3(cA); err != nil {
-		// Clear the verifier on Pake3 failure so the next Pake1
-		// re-starts cleanly. Without this, a retry after Pake3
-		// rejection would still see the old (post-Pake1) verifier
-		// state on the next Pake3, which is undefined.
+		// Clear the verifier so the next Pake1 re-starts cleanly, and
+		// surface the confirmation error (spake2.ErrConfirmationFailed
+		// for a wrong-passcode cA that does not match the verifier's
+		// expected hAY) so handlePase emits the single
+		// StatusReport(FAILURE) and increments the brute-force counter.
 		a.verifier = nil
-		body := mrp.EncodeStatusReport(
-			mrp.SCStatusGeneralFailure,
-			uint32(mrp.SecureChannelProtocolID),
-			mrp.SCStatusProtocolInvalidParameter,
-			nil,
-		)
-		return mrp.SCOpcodeStatusReport, body, nil
+		return 0, nil, err
 	}
 	sharedSecret := v.SharedSecret()
 	peerSessionID := a.peerSessionID

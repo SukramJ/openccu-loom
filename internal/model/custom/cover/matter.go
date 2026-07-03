@@ -85,6 +85,37 @@ const (
 	matterWCMotionStopped uint8 = 0b00
 	matterWCMotionOpening uint8 = 0b01
 	matterWCMotionClosing uint8 = 0b10
+
+	// ConfigStatus (0x0007) bitmap bits (window-covering-cluster.element.ts:108-117).
+	// LiftMovementReversed sits at bit 2 — a WindowCovering that has never
+	// received a Mode write setting MotorDirectionReversed leaves it
+	// clear. LiftPositionAware / TiltPositionAware (bits 3/4) mirror the
+	// position-aware features every projection in this file always
+	// advertises in FeatureMap; matter.js WindowCoveringServer.ts:120-135
+	// initialize() sets them from those same features.
+	matterWCConfigOperational       uint8 = 1 << 0
+	matterWCConfigLiftPositionAware uint8 = 1 << 3
+	matterWCConfigTiltPositionAware uint8 = 1 << 4
+
+	// matterWCConfigStatusLift / matterWCConfigStatusLiftTilt are the
+	// ConfigStatus values this projection reports: Operational plus the
+	// position-aware bit(s) the device type always advertises. No
+	// projection here sets LiftMovementReversed — that only flips on a
+	// Mode write with MotorDirectionReversed set
+	// (WindowCoveringServer.ts:188), and HM covers have no motor-reversal
+	// engine to drive that write's effect.
+	matterWCConfigStatusLift     = matterWCConfigOperational | matterWCConfigLiftPositionAware
+	matterWCConfigStatusLiftTilt = matterWCConfigOperational | matterWCConfigLiftPositionAware | matterWCConfigTiltPositionAware
+
+	// matterWCModeMax is the Mode (0x0017) attribute's "constraint: max
+	// 15" — the four ModeBitmap bits (MotorDirectionReversed,
+	// CalibrationMode, MaintenanceMode, LedFeedback;
+	// window-covering-cluster.element.ts:76-79,120-125) span the full
+	// legal range, so any set bit above that is a reserved/unsupported
+	// value and must be rejected.
+	matterWCModeMax uint8 = 0x0F
+	// matterWCModeDefault is the Mode attribute's spec default (0).
+	matterWCModeDefault uint8 = 0
 )
 
 var (
@@ -256,9 +287,9 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrEndProductType:
 		return coverTypeFor(s.c.Variant), true
 	case matterAttrConfigStatus:
-		// 0x05 = Operational | LiftPositionAware. Mirrors a typical
-		// powered-cover descriptor.
-		return uint8(0x05), true
+		// Operational | LiftPositionAware — this projection always
+		// advertises PA_LF in FeatureMap. See matterWCConfigStatusLift.
+		return matterWCConfigStatusLift, true
 	case matterAttrOperationalStatus:
 		motion := motionForOpeningClosing(s.c.IsOpening(), s.c.IsClosing())
 		return motion | (motion << 2), true
@@ -285,7 +316,7 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrMode:
-		return uint8(0), true
+		return matterWCModeDefault, true
 	case matterAttrFeatureMap:
 		return matterWCFeatureLift | matterWCFeaturePositionAwLft, true
 	case matterAttrClusterRevision:
@@ -295,9 +326,21 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s coverWCServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+// MatterWrite implements [interfaces.MatterClusterServer]. Mode
+// (0x0017) is the only writable attribute — window-covering-cluster.
+// element.ts:76-79 declares it "RW VM" with constraint "max 15". See
+// [validateWindowCoveringMode] for the accept-but-inert rationale.
+func (s coverWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+	if attrID != matterAttrMode {
+		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+	}
+	return validateWindowCoveringMode(value)
 }
+
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: Mode is RW VM
+// (Manage) per window-covering-cluster.element.ts:76-79.
+func (s coverWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
 
 func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
@@ -378,7 +421,10 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 		// Cover), so report the Type code directly.
 		return matterWCTypeTiltBlindLiftAndTilt, true
 	case matterAttrConfigStatus:
-		return uint8(0x05), true
+		// Operational | LiftPositionAware | TiltPositionAware — this
+		// projection always advertises PA_LF and PA_TL in FeatureMap.
+		// See matterWCConfigStatusLiftTilt.
+		return matterWCConfigStatusLiftTilt, true
 	case matterAttrOperationalStatus:
 		// Lift motion mirrors Cover.IsOpening / IsClosing. Tilt motion
 		// is not exposed by the model in 0.1.0 — bits remain 00.
@@ -423,7 +469,7 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(tilt.Level()), true
 	case matterAttrMode:
-		return uint8(0), true
+		return matterWCModeDefault, true
 	case matterAttrFeatureMap:
 		return matterWCFeatureLift | matterWCFeatureTilt |
 			matterWCFeaturePositionAwLft | matterWCFeaturePositionAwTlt, true
@@ -434,9 +480,20 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s blindWCServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+// MatterWrite implements [interfaces.MatterClusterServer]. See
+// [coverWCServer.MatterWrite] — the Mode attribute has the same
+// accept-valid-writes contract on every WindowCovering variant.
+func (s blindWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+	if attrID != matterAttrMode {
+		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+	}
+	return validateWindowCoveringMode(value)
 }
+
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: Mode is RW VM
+// (Manage) per window-covering-cluster.element.ts:76-79.
+func (s blindWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
 
 func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
@@ -535,7 +592,9 @@ func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 	case matterAttrEndProductType:
 		return matterWCEndProductGarageDoor, true
 	case matterAttrConfigStatus:
-		return uint8(0x05), true
+		// Operational | LiftPositionAware — this projection always
+		// advertises PA_LF in FeatureMap. See matterWCConfigStatusLift.
+		return matterWCConfigStatusLift, true
 	case matterAttrOperationalStatus:
 		motion := motionForOpeningClosing(s.g.IsOpening(), s.g.IsClosing())
 		return motion | (motion << 2), true
@@ -558,7 +617,7 @@ func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrMode:
-		return uint8(0), true
+		return matterWCModeDefault, true
 	case matterAttrFeatureMap:
 		return matterWCFeatureLift | matterWCFeaturePositionAwLft, true
 	case matterAttrClusterRevision:
@@ -568,9 +627,20 @@ func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 	}
 }
 
-func (s garageWCServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hmenum.CommandPriority) error {
-	return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+// MatterWrite implements [interfaces.MatterClusterServer]. See
+// [coverWCServer.MatterWrite] — the Mode attribute has the same
+// accept-valid-writes contract on every WindowCovering variant.
+func (s garageWCServer) MatterWrite(_ context.Context, attrID uint32, value any, _ hmenum.CommandPriority) error {
+	if attrID != matterAttrMode {
+		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
+	}
+	return validateWindowCoveringMode(value)
 }
+
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: Mode is RW VM
+// (Manage) per window-covering-cluster.element.ts:76-79.
+func (s garageWCServer) MinWritePrivilege(_ uint32) uint8 { return 4 }
 
 func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
@@ -704,4 +774,36 @@ func wireUint16(raw any) (uint16, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// wireUint8 is the 8-bit sibling of [wireUint16].
+func wireUint8(raw any) (uint8, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint8(n & 0xFF), true
+	case uint8:
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+// validateWindowCoveringMode accepts a Mode (0x0017) attribute write
+// when the value is within the ModeBitmap's legal range (constraint
+// "max 15": MotorDirectionReversed / CalibrationMode / MaintenanceMode /
+// LedFeedback, window-covering-cluster.element.ts:76-79,120-125) and
+// rejects anything wider. HM covers have no maintenance / calibration /
+// motor-reversal engine to react to the write, so a constraint-valid
+// value is accepted without changing behaviour — the same "accepted but
+// inert" treatment this projection already gives capability-absent
+// commands (e.g. Stop on a cover with no in-flight ramp).
+func validateWindowCoveringMode(value any) error {
+	m, ok := wireUint8(value)
+	if !ok {
+		return fmt.Errorf("%w: Mode write expected uint8, got %T", errMatterValueType, value)
+	}
+	if m > matterWCModeMax {
+		return fmt.Errorf("%w: Mode constraint max 15, got %d", errMatterValueType, m)
+	}
+	return nil
 }

@@ -147,9 +147,15 @@ func TestEventLog_PriorityCapEviction(t *testing.T) {
 
 // ---- TestEventLog_QueryMinNumber -----------------------------------------
 
-// TestEventLog_QueryMinNumber verifies that Query with minNumber=10 returns
-// only events with Number > 10.
-func TestEventLog_QueryMinNumber(t *testing.T) {
+// TestEventLog_QueryEventMinIsInclusive pins the EventFilterIB.EventMin
+// semantics: minNumber is an INCLUSIVE lower bound, so Query(minNumber=10)
+// returns the record whose Number == 10 as well as every later one. Mirrors
+// matter.js OccurrenceManager.ts #findMinEventNumberIndex ("first event number
+// that is greater than or equal to eventMin") and chip EventManagement.cpp
+// IncludeEventInReport (drops only Number < mStartingEventNumber). A controller
+// following the chip convention sends EventMin = lastSeen+1, so an exclusive
+// (>) bound would silently drop the event whose Number == EventMin.
+func TestEventLog_QueryEventMinIsInclusive(t *testing.T) {
 	t.Parallel()
 	log := NewEventLog()
 
@@ -163,19 +169,19 @@ func TestEventLog_QueryMinNumber(t *testing.T) {
 		})
 	}
 
+	// Numbers run 1..20; EventMin=10 must return 10..20 (11 records).
 	got := log.Query(0xFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 10)
-	if len(got) != 10 {
-		t.Fatalf("Query(minNumber=10): got %d records, want 10", len(got))
+	if len(got) != 11 {
+		t.Fatalf("Query(minNumber=10): got %d records, want 11 (inclusive of Number==10)", len(got))
 	}
-	// All returned numbers must be > 10.
+	// The boundary record whose Number == EventMin must be present.
+	if got[0].Number != 10 {
+		t.Errorf("first record Number=%d, want 10 (EventMin is inclusive)", got[0].Number)
+	}
 	for _, r := range got {
-		if r.Number <= 10 {
-			t.Errorf("record with Number=%d returned for minNumber=10", r.Number)
+		if r.Number < 10 {
+			t.Errorf("record with Number=%d returned for minNumber=10 (below inclusive floor)", r.Number)
 		}
-	}
-	// First record should have Number=11.
-	if got[0].Number != 11 {
-		t.Errorf("first record Number=%d, want 11", got[0].Number)
 	}
 }
 

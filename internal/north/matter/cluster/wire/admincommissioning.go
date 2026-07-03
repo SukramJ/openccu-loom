@@ -292,6 +292,35 @@ func (a *AdministratorCommissioning) MatterInvoke(ctx context.Context, cmdID uin
 
 	switch cmdID {
 	case matterCmdAdmCommOpenWindow:
+		params, ok := fields.(OpenWindowParams)
+		if !ok {
+			// fields can be a pointer in some dispatcher paths; be
+			// liberal in what we accept here.
+			if p, okp := fields.(*OpenWindowParams); okp && p != nil {
+				params = *p
+			} else {
+				return nil, errAdmCommInvalidFields
+			}
+		}
+		// Validate PAKE parameters per Matter §11.19.8.1.2 FIRST — before
+		// the PASE / Busy / fail-safe gates. Mirrors matter.js
+		// AdministratorCommissioningServer.ts:82-97 (openCommissioningWindow
+		// checks the verifier length, iterations, and salt bounds — each
+		// raising PakeParameterError — BEFORE #assertCommissioningWindowRequirements
+		// runs the window-already-open / fail-safe Busy checks). A
+		// malformed-and-busy request therefore surfaces the PAKEParameterError
+		// (cluster status 0x03), not Busy. chip's
+		// administrator-commissioning-server.cpp likewise validates PAKE
+		// parameters before the window-state check.
+		if params.Iterations < pakeIterationsMin || params.Iterations > pakeIterationsMax {
+			return nil, fmt.Errorf("%w: Iterations=%d not in [%d, %d]", errAdmCommPakeParameter, params.Iterations, pakeIterationsMin, pakeIterationsMax)
+		}
+		if n := len(params.Salt); n < pakeSaltMinBytes || n > pakeSaltMaxBytes {
+			return nil, fmt.Errorf("%w: Salt length=%d not in [%d, %d]", errAdmCommPakeParameter, n, pakeSaltMinBytes, pakeSaltMaxBytes)
+		}
+		if n := len(params.PAKEPasscodeVerifier); n != pakeVerifierBytes {
+			return nil, fmt.Errorf("%w: PAKEPasscodeVerifier length=%d, want %d", errAdmCommPakeParameter, n, pakeVerifierBytes)
+		}
 		// OpenCommissioningWindow must be refused when called over a PASE
 		// session (fabricIndex == 0). Multi-Admin is a CASE-only operation.
 		// Mirrors chip AdministratorCommissioningCluster.cpp
@@ -311,33 +340,6 @@ func (a *AdministratorCommissioning) MatterInvoke(ctx context.Context, cmdID uin
 		if c == nil {
 			return nil, errAdmCommBusy
 		}
-		params, ok := fields.(OpenWindowParams)
-		if !ok {
-			// fields can be a pointer in some dispatcher paths; be
-			// liberal in what we accept here.
-			if p, okp := fields.(*OpenWindowParams); okp && p != nil {
-				params = *p
-			} else {
-				return nil, errAdmCommInvalidFields
-			}
-		}
-		// Validate PAKE parameters per Matter §11.19.8.1.2 BEFORE
-		// dispatching to the controller. matter.js's
-		// AdministratorCommissioningServer.ts enforces the same
-		// ranges; chip's administrator-commissioning-server.cpp
-		// returns PakeParameterError (0x02) for out-of-range values.
-		// openccu-loom previously passed unvalidated values straight
-		// to spake2.PBKDF, producing opaque crypto failures instead
-		// of the spec-mandated status code.
-		if params.Iterations < pakeIterationsMin || params.Iterations > pakeIterationsMax {
-			return nil, fmt.Errorf("%w: Iterations=%d not in [%d, %d]", errAdmCommPakeParameter, params.Iterations, pakeIterationsMin, pakeIterationsMax)
-		}
-		if n := len(params.Salt); n < pakeSaltMinBytes || n > pakeSaltMaxBytes {
-			return nil, fmt.Errorf("%w: Salt length=%d not in [%d, %d]", errAdmCommPakeParameter, n, pakeSaltMinBytes, pakeSaltMaxBytes)
-		}
-		if n := len(params.PAKEPasscodeVerifier); n != pakeVerifierBytes {
-			return nil, fmt.Errorf("%w: PAKEPasscodeVerifier length=%d, want %d", errAdmCommPakeParameter, n, pakeVerifierBytes)
-		}
 		// Populate AdminFabricIndex from IM dispatcher context per
 		// Matter §11.19.5.2 and matter.js
 		// AdministratorCommissioningServer.ts:176-180
@@ -346,8 +348,6 @@ func (a *AdministratorCommissioning) MatterInvoke(ctx context.Context, cmdID uin
 		// (fabric store lookup); fabricIndex==0 (PASE) keeps the
 		// VendorID at zero, which the bridge controller surfaces as
 		// AdminVendorIsNull.
-		// fabIdx is already declared above for the PASE-reject check;
-		// reuse it here.
 		params.AdminFabricIndex = fabIdx
 		if fabIdx != 0 && vr != nil && params.AdminVendorID == 0 {
 			params.AdminVendorID = vr(ctx, fabIdx)

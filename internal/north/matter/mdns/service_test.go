@@ -451,10 +451,10 @@ func TestBuildCommissionableService_PairingHint_NonZero_SetsPH(t *testing.T) {
 }
 
 // TestBuildCommissionableService_PairingHint_Zero_EmitsDefault verifies
-// that PairingHint=0 emits PH=PairingHintDefault (0x0033) matching
+// that PairingHint=0 emits PH=PairingHintDefault (0x21) matching
 // matter.js CommissionableMdnsAdvertisement.ts DEFAULT_PAIRING_HINT.
 // The old behaviour suppressed PH=0; the new behaviour always emits PH
-// (defaulting to 0x0033 = 51 when unset).
+// (defaulting to 0x21 = 33 when unset).
 func TestBuildCommissionableService_PairingHint_Zero_EmitsDefault(t *testing.T) {
 	t.Parallel()
 	cfg := commissionableCfg()
@@ -464,6 +464,26 @@ func TestBuildCommissionableService_PairingHint_Zero_EmitsDefault(t *testing.T) 
 		t.Fatal("expected PH key to be emitted with default when PairingHint is 0")
 	}
 	assertTXTValue(t, svc, "PH", strconv.FormatUint(uint64(mdns.PairingHintDefault), 10))
+}
+
+// TestPairingHintDefault_MatchesMatterJS pins the numeric value of
+// [mdns.PairingHintDefault] to matter.js's DEFAULT_PAIRING_HINT
+// (packages/protocol/src/mdns/MdnsConsts.ts:15-18 —
+// { powerCycle: true, deviceManual: true }). Per
+// packages/protocol/src/advertisement/PairingHintBitmap.ts, powerCycle
+// is bit 0 (0x01) and deviceManual is bit 5 (0x20); the combined
+// bitmap is 0x21, NOT 0x33 (which would additionally set
+// deviceManufacturerUrl (bit 1) and customInstruction (bit 4) —
+// customInstruction requires a PI value the bridge never supplies, so
+// advertising it is actively wrong).
+func TestPairingHintDefault_MatchesMatterJS(t *testing.T) {
+	t.Parallel()
+	const wantPowerCycle = 1 << 0
+	const wantDeviceManual = 1 << 5
+	want := uint16(wantPowerCycle | wantDeviceManual)
+	if mdns.PairingHintDefault != want {
+		t.Fatalf("PairingHintDefault = 0x%02X, want 0x%02X (powerCycle|deviceManual)", mdns.PairingHintDefault, want)
+	}
 }
 
 func TestBuildCommissionableService_PairingInstruction_SetsPI(t *testing.T) {

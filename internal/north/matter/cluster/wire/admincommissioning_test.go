@@ -641,3 +641,38 @@ func TestAdmComm_TypedErrors_Interface(t *testing.T) {
 		t.Error("ErrAdmCommWindowNotOpen.MatterStatusCode() is 0")
 	}
 }
+
+// TestAdmComm_Invoke_OpenWindow_MalformedPAKEBeatsBusy pins that PAKE
+// parameter validation runs BEFORE the Busy / fail-safe gates: a request that
+// is both malformed (bad verifier length) AND busy (FailSafe armed) surfaces
+// the PAKEParameterError, not Busy. Mirrors matter.js
+// AdministratorCommissioningServer.ts:82-97 (openCommissioningWindow validates
+// verifier length / iterations / salt bounds before
+// #assertCommissioningWindowRequirements runs the Busy checks).
+func TestAdmComm_Invoke_OpenWindow_MalformedPAKEBeatsBusy(t *testing.T) {
+	t.Parallel()
+	ac := newAdmComm()
+	ctrl := &fakeWindowController{}
+	ac.SetController(ctrl)
+	// Make the cluster "busy": a FailSafe window is armed.
+	ac.SetIsFailSafeArmed(func() bool { return true })
+
+	// CASE session so the PASE reject does not pre-empt anything.
+	caseCtx := im.WithFabricFilter(context.Background(), true, 1)
+	// Malformed verifier length (want 97) — and the window is busy.
+	_, err := ac.MatterInvoke(caseCtx, admCommCmdOpenWindow, wire.OpenWindowParams{
+		CommissioningTimeoutSeconds: 300,
+		Iterations:                  1000,
+		Salt:                        make([]byte, 16),
+		PAKEPasscodeVerifier:        make([]byte, 10), // wrong length
+	}, hmenum.CommandPriorityHigh)
+	if !errors.Is(err, wire.ErrAdmCommPakeParameter) {
+		t.Fatalf("MatterInvoke(OpenWindow, malformed+busy): want ErrAdmCommPakeParameter, got %v", err)
+	}
+	if errors.Is(err, wire.ErrAdmCommBusy) {
+		t.Errorf("malformed+busy request returned Busy; PAKE validation must run first")
+	}
+	if ctrl.openWindowCalls != 0 {
+		t.Errorf("OpenWindow call count = %d, want 0 (rejected before controller dispatch)", ctrl.openWindowCalls)
+	}
+}

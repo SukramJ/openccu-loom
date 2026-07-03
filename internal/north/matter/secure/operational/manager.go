@@ -229,8 +229,29 @@ func NewManager(s ResumptionStore) *Manager {
 	return &Manager{
 		store:    s,
 		sessions: make(map[uint16]*Entry),
-		nextID:   1,
+		nextID:   randomInitialSessionID(),
 	}
+}
+
+// randomInitialSessionID picks a random starting point in [1, 0xFFFE]
+// for the session-id allocator. Mirrors matter.js
+// packages/protocol/src/session/SessionManager.ts:213
+// (`this.#nextSessionId = crypto.randomUint16`). Starting at a random
+// slot rather than always at 1 reduces the chance that, after a daemon
+// restart, the bridge re-issues a low session id that a peer still has
+// cached from a prior session — which would otherwise let the peer's
+// new traffic land on a session-table slot it misidentifies. Falls
+// back to 1 if the entropy source is unavailable.
+func randomInitialSessionID() uint16 {
+	var b [2]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return 1
+	}
+	v := uint16(b[0])<<8 | uint16(b[1])
+	// Map onto the allocator's valid range [1, 0xFFFE]; id 0 is
+	// reserved by Matter for unsecured traffic and 0xFFFF is out of
+	// range for allocateIDLocked.
+	return v%0xFFFE + 1
 }
 
 // OpenFromSigma constructs a session from the Sigma key-derivation
@@ -247,8 +268,11 @@ func NewManager(s ResumptionStore) *Manager {
 // in-memory window's high-water mark; without eviction the bridge
 // keeps decrypting against the stale entry, fails authentication,
 // and the commissioner aborts the new pair attempt with INVALID_PARAMETER.
-// Mirrors matter.js packages/protocol/src/session/SessionManager.ts:
-// removeAllSessionsForNode (called on every CASE establishment).
+// This is a deliberate divergence from matter.js, which does NOT evict
+// same-peer sessions on establishment: SessionManager.ts createSecureSession
+// (:396) retains concurrent (fabric, peer) sessions and reclaims an id only
+// on exhaustion (getNextAvailableSessionId -> findOldestInactiveSession,
+// :455-476). See docs/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
 func (m *Manager) OpenFromSigma(fabricIndex uint8, localNodeID, peerNodeID uint64, keys sigma.SessionKeys) (*Entry, error) {
 	sess, err := channel.New(channel.Config{
 		EncryptKey:  keys.R2IKey[:], // bridge → peer
@@ -581,8 +605,10 @@ func (m *Manager) ClosePASESessions() int {
 // ClosePeer tears down every live session matching the
 // (fabricIndex, peerNodeID) pair. Returns the number of sessions
 // closed. Exposed so an operator (or a counter-jump heuristic) can
-// invalidate a stale session table on demand. Mirrors matter.js
-// packages/protocol/src/session/SessionManager.ts:removeAllSessionsForNode.
+// invalidate a stale session table on demand. matter.js has no direct
+// per-peer equivalent (it drops sessions per fabric on fabric teardown,
+// not per peer); this backs the bridge's stale-session invalidation path.
+// See docs/parity/by_design.md BD-Matter-CASE-StalePeerEviction.
 func (m *Manager) ClosePeer(fabricIndex uint8, peerNodeID uint64) int {
 	m.mu.Lock()
 	victims := make([]*Entry, 0)

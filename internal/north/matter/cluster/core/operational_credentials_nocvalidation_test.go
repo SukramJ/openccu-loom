@@ -164,6 +164,11 @@ func TestUpdateNOC_MintedOverWrongKeyRejectedAsInvalidPublicKey(t *testing.T) {
 	_, rootPriv, fabricIndex := commissionTestFabric(ctx, t, oc)
 
 	fabCtx := im.WithFabricFilter(ctx, true, fabricIndex)
+	// A real UpdateNOC opens a fresh FailSafe window (ArmFailSafe →
+	// ClearPendingState) before its CSRRequest; without the reset the CSR
+	// lands in the AddNOC window and is rejected with ConstraintError
+	// (matter.js OperationalCredentialsServer.ts:131-137).
+	oc.ClearPendingState()
 	// Issue the update CSR (sets a pending key) but mint the NOC over an
 	// unrelated throwaway key instead of the one the CSR carried.
 	if _, err := oc.MatterInvoke(fabCtx, 0x04, core.CSRRequest{

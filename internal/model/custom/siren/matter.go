@@ -51,6 +51,29 @@ const (
 
 	matterAttrOnOffOnOff uint32 = 0x0000
 
+	// LT (Lighting) feature-gated OnOff attributes. OnOffPlugInUnit
+	// (0x010A) mandates the LT feature on the OnOff cluster (see
+	// matterFeatureOnOffLT below), which in turn makes these four
+	// attributes mandatory. matter.js
+	// packages/model/src/standard/elements/on-off.element.ts:30-36:
+	//   GlobalSceneControl 0x4000 bool   conformance "LT" access "R V"
+	//   OnTime             0x4001 uint16 conformance "LT" access "RW VO"
+	//   OffWaitTime        0x4002 uint16 conformance "LT" access "RW VO"
+	//   StartUpOnOff       0x4003 enum8  conformance "LT" access "RW VM" quality "X N"
+	matterAttrOnOffGlobalSceneControl uint32 = 0x4000
+	matterAttrOnOffOnTime             uint32 = 0x4001
+	matterAttrOnOffOffWaitTime        uint32 = 0x4002
+	matterAttrOnOffStartUpOnOff       uint32 = 0x4003
+
+	// matterFeatureOnOffLT is the LT (Lighting) FeatureMap bit on the
+	// OnOff cluster: constraint "0" → bit 0 (0x01). matter.js
+	// on-off.element.ts:24 (Field LT). OnOffPlugInUnit (0x010A) marks
+	// the feature "M" (mandatory) — on-off-plug-in-unit.element.ts:22-25 —
+	// so this projection must advertise it (and its four gated
+	// attributes + three gated commands below), the same as
+	// internal/model/custom/switch/matter.go's Switch projection.
+	matterFeatureOnOffLT uint32 = 0x01
+
 	// SmokeCOAlarm attributes (Matter spec 2.11.5).
 	// HardwareFaultAlert (0x0006) and EndOfServiceAlert (0x0007) are
 	// mandatory per matter.js
@@ -68,6 +91,12 @@ const (
 
 	matterCmdOff uint32 = 0x00
 	matterCmdOn  uint32 = 0x01
+	// LT (Lighting) feature-gated OnOff commands — mandatory once LT is
+	// advertised. matter.js on-off.element.ts:41,46,51 mark all three
+	// conformance "LT".
+	matterCmdOffWithEffect           uint32 = 0x40
+	matterCmdOnWithRecallGlobalScene uint32 = 0x41
+	matterCmdOnWithTimedOff          uint32 = 0x42
 
 	matterOnOffClusterRevision        uint16 = 6
 	matterBooleanStateClusterRevision uint16 = 2 // matter.js HEAD (@matter/model 0.16.11)
@@ -112,8 +141,9 @@ func (s *Siren) MatterEligibility() interfaces.MatterEligibilityVerdict {
 }
 
 // MatterClusterServers returns OnOff (for the alarm-on/off command
-// surface) plus the mandatory Groups + ScenesManagement stubs for the
-// OnOffPlugInUnit (0x010A) device-type per matter.js
+// surface, LT feature and all — see sirenOnOffServer) plus the
+// mandatory Groups + ScenesManagement stubs for the OnOffPlugInUnit
+// (0x010A) device-type per matter.js
 // packages/model/src/standard/elements/on-off-plug-in-unit.element.ts.
 //
 // BooleanState (0x0045) is intentionally absent: it is NOT part of the
@@ -137,6 +167,19 @@ func (s *Siren) MatterClusterServers() []interfaces.MatterClusterServer {
 // On/Off commands map to the default Siren TurnOn / TurnOff with the
 // device-supplied default OnConfig (capability profile chooses the
 // tone / light selection out-of-band).
+//
+// OnOffPlugInUnit (0x010A) mandates the LT (Lighting) feature on OnOff
+// (on-off-plug-in-unit.element.ts:22-25), so this server advertises it
+// and implements the four LT-gated attributes plus the three LT-gated
+// commands — the same LT baseline
+// internal/model/custom/switch/matter.go's Switch projection carries
+// for the same device type. HM-ASIR has no on-timer / delayed-off /
+// scene engine, so OnTime, OffWaitTime, and the three LT commands
+// collapse to the plain On/Off path; GlobalSceneControl is reported
+// false — matter.js's schema default for a device that has never
+// executed on() (on-off.element.ts:29-30 declares no explicit default,
+// so the bool starts false; OnOffServer.ts:102-103 only flips it true
+// inside on()).
 type sirenOnOffServer struct{ s *Siren }
 
 func (s sirenOnOffServer) MatterClusterID() uint32 { return matterClusterOnOff }
@@ -150,8 +193,19 @@ func (s sirenOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		// state so the cluster surface stays spec-clean.
 		on, _ := s.s.IsActive()
 		return on, true
+	case matterAttrOnOffGlobalSceneControl:
+		// See the sirenOnOffServer doc comment: static false, this
+		// projection has no scene engine to flip it live.
+		return false, true
+	case matterAttrOnOffOnTime, matterAttrOnOffOffWaitTime:
+		// No on-timer / delayed-off engine; report the idle default (0).
+		return uint16(0), true
+	case matterAttrOnOffStartUpOnOff:
+		// Nullable; null = "keep last state on startup" (the only state
+		// this bridge tracks). matter.js OnOffServer.ts:39.
+		return nil, true
 	case matterAttrFeatureMap:
-		return uint32(0), true
+		return matterFeatureOnOffLT, true
 	case matterAttrClusterRevision:
 		return matterOnOffClusterRevision, true
 	default:
@@ -160,26 +214,62 @@ func (s sirenOnOffServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 func (s sirenOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
-	if attrID != matterAttrOnOffOnOff {
+	switch attrID {
+	case matterAttrOnOffOnOff:
+		on, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
+		}
+		var err error
+		if on {
+			// TurnOn with the empty OnConfig: device-defined defaults pick the tone /
+			// light selection.
+			err = s.s.TurnOn(ctx, OnConfig{}, priority)
+		} else {
+			err = s.s.TurnOff(ctx, priority)
+		}
+		if err != nil {
+			return err
+		}
+		s.s.dataVersion.Bump()
+		return nil
+	case matterAttrOnOffOnTime, matterAttrOnOffOffWaitTime:
+		// RW VO (on-off.element.ts:31-32); accepted for conformance —
+		// there is no on-timer / delayed-off engine behind these
+		// counters on this projection, so the write is a validated no-op.
+		if _, ok := matterWriteUint16(value); !ok {
+			return fmt.Errorf("%w: OnTime/OffWaitTime write expected uint16, got %T", errMatterValueType, value)
+		}
+		return nil
+	case matterAttrOnOffStartUpOnOff:
+		// RW VM, nullable enum 0..2 (on-off.element.ts:33-36); accepted
+		// for conformance, not persisted (see the sirenOnOffServer doc
+		// comment).
+		if value == nil {
+			return nil
+		}
+		v, ok := matterWriteUint8(value)
+		if !ok {
+			return fmt.Errorf("%w: StartUpOnOff write expected enum8, got %T", errMatterValueType, value)
+		}
+		if v > 2 {
+			return fmt.Errorf("%w: StartUpOnOff constraint 0..2, got %d", errMatterValueType, v)
+		}
+		return nil
+	default:
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
-	on, ok := value.(bool)
-	if !ok {
-		return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
+}
+
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: StartUpOnOff is
+// RW VM per on-off.element.ts:34 (write access Manage); the countdown
+// attributes stay at the RW VO default.
+func (s sirenOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
+	if attrID == matterAttrOnOffStartUpOnOff {
+		return 4 // Manage
 	}
-	var err error
-	if on {
-		// TurnOn with the empty OnConfig: device-defined defaults pick the tone /
-		// light selection.
-		err = s.s.TurnOn(ctx, OnConfig{}, priority)
-	} else {
-		err = s.s.TurnOff(ctx, priority)
-	}
-	if err != nil {
-		return err
-	}
-	s.s.dataVersion.Bump()
-	return nil
+	return 3 // Operate
 }
 
 func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
@@ -188,6 +278,20 @@ func (s sirenOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any,
 	case matterCmdOff:
 		err = s.s.TurnOff(ctx, priority)
 	case matterCmdOn:
+		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+	case matterCmdOffWithEffect:
+		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
+		// siren, so the effect identifier/variant are ignored and the
+		// alarm is turned off. on-off.element.ts:41.
+		err = s.s.TurnOff(ctx, priority)
+	case matterCmdOnWithRecallGlobalScene:
+		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
+		// recall collapses to a plain On. on-off.element.ts:46.
+		err = s.s.TurnOn(ctx, OnConfig{}, priority)
+	case matterCmdOnWithTimedOff:
+		// OnWithTimedOff (LT, mandatory): no on-timer, so the timed-off
+		// semantics are dropped and the alarm is turned on.
+		// on-off.element.ts:51.
 		err = s.s.TurnOn(ctx, OnConfig{}, priority)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
@@ -206,10 +310,48 @@ func (s sirenOnOffServer) MatterReportable() []uint32 {
 // MatterAttributes lists every OnOff (0x0006) attribute the siren
 // server implements via MatterRead. Apple Home's HAP service rebuild
 // reads the full attribute set; without this the dispatcher falls back
-// to MatterReportable's single attribute.
+// to MatterReportable's single attribute. OnOffPlugInUnit (0x010A)
+// mandates the LT (Lighting) feature, so the four LT-gated attributes
+// are enumerated. matter.js on-off.element.ts:30-36.
 func (s sirenOnOffServer) MatterAttributes() []uint32 {
-	return []uint32{matterAttrOnOffOnOff}
+	return []uint32{
+		matterAttrOnOffOnOff,
+		matterAttrOnOffGlobalSceneControl,
+		matterAttrOnOffOnTime,
+		matterAttrOnOffOffWaitTime,
+		matterAttrOnOffStartUpOnOff,
+	}
 }
+
+// MatterAcceptedCommands implements [interfaces.MatterClusterCommandLister]
+// for the OnOff cluster (0x0006). Enumerates the OnOff baseline plus the
+// three LT-mandatory commands so AcceptedCommandList is populated for
+// chip-tool / Apple Home conformance reads. matter.js on-off.element.ts:
+// Off (0x00, M), On (0x01), OffWithEffect (0x40, LT),
+// OnWithRecallGlobalScene (0x41, LT), OnWithTimedOff (0x42, LT). Toggle
+// (0x02) is absent — Siren has no toggle command in its wire surface.
+func (s sirenOnOffServer) MatterAcceptedCommands() []uint32 {
+	return []uint32{
+		matterCmdOff,
+		matterCmdOn,
+		matterCmdOffWithEffect,
+		matterCmdOnWithRecallGlobalScene,
+		matterCmdOnWithTimedOff,
+	}
+}
+
+// MatterGeneratedCommands implements [interfaces.MatterClusterCommandLister]
+// for the OnOff cluster (0x0006). OnOff commands have no response payload.
+func (s sirenOnOffServer) MatterGeneratedCommands() []uint32 { return nil }
+
+// Compile-time assertions: sirenOnOffServer implements the attribute +
+// command listers plus the write-privilege provider the dispatcher
+// uses to populate the global metadata attributes and enforce ACL.
+var (
+	_ interfaces.MatterClusterAttributeLister         = sirenOnOffServer{}
+	_ interfaces.MatterClusterCommandLister           = sirenOnOffServer{}
+	_ interfaces.MatterClusterAttributeWritePrivilege = sirenOnOffServer{}
+)
 
 // MatterDeviceType implements [interfaces.MatterEndpointSource].
 func (s *SmokeSiren) MatterDeviceType() uint16 { return matterDeviceTypeSmokeCOAlarm }
@@ -317,5 +459,32 @@ func (s smokeCOServer) MatterAttributes() []uint32 {
 		matterAttrHardwareFaultAlert,
 		matterAttrEndOfServiceAlert,
 		matterAttrTestInProgress,
+	}
+}
+
+// matterWriteUint16 coerces an OnOff LT attribute-write value (OnTime /
+// OffWaitTime) into uint16. The IM write layer delivers decoded TLV
+// unsigned ints as uint64; the narrower uint16 case keeps in-package
+// callers working.
+func matterWriteUint16(value any) (uint16, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint16(v & 0xFFFF), true
+	case uint16:
+		return v, true
+	default:
+		return 0, false
+	}
+}
+
+// matterWriteUint8 coerces a StartUpOnOff attribute-write value into uint8.
+func matterWriteUint8(value any) (uint8, bool) {
+	switch v := value.(type) {
+	case uint64:
+		return uint8(v & 0xFF), true
+	case uint8:
+		return v, true
+	default:
+		return 0, false
 	}
 }

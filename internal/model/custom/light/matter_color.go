@@ -140,6 +140,56 @@ func matterSaturationToHM(m uint8) float64 {
 	return float64(m) / matterHueScale * 100
 }
 
+// colorOptionsAllowExecution mirrors matter.js
+// ColorControlServer.ts:1733 (#optionsAllowExecution): a ColorControl
+// move-to command silently no-ops while the device is off unless the
+// effective ExecuteIfOff option (bit 0) is set. The Options attribute
+// (0x000F) is a constant 0 on every projection in this file, so the
+// effective option reduces to "mask bit set AND override bit set" —
+// matter.js's #calculateEffectiveOptions with options.executeIfOff
+// always false. Mirrors [lightLevelServer.levelOptionsAllowExecution]
+// in matter.go for the analogous LevelControl gate.
+func colorOptionsAllowExecution(on bool, optionsMask, optionsOverride uint8) bool {
+	const executeIfOffBit = 0x01
+	if optionsMask&executeIfOffBit != 0 && optionsOverride&executeIfOffBit != 0 {
+		return true
+	}
+	return on
+}
+
+// extractColorOptions pulls OptionsMask / OptionsOverride out of a
+// decoded ColorControl move-to command. The typed wire request structs
+// already carry both fields (decoded by the bridge's TLV codec); the
+// map[uint8]any fallback reads the command-specific tag pair — the tag
+// numbers vary per command (color-control.element.ts:197-198 MoveToHue
+// tags 3/4, :205-206 MoveToSaturation tags 2/3, :288-289
+// MoveToColorTemperature tags 2/3). Absent fields default to 0,
+// matching the spec default for an omitted optional bitmap.
+func extractColorOptions(fields any, maskTag, overrideTag uint8) (mask, override uint8) {
+	switch v := fields.(type) {
+	case wire.MoveToHueRequest:
+		return v.OptionsMask, v.OptionsOverride
+	case wire.MoveToSaturationRequest:
+		return v.OptionsMask, v.OptionsOverride
+	case wire.MoveToHueAndSaturationRequest:
+		return v.OptionsMask, v.OptionsOverride
+	case wire.MoveToColorTemperatureRequest:
+		return v.OptionsMask, v.OptionsOverride
+	case map[uint8]any:
+		if raw, ok := v[maskTag]; ok {
+			if m, mok := wireUint8(raw); mok {
+				mask = m
+			}
+		}
+		if raw, ok := v[overrideTag]; ok {
+			if o, ook := wireUint8(raw); ook {
+				override = o
+			}
+		}
+	}
+	return mask, override
+}
+
 // kelvinToMireds converts Kelvin into Matter's reciprocal mireds.
 // Matter spec 3.2.7.10: ColorTemperatureMireds = 1_000_000 / Kelvin.
 func kelvinToMireds(k int32) uint16 {
@@ -304,6 +354,13 @@ func (s ctColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		if err != nil {
 			return nil, err
 		}
+		mask, override := extractColorOptions(fields, 2, 3)
+		on, _ := s.l.IsOn()
+		if !colorOptionsAllowExecution(on, mask, override) {
+			// matter.js ColorControlServer.ts:956-957: silent no-op while off
+			// and ExecuteIfOff is not effective.
+			return nil, nil
+		}
 		if err := s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority); err != nil {
 			return nil, err
 		}
@@ -406,12 +463,19 @@ func (s hsColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hm
 }
 
 func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+	on, _ := s.l.IsOn()
 	var err error
 	switch cmdID {
 	case matterCmdColorMoveToHue:
 		hue, e := extractHueOnly(fields)
 		if e != nil {
 			return nil, e
+		}
+		mask, override := extractColorOptions(fields, 3, 4)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			// matter.js ColorControlServer.ts:409-411: silent no-op while
+			// off and ExecuteIfOff is not effective.
+			return nil, nil
 		}
 		_, sat, _ := s.l.Color()
 		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, priority)
@@ -420,12 +484,20 @@ func (s hsColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 		if e != nil {
 			return nil, e
 		}
+		mask, override := extractColorOptions(fields, 2, 3)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			return nil, nil
+		}
 		hue, _, _ := s.l.Color()
 		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), priority)
 	case matterCmdColorMoveToHueAndSaturation:
 		hue, sat, e := extractHueAndSaturation(fields)
 		if e != nil {
 			return nil, e
+		}
+		mask, override := extractColorOptions(fields, 3, 4)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			return nil, nil
 		}
 		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), priority)
 	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,
@@ -567,12 +639,19 @@ func (s rgbwColorServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ 
 }
 
 func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
+	on, _ := s.l.IsOn()
 	var err error
 	switch cmdID {
 	case matterCmdColorMoveToHue:
 		hue, e := extractHueOnly(fields)
 		if e != nil {
 			return nil, e
+		}
+		mask, override := extractColorOptions(fields, 3, 4)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			// matter.js ColorControlServer.ts:409-411: silent no-op while
+			// off and ExecuteIfOff is not effective.
+			return nil, nil
 		}
 		_, sat, _ := s.l.Color()
 		err = s.l.SetColor(ctx, matterHueToHM(hue), sat, priority)
@@ -581,6 +660,10 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 		if e != nil {
 			return nil, e
 		}
+		mask, override := extractColorOptions(fields, 2, 3)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			return nil, nil
+		}
 		hue, _, _ := s.l.Color()
 		err = s.l.SetColor(ctx, hue, matterSaturationToHM(sat), priority)
 	case matterCmdColorMoveToHueAndSaturation:
@@ -588,11 +671,19 @@ func (s rgbwColorServer) MatterInvoke(ctx context.Context, cmdID uint32, fields 
 		if e != nil {
 			return nil, e
 		}
+		mask, override := extractColorOptions(fields, 3, 4)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			return nil, nil
+		}
 		err = s.l.SetColor(ctx, matterHueToHM(hue), matterSaturationToHM(sat), priority)
 	case matterCmdColorMoveToColorTemperature:
 		mireds, e := extractColorTempMireds(fields)
 		if e != nil {
 			return nil, e
+		}
+		mask, override := extractColorOptions(fields, 2, 3)
+		if !colorOptionsAllowExecution(on, mask, override) {
+			return nil, nil
 		}
 		err = s.l.SetKelvin(ctx, miredsToKelvin(mireds), priority)
 	case wire.ColorCtrlCmdMoveHue, wire.ColorCtrlCmdStepHue,

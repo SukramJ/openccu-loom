@@ -17,10 +17,8 @@ package schema
 //
 // Unlike ClusterRevisions this table is hand-authored: the generated schema
 // snapshot does not yet carry per-command conformance. It is pinned against
-// matter.js by TestTimedInvokeParity so it cannot silently drift, and it lists
-// only clusters the bridge exposes — across that root/utility cluster set
-// AdministratorCommissioning is the only one with "T"-access commands. Extend
-// it (and the parity test) whenever a newly exposed cluster ships a timed
+// matter.js by TestTimedInvokeParity so it cannot silently drift. Extend it
+// (and the parity test) whenever a newly exposed cluster ships a timed
 // command.
 var timedInvokePaths = map[uint32]map[uint32]struct{}{
 	// AdministratorCommissioning (0x003C) — every command is "A T".
@@ -29,6 +27,13 @@ var timedInvokePaths = map[uint32]map[uint32]struct{}{
 		0x0: {}, // OpenCommissioningWindow
 		0x1: {}, // OpenBasicCommissioningWindow
 		0x2: {}, // RevokeCommissioning
+	},
+	// DoorLock (0x0101) — LockDoor / UnlockDoor / UnboltDoor carry "O T".
+	// ../matter.js/packages/model/src/standard/elements/door-lock-cluster.element.ts:230,234,560
+	0x0101: {
+		0x00: {}, // LockDoor
+		0x01: {}, // UnlockDoor
+		0x27: {}, // UnboltDoor
 	},
 }
 

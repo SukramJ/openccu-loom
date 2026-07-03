@@ -58,8 +58,12 @@ func TestRoundTripAliceToBob(t *testing.T) {
 	if hdr.MessageCounter != 1 {
 		t.Errorf("counter=%d, want 1", hdr.MessageCounter)
 	}
-	if hdr.SourceNodeID != aCfg.LocalNodeID {
-		t.Errorf("source=%X, want %X", hdr.SourceNodeID, aCfg.LocalNodeID)
+	// Secure unicast omits the Source Node ID on the wire (S flag = 0) —
+	// the nonce binds to the local node id via session context, not the
+	// header. Mirrors matter.js NodeSession.ts encode.
+	if hdr.HasSourceNodeID || hdr.SourceNodeID != 0 {
+		t.Errorf("secure unicast must not stamp source node id: has=%v src=%X",
+			hdr.HasSourceNodeID, hdr.SourceNodeID)
 	}
 
 	got, _, err := bob.Decrypt(&hdr, 0, out.Ciphertext)

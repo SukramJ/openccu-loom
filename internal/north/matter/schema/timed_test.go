@@ -31,6 +31,10 @@ func TestIsTimedInvoke(t *testing.T) {
 		{"AdministratorCommissioning/OpenBasicCommissioningWindow", 0x003C, 0x1, true},
 		{"AdministratorCommissioning/RevokeCommissioning", 0x003C, 0x2, true},
 		{"AdministratorCommissioning/UnknownCommand", 0x003C, 0x5, false},
+		{"DoorLock/LockDoor", 0x0101, 0x00, true},
+		{"DoorLock/UnlockDoor", 0x0101, 0x01, true},
+		{"DoorLock/UnboltDoor", 0x0101, 0x27, true},
+		{"DoorLock/UnknownCommand", 0x0101, 0x02, false},
 		{"OnOff/On", 0x0006, 0x0, false},
 		{"BasicInformation/Command0", 0x0028, 0x0, false},
 	}
@@ -96,9 +100,8 @@ func timedCommandIDsFromElementFile(t *testing.T, path string) map[uint32]struct
 }
 
 // TestTimedInvokeParity pins schema.timedInvokePaths (via IsTimedInvoke)
-// against the matter.js AdministratorCommissioning element file — the
-// single cluster the bridge currently exposes with "T"-access commands
-// (see timed.go). If matter.js adds, removes, or changes the timed
+// against the matter.js cluster element files for every cluster currently
+// listed in timed.go. If matter.js adds, removes, or changes the timed
 // qualifier on a command here, this test fails and timed.go must be
 // extended alongside it.
 //
@@ -117,32 +120,71 @@ func TestTimedInvokeParity(t *testing.T) {
 	// level above the repo root (see CLAUDE.md "matter.js as the Matter Gold
 	// Standard").
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..", "..", "..")
-	elementPath := filepath.Join(repoRoot, "..", "matter.js", "packages", "model", "src", "standard", "elements", "administrator-commissioning.element.ts")
+	elementsDir := filepath.Join(repoRoot, "..", "matter.js", "packages", "model", "src", "standard", "elements")
 
-	if _, err := os.Stat(elementPath); err != nil {
-		t.Skip("matter.js checkout not present")
+	cases := []struct {
+		name      string
+		clusterID uint32
+		file      string
+		want      map[uint32]struct{}
+		idRange   uint32 // exclusive upper bound scanned for typo/false-positive detection
+		// fullCoverage is true when want equals the cluster's ENTIRE
+		// matter.js timed-command set (AdministratorCommissioning: every
+		// command is "A T"). It is false for clusters where the bridge only
+		// implements a subset of the cluster's commands — DoorLock ships
+		// LockDoor/UnlockDoor/UnboltDoor only; matter.js also marks
+		// SetUser/ClearUser/SetCredential/ClearCredential/Aliro commands as
+		// timed, but those are not yet exposed by the bridge so they are
+		// intentionally absent from timedInvokePaths.
+		fullCoverage bool
+	}{
+		{
+			name:         "AdministratorCommissioning",
+			clusterID:    0x003C,
+			file:         "administrator-commissioning.element.ts",
+			want:         map[uint32]struct{}{0x0: {}, 0x1: {}, 0x2: {}},
+			idRange:      0xA,
+			fullCoverage: true,
+		},
+		{
+			name:      "DoorLock",
+			clusterID: 0x0101,
+			file:      "door-lock-cluster.element.ts",
+			want:      map[uint32]struct{}{0x00: {}, 0x01: {}, 0x27: {}},
+			idRange:   0x30,
+		},
 	}
 
-	timedIDs := timedCommandIDsFromElementFile(t, elementPath)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	want := map[uint32]struct{}{0x0: {}, 0x1: {}, 0x2: {}}
-	if len(timedIDs) != len(want) {
-		t.Fatalf("matter.js AdministratorCommissioning timed command IDs = %v, want %v", timedIDs, want)
-	}
-	for id := range want {
-		if _, ok := timedIDs[id]; !ok {
-			t.Errorf("matter.js marks command 0x%X as timed but it is missing from the parsed set %v", id, timedIDs)
-		}
-	}
+			elementPath := filepath.Join(elementsDir, tc.file)
+			if _, err := os.Stat(elementPath); err != nil {
+				t.Skip("matter.js checkout not present")
+			}
 
-	// Cross-check against IsTimedInvoke across a small ID range so an
-	// erroneous extra entry in timedInvokePaths (a false positive not
-	// present in matter.js) is caught too.
-	for id := range uint32(0xA) {
-		_, wantTimed := timedIDs[id]
-		gotTimed := schema.IsTimedInvoke(0x003C, id)
-		if gotTimed != wantTimed {
-			t.Errorf("IsTimedInvoke(0x003C, 0x%X) = %v, want %v (matter.js parity)", id, gotTimed, wantTimed)
-		}
+			timedIDs := timedCommandIDsFromElementFile(t, elementPath)
+
+			for id := range tc.want {
+				if _, ok := timedIDs[id]; !ok {
+					t.Errorf("matter.js marks command 0x%X as timed but it is missing from the parsed set %v", id, timedIDs)
+				}
+			}
+			if tc.fullCoverage && len(timedIDs) != len(tc.want) {
+				t.Fatalf("matter.js %s timed command IDs = %v, want %v", tc.name, timedIDs, tc.want)
+			}
+
+			// Cross-check against IsTimedInvoke across an ID range so an
+			// erroneous extra entry in timedInvokePaths (a typo'd ID not in
+			// tc.want) is caught too.
+			for id := range tc.idRange {
+				_, wantTimed := tc.want[id]
+				gotTimed := schema.IsTimedInvoke(tc.clusterID, id)
+				if gotTimed != wantTimed {
+					t.Errorf("IsTimedInvoke(0x%04X, 0x%X) = %v, want %v (matter.js parity)", tc.clusterID, id, gotTimed, wantTimed)
+				}
+			}
+		})
 	}
 }

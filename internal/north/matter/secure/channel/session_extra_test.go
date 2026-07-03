@@ -87,8 +87,8 @@ func TestSessionCloseZeroesKeys(t *testing.T) {
 //
 // To produce a ciphertext compatible with the fallback we build a
 // session where both EncryptKey/DecryptKey are swapped and
-// peerNodeID equals the sender's configured localNodeID, then
-// encrypt with HasSourceNodeID unset (overriding what Encrypt stamps).
+// peerNodeID equals the sender's configured localNodeID. Encrypt omits
+// the source node id (secure unicast), so decode takes the fallback.
 func TestDecryptFallsBackToPeerWhenSourceNodeIDAbsent(t *testing.T) {
 	t.Parallel()
 
@@ -132,7 +132,9 @@ func TestDecryptFallsBackToPeerWhenSourceNodeIDAbsent(t *testing.T) {
 		t.Fatalf("bob New: %v", err)
 	}
 
-	// Normal encrypt then decrypt (exercises HasSourceNodeID=true path).
+	// Encrypt omits the source node id (secure unicast), so Decrypt takes
+	// the peer-node-id fallback; bob.PeerNodeID == alice.LocalNodeID, so
+	// the nonce still matches and the plaintext recovers.
 	var hdr message.Header
 	out, err := alice.Encrypt(&hdr, 0, []byte("hello"))
 	if err != nil {
@@ -141,7 +143,7 @@ func TestDecryptFallsBackToPeerWhenSourceNodeIDAbsent(t *testing.T) {
 
 	plain, _, err := bob.Decrypt(&hdr, 0, out.Ciphertext)
 	if err != nil {
-		t.Fatalf("bob Decrypt (HasSourceNodeID=true): %v", err)
+		t.Fatalf("bob Decrypt (source-node-id fallback): %v", err)
 	}
 	if string(plain) != "hello" {
 		t.Fatalf("plain=%q, want hello", plain)

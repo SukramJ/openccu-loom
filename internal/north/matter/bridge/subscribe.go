@@ -139,35 +139,36 @@ func (b *Bridge) SubscriptionEventReporter() subscription.EventReporter {
 	return b.reportSubscriptionEvents
 }
 
-// authorizedEventReports filters events down to those the subscribing
-// subject (captured on target) is permitted to read. A PASE session
-// (fabricIndex==0) or a dispatcher without an [im.ACLChecker] returns the
-// events unchanged. Each event is gated at View — the Matter default
-// event read privilege — except events on the AccessControl cluster
-// (0x001F), which require Administer, matching the fabric-sensitivity of
-// AccessControlEntryChanged (Matter §9.10.7.1). Closes the event half of
-// the subscribe-path ACL bypass.
+// eventReadAuthorizer builds the ACL + fabric-sensitive gate for event reads
+// and subscriptions from the requesting session's identity, using dispatcher's
+// optional [im.ACLChecker]. A PASE session (fabricIndex==0) or a dispatcher
+// without an ACLChecker fails open inside [im.AuthorizeEventReports]. Shared by
+// the plain event read (receive_dispatch), the Subscribe-Initial priming report
+// (subscribe_dispatch), and the ongoing event fan-out (authorizedEventReports)
+// so all three enforce identical event authorization.
+func (b *Bridge) eventReadAuthorizer(dispatcher im.Dispatcher, fabricIndex uint8, subjectNodeID uint64, subjectCATs []uint32) im.EventReadAuthorizer {
+	checker, _ := dispatcher.(im.ACLChecker)
+	return im.EventReadAuthorizer{
+		Checker:       checker,
+		FabricIndex:   fabricIndex,
+		SubjectNodeID: subjectNodeID,
+		SubjectCATs:   subjectCATs,
+	}
+}
+
+// authorizedEventReports filters events down to those the subscribing subject
+// (captured on target) is permitted to read AND drops fabric-sensitive records
+// owned by another fabric. A PASE session (fabricIndex==0) or a dispatcher
+// without an [im.ACLChecker] returns the events unchanged. Each event is gated
+// at View — the Matter default event read privilege — except AccessControl
+// (0x001F) events, which require Administer AND are dropped when the record's
+// FabricIndex differs from the subscribing fabric (Matter §8.4.3.2 /
+// §9.10.7.1): path-ACL alone does not stop cross-fabric disclosure of a
+// fabric-sensitive record, so the fabric-sensitive drop is applied here too.
+// Closes the event half of the subscribe-path ACL bypass.
 func (b *Bridge) authorizedEventReports(ctx context.Context, target subTarget, events []im.EventReport) []im.EventReport {
-	if target.fabricIndex == 0 {
-		return append([]im.EventReport(nil), events...)
-	}
-	aclChecker, hasACL := b.Dispatcher().(im.ACLChecker)
-	if !hasACL {
-		return append([]im.EventReport(nil), events...)
-	}
-	const accessControlClusterID uint32 = 0x001F
-	out := make([]im.EventReport, 0, len(events))
-	for _, ev := range events {
-		var priv uint8 = 1 // View — Matter default event read privilege
-		if ev.Path.Cluster == accessControlClusterID {
-			priv = 5 // Administer
-		}
-		if status := aclChecker.CheckACL(ctx, target.fabricIndex, target.subjectNodeID, target.subjectCATs, ev.Path.Endpoint, ev.Path.Cluster, priv); !status.IsSuccess() {
-			continue
-		}
-		out = append(out, ev)
-	}
-	return out
+	auth := b.eventReadAuthorizer(b.Dispatcher(), target.fabricIndex, target.subjectNodeID, target.subjectCATs)
+	return im.AuthorizeEventReports(ctx, auth, events)
 }
 
 // reportSubscriptionEvents assembles + ships an event-only ReportData

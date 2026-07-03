@@ -522,14 +522,17 @@ func (b *Bridge) handlePase(
 		// handled and replied to). Mirrors chip PASESession.cpp
 		// error-path StatusReport emission.
 		if !isMissing && !isStateReplay {
-			protocolCode := mrp.SCStatusProtocolInvalidParameter
-			if errors.Is(err, spake2.ErrConfirmationFailed) {
-				protocolCode = mrp.SCStatusProtocolNoSharedTrustRoots
-			}
+			// matter.js answers EVERY PASE pairing failure — a
+			// wrong-passcode key-confirmation mismatch included — with
+			// SecureChannelStatusCode.InvalidParam. NoSharedTrustRoots is
+			// a CASE-only code (no fabric in common) and never rides a
+			// PASE failure. Mirrors matter.js
+			// packages/protocol/src/session/pase/PaseServer.ts:207-212
+			// (cancelPairing → sendError(InvalidParam)).
 			body := mrp.EncodeStatusReport(
 				mrp.SCStatusGeneralFailure,
 				uint32(mrp.SecureChannelProtocolID),
-				protocolCode,
+				mrp.SCStatusProtocolInvalidParameter,
 				nil,
 			)
 			if sendErr := b.sendReply(src, requestHdr, proto, mrp.SCOpcodeStatusReport, body); sendErr != nil {

@@ -99,14 +99,15 @@ func TestParityMatterJS_SirenDataVersionStableOnRead(t *testing.T) {
 
 // TestParityMatterJS_SirenDataVersionStableOnUnknownAttrWrite verifies
 // that a write to an unsupported attribute ID does not increment
-// MatterDataVersion.
+// MatterDataVersion. 0x9999 is outside every attribute this projection
+// implements (OnOff 0x0000 and the LT-gated 0x4000-0x4003 range).
 func TestParityMatterJS_SirenDataVersionStableOnUnknownAttrWrite(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	_ = srv.MatterWrite(context.Background(), 0x4001, true, hmenum.CommandPriorityHigh)
+	_ = srv.MatterWrite(context.Background(), 0x9999, true, hmenum.CommandPriorityHigh)
 
 	if after := r.siren.MatterDataVersion(); after != before {
 		t.Fatalf("failed write bumped DataVersion: before=%d after=%d", before, after)
@@ -115,14 +116,17 @@ func TestParityMatterJS_SirenDataVersionStableOnUnknownAttrWrite(t *testing.T) {
 
 // TestParityMatterJS_SirenDataVersionStableOnUnknownCommand verifies that
 // a MatterInvoke with an unknown command ID does not increment
-// MatterDataVersion.
+// MatterDataVersion. Toggle (0x02) is deliberately absent from this
+// projection's accepted-command set — Siren has no toggle-alarm role —
+// so it remains a genuinely unimplemented command ID.
 func TestParityMatterJS_SirenDataVersionStableOnUnknownCommand(t *testing.T) {
 	t.Parallel()
 	r := newRig(t, "HmIP-ASIR:3", &stubWriter{}, custom.SirenCapabilities{SupportsAcoustic: true})
 	before := r.siren.MatterDataVersion()
 
 	srv := findCluster(t, r.siren, matterClusterOnOff)
-	_, _ = srv.MatterInvoke(context.Background(), 0x42, nil, hmenum.CommandPriorityHigh)
+	const toggleCmdID = 0x02
+	_, _ = srv.MatterInvoke(context.Background(), toggleCmdID, nil, hmenum.CommandPriorityHigh)
 
 	if after := r.siren.MatterDataVersion(); after != before {
 		t.Fatalf("failed invoke bumped DataVersion: before=%d after=%d", before, after)

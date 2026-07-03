@@ -53,8 +53,8 @@ func TestGKM_NewGroupKeyManagement_NilStore(t *testing.T) {
 
 func TestGKM_MaxGroupsPerFabric_Default(t *testing.T) {
 	t.Parallel()
-	// cfg value 0 → matter.js default 21
-	// (GroupKeyManagementServer.ts:532).
+	// cfg value 0 → matter.js default 22
+	// (GroupKeyManagementServer.ts:616 override maxGroupsPerFabric = 22).
 	gkm, err := core.NewGroupKeyManagement(newFakeStore(), core.GroupKeyMgmtConfig{MaxGroupsPerFabric: 0})
 	if err != nil {
 		t.Fatalf("NewGroupKeyManagement: %v", err)
@@ -63,8 +63,8 @@ func TestGKM_MaxGroupsPerFabric_Default(t *testing.T) {
 	if !ok {
 		t.Fatal("MaxGroupsPerFabric: ok=false")
 	}
-	if v.(uint16) != 21 {
-		t.Fatalf("MaxGroupsPerFabric = %d, want 21", v.(uint16))
+	if v.(uint16) != 22 {
+		t.Fatalf("MaxGroupsPerFabric = %d, want 22", v.(uint16))
 	}
 }
 

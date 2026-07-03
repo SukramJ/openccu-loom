@@ -8,11 +8,39 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/aesccm"
 )
+
+// ErrFabricIDMismatch is returned by [Responder.ProcessSigma3] when the
+// peer's operational certificate is scoped to a different fabric than
+// the one the responder selected for this exchange — its NOC subject
+// fabric-id does not equal [Identity.FabricID]. Mirrors matter.js
+// packages/protocol/src/session/case/CaseServer.ts:304-306
+// (`if (fabric.fabricId !== peerFabricId) throw new UnexpectedDataError`).
+var ErrFabricIDMismatch = errors.New("sigma: peer NOC fabric-id does not match responder fabric")
+
+// PeerFabricIDExtractor is an OPTIONAL interface a [PeerVerifier]
+// implementation may also satisfy. When it does, [Responder.ProcessSigma3]
+// calls it after NOC-chain verification to lift the peer NOC subject's
+// fabric-id and reject the handshake when it does not match the
+// responder-selected fabric's [Identity.FabricID].
+//
+// The chain verification in [PeerVerifier.VerifyAndExtractPubKey] only
+// proves the peer NOC links back to the fabric root; it does NOT bind
+// the NOC subject fabric-id, which Matter §6.5.6.1 carries as a
+// distinct subject DN attribute. matter.js validates the two
+// separately and rejects a fabric-id mismatch before the transcript
+// signature check. Verifiers that do not implement this surface (test
+// fixtures / single-fabric rigs) skip the check, matching the existing
+// [PeerNodeIDExtractor] / [PeerCATsExtractor] optional-surface pattern.
+// Mirrors matter.js packages/protocol/src/session/case/CaseServer.ts:299-306.
+type PeerFabricIDExtractor interface {
+	PeerFabricIDFromNOC(noc []byte) (uint64, error)
+}
 
 // sigma2Salt builds the per-spec HKDF salt for the S2K key:
 // `IPK || responderRandom || responderEphPubKey || SHA256(sigma1)`
@@ -918,6 +946,23 @@ func (r *Responder) ProcessSigma3(sigma3Bytes []byte) error {
 	initOpPub, err := r.verifier.VerifyAndExtractPubKey(tbe3.InitiatorNOC, tbe3.InitiatorICAC)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSignatureInvalid, err)
+	}
+	// Bind the peer's NOC to the responder-selected fabric: the chain
+	// verification above only proves the NOC links to the fabric root,
+	// not that its subject fabric-id equals the fabric we signed Sigma2
+	// under. matter.js checks the two separately and rejects a mismatch
+	// BEFORE the transcript signature check. Verifiers that do not
+	// expose the fabric-id (test fixtures) skip the check, and an
+	// extractor error is treated as "unavailable" — mirroring the
+	// PeerNodeID / PeerCATs optional-surface handling below.
+	// Mirrors matter.js packages/protocol/src/session/case/CaseServer.ts:299-306.
+	if extractor, ok := r.verifier.(PeerFabricIDExtractor); ok {
+		if peerFabricID, ferr := extractor.PeerFabricIDFromNOC(tbe3.InitiatorNOC); ferr == nil && r.identity != nil {
+			if peerFabricID != r.identity.FabricID {
+				return fmt.Errorf("%w: NOC fabric-id 0x%016X != responder fabric-id 0x%016X",
+					ErrFabricIDMismatch, peerFabricID, r.identity.FabricID)
+			}
+		}
 	}
 	// Lift the peer's NodeID out of the verified NOC if the
 	// verifier supports it (PeerNodeIDExtractor). The value rides

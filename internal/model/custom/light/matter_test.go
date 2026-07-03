@@ -198,6 +198,109 @@ func TestOnOffLightingGatedCommandsAccepted(t *testing.T) {
 	}
 }
 
+// TestGlobalSceneControlLifecycle verifies GlobalSceneControl (0x4000)
+// is live state, not the hardcoded constant it used to be: it reads
+// true initially, stays true after a plain On, flips to false after
+// OffWithEffect, is left unchanged by a subsequent plain Off, and
+// reverts to true on a following On. The value also survives a
+// MatterClusterServers reconstruction — the lightOnOffServer
+// projection is rebuilt fresh on every call, but the flag lives on the
+// long-lived Light (see timedOnOffState in matter_timed_onoff.go).
+// Mirrors matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:
+// 97-104 (on), :119-139 (off — GlobalSceneControl untouched),
+// :158-169 (offWithEffect).
+func TestGlobalSceneControlLifecycle(t *testing.T) {
+	w := &stubWriter{}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5)
+	srv := onOffServer(t, l)
+
+	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
+		t.Fatalf("initial GlobalSceneControl = (%v, %v), want (true, true)", v, ok)
+	}
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("On error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
+		t.Fatalf("GlobalSceneControl after On = (%v, %v), want (true, true)", v, ok)
+	}
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OffWithEffect error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
+		t.Fatalf("GlobalSceneControl after OffWithEffect = (%v, %v), want (false, true)", v, ok)
+	}
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x00, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("plain Off error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
+		t.Fatalf("GlobalSceneControl after plain Off = (%v, %v), want (false, true) — a plain Off must not change it", v, ok)
+	}
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x01, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("second On error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
+		t.Fatalf("GlobalSceneControl after second On = (%v, %v), want (true, true)", v, ok)
+	}
+
+	// The cluster-server projection is rebuilt fresh on every
+	// MatterClusterServers call; the flag must still read back true.
+	fresh := onOffServer(t, l)
+	if v, ok := fresh.MatterRead(0x4000); !ok || v != true {
+		t.Fatalf("GlobalSceneControl after MatterClusterServers reconstruction = (%v, %v), want (true, true)", v, ok)
+	}
+}
+
+// TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue verifies
+// OnWithRecallGlobalScene (0x41) sets GlobalSceneControl true, matching
+// the plain On path. matter.js OnOffServer.ts:171-191.
+func TestGlobalSceneControlOnWithRecallGlobalSceneSetsTrue(t *testing.T) {
+	w := &stubWriter{}
+	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5)
+	srv := onOffServer(t, l)
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x40, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OffWithEffect error: %v", err)
+	}
+	if v, _ := srv.MatterRead(0x4000); v != false {
+		t.Fatalf("precondition: GlobalSceneControl = %v, want false", v)
+	}
+
+	if _, err := srv.MatterInvoke(context.Background(), 0x41, nil, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("OnWithRecallGlobalScene error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != true {
+		t.Fatalf("GlobalSceneControl after OnWithRecallGlobalScene = (%v, %v), want (true, true)", v, ok)
+	}
+}
+
+// TestGlobalSceneControlOnWithTimedOffGatedNoOpLeavesUnchanged verifies
+// the AcceptOnlyWhenOn gate on OnWithTimedOff (0x42): when the device
+// is off and the gate rejects the command, no on() runs, so
+// GlobalSceneControl must stay at its pre-call value instead of being
+// flipped true by a command that never actually turned the light on.
+// matter.js OnOffServer.ts:199-201 returns before the :101-104 GSC
+// flip inside on() ever runs.
+func TestGlobalSceneControlOnWithTimedOffGatedNoOpLeavesUnchanged(t *testing.T) {
+	l := timedRig(t, &stubWriter{})
+	l.OnLevel(0.0)
+	l.matterClearGlobalSceneControl()
+	srv := onOffServer(t, l)
+
+	gated := map[uint8]any{0: uint64(1), 1: uint64(5), 2: uint64(5)} // AcceptOnlyWhenOn bit set
+	if _, err := srv.MatterInvoke(context.Background(), 0x42, gated, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("gated OnWithTimedOff error: %v", err)
+	}
+	if v, ok := srv.MatterRead(0x4000); !ok || v != false {
+		t.Fatalf("GlobalSceneControl after gated no-op = (%v, %v), want (false, true) unchanged", v, ok)
+	}
+}
+
 // TestLevelFeatureMapAdvertisesOnOffAndLighting verifies LevelControl
 // advertises OO (bit 0) | LT (bit 1) = 0x03. DimmableLight mandates LT
 // on LevelControl. matter.js level-control.element.ts:24-25.

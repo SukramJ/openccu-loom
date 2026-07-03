@@ -146,8 +146,16 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 	// checks return the buffered StartUp / BootReason / etc. events.
 	// Matter §10.6.6: a ReadRequest may carry both AttributeRequests
 	// and EventRequests; the bridge merges both into one ReportData.
+	//
+	// Gate the event reads by ACL + fabric-sensitive filtering the same
+	// way HandleReadRequest gates attribute reads: a wildcard event read
+	// must not leak another fabric's AccessControl events, and a
+	// non-Administer subject must not read AccessControl events (Matter
+	// §8.4.3.2 / §9.10.7.1). Mirrors matter.js EventReadResponse.ts
+	// #readAllowedEvents.
 	if len(req.EventRequests) > 0 {
-		report.EventReports = im.HandleReadEventRequest(req, b.eventLog)
+		auth := b.eventReadAuthorizer(dispatcher, readFabricIndex, readSubjectNodeID, readSubjectCATs)
+		report.EventReports = im.AuthorizeEventReports(readCtx, auth, im.HandleReadEventRequest(req, b.eventLog))
 	}
 	// Diagnostic: show what we returned per path.
 	for i, r := range report.Reports {
@@ -179,13 +187,24 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		// Mirror the Subscribe path's per-chunk IM:StatusResponse wait
 		// so Apple Home's MTRDevice processes each ReportData frame on
 		// the IM layer before the next arrives. matter.js's
-		// InteractionMessenger acks every chunk on the IM layer
+		// InteractionMessenger acks every non-final chunk on the IM layer
 		// (not just MRP); without the wait openccu-loom
 		// burst-fires all chunks back-to-back and Apple's
 		// `ProcessReadResponse` state machine drops late chunks.
-		// Subscribe path applied this fix as P15; this closes
-		// the symmetric drift on Read.
-		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+		//
+		// A chunk carrying SuppressResponse=true (only the terminal chunk
+		// of a plain Read — see [im.HandleReadRequest]) expects nothing but
+		// a Standalone MRP-Ack, so the controller never emits an IM
+		// StatusResponse for it; waiting would just burn perChunkStatusRespTimeout.
+		// Mirrors matter.js
+		// packages/protocol/src/interaction/InteractionMessenger.ts:679,701
+		// (`suppressResponse` chunk → `expectAckOnly: true`, no StatusResponse
+		// wait). Reliable delivery of the final chunk is still guaranteed by
+		// sendReplyReliable's MRP retransmit + the post-loop dischargeOwedAck.
+		var waitCh <-chan struct{}
+		if !chunk.SuppressResponse {
+			waitCh = b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+		}
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries
 		// the stale ReadRequest counter, and python-matter-server's
@@ -196,21 +215,25 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		chunkHdr := *requestHdr
 		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			if waitCh != nil {
+				b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			}
 			debugReplyError(b.logger, "send_report", src, err)
 			return err
 		}
-		select {
-		case <-waitCh:
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
-		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
-			b.logger.Debug("matter.tx.read.chunk_ack_timeout",
-				slog.String("src", srcString(src)),
-				slog.Int("chunk", i),
-				slog.Int("exchange", int(proto.ExchangeID)),
-				slog.Bool("final", !chunk.MoreChunkedMessages),
-				slog.String("timeout", perChunkStatusRespTimeout.String()))
+		if waitCh != nil {
+			select {
+			case <-waitCh:
+				b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+			case <-time.After(perChunkStatusRespTimeout):
+				b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
+				b.logger.Debug("matter.tx.read.chunk_ack_timeout",
+					slog.String("src", srcString(src)),
+					slog.Int("chunk", i),
+					slog.Int("exchange", int(proto.ExchangeID)),
+					slog.Bool("final", !chunk.MoreChunkedMessages),
+					slog.String("timeout", perChunkStatusRespTimeout.String()))
+			}
 		}
 		b.logger.Debug("matter.rx.im.read.chunk",
 			slog.String("src", srcString(src)),
@@ -360,6 +383,33 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 	if status, gated := b.checkTimedGate(req.TimedRequest || anyTimedRequiredInvoke(req), requestHdr.SessionID, proto.ExchangeID); gated {
 		return b.replyTimedStatus(src, requestHdr, proto, "invoke", status)
 	}
+	// Batch-invoke path validation: a malformed batch (wildcard-endpoint path
+	// mixed with others, a concrete path missing its CommandRef, a duplicate
+	// CommandRef, or a duplicate concrete path) is rejected up front with a
+	// top-level StatusResponse(InvalidAction) instead of dispatching any
+	// command. Mirrors matter.js
+	// packages/protocol/src/action/server/CommandInvokeResponse.ts:64-92
+	// (process/#processConcrete), whose StatusResponseError(InvalidAction)
+	// aborts the whole invoke before a producer runs. Runs after the timed gate
+	// because matter.js validates the timed window first (InteractionServer.ts
+	// handleInvokeRequest).
+	if status := im.ValidateInvokeBatch(req); status != im.StatusSuccess {
+		body, err := EncodeStatusResponse(im.StatusResponse{Status: status})
+		if err != nil {
+			debugReplyError(b.logger, "encode_invoke_batch_reject", src, err)
+			return err
+		}
+		if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+			debugReplyError(b.logger, "send_invoke_batch_reject", src, err)
+			return err
+		}
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+		b.logger.Debug("matter.rx.im.invoke.batch_reject",
+			slog.String("src", srcString(src)),
+			slog.Int("invokes", len(req.Invokes)),
+			slog.Any("status_code", uint8(status)))
+		return nil
+	}
 	// Stamp the FabricIndex into the context so cluster handlers
 	// can distinguish PASE (0) from CASE (>0) — required by
 	// GeneralCommissioning.CommissioningComplete (matter.js
@@ -378,6 +428,22 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 	resp := im.HandleInvokeRequest(invokeCtx, dispatcher, req)
 	for i := range resp.Responses {
 		rewriteInvokeResponseCommand(&resp.Responses[i])
+	}
+	// SuppressResponse handling per Matter §8.8.3.2.1: a suppress-response invoke
+	// still ships its InvokeResponse when a CommandDataIB was generated, but sends
+	// nothing when the response carries only CommandStatusIB entries. Mirrors
+	// matter.js packages/node/src/node/server/InteractionServer.ts:1043-1074
+	// (the held `suppressedBuffer` is discarded — no message sent — when no
+	// cmd-response is produced). The command side-effects already ran inside
+	// HandleInvokeRequest; we only elide the wire reply and discharge the owed
+	// MRP ack (the controller opted out of the StatusResponse handshake, so the
+	// Standalone Ack is all it expects).
+	if req.SuppressResponse && !resp.HasCommandData() {
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+		b.logger.Debug("matter.rx.im.invoke.suppressed",
+			slog.String("src", srcString(src)),
+			slog.Int("statuses", len(resp.Responses)))
+		return nil
 	}
 	body, err := EncodeInvokeResponse(resp)
 	if err != nil {

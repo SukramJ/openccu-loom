@@ -37,9 +37,12 @@ const (
 //	Bit  7:   P — Privacy enhancement
 //	Bit  6:   C — Control message
 //	Bit  5:   MX — Message Extensions present
-//	Bits 4-0: Session Type (0 = unicast unencrypted, 1 = group)
+//	Bits 4-2: reserved (0)
+//	Bits 1-0: Session Type (0 = unicast, 1 = group)
 const (
-	secFlagSessionTypeMask = 0x1F
+	// secFlagSessionTypeMask isolates the 2-bit Session Type. Mirrors
+	// matter.js MessageCodec.ts SecurityFlag.SessionTypeMask (0b11).
+	secFlagSessionTypeMask = 0x03
 	secFlagControl         = 0x40
 	secFlagPrivacy         = 0x80
 	secFlagExtensions      = 0x20
@@ -79,10 +82,20 @@ type Header struct {
 	// MessageExtension carries the Message Extensions block (Core Spec
 	// §4.4.1.8) when HasExtension is set. The block is reserved in Matter
 	// 1.x, but it is part of the message header and therefore part of the
-	// AEAD additional authenticated data ([Header.Marshal] feeds the AAD in
+	// AEAD additional authenticated data ([Header.AAD] feeds the AAD in
 	// channel.Session.Decrypt), so it MUST round-trip through encode/decode
 	// or authentication of any frame that carries it would fail.
 	MessageExtension []byte
+
+	// Raw holds the exact on-the-wire header bytes UnmarshalHeader
+	// consumed. It is the AEAD additional authenticated data: matter.js
+	// authenticates the raw received header, not a re-encoded copy
+	// (packages/protocol/src/protocol/ExchangeManager.ts:196-197 —
+	// aad = bytes.slice(0, len - applicationPayload.length)), so a
+	// reserved wire bit that does not round-trip through Marshal cannot
+	// break authentication. Nil for headers built in memory; [Header.AAD]
+	// falls back to [Header.Marshal] in that case.
+	Raw []byte
 }
 
 // Errors.
@@ -97,6 +110,17 @@ var (
 	// ErrReservedDestSize is returned when the DSIZ field carries the
 	// reserved 0b11 value.
 	ErrReservedDestSize = errors.New("message: reserved DSIZ value")
+
+	// ErrUnsupportedSessionType is returned when the Security Flags carry
+	// a Session Type other than unicast (0) or group (1). Mirrors the
+	// guard in matter.js MessageCodec.ts decodeFixedHeader.
+	ErrUnsupportedSessionType = errors.New("message: unsupported session type")
+
+	// ErrControlMessage is returned when the Security Flags carry the
+	// Control (C) bit. Control messages are not implemented (Matter 1.x
+	// reserves them); matter.js MessageCodec.ts decodeFixedHeader rejects
+	// them the same way.
+	ErrControlMessage = errors.New("message: control messages not supported")
 
 	// ErrExtensionLength is returned when an extension block's uint16
 	// length prefix claims more bytes than remain in the buffer. Mirrors
@@ -178,6 +202,20 @@ func (h Header) Marshal() []byte {
 	return buf
 }
 
+// AAD returns the additional authenticated data that binds this header
+// to its AEAD tag. When the header came off the wire ([Header.Raw]
+// populated by UnmarshalHeader) the exact received bytes are returned;
+// otherwise the header is re-encoded via Marshal. Mirrors matter.js
+// authenticating the raw received header bytes
+// (ExchangeManager.ts:196-197) while still letting the outbound path
+// bind against a freshly-marshaled header.
+func (h Header) AAD() []byte {
+	if len(h.Raw) > 0 {
+		return h.Raw
+	}
+	return h.Marshal()
+}
+
 // UnmarshalHeader decodes a Matter message header. Returns the
 // decoded header and the number of bytes consumed; the caller can
 // slice the buffer past that boundary to get the Protocol Header +
@@ -199,8 +237,17 @@ func UnmarshalHeader(buf []byte) (Header, int, error) {
 	}
 	secFlags := buf[3]
 	h.SessionType = SessionType(secFlags & secFlagSessionTypeMask)
+	// Reject unsupported session types and control messages, mirroring
+	// matter.js MessageCodec.ts decodeFixedHeader (reject sessionType not
+	// in {Unicast, Group}; reject the Control bit — Matter 1.x reserves
+	// control messages). Both guards run on the cleartext prefix.
+	if h.SessionType != SessionUnsecured && h.SessionType != SessionGroup {
+		return Header{}, 0, fmt.Errorf("%w: %d", ErrUnsupportedSessionType, h.SessionType)
+	}
+	if secFlags&secFlagControl != 0 {
+		return Header{}, 0, ErrControlMessage
+	}
 	h.Privacy = secFlags&secFlagPrivacy != 0
-	h.Control = secFlags&secFlagControl != 0
 	h.HasExtension = secFlags&secFlagExtensions != 0
 
 	pos := fixed
@@ -237,6 +284,10 @@ func UnmarshalHeader(buf []byte) (Header, int, error) {
 		h.MessageExtension = ext
 		pos += n
 	}
+	// Capture the exact received header bytes for AEAD authentication —
+	// see [Header.Raw]. A copy so a later in-place decrypt of the caller's
+	// buffer cannot corrupt the AAD.
+	h.Raw = append([]byte(nil), buf[:pos]...)
 	return h, pos, nil
 }
 

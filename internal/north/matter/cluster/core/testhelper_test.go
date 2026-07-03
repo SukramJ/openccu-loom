@@ -599,6 +599,13 @@ func commissionTestFabric(ctx context.Context, t *testing.T, oc *core.Operationa
 func mintUpdateNOC(fabCtx context.Context, t *testing.T, oc *core.OperationalCredentials, signerPriv *ecdsa.PrivateKey, fabricID, nodeID uint64) []byte {
 	t.Helper()
 
+	// A real UpdateNOC runs in a fresh FailSafe window: the commissioner
+	// re-arms ArmFailSafe (→ ClearPendingState) before the update CSRRequest.
+	// Without that reset, the CSRRequest lands in the same window as the
+	// initial AddNOC and is rejected with ConstraintError — matter.js
+	// OperationalCredentialsServer.ts:131-137 (failsafeContext.fabricIndex !==
+	// undefined). Simulate the re-arm here so the helper reflects the real flow.
+	oc.ClearPendingState()
 	pendingPub := issueCSRPendingPubKey(fabCtx, t, oc, true)
 	return buildCoreSignedCertForPubKey(t, pendingPub, false, signerPriv, fabricID, nodeID)
 }

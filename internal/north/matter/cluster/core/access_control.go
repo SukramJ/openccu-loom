@@ -496,11 +496,24 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 				if t.Cluster == nil && t.Endpoint == nil && t.DeviceType == nil {
 					return fmt.Errorf("matter: AccessControl.ACL[%d].Targets[%d] write: constraint error: at least one of Cluster/Endpoint/DeviceType must be set", i, j)
 				}
-				// ClusterId and EndpointId range checks.
-				// Mirrors chip AccessControl.cpp:746-748 IsValidClusterId /
-				// IsValidEndpointId / IsValidDeviceTypeId guards in IsValid().
+				// Cluster / Endpoint / DeviceType ID validity, in the same
+				// order matter.js checks them. Mirrors matter.js
+				// packages/node/src/behaviors/access-control/AccessControlServer.ts:266-278
+				// (ClusterId.isValid / EndpointNumber.isValid / DeviceTypeId.isValid,
+				// each throwing ConstraintError). Cross-check chip
+				// AccessControl.cpp:746-748 IsValidClusterId / IsValidEndpointId /
+				// IsValidDeviceTypeId guards in Entry::IsValid().
+				if t.Cluster != nil && !aclIsValidClusterID(*t.Cluster) {
+					return fmt.Errorf("matter: AccessControl.ACL[%d].Targets[%d] write: constraint error: Cluster 0x%08X is not a valid ClusterId", i, j, *t.Cluster)
+				}
+				// EndpointNumber.isValid rejects 0xFFFF (the reserved wildcard);
+				// a uint16 endpoint cannot exceed that, so 0xFFFF is the only
+				// invalid value.
 				if t.Endpoint != nil && *t.Endpoint == 0xFFFF {
 					return fmt.Errorf("matter: AccessControl.ACL[%d].Targets[%d] write: constraint error: EndpointId 0xFFFF is reserved", i, j)
+				}
+				if t.DeviceType != nil && !aclIsValidDeviceTypeID(*t.DeviceType) {
+					return fmt.Errorf("matter: AccessControl.ACL[%d].Targets[%d] write: constraint error: DeviceType 0x%08X is not a valid DeviceTypeId", i, j, *t.DeviceType)
 				}
 			}
 		}
@@ -683,16 +696,61 @@ func (a *AccessControl) SetEndpoint(endpoint uint16) {
 }
 
 // aclIsValidCASESubject reports whether id is valid as a CASE-AuthMode ACL subject.
-// Valid: operational node ID (0x0001..0xFFFF_FFFF_FFFF_FFEF) or CASE Auth Tag
-// (upper 32 bits == 0xFFFF_FFFD). Mirrors chip
-// src/access/AccessControl.cpp:735 IsValidCaseNodeId / IsCASEAuthTag guards.
+// Valid: operational node ID (0x0001..0xFFFF_FFEF_FFFF_FFFF) or CASE Auth Tag
+// (upper 32 bits == 0xFFFF_FFFD). The upper operational bound must be
+// 0xFFFF_FFEF_FFFF_FFFF: anything above it is a reserved Node ID subrange
+// (CAT 0xFFFF_FFFD.., Temporary-Local 0xFFFF_FFFE.., Group
+// 0xFFFF_FFFF_FFFF_FF00..) and is not a plain operational node. A
+// byte-transposed bound of 0xFFFF_FFFF_FFFF_FFEF would accept the whole
+// reserved range as a CASE subject. Mirrors matter.js
+// packages/types/src/datatype/NodeId.ts:27-28 (OPERATIONAL_NODE_MIN/MAX) and
+// :57-59 (isOperationalNodeId). Cross-check chip
+// src/lib/core/NodeId.h:59 kMaxOperationalNodeId = 0xFFFF'FFEF'FFFF'FFFF.
 func aclIsValidCASESubject(id uint64) bool {
 	// Operational node ID range.
-	if id >= 0x0000_0000_0000_0001 && id <= 0xFFFF_FFFF_FFFF_FFEF {
+	if id >= 0x0000_0000_0000_0001 && id <= 0xFFFF_FFEF_FFFF_FFFF {
 		return true
 	}
-	// CASE Auth Tag: upper 32 bits == 0xFFFF_FFFD.
-	return (id >> 32) == 0xFFFF_FFFD
+	// CASE Auth Tag: upper 32 bits == 0xFFFF_FFFD. The low 16 bits carry
+	// the CAT version, which MUST NOT be 0 — a version-0 CAT is rejected
+	// with ConstraintError. Mirrors matter.js
+	// packages/node/src/behaviors/access-control/AccessControlServer.ts:211-220
+	// (CaseAuthenticatedTag.getVersion(cat) === 0 → ConstraintError) and
+	// packages/types/src/datatype/CaseAuthenticatedTag.ts:31-33
+	// (getVersion = tag & 0xffff). Matter §6.6.2.1.2.
+	return (id>>32) == 0xFFFF_FFFD && (id&0xFFFF) != 0
+}
+
+// aclIsValidClusterID reports whether id is a well-formed Matter ClusterId.
+// Mirrors matter.js packages/types/src/datatype/ClusterId.ts:22-32 (the
+// ClusterId constructor validation via Mei.fromMei): a standard cluster has a
+// zero vendor prefix (upper 16 bits) and a type suffix (low 16 bits) in
+// 0x0000..0x7FFF; a manufacturer-specific cluster has a non-zero vendor prefix
+// (≤ 0xFFF4) and a type suffix in 0xFC00..0xFFFE. Everything else is invalid.
+// Matter §7.10.
+func aclIsValidClusterID(id uint32) bool {
+	vendorPrefix := id >> 16
+	typeSuffix := id & 0xFFFF
+	// Mei.fromMei rejects a vendor prefix above 0xFFF4 or a type suffix of
+	// 0xFFFF outright (ManufacturerExtensibleIdentifier.ts:23-38).
+	if vendorPrefix > 0xFFF4 || typeSuffix > 0xFFFE {
+		return false
+	}
+	if vendorPrefix == 0 && typeSuffix <= 0x7FFF {
+		return true // standard cluster
+	}
+	return vendorPrefix != 0 && typeSuffix >= 0xFC00 && typeSuffix <= 0xFFFE
+}
+
+// aclIsValidDeviceTypeID reports whether id is a well-formed Matter
+// DeviceTypeId. Mirrors matter.js packages/types/src/datatype/DeviceTypeId.ts:20-28
+// (the DeviceTypeId constructor validation via Mei.fromMei): the vendor prefix
+// (upper 16 bits) must be ≤ 0xFFF4 and the type suffix (low 16 bits) must be in
+// 0x0000..0xBFFF. Matter §7.19.2.29.
+func aclIsValidDeviceTypeID(id uint32) bool {
+	vendorPrefix := id >> 16
+	typeSuffix := id & 0xFFFF
+	return vendorPrefix <= 0xFFF4 && typeSuffix <= 0xBFFF
 }
 
 // aclIsValidGroupSubject reports whether id is valid as a Group-AuthMode ACL

@@ -141,7 +141,11 @@ func New(cfg Config) (*Session, error) {
 		peerCATs:      peerCATs,
 		peerSessionID: cfg.PeerSessionID,
 		out:           counter,
-		in:            mrp.NewWindow(),
+		// Secure sessions use a no-rollover reception window: a counter
+		// that appears to wrap is a duplicate, not a fresh value — the
+		// session re-establishes before the counter rolls over. Mirrors
+		// matter.js NodeSession.ts:118 (MessageReceptionStateEncryptedWithoutRollover).
+		in: mrp.NewWindowNoRollover(),
 	}, nil
 }
 
@@ -181,10 +185,16 @@ func (s *Session) Encrypt(header *message.Header, secFlags uint8, plaintext []by
 		return nil, fmt.Errorf("channel: %w", err)
 	}
 	header.MessageCounter = counter
-	header.HasSourceNodeID = true
-	header.SourceNodeID = s.localNodeID
-
+	// Secure unicast omits the Source Node ID on the wire (S flag = 0):
+	// the peer derives the nonce node id from the resolved session
+	// context, not from the header. Mirrors matter.js NodeSession.ts
+	// encode (packages/protocol/src/session/NodeSession.ts:204-217),
+	// which stamps only the peer session id and builds the nonce from
+	// the local fabric node id. The nonce below still binds to
+	// s.localNodeID so the peer's session-derived node id matches.
 	nonce := buildNonce(secFlags, counter, s.localNodeID)
+	// Outbound AAD binds to the header we are about to marshal onto the
+	// wire (matter.js encode uses encodePacketHeader for AAD).
 	aad := header.Marshal()
 	sealed, err := s.encCipher.Seal(nil, nonce, plaintext, aad)
 	if err != nil {
@@ -220,7 +230,12 @@ func (s *Session) Decrypt(header *message.Header, secFlags uint8, ciphertext []b
 		srcNode = s.peerNodeID
 	}
 	nonce := buildNonce(secFlags, header.MessageCounter, srcNode)
-	aad := header.Marshal()
+	// Authenticate the exact raw received header bytes, not a re-encoded
+	// copy — a reserved wire bit that does not round-trip through Marshal
+	// must not change the AAD. Mirrors matter.js authenticating the raw
+	// received header (ExchangeManager.ts:196-197). Falls back to Marshal
+	// for in-memory headers (Raw nil).
+	aad := header.AAD()
 	plain, openErr := s.decCipher.Open(nil, nonce, ciphertext, aad)
 	if openErr != nil {
 		return nil, false, fmt.Errorf("%w: %w", ErrUnauthenticated, openErr)

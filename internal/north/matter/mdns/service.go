@@ -275,7 +275,7 @@ type CommissionableServiceConfig struct {
 	DeviceName string
 	// PairingHint / PairingInstruction follow Matter §4.3.1.6 (`PH`
 	// / `PI`). PairingHint defaults to
-	// [PairingHintDefault] (powerCycle | deviceManual = 0x0033) when
+	// [PairingHintDefault] (powerCycle | deviceManual = 0x21) when
 	// zero, matching matter.js
 	// CommissionableMdnsAdvertisement.ts:90 DEFAULT_PAIRING_HINT.
 	PairingHint        uint16
@@ -313,10 +313,15 @@ type CommissionableServiceConfig struct {
 
 // PairingHintDefault is the bitmask openccu-loom emits for PH when the
 // caller leaves PairingHint zero. Mirrors matter.js
-// CommissionableMdnsAdvertisement.ts DEFAULT_PAIRING_HINT:
-// { powerCycle: true, deviceManual: true } → bits 4 (0x10) and 5 (0x20)
-// of the Matter §4.3.1.6 PairingHintBitmap — value 0x0033.
-const PairingHintDefault uint16 = 0x0033
+// packages/protocol/src/mdns/MdnsConsts.ts:15-18 DEFAULT_PAIRING_HINT:
+// { powerCycle: true, deviceManual: true }. Per
+// packages/protocol/src/advertisement/PairingHintBitmap.ts, powerCycle
+// is bit 0 (0x01) and deviceManual is bit 5 (0x20) of the Matter
+// §4.3.1.6 PairingHintBitmap — combined value 0x21. Bit 4
+// (customInstruction) is NOT part of the default: it requires a PI
+// (custom instruction) value the bridge never supplies, so setting it
+// without one is non-conformant.
+const PairingHintDefault uint16 = 0x21
 
 // defaultCommissionableSII is the Session Idle Interval in milliseconds
 // advertised on the commissionable record (Matter §4.3.1.6). matter.js
@@ -409,7 +414,7 @@ func BuildCommissionableService(cfg CommissionableServiceConfig) Service {
 	}
 	// PH (PairingHint): always emitted per matter.js
 	// CommissionableMdnsAdvertisement.ts:90 — DEFAULT_PAIRING_HINT
-	// (powerCycle=true, deviceManual=true → 0x0033) used when the
+	// (powerCycle=true, deviceManual=true → 0x21) used when the
 	// caller leaves PairingHint zero.
 	ph := cfg.PairingHint
 	if ph == 0 {

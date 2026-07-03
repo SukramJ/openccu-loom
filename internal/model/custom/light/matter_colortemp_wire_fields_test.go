@@ -24,6 +24,7 @@ func TestColorTempMoveToColorTemperatureTypedWireShape(t *testing.T) {
 	w := &colorStubWriter{}
 	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
 	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
+	l.OnLevel(1.0) // on — the ExecuteIfOff gate only matters while off (see matter_color_options_test.go).
 	var cc ctColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(ctColorServer); ok {
@@ -51,6 +52,7 @@ func TestColorTempMoveToColorTemperatureGenericTagMapWireShape(t *testing.T) {
 	w := &colorStubWriter{}
 	ch := newColorTempRig(t, "HmIP-CTL:4", w, custom.LightCapabilities{SupportsColorTemp: true}, 2700, 6500)
 	l := NewColorTempLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColorTemp: true, Dimmable: true}}, 2700, 6500)
+	l.OnLevel(1.0) // on — the ExecuteIfOff gate only matters while off (see matter_color_options_test.go).
 	var cc ctColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(ctColorServer); ok {
@@ -76,6 +78,7 @@ func TestRGBWMoveToColorTemperatureGenericTagMapWireShape(t *testing.T) {
 	ch := newRGBWRig(t, "HmIP-RGBW:4", w, custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true})
 	l := NewRGBWLight(Config{Channel: ch, Writer: w, Capabilities: custom.LightCapabilities{SupportsColor: true, SupportsColorTemp: true, Dimmable: true}})
 	l.recordMode("TUNABLE_WHITE")
+	l.OnLevel(1.0) // on — the ExecuteIfOff gate only matters while off (see matter_color_options_test.go).
 	var rgbw rgbwColorServer
 	for _, s := range l.MatterClusterServers() {
 		if v, ok := s.(rgbwColorServer); ok {

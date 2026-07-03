@@ -133,6 +133,10 @@ func New(cfg Config) *Light {
 		hasOnTimeUnit:        hasOnTimeUnit,
 		enableLastBrightness: deviceLightLastBrightness(cfg.Channel),
 	}
+	// GlobalSceneControl (Matter OnOff attribute 0x4000) defaults to
+	// true. matter.js OnOffServer.ts state default; the field is unset
+	// (false) otherwise since Go zero-values a fresh timedOnOffState.
+	l.timed.globalSceneControl = true
 	if level != nil {
 		l.unsubLevel = level.OnUpdate(func(_, next float64) {
 			// OnUpdate fires both for optimistic notifications (synchronously

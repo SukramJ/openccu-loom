@@ -332,6 +332,9 @@ func TestHandleInvokeRequest_AdministerPrivilegeNotBlockedByGate(t *testing.T) {
 // control case: an Operate-privilege fabric writing a plain,
 // non-elevated attribute must sail through the gate unblocked, proving
 // the per-element privilege check does not over-reject ordinary writes.
+// The target is a writable Thermostat attribute (OccupiedHeatingSetpoint
+// 0x0012, access "RW VO") so the outcome isolates the privilege gate from
+// the schema read-only-write gate (schema.AttributeWritable).
 func TestHandleWriteRequest_OperateAttributeNotBlockedByPrivilegeGate(t *testing.T) {
 	t.Parallel()
 	d := NewTopologyDispatcher(privilegeTestTopology(t))
@@ -339,7 +342,7 @@ func TestHandleWriteRequest_OperateAttributeNotBlockedByPrivilegeGate(t *testing
 
 	req := im.WriteRequest{
 		Writes: []im.AttributeWrite{
-			{Path: concreteAttrPath(0, plainClusterID, 0x0000), Value: im.AttributeValue{Value: uint8(1)}},
+			{Path: concreteAttrPath(0, plainClusterID, 0x0012), Value: im.AttributeValue{Value: uint8(1)}},
 		},
 	}
 	resp := im.HandleWriteRequest(privilegeEnforcementCtx(), d, req)

@@ -308,7 +308,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				slog.String("err", verr.Error()))
 			return
 		}
-		opIPK, ipkErr := deriveOperationalIPK(id.IPK, fabric.CompressedID)
+		ipkCandidates, ipkErr := ipkOperationalCandidates(ctx, store, fabricIndex, fabric.CompressedID, id.IPK)
 		if ipkErr != nil {
 			logger.Warn("matter.bridge.case.refresh_ipk",
 				slog.Int("fabric_index", int(fabricIndex)),
@@ -322,7 +322,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			NodeID:             fabric.NodeID,
 			FabricID:           fabric.FabricID,
 			CompressedFabricID: fabric.CompressedID,
-			IPK:                opIPK,
+			IPK:                ipkCandidates[0],
 			FabricIndex:        fabricIndex,
 		}
 		caseIdentityMu.Lock()
@@ -331,6 +331,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			verifier:      ver,
 			rootPublicKey: append([]byte(nil), fabric.RootPublicKey...),
 			fabricIndex:   fabricIndex,
+			ipkCandidates: ipkCandidates,
 		}
 		// Keep `caseIdentity` as the most-recently-installed identity so
 		// fresh responders still have a sane default before the resolver
@@ -707,11 +708,27 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			// destination resolver can match it post-reboot before any
 			// AddNOC fires.
 			if rootPub, rpErr := loadFabricRootPublicKey(ctx, store, seedIdx); rpErr == nil {
+				// Re-derive the IPK rotation candidate set (Matter
+				// §11.2.10.6) for the seed fabric so a reboot doesn't
+				// lose a KeySetWrite-rotated IPK; falls back to the
+				// identity's already-derived IPK when the raw record
+				// can't be re-read.
+				ipkCandidates := [][16]byte{seedID.IPK}
+				if id, idErr := store.GetIdentity(ctx, seedIdx); idErr == nil {
+					if cands, candErr := ipkOperationalCandidates(ctx, store, seedIdx, seedID.CompressedFabricID, id.IPK); candErr == nil {
+						ipkCandidates = cands
+					} else {
+						logger.Warn("matter.bridge.case.persistent_ipk_candidates",
+							slog.Int("fabric_index", int(seedIdx)),
+							slog.String("err", candErr.Error()))
+					}
+				}
 				caseFabrics[seedIdx] = &caseFabricEntry{
 					identity:      seedID,
 					verifier:      seedVer,
 					rootPublicKey: rootPub,
 					fabricIndex:   seedIdx,
+					ipkCandidates: ipkCandidates,
 				}
 			} else {
 				logger.Warn("matter.bridge.case.persistent_rootpub",
@@ -1121,6 +1138,15 @@ type caseFabricEntry struct {
 	verifier      sigma.PeerVerifier
 	rootPublicKey []byte // raw 0x04||X||Y, 65 bytes — input to the destinationID HMAC
 	fabricIndex   uint8
+	// ipkCandidates holds every operational IPK derived from
+	// GroupKeySetID 0's epoch keys (Matter §11.2.10.6, the reserved
+	// IPK key set). A KeySetWrite that rotates the IPK can leave up
+	// to three keys simultaneously valid during the grace window;
+	// [ipkOperationalCandidates] populates one entry per present
+	// EpochKeyN so [caseDestinationResolver.ResolveSigma1Destination]
+	// can match a Sigma1 signed with any of them. Always has at least
+	// one element.
+	ipkCandidates [][16]byte
 }
 
 // loadFabricRootPublicKey reads the raw P-256 root public key (65
@@ -1195,7 +1221,7 @@ func loadAdditionalFabricsForCase(
 				slog.String("err", verErr.Error()))
 			continue
 		}
-		opIPK, ipkErr := deriveOperationalIPK(id.IPK, f.CompressedID)
+		ipkCandidates, ipkErr := ipkOperationalCandidates(ctx, store, f.FabricIndex, f.CompressedID, id.IPK)
 		if ipkErr != nil {
 			logger.Warn("matter.bridge.case.multi_fabric_ipk",
 				slog.Int("fabric_index", int(f.FabricIndex)),
@@ -1209,7 +1235,7 @@ func loadAdditionalFabricsForCase(
 			NodeID:             f.NodeID,
 			FabricID:           f.FabricID,
 			CompressedFabricID: f.CompressedID,
-			IPK:                opIPK,
+			IPK:                ipkCandidates[0],
 			FabricIndex:        f.FabricIndex,
 		}
 		entry := &caseFabricEntry{
@@ -1217,6 +1243,7 @@ func loadAdditionalFabricsForCase(
 			verifier:      verifier,
 			rootPublicKey: append([]byte(nil), f.RootPublicKey...),
 			fabricIndex:   f.FabricIndex,
+			ipkCandidates: ipkCandidates,
 		}
 		mu.Lock()
 		caseFabrics[f.FabricIndex] = entry
@@ -1253,21 +1280,37 @@ func (r caseDestinationResolver) ResolveSigma1Destination(destinationID [32]byte
 		if entry == nil || entry.identity == nil {
 			continue
 		}
-		cand := sigma.ComputeDestinationID(
-			entry.identity.IPK,
-			initiatorRandom,
-			entry.rootPublicKey,
-			entry.identity.FabricID,
-			entry.identity.NodeID,
-		)
-		if cand == destinationID {
+		// Try every IPK candidate for this fabric's GroupKeySetID 0
+		// (Matter §11.2.10.6 IPK rotation grace window). Mirrors chip
+		// CASESession.cpp:958-976 (`FindLocalNodeFromDestinationId`),
+		// which loops `ipkKeySet.epoch_keys` and caches whichever key
+		// produced the matching candidate — the winning key, not
+		// necessarily the newest one, seeds the rest of the exchange
+		// because the initiator's Sigma2/Sigma3 salts are keyed on it.
+		candidates := entry.ipkCandidates
+		if len(candidates) == 0 {
+			candidates = [][16]byte{entry.identity.IPK}
+		}
+		for _, opIPK := range candidates {
+			cand := sigma.ComputeDestinationID(
+				opIPK,
+				initiatorRandom,
+				entry.rootPublicKey,
+				entry.identity.FabricID,
+				entry.identity.NodeID,
+			)
+			if cand != destinationID {
+				continue
+			}
 			if r.logger != nil {
 				r.logger.Debug("matter.bridge.case.identity_resolved",
 					slog.Int("fabric_index", int(entry.fabricIndex)),
 					slog.Uint64("fabric_id", entry.identity.FabricID),
 					slog.Uint64("node_id", entry.identity.NodeID))
 			}
-			return entry.identity, entry.verifier, true
+			resolved := *entry.identity
+			resolved.IPK = opIPK
+			return &resolved, entry.verifier, true
 		}
 	}
 	if r.logger != nil {
@@ -1324,6 +1367,55 @@ func deriveOperationalIPK(rawIPK []byte, compressedFabricID [8]byte) ([16]byte, 
 	}
 	copy(out[:], derived)
 	return out, nil
+}
+
+// ipkOperationalCandidates derives every operational-IPK destination-ID
+// input that is currently valid for a fabric's GroupKeySetID 0 (the
+// reserved IPK key set, Matter §11.2.10.6). A KeySetWrite that rotates
+// the IPK carries up to three epoch keys so the previous key stays
+// valid during the transition; matter.js
+// packages/protocol/src/groups/FabricGroups.ts:125-156
+// (`setFromGroupKeySet`) HKDF-derives an operational key for every
+// present EpochKeyN, and
+// packages/protocol/src/fabric/FabricManager.ts:302-317
+// (`findFabricFromDestinationId`) tries every one when matching an
+// inbound Sigma1 — chip mirrors this in
+// CASESession.cpp:958-976 (`FindLocalNodeFromDestinationId`), iterating
+// `ipkKeySet.epoch_keys` and caching whichever key produced the
+// matching candidate for the rest of the exchange.
+//
+// operational_credentials.go's AddNOC handler seeds a GroupKeySetID=0
+// row with EpochKey0=IPKValue on every successful pair, so the
+// rawIPKFallback branch only fires for identities loaded before that
+// write path existed (or when the store is unavailable).
+func ipkOperationalCandidates(ctx context.Context, st *matterstore.Store, fabricIndex uint8, compressedFabricID [8]byte, rawIPKFallback []byte) ([][16]byte, error) {
+	if st != nil {
+		gks, err := st.GetGroupKeySet(ctx, fabricIndex, 0)
+		switch {
+		case err == nil:
+			var out [][16]byte
+			for _, epochKey := range [][]byte{gks.EpochKey0, gks.EpochKey1, gks.EpochKey2} {
+				if len(epochKey) == 0 {
+					continue
+				}
+				opIPK, derr := deriveOperationalIPK(epochKey, compressedFabricID)
+				if derr != nil {
+					return nil, derr
+				}
+				out = append(out, opIPK)
+			}
+			if len(out) > 0 {
+				return out, nil
+			}
+		case !errors.Is(err, matterstore.ErrGroupKeySetNotFound):
+			return nil, err
+		}
+	}
+	opIPK, err := deriveOperationalIPK(rawIPKFallback, compressedFabricID)
+	if err != nil {
+		return nil, err
+	}
+	return [][16]byte{opIPK}, nil
 }
 
 // privKeyFromScalar reconstructs an *ecdsa.PrivateKey from a 32-byte

@@ -11,6 +11,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/schema"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -195,6 +196,28 @@ func (d *TopologyDispatcher) Write(ctx context.Context, path im.ConcreteAttribut
 				aPath := cPath
 				aPath.Attribute = attrID
 				aPath.HasAttribute = true
+
+				// Read-only-attribute write gate (Matter §8.6). matter.js
+				// rejects a WriteRequest to a non-writable attribute BEFORE
+				// any behavior runs, so the write never reaches the cluster
+				// server (and, downstream, the CCU). The writability verdict
+				// derives from the matter.js schema access string via
+				// schema.AttributeWritable. A concrete path is answered with
+				// UNSUPPORTED_WRITE (mirrors
+				// ../matter.js/packages/protocol/src/action/server/AttributeWriteResponse.ts:229-231
+				// `if (!limits.writable) … return this.#asStatus(path, Status.UnsupportedWrite)`);
+				// a wildcard path silently skips the attribute (mirrors
+				// AttributeWriteResponse.ts:329-331
+				// `if (!attribute.limits.writable) return;`). Attributes with
+				// no read-only record — globals, writable attrs, clusters
+				// outside the table (known == false) — fall through unchanged.
+				if writable, known := schema.AttributeWritable(cPath.Cluster, attrID); known && !writable {
+					if path.HasAttribute {
+						results = append(results, im.WriteResult{Path: aPath, Status: im.StatusUnsupportedWrite})
+					}
+					continue
+				}
+
 				res := writeOne(ctx, srv, aPath, value)
 				// A successful write mutated cluster state; advance the
 				// endpoint-hosted DataVersion so DataVersionFilters miss

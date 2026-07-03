@@ -241,6 +241,71 @@ type InvokeResponseEntry struct {
 	HasCommandRef bool
 }
 
+// HasCommandData reports whether any entry is a CommandDataIB (a command
+// that produced a response payload) rather than a CommandStatusIB. Per
+// Matter §8.8.3.2.1 a SuppressResponse invoke still ships a response when a
+// CommandDataIB is generated; when the response carries only status entries
+// the server sends nothing. Mirrors matter.js
+// packages/node/src/node/server/InteractionServer.ts:1043-1074
+// (`suppressedBuffer` is flushed on the first `cmd-response`; otherwise the
+// invoke returns without sending).
+func (ir InvokeResponse) HasCommandData() bool {
+	for i := range ir.Responses {
+		if !ir.Responses[i].IsStatus {
+			return true
+		}
+	}
+	return false
+}
+
+// ValidateInvokeBatch enforces the batch-invoke path rules a controller may
+// violate when it packs more than one CommandDataIB into a single
+// InvokeRequest. Returns StatusInvalidAction on the first offending command,
+// else StatusSuccess. A single-command invoke always passes. Mirrors matter.js
+// packages/protocol/src/action/server/CommandInvokeResponse.ts:64-92,171-185
+// (CommandInvokeResponse.process / #processConcrete):
+//   - a wildcard-endpoint path is illegal in a batch (matter.js "Wildcard path
+//     must not be used with multiple invokes");
+//   - every concrete path in a batch MUST carry a CommandRef ("The CommandRef
+//     field must be specified for all commands in a batch invoke");
+//   - duplicate concrete (endpoint, cluster, command) paths are rejected
+//     ("Duplicate concrete command path on batch invoke");
+//   - duplicate CommandRefs are rejected ("Duplicate commandRef on batch
+//     invoke").
+//
+// The wire decoder guarantees every command path carries a cluster and a
+// command, so a "wildcard" here is a path without a concrete endpoint.
+func ValidateInvokeBatch(req InvokeRequest) StatusCode {
+	multiple := len(req.Invokes) > 1
+	seenPaths := make(map[[3]uint32]struct{}, len(req.Invokes))
+	seenRefs := make(map[uint16]struct{}, len(req.Invokes))
+	for i := range req.Invokes {
+		inv := req.Invokes[i]
+		if !inv.Path.HasEndpoint {
+			// Wildcard-endpoint invoke: legal only as the sole command.
+			if multiple {
+				return StatusInvalidAction
+			}
+			continue
+		}
+		if multiple && !inv.HasCommandRef {
+			return StatusInvalidAction
+		}
+		key := [3]uint32{uint32(inv.Path.Endpoint), inv.Path.Cluster, inv.Path.Command}
+		if _, dup := seenPaths[key]; dup {
+			return StatusInvalidAction
+		}
+		seenPaths[key] = struct{}{}
+		if inv.HasCommandRef {
+			if _, dup := seenRefs[inv.CommandRef]; dup {
+				return StatusInvalidAction
+			}
+			seenRefs[inv.CommandRef] = struct{}{}
+		}
+	}
+	return StatusSuccess
+}
+
 // CommandFieldsWriter is the encoder counterpart of [CommandFieldsReader].
 type CommandFieldsWriter func(enc *tlv.Encoder, tag tlv.Tag, fields any)
 
@@ -316,7 +381,12 @@ func HandleInvokeRequest(ctx context.Context, d Dispatcher, req InvokeRequest) I
 	}
 
 	var ir InvokeResponse
-	ir.SuppressResponse = req.SuppressResponse
+	// The InvokeResponseMessage.SuppressResponse field is deprecated and matter.js
+	// always emits it as false (packages/node/src/node/server/InteractionServer.ts:987-988
+	// `emptyInvokeResponse.suppressResponse: false`). The controller's suppress-response
+	// intent governs whether the bridge sends the InvokeResponse at all (handled at the
+	// dispatch layer via [InvokeResponse.HasCommandData] per Matter §8.8.3.2.1), not the
+	// value of this wire field — so it stays at its zero value here.
 	for _, inv := range req.Invokes {
 		// ACL gate. PASE (fabricIndex==0) skips ACL: commissioning
 		// invokes arrive before the fabric's ACL entry exists. The

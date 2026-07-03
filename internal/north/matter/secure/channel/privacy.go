@@ -12,18 +12,39 @@ import (
 	"fmt"
 )
 
-// Privacy-mode constants per Matter Core Spec §4.4.3.1.
+// Privacy-mode constants per Matter Core Spec §4.9.
 const (
 	// PrivacyKeySize is the byte length of the AES key that masks the
 	// privacy-protected header portion. Equal to AES-128 key size.
 	PrivacyKeySize = 16
 
-	// PrivacyMICSuffixSize is the number of trailing MIC bytes that
-	// participate in the privacy IV (Spec §4.4.3.1).
+	// PrivacyMICSuffixSize is the minimum trailing-MIC byte count the
+	// framing layer requires before attempting a privacy operation. The
+	// privacy nonce itself consumes the last [privacyNonceMICBytes] of
+	// the full [privacyMICLength]-byte MIC; this looser gate is kept for
+	// the framing-layer length check.
 	PrivacyMICSuffixSize = 14
 
+	// PrivacyNonceSize is the length of the AES-CTR privacy nonce:
+	// SessionID (2 bytes) followed by the last privacyNonceMICBytes of
+	// the MIC. Mirrors matter.js CRYPTO_PRIVACY_NONCE_LENGTH_BYTES (13).
+	PrivacyNonceSize = 13
+
+	// privacyMICLength is the full AES-CCM MIC (tag) length. matter.js
+	// buildNonce requires exactly this many MIC bytes.
+	privacyMICLength = 16
+
+	// privacyNonceMICBytes is how many trailing MIC bytes feed the
+	// privacy nonce: mic[privacyMICLength-privacyNonceMICBytes:] — i.e.
+	// mic[5:16], the last 11 bytes. Mirrors matter.js NONCE_MIC_LENGTH.
+	privacyNonceMICBytes = PrivacyNonceSize - 2 // 11
+
+	// privacyCTRFlags is the AES-CCM counter-block flags byte for a
+	// 13-byte nonce (L = 15-13 = 2, so flags = L-1 = 1).
+	privacyCTRFlags = 0x01
+
 	// privacyHKDFInfo is the HKDF info string used to derive the
-	// privacy key from the session encryption key. Matter §4.4.3.1
+	// privacy key from the session encryption key. Matter §4.9.1
 	// fixes the literal value.
 	privacyHKDFInfo = "PrivacyKey"
 )
@@ -35,9 +56,9 @@ var (
 	ErrPrivacyKeySource = errors.New("channel: privacy key source must be 16 bytes")
 
 	// ErrPrivacyMICShort is returned when the MIC slice supplied to a
-	// privacy operation is shorter than the spec-mandated 14-byte
-	// suffix.
-	ErrPrivacyMICShort = errors.New("channel: privacy MIC suffix needs ≥14 bytes")
+	// privacy operation is shorter than the 16-byte AES-CCM tag the
+	// privacy nonce is derived from (Matter §4.9; matter.js buildNonce).
+	ErrPrivacyMICShort = errors.New("channel: privacy MIC needs ≥16 bytes")
 )
 
 // DerivePrivacyKey produces the 16-byte privacy key from a session
@@ -58,35 +79,47 @@ func DerivePrivacyKey(sessionKey []byte) ([]byte, error) {
 	return out, nil
 }
 
-// PrivacyMask produces the 16-byte AES-ECB block that the privacy-
-// protected header portion is XORed with per Matter §4.4.3.1:
+// PrivacyMask produces the 16-byte AES-CTR keystream block the
+// privacy-protected header portion is XORed with per Matter §4.9.
 //
-//	IV     = SessionID (BE 2B) || MIC[len-14:]    (16 bytes total)
-//	Mask   = AES-ECB-Encrypt(PrivacyKey, IV)
+//	nonce   = SessionID (BE 2B) || MIC[5:16]      (13 bytes)
+//	mask    = AES-Encrypt(PrivacyKey, 0x01 || nonce || 0x0001)
 //
-// privacyKey must be exactly 16 bytes (i.e., the output of
-// [DerivePrivacyKey]); mic must be at least 14 bytes long. The
-// function reads only the last [PrivacyMICSuffixSize] bytes of mic.
+// Header privacy is AES-CTR (expressed as AES-CCM with L=2 and empty
+// AAD). The protected header region never exceeds one AES block, so a
+// single keystream block suffices: the AES-CCM counter block for the
+// first payload block is 0x01 || nonce || 0x0001 (flags = L-1 = 1,
+// counter = 1). XORing that keystream over the region both masks and
+// unmasks. Mirrors matter.js
+// packages/protocol/src/codec/MessagePrivacy.ts:38-56 (buildNonce +
+// obfuscate) and chip src/transport/CryptoContext.cpp:168-176.
 //
-// Per spec, SessionID is encoded big-endian in the privacy IV (this
-// is the one place in the Matter wire protocol where a multi-byte
-// integer is *not* little-endian).
+// privacyKey must be exactly 16 bytes (the output of
+// [DerivePrivacyKey]); mic must carry the full 16-byte AES-CCM tag —
+// the nonce reads its last [privacyNonceMICBytes] bytes (mic[5:16]).
+//
+// SessionID is encoded big-endian in the nonce — the one place in the
+// Matter wire protocol where a multi-byte integer is not little-endian.
 func PrivacyMask(privacyKey []byte, sessionID uint16, mic []byte) ([]byte, error) {
 	if len(privacyKey) != PrivacyKeySize {
 		return nil, fmt.Errorf("%w: privacy key got %d", ErrPrivacyKeySource, len(privacyKey))
 	}
-	if len(mic) < PrivacyMICSuffixSize {
+	if len(mic) < privacyMICLength {
 		return nil, fmt.Errorf("%w: got %d", ErrPrivacyMICShort, len(mic))
 	}
+	tag := mic[len(mic)-privacyMICLength:]
 	cipher, err := aes.NewCipher(privacyKey)
 	if err != nil {
 		return nil, fmt.Errorf("channel: privacy cipher: %w", err)
 	}
-	iv := make([]byte, PrivacyKeySize)
-	binary.BigEndian.PutUint16(iv[0:2], sessionID)
-	copy(iv[2:], mic[len(mic)-PrivacyMICSuffixSize:])
+	// counter block: 0x01 || SessionID(BE) || MIC[5:16] || 0x0001.
+	block := make([]byte, PrivacyKeySize)
+	block[0] = privacyCTRFlags
+	binary.BigEndian.PutUint16(block[1:3], sessionID)
+	copy(block[3:1+PrivacyNonceSize], tag[privacyMICLength-privacyNonceMICBytes:])
+	block[PrivacyKeySize-1] = 0x01 // low byte of the big-endian CCM counter (value 1)
 	mask := make([]byte, PrivacyKeySize)
-	cipher.Encrypt(mask, iv)
+	cipher.Encrypt(mask, block)
 	return mask, nil
 }
 

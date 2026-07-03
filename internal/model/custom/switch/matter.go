@@ -154,11 +154,12 @@ func (s *Switch) MatterRead(attrID uint32) (any, bool) {
 		}
 		return on, true
 	case matterAttrGlobalSceneControl:
-		// GlobalSceneControl (bool, conformance LT): defaults to true.
-		// matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:75,151
-		// sets globalSceneControl = true; the bridge has no scene engine
-		// so it stays true (read-only on this projection).
-		return true, true
+		// GlobalSceneControl (bool, conformance LT): true after On /
+		// OnWithTimedOff / OnWithRecallGlobalScene, false after
+		// OffWithEffect; a plain Off leaves it unchanged. Defaults to
+		// true. matter.js packages/node/src/behaviors/on-off/OnOffServer.ts:
+		// 97-104 (on), :158-169 (offWithEffect).
+		return s.globalSceneControl.Load(), true
 	case matterAttrOnTime:
 		// OnTime (uint16, conformance LT): timed-off countdown.
 		// Returns the last written value (default 0 = no timed-off active).
@@ -285,27 +286,45 @@ func (s *Switch) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority
 		err = s.TurnOff(ctx, priority)
 	case matterCmdOn:
 		err = s.TurnOn(ctx, priority)
+		if err == nil {
+			s.globalSceneControl.Store(true)
+		}
 	case matterCmdToggle:
 		cur, observed := s.IsOn()
 		if !observed || !cur {
 			err = s.TurnOn(ctx, priority)
+			if err == nil {
+				s.globalSceneControl.Store(true)
+			}
 		} else {
 			err = s.TurnOff(ctx, priority)
 		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): no dimming-effect engine on a
 		// plain switch, so the effect identifier/variant are ignored and
-		// the switch is turned off. on-off.element.ts:41.
+		// the switch is turned off. on-off.element.ts:41. matter.js
+		// OnOffServer.ts:158-169 also clears GlobalSceneControl here —
+		// a plain Off never touches it.
 		err = s.TurnOff(ctx, priority)
+		if err == nil {
+			s.globalSceneControl.Store(false)
+		}
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
 		err = s.TurnOn(ctx, priority)
+		if err == nil {
+			s.globalSceneControl.Store(true)
+		}
 	case matterCmdOnWithTimedOff:
 		// OnWithTimedOff (LT, mandatory): no on-timer, so the timed-off
 		// semantics are dropped and the switch is turned on.
-		// on-off.element.ts:51.
+		// on-off.element.ts:51. matter.js OnOffServer.ts:224 ends
+		// onWithTimedOff() with on(), which also sets GlobalSceneControl.
 		err = s.TurnOn(ctx, priority)
+		if err == nil {
+			s.globalSceneControl.Store(true)
+		}
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}

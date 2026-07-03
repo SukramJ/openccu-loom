@@ -279,7 +279,38 @@ const (
 )
 
 // Errors.
-var errOpcredsInvalidArg = errors.New("matter: OperationalCredentials invalid argument")
+
+// opcredsInvalidArgErr is the typed [im.StatusCodeError] backing
+// [errOpcredsInvalidArg]. A malformed command argument — a wrong-length
+// nonce, an unknown CertificateChainType, an undecodable root certificate,
+// or a mis-typed TLV payload — surfaces as IM Status::InvalidCommand (0x85),
+// NOT a generic Failure. Mirrors matter.js
+// packages/node/src/behaviors/operational-credentials/OperationalCredentialsServer.ts:97-99
+// (bad attestation-nonce length), :120-127 (bad CSR-nonce length / unknown
+// certificate type), and :453 (undecodable root cert) — each raises
+// StatusResponseError(..., Status.InvalidCommand).
+type opcredsInvalidArgErr struct{}
+
+func (opcredsInvalidArgErr) Error() string {
+	return "matter: OperationalCredentials invalid argument"
+}
+
+func (opcredsInvalidArgErr) MatterStatusCode() im.StatusCode { return im.StatusInvalidCommand }
+
+var errOpcredsInvalidArg error = opcredsInvalidArgErr{}
+
+// opcredsConstraintErr is the typed [im.StatusCodeError] returned when a
+// command is invoked in a state the failsafe context forbids — e.g. an
+// AddNOC that consumes a CSR issued for UpdateNOC (or vice versa). Surfaces
+// as IM Status::ConstraintError (0x87). Mirrors matter.js
+// OperationalCredentialsServer.ts:234-239 (addNoc after CSRRequest for
+// UpdateNOC) and :316-319 (updateNoc after CSRRequest for AddNOC), both
+// StatusResponseError(..., Status.ConstraintError). Matter §11.18.6.
+type opcredsConstraintErr struct{ msg string }
+
+func (e opcredsConstraintErr) Error() string { return e.msg }
+
+func (opcredsConstraintErr) MatterStatusCode() im.StatusCode { return im.StatusConstraintError }
 
 // OpcredsConfig drives [NewOperationalCredentials].
 type OpcredsConfig struct {
@@ -1166,6 +1197,29 @@ func (o *OperationalCredentials) handleCSRRequest(ctx context.Context, fields an
 	if req.IsForUpdateNOC && sessFabric == 0 {
 		return nil, errors.New("matter: CSRRequest: invalid command argument: IsForUpdateNOC requires CASE session (got PASE)")
 	}
+	// A CSRRequest requires an armed FailSafe window — the generated CSR is a
+	// FailSafe-scoped ephemeral, so issuing one outside the window leaves
+	// dangling pending state. Mirrors matter.js
+	// OperationalCredentialsServer.ts:117-118 (the `commissioner.failsafeContext`
+	// getter calls assertFailsafeArmed → Status::FailsafeRequired, 0xCA) and
+	// chip operational-credentials-server.cpp CSRRequest failsafe assertion.
+	// When the accessor is nil (test setups + legacy callers) the guard is
+	// skipped, matching handleAddNOC / handleAddTrustedRootCertificate.
+	o.mu.RLock()
+	checkArmed := o.isFailSafeArmed
+	nocInvoked := o.nocWasInvoked
+	o.mu.RUnlock()
+	if checkArmed != nil && !checkArmed() {
+		return nil, errOpcredsFailsafeRequired
+	}
+	// A CSRRequest after AddNOC or UpdateNOC has already run in this FailSafe
+	// window is illegal — the fabric slot is already claimed and a fresh CSR
+	// would orphan the installed keypair. Mirrors matter.js
+	// OperationalCredentialsServer.ts:131-137 (`if (failsafeContext.fabricIndex
+	// !== undefined) throw ConstraintError`). Matter §11.18.6.5.
+	if nocInvoked {
+		return nil, opcredsConstraintErr{msg: "matter: CSRRequest illegal after AddNOC/UpdateNOC in same FailSafe context"}
+	}
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("matter: CSRRequest: generate key: %w", err)
@@ -1344,10 +1398,13 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	// A CSR issued with IsForUpdateNOC=true must NOT be consumed by AddNOC
 	// — that would let a commissioner update an existing fabric's NOC via
 	// the add path, skipping the fabric-authentication guard on UpdateNOC.
-	// Mirrors matter.js OperationalCredentialsServer.ts:#addNoc
-	// !csrIsForUpdateNoc check.
+	// This is an IM-level Status::ConstraintError (0x87), NOT an in-band
+	// NOCResponse. Mirrors matter.js
+	// OperationalCredentialsServer.ts:234-239 (addNoc raises
+	// StatusResponseError("AddNoc is illegal after CsrRequest for UpdateNOC
+	// in same failsafe context", Status.ConstraintError)).
 	if pendingForUpdate {
-		return NOCResponse{StatusCode: NOCStatusMissingCsr, DebugText: "CSR was issued for UpdateNOC"}, nil
+		return nil, opcredsConstraintErr{msg: "matter: AddNOC illegal after CSRRequest for UpdateNOC in same FailSafe context"}
 	}
 	if len(root) == 0 {
 		return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "no trusted root"}, nil
@@ -1639,11 +1696,16 @@ func (o *OperationalCredentials) handleUpdateNOC(ctx context.Context, fields any
 		return NOCResponse{StatusCode: NOCStatusMissingCsr, DebugText: "CSR not issued"}, nil
 	}
 	// UpdateNOC requires the pending CSR was issued with IsForUpdateNOC=true.
-	// Otherwise the CSR belongs to AddNOC and must not be consumed here.
-	// Mirrors matter.js OperationalCredentialsServer.ts:#updateNoc
-	// csrIsForUpdateNoc check.
+	// Otherwise the CSR belongs to AddNOC and must not be consumed here. The
+	// priv==nil "no CSR at all" case is handled above (in-band MissingCsr,
+	// matter.js forUpdateNoc===undefined); reaching here with priv!=nil and
+	// !pendingForUpdate means a CSR was issued for AddNOC (forUpdateNoc===false),
+	// which is an IM-level Status::ConstraintError (0x87). Mirrors matter.js
+	// OperationalCredentialsServer.ts:316-319 (updateNoc raises
+	// StatusResponseError("UpdateNoc is illegal after CsrRequest for AddNOC in
+	// same failsafe context", Status.ConstraintError)).
 	if !pendingForUpdate {
-		return NOCResponse{StatusCode: NOCStatusMissingCsr, DebugText: "CSR was issued for AddNOC"}, nil
+		return nil, opcredsConstraintErr{msg: "matter: UpdateNOC illegal after CSRRequest for AddNOC in same FailSafe context"}
 	}
 	// UpdateNOC is fabric-scoped (Matter §11.18.6.9 — the NOC update
 	// SHALL target the fabric of the invoking session). Read the
