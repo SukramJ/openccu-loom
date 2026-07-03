@@ -66,7 +66,7 @@ func dispatchCopy(t *testing.T, r *Router, src, dst, psKey string) map[string]an
 		"target_channel_address": dst,
 		"paramset_key":           psKey,
 	})
-	res := r.Dispatch(context.Background(), "paramset.copy", raw)
+	res := r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error != nil {
 		t.Fatalf("paramset.copy: unexpected error: %v", res.Error)
 	}
@@ -121,7 +121,7 @@ func TestParamsetCopy_DefaultsToMASTER(t *testing.T) {
 		"target_channel_address": "B:1",
 		// no paramset_key → defaults to MASTER
 	})
-	res := r.Dispatch(context.Background(), "paramset.copy", raw)
+	res := r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -154,7 +154,7 @@ func TestParamsetCopy_ReadErrorPropagates(t *testing.T) {
 		"source_channel_address": "A:1",
 		"target_channel_address": "B:1",
 	})
-	res := r.Dispatch(context.Background(), "paramset.copy", raw)
+	res := r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error == nil {
 		t.Fatal("expected error when read fails")
 	}
@@ -171,7 +171,7 @@ func TestParamsetCopy_WriteErrorPropagates(t *testing.T) {
 		"source_channel_address": "A:1",
 		"target_channel_address": "B:1",
 	})
-	res := r.Dispatch(context.Background(), "paramset.copy", raw)
+	res := r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error == nil {
 		t.Fatal("expected error when write fails")
 	}
@@ -183,14 +183,14 @@ func TestParamsetCopy_RequiresAddresses(t *testing.T) {
 
 	// Missing both addresses.
 	raw, _ := json.Marshal(map[string]any{})
-	res := r.Dispatch(context.Background(), "paramset.copy", raw)
+	res := r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error == nil {
 		t.Fatal("expected error for missing addresses")
 	}
 
 	// Missing target only.
 	raw, _ = json.Marshal(map[string]any{"source_channel_address": "A:1"})
-	res = r.Dispatch(context.Background(), "paramset.copy", raw)
+	res = r.Dispatch(opCtx(), "paramset.copy", raw)
 	if res.Error == nil {
 		t.Fatal("expected error for missing target")
 	}
@@ -203,14 +203,14 @@ func TestParamsetCopy_NotRegisteredWhenReaderOrWriterNil(t *testing.T) {
 	r1 := NewRouter()
 	RegisterExtendedCommands(r1, ExtendedCommandsConfig{ParamsetReader: rw})
 	raw, _ := json.Marshal(map[string]any{"source_channel_address": "A:1", "target_channel_address": "B:1"})
-	if res := r1.Dispatch(context.Background(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
+	if res := r1.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
 		t.Fatal("paramset.copy should not be registered without both reader and writer")
 	}
 
 	// Only ParamsetWriter wired, no ParamsetReader → not registered.
 	r2 := NewRouter()
 	RegisterExtendedCommands(r2, ExtendedCommandsConfig{Paramsets: rw})
-	if res := r2.Dispatch(context.Background(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
+	if res := r2.Dispatch(opCtx(), "paramset.copy", raw); res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
 		t.Fatal("paramset.copy should not be registered without both reader and writer")
 	}
 }

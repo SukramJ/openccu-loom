@@ -45,7 +45,7 @@ func TestReloadDeviceConfig_Success(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{DeviceReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"device_address": "ABC0001"})
-	res := r.Dispatch(context.Background(), "config.reload_device_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_device_config", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -67,7 +67,7 @@ func TestReloadDeviceConfig_MissingAddress(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{DeviceReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{})
-	res := r.Dispatch(context.Background(), "config.reload_device_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_device_config", raw)
 	if res.Error == nil {
 		t.Fatal("expected error for missing device_address")
 	}
@@ -82,7 +82,7 @@ func TestReloadDeviceConfig_DomainError(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{DeviceReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"device_address": "ABC0001"})
-	res := r.Dispatch(context.Background(), "config.reload_device_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_device_config", raw)
 	if res.Error == nil {
 		t.Fatal("expected error from domain")
 	}
@@ -96,7 +96,7 @@ func TestReloadDeviceConfig_NotRegisteredWhenNilReloader(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{}) // no DeviceReloader
 
 	raw, _ := json.Marshal(map[string]any{"device_address": "ABC0001"})
-	res := r.Dispatch(context.Background(), "config.reload_device_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_device_config", raw)
 	if res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
 		t.Fatalf("expected unknown_command when reloader not wired, got %v", res.Error)
 	}
@@ -110,7 +110,7 @@ func TestCCUReloadDeviceConfig_Success(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{DeviceReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"device_address": "DEF0002"})
-	res := r.Dispatch(context.Background(), "ccu.reload_device_config", raw)
+	res := r.Dispatch(opCtx(), "ccu.reload_device_config", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -154,7 +154,7 @@ func TestReloadChannelConfig_Success(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
-	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_channel_config", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -177,7 +177,7 @@ func TestReloadChannelConfig_AddressAlias(t *testing.T) {
 
 	// Send only the "address" alias key — channel_address should fall back to it.
 	raw, _ := json.Marshal(map[string]any{"address": "ABC0001:2"})
-	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_channel_config", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error using address alias: %v", res.Error)
 	}
@@ -192,7 +192,7 @@ func TestReloadChannelConfig_MissingAddress(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{})
-	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_channel_config", raw)
 	if res.Error == nil {
 		t.Fatal("expected error for missing channel_address")
 	}
@@ -207,7 +207,7 @@ func TestReloadChannelConfig_DomainError(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
-	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_channel_config", raw)
 	if res.Error == nil {
 		t.Fatal("expected error from domain")
 	}
@@ -221,7 +221,7 @@ func TestReloadChannelConfig_NotRegisteredWhenNilReloader(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{}) // no ChannelReloader
 
 	raw, _ := json.Marshal(map[string]any{"channel_address": "ABC0001:1"})
-	res := r.Dispatch(context.Background(), "config.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "config.reload_channel_config", raw)
 	if res.Error == nil || res.Error.Code != CommandErrorUnknownCommand {
 		t.Fatalf("expected unknown_command when reloader not wired, got %v", res.Error)
 	}
@@ -235,7 +235,7 @@ func TestCCUReloadChannelConfig_Success(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{ChannelReloader: stub})
 
 	raw, _ := json.Marshal(map[string]any{"channel_address": "DEF0002:3"})
-	res := r.Dispatch(context.Background(), "ccu.reload_channel_config", raw)
+	res := r.Dispatch(opCtx(), "ccu.reload_channel_config", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -280,14 +280,14 @@ func TestSessionSavePassesWithNoConstraints(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"TEMPERATURE": float64(20)}}
 	r, _ := newSessionRouterWithConstraints(t, backend, nil) // nil cp → no validation
 
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name": "test", "channel_address": "addr:1", "paramset_key": "MASTER",
 		"parameter": "TEMPERATURE", "value": float64(22),
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("save with nil constraints should succeed: %v", res.Error)
 	}
@@ -301,15 +301,15 @@ func TestSessionSavePassesWithSatisfiedConstraints(t *testing.T) {
 	}}
 	r, _ := newSessionRouterWithConstraints(t, backend, cp)
 
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	// Change MAX_TEMP to 30 — still satisfies MAX_TEMP >= MIN_TEMP.
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name": "test", "channel_address": "addr:1", "paramset_key": "MASTER",
 		"parameter": "MAX_TEMP", "value": float64(30),
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("save should succeed when constraints are satisfied: %v", res.Error)
 	}
@@ -326,15 +326,15 @@ func TestSessionSaveBlockedByConstraintViolation(t *testing.T) {
 	}}
 	r, _ := newSessionRouterWithConstraints(t, backend, cp)
 
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	// Set MAX_TEMP below MIN_TEMP — violates the constraint.
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name": "test", "channel_address": "addr:1", "paramset_key": "MASTER",
 		"parameter": "MAX_TEMP", "value": float64(5),
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error == nil {
 		t.Fatal("save should be blocked when constraints are violated")
 	}
@@ -352,14 +352,14 @@ func TestSessionSaveConstraintProviderError(t *testing.T) {
 	cp := &stubConstraintProvider{err: errors.New("schema unavailable")}
 	r, _ := newSessionRouterWithConstraints(t, backend, cp)
 
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name": "test", "channel_address": "addr:1", "paramset_key": "MASTER",
 		"parameter": "A", "value": float64(2),
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error == nil {
 		t.Fatal("save should fail when constraint provider returns error")
 	}

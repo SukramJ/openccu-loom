@@ -111,7 +111,7 @@ func TestCentralCreateLinks_HappyPath(t *testing.T) {
 	r := newLinksRouter(fake, nil)
 
 	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001"})
-	res := r.Dispatch(context.Background(), "central.create_links", raw)
+	res := r.Dispatch(opCtx(), "central.create_links", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -128,7 +128,7 @@ func TestCentralCreateLinks_MissingAddress(t *testing.T) {
 	t.Parallel()
 	r := newLinksRouter(&fakeCentralLinks{}, nil)
 
-	res := r.Dispatch(context.Background(), "central.create_links", marshalArgs(t, map[string]any{}))
+	res := r.Dispatch(opCtx(), "central.create_links", marshalArgs(t, map[string]any{}))
 	if res.Error == nil {
 		t.Fatal("expected error for missing address")
 	}
@@ -143,7 +143,7 @@ func TestCentralCreateLinks_ManagerError(t *testing.T) {
 	r := newLinksRouter(fake, nil)
 
 	raw := marshalArgs(t, map[string]any{"device_address": "ABC0001"})
-	res := r.Dispatch(context.Background(), "central.create_links", raw)
+	res := r.Dispatch(opCtx(), "central.create_links", raw)
 	if res.Error == nil {
 		t.Fatal("expected error from manager")
 	}
@@ -161,7 +161,7 @@ func TestCentralRemoveLinks_AddressAlias(t *testing.T) {
 
 	// Use the `address` alias instead of `device_address`.
 	raw := marshalArgs(t, map[string]any{"address": "DEF0002"})
-	res := r.Dispatch(context.Background(), "central.remove_links", raw)
+	res := r.Dispatch(opCtx(), "central.remove_links", raw)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -219,7 +219,7 @@ func TestRecordingStart(t *testing.T) {
 	rec := &fakeSessionRecorder{}
 	r := newLinksRouter(nil, rec)
 
-	res := r.Dispatch(context.Background(), "recording.start", nil)
+	res := r.Dispatch(opCtx(), "recording.start", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -237,8 +237,8 @@ func TestRecordingStop_AfterStart(t *testing.T) {
 	r := newLinksRouter(nil, rec)
 
 	// Start first, then stop.
-	r.Dispatch(context.Background(), "recording.start", nil)
-	res := r.Dispatch(context.Background(), "recording.stop", nil)
+	r.Dispatch(opCtx(), "recording.start", nil)
+	res := r.Dispatch(opCtx(), "recording.stop", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
 	}
@@ -256,7 +256,7 @@ func TestRecordingStatus_ReflectsState(t *testing.T) {
 	r := newLinksRouter(nil, rec)
 
 	// Activate and check status.
-	r.Dispatch(context.Background(), "recording.start", nil)
+	r.Dispatch(opCtx(), "recording.start", nil)
 	res := r.Dispatch(context.Background(), "recording.status", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)
@@ -266,7 +266,7 @@ func TestRecordingStatus_ReflectsState(t *testing.T) {
 	}
 
 	// Deactivate and check status.
-	r.Dispatch(context.Background(), "recording.stop", nil)
+	r.Dispatch(opCtx(), "recording.stop", nil)
 	res = r.Dispatch(context.Background(), "recording.status", nil)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error)

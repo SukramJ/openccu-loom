@@ -140,7 +140,7 @@ func dispatch(t *testing.T, r *Router, name string, params any) any {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := r.Dispatch(context.Background(), name, raw)
+	res := r.Dispatch(ctxForCommand(name), name, raw)
 	if res.Error != nil {
 		t.Fatalf("%s: dispatch err: %v", name, res.Error.Message)
 	}
@@ -150,7 +150,7 @@ func dispatch(t *testing.T, r *Router, name string, params any) any {
 func dispatchExpectErr(t *testing.T, r *Router, name string, params any, contains string) {
 	t.Helper()
 	raw, _ := json.Marshal(params)
-	res := r.Dispatch(context.Background(), name, raw)
+	res := r.Dispatch(ctxForCommand(name), name, raw)
 	if res.Error == nil {
 		t.Fatalf("%s: expected error", name)
 	}
@@ -293,7 +293,7 @@ func TestExtendedParamsetPutHiddenParamReturnsForbidenError(t *testing.T) {
 		"paramset_key":    "VALUES",
 		"values":          map[string]any{"PARTY_MODE_SUBMIT": "submit"},
 	})
-	res := r.Dispatch(context.Background(), "paramset.put", raw)
+	res := r.Dispatch(opCtx(), "paramset.put", raw)
 	if res.Error == nil {
 		t.Fatal("expected error for hidden parameter, got nil")
 	}
@@ -327,7 +327,7 @@ func TestExtendedParamsetPutVisibleParamSucceeds(t *testing.T) {
 		"paramset_key":    "VALUES",
 		"values":          map[string]any{"STATE": true},
 	})
-	res := r.Dispatch(context.Background(), "paramset.put", raw)
+	res := r.Dispatch(opCtx(), "paramset.put", raw)
 	if res.Error != nil {
 		t.Fatalf("expected success for visible param, got error: %v", res.Error)
 	}

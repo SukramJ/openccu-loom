@@ -100,7 +100,7 @@ func dispatchMissing(t *testing.T, r *Router, name string, params any) map[strin
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := r.Dispatch(context.Background(), name, raw)
+	res := r.Dispatch(ctxForCommand(name), name, raw)
 	if res.Error != nil {
 		t.Fatalf("%s: unexpected error: %v", name, res.Error.Message)
 	}
@@ -283,7 +283,7 @@ func TestMissingStubCommandsReturnError(t *testing.T) {
 	}
 	for _, name := range stubs {
 		raw, _ := json.Marshal(map[string]any{})
-		res := r.Dispatch(context.Background(), name, raw)
+		res := r.Dispatch(ctxForCommand(name), name, raw)
 		if res.Error == nil {
 			t.Errorf("%s: expected stub error, got nil", name)
 			continue

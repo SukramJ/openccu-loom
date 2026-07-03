@@ -153,7 +153,7 @@ func TestRegisterCustomDPCommands_AllFiveCommandsRegistered(t *testing.T) {
 		"calc_dp.get",
 	}
 	for _, cmd := range expected {
-		res := r.Dispatch(context.Background(), cmd, nil)
+		res := r.Dispatch(ctxForCommand(cmd), cmd, nil)
 		// Commands themselves may error (e.g. missing params) but must be registered.
 		_ = res
 	}
@@ -274,7 +274,7 @@ func TestCustomDPSet_HappyPath(t *testing.T) {
 	r := NewRouter()
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx, Invoker: invoker})
 
-	res := r.Dispatch(context.Background(), "cdp.invoke",
+	res := r.Dispatch(opCtx(), "cdp.invoke",
 		jsonParam(`{"device":"DEV0023","name":"STATE","operation":"turn_on"}`))
 	if res.Error != nil {
 		t.Fatalf("dispatch error: %+v", res.Error)
@@ -296,7 +296,7 @@ func TestCustomDPSet_UnknownOperation_ReturnsError(t *testing.T) {
 	r := NewRouter()
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx, Invoker: invoker})
 
-	res := r.Dispatch(context.Background(), "cdp.invoke",
+	res := r.Dispatch(opCtx(), "cdp.invoke",
 		jsonParam(`{"device":"DEV0024","name":"STATE","operation":"fly"}`))
 	if res.Error == nil {
 		t.Fatal("expected error for unknown operation")
@@ -311,7 +311,7 @@ func TestCustomDPSet_MissingOperation_ReturnsError(t *testing.T) {
 	r := NewRouter()
 	RegisterCustomDPCommands(r, CustomDPCommandsConfig{Index: idx, Invoker: invoker})
 
-	res := r.Dispatch(context.Background(), "cdp.invoke",
+	res := r.Dispatch(opCtx(), "cdp.invoke",
 		jsonParam(`{"device":"DEV0025","name":"STATE"}`))
 	if res.Error == nil {
 		t.Fatal("expected error when operation is missing")

@@ -11,9 +11,73 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/reqctx"
 	"github.com/SukramJ/openccu-loom/pkg/hmerr"
 )
+
+// writeCommandRoles is the single source of truth for the minimum role a
+// caller must hold to invoke a state-changing WebSocket command. Any command
+// absent from this map is read-only and needs only an authenticated (viewer)
+// identity — the same contract the REST router applies, where reads are open
+// to any authenticated user and writes are wrapped in `.With(op)` / `.With(admin)`.
+//
+// Keeping the policy in one table — rather than tagging each of the ~90
+// registration sites across the command files — makes the privilege boundary
+// auditable and testable in a single place. TestWriteCommandRolesAreRegistered
+// guards against typos by pinning every entry to a really-registered command,
+// and the viewer-rejection tests assert the gate actually blocks writes.
+var writeCommandRoles = map[string]auth.Role{
+	// Admin-tier: backup + cache invalidation mirror the REST
+	// `/backups` and `/admin/cache/clear` routes (both `.With(admin)`).
+	"backup.trigger":  auth.RoleAdmin,
+	"ccu.cache_clear": auth.RoleAdmin,
+
+	// Operator-tier: every real device / config / schedule / link mutation.
+	"alarm_messages.ack":                  auth.RoleOperator,
+	"ccu.reload_channel_config":           auth.RoleOperator,
+	"ccu.reload_device_config":            auth.RoleOperator,
+	"cdp.invoke":                          auth.RoleOperator,
+	"central.create_links":                auth.RoleOperator,
+	"central.reconcile":                   auth.RoleOperator,
+	"central.remove_links":                auth.RoleOperator,
+	"change_history.clear":                auth.RoleOperator,
+	"config.reload_channel_config":        auth.RoleOperator,
+	"config.reload_device_config":         auth.RoleOperator,
+	"config.session.discard":              auth.RoleOperator,
+	"config.session.open":                 auth.RoleOperator,
+	"config.session.redo":                 auth.RoleOperator,
+	"config.session.save":                 auth.RoleOperator,
+	"config.session.set":                  auth.RoleOperator,
+	"config.session.undo":                 auth.RoleOperator,
+	"device.install_mode":                 auth.RoleOperator,
+	"device.rename":                       auth.RoleOperator,
+	"firmware.refresh":                    auth.RoleOperator,
+	"firmware.update":                     auth.RoleOperator,
+	"inbox.accept":                        auth.RoleOperator,
+	"incidents.clear":                     auth.RoleOperator,
+	"install_mode.disable":                auth.RoleOperator,
+	"install_mode.enable":                 auth.RoleOperator,
+	"links.add":                           auth.RoleOperator,
+	"links.put_paramset":                  auth.RoleOperator,
+	"links.remove":                        auth.RoleOperator,
+	"master_profiles.apply":               auth.RoleOperator,
+	"paramset.copy":                       auth.RoleOperator,
+	"paramset.put":                        auth.RoleOperator,
+	"programs.execute":                    auth.RoleOperator,
+	"recording.start":                     auth.RoleOperator,
+	"recording.stop":                      auth.RoleOperator,
+	"schedules.active_profile.set":        auth.RoleOperator,
+	"schedules.climate.copy_profile":      auth.RoleOperator,
+	"schedules.climate.set":               auth.RoleOperator,
+	"schedules.copy":                      auth.RoleOperator,
+	"schedules.device.active_profile.set": auth.RoleOperator,
+	"schedules.device.set":                auth.RoleOperator,
+	"schedules.set_enabled":               auth.RoleOperator,
+	"service_messages.ack":                auth.RoleOperator,
+	"service_messages.disable":            auth.RoleOperator,
+	"sysvars.set":                         auth.RoleOperator,
+}
 
 // CommandHandler implements one RPC-style WebSocket command. The returned
 // `data` is JSON-encoded into the response envelope under the "data" field;
@@ -175,6 +239,24 @@ func (r *Router) Dispatch(ctx context.Context, command string, args json.RawMess
 		res := Result{Error: NewCommandError(CommandErrorUnknownCommand, "no handler for "+command)}
 		r.logOutcome(ctx, command, res, time.Since(start))
 		return res
+	}
+	// Per-command role gate: a state-changing command listed in
+	// writeCommandRoles requires the caller's identity to hold at least the
+	// mapped role. This is the WebSocket counterpart to the REST router's
+	// `.With(op)` / `.With(admin)` wrappers; without it a read-only viewer
+	// could invoke operator/admin writes over the socket.
+	if minRole, gated := writeCommandRoles[command]; gated {
+		id, authed := auth.IdentityFrom(ctx)
+		switch {
+		case !authed || id.Subject == "":
+			res := Result{Error: NewCommandError(CommandErrorUnauthorized, "authentication required for "+command)}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		case !id.HasRole(minRole):
+			res := Result{Error: NewCommandError(CommandErrorForbidden, command+" requires "+string(minRole)+" role")}
+			r.logOutcome(ctx, command, res, time.Since(start))
+			return res
+		}
 	}
 	data, err := fn(ctx, args)
 	if err != nil {
