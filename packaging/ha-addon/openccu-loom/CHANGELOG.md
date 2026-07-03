@@ -1,5 +1,23 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.24.0
+
+- **More Matter parity and hardening.** A second, independent code-vs-code
+  re-audit against the reference stack closed a further wave of gaps:
+  - Access control is now enforced on Matter *event* reads and subscriptions
+    too, so one ecosystem can no longer see another's access-control activity;
+    writes to read-only attributes (like a light's on/off state field) are
+    rejected instead of quietly reaching the device.
+  - Commissioning is sturdier — repeated wrong pass-codes now count against the
+    pairing-attempt limit, and controllers that present a longer certificate
+    serial (seen on some TVs) can pair.
+  - Editing which devices are exposed no longer makes every controller
+    re-download the whole bridge.
+  - Door locks require a fresh "timed" request to lock/unlock; heating-only
+    thermostats stop showing a cooling control; blinds, colour lights and
+    on/off switches report a few status fields more faithfully.
+- The Matter bridge remains **opt-in and off by default** (`north.matter.enabled`).
+
 ## 0.23.1
 
 - **More stable MQTT connection.** The MQTT client no longer tears down and
