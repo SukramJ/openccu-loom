@@ -30,6 +30,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     restoring a backup onto a fresh host now requires the `OPENCCU_LOOM_SECRET_KEY`
     env key (or copying `secret.key` out of band); otherwise encrypted secrets
     must be re-entered.
+  - **Daemon-state backups are now fully encrypted at rest and hardened on
+    restore.** The `backup create` archive previously wrote the unencrypted
+    SQLite DB world-readable (0644), leaking live session tokens, Matter PSKs,
+    and CCU passwords. The whole archive is now sealed with AES-256-GCM using
+    the data-dir master key (a versioned container; legacy plaintext archives
+    are auto-detected and still restorable) and created `0600`; if no master
+    key is available the tool warns loudly rather than silently writing
+    plaintext. `backup restore` gained a Zip-Slip guard (tar entries that
+    escape the data dir are rejected), decompression-bomb bounds
+    (total/per-entry/entry-count caps, streamed to disk), a schema-compat check
+    (a backup from a newer daemon is refused unless `--force`), and
+    all-or-nothing atomic staging (a mid-restore failure rolls back instead of
+    leaving half-applied live data). *Operator note:* as with the key
+    exclusion above, restoring an encrypted archive onto a fresh host needs the
+    original `OPENCCU_LOOM_SECRET_KEY` (or `secret.key`).
+  - **Scheduled-backup rotation race fixed.** The per-central scheduled job now
+    awaits backup creation before pruning, so rotation settles at exactly
+    `KeepLast` instead of `KeepLast+1`; concurrent runs for one central are
+    serialized.
   - **OIDC login-CSRF closed:** the `state` value is now bound to an HttpOnly
     cookie and verified on callback; abandoned-flow state entries are swept.
   - **Session cookies are marked `Secure`** whenever the deployment terminates

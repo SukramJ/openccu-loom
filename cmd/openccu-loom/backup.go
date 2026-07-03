@@ -5,6 +5,7 @@ package main
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
@@ -24,6 +25,39 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
+
+// backupMagicV1 is the fixed 7-byte header of an encrypted backup container:
+// "OCLBAK" + format version 0x01. Its first byte (0x4f, 'O') differs from the
+// gzip magic (0x1f), so restore auto-detects a legacy plaintext (bare gzip)
+// archive versus an encrypted one by peeking these bytes.
+var backupMagicV1 = []byte("OCLBAK\x01")
+
+// Decompression bounds for restore. The archive is an operator artefact, but
+// a crafted (or corrupted) one must not be able to exhaust memory or disk via
+// a gzip/tar bomb. The ceilings are generous — a real fleet DB is well under
+// them — but finite.
+const (
+	// maxBackupEntryCount caps the number of tar entries.
+	maxBackupEntryCount = 100_000
+	// maxBackupManifestSize caps the in-memory manifest.json read.
+	maxBackupManifestSize = 4 << 20 // 4 MiB
+)
+
+// maxBackupDecompressed and maxBackupEntrySize cap the total and per-entry
+// decompressed byte counts. They are vars, not consts, only so tests can
+// shrink them to exercise the bomb guards without materialising gigabytes;
+// production never mutates them.
+var (
+	// maxBackupDecompressed caps the total decompressed byte count across all
+	// tar entries.
+	maxBackupDecompressed int64 = 8 << 30 // 8 GiB
+	// maxBackupEntrySize caps a single decompressed entry.
+	maxBackupEntrySize int64 = 8 << 30 // 8 GiB
+)
+
+// errBackupTooLarge is returned when a restore exceeds the decompressed-size
+// ceiling — the signature of a gzip/tar bomb.
+var errBackupTooLarge = errors.New("backup restore: decompressed size exceeds limit (possible archive bomb)")
 
 // runBackup is the entry point for the `backup` subcommand family.
 func runBackup(args []string, stdout, stderr io.Writer) error {
@@ -60,12 +94,13 @@ type backupManifest struct {
 
 // backupCreateResult is the --json output for scripting consumers.
 type backupCreateResult struct {
-	Path   string `json:"path"`
-	Bytes  int64  `json:"bytes"`
-	SHA256 string `json:"sha256"`
+	Path      string `json:"path"`
+	Bytes     int64  `json:"bytes"`
+	SHA256    string `json:"sha256"`
+	Encrypted bool   `json:"encrypted"`
 }
 
-func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
+func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocognit,gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup create", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml")
@@ -109,6 +144,13 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 		return fmt.Errorf("backup create: vacuum: %w", err)
 	}
 
+	// Record the schema generation of the snapshot so restore can refuse a
+	// backup produced by a newer daemon than the restoring binary.
+	schemaVer, err := sqlite.SchemaVersionOfFile(context.Background(), tmpDBPath)
+	if err != nil {
+		return fmt.Errorf("backup create: schema version: %w", err)
+	}
+
 	// Collect files to archive: state/ prefix for the DB and anything
 	// else under DataDir (skip WAL/SHM which are live-connection artefacts).
 	type entry struct {
@@ -133,10 +175,11 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 			if base == "openccu-loom.db" || base == "openccu-loom.db-wal" || base == "openccu-loom.db-shm" {
 				return nil
 			}
-			// Never archive the at-rest encryption key alongside the
-			// ciphertext it protects — a stolen backup would otherwise carry
-			// both the key and the encrypted DB, defeating the encryption for
-			// exactly the stolen-copy threat it exists to counter.
+			// Never archive the at-rest encryption key alongside the ciphertext
+			// it protects. The whole archive is sealed with the master key
+			// derived from this file; bundling the key would let anyone who
+			// steals the backup decrypt it, defeating the at-rest encryption
+			// for exactly the stolen-copy threat it exists to counter.
 			if base == secret.KeyFileName {
 				return nil
 			}
@@ -168,16 +211,61 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 		}
 	}
 
-	// Build sha256 map and write archive.
-	sha256Map := make(map[string]string)
-	outF, err := os.Create(dest) //nolint:gosec // operator-controlled destination path; see #20
+	// Resolve the at-rest cipher. When a master key is available the whole
+	// archive is sealed with AES-256-GCM; the DB carries live session tokens,
+	// Matter PSKs, and CCU passwords, so a plaintext archive would leak them.
+	cipher, err := secret.Load(dataDir, nil, nil)
+	if err != nil {
+		return fmt.Errorf("backup create: load master key: %w", err)
+	}
+	encrypted := cipher.Available()
+
+	// Create the output 0600 — the archive holds secret material even when
+	// encrypted (and especially when the degraded plaintext path is taken).
+	outF, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) //nolint:gosec // operator-controlled destination path; see #20
 	if err != nil {
 		return fmt.Errorf("backup create: create output: %w", err)
 	}
 	archiveHasher := sha256.New()
-	mw := io.MultiWriter(outF, archiveHasher)
-	gz := gzip.NewWriter(mw)
+	fileW := io.MultiWriter(outF, archiveHasher)
+
+	var (
+		archiveSink io.Writer      // gzip writes here
+		encWriter   io.WriteCloser // non-nil when encrypting
+	)
+	if encrypted {
+		if _, err := fileW.Write(backupMagicV1); err != nil {
+			_ = outF.Close()
+			return fmt.Errorf("backup create: write header: %w", err)
+		}
+		ew, err := cipher.NewEncryptWriter(fileW)
+		if err != nil {
+			_ = outF.Close()
+			return fmt.Errorf("backup create: encrypt writer: %w", err)
+		}
+		encWriter = ew
+		archiveSink = ew
+	} else {
+		// The key could not be resolved or persisted. Do not silently write
+		// plaintext: warn loudly and continue in a degraded mode so backups
+		// keep working, but the operator must protect the file themselves.
+		_, _ = fmt.Fprintln(stderr, "WARNING: no at-rest master key available — writing an UNENCRYPTED backup.")
+		_, _ = fmt.Fprintln(stderr, "         The archive contains the plaintext SQLite database (session")
+		_, _ = fmt.Fprintln(stderr, "         tokens, Matter PSKs, CCU passwords). Protect the file, and set")
+		_, _ = fmt.Fprintln(stderr, "         OPENCCU_LOOM_SECRET_KEY (or use a writable data dir) to encrypt.")
+		archiveSink = fileW
+	}
+
+	gz := gzip.NewWriter(archiveSink)
 	tw := tar.NewWriter(gz)
+
+	// Build sha256 map and write archive.
+	sha256Map := make(map[string]string)
+
+	fail := func(err error) error {
+		_ = outF.Close()
+		return err
+	}
 
 	for _, e := range entries {
 		if e.isDir {
@@ -187,15 +275,13 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 				Mode:     0o755,
 			}
 			if err := tw.WriteHeader(hdr); err != nil {
-				_ = outF.Close()
-				return fmt.Errorf("backup create: tar dir header: %w", err)
+				return fail(fmt.Errorf("backup create: tar dir header: %w", err))
 			}
 			continue
 		}
 		sum, err := addFileToTar(tw, e.archivePath, e.diskPath)
 		if err != nil {
-			_ = outF.Close()
-			return fmt.Errorf("backup create: add %s: %w", e.archivePath, err)
+			return fail(fmt.Errorf("backup create: add %s: %w", e.archivePath, err))
 		}
 		sha256Map[e.archivePath] = sum
 	}
@@ -207,42 +293,42 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 			Name:     "secrets/",
 			Mode:     0o700,
 		}); err != nil {
-			_ = outF.Close()
-			return fmt.Errorf("backup create: secrets dir: %w", err)
+			return fail(fmt.Errorf("backup create: secrets dir: %w", err))
 		}
 		readmeContent := "Secrets resolved from environment variables are not stored in the archive.\n" +
 			"Set the relevant environment variables (e.g. OPENCCU_LOOM_MQTT_PASSWORD) before restore.\n"
 		sum, err := addBytesToTar(tw, "secrets/README.txt", []byte(readmeContent))
 		if err != nil {
-			_ = outF.Close()
-			return fmt.Errorf("backup create: secrets readme: %w", err)
+			return fail(fmt.Errorf("backup create: secrets readme: %w", err))
 		}
 		sha256Map["secrets/README.txt"] = sum
 	}
 
 	// Write manifest last so it can include all sha256 sums.
 	manifest := backupManifest{
-		DaemonVersion: build.Version,
-		CreatedAt:     time.Now().UTC().Format(time.RFC3339),
-		SHA256:        sha256Map,
+		DaemonVersion:  build.Version,
+		SchemaVersions: map[string]int{"openccu-loom.db": int(schemaVer)},
+		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		SHA256:         sha256Map,
 	}
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
-		_ = outF.Close()
-		return fmt.Errorf("backup create: manifest: %w", err)
+		return fail(fmt.Errorf("backup create: manifest: %w", err))
 	}
 	if _, err := addBytesToTar(tw, "manifest.json", manifestJSON); err != nil {
-		_ = outF.Close()
-		return fmt.Errorf("backup create: manifest tar: %w", err)
+		return fail(fmt.Errorf("backup create: manifest tar: %w", err))
 	}
 
 	if err := tw.Close(); err != nil {
-		_ = outF.Close()
-		return fmt.Errorf("backup create: tar close: %w", err)
+		return fail(fmt.Errorf("backup create: tar close: %w", err))
 	}
 	if err := gz.Close(); err != nil {
-		_ = outF.Close()
-		return fmt.Errorf("backup create: gzip close: %w", err)
+		return fail(fmt.Errorf("backup create: gzip close: %w", err))
+	}
+	if encWriter != nil {
+		if err := encWriter.Close(); err != nil {
+			return fail(fmt.Errorf("backup create: encrypt close: %w", err))
+		}
 	}
 	if err := outF.Close(); err != nil {
 		return fmt.Errorf("backup create: close output: %w", err)
@@ -255,11 +341,15 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 	archiveSHA := hex.EncodeToString(archiveHasher.Sum(nil))
 
 	if *asJSON {
-		res := backupCreateResult{Path: dest, Bytes: fi.Size(), SHA256: archiveSHA}
+		res := backupCreateResult{Path: dest, Bytes: fi.Size(), SHA256: archiveSHA, Encrypted: encrypted}
 		b, _ := json.Marshal(res)
 		_, _ = fmt.Fprintf(stdout, "%s\n", b)
 	} else {
-		_, _ = fmt.Fprintf(stdout, "backup created: %s  (%d bytes, sha256=%s)\n", dest, fi.Size(), archiveSHA)
+		enc := "encrypted"
+		if !encrypted {
+			enc = "UNENCRYPTED"
+		}
+		_, _ = fmt.Fprintf(stdout, "backup created: %s  (%d bytes, %s, sha256=%s)\n", dest, fi.Size(), enc, archiveSHA)
 	}
 	return nil
 }
@@ -299,10 +389,11 @@ func addFileToTar(tw *tar.Writer, archivePath, diskPath string) (string, error) 
 	}
 
 	hdr := &tar.Header{
-		Name:    archivePath,
-		Mode:    0o600,
-		Size:    fi.Size(),
-		ModTime: fi.ModTime(),
+		Typeflag: tar.TypeReg,
+		Name:     archivePath,
+		Mode:     0o600,
+		Size:     fi.Size(),
+		ModTime:  fi.ModTime(),
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
 		return "", fmt.Errorf("write header: %w", err)
@@ -318,10 +409,11 @@ func addFileToTar(tw *tar.Writer, archivePath, diskPath string) (string, error) 
 // addBytesToTar writes buf as archivePath and returns its sha256.
 func addBytesToTar(tw *tar.Writer, archivePath string, buf []byte) (string, error) {
 	hdr := &tar.Header{
-		Name:    archivePath,
-		Mode:    0o600,
-		Size:    int64(len(buf)),
-		ModTime: time.Now().UTC(),
+		Typeflag: tar.TypeReg,
+		Name:     archivePath,
+		Mode:     0o600,
+		Size:     int64(len(buf)),
+		ModTime:  time.Now().UTC(),
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
 		return "", fmt.Errorf("write header %s: %w", archivePath, err)
@@ -333,12 +425,41 @@ func addBytesToTar(tw *tar.Writer, archivePath string, buf []byte) (string, erro
 	return hex.EncodeToString(sum[:]), nil
 }
 
+// cappedReader wraps a reader and returns errBackupTooLarge once more than
+// `remaining` bytes have been read. Unlike io.LimitReader it surfaces an
+// error rather than a silent early EOF, so a bomb is reported, not truncated.
+type cappedReader struct {
+	r         io.Reader
+	remaining int64
+}
+
+func (c *cappedReader) Read(p []byte) (int, error) {
+	if c.remaining < 0 {
+		return 0, errBackupTooLarge
+	}
+	n, err := c.r.Read(p)
+	c.remaining -= int64(n)
+	if c.remaining < 0 {
+		return n, errBackupTooLarge
+	}
+	return n, err
+}
+
+// stagedRestoreFile is one archive member written to a temp file next to its
+// final destination, ready for the all-or-nothing commit.
+type stagedRestoreFile struct {
+	archivePath string
+	live        string
+	tempPath    string
+	sha256      string
+}
+
 func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:gocognit,gocyclo,funlen // single-purpose CLI command handler with many flag/validate branches
 	fs := flag.NewFlagSet("backup restore", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	configPath := fs.String("config", "", "path to config.yaml (receives extracted config.yaml when present)")
 	dataDirFlag := fs.String("data-dir", "", "override DataDir (default: from --config or ./var)")
-	force := fs.Bool("force", false, "overwrite existing DB without prompt")
+	force := fs.Bool("force", false, "overwrite an existing DB and accept a newer-schema backup")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -365,27 +486,50 @@ func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:goc
 			return fmt.Errorf("backup restore: %s exists; use --force to overwrite", targetDB)
 		}
 	}
+	if err := os.MkdirAll(dataDir, 0o750); err != nil {
+		return fmt.Errorf("backup restore: mkdir data dir: %w", err)
+	}
 
-	// Open and read the archive, validate sha256 sums, collect entries.
 	f, err := os.Open(archivePath) //nolint:gosec // operator-supplied path; see #20
 	if err != nil {
 		return fmt.Errorf("backup restore: open archive: %w", err)
 	}
 	defer func() { _ = f.Close() }()
 
-	gr, err := gzip.NewReader(f)
+	// Auto-detect the container: an encrypted archive starts with the magic
+	// header; anything else is treated as a legacy plaintext (bare gzip) one.
+	src, encryptedArchive, err := openBackupBody(f, dataDir, stderr)
 	if err != nil {
+		return err
+	}
+
+	gr, err := gzip.NewReader(src)
+	if err != nil {
+		if encryptedArchive {
+			return fmt.Errorf("backup restore: decrypt/gzip (wrong or missing master key?): %w", err)
+		}
 		return fmt.Errorf("backup restore: gzip: %w", err)
 	}
 	defer func() { _ = gr.Close() }()
 
-	tr := tar.NewReader(gr)
+	// Bound total decompression so a gzip/tar bomb cannot exhaust resources.
+	tr := tar.NewReader(&cappedReader{r: gr, remaining: maxBackupDecompressed})
 
-	type fileEntry struct {
-		archivePath string
-		data        []byte
-	}
-	var files []fileEntry
+	var (
+		staged    []stagedRestoreFile
+		manifest  backupManifest
+		count     int
+		committed bool
+	)
+	// Until the commit succeeds, no live file is touched. Clean up any staged
+	// temp files on every early return.
+	defer func() {
+		if !committed {
+			for _, s := range staged {
+				_ = os.Remove(s.tempPath)
+			}
+		}
+	}()
 
 	for {
 		hdr, err := tr.Next()
@@ -398,82 +542,271 @@ func backupRestore(args []string, stdout, stderr io.Writer) error { //nolint:goc
 		if hdr.Typeflag == tar.TypeDir {
 			continue
 		}
-		data, err := io.ReadAll(tr)
-		if err != nil {
-			return fmt.Errorf("backup restore: read entry %s: %w", hdr.Name, err)
+		// Skip anything that is not a plain regular file (symlinks, devices,
+		// hardlinks) — they have no legitimate place in a state backup and are
+		// classic archive-escape vectors. TypeRegA (0x00) is the zero-value
+		// regular-file flag emitted by older archive writers, so accept it too.
+		if hdr.Typeflag != tar.TypeReg && hdr.Typeflag != tar.TypeRegA { //nolint:staticcheck // TypeRegA is the legacy zero-value regular-file flag; still restorable
+			continue
 		}
-		files = append(files, fileEntry{archivePath: hdr.Name, data: data})
-	}
+		count++
+		if count > maxBackupEntryCount {
+			return fmt.Errorf("backup restore: too many entries (> %d)", maxBackupEntryCount)
+		}
+		if hdr.Size > maxBackupEntrySize {
+			return fmt.Errorf("backup restore: entry %s too large (%d bytes)", hdr.Name, hdr.Size)
+		}
 
-	// Parse manifest.
-	var manifest backupManifest
-	for _, fe := range files {
-		if fe.archivePath == "manifest.json" {
-			if err := json.Unmarshal(fe.data, &manifest); err != nil {
+		switch {
+		case hdr.Name == "manifest.json":
+			data, err := readEntryBounded(tr, maxBackupManifestSize)
+			if err != nil {
+				return fmt.Errorf("backup restore: read manifest: %w", err)
+			}
+			if err := json.Unmarshal(data, &manifest); err != nil {
 				return fmt.Errorf("backup restore: parse manifest: %w", err)
 			}
-			break
+		case hdr.Name == "config.yaml":
+			if *configPath == "" {
+				continue
+			}
+			sf, err := stageEntry(tr, hdr.Name, *configPath)
+			if err != nil {
+				return err
+			}
+			staged = append(staged, sf)
+		case strings.HasPrefix(hdr.Name, "state/"):
+			rel := strings.TrimPrefix(hdr.Name, "state/")
+			dest, err := safeDataDirJoin(dataDir, rel)
+			if err != nil {
+				return err
+			}
+			sf, err := stageEntry(tr, hdr.Name, dest)
+			if err != nil {
+				return err
+			}
+			staged = append(staged, sf)
+		default:
+			// Unknown / informational entry (e.g. secrets/README.txt): ignore.
+			continue
 		}
 	}
+
 	if manifest.CreatedAt == "" {
 		return errors.New("backup restore: manifest.json not found in archive")
 	}
 
-	// Validate sha256 sums.
-	for _, fe := range files {
-		if fe.archivePath == "manifest.json" {
+	// Validate sha256 sums against the manifest (extra files without a sum are
+	// tolerated, as before).
+	for _, s := range staged {
+		expected, ok := manifest.SHA256[s.archivePath]
+		if !ok {
 			continue
 		}
-		expected, ok := manifest.SHA256[fe.archivePath]
-		if !ok {
-			continue // extra files without a sha256 entry are tolerated
-		}
-		sum := sha256.Sum256(fe.data)
-		got := hex.EncodeToString(sum[:])
-		if got != expected {
+		if s.sha256 != expected {
 			return fmt.Errorf("backup restore: sha256 mismatch for %s: want %s got %s",
-				fe.archivePath, expected, got)
+				s.archivePath, expected, s.sha256)
 		}
 	}
 
-	// Write to a staging directory, then atomically rename the DB.
-	if err := os.MkdirAll(dataDir, 0o750); err != nil {
-		return fmt.Errorf("backup restore: mkdir data dir: %w", err)
+	// Refuse a backup produced by a newer daemon (its schema this binary can't
+	// operate) unless the operator forces it.
+	if err := checkSchemaCompat(manifest, *force); err != nil {
+		return err
 	}
-	stagingDir, err := os.MkdirTemp(dataDir, ".restore-staging-*")
-	if err != nil {
-		return fmt.Errorf("backup restore: staging dir: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(stagingDir) }()
 
-	for _, fe := range files {
-		switch {
-		case fe.archivePath == "state/openccu-loom.db":
-			stagingDB := filepath.Join(stagingDir, "openccu-loom.db")
-			if err := os.WriteFile(stagingDB, fe.data, 0o600); err != nil {
-				return fmt.Errorf("backup restore: write staging db: %w", err)
-			}
-			if err := os.Rename(stagingDB, targetDB); err != nil {
-				return fmt.Errorf("backup restore: rename db: %w", err)
-			}
-		case fe.archivePath == "config.yaml" && *configPath != "":
-			if err := os.WriteFile(*configPath, fe.data, 0o600); err != nil {
-				return fmt.Errorf("backup restore: write config.yaml: %w", err)
-			}
-		case strings.HasPrefix(fe.archivePath, "state/"):
-			rel := strings.TrimPrefix(fe.archivePath, "state/")
-			dest := filepath.Join(dataDir, rel)
-			if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
-				return fmt.Errorf("backup restore: mkdir for %s: %w", rel, err)
-			}
-			if err := os.WriteFile(dest, fe.data, 0o600); err != nil {
-				return fmt.Errorf("backup restore: write %s: %w", rel, err)
-			}
-		}
+	// All entries staged and validated — swap them into place atomically.
+	if err := commitRestore(staged); err != nil {
+		return fmt.Errorf("backup restore: commit: %w", err)
 	}
+	committed = true
 
 	_, _ = fmt.Fprintf(stdout, "backup restored from %s to %s\n", archivePath, dataDir)
 	return nil
+}
+
+// openBackupBody peeks the archive header to decide whether the body is an
+// encrypted container or a legacy plaintext (bare gzip) archive, and returns
+// a reader positioned at the start of the gzip stream. For an encrypted
+// archive it wraps the file in a decrypting reader keyed by the data-dir
+// master key. The bool reports whether the archive was encrypted.
+func openBackupBody(f *os.File, dataDir string, stderr io.Writer) (io.Reader, bool, error) {
+	magic := make([]byte, len(backupMagicV1))
+	n, err := io.ReadFull(f, magic)
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, false, fmt.Errorf("backup restore: read header: %w", err)
+	}
+	if n == len(backupMagicV1) && bytes.Equal(magic, backupMagicV1) {
+		cipher, cerr := secret.Load(dataDir, nil, nil)
+		if cerr != nil {
+			return nil, true, fmt.Errorf("backup restore: load master key: %w", cerr)
+		}
+		if !cipher.Available() {
+			return nil, true, errors.New("backup restore: archive is encrypted but no master key is " +
+				"available (set OPENCCU_LOOM_SECRET_KEY or restore the original secret.key first)")
+		}
+		return cipher.NewDecryptReader(f), true, nil
+	}
+	// Legacy plaintext archive: put the peeked bytes back in front of the file.
+	_, _ = fmt.Fprintln(stderr, "note: restoring a legacy unencrypted backup archive")
+	return io.MultiReader(bytes.NewReader(magic[:n]), f), false, nil
+}
+
+// readEntryBounded reads up to limit bytes from r, returning an error if the
+// entry is larger.
+func readEntryBounded(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("entry exceeds %d bytes", limit)
+	}
+	return data, nil
+}
+
+// safeDataDirJoin resolves rel against dataDir and guarantees the result stays
+// strictly inside dataDir. It rejects absolute paths and any `..` traversal —
+// the Zip-Slip guard for restore.
+func safeDataDirJoin(dataDir, rel string) (string, error) {
+	if rel == "" || rel == "." {
+		return "", errors.New("backup restore: empty archive path under state/")
+	}
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("backup restore: absolute path in archive: %q", rel)
+	}
+	cleanBase := filepath.Clean(dataDir)
+	dest := filepath.Clean(filepath.Join(cleanBase, rel))
+	if dest != cleanBase && !strings.HasPrefix(dest, cleanBase+string(filepath.Separator)) {
+		return "", fmt.Errorf("backup restore: path escapes data dir: %q", rel)
+	}
+	return dest, nil
+}
+
+// stageEntry streams one tar entry to a private temp file in the same
+// directory as its final destination (so the later rename is atomic and
+// same-filesystem), returning its sha256. It never writes to the live path.
+func stageEntry(r io.Reader, archivePath, live string) (stagedRestoreFile, error) {
+	dir := filepath.Dir(live)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return stagedRestoreFile{}, fmt.Errorf("backup restore: mkdir %s: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".restore-*.tmp")
+	if err != nil {
+		return stagedRestoreFile{}, fmt.Errorf("backup restore: temp for %s: %w", archivePath, err)
+	}
+	tmpPath := tmp.Name()
+
+	hasher := sha256.New()
+	// Bound the per-entry copy: total decompression is already capped, but a
+	// single huge entry must not fill the disk either.
+	written, err := io.Copy(io.MultiWriter(tmp, hasher), io.LimitReader(r, maxBackupEntrySize+1))
+	if cerr := tmp.Close(); cerr != nil && err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(tmpPath)
+		return stagedRestoreFile{}, fmt.Errorf("backup restore: stage %s: %w", archivePath, err)
+	}
+	if written > maxBackupEntrySize {
+		_ = os.Remove(tmpPath)
+		return stagedRestoreFile{}, fmt.Errorf("backup restore: entry %s exceeds %d bytes", archivePath, maxBackupEntrySize)
+	}
+	// Restored files are private (0600); the DB carries secret material.
+	if err := os.Chmod(tmpPath, 0o600); err != nil {
+		_ = os.Remove(tmpPath)
+		return stagedRestoreFile{}, fmt.Errorf("backup restore: chmod %s: %w", archivePath, err)
+	}
+	return stagedRestoreFile{
+		archivePath: archivePath,
+		live:        live,
+		tempPath:    tmpPath,
+		sha256:      hex.EncodeToString(hasher.Sum(nil)),
+	}, nil
+}
+
+// checkSchemaCompat refuses a backup stamped with a schema newer than this
+// binary supports, unless force is set. A backup without a schema stamp
+// (legacy) is accepted.
+func checkSchemaCompat(manifest backupManifest, force bool) error {
+	backupVer, ok := manifest.SchemaVersions["openccu-loom.db"]
+	if !ok {
+		return nil
+	}
+	maxKnown, err := sqlite.MaxKnownMigration()
+	if err != nil {
+		return fmt.Errorf("backup restore: schema check: %w", err)
+	}
+	if int64(backupVer) > maxKnown && !force {
+		return fmt.Errorf("backup restore: backup schema version %d is newer than this binary supports (%d); "+
+			"restore with a newer daemon or pass --force to override", backupVer, maxKnown)
+	}
+	return nil
+}
+
+// commitRestore swaps every staged temp file into its live destination. It is
+// all-or-nothing on a best-effort basis: existing live files are moved aside
+// first (a same-directory rename), and any failure rolls the whole set back so
+// a mid-restore error never leaves half-applied live data.
+func commitRestore(staged []stagedRestoreFile) error {
+	type asideEntry struct{ live, backup string }
+	var (
+		movedAside []asideEntry
+		placed     []string
+	)
+	rollback := func() {
+		for _, p := range placed {
+			_ = os.Remove(p)
+		}
+		for _, m := range movedAside {
+			_ = os.Rename(m.backup, m.live)
+		}
+	}
+	cleanup := func() {
+		for _, m := range movedAside {
+			_ = os.Remove(m.backup)
+		}
+	}
+
+	for _, s := range staged {
+		if err := os.MkdirAll(filepath.Dir(s.live), 0o750); err != nil {
+			rollback()
+			return fmt.Errorf("mkdir %s: %w", filepath.Dir(s.live), err)
+		}
+		if _, err := os.Stat(s.live); err == nil {
+			backup, berr := uniqueSidecar(s.live)
+			if berr != nil {
+				rollback()
+				return berr
+			}
+			if err := os.Rename(s.live, backup); err != nil {
+				rollback()
+				return fmt.Errorf("move aside %s: %w", s.live, err)
+			}
+			movedAside = append(movedAside, asideEntry{live: s.live, backup: backup})
+		}
+		if err := os.Rename(s.tempPath, s.live); err != nil {
+			rollback()
+			return fmt.Errorf("place %s: %w", s.live, err)
+		}
+		placed = append(placed, s.live)
+	}
+	cleanup()
+	return nil
+}
+
+// uniqueSidecar returns a fresh, unique path in the same directory as live,
+// used to move the existing live file aside during commit.
+func uniqueSidecar(live string) (string, error) {
+	dir := filepath.Dir(live)
+	base := filepath.Base(live)
+	tmp, err := os.CreateTemp(dir, base+".restore-bak-*")
+	if err != nil {
+		return "", fmt.Errorf("sidecar for %s: %w", live, err)
+	}
+	name := tmp.Name()
+	_ = tmp.Close()
+	return name, nil
 }
 
 // loadBootstrapForCLI loads the bootstrap config for CLI subcommands.
