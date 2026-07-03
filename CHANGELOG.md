@@ -6,6 +6,28 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **User access-permission switches for HmIP-DLD and HmIP-FWI.** The per-user
+  access-receiver channels (HmIP-DLD channels 2–9, HmIP-FWI channels 1–8) are now
+  exposed as switches: the value reflects the current permission (`STATE`), and
+  turning the switch on/off grants/revokes access by writing
+  `ACCESS_AUTHORIZATION` = ENABLE/DISABLE. Ported from aiohomematic (#3262) via a
+  profile regeneration against aiohomematic 2026.7.1. Available over REST/WS.
+  The switches are intentionally **not** exposed to the Matter bridge — a per-user
+  access control is deliberately kept out of Matter ecosystems; MQTT
+  Home-Assistant-Discovery surfacing is a planned follow-up.
+
+### Fixed
+
+- **CCU value loading: skip the init getValue fallback for BidCos-RF.** Passive /
+  battery BidCos-RF devices that have not reported since a CCU restart no longer
+  have their readable VALUES seeded from the paramset default and marked as a
+  valid observation, which masked an actually-uncertain state. The data point now
+  stays unobserved until a real value arrives via event (as already done for
+  VirtualDevices); the timestamp-gated bulk ReGa fetch remains the trustworthy
+  init source. Mirrors aiohomematic #3260.
+
 ## [0.24.0] — 2026-07-03
 
 ### Security

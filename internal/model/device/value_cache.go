@@ -305,16 +305,20 @@ func (d *Device) runLoadMaster(ctx context.Context, loader ValueLoader, cache *v
 //     fill can never overwrite a restored / already-known value with a fresh
 //     read that may be a not-yet-measured placeholder.
 func (d *Device) runLoadValuesParamset(ctx context.Context, loader ValueLoader, cache *valueCache, dpk hmtypes.DataPointKey) error {
-	// VirtualDevices (e.g. heating groups) have no physical device behind them;
-	// their VALUES are aggregated by the CCU. A GetParamset/GetValue fallback can
-	// therefore never return a device-fresh reading — only the CCU-internal default
-	// (e.g. 0 for a not-yet-measured ACTUAL_TEMPERATURE right after a CCU restart),
-	// reported with *_STATUS = NORMAL so the status cannot be used to reject it. The
-	// bulk seeder already gates these data points on a valid LastTimestamp() and is
-	// the only trustworthy source for this interface, so skip the per-parameter
-	// fallback entirely. The data point stays unobserved (sentinel) until a real
-	// value arrives via the event callback (#3228).
-	if d.Interface == hmenum.InterfaceVirtualDevices {
+	// For some interfaces a per-parameter GetParamset/GetValue fallback during
+	// init cannot return a device-fresh reading — only a CCU-internal placeholder
+	// (reported with *_STATUS = NORMAL so the status cannot be used to reject it),
+	// which would be marked valid and thereby mask an actually uncertain state:
+	//   - VirtualDevices (e.g. heating groups) have no physical device behind them;
+	//     their VALUES are aggregated by the CCU (e.g. 0 for a not-yet-measured
+	//     ACTUAL_TEMPERATURE right after a CCU restart).
+	//   - BidCos-RF hosts passive/battery devices that cannot be actively queried;
+	//     the fallback then returns the paramset default instead of a real reading.
+	// The bulk seeder already gates these data points on a valid LastTimestamp()
+	// and is the only trustworthy source for these interfaces, so skip the
+	// per-parameter fallback entirely. The data point stays unobserved (sentinel)
+	// until a real value arrives via the event callback (#3228, #3260).
+	if d.Interface == hmenum.InterfaceVirtualDevices || d.Interface == hmenum.InterfaceBidCosRF {
 		cache.put(dpk, nil, false)
 		return nil
 	}

@@ -870,48 +870,83 @@ func TestLoadValueValuesParamsetSiblingGuard(t *testing.T) {
 // ACTUAL_TEMPERATURE right after a CCU restart). The fallback must be skipped so
 // the data point stays unobserved until a real value arrives via event — instead
 // of being written with a spurious 0.
-func TestLoadValueValuesParamsetSkippedForVirtualDevices(t *testing.T) {
+// TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces pins that the
+// per-parameter VALUES fallback is skipped for interfaces whose GetParamset can
+// only return a CCU-internal placeholder rather than a device-fresh reading:
+// VirtualDevices (aggregated, no physical device) and BidCos-RF (passive/battery
+// devices that cannot be actively queried). The data point must stay unobserved
+// until a real value arrives via event (#3228, #3260).
+func TestLoadValueValuesParamsetSkippedForUnqueryableInterfaces(t *testing.T) {
 	t.Parallel()
 
-	d := New(Config{
-		InterfaceID: "VirtualDevices",
-		Interface:   hmenum.InterfaceVirtualDevices,
-		Address:     "INT0000001",
-		Model:       "HmIP-HEATING",
-		Name:        "Heating Group",
-	})
-
-	const channelAddr = "INT0000001:1"
-	ch := d.AddChannel(channelAddr, 1, "", hmenum.ParamsetKeyValues)
-	const actualTemp = hmenum.Parameter("ACTUAL_TEMPERATURE")
-	dp := makeFloatDP(channelAddr, actualTemp)
-	ch.Put(dp)
-
-	fake := newFakeLoader()
-	// The CCU returns the default 0 for a heating group's ACTUAL_TEMPERATURE that
-	// has not been measured yet. This must never reach the data point.
-	fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{
-		string(actualTemp): 0.0,
-	}, nil)
-	d.SetValueLoader(fake)
-
-	dpk := makeDPKey("VirtualDevices", channelAddr, hmenum.ParamsetKeyValues, string(actualTemp))
-
-	_, obs, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	cases := []struct {
+		name        string
+		interfaceID string
+		iface       hmenum.Interface
+		address     string
+		model       string
+	}{
+		{
+			name:        "VirtualDevices",
+			interfaceID: "VirtualDevices",
+			iface:       hmenum.InterfaceVirtualDevices,
+			address:     "INT0000001",
+			model:       "HmIP-HEATING",
+		},
+		{
+			name:        "BidCosRF",
+			interfaceID: "BidCos-RF",
+			iface:       hmenum.InterfaceBidCosRF,
+			address:     "LEQ0000001",
+			model:       "HM-CC-RT-DN",
+		},
 	}
 
-	// (a) No fallback RPC is issued for VirtualDevices VALUES.
-	if calls := fake.getParamsetCalls.Load(); calls != 0 {
-		t.Fatalf("(a) expected 0 GetParamset calls for VirtualDevices, got %d", calls)
-	}
-	// (b) LoadValue returns the sentinel (observed=false).
-	if obs {
-		t.Fatal("(b) expected observed=false (sentinel) for VirtualDevices VALUES fallback")
-	}
-	// (c) The data point stays unobserved — no spurious 0 placeholder is written.
-	if _, dpObs := dp.RawValue(); dpObs {
-		t.Fatal("(c) ACTUAL_TEMPERATURE data point must stay unobserved (no 0 placeholder)")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			d := New(Config{
+				InterfaceID: tc.interfaceID,
+				Interface:   tc.iface,
+				Address:     tc.address,
+				Model:       tc.model,
+				Name:        tc.name,
+			})
+
+			channelAddr := tc.address + ":1"
+			ch := d.AddChannel(channelAddr, 1, "", hmenum.ParamsetKeyValues)
+			const actualTemp = hmenum.Parameter("ACTUAL_TEMPERATURE")
+			dp := makeFloatDP(channelAddr, actualTemp)
+			ch.Put(dp)
+
+			fake := newFakeLoader()
+			// The CCU returns the default 0 for an ACTUAL_TEMPERATURE that has not
+			// been measured yet. This must never reach the data point.
+			fake.setGetParamset(channelAddr, hmenum.ParamsetKeyValues, map[string]any{
+				string(actualTemp): 0.0,
+			}, nil)
+			d.SetValueLoader(fake)
+
+			dpk := makeDPKey(tc.interfaceID, channelAddr, hmenum.ParamsetKeyValues, string(actualTemp))
+
+			_, obs, err := d.LoadValue(context.Background(), dpk, hmenum.CallSourceHMInit, false)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			// (a) No fallback RPC is issued for an unqueryable interface's VALUES.
+			if calls := fake.getParamsetCalls.Load(); calls != 0 {
+				t.Fatalf("(a) expected 0 GetParamset calls for %s, got %d", tc.name, calls)
+			}
+			// (b) LoadValue returns the sentinel (observed=false).
+			if obs {
+				t.Fatalf("(b) expected observed=false (sentinel) for %s VALUES fallback", tc.name)
+			}
+			// (c) The data point stays unobserved — no spurious 0 placeholder is written.
+			if _, dpObs := dp.RawValue(); dpObs {
+				t.Fatalf("(c) ACTUAL_TEMPERATURE must stay unobserved for %s (no 0 placeholder)", tc.name)
+			}
+		})
 	}
 }
