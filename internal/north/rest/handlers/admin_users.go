@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"time"
+	"unicode"
 
 	"github.com/go-chi/chi/v5"
 
@@ -84,6 +85,20 @@ func validRole(r auth.Role) bool {
 	return false
 }
 
+// validUsername rejects names that could tamper with the key=value shape
+// of a free-form audit note or inject log lines. '=' and whitespace are
+// the note's field separators; control characters can smuggle newlines
+// into the log. Refusing such a username at creation keeps every
+// downstream `subject=<name> …` note unambiguous and unspoofable.
+func validUsername(name string) bool {
+	for _, r := range name {
+		if r == '=' || unicode.IsSpace(r) || unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
+}
+
 // CreateUser handles POST /admin/users. It creates or upserts a user
 // with the supplied credentials. Returns 201 with a summary on success.
 func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
@@ -97,6 +112,12 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 		if body.Username == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing username", "username is required"))
+			return
+		}
+		if !validUsername(body.Username) {
+			problem.Write(w, http.StatusBadRequest,
+				problem.New(problem.TypeValidation, r, "Invalid username",
+					"username must not contain '=', whitespace, or control characters"))
 			return
 		}
 		if body.Password == "" {

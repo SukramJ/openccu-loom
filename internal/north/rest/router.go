@@ -684,7 +684,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PostCopyProfile(d.Schedules))
 			}
 			if d.Audit != nil {
-				pr.Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
+				// The change-log can expose subjects, device addresses and
+				// operator actions across every central, so it is admin-only —
+				// a viewer / operator identity must not read it.
+				pr.With(admin).Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
 			}
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))

@@ -668,6 +668,42 @@ func TestRouter_Audit_route(t *testing.T) {
 	}
 }
 
+// TestRouter_Audit_RequiresAdmin locks the change-log endpoint behind the
+// admin role: a viewer identity is rejected with 403, while an admin
+// reaches the handler (200). The audit log can expose subjects, device
+// addresses and operator actions, so any-authenticated-user access is a
+// regression.
+func TestRouter_Audit_RequiresAdmin(t *testing.T) {
+	t.Parallel()
+	mw := auth.NewMiddleware(nil, nil)
+	build := func(role auth.Role) http.Handler {
+		return NewRouter(Deps{
+			StartedAt: time.Now(),
+			Audit:     fakeAuditService{},
+			AuthResolve: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					ctx := auth.ContextWithIdentity(r.Context(), auth.Identity{Subject: "u", Role: role})
+					next.ServeHTTP(w, r.WithContext(ctx))
+				})
+			},
+			AuthRequire:  mw.Require,
+			RequireAdmin: func(next http.Handler) http.Handler { return mw.RequireRole(auth.RoleAdmin, next) },
+		})
+	}
+
+	rr := httptest.NewRecorder()
+	build(auth.RoleViewer).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody))
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("viewer must be forbidden from /audit, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	build(auth.RoleAdmin).ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/v1/audit", http.NoBody))
+	if rr.Code != http.StatusOK {
+		t.Fatalf("admin must reach /audit, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 // TestRouter_RefreshDevices_route confirms the refresh route is guarded by dep.
 func TestRouter_RefreshDevices_route(t *testing.T) {
 	t.Parallel()

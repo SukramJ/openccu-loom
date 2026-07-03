@@ -61,6 +61,13 @@ var defaultSensitiveKeys = []string{
 // still masks the inner secret. Map / struct values that reach the
 // handler as [slog.AnyValue] are NOT introspected — callers must use
 // slog.Group or slog.Attr to expose individual fields.
+//
+// Hard rule: never log a secret-bearing struct via slog.Any(...). Because
+// redaction is key-based and shallow, slog.Any("cfg", secretStruct) reaches
+// the underlying handler verbatim and leaks every secret field the struct
+// carries. Pass the individual, named fields through slog.Group / slog.Attr
+// instead, so each sensitive key is matched and masked. A contract test
+// (tests/contract) guards production call sites against this pattern.
 type RedactingHandler struct {
 	inner    slog.Handler
 	patterns []string // lowercase substrings to match against attribute keys
@@ -99,6 +106,25 @@ func DefaultSensitiveKeys() []string {
 	out := make([]string, len(defaultSensitiveKeys))
 	copy(out, defaultSensitiveKeys)
 	return out
+}
+
+// IsSensitiveKey reports whether key matches one of the built-in
+// sensitive-key patterns ([DefaultSensitiveKeys]). Matching is
+// case-insensitive and substring-based, identical to the predicate the
+// [RedactingHandler] applies. Callers that serialise their own attribute
+// graphs outside the slog pipeline (e.g. the OTLP span exporter) use this
+// to apply the same redaction rule at their wire boundary.
+func IsSensitiveKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	lc := strings.ToLower(key)
+	for _, p := range defaultSensitiveKeys {
+		if strings.Contains(lc, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // Enabled delegates to the inner handler.
