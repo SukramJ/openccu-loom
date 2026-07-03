@@ -6,6 +6,27 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.1]
+
+### Changed
+
+- **MQTT transport extracted to the shared `github.com/SukramJ/go-mqtt`
+  module.** The wire codec, TCP/TLS adapter, and reconnecting lifecycle that
+  previously lived under `internal/north/mqtt` now come from the standalone,
+  dependency-free module shared with the `go-*2mqtt` bridges, so a transport
+  fix lands once for every consumer instead of drifting across copies. Loom's
+  MQTT surface and behaviour are unchanged; the HA Discovery, entity-description,
+  topic-building, and command-handling code stays in `internal/north/mqtt`.
+
+### Fixed
+
+- **MQTT: fewer spurious reconnects on a healthy broker.** The keep-alive
+  watchdog now tolerates a single delayed PINGRESP and only declares the socket
+  dead after two consecutive missed heartbeats (≈ one full KeepAlive), so a
+  momentary network blip or scheduler stall no longer forces a
+  `mqtt.tcp.ping_timeout` + reconnect. A genuinely half-open socket is still
+  detected, one keep-alive interval later.
+
 ## [0.23.0]
 
 ### Security

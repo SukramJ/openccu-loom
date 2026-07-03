@@ -29,6 +29,7 @@ require (
 )
 
 require (
+	github.com/SukramJ/go-mqtt v0.2.0
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-openapi/jsonpointer v0.23.1 // indirect

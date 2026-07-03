@@ -1,5 +1,14 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.23.1
+
+- **More stable MQTT connection.** The MQTT client no longer tears down and
+  reconnects on a brief network hiccup or a busy moment — it now tolerates a
+  single missed keep-alive before declaring the link dead, so you'll see far
+  fewer spurious disconnect/reconnect log lines against a healthy broker.
+- Internally, the MQTT transport moved to the shared `go-mqtt` library; the
+  add-on's MQTT behaviour is otherwise unchanged.
+
 ## 0.23.0
 
 - **Matter bridge hardening.** A wave of correctness and security fixes brings
