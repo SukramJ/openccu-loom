@@ -30,6 +30,20 @@ type CentralAdminService interface {
 	List(ctx context.Context) ([]sqlite.CentralRow, error)
 }
 
+// maskCentralRow returns row with its cleartext CCU password replaced by
+// the mask sentinel, so a central row is safe to return in an API
+// response / log. The store decrypts password_plain on read; without this
+// mask GET /admin/centrals would leak the live CCU credential in the clear.
+// password_env holds only the env-variable NAME (not a secret) and stays
+// visible so the operator can see which variable is referenced.
+// [restoreCentralSecret] swaps the sentinel back on write.
+func maskCentralRow(row sqlite.CentralRow) sqlite.CentralRow {
+	if row.PasswordPlain != "" {
+		row.PasswordPlain = maskSentinel
+	}
+	return row
+}
+
 // ListCentrals handles GET /admin/centrals. Returns every central row
 // sorted by name.
 func ListCentrals(svc CentralAdminService) http.HandlerFunc {
@@ -40,10 +54,11 @@ func ListCentrals(svc CentralAdminService) http.HandlerFunc {
 				problem.New(problem.TypeInternal, r, "Central list failed", err.Error()))
 			return
 		}
-		if rows == nil {
-			rows = []sqlite.CentralRow{}
+		masked := make([]sqlite.CentralRow, 0, len(rows))
+		for i := range rows {
+			masked = append(masked, maskCentralRow(rows[i]))
 		}
-		JSON(w, http.StatusOK, rows)
+		JSON(w, http.StatusOK, masked)
 	}
 }
 
@@ -68,7 +83,7 @@ func GetCentral(svc CentralAdminService) http.HandlerFunc {
 				problem.New(problem.TypeInternal, r, "Central lookup failed", err.Error()))
 			return
 		}
-		JSON(w, http.StatusOK, row)
+		JSON(w, http.StatusOK, maskCentralRow(row))
 	}
 }
 
@@ -92,6 +107,11 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
 			return
 		}
+		// A fresh central has no stored credential to restore; the sentinel
+		// is not a real password, so drop it rather than persist "***".
+		if row.PasswordPlain == maskSentinel {
+			row.PasswordPlain = ""
+		}
 		if err := svc.Put(r.Context(), row); err != nil {
 			problem.Write(w, http.StatusInternalServerError,
 				problem.New(problem.TypeInternal, r, "Central creation failed", err.Error()))
@@ -105,7 +125,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 				Note:   "name=" + row.Name,
 			})
 		}
-		JSON(w, http.StatusCreated, row)
+		JSON(w, http.StatusCreated, maskCentralRow(row))
 	}
 }
 
@@ -132,6 +152,18 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Missing host", "central host is required"))
 			return
+		}
+		// The GET path masks password_plain to the sentinel; a save that
+		// echoes the sentinel back means "unchanged" and must restore the
+		// stored credential rather than overwrite it with the literal mask.
+		if row.PasswordPlain == maskSentinel {
+			existing, err := svc.Get(r.Context(), name)
+			if err != nil && !errors.Is(err, sqlite.ErrCentralNotFound) {
+				problem.Write(w, http.StatusInternalServerError,
+					problem.New(problem.TypeInternal, r, "Central lookup failed", err.Error()))
+				return
+			}
+			row.PasswordPlain = existing.PasswordPlain
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
 			problem.Write(w, http.StatusInternalServerError,
