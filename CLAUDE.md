@@ -876,7 +876,7 @@ automatically propagates the update without requiring a second manual edit.
 ### Regenerate device profiles from aiohomematic
 
 ```sh
-./script/generate_profiles.py --aiohomematic-version=2026.4.19 \
+./script/generate_profiles.py --aiohomematic-version=2026.7.1 \
     --out-go=internal/model/custom \
     --out-test=tests/contract/profile_parity_generated_test.go
 ```
