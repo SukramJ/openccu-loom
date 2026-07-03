@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand/v2"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -40,6 +41,12 @@ type ReconnectConfig struct {
 	// BackoffFactor is the exponential growth factor per attempt.
 	// Default: 2.0.
 	BackoffFactor float64
+
+	// Rand is the random source for the reconnect-delay jitter. Nil uses
+	// the concurrency-safe top-level math/rand/v2 source (each interface
+	// reconnects on its own goroutine); tests inject a seeded *rand.Rand
+	// for deterministic assertions.
+	Rand *rand.Rand
 }
 
 func (c *ReconnectConfig) applyDefaults() {
@@ -52,6 +59,46 @@ func (c *ReconnectConfig) applyDefaults() {
 	if c.BackoffFactor <= 0 {
 		c.BackoffFactor = 2.0
 	}
+}
+
+// reconnectJitterFraction bounds the random wiggle applied to the reconnect
+// backoff. Mirrors the retrier's ±20% jitter (internal/client/reliability/
+// retry.go applyJitter): without it every interface of one central computes
+// the same deterministic backoff and reconnects in lockstep, hammering a
+// just-booted CCU (thundering herd).
+const reconnectJitterFraction = 0.2
+
+// reconnectDelay computes the wait before a reconnect attempt:
+// InitialDelay * BackoffFactor^attempts, capped at MaxDelay, then perturbed
+// by bounded random jitter so sibling interfaces desynchronise.
+func reconnectDelay(cfg ReconnectConfig, attempts int) time.Duration {
+	base := time.Duration(math.Min(
+		float64(cfg.InitialDelay)*math.Pow(cfg.BackoffFactor, float64(attempts)),
+		float64(cfg.MaxDelay),
+	))
+	return applyReconnectJitter(base, cfg.Rand)
+}
+
+// applyReconnectJitter perturbs d by up to ±reconnectJitterFraction. A nil
+// rng uses the top-level math/rand/v2 source, which is safe for concurrent
+// use across the per-interface reconnect goroutines; tests pass a seeded
+// *rand.Rand for deterministic output.
+func applyReconnectJitter(d time.Duration, rng *rand.Rand) time.Duration {
+	if d <= 0 {
+		return d
+	}
+	var u float64
+	if rng != nil {
+		u = rng.Float64()
+	} else {
+		u = rand.Float64() //nolint:gosec // jitter only, not security-sensitive
+	}
+	offset := (u*2 - 1) * float64(d) * reconnectJitterFraction
+	out := time.Duration(float64(d) + offset)
+	if out < 0 {
+		return d
+	}
+	return out
 }
 
 // Reconnect performs the reconnect orchestration with exponential
@@ -139,17 +186,13 @@ func (c *InterfaceClient) Reconnect( //nolint:funlen // composition/wiring: long
 		)
 	}
 
-	// Compute exponential backoff delay.
+	// Compute exponential backoff delay with jitter so sibling interfaces
+	// of one central do not reconnect in lockstep at a just-booted CCU.
 	attempts := 0
 	if reconnectAttempts != nil {
 		attempts = *reconnectAttempts
 	}
-	delay := time.Duration(
-		math.Min(
-			float64(rcfg.InitialDelay)*math.Pow(rcfg.BackoffFactor, float64(attempts)),
-			float64(rcfg.MaxDelay),
-		),
-	)
+	delay := reconnectDelay(rcfg, attempts)
 
 	c.cfg.Logger.Debug(
 		"Reconnect: waiting before reconnect",
@@ -650,21 +693,24 @@ func (c *InterfaceClient) SetValue(
 	skipRetry bool,
 ) error {
 	throttle := c.cfg.WriteThrottle
-	if err := throttle.Acquire(ctx, priority); err != nil {
-		return err
-	}
-	defer throttle.Release()
-
 	dpKey := hmtypes.DataPointKey{ChannelAddress: channelAddress, Parameter: string(parameter)}
+	// Acquire the throttle permit per wire-attempt inside the retry loop and
+	// release it (via defer) before any backoff sleep, so a command that is
+	// backing off (e.g. a DUTY_CYCLE stall) does not hold the write pool
+	// permit across the wait. The circuit wraps the retry so an OPEN breaker
+	// sheds the call before a permit is taken.
+	writeOnce := func(ctx context.Context, _ int) error {
+		if err := throttle.Acquire(ctx, priority); err != nil {
+			return err
+		}
+		defer throttle.Release()
+		return b.SetValue(ctx, channelAddress, parameter, value, priority, rxMode)
+	}
 	err := c.cfg.Circuit.Do(ctx, "setValue", func(ctx context.Context) error {
 		if skipRetry {
-			return c.cfg.Retrier.DoOnce(ctx, func(ctx context.Context, _ int) error {
-				return b.SetValue(ctx, channelAddress, parameter, value, priority, rxMode)
-			})
+			return c.cfg.Retrier.DoOnce(ctx, writeOnce)
 		}
-		return c.cfg.Retrier.DoForKey(ctx, dpKey, func(ctx context.Context, _ int) error {
-			return b.SetValue(ctx, channelAddress, parameter, value, priority, rxMode)
-		})
+		return c.cfg.Retrier.DoForKey(ctx, dpKey, writeOnce)
 	})
 	if err != nil {
 		return err
@@ -700,30 +746,26 @@ func (c *InterfaceClient) PutParamset(
 	skipRetry bool,
 ) error {
 	throttle := c.cfg.WriteThrottle
-	if err := throttle.Acquire(ctx, priority); err != nil {
-		return err
-	}
-	defer throttle.Release()
-
 	dpKey := hmtypes.DataPointKey{ChannelAddress: channelAddress, Parameter: paramsetKeyOrLinkAddress}
+	// Acquire the throttle permit per wire-attempt inside the retry loop and
+	// release it before any backoff sleep (see [InterfaceClient.SetValue]).
+	putOnce := func(ctx context.Context, _ int) error {
+		if err := throttle.Acquire(ctx, priority); err != nil {
+			return err
+		}
+		defer throttle.Release()
+		// A second arg containing ":" is a channel address → LINK paramset.
+		if isChannelAddress(paramsetKeyOrLinkAddress) {
+			return b.PutLinkParamset(ctx, channelAddress, paramsetKeyOrLinkAddress, values)
+		}
+		pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
+		return b.PutParamset(ctx, channelAddress, pKey, values, rxMode)
+	}
 	err := c.cfg.Circuit.Do(ctx, "putParamset", func(ctx context.Context) error {
 		if skipRetry {
-			return c.cfg.Retrier.DoOnce(ctx, func(ctx context.Context, _ int) error {
-				if isChannelAddress(paramsetKeyOrLinkAddress) {
-					return b.PutLinkParamset(ctx, channelAddress, paramsetKeyOrLinkAddress, values)
-				}
-				pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
-				return b.PutParamset(ctx, channelAddress, pKey, values, rxMode)
-			})
+			return c.cfg.Retrier.DoOnce(ctx, putOnce)
 		}
-		return c.cfg.Retrier.DoForKey(ctx, dpKey, func(ctx context.Context, _ int) error {
-			// If the second arg contains ":" it is a channel address → LINK paramset.
-			if isChannelAddress(paramsetKeyOrLinkAddress) {
-				return b.PutLinkParamset(ctx, channelAddress, paramsetKeyOrLinkAddress, values)
-			}
-			pKey := hmenum.ParamsetKey(paramsetKeyOrLinkAddress)
-			return b.PutParamset(ctx, channelAddress, pKey, values, rxMode)
-		})
+		return c.cfg.Retrier.DoForKey(ctx, dpKey, putOnce)
 	})
 	if err != nil {
 		return err

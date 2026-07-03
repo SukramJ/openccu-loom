@@ -602,16 +602,12 @@ func wireInterface(
 			Initial: relCfg.CommandRetryInitialDelay,
 		})
 	}
-	if relCfg.CommandThrottleInterCommandDelay > 0 {
-		icCfg.Throttle = reliability.NewThrottle(reliability.ThrottleConfig{
-			InterCommandDelay: relCfg.CommandThrottleInterCommandDelay,
-		})
-	}
-	// ReadThrottle / WriteThrottle / ControlThrottle are intentionally left nil
-	// here. client.New fills each nil per-class slot with icCfg.Throttle (the
-	// single shared pool above), so all three RPC classes share one throttle in
-	// production. Separate per-class pools are reserved for a future operator
-	// tuning surface; see docs/parity/by_design.md "Per-class southbound throttles".
+	// Wire independent per-RPC-class throttle pools (read / write / control)
+	// instead of a single shared pool, so a backing-off write does not block
+	// reads or liveness pings behind one permit. Each pool bounds its waiter
+	// queue; the operator-configured inter-command delay paces writes only.
+	// See [perClassThrottlePools].
+	icCfg.ReadThrottle, icCfg.WriteThrottle, icCfg.ControlThrottle = perClassThrottlePools(relCfg.CommandThrottleInterCommandDelay)
 	ic, err := client.New(icCfg)
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
