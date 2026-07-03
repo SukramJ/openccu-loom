@@ -299,6 +299,12 @@ const EN: Catalog = {
   "nav.settings": "Settings",
   "nav.sysvars": "Variables",
   "nav.visibility": "Un-Ignore",
+  // Guard shown when in-app navigation would discard an editor's
+  // unsaved edits.
+  "nav.leave_title": "Unsaved changes",
+  "nav.leave_body":
+    "You have unsaved changes that will be lost if you leave this view. Leave anyway?",
+  "nav.leave_confirm": "Leave",
   // --- Overview (fleet-wide tile dashboard, roadmap B8) ---
   "overview.title": "Overview",
   "overview.subtitle": "All devices across your fleet, grouped and filterable.",
@@ -925,6 +931,8 @@ const EN: Catalog = {
   "tokens.reveal_title": "Token created",
   "tokens.reveal_warning": "This token will not be shown again. Copy it now.",
   "tokens.copied": "Copied!",
+  "tokens.copy_failed":
+    "Copy failed — the clipboard needs a secure (HTTPS) context. The token is selected so you can copy it manually.",
   "tokens.confirm_revoke_title": "Revoke token?",
   "tokens.confirm_revoke_body": "Revoke token {fingerprint}? Any client using it will lose access immediately.",
   "tokens.col.subject": "Subject",
@@ -1059,6 +1067,9 @@ const EN: Catalog = {
   "channel.session_lock_other":
     "Another session currently holds the edit lock for this view. Saves may fail until the lock expires.",
   "channel.take_over": "Take over",
+  "channel.lock_lost": "Edit lock lost",
+  "channel.lock_lost_detail":
+    "Another session took over the edit lock, or your lock expired. Re-open this editor before saving so you don't overwrite concurrent changes.",
   "channel.empty": "No parameters to display.",
   "channel.undo": "Undo",
   "channel.redo": "Redo",
@@ -2270,6 +2281,10 @@ const DE: Catalog = {
   "nav.settings": "Einstellungen",
   "nav.sysvars": "Variablen",
   "nav.visibility": "Un-Ignore",
+  "nav.leave_title": "Ungespeicherte Änderungen",
+  "nav.leave_body":
+    "Es gibt ungespeicherte Änderungen, die beim Verlassen dieser Ansicht verloren gehen. Trotzdem verlassen?",
+  "nav.leave_confirm": "Verlassen",
   // --- Übersicht (Kachel-Dashboard über alle Geräte, Roadmap B8) ---
   "overview.title": "Übersicht",
   "overview.subtitle": "Alle Geräte Ihres Bestands, gruppiert und filterbar.",
@@ -2892,6 +2907,8 @@ const DE: Catalog = {
   "tokens.reveal_title": "Token erstellt",
   "tokens.reveal_warning": "Dieser Token wird nicht erneut angezeigt. Jetzt kopieren.",
   "tokens.copied": "Kopiert!",
+  "tokens.copy_failed":
+    "Kopieren fehlgeschlagen — die Zwischenablage benötigt einen sicheren (HTTPS-)Kontext. Der Token ist markiert und kann manuell kopiert werden.",
   "tokens.confirm_revoke_title": "Token widerrufen?",
   "tokens.confirm_revoke_body": "Token {fingerprint} widerrufen? Jeder Client, der ihn verwendet, verliert sofort den Zugriff.",
   "tokens.col.subject": "Subject",
@@ -3024,6 +3041,9 @@ const DE: Catalog = {
   "channel.session_lock_other":
     "Dieser Editor wird gerade von einer anderen Sitzung bearbeitet. Speichern kann scheitern, bis die Sperre abläuft.",
   "channel.take_over": "Bearbeitung übernehmen",
+  "channel.lock_lost": "Bearbeitungssperre verloren",
+  "channel.lock_lost_detail":
+    "Eine andere Sitzung hat die Bearbeitungssperre übernommen oder deine Sperre ist abgelaufen. Öffne diesen Editor erneut, bevor du speicherst, um gleichzeitige Änderungen nicht zu überschreiben.",
   "channel.empty": "Keine anzeigbaren Parameter.",
   "channel.undo": "Rückgängig",
   "channel.redo": "Wiederholen",
