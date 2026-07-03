@@ -142,7 +142,10 @@ func ImportChannelConfig(svc ConfigExportService) http.HandlerFunc {
 		}
 		channelAddr := addr + ":" + no
 
-		raw, err := io.ReadAll(r.Body)
+		// Cap the body like every JSON handler (write.go DecodeJSON): this
+		// route reads the raw bytes directly, so without the ceiling a
+		// multi-GB POST would pin a goroutine allocating unbounded heap.
+		raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBodyBytes))
 		if err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Cannot read request body", err.Error()))

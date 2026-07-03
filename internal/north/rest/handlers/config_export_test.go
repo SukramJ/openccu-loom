@@ -327,6 +327,27 @@ func TestImportChannelConfig_WriteError_Returns500(t *testing.T) {
 	}
 }
 
+// TestImportChannelConfig_OversizedBody_Returns400 verifies that a body
+// larger than maxRequestBodyBytes is rejected via the http.MaxBytesReader
+// wrapping instead of being read into memory in full (which would let an
+// oversized POST pin a goroutine allocating unbounded heap).
+func TestImportChannelConfig_OversizedBody_Returns400(t *testing.T) {
+	t.Parallel()
+
+	svc := &stubConfigExportService{}
+	oversize := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
+	body := append([]byte(`{"values":{"a":"`), oversize...)
+	body = append(body, []byte(`"}}`)...)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "0001ABCD", "no": "1"}))
+	w := httptest.NewRecorder()
+	ImportChannelConfig(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for oversized body, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 // TestImportChannelConfig_MultiCCUScope verifies that a payload with a
 // non-empty central_name is forwarded as-is to the writer so multi-CCU
 // setups receive the correct scoping.

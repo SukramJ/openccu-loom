@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -243,11 +244,13 @@ type Deps struct {
 	RateLimit *middleware.RateLimitConfig
 	// RequireOperator wraps mutations that an operator-grade user is
 	// allowed to perform (paramset writes, link CRUD, schedule edits,
-	// sysvar writes). Nil falls back to AuthRequire — i.e. any
-	// authenticated user is allowed (current behaviour).
+	// sysvar writes, device pairing / install mode, firmware update).
+	// Nil falls back to AuthRequire (any authenticated user); when
+	// AuthRequire is also nil the shim fails closed (401).
 	RequireOperator func(http.Handler) http.Handler
-	// RequireAdmin gates dangerous operations (delete device, install
-	// mode, backup trigger, interface reconnect). Nil → AuthRequire.
+	// RequireAdmin gates dangerous operations (delete device, backup
+	// trigger, cache clear, interface reconnect, user/token/central CRUD).
+	// Nil falls back to AuthRequire; when that is also nil it fails closed.
 	RequireAdmin func(http.Handler) http.Handler
 	CORS         *middleware.CORSConfig
 	Idempotent   bool
@@ -536,10 +539,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			r.Get("/auth/oidc/callback", handlers.OIDCCallback(d.OIDC))
 		}
 
-		// Permission shorthands. When a role middleware isn't wired
-		// (legacy single-tier setups), all authenticated users pass —
-		// matches the previous behaviour so upgrades don't lock
-		// anyone out.
+		// Permission shorthands. When a specific role middleware isn't
+		// wired it falls back to the blanket AuthRequire (any authenticated
+		// user). The final pass-through fallback exists only for tests that
+		// build a router without an auth chain; production is protected by
+		// [AssertAuthWired], called from the composition root, which refuses
+		// to start a router whose auth middleware is nil.
 		op := d.RequireOperator
 		if op == nil {
 			op = d.AuthRequire
@@ -953,4 +958,18 @@ func safeIngressPrefix(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimRight(p, "/")
+}
+
+// AssertAuthWired reports an error when d has no auth enforcement wired —
+// AuthRequire is the blanket gate every protected route depends on, and a
+// nil value would leave the router's role shims falling through to an
+// open pass-through. The composition root calls this before serving so a
+// mis-wired production build fails fast instead of silently exposing write
+// routes to anonymous callers (the router's own pass-through fallback
+// exists only for auth-less unit tests).
+func (d Deps) AssertAuthWired() error {
+	if d.AuthRequire == nil {
+		return errors.New("rest: AuthRequire middleware is not wired — refusing to serve with no auth gate")
+	}
+	return nil
 }

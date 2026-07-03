@@ -312,6 +312,13 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,
 	}
+	// Fail fast if the composition root ever stops wiring the auth chain:
+	// the router's role shims fall through to an open pass-through when
+	// AuthRequire is nil, which must never happen in a served build.
+	if err := deps.AssertAuthWired(); err != nil {
+		logger.Error("rest.auth_not_wired — refusing to serve", slog.String("err", err.Error()))
+		return func() {}
+	}
 	router := rest.NewRouter(deps)
 	var topHandler http.Handler = router
 	if cfg.North.MCP.Enabled {
