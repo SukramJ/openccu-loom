@@ -67,6 +67,45 @@ type restWiring struct {
 	authResolve func(next http.Handler) http.Handler
 }
 
+// seedLegacyAuthFromConfig performs the one-shot migration of config-file
+// (YAML) basic-auth users and API tokens into the SQLite user/token stores.
+// Now that credentials live only in SQLite (no longer round-tripped through
+// the north.rest config section), this migration is what preserves an
+// operator's YAML-pinned logins across an upgrade. It is idempotent: users
+// are seeded only while the users table is empty and tokens only while the
+// tokens table is empty, so a credential the operator later deletes via the
+// CRUD surface is never resurrected on the next boot. A nil store is skipped.
+func seedLegacyAuthFromConfig(
+	ctx context.Context,
+	users *sqlitestore.UserStore,
+	tokens *sqlitestore.TokenStore,
+	cfg *config.Config,
+	logger *slog.Logger,
+) {
+	if users != nil && len(cfg.North.REST.Auth.Users) > 0 {
+		if n, err := users.Count(ctx); err == nil && n == 0 {
+			for name, pass := range cfg.North.REST.Auth.Users {
+				if perr := users.Put(ctx, name, pass, auth.RoleAdmin); perr != nil {
+					logger.Warn("auth.seed.user", slog.String("subject", name), slog.String("err", perr.Error()))
+				}
+			}
+		}
+	}
+	if tokens != nil && len(cfg.North.REST.Auth.Tokens) > 0 {
+		if n, err := tokens.Count(ctx); err == nil && n == 0 {
+			for secret, role := range cfg.North.REST.Auth.Tokens {
+				// Subject is a fixed non-secret label so the token secret never
+				// lands in a plaintext column; the exact bearer value is
+				// preserved (only its hash is stored) so existing API clients
+				// keep authenticating after the migration.
+				if _, perr := tokens.Import(ctx, secret, "config-token", auth.Role(role)); perr != nil {
+					logger.Warn("auth.seed.token", slog.String("err", perr.Error()))
+				}
+			}
+		}
+	}
+}
+
 // wireREST performs the REST wiring phase of the composition root: it
 // builds the server group, starts the SQLite health probe, runs the
 // idempotent one-shot seeds for the users and centrals tables, layers
@@ -100,17 +139,13 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 	}
 
 	if d.auditDB != nil {
-		// One-shot seed: if SQLite users table is empty AND the
-		// YAML carries legacy auth.users, copy them in so the
-		// admin-edit surface starts pre-populated. Idempotent —
-		// subsequent boots see Count() > 0 and skip the seed.
-		if n, err := d.sqUsers.Count(ctx); err == nil && n == 0 {
-			for name, pass := range cfg.North.REST.Auth.Users {
-				if perr := d.sqUsers.Put(ctx, name, pass, auth.RoleAdmin); perr != nil {
-					logger.Warn("auth.seed.user", slog.String("subject", name), slog.String("err", perr.Error()))
-				}
-			}
-		}
+		// One-shot migration: copy legacy config-file (YAML) basic-auth users
+		// and API tokens into the SQLite stores. Credentials no longer live in
+		// the north.rest config section, so this is what keeps an operator's
+		// YAML-pinned logins working across the upgrade. Idempotent — it seeds
+		// each table only while it is empty, so a later CRUD delete is not
+		// resurrected on the next boot.
+		seedLegacyAuthFromConfig(ctx, d.sqUsers, d.sqTokens, cfg, logger)
 
 		// Same idempotent seed for the centrals table: if SQLite is
 		// empty AND the YAML lists at least one CCU, copy the list

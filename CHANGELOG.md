@@ -59,6 +59,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Config pipeline hardening from a code-vs-code audit.** Four issues in the
+  config + configstore pipeline were found and closed:
+  - **`OPENCCU_LOOM_REST_LISTEN` / `north.rest.listen` now survives every boot.**
+    The REST bind address is bootstrap-tier: it is no longer persisted into or
+    read back from the `north.rest` config section, so the env/YAML value always
+    wins instead of being pinned to a stale value seeded on first boot. The SPA's
+    source pill reports it as `bootstrap`, and the field is no longer shown as an
+    editable REST field.
+  - **`restart_required` in the section-PUT response is now computed per changed
+    field** (via `config.RestartRequiredDiff`), so a mixed section (e.g.
+    `north.rest`, where CORS is hot-appliable but `public_url` needs a restart)
+    and the fully-restart-required webhook section report correctly — consistent
+    with `GET /system/config-changes`.
+  - **Semantic validation now runs on the section-PUT path.** A well-typed but
+    semantically-invalid section (empty `broker_url` with MQTT enabled, a callback
+    port out of range, an `ftp://` `public_url`) is rejected with 400 and never
+    persisted, instead of being saved and only warned about at the next boot.
+  - **A REST PUT can no longer wipe basic-auth users or API tokens.** Credentials
+    are managed exclusively by the SQLite user/token stores (the `/api/v1/users`
+    and `/auth/tokens` CRUD) and no longer round-trip through the `north.rest`
+    section. Config-file (YAML) users **and** API tokens are migrated into SQLite
+    once on boot (idempotent, preserving each token's exact secret), so no
+    operator loses a login on upgrade.
 - **CCU value loading: skip the init getValue fallback for BidCos-RF.** Passive /
   battery BidCos-RF devices that have not reported since a CCU restart no longer
   have their readable VALUES seeded from the paramset default and marked as a
