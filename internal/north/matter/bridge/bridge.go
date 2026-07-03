@@ -316,6 +316,36 @@ type Bridge struct {
 	// Wired via [AttachCommissioningWindow].
 	commissioningWindow *CommissioningWindow
 
+	// paseFailures counts consecutive real PASE pairing errors so the
+	// bridge can abort the commissioning window after too many, mirroring
+	// matter.js PaseServer's PASE_COMMISSIONING_MAX_ERRORS brute-force cap.
+	// Reset when a new PASE acceptor is installed (a window boundary) and
+	// when the cap fires. See [Bridge.recordPaseFailure].
+	paseFailures atomic.Int32
+
+	// paseInFlightExchange / paseInFlightSince implement the
+	// single-active-PASE invariant (Matter §4.13.1): while one PASE
+	// handshake is in progress the bridge SHALL NOT accept another —
+	// otherwise a second commissioner's PBKDFParamRequest silently
+	// replaces the first one's in-flight verifier state. Guarded by
+	// b.mu; zero exchange + zero time = idle. An abandoned handshake
+	// self-expires after [pasePairingTimeout] so a crashed
+	// commissioner cannot lock pairing out for the whole window.
+	// Mirrors matter.js PaseServer.ts:80-86 onNewExchange (reject
+	// while a pairing messenger / timer is active) + :127 the 60 s
+	// pairing timer.
+	paseInFlightExchange uint16
+	paseInFlightSince    time.Time
+
+	// unsecuredWindows holds a per-source-node-id [mrp.Window] duplicate
+	// detector for unsecured (SessionID==0, PASE) traffic, so a
+	// retransmitted Pake1/Pake3 is acked without re-invoking the handshake
+	// handler. Keyed by SourceNodeID (uint64) → *mrp.Window. Cleared on
+	// each PASE-acceptor swap (a commissioning-window boundary) so it stays
+	// bounded to the current window's transient commissioners. Mirrors
+	// matter.js UnsecuredSession's MessageReceptionState.
+	unsecuredWindows sync.Map
+
 	// commissioningInstanceName remembers the mDNS instance name the
 	// bridge published via [Bridge.AnnounceCommissioning] so the
 	// matching [Bridge.WithdrawCommissioning] call can target the
@@ -1177,6 +1207,37 @@ func (b *Bridge) AnnounceFabric(ctx context.Context, compressedFabricID [8]byte,
 		return
 	}
 	b.logger.Info("matter.mdns.fabric_published",
+		slog.String("instance", svc.InstanceName))
+}
+
+// WithdrawFabric retracts the operational `_matter._tcp` instance for
+// the given (compressedFabricID, nodeID) identity — the counterpart to
+// [Bridge.AnnounceFabric] for RemoveFabric and for an UpdateNOC that
+// changed the NodeID. A republish alone cannot retire the record: the
+// advertiser re-announces what it still holds, so the stale
+// <compressedID>-<nodeID> instance keeps answering until its TTL and
+// commissioners resolve an identity that no longer exists. Mirrors
+// matter.js DeviceAdvertiser.ts:76-86 (close the fabric's
+// advertisements on update/delete before re-advertising).
+func (b *Bridge) WithdrawFabric(ctx context.Context, compressedFabricID [8]byte, nodeID uint64) {
+	if b.advertiser == nil {
+		return
+	}
+	wCtx, cancel := context.WithTimeout(ctx, b.cfg.AdvertiseTimeout)
+	defer cancel()
+	svc := mdns.BuildOperationalService(mdns.OperationalServiceConfig{
+		CompressedFabricID: compressedFabricID,
+		NodeID:             nodeID,
+		Port:               uint16(udpPort(b.cfg.Listen)), //nolint:gosec // udpPort returns ≤ 65535; see #20
+		HostName:           "",
+	})
+	if err := b.advertiser.Withdraw(wCtx, svc.InstanceName, svc.ServiceType); err != nil {
+		b.logger.Debug("matter.mdns.fabric_withdraw",
+			slog.String("instance", svc.InstanceName),
+			slog.String("err", err.Error()))
+		return
+	}
+	b.logger.Info("matter.mdns.fabric_withdrawn",
 		slog.String("instance", svc.InstanceName))
 }
 

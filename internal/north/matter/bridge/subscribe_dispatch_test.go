@@ -30,7 +30,7 @@ func TestBuildInitialReport_EmptyRequest_EmptyReport(t *testing.T) {
 		t.Skip("dispatcher nil after start — topology not yet assembled")
 	}
 	req := im.SubscribeRequest{}
-	report := b.buildInitialReport(context.Background(), dispatcher, req)
+	report, matched := b.buildInitialReport(context.Background(), dispatcher, req)
 	if report.HasSubscription {
 		t.Error("buildInitialReport: HasSubscription must be false on return")
 	}
@@ -39,6 +39,9 @@ func TestBuildInitialReport_EmptyRequest_EmptyReport(t *testing.T) {
 	}
 	if len(report.EventReports) != 0 {
 		t.Errorf("buildInitialReport: empty request: got %d event reports, want 0", len(report.EventReports))
+	}
+	if matched != 0 {
+		t.Errorf("buildInitialReport: empty request: matched = %d, want 0", matched)
 	}
 }
 
@@ -63,7 +66,10 @@ func TestBuildInitialReport_SortOrder(t *testing.T) {
 			{HasEndpoint: false, HasCluster: false, HasAttribute: false},
 		},
 	}
-	report := b.buildInitialReport(context.Background(), dispatcher, req)
+	report, matched := b.buildInitialReport(context.Background(), dispatcher, req)
+	if matched != len(report.Reports) {
+		t.Errorf("buildInitialReport: matched = %d, want %d (len(report.Reports), no event paths requested)", matched, len(report.Reports))
+	}
 	for i := 1; i < len(report.Reports); i++ {
 		prev, curr := report.Reports[i-1].Path, report.Reports[i].Path
 		less := prev.Endpoint < curr.Endpoint ||

@@ -542,10 +542,10 @@ func minEventNumberFromFilters(filters []EventMinimumNumber) uint64 {
 // When filters is non-empty the minimum EventMin across all entries is used
 // as the lower bound — events with Number ≤ minNumber are excluded.
 // The returned [EventReport].Timestamp is sourced from
-// [EventRecord].EpochUS (microseconds since Unix epoch) — the same tag
-// slot the subscribe path uses; a follow-up parity pass can split the
-// EpochTimestamp (tag 4) vs SystemTimestamp (tag 3) serialisation when
-// needed.
+// [EventRecord].EpochMS (POSIX milliseconds — Matter §10.6.6.1
+// EpochTimestamp, encoded at tag 3), matching the millisecond timestamp
+// the subscribe path emits so the same event reads identically live and
+// out-of-band.
 //
 // Callers that have a [ReadRequest] available should prefer the
 // [HandleReadEventRequest] wrapper.
@@ -587,7 +587,7 @@ func BuildEventReports(paths []ConcreteEventPath, log *EventLog, filters []Event
 				},
 				Number:    rec.Number,
 				Priority:  rec.Priority,
-				Timestamp: rec.EpochUS,
+				Timestamp: rec.EpochMS,
 				Data:      AttributeValue{Value: rec.Payload},
 				IsStatus:  false,
 			})

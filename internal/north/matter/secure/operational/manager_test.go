@@ -432,7 +432,8 @@ func TestManager_PersistAndLookupResumption(t *testing.T) {
 		secret[i] = byte(i + 50)
 	}
 
-	if err := m.PersistResumption(ctx, 1, 0xABCD, rid, secret); err != nil {
+	cats := []uint32{0x0001_0002, 0xABCD_0001}
+	if err := m.PersistResumption(ctx, 1, 0xABCD, rid, secret, cats); err != nil {
 		t.Fatalf("PersistResumption: %v", err)
 	}
 
@@ -445,6 +446,17 @@ func TestManager_PersistAndLookupResumption(t *testing.T) {
 	}
 	if !bytes.Equal(got.SharedSecret, secret) {
 		t.Error("SharedSecret mismatch")
+	}
+	// CATs must survive the round-trip — the resume path re-grants them
+	// without re-validating the NOC, so a persist that drops them
+	// silently strips CAT-scoped ACL privilege from resumed sessions.
+	if len(got.CASEAuthTags) != len(cats) {
+		t.Fatalf("CASEAuthTags length=%d, want %d", len(got.CASEAuthTags), len(cats))
+	}
+	for i, want := range cats {
+		if got.CASEAuthTags[i] != want {
+			t.Errorf("CASEAuthTags[%d]=%#x, want %#x", i, got.CASEAuthTags[i], want)
+		}
 	}
 }
 
@@ -484,6 +496,52 @@ func TestOpenFromPase_AllocatesSessionID(t *testing.T) {
 	}
 	if e.Session == nil {
 		t.Fatal("Session must not be nil")
+	}
+}
+
+// TestClosePASESessions_ClosesOnlyPASE verifies ClosePASESessions
+// tears down PASE sessions — including one whose FabricIndex was
+// rewritten by AdoptFabricIndex — while leaving CASE sessions intact
+// (Matter §11.10.6.6 step 4; matter.js FailsafeContext closePaseSession).
+func TestClosePASESessions_ClosesOnlyPASE(t *testing.T) {
+	t.Parallel()
+	m, _ := newTestManager()
+	secret := make([]byte, 16)
+	for i := range secret {
+		secret[i] = byte(i + 3)
+	}
+
+	pase, err := m.OpenFromPase(1, 2, 0, secret)
+	if err != nil {
+		t.Fatalf("OpenFromPase: %v", err)
+	}
+	// A CASE session (any non-PASE Entry).
+	var keys sigma.SessionKeys
+	for i := range keys.I2RKey {
+		keys.I2RKey[i] = byte(i + 1)
+		keys.R2IKey[i] = byte(i + 40)
+	}
+	caseEntry, err := m.OpenFromSigma(1, 100, 200, keys)
+	if err != nil {
+		t.Fatalf("OpenFromSigma: %v", err)
+	}
+	// Adopt a fabric onto the PASE session (as AddNOC does) — it must
+	// still count as PASE for the cleanup.
+	if err := m.AdoptFabricIndex(pase.SessionID, 1); err != nil {
+		t.Fatalf("AdoptFabricIndex: %v", err)
+	}
+
+	if got := m.Active(); got != 2 {
+		t.Fatalf("Active before close = %d, want 2", got)
+	}
+	if n := m.ClosePASESessions(); n != 1 {
+		t.Errorf("ClosePASESessions closed %d, want 1", n)
+	}
+	if _, err := m.Get(pase.SessionID); err == nil {
+		t.Error("PASE session still present after ClosePASESessions")
+	}
+	if _, err := m.Get(caseEntry.SessionID); err != nil {
+		t.Errorf("CASE session was closed by ClosePASESessions: %v", err)
 	}
 }
 

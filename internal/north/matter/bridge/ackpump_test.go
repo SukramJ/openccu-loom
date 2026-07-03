@@ -248,10 +248,101 @@ func TestAckPump_Discharge(t *testing.T) {
 
 	b.owedInboundAck(peerAddr, hdr, proto)
 	// Discharge before pump fires — simulates a piggybacked ACK on a reply.
-	b.dischargeOwedAck(exchangeID)
+	// buildMsgHdr always sets SessionID 0, matching owedInboundAck's key.
+	b.dischargeOwedAck(0, exchangeID)
 
 	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
 		t.Errorf("RunAckPumpOnce after Discharge: want 0, got %d", n)
+	}
+}
+
+// TestAckPump_SessionScopedExchangeCollision verifies that two inbound
+// reliable messages carrying different SessionIDs on the SAME ExchangeID
+// are tracked as independent obligations, and that dischargeOwedAck for one
+// session leaves the other session's obligation AND reply-target intact.
+// Exchange IDs are picked independently by every peer, so two controllers
+// (or an old and a new CASE session of the same controller) sharing an
+// exchange ID is a real scenario, not hypothetical — mirrors matter.js
+// ExchangeManager.ts:287 (an exchange lookup is invalidated as soon as the
+// session no longer matches).
+func TestAckPump_SessionScopedExchangeCollision(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(0)
+	b.AttachAckTracker(tracker)
+
+	// Session 0 (unsecured/PASE pre-fabric) — this is the survivor and the
+	// only one that can actually round-trip over UDP without a wired
+	// operational session, so it doubles as proof-of-emission.
+	peerSurvivor, addrSurvivor := openPeerSocket(t)
+	defer peerSurvivor.Close()
+	// Session 99 — discharged before the pump runs; its socket must never
+	// see a datagram.
+	peerDischarged, addrDischarged := openPeerSocket(t)
+	defer peerDischarged.Close()
+
+	const (
+		exchangeID       uint16 = 30
+		survivorSession  uint16 = 0
+		dischargeSession uint16 = 99
+		survivorCounter  uint32 = 0x1111
+		dischargeCounter uint32 = 0x2222
+	)
+
+	protoSurvivor := buildNeedsAckProto(exchangeID, survivorCounter)
+	hdrSurvivor := buildMsgHdr(survivorCounter) // SessionID 0
+	protoDischarged := buildNeedsAckProto(exchangeID, dischargeCounter)
+	hdrDischarged := &message.Header{SessionID: dischargeSession, MessageCounter: dischargeCounter}
+
+	b.owedInboundAck(addrSurvivor, hdrSurvivor, protoSurvivor)
+	b.owedInboundAck(addrDischarged, hdrDischarged, protoDischarged)
+
+	if got := tracker.Pending(); got != 2 {
+		t.Fatalf("Pending() = %d after two sessions on the same exchange, want 2", got)
+	}
+
+	// Discharge session 99's obligation — session 0's must survive intact.
+	b.dischargeOwedAck(dischargeSession, exchangeID)
+	if got := tracker.Pending(); got != 1 {
+		t.Fatalf("Pending() = %d after discharging session %d, want 1 (session %d must survive)", got, dischargeSession, survivorSession)
+	}
+
+	n := b.RunAckPumpOnce(time.Now())
+	if n != 1 {
+		t.Fatalf("RunAckPumpOnce: want 1 (only the surviving session's obligation), got %d", n)
+	}
+
+	// The discharged session's peer must never receive a datagram.
+	if err := peerDischarged.SetReadDeadline(time.Now().Add(50 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	if _, _, err := peerDischarged.ReadFromUDP(buf); err == nil {
+		t.Error("discharged session's peer socket received a datagram; its reply target should be gone")
+	}
+
+	// The surviving session's peer must receive its own StandaloneAck,
+	// carrying its own counter — not the discharged session's.
+	if err := peerSurvivor.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	nRead, _, err := peerSurvivor.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP (surviving session): %v", err)
+	}
+	rxHdr, hdrLen, err := message.UnmarshalHeader(buf[:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	if rxHdr.SessionID != survivorSession {
+		t.Errorf("SessionID = %d, want %d", rxHdr.SessionID, survivorSession)
+	}
+	rxProto, _, err := message.UnmarshalProtocolHeader(buf[hdrLen:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rxProto.AckCounter != survivorCounter {
+		t.Errorf("AckCounter = 0x%X, want 0x%X (surviving session's own counter)", rxProto.AckCounter, survivorCounter)
 	}
 }
 
@@ -295,7 +386,7 @@ func TestAckPump_NoSrcDropsObligation(t *testing.T) {
 		exchangeID uint16 = 77
 		msgCounter uint32 = 1234
 	)
-	tracker.Owe(msgCounter, exchangeID, false, time.Now())
+	tracker.Owe(msgCounter, 0, exchangeID, false, time.Now())
 
 	// Pump should drain the obligation (returns 1) but not send to any peer.
 	n := b.RunAckPumpOnce(time.Now())
@@ -347,6 +438,85 @@ func TestTickOutboundReliable_NilListener(t *testing.T) {
 	// Nothing to assert beyond no panic.
 }
 
+// TestAckPump_ExpediteDuplicateAck verifies that expediteDuplicateAck makes
+// a just-registered obligation immediately due, so the following
+// RunAckPumpOnce call emits its StandaloneAck without waiting out the
+// piggyback grace window. The tracker is wired with
+// [mrp.DefaultStandaloneAckDelay] (not 0) so the negative control is
+// meaningful: a zero-delay fixture would make every obligation immediately
+// due regardless of expediting, masking a regression of the underlying fix.
+// Mirrors matter.js MessageExchange.ts:428-433 (duplicate + requiresAck →
+// sendStandaloneAckForMessage immediately).
+func TestAckPump_ExpediteDuplicateAck(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
+	b.AttachAckTracker(tracker)
+
+	peerConn, peerAddr := openPeerSocket(t)
+	defer peerConn.Close()
+
+	const (
+		exchangeID uint16 = 88
+		msgCounter uint32 = 0x4242
+	)
+	proto := buildNeedsAckProto(exchangeID, msgCounter)
+	hdr := buildMsgHdr(msgCounter)
+
+	b.owedInboundAck(peerAddr, hdr, proto)
+
+	// Negative control: the grace window has not elapsed, so an immediate
+	// pump pass must emit nothing.
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Fatalf("RunAckPumpOnce before expedite: want 0 (grace window not elapsed), got %d", n)
+	}
+
+	// Simulate the duplicate-retransmit path: expedite, then pump.
+	b.expediteDuplicateAck(0, exchangeID)
+	if n := b.RunAckPumpOnce(time.Now()); n != 1 {
+		t.Fatalf("RunAckPumpOnce after expedite: want 1, got %d", n)
+	}
+
+	if err := peerConn.SetReadDeadline(time.Now().Add(200 * time.Millisecond)); err != nil {
+		t.Fatalf("SetReadDeadline: %v", err)
+	}
+	buf := make([]byte, 512)
+	nRead, _, err := peerConn.ReadFromUDP(buf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v (no StandaloneAck datagram received)", err)
+	}
+	_, hdrLen, err := message.UnmarshalHeader(buf[:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	rxProto, _, err := message.UnmarshalProtocolHeader(buf[hdrLen:nRead])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rxProto.Opcode != mrp.StandaloneAckOpcode {
+		t.Errorf("Opcode = 0x%02X, want StandaloneAckOpcode (0x%02X)", rxProto.Opcode, mrp.StandaloneAckOpcode)
+	}
+	if rxProto.AckCounter != msgCounter {
+		t.Errorf("AckCounter = %d, want %d", rxProto.AckCounter, msgCounter)
+	}
+}
+
+// TestAckPump_ExpediteDuplicateAck_UnknownObligationNoOp verifies that
+// expediteDuplicateAck is a no-op (no panic, nothing emitted) when called
+// for a (session, exchange) pair with no pending obligation — the shape a
+// duplicate arriving without a prior owedInboundAck registration would take.
+func TestAckPump_ExpediteDuplicateAck_UnknownObligationNoOp(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	tracker := mrp.NewAckTracker(mrp.DefaultStandaloneAckDelay)
+	b.AttachAckTracker(tracker)
+
+	b.expediteDuplicateAck(0, 4242)
+	if n := b.RunAckPumpOnce(time.Now()); n != 0 {
+		t.Errorf("RunAckPumpOnce after expediting an unknown obligation: want 0, got %d", n)
+	}
+}
+
 // TestAckPump_AttachAckTrackerAlsoSetsAckHandler verifies that after
 // AttachAckTracker, the bridge's AckHandler (wired via AttachAckHandler
 // internally) discharges through the same tracker when dispatchSecureChannel
@@ -363,7 +533,7 @@ func TestAckPump_AttachAckTrackerAlsoSetsAckHandler(t *testing.T) {
 	)
 
 	// Plant an obligation so Discharge has something to clear.
-	tracker.Owe(msgCounter, exchangeID, false, time.Now())
+	tracker.Owe(msgCounter, 0, exchangeID, false, time.Now())
 	if tracker.Pending() != 1 {
 		t.Fatalf("pre-condition: tracker.Pending() = %d, want 1", tracker.Pending())
 	}

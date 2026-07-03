@@ -65,10 +65,14 @@ func TestParityMatterJS_LightLevelDataVersionBumpsOnWrite(t *testing.T) {
 
 // TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke verifies that a
 // successful MoveToLevel invoke via lightLevelServer increments
-// MatterDataVersion.
+// MatterDataVersion. The light is primed on via l.OnLevel first: plain
+// MoveToLevel (0x00) is gated on the effective ExecuteIfOff option while
+// off (matter.js LevelControlServer.ts:596), and a gated no-op must not
+// bump the version — see TestGatedMoveToLevelDoesNotBumpDataVersion.
 func TestParityMatterJS_LightLevelDataVersionBumpsOnInvoke(t *testing.T) {
 	t.Parallel()
 	l, _ := newLightRig(t, "HmIP-BDT:4", &stubWriter{}, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5) // light is on
 	before := l.MatterDataVersion()
 
 	srv := levelServer(t, l)

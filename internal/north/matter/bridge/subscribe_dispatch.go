@@ -22,7 +22,11 @@ import (
 // by running each requested attribute path through the dispatcher, merging
 // cached EventReports, sorting the result, and emitting per-attribute
 // diagnostic log lines. Returns the assembled report with
-// HasSubscription=false (the caller stamps that after registerSubscription).
+// HasSubscription=false (the caller stamps that after registerSubscription)
+// plus the count of matched attribute/event paths — taken BEFORE
+// DataVersionFilter suppression, so the caller can reject a
+// zero-matching Subscribe (ServerSubscription.ts:610-614) without
+// misfiring on an all-cached re-subscribe.
 //
 // Mirrors matter.js InteractionServer.ts:startReadInteraction for the
 // Subscribe path (attribute reading + event merging + sort).
@@ -30,7 +34,7 @@ func (b *Bridge) buildInitialReport(
 	subCtx context.Context,
 	dispatcher im.Dispatcher,
 	req im.SubscribeRequest,
-) im.ReportData {
+) (report im.ReportData, matchedPaths int) {
 	// Build the initial ReportData by running each requested path
 	// through the dispatcher and collecting the results into one
 	// AttributeReport list. Mirrors HandleReadRequest at the path
@@ -40,8 +44,15 @@ func (b *Bridge) buildInitialReport(
 		HasSubscription: false, // overwritten below when manager wires the subscription
 		Reports:         nil,
 	}
+	matched := 0
 	for _, path := range req.AttributeRequests {
-		for _, rr := range dispatcher.Read(subCtx, path) {
+		// Authorize each result against the requesting subject (subCtx
+		// carries fabric + subject from handleSubscribeRequest). Without
+		// this the Subscribe-Initial would leak fabric-sensitive
+		// attributes (ACL, NOCs) to a View-only / ACE-less subject, the
+		// same bypass reportSubscription closes for ongoing reports.
+		for _, rr := range b.readAuthorizedResults(subCtx, dispatcher, path) {
+			matched++
 			// DataVersionFilter evaluation: skip attributes whose cluster
 			// DataVersion matches the controller's cached version.
 			// Matter §10.6.5 — the controller infers "no change since
@@ -91,6 +102,7 @@ func (b *Bridge) buildInitialReport(
 	if len(req.EventRequests) > 0 {
 		evs := im.BuildEventReports(req.EventRequests, b.eventLog, req.EventFilters)
 		initialReport.EventReports = evs
+		matched += len(evs)
 	}
 	// Sort reports by (endpoint, cluster, attribute) ascending. Apple
 	// Home's MTRDevice processes the wildcard Subscribe-Initial in
@@ -137,7 +149,7 @@ func (b *Bridge) buildInitialReport(
 			slog.String("value_type", valueType),
 			slog.Any("value", valuePreview))
 	}
-	return initialReport
+	return initialReport, matched
 }
 
 // registerSubscription registers the subscribe request in the subscription
@@ -235,7 +247,7 @@ func (b *Bridge) registerSubscription(
 			subID = sub.ID
 			initialReport.HasSubscription = true
 			initialReport.SubscriptionID = subID
-			b.captureSubTarget(subID, src, requestHdr, proto)
+			b.captureSubTarget(subID, src, requestHdr, proto, req.FabricFiltered)
 		}
 	}
 	return subID
@@ -337,7 +349,7 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// Arm the per-exchange StatusResponse waiter BEFORE the send
 		// to avoid a missed-wakeup race: Apple can reply faster than
 		// our scheduler returns from sendReplyReliable.
-		waitCh := b.armStatusResponseWait(proto.ExchangeID)
+		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries the
 		// stale SubscribeRequest counter, and python-matter-server's
@@ -347,7 +359,7 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		chunkHdr := *requestHdr
 		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			debugReplyError(b.logger, "send_initial_report", src, err)
 			return err
 		}
@@ -365,9 +377,9 @@ func (b *Bridge) streamInitialReportChunks( //nolint:gocognit // per-chunk ack s
 		// diagnostic only.
 		select {
 		case <-waitCh:
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			b.logger.Debug("matter.tx.subscribe.chunk_ack_timeout",
 				slog.String("src", srcString(src)),
 				slog.Int("chunk", i),
@@ -451,7 +463,7 @@ func (b *Bridge) sendSubscribeResponse(
 	ackTracker := b.ackTracker
 	b.mu.RUnlock()
 	if ackTracker != nil {
-		if counter, ok := ackTracker.LookupAndDischarge(proto.ExchangeID); ok {
+		if counter, ok := ackTracker.LookupAndDischarge(requestHdr.SessionID, proto.ExchangeID); ok {
 			subRespHdr.MessageCounter = counter
 		}
 	}

@@ -50,6 +50,48 @@ func TestOpcreds_ClusterRevision(t *testing.T) {
 	}
 }
 
+// TestOpcreds_MinReadPrivilege_NOCsRequiresAdminister asserts that NOCs
+// (0x0000) requires Administer (5), not View — the certificate bytes in the
+// NOC/ICAC list must not be readable or subscribable by a merely-View
+// subject. Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts:24
+// (access "R F A").
+func TestOpcreds_MinReadPrivilege_NOCsRequiresAdminister(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	if got := oc.MinReadPrivilege(0x0000); got != 5 {
+		t.Fatalf("MinReadPrivilege(NOCs) = %d, want 5 (Administer)", got)
+	}
+}
+
+// TestOpcreds_MinReadPrivilege_OtherAttributesAreView asserts that every
+// OperationalCredentials attribute other than NOCs stays at the default
+// View (1) privilege.
+func TestOpcreds_MinReadPrivilege_OtherAttributesAreView(t *testing.T) {
+	t.Parallel()
+	oc := newOpcreds(t)
+	for _, attrID := range []uint32{0x0001, 0x0002, 0x0004} {
+		if got := oc.MinReadPrivilege(attrID); got != 1 {
+			t.Errorf("MinReadPrivilege(0x%04X) = %d, want 1 (View)", attrID, got)
+		}
+	}
+}
+
+// TestOpcreds_MinReadPrivilege_NilReceiver asserts that MinReadPrivilege is
+// a pure attrID switch that never dereferences its receiver, so it also
+// works on a nil *OperationalCredentials — no server construction required
+// to determine the read-privilege table.
+func TestOpcreds_MinReadPrivilege_NilReceiver(t *testing.T) {
+	t.Parallel()
+	var oc *core.OperationalCredentials
+	if got := oc.MinReadPrivilege(0x0000); got != 5 {
+		t.Fatalf("MinReadPrivilege(NOCs) on nil receiver = %d, want 5", got)
+	}
+	if got := oc.MinReadPrivilege(0x0001); got != 1 {
+		t.Fatalf("MinReadPrivilege(Fabrics) on nil receiver = %d, want 1", got)
+	}
+}
+
 func TestOpcreds_NewOperationalCredentials_NilStore(t *testing.T) {
 	t.Parallel()
 	_, err := core.NewOperationalCredentials(nil, core.OpcredsConfig{})
@@ -467,7 +509,16 @@ func TestAddNOC_InstallsIPKInGroupKeyManagement(t *testing.T) {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
 
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
+	// Real commissioning flow: mint the root, install it, issue a CSR,
+	// and mint the NOC over the CSR's actual pending key — a NOC signed
+	// over an unrelated key (the old fixture behaviour) is rejected with
+	// NOCStatusInvalidPublicKey before AddNOC ever reaches the
+	// GroupKeyManagement write this test asserts on.
+	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 
 	// Step 1: AddTrustedRootCertificate.
 	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
@@ -477,11 +528,8 @@ func TestAddNOC_InstallsIPKInGroupKeyManagement(t *testing.T) {
 	}
 
 	// Step 2: CSRRequest.
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{
-		CSRNonce: make([]byte, 32),
-	}, 0); err != nil {
-		t.Fatalf("CSRRequest: %v", err)
-	}
+	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+	nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
 
 	// Step 3: AddNOC with a recognizable 16-byte IPK.
 	ipk := []byte{
@@ -608,31 +656,11 @@ func TestRemoveFabric_FiresCleanupCallbacks(t *testing.T) {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
 
-	// Drive a full commissioning sequence to install a fabric.
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
-
-	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
-		RootCACertificate: rootRaw,
-	}, 0); err != nil {
-		t.Fatalf("AddTrustedRootCertificate: %v", err)
-	}
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, 0); err != nil {
-		t.Fatalf("CSRRequest: %v", err)
-	}
-	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
-		NOCValue:         nocRaw,
-		IPKValue:         make([]byte, 16),
-		CaseAdminSubject: 0xABCD,
-		AdminVendorID:    0x1234,
-	}, 0)
-	if err != nil {
-		t.Fatalf("AddNOC: %v", err)
-	}
-	nr := resp.(core.NOCResponse)
-	if nr.StatusCode != core.NOCStatusOK {
-		t.Fatalf("AddNOC StatusCode = %d (%s), want OK", nr.StatusCode, nr.DebugText)
-	}
-	installedFabric := nr.FabricIndex
+	// Drive a full commissioning sequence to install a fabric — a NOC
+	// signed over an unrelated key (the old fixture behaviour) is
+	// rejected with NOCStatusInvalidPublicKey before AddNOC ever installs
+	// a fabric to remove.
+	_, _, installedFabric := commissionTestFabric(ctx, t, oc)
 
 	// Now remove the fabric.
 	rmResp, err := oc.MatterInvoke(ctx, 0x0A, core.RemoveFabricRequest{FabricIndex: installedFabric}, 0)
@@ -709,30 +737,8 @@ func TestAddTrustedRoot_AfterNOCCommandRejected(t *testing.T) {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
 
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
-
 	// Full commissioning sequence → AddNOC succeeds.
-	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
-		RootCACertificate: rootRaw,
-	}, 0); err != nil {
-		t.Fatalf("AddTrustedRootCertificate: %v", err)
-	}
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, 0); err != nil {
-		t.Fatalf("CSRRequest: %v", err)
-	}
-	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
-		NOCValue:         nocRaw,
-		IPKValue:         make([]byte, 16),
-		CaseAdminSubject: 0xABCD,
-		AdminVendorID:    0x1234,
-	}, 0)
-	if err != nil {
-		t.Fatalf("AddNOC: %v", err)
-	}
-	nr := resp.(core.NOCResponse)
-	if nr.StatusCode != core.NOCStatusOK {
-		t.Fatalf("AddNOC StatusCode = %d (%s), want OK", nr.StatusCode, nr.DebugText)
-	}
+	commissionTestFabric(ctx, t, oc)
 
 	// AddTrustedRootCertificate after AddNOC must fail (nocWasInvoked guard).
 	rootRaw2, _, _ := buildTestNOCAndRoot(t)
@@ -870,54 +876,25 @@ func TestUpdateNOC_FiresOnFabricUpdatedHook(t *testing.T) {
 		t.Fatalf("NewOperationalCredentials: %v", err)
 	}
 
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
+	// Install a fabric via the real commissioning flow first.
+	_, rootPriv, installedFabric := commissionTestFabric(ctx, t, oc)
 
-	// Install a fabric via AddNOC first.
-	if _, err := oc.MatterInvoke(ctx, 0x0B, core.AddTrustedRootCertificateRequest{
-		RootCACertificate: rootRaw,
-	}, 0); err != nil {
-		t.Fatalf("AddTrustedRootCertificate: %v", err)
-	}
-	if _, err := oc.MatterInvoke(ctx, 0x04, core.CSRRequest{CSRNonce: make([]byte, 32)}, 0); err != nil {
-		t.Fatalf("CSRRequest (for AddNOC): %v", err)
-	}
-	resp, err := oc.MatterInvoke(ctx, 0x06, core.AddNOCRequest{
-		NOCValue:         nocRaw,
-		IPKValue:         make([]byte, 16),
-		CaseAdminSubject: 0xABCD,
-		AdminVendorID:    0x1234,
-	}, 0)
-	if err != nil {
-		t.Fatalf("AddNOC: %v", err)
-	}
-	nr := resp.(core.NOCResponse)
-	if nr.StatusCode != core.NOCStatusOK {
-		t.Fatalf("AddNOC StatusCode = %d (%s), want OK", nr.StatusCode, nr.DebugText)
-	}
-	installedFabric := nr.FabricIndex
-
-	// Now perform UpdateNOC: need a new CSR with IsForUpdateNOC=true,
-	// on a CASE session (non-zero fabric in context).
+	// Now perform UpdateNOC: mint the new NOC over the cluster's actual
+	// pending key from an IsForUpdateNOC CSR, signed by the SAME root
+	// and stamping the SAME FabricID — UpdateNOC verifies the chain
+	// against the fabric's stored root and rejects a FabricID change.
 	fabCtx := im.WithFabricFilter(ctx, true, installedFabric)
-	_, nocRaw2, _ := buildTestNOCAndRoot(t)
-	if _, err := oc.MatterInvoke(fabCtx, 0x04, core.CSRRequest{
-		CSRNonce:       make([]byte, 32),
-		IsForUpdateNOC: true,
-	}, 0); err != nil {
-		t.Fatalf("CSRRequest (for UpdateNOC): %v", err)
-	}
-	if err := fs.UpsertIdentity(ctx, mstore.IdentityRecord{
-		FabricIndex: installedFabric,
-		NOC:         nocRaw,
-		IPK:         make([]byte, 16),
-	}); err != nil {
-		t.Fatalf("UpsertIdentity setup: %v", err)
-	}
-	_, err = oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{
+	nocRaw2 := mintUpdateNOC(fabCtx, t, oc, rootPriv, testDefaultFabricID, testDefaultNodeID)
+
+	resp, err := oc.MatterInvoke(fabCtx, 0x07, core.UpdateNOCRequest{
 		NOCValue: nocRaw2,
 	}, 0)
 	if err != nil {
 		t.Fatalf("UpdateNOC: %v", err)
+	}
+	nr := resp.(core.NOCResponse)
+	if nr.StatusCode != core.NOCStatusOK {
+		t.Fatalf("UpdateNOC StatusCode = %d (%s), want OK", nr.StatusCode, nr.DebugText)
 	}
 
 	if !hookFired {

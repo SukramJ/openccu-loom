@@ -148,24 +148,51 @@ func TestCaseAdapter_Sigma2ResumeNotImplemented(t *testing.T) {
 func TestMRPAckAdapter_NilTrackerReturnsFalse(t *testing.T) {
 	t.Parallel()
 	a := NewMRPAckAdapter(nil)
-	if a.Discharge(42) {
+	if a.Discharge(0, 42) {
 		t.Fatal("expected false from Discharge with nil tracker")
 	}
 }
 
 // TestMRPAckAdapter_DischargeRoundTrip — Owe then Discharge on the same
-// exchange returns true; a second Discharge returns false.
+// (session, exchange) pair returns true; a second Discharge returns false.
 func TestMRPAckAdapter_DischargeRoundTrip(t *testing.T) {
 	t.Parallel()
 	tracker := mrp.NewAckTracker(0) // delay=0 → every Owe is immediately due
 	a := NewMRPAckAdapter(tracker)
-	const exchangeID uint16 = 7
-	tracker.Owe(100, exchangeID, true, time.Now())
-	if !a.Discharge(exchangeID) {
+	const (
+		sessionID  uint16 = 0
+		exchangeID uint16 = 7
+	)
+	tracker.Owe(100, sessionID, exchangeID, true, time.Now())
+	if !a.Discharge(sessionID, exchangeID) {
 		t.Fatal("expected true from first Discharge after Owe")
 	}
-	if a.Discharge(exchangeID) {
+	if a.Discharge(sessionID, exchangeID) {
 		t.Fatal("expected false from second Discharge (already discharged)")
+	}
+}
+
+// TestMRPAckAdapter_DischargeIsSessionScoped verifies that Discharge is
+// keyed on (session, exchange), not the bare exchange ID: two sessions
+// sharing an exchange ID must not clear each other's obligation. Exchange
+// IDs are picked independently by every peer, so this collision is a real
+// scenario, not a hypothetical — mirrors matter.js ExchangeManager.ts:287.
+func TestMRPAckAdapter_DischargeIsSessionScoped(t *testing.T) {
+	t.Parallel()
+	tracker := mrp.NewAckTracker(0)
+	a := NewMRPAckAdapter(tracker)
+	const exchangeID uint16 = 7
+	tracker.Owe(100, 1, exchangeID, true, time.Now())
+	tracker.Owe(200, 2, exchangeID, false, time.Now())
+
+	if a.Discharge(3, exchangeID) {
+		t.Fatal("expected false discharging an unrelated session on the same exchange")
+	}
+	if !a.Discharge(1, exchangeID) {
+		t.Fatal("expected true discharging session 1's own obligation")
+	}
+	if !a.Discharge(2, exchangeID) {
+		t.Fatal("expected true discharging session 2's own obligation (must have survived session 1's discharge)")
 	}
 }
 

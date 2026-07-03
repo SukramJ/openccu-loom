@@ -354,9 +354,16 @@ func TestLevelWriteWrongTypeRejected(t *testing.T) {
 // TestLevelInvokeMoveToLevel routes a MoveToLevel command through to
 // SetLevel. Transition time is intentionally ignored in the worked
 // example.
+// The plain MoveToLevel variant (0x00, no OnOff coupling) is gated on the
+// effective ExecuteIfOff option while the light is off (matter.js
+// LevelControlServer.ts:596 #optionsAllowExecution); with no options set it
+// is a silent no-op on an off/unobserved light (see
+// TestLevelInvokeMoveToLevelWhileOffIsNoOp). The rig is therefore primed
+// with l.OnLevel before invoking so this test exercises the executed path.
 func TestLevelInvokeMoveToLevel(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
+	l.OnLevel(0.5) // light is on
 	srv := levelServer(t, l)
 	if _, err := srv.MatterInvoke(context.Background(), 0x00, uint8(190), hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("MoveToLevel error: %v", err)
@@ -417,20 +424,23 @@ func TestLevelInvokeStepUpAndDown(t *testing.T) {
 	}
 }
 
-// TestLevelInvokeStepDownFloor verifies that a Step-Down that would go
-// below zero clamps to 0.
+// TestLevelInvokeStepDownFloor verifies that a plain Step-Down (0x02) that
+// would go below MinLevel clamps to MinLevel (1), not 0 — a plain Step can
+// never turn the device off, mirroring matter.js Transitions.ts:139's
+// min/max property clamp against [MinLevel, MaxLevel] = [1, 254].
 func TestLevelInvokeStepDownFloor(t *testing.T) {
 	w := &stubWriter{}
 	l, _ := newLightRig(t, "HmIP-BDT:4", w, custom.LightCapabilities{Dimmable: true})
 	l.OnLevel(0.1)
 	srv := levelServer(t, l)
-	// Step down by 200 from a low baseline — must clamp to 0.
+	// Step down by 200 from a low baseline — must clamp to MinLevel (1).
 	fields := map[string]any{"step_mode": uint8(1), "step_size": uint8(200)}
 	if _, err := srv.MatterInvoke(context.Background(), 0x02, fields, hmenum.CommandPriorityHigh); err != nil {
 		t.Fatalf("Step down error: %v", err)
 	}
-	if w.last != 0.0 {
-		t.Fatalf("Step down floor wrote %v, want 0.0", w.last)
+	// 1/254 ≈ 0.0039
+	if w.last < 0.003 || w.last > 0.005 {
+		t.Fatalf("Step down floor wrote %v, want ~0.0039 (MinLevel, not 0)", w.last)
 	}
 }
 

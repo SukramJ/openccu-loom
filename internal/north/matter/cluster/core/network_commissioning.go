@@ -128,9 +128,10 @@ func NewNetworkCommissioning(cfg NetworkCommissioningConfig) *NetworkCommissioni
 // MatterClusterServer, the attribute-lister capability, and
 // MatterClusterDataVersion.
 var (
-	_ interfaces.MatterClusterServer          = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*NetworkCommissioning)(nil)
-	_ interfaces.MatterClusterDataVersion     = (*NetworkCommissioning)(nil)
+	_ interfaces.MatterClusterServer                  = (*NetworkCommissioning)(nil)
+	_ interfaces.MatterClusterAttributeLister         = (*NetworkCommissioning)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*NetworkCommissioning)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*NetworkCommissioning)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -144,6 +145,19 @@ func (n *NetworkCommissioning) MatterDataVersion() uint32 {
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (n *NetworkCommissioning) MatterClusterID() uint32 { return netcommClusterID }
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// InterfaceEnabled (0x0004) requires Administer (5) per Matter §11.9
+// (access "RW VA"). Mirrors matter.js
+// packages/model/src/standard/elements/network-commissioning.element.ts:47.
+func (n *NetworkCommissioning) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case netcommAttrInterfaceEnabled:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterRead implements [interfaces.MatterClusterServer].
 func (n *NetworkCommissioning) MatterRead(attrID uint32) (any, bool) {

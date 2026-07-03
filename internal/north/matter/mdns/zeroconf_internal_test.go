@@ -129,6 +129,68 @@ func TestZeroconfInternal_Publish_WithResponder_Domain(t *testing.T) {
 	}
 }
 
+// TestZeroconfInternal_Publish_UnchangedSkipsReRegister verifies the
+// re-announce dedup: publishing the same record set twice keeps the
+// SAME underlying zeroconf.Server (no teardown → no TTL-0 goodbye →
+// no Apple cache flush), while a changed record set (TXT bump)
+// re-registers a fresh server.
+func TestZeroconfInternal_Publish_UnchangedSkipsReRegister(t *testing.T) {
+	t.Parallel()
+	z := NewZeroconf()
+	t.Cleanup(func() { _ = z.Close() })
+
+	svc := Service{
+		InstanceName: "AABBCCDD00112233",
+		ServiceType:  ServiceTypeOperational,
+		Port:         5540,
+		HostName:     "test",
+		TXT:          []TXTRecord{{Key: "SII", Value: "500"}},
+	}
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("first Publish: %v", err)
+	}
+	key := noopKey(svc.InstanceName, svc.ServiceType)
+	z.mu.RLock()
+	first := z.servers[key]
+	firstFP := z.published[key]
+	z.mu.RUnlock()
+	if first == nil {
+		t.Fatal("no server registered after first Publish")
+	}
+
+	// Identical re-publish → same server instance, same fingerprint.
+	if err := z.Publish(context.Background(), svc); err != nil {
+		t.Fatalf("identical re-Publish: %v", err)
+	}
+	z.mu.RLock()
+	second := z.servers[key]
+	secondFP := z.published[key]
+	z.mu.RUnlock()
+	if second != first {
+		t.Error("identical re-Publish replaced the server (would emit a TTL-0 goodbye + re-register)")
+	}
+	if secondFP != firstFP {
+		t.Errorf("fingerprint changed on identical re-Publish: %q → %q", firstFP, secondFP)
+	}
+
+	// Changed TXT → fresh server (re-register is correct here).
+	changed := svc
+	changed.TXT = []TXTRecord{{Key: "SII", Value: "300"}}
+	if err := z.Publish(context.Background(), changed); err != nil {
+		t.Fatalf("changed re-Publish: %v", err)
+	}
+	z.mu.RLock()
+	third := z.servers[key]
+	thirdFP := z.published[key]
+	z.mu.RUnlock()
+	if third == first {
+		t.Error("changed re-Publish did NOT re-register — the stale record would keep answering")
+	}
+	if thirdFP == firstFP {
+		t.Error("fingerprint unchanged after a TXT change")
+	}
+}
+
 // TestZeroconfInternal_Close_WithResponder_SubFQDNs verifies that Close
 // removes subtype mappings from the attached responder when there are
 // registered subFQDNs. This exercises the

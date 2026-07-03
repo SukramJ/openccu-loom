@@ -101,6 +101,7 @@ const (
 	accessControlAuthModePASE        uint8 = 1
 	accessControlAuthModeCASE        uint8 = 2 //nolint:unused // listed for symmetry with matter.js enum
 	accessControlAuthModeGroup       uint8 = 3
+	accessControlPrivilegeView       uint8 = 1 // lowest valid privilege enum (View); Administer=5 is the highest
 	accessControlPrivilegeAdminister uint8 = 5
 
 	// accessControlEventEntryChanged is the Matter §9.10.7.1 event
@@ -173,11 +174,12 @@ func NewAccessControl(s ACLStoreFacade) (*AccessControl, error) {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer                 = (*AccessControl)(nil)
-	_ interfaces.FabricScopedReader                  = (*AccessControl)(nil)
-	_ interfaces.MatterEventReceiver                 = (*AccessControl)(nil)
-	_ interfaces.MatterClusterDataVersion            = (*AccessControl)(nil)
-	_ interfaces.MatterClusterAttributeReadPrivilege = (*AccessControl)(nil)
+	_ interfaces.MatterClusterServer                  = (*AccessControl)(nil)
+	_ interfaces.FabricScopedReader                   = (*AccessControl)(nil)
+	_ interfaces.MatterEventReceiver                  = (*AccessControl)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*AccessControl)(nil)
+	_ interfaces.MatterClusterAttributeReadPrivilege  = (*AccessControl)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*AccessControl)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
@@ -202,6 +204,19 @@ func (*AccessControl) MinReadPrivilege(attrID uint32) uint8 {
 		return accessControlPrivilegeAdminister // 5
 	default:
 		return 1 // View — standard default
+	}
+}
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// ACL (0x0000) and Extension (0x0001) require Administer (5) per Matter
+// §9.10.5.3 (access "RW … A"). Mirrors matter.js
+// packages/model/src/standard/elements/access-control.element.ts:28,32.
+func (*AccessControl) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case accessControlAttrACL, accessControlAttrExtension:
+		return accessControlPrivilegeAdminister // 5
+	default:
+		return 3 // Operate — standard default
 	}
 }
 
@@ -431,6 +446,18 @@ func (a *AccessControl) MatterWrite(ctx context.Context, attrID uint32, value an
 			}
 			if len(e.Targets) > int(accessControlTargetsPerEntry) {
 				return fmt.Errorf("matter: AccessControl.ACL[%d] write: resource exhausted: TargetsPerAccessControlEntry=%d > limit=%d", i, len(e.Targets), accessControlTargetsPerEntry)
+			}
+			// Enum validity: reject out-of-range Privilege / AuthMode values
+			// before the semantic checks below. matter.js enforces these via
+			// schema supervision (AccessControlEntryPrivilegeEnum 1..5,
+			// AuthModeEnum 1..3); an unchecked write would persist e.g.
+			// Privilege=7 / AuthMode=9. Mirrors chip AccessControl.cpp
+			// Entry::IsValid() privilege/authMode guards.
+			if e.Privilege < accessControlPrivilegeView || e.Privilege > accessControlPrivilegeAdminister {
+				return fmt.Errorf("matter: AccessControl.ACL[%d] write: constraint error: Privilege=%d not in 1..5 (View..Administer)", i, e.Privilege)
+			}
+			if e.AuthMode < accessControlAuthModePASE || e.AuthMode > accessControlAuthModeGroup {
+				return fmt.Errorf("matter: AccessControl.ACL[%d] write: constraint error: AuthMode=%d not in 1..3 (PASE/CASE/Group)", i, e.AuthMode)
 			}
 			if e.AuthMode == accessControlAuthModePASE {
 				return fmt.Errorf("matter: AccessControl.ACL[%d] write: constraint error: AuthMode=PASE is forbidden in ACL", i)

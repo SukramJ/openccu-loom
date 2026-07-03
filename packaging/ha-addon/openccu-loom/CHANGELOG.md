@@ -1,5 +1,25 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.23.0
+
+- **Matter bridge hardening.** A wave of correctness and security fixes brings
+  the Matter side closer to the reference stack:
+  - Commissioning is more robust — re-pairing after an interrupted attempt, and
+    "add to another ecosystem" flows, recover cleanly; only one pairing runs at
+    a time; and a re-connecting controller's fast-resume no longer lands on a
+    dead session.
+  - Certificate updates (UpdateNOC) are now validated before they are stored,
+    duplicate fabrics and mismatched keys are rejected, and a removed fabric's
+    stale discovery record is withdrawn instead of lingering.
+  - Access-control is enforced on every subscription report and per attribute /
+    command, closing a privilege-escalation and a cross-ecosystem data-leak
+    path; device-type-scoped access rules are honoured.
+  - Bridged devices report a stable data-version, so controllers stop
+    re-downloading the whole bridge on every reconnect; the human-set bridge
+    name/location and event history survive a restart; and the periodic mDNS
+    re-announce no longer churns Apple's device cache.
+- The Matter bridge remains **opt-in and off by default** (`north.matter.enabled`).
+
 ## 0.22.0
 
 - **New Energy view** (`#/energy`) — per-device power/energy consumption and

@@ -152,11 +152,15 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	// handler when the original arrived. Re-running would corrupt
 	// fabric-scoped state (e.g. AddNOC twice) — but the peer is
 	// retransmitting because it never saw our previous ack, so we
-	// MUST send a fresh StandaloneAck for THIS counter. The pump
-	// goroutine fires it per-exchange via owedInboundAck above; flush
-	// the pump immediately so the ack hits the wire before the peer's
-	// next retransmit, then drop processing.
+	// MUST send a fresh StandaloneAck for THIS counter, and
+	// immediately: the obligation owedInboundAck registered above
+	// carries the piggyback grace window, behind which a duplicate
+	// ack must not hide (the peer would retransmit again meanwhile).
+	// Expedite it to due-now, flush the pump, drop processing.
+	// Mirrors matter.js MessageExchange.ts:428-433 (duplicate +
+	// requiresAck → sendStandaloneAckForMessage without delay).
 	if duplicate {
+		b.expediteDuplicateAck(hdr.SessionID, proto.ExchangeID)
 		b.RunAckPumpOnce(time.Now())
 		b.logger.Debug("matter.rx.duplicate_acked",
 			slog.String("src", srcString(src)),
@@ -177,8 +181,8 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 		b.mu.RLock()
 		outbound := b.outboundReliable
 		b.mu.RUnlock()
-		if outbound != nil && outbound.Ack(proto.AckCounter) {
-			b.releaseReportCounter(proto.AckCounter)
+		if outbound != nil && outbound.Ack(hdr.SessionID, proto.AckCounter) {
+			b.releaseReportCounter(hdr.SessionID, proto.AckCounter)
 		}
 	}
 
@@ -191,6 +195,24 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 		return err
 	}
 	payload := plain[bodyOffset:]
+
+	// Interaction Model (0x0001) and Secure Channel (0x0000) are
+	// Common-vendor protocols. A datagram that carries a vendor id (the
+	// exchange V flag, VendorID != Common 0x0000) belongs to a
+	// vendor-specific protocol the bridge does not implement — even if its
+	// low 16-bit protocol id collides with IM/SC. matter.js keys dispatch on
+	// the full 32-bit id (vendorId*0x10000 + protocolId,
+	// MessageCodec.ts:377), so a vendor-qualified protocol never routes into
+	// the common handlers; reject it before the switch rather than feeding a
+	// forged frame into the PASE/IM machinery.
+	if proto.HasVendorID && proto.VendorID != 0 {
+		err := fmt.Errorf("%w: vendor=0x%04X protocol=0x%04X", ErrUnknownProtocol, proto.VendorID, proto.ProtocolID)
+		b.logger.Debug("matter.rx.vendor_protocol",
+			slog.String("src", srcString(src)),
+			slog.Int("vendor_id", int(proto.VendorID)),
+			slog.Int("protocol_id", int(proto.ProtocolID)))
+		return err
+	}
 
 	switch proto.ProtocolID {
 	case im.InteractionModelProtocolID:
@@ -220,6 +242,19 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 // stop the peer's retransmit storm — but skip handler dispatch.
 func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []byte, duplicate bool, err error) {
 	if hdr.SessionID == 0 {
+		// Unsecured (PASE / pre-fabric) traffic. Detect MRP retransmits per
+		// source node id so a duplicate Pake1/Pake3 is acked without
+		// re-invoking the handshake handler, mirroring matter.js
+		// UnsecuredSession's MessageReceptionState
+		// (packages/protocol/src/session/UnsecuredSession.ts). Without a
+		// source node id there is nothing stable to key on — treat as fresh
+		// (the handshake handler's own state-replay guard still catches it).
+		if hdr.HasSourceNodeID && hdr.SourceNodeID != 0 {
+			raw, _ := b.unsecuredWindows.LoadOrStore(hdr.SourceNodeID, mrp.NewWindow())
+			if w, ok := raw.(*mrp.Window); ok && !w.Accept(hdr.MessageCounter) {
+				return body, true, nil
+			}
+		}
 		return body, false, nil
 	}
 	b.mu.RLock()
@@ -292,7 +327,7 @@ func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHd
 	case imGateProceed:
 		// fall through to decode + dispatch below
 	case imGateAbsorbStatusResp:
-		return b.absorbStatusResponse(src, proto)
+		return b.absorbStatusResponse(src, requestHdr, proto)
 	case imGateRejectUnsupported:
 		return b.rejectUnsupportedOpcode(src, proto)
 	case imGateRejectGroupSession:
@@ -418,6 +453,7 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 	if topo == nil {
 		return
 	}
+	mgr := b.subscriptionManagerLocked()
 	for _, ep := range topo.Bridged() {
 		if ep == nil {
 			continue
@@ -430,6 +466,26 @@ func (b *Bridge) NotifyDeviceReachable(centralName, deviceAddress string, reacha
 			core.EventReachableChanged,
 			core.ReachableChangedEvent{ReachableNewValue: reachable},
 			interfaces.MatterEventPriorityCritical)
+		// Advance the endpoint-hosted BDBI DataVersion — the reachability
+		// flip is a cluster state change, so DataVersionFilters must miss
+		// afterwards (matter.js Datasource.ts:949).
+		ep.BumpClusterDataVersion(core.BridgedDeviceBasicInformationClusterID)
+		// Also dirty the Reachable ATTRIBUTE (BDBI 0x0039 / 0x0011), not
+		// just fire the event: a controller subscribed to the attribute
+		// (Google Home tracks it) otherwise shows stale reachability until
+		// it re-subscribes. matter.js's reactive state marks the attribute
+		// dirty on the same change. Mirrors the Descriptor.PartsList
+		// dirty-mark pattern in bridge.go.
+		if mgr != nil {
+			mgr.OnAttributeChanged(im.ConcreteAttributePath{
+				Endpoint:     ep.ID,
+				Cluster:      core.BridgedDeviceBasicInformationClusterID,
+				Attribute:    0x0011, // Reachable (§9.13.5)
+				HasEndpoint:  true,
+				HasCluster:   true,
+				HasAttribute: true,
+			})
+		}
 		b.logger.Debug("matter.bridge.reachable_changed",
 			slog.Int("endpoint_id", int(ep.ID)),
 			slog.String("central", centralName),
@@ -451,7 +507,7 @@ func (b *Bridge) replyTimedStatus(src *net.UDPAddr, requestHdr *message.Header, 
 		debugReplyError(b.logger, "send_timed_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.timed_reject",
 		slog.String("src", srcString(src)),
 		slog.String("stage", stage),

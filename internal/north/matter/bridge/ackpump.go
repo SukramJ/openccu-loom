@@ -51,9 +51,27 @@ func (b *Bridge) AttachAckTracker(t *mrp.AckTracker) {
 	b.mu.Lock()
 	b.ackTracker = t
 	if b.outboundReliable == nil {
-		b.outboundReliable = newOutboundReliableTracker()
+		b.outboundReliable = newOutboundReliableTracker(b.outboundBaseInterval)
 	}
 	b.mu.Unlock()
+}
+
+// outboundBaseInterval resolves the peer-appropriate MRP base
+// interval for an outbound retransmission on sessionID. Delegates to
+// the session lookup's optional
+// [SessionRetransmitIntervalResolver] capability; a lookup without
+// the capability, an unknown session, or session 0 (unsecured PASE)
+// returns 0 and the tracker falls back to the spec idle default.
+func (b *Bridge) outboundBaseInterval(sessionID uint16, now time.Time) time.Duration {
+	b.mu.RLock()
+	sessions := b.sessions
+	b.mu.RUnlock()
+	if r, ok := sessions.(SessionRetransmitIntervalResolver); ok {
+		if d, ok := r.RetransmitBaseInterval(sessionID, now); ok && d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // exchangeReplyTarget captures the per-exchange routing state the
@@ -91,7 +109,11 @@ func (b *Bridge) owedInboundAck(src *net.UDPAddr, hdr *message.Header, proto mes
 		return
 	}
 	if src != nil {
-		b.exchangeSrcs.Store(proto.ExchangeID, exchangeReplyTarget{
+		// Keyed on (session, exchange): exchange IDs are only unique
+		// per session, so two controllers sharing an exchange ID must
+		// not overwrite each other's reply route. Mirrors matter.js
+		// ExchangeManager.ts:287 session-scoped exchange resolution.
+		b.exchangeSrcs.Store(mrp.ExchangeKey{SessionID: hdr.SessionID, ExchangeID: proto.ExchangeID}, exchangeReplyTarget{
 			src:                 src,
 			hasPeerSourceNodeID: hdr.HasSourceNodeID,
 			peerSourceNodeID:    hdr.SourceNodeID,
@@ -101,7 +123,7 @@ func (b *Bridge) owedInboundAck(src *net.UDPAddr, hdr *message.Header, proto mes
 	// Initiator is set to false: peer opened the exchange, we are
 	// the responder. The eventual StandaloneAck flips this back to
 	// false-on-our-side so the peer sees our role correctly.
-	tracker.Owe(hdr.MessageCounter, proto.ExchangeID, false, time.Now())
+	tracker.Owe(hdr.MessageCounter, hdr.SessionID, proto.ExchangeID, false, time.Now())
 }
 
 // refreshAckCounter rewrites requestHdr.MessageCounter to the latest
@@ -131,27 +153,41 @@ func (b *Bridge) refreshAckCounter(requestHdr *message.Header, exchangeID uint16
 	if tracker == nil {
 		return
 	}
-	if counter, ok := tracker.LookupAndDischarge(exchangeID); ok {
+	if counter, ok := tracker.LookupAndDischarge(requestHdr.SessionID, exchangeID); ok {
 		requestHdr.MessageCounter = counter
 	}
 }
 
 // dischargeOwedAck cancels an obligation because the bridge just
-// piggybacked an ACK on an outbound reply for the same exchange.
-// Caller invokes this from the IM / SC handler paths immediately
-// after [Bridge.sendReply] succeeds.
+// piggybacked an ACK on an outbound reply for the same (session,
+// exchange). Caller invokes this from the IM / SC handler paths
+// immediately after [Bridge.sendReply] succeeds.
 //
-// Safe to call when no obligation exists for the exchange — the
-// tracker silently no-ops.
-func (b *Bridge) dischargeOwedAck(exchangeID uint16) {
+// Safe to call when no obligation exists for the pair — the tracker
+// silently no-ops.
+func (b *Bridge) dischargeOwedAck(sessionID, exchangeID uint16) {
 	b.mu.RLock()
 	tracker := b.ackTracker
 	b.mu.RUnlock()
 	if tracker == nil {
 		return
 	}
-	tracker.Discharge(exchangeID)
-	b.exchangeSrcs.Delete(exchangeID)
+	tracker.Discharge(sessionID, exchangeID)
+	b.exchangeSrcs.Delete(mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID})
+}
+
+// expediteDuplicateAck rewrites the just-registered obligation for a
+// duplicate to due-now so the caller's immediate pump pass emits the
+// StandaloneAck without waiting out the piggyback grace window. No-op
+// when no tracker is wired or no obligation exists.
+func (b *Bridge) expediteDuplicateAck(sessionID, exchangeID uint16) {
+	b.mu.RLock()
+	tracker := b.ackTracker
+	b.mu.RUnlock()
+	if tracker == nil {
+		return
+	}
+	tracker.ExpediteDue(sessionID, exchangeID)
 }
 
 // armStatusResponseWait registers a per-exchange rendezvous channel
@@ -166,9 +202,12 @@ func (b *Bridge) dischargeOwedAck(exchangeID uint16) {
 //
 // Returns a freshly-allocated channel that is closed exactly once
 // by [Bridge.signalStatusResponseRX] when the StatusResponse lands.
-func (b *Bridge) armStatusResponseWait(exchangeID uint16) <-chan struct{} {
+// Keyed on (session, exchange) so a StatusResponse from another
+// controller sharing the exchange ID cannot release this waiter.
+func (b *Bridge) armStatusResponseWait(sessionID, exchangeID uint16) <-chan struct{} {
 	ch := make(chan struct{})
-	if prev, loaded := b.statusResponseWaits.Swap(exchangeID, ch); loaded {
+	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	if prev, loaded := b.statusResponseWaits.Swap(key, ch); loaded {
 		// Pathological: caller armed a second waiter on the same
 		// exchange without disarming the first. Close the orphan
 		// channel so a goroutine blocked on it unblocks (interpreting
@@ -181,13 +220,14 @@ func (b *Bridge) armStatusResponseWait(exchangeID uint16) <-chan struct{} {
 }
 
 // disarmStatusResponseWait removes any pending rendezvous channel
-// for exchangeID. Safe to call when no wait is registered — no-op.
-// Always paired with [Bridge.armStatusResponseWait] on the caller's
-// exit path (success or timeout) so a late StatusResponse arrival
-// cannot panic on a closed channel that a goroutine has already
-// abandoned.
-func (b *Bridge) disarmStatusResponseWait(exchangeID uint16) {
-	if v, loaded := b.statusResponseWaits.LoadAndDelete(exchangeID); loaded {
+// for the (session, exchange) pair. Safe to call when no wait is
+// registered — no-op. Always paired with
+// [Bridge.armStatusResponseWait] on the caller's exit path (success
+// or timeout) so a late StatusResponse arrival cannot panic on a
+// closed channel that a goroutine has already abandoned.
+func (b *Bridge) disarmStatusResponseWait(sessionID, exchangeID uint16) {
+	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	if v, loaded := b.statusResponseWaits.LoadAndDelete(key); loaded {
 		if ch, ok := v.(chan struct{}); ok {
 			safeClose(ch)
 		}
@@ -196,11 +236,12 @@ func (b *Bridge) disarmStatusResponseWait(exchangeID uint16) {
 
 // signalStatusResponseRX is the IM-dispatcher hook into the wait
 // machinery: when handleIMOpcode sees an inbound IM:StatusResponse
-// for exchangeID, it calls this so any goroutine inside the
-// chunk-streaming loop unblocks. Safe to call when no wait is
-// registered — no-op.
-func (b *Bridge) signalStatusResponseRX(exchangeID uint16) {
-	if v, loaded := b.statusResponseWaits.LoadAndDelete(exchangeID); loaded {
+// for the (session, exchange) pair, it calls this so any goroutine
+// inside the chunk-streaming loop unblocks. Safe to call when no
+// wait is registered — no-op.
+func (b *Bridge) signalStatusResponseRX(sessionID, exchangeID uint16) {
+	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	if v, loaded := b.statusResponseWaits.LoadAndDelete(key); loaded {
 		if ch, ok := v.(chan struct{}); ok {
 			safeClose(ch)
 		}
@@ -269,7 +310,7 @@ func (b *Bridge) tickOutboundReliable(outbound *outboundReliableTracker, now tim
 			continue
 		}
 		if errors.Is(r.Err, mrp.ErrMaxRetransmissionsReached) {
-			b.closeSubscriptionByCounter(r.Counter)
+			b.closeSubscriptionByCounter(r.SessionID, r.Counter)
 			continue
 		}
 		b.logger.Debug("matter.tx.reliable.retransmit",
@@ -303,10 +344,11 @@ func (b *Bridge) RunAckPumpOnce(now time.Time) int {
 // pipeline didn't run owedInboundAck — either way we can't route the
 // reply, so log and drop.
 func (b *Bridge) emitStandaloneAck(obl mrp.AckObligation) {
-	raw, ok := b.exchangeSrcs.LoadAndDelete(obl.ExchangeID)
+	raw, ok := b.exchangeSrcs.LoadAndDelete(mrp.ExchangeKey{SessionID: obl.SessionID, ExchangeID: obl.ExchangeID})
 	if !ok {
 		b.logger.Debug("matter.tx.ack_pump.no_src",
-			slog.Int("exchange_id", int(obl.ExchangeID)))
+			slog.Int("exchange_id", int(obl.ExchangeID)),
+			slog.Int("session_id", int(obl.SessionID)))
 		return
 	}
 	target, ok := raw.(exchangeReplyTarget)

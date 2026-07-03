@@ -11,6 +11,7 @@ import (
 	"time"
 
 	mattercore "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/core"
+	matterlock "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/lock"
 	mattermeasure "github.com/SukramJ/openccu-loom/internal/north/matter/cluster/measurement"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/tlv"
@@ -182,7 +183,7 @@ func (b *Bridge) sendReplyOpts(
 			return fmt.Errorf("%w: %w", ErrReplySend, err)
 		}
 		if needsAck {
-			tracker.Track(counter, requestProto.ExchangeID, datagram, src, time.Now())
+			tracker.Track(counter, requestHdr.SessionID, requestProto.ExchangeID, datagram, src, time.Now())
 		}
 		return nil
 	}
@@ -219,7 +220,7 @@ func (b *Bridge) sendReplyOpts(
 		return fmt.Errorf("%w: %w", ErrReplySend, err)
 	}
 	if needsAck {
-		tracker.Track(counter, requestProto.ExchangeID, datagram, src, time.Now())
+		tracker.Track(counter, requestHdr.SessionID, requestProto.ExchangeID, datagram, src, time.Now())
 	}
 	return nil
 }
@@ -844,6 +845,34 @@ func defaultAttributeValueWriter(enc *tlv.Encoder, tag tlv.Tag, v im.AttributeVa
 		// ReachableNewValue (bool).
 		enc.StartStruct(tag)
 		enc.PutBool(tlv.ContextTag(0), x.ReachableNewValue)
+		_ = enc.EndContainer()
+	case matterlock.LockOperationEvent:
+		// DoorLock §5.2.10.3 LockOperation. Field tags per matter.js
+		// door-lock-cluster.element.ts:181-195:
+		//   [0] LockOperationType enum8
+		//   [1] OperationSource   enum8
+		//   [2] UserIndex         uint16 nullable
+		//   [3] FabricIndex       fabric-idx nullable
+		//   [4] SourceNode        node-id nullable
+		// Credentials [5] is USR-gated and absent (no USR feature).
+		enc.StartStruct(tag)
+		enc.PutUint(tlv.ContextTag(0), uint64(x.LockOperationType))
+		enc.PutUint(tlv.ContextTag(1), uint64(x.OperationSource))
+		if x.UserIndex != nil {
+			enc.PutUint16(tlv.ContextTag(2), *x.UserIndex)
+		} else {
+			enc.PutNull(tlv.ContextTag(2))
+		}
+		if x.FabricIndex != nil {
+			enc.PutUint(tlv.ContextTag(3), uint64(*x.FabricIndex))
+		} else {
+			enc.PutNull(tlv.ContextTag(3))
+		}
+		if x.SourceNode != nil {
+			enc.PutUint64(tlv.ContextTag(4), *x.SourceNode)
+		} else {
+			enc.PutNull(tlv.ContextTag(4))
+		}
 		_ = enc.EndContainer()
 	case mattercore.AccessControlEntryChangedEvent:
 		// AccessControl §9.10.7.1. Field tags per matter.js

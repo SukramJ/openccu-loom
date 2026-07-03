@@ -4,6 +4,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdh"
 	"crypto/ecdsa"
@@ -129,6 +130,17 @@ type OperationalCredentials struct {
 	// MdnsServer.reannounceInstance call for the updated fabric set.
 	onMDNSReannounce func(ctx context.Context)
 
+	// onFabricWithdraw, when non-nil, receives the operational identity
+	// (compressedID, nodeID) of an mDNS instance that must be withdrawn:
+	// the removed fabric on RemoveFabric, or the OLD NodeID on an
+	// UpdateNOC that changed the NodeID. A plain republish cannot do
+	// this — the advertiser only re-announces the records it still
+	// holds, so the stale <compressedID>-<nodeID> instance would keep
+	// answering until its TTL. Mirrors matter.js DeviceAdvertiser.ts:76-86
+	// (close the fabric's advertisements on update/delete before
+	// re-advertising). May be nil.
+	onFabricWithdraw func(ctx context.Context, compressedID [8]byte, nodeID uint64)
+
 	// dataVersion tracks the per-cluster monotonic counter per Matter
 	// §10.6.5. Bumped after every successful fabric mutation (AddNOC,
 	// UpdateNOC, UpdateFabricLabel, RemoveFabric) so DataVersionFilter
@@ -192,6 +204,11 @@ type StoreFacade interface {
 	GetFabric(ctx context.Context, fabricIndex uint8) (store.FabricRecord, error)
 	AddFabric(ctx context.Context, rec store.FabricRecord) (uint8, error)
 	UpdateFabricLabel(ctx context.Context, fabricIndex uint8, label string) error
+	// UpdateFabricNodeID follows an UpdateNOC whose new NOC carries a
+	// different operational NodeID; the fabric row must track it so
+	// destinationID resolution and the mDNS instance name stay in sync
+	// with the installed certificate (matter.js Fabric.ts:543).
+	UpdateFabricNodeID(ctx context.Context, fabricIndex uint8, nodeID uint64) error
 	RemoveFabric(ctx context.Context, fabricIndex uint8) error
 	UpsertIdentity(ctx context.Context, rec store.IdentityRecord) error
 	GetIdentity(ctx context.Context, fabricIndex uint8) (store.IdentityRecord, error)
@@ -324,6 +341,10 @@ type OpcredsConfig struct {
 	// May be nil — the cluster functions without it; the mDNS record
 	// will be stale until the next AddNOC or daemon restart.
 	OnMDNSReannounce func(ctx context.Context)
+	// OnFabricWithdraw, when non-nil, receives the (compressedID,
+	// nodeID) of an operational mDNS instance that must be withdrawn —
+	// see the field doc on [OperationalCredentials]. May be nil.
+	OnFabricWithdraw func(ctx context.Context, compressedID [8]byte, nodeID uint64)
 }
 
 // NewOperationalCredentials constructs the cluster.
@@ -353,6 +374,7 @@ func NewOperationalCredentials(s StoreFacade, cfg OpcredsConfig) (*OperationalCr
 		onFabricRemoved:   cfg.OnFabricRemoved,
 		onFabricUpdated:   cfg.OnFabricUpdated,
 		onMDNSReannounce:  cfg.OnMDNSReannounce,
+		onFabricWithdraw:  cfg.OnFabricWithdraw,
 		isFailSafeArmed:   cfg.IsFailSafeArmed,
 	}, nil
 }
@@ -464,14 +486,50 @@ var errOpcredsFailsafeRequired error = opcredsFailsafeRequiredErr{}
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*OperationalCredentials)(nil)
-	_ interfaces.FabricScopedReader         = (*OperationalCredentials)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*OperationalCredentials)(nil)
-	_ interfaces.MatterClusterCommandLister = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterServer                 = (*OperationalCredentials)(nil)
+	_ interfaces.FabricScopedReader                  = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterDataVersion            = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterCommandLister          = (*OperationalCredentials)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege = (*OperationalCredentials)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (o *OperationalCredentials) MatterClusterID() uint32 { return opcredsClusterID }
+
+// MinReadPrivilege implements [interfaces.MatterClusterAttributeReadPrivilege].
+// NOCs (0x0000) requires Administer (5) per Matter §11.18.5.7 (access
+// "R F A") — the NOC / ICAC certificate bytes must not be readable by a
+// merely-View subject (nor streamed to one via a wildcard subscribe). Every
+// other OperationalCredentials attribute is View. Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts:24.
+func (*OperationalCredentials) MinReadPrivilege(attrID uint32) uint8 {
+	if attrID == opcredsAttrNOCs {
+		return 5 // Administer
+	}
+	return 1 // View
+}
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// Every OperationalCredentials command requires Administer (5) per
+// Matter §11.18 (access "A" / "F A"). Mirrors matter.js
+// packages/model/src/standard/elements/operational-credentials.element.ts.
+func (o *OperationalCredentials) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case opcredsCmdAttestationRequest,
+		opcredsCmdCertificateChainRequest,
+		opcredsCmdCSRRequest,
+		opcredsCmdAddNOC,
+		opcredsCmdUpdateNOC,
+		opcredsCmdUpdateFabricLabel,
+		opcredsCmdRemoveFabric,
+		opcredsCmdAddTrustedRootCertificate,
+		opcredsCmdSetVidVerificationStatement,
+		opcredsCmdSignVidVerificationRequest:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
 // Returns the current per-cluster monotonic counter bumped after every
@@ -1328,8 +1386,12 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	if verr != nil {
 		return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "trust root invalid: " + verr.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
 	}
-	if _, verr = verifier.VerifyAndExtractPubKey(req.NOCValue, req.ICACValue); verr != nil {
+	nocPub, verr := verifier.VerifyAndExtractPubKey(req.NOCValue, req.ICACValue)
+	if verr != nil {
 		return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "NOC chain verification failed: " + verr.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
+	}
+	if !nocCertifiesPendingKey(nocPub, priv) {
+		return NOCResponse{StatusCode: NOCStatusInvalidPublicKey, DebugText: "NOC public key does not match pending CSR key"}, nil
 	}
 
 	// Decode is safe after chain verification has passed.
@@ -1339,6 +1401,12 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	}
 	if !noc.IsNOC() {
 		return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "not a NOC"}, nil
+	}
+	if o.fabricAlreadyInstalled(ctx, noc.Subject.MatterFabricID, root) {
+		return NOCResponse{
+			StatusCode: NOCStatusFabricConflict,
+			DebugText:  fmt.Sprintf("fabric 0x%016X already commissioned under this root", noc.Subject.MatterFabricID),
+		}, nil
 	}
 
 	rec := store.FabricRecord{
@@ -1481,6 +1549,76 @@ func (o *OperationalCredentials) handleAddNOC(ctx context.Context, fields any) (
 	return NOCResponse{StatusCode: NOCStatusOK, FabricIndex: idx}, nil
 }
 
+// nocCertifiesPendingKey reports whether the NOC's subject public key
+// equals the pending CSR key pair's public key. A certificate for any
+// other key is unusable for CASE signing. Mirrors matter.js
+// Fabric.ts:524-526 (PublicKeyError → InvalidPublicKey) and chip
+// FabricTable.cpp:890 `existingOpKey->Pubkey().Matches(nocPubKey)` →
+// CHIP_ERROR_INVALID_PUBLIC_KEY.
+func nocCertifiesPendingKey(nocPub *ecdsa.PublicKey, priv *ecdsa.PrivateKey) bool {
+	return nocPub != nil && nocPub.Equal(&priv.PublicKey)
+}
+
+// fabricAlreadyInstalled reports whether an installed fabric already
+// uses the (fabricID, root public key) identity pair. A fabric is
+// identified by exactly this pair; AddNOC must reject a duplicate
+// install with FabricConflict BEFORE the store INSERT. Mirrors
+// matter.js FailsafeContext.ts:255-259 — the builder's globalId (hash
+// over fabricId + root public key) checked against the installed set →
+// MatterFabricConflictError. A store list failure reports false: the
+// subsequent AddFabric surfaces the real store error.
+func (o *OperationalCredentials) fabricAlreadyInstalled(ctx context.Context, fabricID uint64, rootPub []byte) bool {
+	fabrics, lerr := o.store.ListFabrics(ctx)
+	if lerr != nil {
+		return false
+	}
+	for i := range fabrics {
+		if fabrics[i].FabricID == fabricID && bytes.Equal(fabrics[i].RootPublicKey, rootPub) {
+			return true
+		}
+	}
+	return false
+}
+
+// validateUpdateNOCCert verifies an UpdateNOC certificate against the
+// fabric's stored trust root and the pending CSR key pair. Returns the
+// decoded NOC on success, or a non-nil rejection NOCResponse.
+//
+//   - Chain verification runs against the fabric's STORED root — there
+//     is no AddTrustedRootCertificate on the update path. Mirrors
+//     matter.js FailsafeContext.ts:217-224 buildUpdatedFabric →
+//     Fabric.ts:508-538 setOperationalCert and chip
+//     FabricTable.cpp:854-882 (fabricIdToValidate from the existing
+//     fabric fed into ValidateIncomingNOCChain).
+//   - The NOC must certify the public key of the pending CSR key pair
+//     — anything else is a certificate for a key we do not hold.
+//     Mirrors matter.js Fabric.ts:524-526 (PublicKeyError →
+//     InvalidPublicKey) and chip FabricTable.cpp:890
+//     `existingOpKey->Pubkey().Matches(nocPubKey)`.
+//   - UpdateNOC SHALL NOT move the fabric to a different FabricID
+//     (Matter §11.18.6.9); chip pins the existing FabricId.
+func validateUpdateNOCCert(fab store.FabricRecord, priv *ecdsa.PrivateKey, nocValue, icacValue []byte) (*mattercert.Certificate, *NOCResponse) {
+	verifier, verr := mattercert.NewVerifier(fab.RootPublicKey, nil)
+	if verr != nil {
+		return nil, &NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "stored trust root invalid: " + verr.Error()}
+	}
+	nocPub, verr := verifier.VerifyAndExtractPubKey(nocValue, icacValue)
+	if verr != nil {
+		return nil, &NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "NOC chain verification failed: " + verr.Error()}
+	}
+	if !nocCertifiesPendingKey(nocPub, priv) {
+		return nil, &NOCResponse{StatusCode: NOCStatusInvalidPublicKey, DebugText: "NOC public key does not match pending CSR key"}
+	}
+	noc, derr := mattercert.Decode(nocValue)
+	if derr != nil {
+		return nil, &NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: derr.Error()}
+	}
+	if noc.Subject.MatterFabricID != fab.FabricID {
+		return nil, &NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: "NOC FabricID does not match fabric"}
+	}
+	return noc, nil
+}
+
 func (o *OperationalCredentials) handleUpdateNOC(ctx context.Context, fields any) (any, error) {
 	req, ok := fields.(UpdateNOCRequest)
 	if !ok {
@@ -1522,6 +1660,17 @@ func (o *OperationalCredentials) handleUpdateNOC(ctx context.Context, fields any
 	if idx == 0 {
 		return NOCResponse{StatusCode: NOCStatusInvalidFabricIndex, DebugText: "no current fabric"}, nil
 	}
+	// Validate the new NOC before persisting anything. UpdateNOC has no
+	// AddTrustedRootCertificate step — the trust anchor is the fabric's
+	// STORED root, so the chain must verify against it.
+	fab, err := o.store.GetFabric(ctx, idx)
+	if err != nil {
+		return NOCResponse{StatusCode: NOCStatusInvalidFabricIndex, DebugText: err.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
+	}
+	noc, rejected := validateUpdateNOCCert(fab, priv, req.NOCValue, req.ICACValue)
+	if rejected != nil {
+		return *rejected, nil
+	}
 	identity := store.IdentityRecord{
 		FabricIndex: idx,
 		NOC:         append([]byte(nil), req.NOCValue...),
@@ -1537,6 +1686,23 @@ func (o *OperationalCredentials) handleUpdateNOC(ctx context.Context, fields any
 	identity.IPK = existing.IPK
 	if err := o.store.UpsertIdentity(ctx, identity); err != nil {
 		return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: err.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
+	}
+	// Track a NodeID change on the fabric row + the operational mDNS
+	// instance. The old <compressedID>-<oldNodeID> record must be
+	// withdrawn explicitly — a republish alone leaves it answering
+	// until TTL. Mirrors matter.js Fabric.ts:543 (nodeId lifted from
+	// the new NOC) + DeviceAdvertiser.ts:65-76 (close the fabric's
+	// advertisement when nodeId changed, then re-advertise).
+	if noc.Subject.MatterNodeID != fab.NodeID {
+		if err := o.store.UpdateFabricNodeID(ctx, idx, noc.Subject.MatterNodeID); err != nil {
+			return NOCResponse{StatusCode: NOCStatusInvalidNOC, DebugText: err.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
+		}
+		o.mu.RLock()
+		withdraw := o.onFabricWithdraw
+		o.mu.RUnlock()
+		if withdraw != nil {
+			withdraw(ctx, fab.CompressedID, fab.NodeID)
+		}
 	}
 	o.mu.Lock()
 	// Mark that a NOC command was invoked so a subsequent
@@ -1637,6 +1803,11 @@ func (o *OperationalCredentials) handleRemoveFabric(ctx context.Context, fields 
 	if !ok {
 		return nil, fmt.Errorf("%w: RemoveFabricRequest expected, got %T", errOpcredsInvalidArg, fields)
 	}
+	// Snapshot the doomed fabric's operational identity BEFORE the row
+	// is gone — the mDNS withdraw below needs (compressedID, nodeID) to
+	// name the stale <compressedID>-<nodeID> instance, and after
+	// RemoveFabric there is nothing left to compute it from.
+	removedFab, gerr := o.store.GetFabric(ctx, req.FabricIndex)
 	if err := o.store.RemoveFabric(ctx, req.FabricIndex); err != nil {
 		return NOCResponse{StatusCode: NOCStatusInvalidFabricIndex, DebugText: err.Error()}, nil //nolint:nilerr // cluster-command failure encoded in NOCResponse.StatusCode, not via the IM-error channel
 	}
@@ -1661,6 +1832,7 @@ func (o *OperationalCredentials) handleRemoveFabric(ctx context.Context, fields 
 	}
 	hook := o.onFabricRemoved
 	mdnsHook := o.onMDNSReannounce
+	withdrawHook := o.onFabricWithdraw
 	o.mu.Unlock()
 
 	// Bump DataVersion after successful RemoveFabric — fabric list changed.
@@ -1679,10 +1851,18 @@ func (o *OperationalCredentials) handleRemoveFabric(ctx context.Context, fields 
 		// + store.RemoveResumptionsByFabric.
 		hook(ctx, req.FabricIndex)
 	}
+	if withdrawHook != nil && gerr == nil {
+		// Withdraw the removed fabric's operational _matter._tcp
+		// instance. A republish alone is not enough — the advertiser
+		// re-announces the records it still holds, so the stale
+		// <compressedID>-<nodeID> record would keep answering until
+		// its TTL and commissioners resolve an identity that no longer
+		// exists. Mirrors matter.js DeviceAdvertiser.ts:84-86
+		// (fabrics.events.deleting → Advertisement.cancelAll).
+		withdrawHook(ctx, removedFab.CompressedID, removedFab.NodeID)
+	}
 	if mdnsHook != nil {
-		// Withdraw the stale per-fabric _matter._tcp record and republish
-		// the remaining fabric set so commissioners do not resolve a
-		// CompressedFabricID that no longer exists. Mirrors matter.js
+		// Republish the remaining fabric set. Mirrors matter.js
 		// Fabric.remove() triggering MdnsServer.reannounceInstance.
 		mdnsHook(ctx)
 	}

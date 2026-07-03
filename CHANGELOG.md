@@ -6,8 +6,287 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0]
+
+### Security
+
+- **Matter bridge: UpdateNOC validates the new certificate before persisting
+  it.** The handler previously stored whatever NOC bytes the commissioner sent
+  — no chain verification against the fabric's trust root, no check that the
+  certificate covers the pending CSR key, no FabricID pinning. A defective (or
+  malicious) UpdateNOC could replace a fabric's identity with an unusable or
+  foreign certificate. The handler now mirrors matter.js/chip: chain
+  verification against the stored root, `InvalidPublicKey` when the NOC does
+  not certify the pending CSR key, `InvalidNOC` on a FabricID change. A NodeID
+  change now propagates to the fabric record, the CASE identity, and mDNS (old
+  instance withdrawn, new instance announced), and the fabric's CASE
+  resumption records are invalidated as the spec requires.
+- **Matter bridge: AddNOC rejects duplicate fabrics and wrong-key NOCs.**
+  Installing the same `(FabricID, root public key)` pair twice now returns
+  `FabricConflict` before touching the store, and a NOC whose subject key does
+  not match the pending CSR key returns `InvalidPublicKey` — both previously
+  unreachable status codes that matter.js/chip emit.
+- **Matter bridge: removing a fabric withdraws its operational mDNS record.**
+  RemoveFabric only triggered a republish, which cannot retire a record the
+  advertiser still holds — the removed fabric's `_matter._tcp` instance kept
+  answering and commissioners resolved a dead identity. The instance is now
+  explicitly withdrawn (and the same path retires the old-NodeID instance
+  after an UpdateNOC).
+- **Matter bridge: PASE sessions are cleared on CommissioningComplete and
+  fail-safe expiry.** Matter §11.10.6.6 step 4 requires the server to drop any
+  still-established PASE session once commissioning completes; the expiry path
+  does the same, so a failed commissioner's channel no longer outlives its
+  fail-safe.
+- **Matter bridge: CASE session resumption (Sigma2_Resume) now establishes a
+  live, correctly-scoped session.** The resume fast path derived fresh keys but
+  never adopted the peer's identity: the resumed session registered with
+  peer-node-id 0 (every inbound decrypt failed the AES-CCM nonce check),
+  peer-session-id set to the bridge's own id (every reply was dropped by the
+  controller), no fabric scoping, and no CASE Authenticated Tags — and the
+  fresh resumption id was never persisted, so the controller's next resume
+  attempt referenced a stale id. A controller reconnect that offered
+  resumption (Apple Home after idle timeout or reboot) hit a dead session
+  until it gave up and re-ran the full handshake. The resume path now mirrors
+  matter.js `CaseServer.ts` — session identity (fabric, peer node id, peer
+  session id, CATs) comes from the stored resumption record, the responder
+  identity is resolved by the record's fabric, and the rotated resumption id
+  is written back. Resumption records also persist the peer's CATs now;
+  previously every persist wiped them, silently stripping CAT-scoped ACL
+  privilege from resumed sessions.
+
+- **Matter bridge: AccessControl.ACL rejects out-of-range Privilege / AuthMode
+  values.** An ACL write with an invalid `Privilege` (outside View..Administer)
+  or `AuthMode` (outside PASE/CASE/Group) enum value was persisted unchecked; it
+  is now rejected with `ConstraintError`, matching matter.js schema validation.
+- **Matter bridge: OperationalCredentials.NOCs requires Administer to read.**
+  The NOC / ICAC certificate bytes were readable — and streamable via a
+  wildcard subscribe — at View privilege. Reading them now requires Administer,
+  matching matter.js (`operational-credentials.element.ts` access "R F A").
+- **Matter bridge: PASE pairing failures are now capped.** An open
+  commissioning window accepted unlimited passcode guesses for its whole
+  duration (up to 15 minutes commissioned, or 48 hours for an uncommissioned
+  bridge), letting a LAN attacker brute-force the setup passcode. The bridge
+  now counts pairing failures and revokes the window after 20, mirroring
+  matter.js `PaseServer`'s `PASE_COMMISSIONING_MAX_ERRORS`; the counter resets
+  when a new window opens.
+- **Matter bridge: writes and command invokes are now gated by the
+  per-element ACL privilege, not a flat Operate.** Previously every write
+  and command was authorised at Operate, so a subject holding an
+  Operate-privilege CASE entry (as controllers issue to household members)
+  could write `AccessControl.ACL` to grant itself Administer, invoke
+  `AdministratorCommissioning.OpenCommissioningWindow` to admit a rogue
+  administrator, or `OperationalCredentials.RemoveFabric` to evict another
+  ecosystem. The IM layer now looks up the required privilege per attribute
+  / command (AccessControl.ACL → Administer, RemoveFabric → Administer,
+  BasicInformation.NodeLabel → Manage, …), mirroring matter.js. Commissioning
+  is unaffected (PASE sessions bypass ACL as before).
+- **Matter bridge: subscriptions now enforce ACL on every report.** The
+  subscription read paths (initial and ongoing, attributes and events)
+  previously called the dispatcher directly, bypassing the access check the
+  one-shot Read path applies — so a View-only or ACE-less subject could
+  subscribe wildcard and stream fabric-sensitive data (`AccessControl.ACL`,
+  `OperationalCredentials.NOCs`). Every subscription result is now authorised
+  against the subscribing subject and fabric-projected, matching matter.js.
+
 ### Fixed
 
+- **Matter bridge: only one PASE commissioning handshake runs at a time.**
+  A second commissioner's PBKDFParamRequest arriving mid-handshake silently
+  replaced the first one's in-flight verifier state; the bridge now rejects the
+  overlapping request (self-expiring after 60 s so a crashed commissioner
+  cannot lock the window), matching matter.js's single-active-PASE rule.
+- **Matter bridge: PASE honours and advertises MRP session parameters.** The
+  commissioner's InitiatorMRPParams (PBKDFParamRequest tag 5) is now applied to
+  the PASE session's retransmit timing, and the bridge advertises its own
+  ResponderMRPParams in the response — previously both were ignored, so
+  retransmissions used spec defaults regardless of what either side asked for.
+- **Matter bridge: MRP message counters resist nonce reuse.** New session
+  counters seed in the low 28 bits (so a fresh counter never starts near
+  exhaustion) and secure-session counters refuse to roll over past
+  0xFFFFFFFF (a wrapped counter would reuse an AES-CCM nonce under the live
+  key); the session is retired instead, matching matter.js. Reliable-send and
+  subscription bookkeeping are now keyed per session, closing a
+  cross-session counter-collision.
+- **Matter bridge: NodeLabel and Location survive a restart.** A commissioner
+  write to either attribute (both non-volatile per spec) is now persisted and
+  restored at boot, instead of reverting to the configured default.
+- **Matter bridge: event numbers stay monotonic across restarts.** The
+  EventNumber counter was in-memory and reset to 1 on every boot, so
+  controllers filtering on the last number they saw silently dropped every
+  fresh event; it now persists a counter ceiling and resumes past it.
+- **Matter bridge: device-type ACL targets are honoured.** An AccessControl
+  entry whose target names only a device type previously always denied; it now
+  matches endpoints advertising that device type, mirroring matter.js/chip.
+- **Matter bridge: the periodic mDNS re-announce no longer churns caches.** The
+  30-minute operational re-announce re-registered every record, emitting TTL-0
+  goodbye packets that made Apple flush and re-learn the bridge each interval;
+  unchanged records are now left in place and only real changes re-register.
+- **Matter bridge: bridged endpoints report a stable DataVersion.** Bridged
+  cluster servers are rebuilt on every dispatch, and each rebuild installed a
+  fresh random DataVersion — the same cluster reported a different version on
+  every read, so controllers' DataVersionFilters never matched and Apple
+  re-transferred all endpoints on every re-subscribe. The version now lives on
+  the persistent endpoint keyed by cluster, is stable across reads, and is
+  bumped on real state changes (value pushes from the CCU, reachability
+  flips, successful writes), matching matter.js's once-per-lifetime /
+  increment-per-change semantics.
+- **Matter bridge: GroupKeyManagement enforces the per-fabric key-set
+  budget.** KeySetWrite accepted unlimited new key sets; adding one beyond
+  MaxGroupKeysPerFabric now returns ResourceExhausted (updates of an existing
+  key set stay allowed), matching matter.js.
+- **Matter bridge: duplicates are acknowledged immediately.** The standalone
+  ACK for a retransmitted (duplicate) reliable message was queued behind the
+  200 ms piggyback grace window, so a peer that had already waited out its
+  retransmission timeout kept retransmitting; the ACK now goes out
+  immediately, matching matter.js.
+- **Matter bridge: a Subscribe matching nothing is rejected.** A Subscribe
+  request naming no attribute/event paths, or whose (wildcard) paths matched
+  zero attributes and events, was accepted and registered as a dead
+  subscription burning engine ticks; both cases now return InvalidAction
+  before registration, matching matter.js. Re-subscribes whose reports are
+  fully suppressed by DataVersionFilters still establish.
+- **Matter bridge: outbound retransmissions honour the peer's MRP session
+  parameters.** The retransmit schedule used a fixed 300 ms base and a bare
+  1.6× growth; the intervals a controller advertises during PASE/CASE session
+  establishment were parsed and thrown away. The initiator's Sigma1 session
+  parameters are now stored on the operational session, the base interval is
+  selected per transmission from the peer's active/idle interval (active when
+  the peer sent within its active threshold; spec defaults 300 ms / 500 ms /
+  4 s otherwise), and the full spec backoff formula (margin, exponential
+  growth past the threshold, jitter) applies — matching matter.js `MRP` and
+  chip `GetMRPBaseTimeout`. Retransmits to a sleepy or slow controller no
+  longer fire ~40 % too early, and active peers get snappier recovery.
+- **Matter bridge: chunked WriteRequests are validated.** The
+  MoreChunkedMessages flag was ignored entirely; a chunked write combined
+  with SuppressResponse, or inside a timed interaction, is now rejected with
+  InvalidAction per spec, and each valid chunk is answered with its own
+  WriteResponse (matching matter.js, which responds per chunk).
+- **Matter bridge: MRP ack bookkeeping is session-scoped.** ACK obligations,
+  standalone-ack reply routes and the per-chunk StatusResponse rendezvous were
+  keyed on the bare 16-bit exchange ID, which is only unique per session — two
+  concurrent controllers (or an old and a new CASE session of one controller)
+  sharing an exchange ID could discharge each other's pending ACKs, hijack the
+  synthesised standalone-ack route, or release the wrong chunk-streaming
+  waiter. All three maps now key on (session, exchange), matching matter.js's
+  session-scoped exchange resolution.
+- **Matter bridge: WindowCovering reports a real TargetPosition.** The
+  TargetPositionLift/TiltPercent100ths attributes always mirrored the current
+  position, so controllers never saw where a moving cover was heading (Apple
+  Home shows "Opening…"/"Closing…" from the target-vs-current delta). The
+  attributes now carry the commanded destination — set by UpOrOpen /
+  DownOrClose / GoToLift- / GoToTiltPercentage, snapped back to the current
+  position by StopMotion — matching matter.js `WindowCoveringServer` across
+  the cover, blind (lift + tilt) and garage projections.
+- **Matter bridge: OnOff implements the OnWithTimedOff engine and writable
+  LT attributes.** OnWithTimedOff previously collapsed to a plain On — the
+  timed-off countdown, the AcceptOnlyWhenOn gate and the delayed-off guard
+  period were all dropped, and the OnTime / OffWaitTime / StartUpOnOff
+  attributes were read-only constants. Lights now run the full matter.js
+  `OnOffServer` state machine: OnTime counts down in 100 ms ticks and turns
+  the device off at expiry, an Off during a timed-on phase enters the
+  delayed-off guard, AcceptOnlyWhenOn is honoured while off, and all three
+  LT attributes are writable (StartUpOnOff requiring Manage privilege;
+  parking a countdown at 0/0xFFFF stops it).
+- **Matter bridge: DoorLock emits the mandatory LockOperation event.** A
+  successful remote LockDoor / UnlockDoor / UnboltDoor produced no event, so
+  controllers tracking lock activity (Apple Home notifications, event
+  subscribers) saw state flips without the spec-mandated operation record.
+  The bridge now emits LockOperation (priority critical) with the operation
+  type (UnboltDoor reports Unlatch), OperationSource=Remote and the invoking
+  fabric + node, matching matter.js `DoorLockServer`. The DoorLock EventList
+  now advertises the three conformance-mandatory events.
+- **Matter bridge: LevelControl honours ExecuteIfOff and the MinLevel/MaxLevel
+  bounds.** A plain `MoveToLevel` / `Step` (the non-WithOnOff variants) sent to
+  a light that is off executed anyway and turned it on; per Matter they must be
+  a silent no-op unless the command's options set ExecuteIfOff. The requested
+  level is now also cropped to the spec range [1, 254] (a plain `Step` down can
+  no longer switch the light off — it floors at MinLevel), the WithOnOff
+  variants couple a MinLevel target to Off, and `Move` with a zero rate returns
+  `InvalidCommand`, all matching matter.js `LevelControlServer`.
+- **Matter bridge: device reachability updates reach attribute-subscribers.**
+  When a bridged HomeMatic device went (un)reachable the bridge fired the
+  `ReachableChanged` event but did not mark the `Reachable` attribute changed,
+  so a controller tracking the attribute (Google Home) showed stale
+  reachability until it re-subscribed. The attribute is now marked dirty too.
+- **Matter bridge: vendor-specific protocol datagrams are rejected, not
+  misrouted.** A datagram carrying a vendor id whose low protocol id collided
+  with Interaction Model / Secure Channel was fed into those handlers; it is now
+  rejected as an unknown protocol, matching matter.js's full 32-bit protocol
+  dispatch.
+- **Matter bridge: empty subscription keepalives set SuppressResponse.** A
+  no-op max-interval heartbeat no longer asks the controller for an IM
+  StatusResponse, matching matter.js.
+- **Matter bridge: GroupKeyManagement.KeySetRead / KeySetRemove return
+  NotFound.** Reading or removing a non-existent group key set returned a
+  generic failure (KeySetRemove even succeeded silently); both now return the
+  spec `NotFound` status, matching matter.js.
+- **Matter bridge: colour lights advertise and accept their mandatory
+  ColorControl commands.** The mounted CT / HS / RGBW colour servers advertised
+  an empty `AcceptedCommandList` and rejected the mandatory Move / Step /
+  StopMoveStep commands, so a conformance controller (and Alexa's hue-only
+  changes on an RGBW light) failed. Each server now lists its
+  feature-appropriate command set and accepts the continuous-rate commands as
+  no-ops (HM lights have no rate sweep), matching matter.js.
+- **Matter bridge: colour-temperature lights advertise the mandatory
+  `StartUpColorTemperatureMireds` + `CoupleColorTempToLevelMinMireds`
+  attributes.** They were missing from the ColorControl read surface, so a
+  conformance/controller read of them returned UNSUPPORTED_ATTRIBUTE. Both are
+  now served (CoupleColorTempToLevelMinMireds = PhysicalMinMireds;
+  StartUpColorTemperatureMireds = null), matching matter.js.
+- **Matter bridge: read-event timestamps are correct.** Out-of-band event reads
+  stamped the EpochTimestamp in microseconds instead of the spec-mandated POSIX
+  milliseconds, so a read event's time read ~1000× off (and inconsistent with
+  the subscribe path, which was already correct). Both paths now emit
+  milliseconds.
+- **Matter bridge: GeneralDiagnostics.TestEventTrigger is now enumerated.** The
+  mandatory command was missing from `AcceptedCommandList` and returned a
+  generic failure; it is now listed and returns `ConstraintError` (the bridge
+  configures no test-event enable key), matching matter.js.
+- **Matter bridge: commissionable mDNS Session Idle Interval corrected to
+  500 ms** (was 5000 ms, from a non-existent matter.js default). A too-large SII
+  made commissioners space PASE retransmits ~10× too slowly on a lossy link.
+- **Matter bridge: multi-admin "add to another ecosystem" now works.** An
+  Enhanced Commissioning Window opened by a second controller
+  (`AdministratorCommissioning.OpenCommissioningWindow`) supplies a PAKE
+  verifier derived from a passcode that controller chose. The bridge validated
+  the verifier and then discarded it, so PASE ran against the bridge's own
+  passcode and every "add to Google/Alexa/…" attempt failed at the Pake2
+  confirmation. The bridge now installs a PASE acceptor built from the supplied
+  verifier for the window lifetime (restoring the configured acceptor on close)
+  and advertises the Enhanced window over mDNS with `CM=2` + its discriminator
+  so the second controller can discover it — mirroring matter.js.
+
+- **Matter bridge: ArmFailSafe ownership is now enforced.** A commissioning
+  fail-safe armed by one fabric could previously be re-armed or disarmed by a
+  different fabric, and a CASE session could arm the fail-safe during another
+  admin's open commissioning window — letting one controller roll back another
+  controller's in-progress commissioning. The handler now rejects a re-arm or
+  disarm from any fabric other than the one that armed it, and rejects a CASE
+  arm while a window is open, both with `BusyWithOtherAdmin`, mirroring
+  matter.js. PASE commissioning is unchanged.
+- **Matter bridge: cancelling a commissioning window no longer Busy-locks the
+  next one.** `RevokeCommissioning` (and the internal revoke path) now expires
+  the fail-safe as Matter §11.19.7.3 step 1 requires, so cancelling a pairing
+  in a controller and retrying immediately no longer fails with "busy" for the
+  remainder of the original window (up to 15 minutes).
+
+- **Matter bridge: blinds, colour-temperature, dimmer-step and thermostat
+  setpoint commands now actually execute.** The bridge's command decoder
+  delivers fields as a context-tag-keyed map, but the WindowCovering
+  `GoToLift`/`GoToTiltPercentage`, LevelControl `Step`, ColorControl
+  `MoveToColorTemperature` and Thermostat `SetpointRaiseLower` handlers only
+  accepted a differently-shaped payload, so every real Apple Home / Google
+  Home / chip-tool invocation of those commands was rejected — or, for the
+  thermostat, silently ignored. The handlers now accept the real wire shape;
+  `GoTo*Percentage` values are additionally clamped to their 100.00 % maximum.
+- **Matter bridge: IM responses and CASE/PASE handshake replies are now
+  MRP-reliable.** `WriteResponse`, `InvokeResponse`, the `TimedRequest`
+  `StatusResponse`, and the PASE/CASE continuation replies (Pake2, Sigma2)
+  were shipped best-effort, so a single dropped UDP datagram surfaced as
+  "Not Responding" on a command or aborted commissioning outright. They are
+  now retransmitted until the controller acknowledges them, matching
+  matter.js. Unsecured (PASE) retransmits are also now detected as duplicates
+  and acknowledged without re-running the handshake handler.
 - **MQTT: detect half-open broker connections via a PINGRESP watchdog.**
   The keep-alive loop sent `PINGREQ` but never checked for the matching
   `PINGRESP`, and the read loop blocks in `ReadFrame` without a deadline.

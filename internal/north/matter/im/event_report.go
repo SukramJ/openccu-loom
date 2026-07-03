@@ -134,7 +134,7 @@ type EventReport struct {
 	Path      ConcreteEventPath
 	Number    uint64 // Monotonic event number per cluster
 	Priority  EventPriority
-	Timestamp uint64 // System ticks since boot (millis)
+	Timestamp uint64 // EpochTimestamp: POSIX milliseconds (encoded at tag 3)
 	Data      AttributeValue
 	Status    StatusIB
 	IsStatus  bool

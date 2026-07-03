@@ -35,6 +35,14 @@ type WriteRequest struct {
 	SuppressResponse bool
 	TimedRequest     bool
 	Writes           []AttributeWrite
+	// MoreChunkedMessages signals that further WriteRequest chunks
+	// follow on the same exchange (Matter §10.6.5 tag 3). Each chunk
+	// is answered with its own WriteResponse — matter.js
+	// InteractionServer.ts:521-532 sends a per-chunk WriteResponse
+	// and then reads the next chunk. The flag is invalid in
+	// combination with SuppressResponse or a timed interaction
+	// (InteractionServer.ts:397/:408 → InvalidAction).
+	MoreChunkedMessages bool
 }
 
 // AttributeWrite is one entry in WriteRequests — a (path, value)
@@ -90,6 +98,8 @@ func UnmarshalWriteRequestTLV(dec *tlv.Decoder, valueReader AttributeValueReader
 			req.SuppressResponse = el.Bool
 		case tagWriteReqTimedRequest:
 			req.TimedRequest = el.Bool
+		case tagWriteReqMoreChunked:
+			req.MoreChunkedMessages = el.Bool
 		case tagWriteReqWriteRequests:
 			if !el.IsContainer || el.Type != tlv.TypeArray {
 				return WriteRequest{}, fmt.Errorf("%w: WriteRequests not array", ErrInvalidWriteRequest)
@@ -228,15 +238,31 @@ func HandleWriteRequest(ctx context.Context, d Dispatcher, req WriteRequest) Wri
 	_, fabricIndex := FabricFilterFromContext(ctx)
 	subjectNodeID, subjectCATs := SubjectFromContext(ctx)
 	aclChecker, hasACL := d.(ACLChecker)
+	privProvider, hasPrivProvider := d.(AttributeWritePrivilegeProvider)
 	dvReader, hasDV := d.(DataVersionReader)
+
+	// writePrivilege returns the minimum privilege needed to write the
+	// given (endpoint, cluster, attribute). Falls back to Operate (3) —
+	// the Matter §9.10.4.4 default write privilege — when no
+	// AttributeWritePrivilegeProvider is wired, the path is not concrete,
+	// or the attribute has no elevated requirement.
+	writePrivilege := func(w AttributeWrite) uint8 {
+		const privilegeOperate uint8 = 3
+		if hasPrivProvider && w.Path.HasAttribute {
+			return privProvider.MinWritePrivilege(w.Path.Endpoint, w.Path.Cluster, w.Path.Attribute)
+		}
+		return privilegeOperate
+	}
 
 	var wr WriteResponse
 	for _, w := range req.Writes {
 		// ACL gate. PASE (fabricIndex==0) skips ACL: commissioning writes
-		// arrive before the fabric's ACL entry exists.
+		// arrive before the fabric's ACL entry exists. The required
+		// privilege is per-attribute (AccessControl.ACL → Administer,
+		// BasicInformation.NodeLabel → Manage) rather than a flat Operate,
+		// so an Operate-only subject cannot escalate via a privileged write.
 		if hasACL && fabricIndex != 0 {
-			const privilegeOperate uint8 = 3
-			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, w.Path.Endpoint, w.Path.Cluster, privilegeOperate); !status.IsSuccess() {
+			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, w.Path.Endpoint, w.Path.Cluster, writePrivilege(w)); !status.IsSuccess() {
 				wr.Responses = append(wr.Responses, AttributeStatus{
 					Path:   w.Path,
 					Status: StatusIB{Status: status},

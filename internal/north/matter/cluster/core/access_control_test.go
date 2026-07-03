@@ -210,6 +210,34 @@ func TestAccessControl_ACLWriteValidation(t *testing.T) {
 			errContains: []string{"constraint error", "at least one of"},
 		},
 		{
+			name:        "privilege_out_of_range",
+			fabricIndex: 1,
+			entries: []core.AccessControlEntryStruct{
+				{
+					Privilege:   7, // invalid: valid range is 1..5 (View..Administer)
+					AuthMode:    2, // CASE
+					Subjects:    []uint64{1},
+					FabricIndex: 1,
+				},
+			},
+			wantErr:     true,
+			errContains: []string{"constraint error", "Privilege=7"},
+		},
+		{
+			name:        "authmode_out_of_range",
+			fabricIndex: 1,
+			entries: []core.AccessControlEntryStruct{
+				{
+					Privilege:   5, // Administer
+					AuthMode:    9, // invalid: valid range is 1..3 (PASE/CASE/Group)
+					Subjects:    []uint64{1},
+					FabricIndex: 1,
+				},
+			},
+			wantErr:     true,
+			errContains: []string{"constraint error", "AuthMode=9"},
+		},
+		{
 			name:        "valid_minimal",
 			fabricIndex: 1,
 			entries: []core.AccessControlEntryStruct{

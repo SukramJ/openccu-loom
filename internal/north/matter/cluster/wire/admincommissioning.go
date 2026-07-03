@@ -216,6 +216,20 @@ func (a *AdministratorCommissioning) MatterClusterID() uint32 {
 	return matterClusterAdminCommissioning
 }
 
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// OpenCommissioningWindow, OpenBasicCommissioningWindow, and
+// RevokeCommissioning all require Administer (5) per Matter §11.19
+// (access "A T"). Mirrors matter.js
+// packages/model/src/standard/elements/administrator-commissioning.element.ts:31,43,49.
+func (a *AdministratorCommissioning) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case matterCmdAdmCommOpenWindow, matterCmdAdmCommOpenBasicWindow, matterCmdAdmCommRevoke:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
+
 // MatterRead resolves attribute reads.
 func (a *AdministratorCommissioning) MatterRead(attrID uint32) (any, bool) {
 	a.mu.RLock()
@@ -536,7 +550,8 @@ func (a *AdministratorCommissioning) MatterGeneratedCommands() []uint32 {
 // bridge's cluster-server contract, the attribute-lister capability,
 // and the command-lister capability.
 var (
-	_ interfaces.MatterClusterServer          = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterAttributeLister = (*AdministratorCommissioning)(nil)
-	_ interfaces.MatterClusterCommandLister   = (*AdministratorCommissioning)(nil)
+	_ interfaces.MatterClusterServer                 = (*AdministratorCommissioning)(nil)
+	_ interfaces.MatterClusterAttributeLister        = (*AdministratorCommissioning)(nil)
+	_ interfaces.MatterClusterCommandLister          = (*AdministratorCommissioning)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege = (*AdministratorCommissioning)(nil)
 )

@@ -11,9 +11,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/cluster/wire"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
@@ -35,6 +37,37 @@ const (
 
 // LockType enum: 0 = DeadBolt.
 const lockTypeDeadBolt uint8 = 0
+
+// LockOperationTypeEnum values per Matter §5.2.6.14. Mirrors matter.js
+// door-lock-cluster.element.ts:704-709 (Lock 0x0, Unlock 0x1,
+// Unlatch 0x4).
+const (
+	lockOperationTypeLock    uint8 = 0
+	lockOperationTypeUnlock  uint8 = 1
+	lockOperationTypeUnlatch uint8 = 4
+)
+
+// operationSourceRemote is the OperationSourceEnum value for a
+// controller-driven operation per Matter §5.2.6.15. Mirrors matter.js
+// door-lock-cluster.element.ts:739 (Remote 0x7, the only
+// conformance-M source).
+const operationSourceRemote uint8 = 7
+
+// LockOperationEvent is the cluster-native payload for the DoorLock
+// LockOperation event (id 0x02, priority critical) per Matter §5.2.10.3.
+// Field set mirrors matter.js door-lock-cluster.element.ts:181-195;
+// UserIndex, FabricIndex and SourceNode are nullable (nil pointer →
+// TLV null). The Credentials field ([USR]-gated) is omitted entirely —
+// this projection advertises no USR feature.
+//
+//nolint:revive // LockOperationEvent mirrors the Matter event name verbatim.
+type LockOperationEvent struct {
+	LockOperationType uint8
+	OperationSource   uint8
+	UserIndex         *uint16
+	FabricIndex       *uint8
+	SourceNode        *uint64
+}
 
 var (
 	errUnknownAttribute = errors.New("doorlock: unknown attribute")
@@ -82,6 +115,10 @@ type DoorLockServer struct {
 	embedded cluster.DataVersionTracker // used when cfg.DataVersion is nil
 	ext      *cluster.DataVersionTracker
 	src      StateSource
+
+	mu       sync.Mutex
+	emitter  interfaces.MatterEventEmitter
+	endpoint uint16
 }
 
 // Compile-time assertions.
@@ -90,6 +127,8 @@ var (
 	_ interfaces.MatterClusterDataVersion     = (*DoorLockServer)(nil)
 	_ interfaces.MatterClusterAttributeLister = (*DoorLockServer)(nil)
 	_ interfaces.MatterClusterCommandLister   = (*DoorLockServer)(nil)
+	_ interfaces.MatterClusterEventLister     = (*DoorLockServer)(nil)
+	_ interfaces.MatterEventReceiver          = (*DoorLockServer)(nil)
 )
 
 // NewDoorLockServer constructs a DoorLockServer with LockType=DeadBolt.
@@ -156,7 +195,8 @@ func (*DoorLockServer) MatterWrite(_ context.Context, attrID uint32, _ any, _ hm
 }
 
 // MatterInvoke implements [interfaces.MatterClusterServer]. Dispatches
-// LockDoor / UnlockDoor / UnboltDoor to the underlying source.
+// LockDoor / UnlockDoor / UnboltDoor to the underlying source and fires
+// the LockOperation event on success.
 func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
 	switch cmdID {
 	case wire.DoorLockCmdLockDoor, wire.DoorLockCmdUnlockDoor, wire.DoorLockCmdUnboltDoor:
@@ -164,10 +204,74 @@ func (s *DoorLockServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, 
 			return nil, err
 		}
 		s.tracker().Bump()
+		s.emitLockOperation(ctx, cmdID)
 		return nil, nil
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errUnknownCommand, cmdID)
 	}
+}
+
+// emitLockOperation fires the Matter §5.2.10.3 LockOperation event
+// after a successful remote lock/unlock/unbolt. Mirrors matter.js
+// DoorLockServer.ts:119-143 (each command handler ends in
+// #emitLockOperation) and :911-939 (payload assembly:
+// OperationSource=Remote, UserIndex/Credentials null without PIN
+// credentials, FabricIndex + SourceNode from the invoking session).
+// A PASE session carries fabric index 0 and no subject node — both
+// encode as TLV null, matching matter.js's null fallbacks. No-op until
+// the bridge wires an emitter via [SetMatterEventEmitter].
+func (s *DoorLockServer) emitLockOperation(ctx context.Context, cmdID uint32) {
+	s.mu.Lock()
+	emitter := s.emitter
+	endpoint := s.endpoint
+	s.mu.Unlock()
+	if emitter == nil {
+		return
+	}
+	var opType uint8
+	switch cmdID {
+	case wire.DoorLockCmdLockDoor:
+		opType = lockOperationTypeLock
+	case wire.DoorLockCmdUnlockDoor:
+		opType = lockOperationTypeUnlock
+	case wire.DoorLockCmdUnboltDoor:
+		// UnboltDoor reports Unlatch, not Unlock — matter.js
+		// DoorLockServer.ts:140-142.
+		opType = lockOperationTypeUnlatch
+	}
+	ev := LockOperationEvent{
+		LockOperationType: opType,
+		OperationSource:   operationSourceRemote,
+	}
+	if _, fabricIndex := im.FabricFilterFromContext(ctx); fabricIndex != 0 {
+		ev.FabricIndex = &fabricIndex
+	}
+	if nodeID, _ := im.SubjectFromContext(ctx); nodeID != 0 {
+		ev.SourceNode = &nodeID
+	}
+	emitter.MatterEmitEvent(endpoint, wire.DoorLockClusterID,
+		wire.DoorLockEventLockOperation, ev,
+		interfaces.MatterEventPriorityCritical)
+}
+
+// SetMatterEventEmitter implements [interfaces.MatterEventReceiver].
+// Called by the bridge during topology assembly so [MatterInvoke] can
+// fire the LockOperation event without holding a bridge reference.
+// Idempotent — re-wiring during topology rebuild replaces the emitter.
+func (s *DoorLockServer) SetMatterEventEmitter(emitter interfaces.MatterEventEmitter) {
+	s.mu.Lock()
+	s.emitter = emitter
+	s.mu.Unlock()
+}
+
+// SetEndpoint stamps the endpoint id this DoorLock server is mounted
+// on. Matter events carry the (endpoint, cluster, event) triple; the
+// endpoint is captured at assembly time because the server is built by
+// the model layer before the bridge assigns endpoint ids.
+func (s *DoorLockServer) SetEndpoint(endpoint uint16) {
+	s.mu.Lock()
+	s.endpoint = endpoint
+	s.mu.Unlock()
 }
 
 // MatterReportable returns the attribute IDs that change on wire events.
@@ -199,3 +303,19 @@ func (*DoorLockServer) MatterAcceptedCommands() []uint32 {
 // DoorLock commands produce status-only InvokeResponses; no generated command
 // IDs are advertised.
 func (*DoorLockServer) MatterGeneratedCommands() []uint32 { return nil }
+
+// MatterEvents implements [interfaces.MatterClusterEventLister]. The
+// three conformance-M DoorLock events are advertised (matter.js
+// door-lock-cluster.element.ts:172/181/198); DoorStateChange (DPS) and
+// LockUserChange (USR) are feature-gated and absent. The server emits
+// LockOperation on successful remote operations; DoorLockAlarm and
+// LockOperationError have no emission path without PIN-credential
+// support, matching matter.js where they fire only from the wrong-code
+// path (DoorLockServer.ts:889 / :941).
+func (*DoorLockServer) MatterEvents() []uint32 {
+	return []uint32{
+		wire.DoorLockEventDoorLockAlarm,
+		wire.DoorLockEventLockOperation,
+		wire.DoorLockEventLockOperationError,
+	}
+}

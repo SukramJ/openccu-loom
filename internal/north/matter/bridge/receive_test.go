@@ -206,6 +206,64 @@ func TestDispatch_UnknownProtocolID(t *testing.T) {
 	}
 }
 
+// TestDispatch_VendorQualifiedProtocolCollisionRejected verifies that a
+// datagram whose protocol header carries a non-zero vendor id is rejected
+// with ErrUnknownProtocol even when its low 16-bit ProtocolID collides
+// with SecureChannel (0x0000) — a vendor-specific protocol must never
+// route into the Common-vendor PASE/IM handlers just because the low bits
+// match. Mirrors matter.js MessageCodec.ts:377, which keys dispatch on
+// the full 32-bit (vendorId*0x10000 + protocolId) identifier. Also
+// confirms the PASE handler that a naive ProtocolID-only switch would
+// have invoked never sees the forged frame.
+func TestDispatch_VendorQualifiedProtocolCollisionRejected(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	h := &recordingPaseHandler{}
+	b.AttachPaseHandler(h)
+
+	hdr := buildHeader(0, 10)
+	proto := message.ProtocolHeader{
+		HasVendorID: true,
+		VendorID:    0xFFF1,
+		ProtocolID:  mrp.SecureChannelProtocolID, // 0x0000 — collides with SecureChannel
+		Opcode:      mrp.SCOpcodePake1,
+		ExchangeID:  1,
+	}.Marshal()
+	payload := []byte{0x01}
+	buf := buildDatagram(hdr, proto, payload)
+
+	err := b.dispatch(context.Background(), buf, nil)
+	if !errors.Is(err, ErrUnknownProtocol) {
+		t.Errorf("want ErrUnknownProtocol, got %v", err)
+	}
+	if got := h.pake1Calls.Load(); got != 0 {
+		t.Errorf("pake1Calls = %d, want 0 — vendor-qualified protocol must not reach the PASE handler", got)
+	}
+}
+
+// TestDispatch_VendorIDZeroStillRoutesNormally verifies the boundary of
+// the vendor-qualified guard: HasVendorID=true with VendorID=0x0000 (the
+// Common vendor id) is NOT treated as vendor-specific — [Bridge.dispatch]
+// only rejects a non-zero vendor id. A datagram shaped this way must
+// still route into the IM handler as usual.
+func TestDispatch_VendorIDZeroStillRoutesNormally(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	hdr := buildHeader(0, 11)
+	proto := message.ProtocolHeader{
+		HasVendorID: true,
+		VendorID:    0,
+		ProtocolID:  im.InteractionModelProtocolID,
+		Opcode:      im.OpcodeReadRequest,
+		ExchangeID:  1,
+	}.Marshal()
+	payload := buildIMReadRequestPayload(t)
+	buf := buildDatagram(hdr, proto, payload)
+	if err := b.dispatch(context.Background(), buf, loopbackSrc()); err != nil {
+		t.Errorf("expected nil for VendorID=0 (Common vendor), got %v", err)
+	}
+}
+
 // ─── SessionID != 0 (encrypted) routing ──────────────────────────────────
 
 // TestDispatch_SessionMissingSurfaces verifies that a non-zero SessionID
@@ -277,18 +335,63 @@ func TestDispatch_IMResponseOpcodeIsUnsupported(t *testing.T) {
 	}
 }
 
-// TestDispatch_IMSubscribeReplies verifies that a valid SubscribeRequest
-// is decoded AND replied to (initial ReportData + SubscribeResponse).
-// Uses loopbackSrc because the reply path now sends two datagrams.
+// TestDispatch_IMSubscribeReplies verifies that a SubscribeRequest is
+// decoded AND replied to at the dispatch() → handleSubscribeRequest
+// routing boundary. buildIMSubscribeRequestPayload builds an empty
+// request (no AttributeRequests, no EventRequests), which the
+// matched-path gate in handleSubscribeRequest (subscribe.go) rejects
+// with a top-level StatusResponse(InvalidAction) rather than
+// establishing — matter.js InteractionServer.ts:628-633 ("No
+// attributes or events requested"). A Subscribe naming a real matching
+// path establishes normally instead; see
+// TestHandleSubscribeRequest_MatchingPath_EstablishesAndReplies
+// (subscribe_establish_test.go) for that positive-control case, and
+// TestHandleSubscribeRequest_EmptyRequest_RejectsInvalidAction
+// (subscribe_reject_test.go) for the same rejection driven directly
+// against handleSubscribeRequest rather than through the wire-decode
+// path exercised here.
 func TestDispatch_IMSubscribeReplies(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
+
+	peerConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 0})
+	if err != nil {
+		t.Fatalf("ListenUDP: %v", err)
+	}
+	t.Cleanup(func() { _ = peerConn.Close() })
+	peerAddr, ok := peerConn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		t.Fatalf("unexpected peer addr type %T", peerConn.LocalAddr())
+	}
+
 	hdr := buildHeader(0, 7)
 	proto := buildProtocolHeader(im.InteractionModelProtocolID, im.OpcodeSubscribeRequest)
 	payload := buildIMSubscribeRequestPayload(t)
 	buf := buildDatagram(hdr, proto, payload)
-	if err := b.dispatch(context.Background(), buf, loopbackSrc()); err != nil {
+	if err := b.dispatch(context.Background(), buf, peerAddr); err != nil {
 		t.Errorf("expected nil for SubscribeRequest, got %v", err)
+	}
+
+	_ = peerConn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	rbuf := make([]byte, 1500)
+	n, _, err := peerConn.ReadFromUDP(rbuf)
+	if err != nil {
+		t.Fatalf("ReadFromUDP: %v", err)
+	}
+	got := rbuf[:n]
+	_, hdrLen, err := message.UnmarshalHeader(got)
+	if err != nil {
+		t.Fatalf("UnmarshalHeader: %v", err)
+	}
+	rproto, protoLen, err := message.UnmarshalProtocolHeader(got[hdrLen:])
+	if err != nil {
+		t.Fatalf("UnmarshalProtocolHeader: %v", err)
+	}
+	if rproto.Opcode != im.OpcodeStatusResponse {
+		t.Fatalf("reply opcode = 0x%02X, want StatusResponse (0x%02X) — an empty Subscribe must be rejected, not established", rproto.Opcode, im.OpcodeStatusResponse)
+	}
+	if status := decodeStatusResponseCode(t, got[hdrLen+protoLen:]); status != im.StatusInvalidAction {
+		t.Errorf("StatusResponse status = %v, want StatusInvalidAction (0x80)", status)
 	}
 }
 
@@ -475,7 +578,7 @@ func TestCaptureSubTarget_StoresMetadata(t *testing.T) {
 		Initiator:  true,
 		ExchangeID: 42,
 	}
-	b.captureSubTarget(99, src, hdr, proto)
+	b.captureSubTarget(99, src, hdr, proto, false)
 
 	raw, ok := b.subTargets.Load(uint32(99))
 	if !ok {
@@ -511,9 +614,9 @@ func TestCaptureSubTarget_SkipsZeroOrNil(t *testing.T) {
 	hdr := &message.Header{}
 	proto := message.ProtocolHeader{}
 
-	b.captureSubTarget(0, src, hdr, proto) // subID==0
-	b.captureSubTarget(1, nil, hdr, proto) // nil src
-	b.captureSubTarget(2, src, nil, proto) // nil hdr
+	b.captureSubTarget(0, src, hdr, proto, false) // subID==0
+	b.captureSubTarget(1, nil, hdr, proto, false) // nil src
+	b.captureSubTarget(2, src, nil, proto, false) // nil hdr
 
 	count := 0
 	b.subTargets.Range(func(_, _ any) bool { count++; return true })

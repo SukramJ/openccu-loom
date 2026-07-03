@@ -301,15 +301,31 @@ func HandleInvokeRequest(ctx context.Context, d Dispatcher, req InvokeRequest) I
 	_, fabricIndex := FabricFilterFromContext(ctx)
 	subjectNodeID, subjectCATs := SubjectFromContext(ctx)
 	aclChecker, hasACL := d.(ACLChecker)
+	privProvider, hasPrivProvider := d.(CommandInvokePrivilegeProvider)
+
+	// invokePrivilege returns the minimum privilege needed to invoke the
+	// given command. Falls back to Operate (3) — the Matter §9.10.4.4
+	// default invoke privilege — when no CommandInvokePrivilegeProvider
+	// is wired or the command has no elevated requirement.
+	invokePrivilege := func(inv CommandInvocation) uint8 {
+		const privilegeOperate uint8 = 3
+		if hasPrivProvider {
+			return privProvider.MinInvokePrivilege(inv.Path.Endpoint, inv.Path.Cluster, inv.Path.Command)
+		}
+		return privilegeOperate
+	}
 
 	var ir InvokeResponse
 	ir.SuppressResponse = req.SuppressResponse
 	for _, inv := range req.Invokes {
 		// ACL gate. PASE (fabricIndex==0) skips ACL: commissioning
-		// invokes arrive before the fabric's ACL entry exists.
+		// invokes arrive before the fabric's ACL entry exists. The
+		// required privilege is per-command (RemoveFabric,
+		// OpenCommissioningWindow, … → Administer) rather than a flat
+		// Operate, so an Operate-only subject cannot invoke an
+		// administrative command.
 		if hasACL && fabricIndex != 0 {
-			const privilegeOperate uint8 = 3
-			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, inv.Path.Endpoint, inv.Path.Cluster, privilegeOperate); !status.IsSuccess() {
+			if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, inv.Path.Endpoint, inv.Path.Cluster, invokePrivilege(inv)); !status.IsSuccess() {
 				ir.Responses = append(ir.Responses, InvokeResponseEntry{
 					Path:          ConcreteCommandPath{Endpoint: inv.Path.Endpoint, Cluster: inv.Path.Cluster, Command: inv.Path.Command, HasEndpoint: true, HasCluster: true, HasCommand: true},
 					CommandRef:    inv.CommandRef,

@@ -95,7 +95,7 @@ func TestAckTrackerNewAckTrackerNegativeDelay(t *testing.T) {
 		t.Fatal("NewAckTracker(-1) returned nil")
 	}
 	// Verify it behaves as a 0-delay tracker: obligation is immediately due.
-	tracker.Owe(100, 1, true, t0)
+	tracker.Owe(100, 0, 1, true, t0)
 	due := tracker.Due(t0)
 	if len(due) != 1 {
 		t.Fatalf("Due at t0 with 0-delay: len=%d, want 1", len(due))
@@ -108,9 +108,9 @@ func TestLookupAndDischargePresent(t *testing.T) {
 	t.Parallel()
 
 	tracker := mrp.NewAckTracker(0)
-	tracker.Owe(42, 7, false, t0)
+	tracker.Owe(42, 0, 7, false, t0)
 
-	counter, ok := tracker.LookupAndDischarge(7)
+	counter, ok := tracker.LookupAndDischarge(0, 7)
 	if !ok {
 		t.Fatal("LookupAndDischarge should return true for present obligation")
 	}
@@ -128,7 +128,7 @@ func TestLookupAndDischargeAbsent(t *testing.T) {
 	t.Parallel()
 
 	tracker := mrp.NewAckTracker(0)
-	counter, ok := tracker.LookupAndDischarge(99)
+	counter, ok := tracker.LookupAndDischarge(0, 99)
 	if ok {
 		t.Fatal("LookupAndDischarge should return false for absent obligation")
 	}

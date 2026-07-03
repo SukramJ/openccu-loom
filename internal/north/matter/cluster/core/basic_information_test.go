@@ -801,6 +801,133 @@ func TestBasicInfo_ValidateNoDiagnosticWhenFieldsSet(t *testing.T) {
 	}
 }
 
+// TestBasicInfo_PersistentWriteHook_FiresOnNodeLabelWrite verifies that a
+// Matter write to NodeLabel (0x0005) invokes the hook registered via
+// SetOnPersistentWrite with the cluster's current NodeLabel/Location, so
+// the daemon can persist a commissioner-set label across restarts.
+func TestBasicInfo_PersistentWriteHook_FiresOnNodeLabelWrite(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	var gotLabel, gotLoc string
+	b.SetOnPersistentWrite(func(nodeLabel, location string) {
+		calls++
+		gotLabel = nodeLabel
+		gotLoc = location
+	})
+
+	if err := b.MatterWrite(context.Background(), 0x0005, "living-room", hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite NodeLabel: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("hook fired %d times, want 1", calls)
+	}
+	if gotLabel != "living-room" {
+		t.Errorf("hook nodeLabel = %q, want living-room", gotLabel)
+	}
+	if gotLoc != "XX" {
+		t.Errorf("hook location = %q, want XX (unchanged default)", gotLoc)
+	}
+}
+
+// TestBasicInfo_PersistentWriteHook_FiresOnLocationWrite verifies that a
+// Matter write to Location (0x0006) invokes the hook with the cluster's
+// current NodeLabel/Location.
+func TestBasicInfo_PersistentWriteHook_FiresOnLocationWrite(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	var gotLabel, gotLoc string
+	b.SetOnPersistentWrite(func(nodeLabel, location string) {
+		calls++
+		gotLabel = nodeLabel
+		gotLoc = location
+	})
+
+	if err := b.MatterWrite(context.Background(), 0x0006, "DE", hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite Location: %v", err)
+	}
+	if calls != 1 {
+		t.Fatalf("hook fired %d times, want 1", calls)
+	}
+	if gotLoc != "DE" {
+		t.Errorf("hook location = %q, want DE", gotLoc)
+	}
+	if gotLabel != "openccu-loom-bridge" {
+		t.Errorf("hook nodeLabel = %q, want unchanged default", gotLabel)
+	}
+}
+
+// TestBasicInfo_PersistentWriteHook_NotFiredOnLocalConfigDisabledWrite
+// verifies that a write to LocalConfigDisabled (0x0010) does NOT invoke
+// the persistence hook — only NodeLabel and Location are persisted
+// (Matter §11.1.6 "N" quality attributes the daemon round-trips).
+func TestBasicInfo_PersistentWriteHook_NotFiredOnLocalConfigDisabledWrite(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	b.SetOnPersistentWrite(func(string, string) { calls++ })
+
+	if err := b.MatterWrite(context.Background(), 0x0010, true, hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite LocalConfigDisabled: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook fired %d times for LocalConfigDisabled write, want 0", calls)
+	}
+}
+
+// TestBasicInfo_PersistentWriteHook_NotFiredBySetNodeLabel verifies that
+// the out-of-band SetNodeLabel restore path does NOT invoke the
+// persistence hook — restores must not echo back into the store.
+func TestBasicInfo_PersistentWriteHook_NotFiredBySetNodeLabel(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	b.SetOnPersistentWrite(func(string, string) { calls++ })
+
+	if err := b.SetNodeLabel("restored-label"); err != nil {
+		t.Fatalf("SetNodeLabel: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook fired %d times for out-of-band SetNodeLabel, want 0", calls)
+	}
+}
+
+// TestBasicInfo_PersistentWriteHook_NotFiredBySetLocation verifies that
+// the out-of-band SetLocation restore path does NOT invoke the
+// persistence hook.
+func TestBasicInfo_PersistentWriteHook_NotFiredBySetLocation(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	b.SetOnPersistentWrite(func(string, string) { calls++ })
+
+	if err := b.SetLocation("FR"); err != nil {
+		t.Fatalf("SetLocation: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook fired %d times for out-of-band SetLocation, want 0", calls)
+	}
+}
+
+// TestBasicInfo_PersistentWriteHook_DetachedByNil verifies that passing
+// nil to SetOnPersistentWrite detaches any previously registered hook and
+// subsequent writes do not panic.
+func TestBasicInfo_PersistentWriteHook_DetachedByNil(t *testing.T) {
+	t.Parallel()
+	b := newValidBasicInfo(t)
+	var calls int
+	b.SetOnPersistentWrite(func(string, string) { calls++ })
+	b.SetOnPersistentWrite(nil)
+
+	if err := b.MatterWrite(context.Background(), 0x0005, "no-hook", hmenum.CommandPriorityHigh); err != nil {
+		t.Fatalf("MatterWrite NodeLabel with detached hook: %v", err)
+	}
+	if calls != 0 {
+		t.Fatalf("hook fired %d times after detach, want 0", calls)
+	}
+}
+
 // fakeEventEmitter records the last emitted event for BasicInformation event assertions.
 type fakeEventEmitter struct {
 	endpoint  uint16

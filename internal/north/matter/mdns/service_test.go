@@ -769,13 +769,13 @@ func TestBuildCommissionableService_SII_SAI_Floor(t *testing.T) {
 		m[r.Key] = r.Value
 	}
 	if m["SII"] == "0" || m["SII"] == "" {
-		t.Errorf("SII = %q — commissionable zero should default to 5000", m["SII"])
+		t.Errorf("SII = %q — commissionable zero should default to 500", m["SII"])
 	}
 	if m["SAI"] == "0" || m["SAI"] == "" {
 		t.Errorf("SAI = %q — commissionable zero should default to 300", m["SAI"])
 	}
-	if m["SII"] != "5000" {
-		t.Errorf("SII = %q, want 5000 (commissionable default per §4.3.1.6)", m["SII"])
+	if m["SII"] != "500" {
+		t.Errorf("SII = %q, want 500 (matter.js SessionIntervals idle default, §4.3.1.6)", m["SII"])
 	}
 	if m["SAI"] != "300" {
 		t.Errorf("SAI = %q, want 300 (commissionable default per §4.3.1.6)", m["SAI"])

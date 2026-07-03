@@ -5,6 +5,9 @@ package core_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"errors"
 	"testing"
 
@@ -65,7 +68,11 @@ func TestAddNOC_ReplaceACLFailure_CleansUpGroupKeys(t *testing.T) {
 	}
 	oc.SetIsFailSafeArmed(func() bool { return true })
 
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
+	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 
 	// Step 1: AddTrustedRootCertificate — sets pendingTrustRoot.
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
@@ -74,16 +81,12 @@ func TestAddNOC_ReplaceACLFailure_CleansUpGroupKeys(t *testing.T) {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
-	// Step 2: CSRRequest — generates the pending key pair.
-	csrNonce := make([]byte, 32)
-	for i := range csrNonce {
-		csrNonce[i] = byte(i + 1)
-	}
-	if _, err := oc.MatterInvoke(ctx, 0x04,
-		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("CSRRequest: %v", err)
-	}
+	// Step 2: CSRRequest — generates the pending key pair. The NOC must be
+	// minted over that real pending key (not a throwaway one) so AddNOC
+	// clears public-key validation and actually reaches the injected
+	// ReplaceACL failure this test targets.
+	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+	nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
 
 	// Step 3: AddNOC — this will succeed through AddFabric + UpsertIdentity +
 	// UpsertGroupKeySet (IPK) but fail at ReplaceACL.
@@ -158,7 +161,11 @@ func TestAddNOC_UpsertIdentityFailure_RevertsViaCanonicalHelper(t *testing.T) {
 	}
 	oc.SetIsFailSafeArmed(func() bool { return true })
 
-	rootRaw, nocRaw, _ := buildTestNOCAndRoot(t)
+	rootPriv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("GenerateKey root: %v", err)
+	}
+	rootRaw := buildCoreSignedCert(t, rootPriv, true, rootPriv)
 
 	if _, err := oc.MatterInvoke(ctx, 0x0B,
 		core.AddTrustedRootCertificateRequest{RootCACertificate: rootRaw},
@@ -166,12 +173,11 @@ func TestAddNOC_UpsertIdentityFailure_RevertsViaCanonicalHelper(t *testing.T) {
 		t.Fatalf("AddTrustedRootCertificate: %v", err)
 	}
 
-	csrNonce := make([]byte, 32)
-	if _, err := oc.MatterInvoke(ctx, 0x04,
-		core.CSRRequest{CSRNonce: csrNonce},
-		hmenum.CommandPriorityHigh); err != nil {
-		t.Fatalf("CSRRequest: %v", err)
-	}
+	// Mint the NOC over the real pending key so AddNOC clears public-key
+	// validation and actually reaches the injected UpsertIdentity failure
+	// this test targets.
+	pendingPub := issueCSRPendingPubKey(ctx, t, oc, false)
+	nocRaw := buildCoreSignedCertForPubKey(t, pendingPub, false, rootPriv, testDefaultFabricID, testDefaultNodeID)
 
 	ipk := make([]byte, 16)
 	resp, err := oc.MatterInvoke(ctx, 0x06,

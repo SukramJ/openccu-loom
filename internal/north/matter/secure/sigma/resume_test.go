@@ -355,6 +355,232 @@ func TestResponder_ResumptionAccessors_ReturnDefensiveCopies(t *testing.T) {
 	}
 }
 
+// TestSigma_Resume_AdoptsPeerSessionState verifies that a successful
+// Sigma2_Resume makes the responder's post-resume accessors describe
+// the RESUMED session (peer session id, peer node id, peer CATs,
+// shared secret, fresh resumption id, session keys, identity) rather
+// than leaving them at their zero values. Without this adoption the
+// resumed session would register with peerNodeID=0 (every inbound
+// AES-CCM verify fails) and peerSessionID=0 (every outbound reply
+// stamps the wrong session id) — see protocol.go tryResume's closing
+// comment for the full failure mode.
+func TestSigma_Resume_AdoptsPeerSessionState(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+
+	const peerNodeID uint64 = 0xAABBCCDD00112233
+	peerCATs := []uint32{0xFABC0001}
+
+	store := newStubStore()
+	store.put(&ResumptionRecord{
+		SharedSecret: sharedSecret,
+		ResumptionID: rid,
+		PeerNodeID:   peerNodeID,
+		PeerCATs:     peerCATs,
+		// FabricIndex intentionally left at zero — no resolver wired.
+	})
+
+	respID := newTestIdentity(t, 0xBBBB, 1, fabricIPK())
+	v := testVerifier{}
+	responder := NewResponder(respID, v, 0x2001)
+	responder.SetResumptionStore(store)
+
+	result, err := responder.ProcessSigma1WithResume(sigma1Bytes)
+	if err != nil {
+		t.Fatalf("ProcessSigma1WithResume: %v", err)
+	}
+	if !result.IsResume() {
+		t.Fatal("expected Sigma2_Resume path but got Full Sigma")
+	}
+
+	// buildValidSigma1WithResume hard-codes InitiatorSessionID=0x1234.
+	if got := responder.PeerSessionID(); got != 0x1234 {
+		t.Errorf("PeerSessionID()=%#x, want 0x1234", got)
+	}
+	if got := responder.PeerNodeID(); got != peerNodeID {
+		t.Errorf("PeerNodeID()=%#x, want %#x", got, peerNodeID)
+	}
+	gotCATs := responder.PeerCATs()
+	if len(gotCATs) != len(peerCATs) {
+		t.Fatalf("PeerCATs() length=%d, want %d", len(gotCATs), len(peerCATs))
+	}
+	for i, want := range peerCATs {
+		if gotCATs[i] != want {
+			t.Errorf("PeerCATs()[%d]=%#x, want %#x", i, gotCATs[i], want)
+		}
+	}
+	if got := responder.ECDHSharedSecret(); !bytes.Equal(got, sharedSecret) {
+		t.Errorf("ECDHSharedSecret()=%x, want %x", got, sharedSecret)
+	}
+
+	newRID := responder.ResumptionID()
+	if !bytes.Equal(newRID, result.Sigma2Resume.ResumptionID) {
+		t.Errorf("ResumptionID()=%x, want %x (Sigma2Resume.ResumptionID)", newRID, result.Sigma2Resume.ResumptionID)
+	}
+	if bytes.Equal(newRID, rid) {
+		t.Error("ResumptionID() must be fresh (differ from the peer-presented id)")
+	}
+
+	keys, ok := responder.SessionKeys()
+	if !ok {
+		t.Fatal("SessionKeys() ok=false after a successful resume")
+	}
+	if keys != result.ResumeKeys {
+		t.Error("SessionKeys() does not match result.ResumeKeys")
+	}
+
+	if _, _, ok := responder.SessionIdentity(); !ok {
+		t.Error("SessionIdentity() ok=false after a successful resume")
+	}
+}
+
+// stubFabricIndexResolver implements both [IdentityResolver] and
+// [FabricIndexResolver] for exercising the resume path's optional
+// fabric-lookup branch. ResolveSigma1Destination always misses — the
+// resume path never calls it (there is no DestinationID on a resuming
+// Sigma1), so it stands in only to satisfy the [IdentityResolver]
+// embedding [FabricIndexResolver] extends.
+type stubFabricIndexResolver struct {
+	identity    *Identity
+	verifier    PeerVerifier
+	fabricIndex uint8
+}
+
+func (stubFabricIndexResolver) ResolveSigma1Destination(_ [32]byte, _ [RandomSize]byte) (*Identity, PeerVerifier, bool) {
+	return nil, nil, false
+}
+
+func (s stubFabricIndexResolver) ResolveFabricIndex(fabricIndex uint8) (*Identity, PeerVerifier, bool) {
+	if fabricIndex != s.fabricIndex {
+		return nil, nil, false
+	}
+	return s.identity, s.verifier, true
+}
+
+// TestSigma_Resume_FabricIndexResolver_SelectsRecordFabric verifies
+// that when the wired [IdentityResolver] also implements
+// [FabricIndexResolver], tryResume looks up the identity by the
+// resumption record's FabricIndex (not the responder's
+// constructor-time baseline identity) and the resumed session reports
+// that fabric via SessionIdentity.
+func TestSigma_Resume_FabricIndexResolver_SelectsRecordFabric(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+
+	const wantFabricIndex uint8 = 7
+	fabricIdentity := newTestIdentity(t, 0xCCCC, 2, fabricIPK())
+	fabricIdentity.FabricIndex = wantFabricIndex
+
+	store := newStubStore()
+	store.put(&ResumptionRecord{
+		SharedSecret: sharedSecret,
+		ResumptionID: rid,
+		FabricIndex:  wantFabricIndex,
+	})
+
+	respID := newTestIdentity(t, 0xBBBB, 1, fabricIPK())
+	v := testVerifier{}
+	responder := NewResponder(respID, v, 0x2001)
+	responder.SetResumptionStore(store)
+	responder.SetIdentityResolver(stubFabricIndexResolver{
+		identity:    fabricIdentity,
+		verifier:    v,
+		fabricIndex: wantFabricIndex,
+	})
+
+	result, err := responder.ProcessSigma1WithResume(sigma1Bytes)
+	if err != nil {
+		t.Fatalf("ProcessSigma1WithResume: %v", err)
+	}
+	if !result.IsResume() {
+		t.Fatal("expected Sigma2_Resume path but got Full Sigma")
+	}
+
+	gotFabricIndex, _, ok := responder.SessionIdentity()
+	if !ok {
+		t.Fatal("SessionIdentity() ok=false after resume")
+	}
+	if gotFabricIndex != wantFabricIndex {
+		t.Errorf("SessionIdentity() fabricIndex=%d, want %d", gotFabricIndex, wantFabricIndex)
+	}
+}
+
+// TestSigma_Resume_FabricIndexResolver_MissFallsToFullSigma verifies
+// that a FabricIndexResolver miss (the record names a fabric that no
+// longer has an installed identity) makes the whole resume attempt
+// fall through to Full Sigma, exactly like an unknown resumption id.
+func TestSigma_Resume_FabricIndexResolver_MissFallsToFullSigma(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+
+	const recordFabricIndex uint8 = 9
+
+	store := newStubStore()
+	store.put(&ResumptionRecord{
+		SharedSecret: sharedSecret,
+		ResumptionID: rid,
+		FabricIndex:  recordFabricIndex,
+	})
+
+	respID := newTestIdentity(t, 0xBBBB, 1, fabricIPK())
+	v := testVerifier{}
+	responder := NewResponder(respID, v, 0x2001)
+	responder.SetResumptionStore(store)
+	// The resolver only knows about a DIFFERENT fabric index than the
+	// one the record names, so ResolveFabricIndex(recordFabricIndex) misses.
+	responder.SetIdentityResolver(stubFabricIndexResolver{
+		identity:    newTestIdentity(t, 0xDDDD, 3, fabricIPK()),
+		verifier:    v,
+		fabricIndex: recordFabricIndex + 1,
+	})
+
+	result, err := responder.ProcessSigma1WithResume(sigma1Bytes)
+	if err != nil {
+		t.Fatalf("unexpected error on FabricIndexResolver miss: %v", err)
+	}
+	if result.IsResume() {
+		t.Fatal("expected Full Sigma fallback but got Sigma2_Resume")
+	}
+	if result.Sigma2 == nil {
+		t.Fatal("Full Sigma fallback must produce Sigma2")
+	}
+}
+
+// stubIdentityOnlyResolver implements [IdentityResolver] but
+// deliberately NOT [FabricIndexResolver] — the single-fabric / legacy
+// resolver shape that predates the resume-time fabric lookup.
+type stubIdentityOnlyResolver struct{}
+
+func (stubIdentityOnlyResolver) ResolveSigma1Destination(_ [32]byte, _ [RandomSize]byte) (*Identity, PeerVerifier, bool) {
+	return nil, nil, false
+}
+
+// TestSigma_Resume_IdentityResolverWithoutFabricLookup_KeepsBaseline
+// verifies that an IdentityResolver which does not also implement
+// FabricIndexResolver leaves the responder's constructor-time
+// baseline identity untouched and the resume still succeeds — the
+// type-asserted lookup in tryResume is purely additive.
+func TestSigma_Resume_IdentityResolverWithoutFabricLookup_KeepsBaseline(t *testing.T) {
+	sigma1Bytes, sharedSecret, rid := buildValidSigma1WithResume(t)
+
+	store := newStubStore()
+	store.put(&ResumptionRecord{
+		SharedSecret: sharedSecret,
+		ResumptionID: rid,
+	})
+
+	respID := newTestIdentity(t, 0xBBBB, 1, fabricIPK())
+	v := testVerifier{}
+	responder := NewResponder(respID, v, 0x2001)
+	responder.SetResumptionStore(store)
+	responder.SetIdentityResolver(stubIdentityOnlyResolver{})
+
+	result, err := responder.ProcessSigma1WithResume(sigma1Bytes)
+	if err != nil {
+		t.Fatalf("ProcessSigma1WithResume: %v", err)
+	}
+	if !result.IsResume() {
+		t.Fatal("expected Sigma2_Resume path but got Full Sigma")
+	}
+}
+
 // TestResumptionSaltUsesLocalResumptionID pins the session-key derivation
 // during Sigma2_Resume against a fixed input vector, locking the salt
 // construction at Matter §3.6.2.2 / matter.js CaseServer.ts:165:

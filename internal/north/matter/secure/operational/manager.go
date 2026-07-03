@@ -16,6 +16,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 )
 
 // Manager maintains the live set of operational (CASE) sessions and
@@ -118,7 +119,26 @@ type Entry struct {
 	// Mirrors chip src/transport/SecureSession.h:240-248 MarkActive /
 	// MarkActiveRx.
 	lastActivity time.Time
-	// mu guards lastActivity for concurrent Rx/Tx updates.
+	// lastPeerActivity is updated only on inbound decrypts — the
+	// peer-active determination for MRP interval selection needs the
+	// time the PEER last sent, not our own transmissions. Mirrors
+	// chip SecureSession GetLastPeerActivityTime.
+	lastPeerActivity time.Time
+	// peerIdleIntervalMs / peerActiveIntervalMs / peerActiveThresholdMs
+	// carry the peer's advertised MRP session parameters (Sigma1 /
+	// PBKDFParamRequest tag 5). Zero means "not advertised" — readers
+	// fall back to the spec defaults (matter.js SessionIntervals.ts:45-49).
+	peerIdleIntervalMs    uint32
+	peerActiveIntervalMs  uint32
+	peerActiveThresholdMs uint32
+	// isPase marks a session established via the PASE handshake. The
+	// marker survives [Manager.AdoptFabricIndex] (the session stays a
+	// PASE session even after AddNOC rewrites its FabricIndex) so
+	// [Manager.ClosePASESessions] can honour Matter §11.10.6.6 step 4.
+	// Mirrors matter.js SessionManager.ts:484 getPaseSession, which
+	// identifies the PASE session by type, not by fabric.
+	isPase bool
+	// mu guards the mutable fields above for concurrent Rx/Tx updates.
 	mu sync.Mutex
 }
 
@@ -126,8 +146,53 @@ type Entry struct {
 // successful inbound message decryption.
 func (e *Entry) MarkActiveRx() {
 	e.mu.Lock()
-	e.lastActivity = time.Now()
+	now := time.Now()
+	e.lastActivity = now
+	e.lastPeerActivity = now
 	e.mu.Unlock()
+}
+
+// SetPeerMRPIntervals stores the peer-advertised MRP session
+// parameters (milliseconds; 0 = not advertised, readers fall back to
+// the spec default for that field). Called once at session open with
+// the values the initiator carried in Sigma1 / PBKDFParamRequest tag 5.
+func (e *Entry) SetPeerMRPIntervals(idleMs, activeMs, activeThresholdMs uint32) {
+	e.mu.Lock()
+	e.peerIdleIntervalMs = idleMs
+	e.peerActiveIntervalMs = activeMs
+	e.peerActiveThresholdMs = activeThresholdMs
+	e.mu.Unlock()
+}
+
+// RetransmitBaseInterval returns the MRP base interval for the next
+// (re)transmission to this peer: the peer's active interval when it
+// sent a message within its active threshold, its idle interval
+// otherwise. Fields the peer never advertised fall back to the spec
+// defaults. Mirrors matter.js MRP.ts:129-135 retransmissionIntervalOf
+// ("baseInterval = isPeerActive ? activeInterval : idleInterval",
+// re-evaluated per transmission) and chip GetMRPBaseTimeout.
+func (e *Entry) RetransmitBaseInterval(now time.Time) time.Duration {
+	e.mu.Lock()
+	lastPeer := e.lastPeerActivity
+	idleMs, activeMs, thresholdMs := e.peerIdleIntervalMs, e.peerActiveIntervalMs, e.peerActiveThresholdMs
+	e.mu.Unlock()
+
+	idle := mrp.SessionIdleIntervalDefault
+	if idleMs != 0 {
+		idle = time.Duration(idleMs) * time.Millisecond
+	}
+	active := mrp.SessionActiveIntervalDefault
+	if activeMs != 0 {
+		active = time.Duration(activeMs) * time.Millisecond
+	}
+	threshold := mrp.SessionActiveThresholdDefault
+	if thresholdMs != 0 {
+		threshold = time.Duration(thresholdMs) * time.Millisecond
+	}
+	if !lastPeer.IsZero() && now.Sub(lastPeer) < threshold {
+		return active
+	}
+	return idle
 }
 
 // MarkActiveTx updates the entry's activity timestamp after a
@@ -342,6 +407,7 @@ func (m *Manager) OpenFromPase(localNodeID, peerNodeID uint64, peerSessionID uin
 		FabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
+		isPase:               true,
 	}
 	m.sessions[id] = entry
 	m.mu.Unlock()
@@ -383,6 +449,7 @@ func (m *Manager) OpenFromPaseWithID(id uint16, localNodeID, peerNodeID uint64, 
 		FabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
+		isPase:               true,
 	}
 	m.mu.Lock()
 	// The pre-allocated id is in m.sessions as a placeholder Entry
@@ -485,6 +552,30 @@ func (m *Manager) CloseFabricExcept(fabricIndex uint8, exceptSessionID uint16) {
 	m.mu.Unlock()
 	closeStaleEntries(victims)
 	m.fireOnSessionClose(victims)
+}
+
+// ClosePASESessions tears down every session established via PASE —
+// including sessions whose FabricIndex was later rewritten by
+// [Manager.AdoptFabricIndex] (adoption does not change the session's
+// PASE nature). Matter §11.10.6.6 step 4 requires the server to clear
+// any still-established PASE session on a successful
+// CommissioningComplete, and the fail-safe expiry path does the same.
+// Mirrors matter.js FailsafeContext.ts:154 (completeCommission) and
+// :291 (fail-safe expired) → closePaseSession. Returns the number of
+// sessions closed.
+func (m *Manager) ClosePASESessions() int {
+	m.mu.Lock()
+	victims := make([]*Entry, 0, 1)
+	for id, entry := range m.sessions {
+		if entry.isPase {
+			victims = append(victims, entry)
+			delete(m.sessions, id)
+		}
+	}
+	m.mu.Unlock()
+	closeStaleEntries(victims)
+	m.fireOnSessionClose(victims)
+	return len(victims)
 }
 
 // ClosePeer tears down every live session matching the
@@ -615,17 +706,22 @@ func (m *Manager) reapIdle(idleTimeout time.Duration) {
 
 // PersistResumption stores a resumption-id pre-shared secret so a
 // returning peer can resume via Sigma1.ResumptionID. resumptionID
-// must be 16 bytes; sharedSecret must be 32 bytes. Wired in daemon.go
-// (matter init) and called from both CASE-onEstablished paths after
-// every successful OpenFromSigmaWithID. Mirrors matter.js
+// must be 16 bytes; sharedSecret must be 32 bytes. peerCATs carries
+// the CASE Authenticated Tags from the peer's verified NOC — the
+// resume path re-grants them without re-validating the NOC, so
+// dropping them here silently strips CAT-scoped ACL privilege from
+// every resumed session. Wired in daemon.go (matter init) and called
+// from both CASE-onEstablished paths after every successful
+// OpenFromSigmaWithID. Mirrors matter.js
 // packages/protocol/src/session/case/CaseServer.ts:210
 // `this.#sessions.saveResumptionRecord(cx.resumptionRecord)`.
-func (m *Manager) PersistResumption(ctx context.Context, fabricIndex uint8, peerNodeID uint64, resumptionID, sharedSecret []byte) error {
+func (m *Manager) PersistResumption(ctx context.Context, fabricIndex uint8, peerNodeID uint64, resumptionID, sharedSecret []byte, peerCATs []uint32) error {
 	return m.store.UpsertResumption(ctx, store.ResumptionRecord{
 		FabricIndex:  fabricIndex,
 		PeerNodeID:   peerNodeID,
 		ResumptionID: resumptionID,
 		SharedSecret: sharedSecret,
+		CASEAuthTags: peerCATs,
 	})
 }
 

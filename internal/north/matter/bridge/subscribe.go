@@ -94,6 +94,17 @@ type subTarget struct {
 	exchangeID          uint16
 	sessionID           uint16
 	peerInitiator       bool // true if peer opened the exchange (always true for Subscribe inbound)
+
+	// Authorization context captured at Subscribe time, so ongoing
+	// reports enforce the SAME ACL + fabric projection as the initial
+	// read (Matter §8.5 / §9.10; matter.js ServerSubscription re-applies
+	// the read-response authority on every update). Without these the
+	// engine tick would ship attribute/event data the subject is no
+	// longer (or never was) permitted to see. fabricIndex==0 means PASE.
+	fabricIndex    uint8
+	subjectNodeID  uint64
+	subjectCATs    []uint32
+	fabricFiltered bool
 }
 
 // SubscriptionReporter returns the [subscription.Reporter] closure the
@@ -128,9 +139,40 @@ func (b *Bridge) SubscriptionEventReporter() subscription.EventReporter {
 	return b.reportSubscriptionEvents
 }
 
+// authorizedEventReports filters events down to those the subscribing
+// subject (captured on target) is permitted to read. A PASE session
+// (fabricIndex==0) or a dispatcher without an [im.ACLChecker] returns the
+// events unchanged. Each event is gated at View — the Matter default
+// event read privilege — except events on the AccessControl cluster
+// (0x001F), which require Administer, matching the fabric-sensitivity of
+// AccessControlEntryChanged (Matter §9.10.7.1). Closes the event half of
+// the subscribe-path ACL bypass.
+func (b *Bridge) authorizedEventReports(ctx context.Context, target subTarget, events []im.EventReport) []im.EventReport {
+	if target.fabricIndex == 0 {
+		return append([]im.EventReport(nil), events...)
+	}
+	aclChecker, hasACL := b.Dispatcher().(im.ACLChecker)
+	if !hasACL {
+		return append([]im.EventReport(nil), events...)
+	}
+	const accessControlClusterID uint32 = 0x001F
+	out := make([]im.EventReport, 0, len(events))
+	for _, ev := range events {
+		var priv uint8 = 1 // View — Matter default event read privilege
+		if ev.Path.Cluster == accessControlClusterID {
+			priv = 5 // Administer
+		}
+		if status := aclChecker.CheckACL(ctx, target.fabricIndex, target.subjectNodeID, target.subjectCATs, ev.Path.Endpoint, ev.Path.Cluster, priv); !status.IsSuccess() {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
 // reportSubscriptionEvents assembles + ships an event-only ReportData
 // for sub. Called by the manager's engine tick.
-func (b *Bridge) reportSubscriptionEvents(_ context.Context, sub *subscription.Subscription, events []im.EventReport) {
+func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription.Subscription, events []im.EventReport) {
 	if sub == nil || len(events) == 0 {
 		return
 	}
@@ -143,10 +185,22 @@ func (b *Bridge) reportSubscriptionEvents(_ context.Context, sub *subscription.S
 		return
 	}
 
+	// Authorize each event against the subscribing subject: a CASE
+	// subject only receives events on (endpoint, cluster) it holds at
+	// least View privilege for (Matter §9.10 — events carry a read
+	// privilege, default View; AccessControlEntryChanged is Administer).
+	// Without this an ACE-less subject would stream every fired event.
+	// PASE (fabricIndex==0) bypasses; a dispatcher without an ACLChecker
+	// keeps the pre-ACL behaviour.
+	authorizedEvents := b.authorizedEventReports(ctx, target, events)
+	if len(authorizedEvents) == 0 {
+		return
+	}
+
 	report := im.ReportData{
 		HasSubscription: true,
 		SubscriptionID:  sub.ID,
-		EventReports:    append([]im.EventReport(nil), events...),
+		EventReports:    authorizedEvents,
 	}
 
 	body, err := EncodeReportData(report)
@@ -163,7 +217,7 @@ func (b *Bridge) reportSubscriptionEvents(_ context.Context, sub *subscription.S
 		return
 	}
 	if counter != 0 {
-		b.reportCounterOwner.Store(counter, sub.ID)
+		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.event_report",
 		slog.Int("subscription_id", int(sub.ID)),
@@ -225,6 +279,48 @@ func (b *Bridge) MatterEmitEvent(endpoint uint16, cluster, event uint32, data an
 	b.EmitEvent(endpoint, cluster, event, data, priority)
 }
 
+// readAuthorizedResults runs dispatcher.Read for path and returns only
+// the results the requesting subject (carried in ctx via
+// [im.WithFabricFilter] / [im.WithSubject]) is authorized to read,
+// mirroring the per-result ACL gate in [im.HandleReadRequest]. A PASE
+// session (fabricIndex==0) or a dispatcher without an [im.ACLChecker]
+// returns every result unchanged.
+//
+// This closes the subscribe-path ACL bypass: unlike HandleReadRequest,
+// the subscription read paths (initial + ongoing) call dispatcher.Read
+// directly, so without this gate a View-only or ACE-less subject could
+// subscribe to fabric-sensitive attributes (AccessControl.ACL,
+// OperationalCredentials.NOCs) and have the engine tick stream them.
+// matter.js gates every subscription report through the same read
+// authorization (ServerSubscription re-applies the read-response
+// authority check). Unauthorized attributes are dropped from the report
+// — a subscription simply does not cover paths the subject cannot read.
+func (b *Bridge) readAuthorizedResults(ctx context.Context, dispatcher im.Dispatcher, path im.ConcreteAttributePath) []im.ReadResult {
+	results := dispatcher.Read(ctx, path)
+	_, fabricIndex := im.FabricFilterFromContext(ctx)
+	if fabricIndex == 0 {
+		return results // PASE / commissioning — ACL not yet applicable
+	}
+	aclChecker, hasACL := dispatcher.(im.ACLChecker)
+	if !hasACL {
+		return results
+	}
+	subjectNodeID, subjectCATs := im.SubjectFromContext(ctx)
+	privProvider, hasPriv := dispatcher.(im.AttributeReadPrivilegeProvider)
+	authorized := make([]im.ReadResult, 0, len(results))
+	for _, rr := range results {
+		var priv uint8 = 1 // View default
+		if hasPriv {
+			priv = privProvider.MinReadPrivilege(rr.Path.Endpoint, rr.Path.Cluster, rr.Path.Attribute)
+		}
+		if status := aclChecker.CheckACL(ctx, fabricIndex, subjectNodeID, subjectCATs, rr.Path.Endpoint, rr.Path.Cluster, priv); !status.IsSuccess() {
+			continue // subject not permitted to read this attribute — drop
+		}
+		authorized = append(authorized, rr)
+	}
+	return authorized
+}
+
 // reportSubscription assembles + ships a ReportData for sub. Called
 // by the manager's engine tick.
 func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subscription, paths []im.ConcreteAttributePath) {
@@ -241,12 +337,20 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 		return
 	}
 
+	// Authorize + fabric-project every ongoing report against the
+	// identity captured at Subscribe time, so a CASE subject cannot
+	// keep receiving attributes it is not permitted to read (or another
+	// fabric's fabric-scoped rows). Mirrors the subCtx stamping the
+	// initial read applies in handleSubscribeRequest.
+	readCtx := im.WithFabricFilter(ctx, target.fabricFiltered, target.fabricIndex)
+	readCtx = im.WithSubject(readCtx, target.subjectNodeID, target.subjectCATs)
+
 	report := im.ReportData{
 		HasSubscription: true,
 		SubscriptionID:  sub.ID,
 	}
 	for _, path := range paths {
-		for _, rr := range dispatcher.Read(ctx, path) {
+		for _, rr := range b.readAuthorizedResults(readCtx, dispatcher, path) {
 			rep := im.AttributeReport{Path: rr.Path, DataVersion: rr.DataVersion}
 			if rr.Status != im.StatusSuccess {
 				rep.IsStatus = true
@@ -256,6 +360,14 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 			}
 			report.Reports = append(report.Reports, rep)
 		}
+	}
+
+	// An empty report is a max-interval keepalive (nothing changed, or every
+	// dirty path was dropped by the ACL gate). matter.js ships empty
+	// DataReports with SuppressResponse=true (ServerSubscription.ts:782) so
+	// the controller does not owe an IM StatusResponse for a no-op heartbeat.
+	if len(report.Reports) == 0 {
+		report.SuppressResponse = true
 	}
 
 	body, err := EncodeReportData(report)
@@ -313,7 +425,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 	// the subscription if the peer never ACKs. Best-effort sends
 	// (NeedsAck=false / no tracker) return counter=0; skip in that case.
 	if counter != 0 {
-		b.reportCounterOwner.Store(counter, sub.ID)
+		b.reportCounterOwner.Store(reportCounterKey(target.sessionID, counter), sub.ID)
 	}
 	b.logger.Debug("matter.tx.subscribe.report",
 		slog.Int("subscription_id", int(sub.ID)),
@@ -327,8 +439,8 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 // it belonged to is therefore unreachable; close it in the manager
 // (so quotas free up and the engine stops ticking it) and drop the
 // target.
-func (b *Bridge) closeSubscriptionByCounter(counter uint32) {
-	raw, ok := b.reportCounterOwner.LoadAndDelete(counter)
+func (b *Bridge) closeSubscriptionByCounter(sessionID uint16, counter uint32) {
+	raw, ok := b.reportCounterOwner.LoadAndDelete(reportCounterKey(sessionID, counter))
 	if !ok {
 		return
 	}
@@ -348,23 +460,39 @@ func (b *Bridge) closeSubscriptionByCounter(counter uint32) {
 	}
 }
 
-// releaseReportCounter clears the counter→subID mapping after a
-// successful peer ACK. Caller is the inbound HasAck pipeline.
-func (b *Bridge) releaseReportCounter(counter uint32) {
+// releaseReportCounter clears the (session, counter)→subID mapping
+// after a successful peer ACK. Caller is the inbound HasAck pipeline,
+// which supplies the session from the received message header.
+func (b *Bridge) releaseReportCounter(sessionID uint16, counter uint32) {
 	if counter == 0 {
 		return
 	}
-	b.reportCounterOwner.Delete(counter)
+	b.reportCounterOwner.Delete(reportCounterKey(sessionID, counter))
+}
+
+// reportCounterKey composes (sessionID, counter) into the
+// [Bridge.reportCounterOwner] map key. Two concurrent sessions can
+// legitimately reuse the same 32-bit MRP counter (each is seeded from
+// an independent random per Matter §4.5.4), so the subscription-owner
+// lookup must be session-scoped — otherwise session A's ACK could
+// release / reap the subscription session B owns.
+func reportCounterKey(sessionID uint16, counter uint32) uint64 {
+	return uint64(sessionID)<<32 | uint64(counter)
 }
 
 // captureSubTarget records the routing metadata for sub on the bridge
 // so reportSubscription can find it later. Overwrites any prior entry
 // with the same subID — recycled IDs are rare in practice but the
 // engine guarantees ordering of Subscribe-then-tick on the same ID.
-func (b *Bridge) captureSubTarget(subID uint32, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader) {
+func (b *Bridge) captureSubTarget(subID uint32, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, fabricFiltered bool) {
 	if subID == 0 || src == nil || requestHdr == nil {
 		return
 	}
+	// Resolve the requesting fabric + subject the same way the initial
+	// read did (handleSubscribeRequest), so ongoing reports authorize
+	// against the exact identity that opened the subscription.
+	fabricIndex := b.resolveSessionFabric(requestHdr.SessionID)
+	subjectNodeID, subjectCATs := b.resolveSessionSubject(requestHdr.SessionID)
 	b.subTargets.Store(subID, subTarget{
 		src:                 src,
 		hasPeerSourceNodeID: requestHdr.HasSourceNodeID,
@@ -372,6 +500,10 @@ func (b *Bridge) captureSubTarget(subID uint32, src *net.UDPAddr, requestHdr *me
 		exchangeID:          proto.ExchangeID,
 		sessionID:           requestHdr.SessionID,
 		peerInitiator:       proto.Initiator,
+		fabricIndex:         fabricIndex,
+		subjectNodeID:       subjectNodeID,
+		subjectCATs:         subjectCATs,
+		fabricFiltered:      fabricFiltered,
 	})
 }
 
@@ -506,7 +638,7 @@ func (b *Bridge) sendUnsolicitedIM(target subTarget, opcode uint8, payload []byt
 		return 0, err
 	}
 	if tracker != nil && respProto.NeedsAck {
-		tracker.Track(counter, target.exchangeID, datagram, target.src, time.Now())
+		tracker.Track(counter, target.sessionID, target.exchangeID, datagram, target.src, time.Now())
 		return counter, nil
 	}
 	return 0, nil
@@ -545,17 +677,14 @@ func (b *Bridge) handleSubscribeRequest(
 	// matter.js InteractionServer.ts validateReadPaths (#3926, Matter
 	// §8.4.3.2), which gates Read and Subscribe through the same check.
 	if im.ValidateReadPaths(req.AttributeRequests, req.EventRequests) != im.StatusSuccess {
-		body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
-		if err != nil {
-			debugReplyError(b.logger, "encode_subscribe_path_reject", src, err)
-			return err
-		}
-		if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
-			debugReplyError(b.logger, "send_subscribe_path_reject", src, err)
-			return err
-		}
-		b.dischargeOwedAck(proto.ExchangeID)
-		return nil
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "path")
+	}
+
+	// A Subscribe naming no attribute and no event paths at all is
+	// InvalidAction — matter.js InteractionServer.ts:628-633 ("No
+	// attributes or events requested").
+	if len(req.AttributeRequests) == 0 && len(req.EventRequests) == 0 {
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "empty")
 	}
 
 	// Stamp the FabricFiltered flag + requesting FabricIndex into the
@@ -570,12 +699,42 @@ func (b *Bridge) handleSubscribeRequest(
 	subCtx := im.WithFabricFilter(ctx, req.FabricFiltered, subFabricIndex)
 	subCtx = im.WithSubject(subCtx, subSubjectNodeID, subSubjectCATs)
 
-	initialReport := b.buildInitialReport(subCtx, dispatcher, req)
+	initialReport, matchedPaths := b.buildInitialReport(subCtx, dispatcher, req)
+	// A Subscribe whose (possibly wildcard) paths match zero attributes
+	// AND zero events cannot be established — matter.js
+	// ServerSubscription.ts:610-614 rejects it with InvalidAction. The
+	// matched count is taken BEFORE DataVersionFilter suppression, so a
+	// legitimately quiet re-subscribe (all clusters cached) still
+	// establishes.
+	if matchedPaths == 0 {
+		return b.rejectSubscribeInvalidAction(src, requestHdr, proto, "no_match")
+	}
 	subID := b.registerSubscription(src, requestHdr, proto, req, &initialReport)
 	if err := b.streamInitialReportChunks(src, requestHdr, proto, subID, initialReport); err != nil {
 		return err
 	}
 	return b.sendSubscribeResponse(src, requestHdr, proto, req, subID, initialReport)
+}
+
+// rejectSubscribeInvalidAction ships a top-level
+// StatusResponse(InvalidAction) for a Subscribe that cannot be
+// established (illegal paths, no paths, or zero matching paths) and
+// discharges the owed MRP ack. stage tags the debug log line.
+func (b *Bridge) rejectSubscribeInvalidAction(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, stage string) error {
+	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusInvalidAction})
+	if err != nil {
+		debugReplyError(b.logger, "encode_subscribe_reject_"+stage, src, err)
+		return err
+	}
+	if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+		debugReplyError(b.logger, "send_subscribe_reject_"+stage, src, err)
+		return err
+	}
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
+	b.logger.Debug("matter.rx.im.subscribe.reject",
+		slog.String("src", srcString(src)),
+		slog.String("stage", stage))
+	return nil
 }
 
 // subscriptionManagerLocked is a small helper to read b.subManager
@@ -679,12 +838,25 @@ func (b *Bridge) wireMeasurementListenersLocked() {
 		}
 		withPaths++
 		epID := ep.ID
+		epRef := ep
 		logger := b.logger
 		unsub := notifier.OnMatterValueChanged(func() {
 			if logger != nil {
 				logger.Debug("matter.bridge.measurement.notify",
 					slog.Int("endpoint", int(epID)),
 					slog.Int("paths", len(pathSet)))
+			}
+			// Advance the endpoint-hosted DataVersion of every cluster
+			// this change touches BEFORE dirty-marking, so the report
+			// the manager ships carries the post-change version and
+			// controllers' DataVersionFilters miss on the next read.
+			// Mirrors matter.js Datasource.ts:949 (increment per change).
+			bumped := make(map[uint32]struct{}, 1)
+			for _, p := range pathSet {
+				if _, done := bumped[p.Cluster]; !done {
+					epRef.BumpClusterDataVersion(p.Cluster)
+					bumped[p.Cluster] = struct{}{}
+				}
 			}
 			for _, p := range pathSet {
 				mgr.OnAttributeChanged(p)

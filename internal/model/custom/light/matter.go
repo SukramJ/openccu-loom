@@ -227,19 +227,23 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 		// so it stays true (read-only on this projection).
 		return true, true
 	case matterAttrOnOffOnTime:
-		// OnTime (uint16, conformance LT): timed-off countdown. The bridge
-		// has no on-timer engine; defaults to 0 ("no timed off active").
-		// matter.js OnOffServer.ts:102 resets onTime to 0.
-		return uint16(0), true
+		// OnTime (uint16, conformance LT): remaining timed-on countdown
+		// in tenths of a second, driven by the OnWithTimedOff engine.
+		// matter.js OnOffServer.ts:239 #timedOnTick.
+		return s.l.matterOnTime(), true
 	case matterAttrOnOffOffWaitTime:
-		// OffWaitTime (uint16, conformance LT): delayed-off wait. 0 = none.
-		// matter.js OnOffServer.ts:80 resets offWaitTime to 0.
-		return uint16(0), true
+		// OffWaitTime (uint16, conformance LT): remaining delayed-off
+		// guard in tenths of a second. matter.js OnOffServer.ts:312
+		// #delayedOffTick.
+		return s.l.matterOffWaitTime(), true
 	case matterAttrOnOffStartUpOnOff:
 		// StartUpOnOff (StartUpOnOffEnum, conformance LT, quality "X N"):
 		// nullable; null = "keep last state on startup". matter.js
-		// OnOffServer.ts:39 reads `this.state.startUpOnOff ?? null` —
-		// null is the default. (nil, true) encodes the TLV null.
+		// OnOffServer.ts:39 reads `this.state.startUpOnOff ?? null`.
+		// (nil, true) encodes the TLV null.
+		if v := s.l.matterStartUpOnOff(); v != nil {
+			return *v, true
+		}
 		return nil, true
 	case matterAttrFeatureMap:
 		// LT (Lighting) feature, bit 0 (0x01). OnOffLight / DimmableLight
@@ -255,39 +259,100 @@ func (s lightOnOffServer) MatterRead(attrID uint32) (any, bool) {
 }
 
 func (s lightOnOffServer) MatterWrite(ctx context.Context, attrID uint32, value any, priority hmenum.CommandPriority) error {
-	if attrID != matterAttrOnOffOnOff {
+	switch attrID {
+	case matterAttrOnOffOnOff:
+		on, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
+		}
+		var err error
+		if on {
+			err = s.l.TurnOn(ctx, priority)
+		} else {
+			err = s.l.TurnOff(ctx, priority)
+		}
+		if err != nil {
+			return err
+		}
+		s.l.dataVersion.Bump()
+		return nil
+	case matterAttrOnOffOnTime, matterAttrOnOffOffWaitTime:
+		// OnTime / OffWaitTime are RW (on-off.element.ts:31-32). A write
+		// updates the countdown attribute; parking it at 0 or the 0xFFFF
+		// hold ends a running countdown, and writes never start one —
+		// matter.js OnOffServer.ts:66-84 #stopHeldTimer.
+		v, ok := matterWriteUint16(value)
+		if !ok {
+			return fmt.Errorf("%w: OnTime/OffWaitTime write expected uint16, got %T", errMatterValueType, value)
+		}
+		if attrID == matterAttrOnOffOnTime {
+			s.l.matterSetOnTime(v)
+		} else {
+			s.l.matterSetOffWaitTime(v)
+		}
+		s.l.dataVersion.Bump()
+		return nil
+	case matterAttrOnOffStartUpOnOff:
+		// StartUpOnOff is RW VM, nullable, enum 0..2 (on-off.element.ts:33-36).
+		// The value is stored on the projection; the physical power-on
+		// behaviour of an HM device stays governed by its own device
+		// configuration.
+		if value == nil {
+			s.l.matterSetStartUpOnOff(nil)
+			s.l.dataVersion.Bump()
+			return nil
+		}
+		v, ok := matterWriteUint8(value)
+		if !ok {
+			return fmt.Errorf("%w: StartUpOnOff write expected enum8, got %T", errMatterValueType, value)
+		}
+		if v > 2 {
+			return fmt.Errorf("%w: StartUpOnOff constraint 0..2, got %d", errMatterValueType, v)
+		}
+		s.l.matterSetStartUpOnOff(&v)
+		s.l.dataVersion.Bump()
+		return nil
+	default:
 		return fmt.Errorf("%w: 0x%04X", errMatterUnknownAttribute, attrID)
 	}
-	on, ok := value.(bool)
-	if !ok {
-		return fmt.Errorf("%w: OnOff write expected bool, got %T", errMatterValueType, value)
-	}
-	var err error
-	if on {
-		err = s.l.TurnOn(ctx, priority)
-	} else {
-		err = s.l.TurnOff(ctx, priority)
-	}
-	if err != nil {
-		return err
-	}
-	s.l.dataVersion.Bump()
-	return nil
 }
 
-func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any, priority hmenum.CommandPriority) (any, error) {
+// MinWritePrivilege implements
+// [interfaces.MatterClusterAttributeWritePrivilege]: StartUpOnOff is
+// RW VM per on-off.element.ts:34 (write access Manage); the countdown
+// attributes stay at the RW VO default.
+func (s lightOnOffServer) MinWritePrivilege(attrID uint32) uint8 {
+	if attrID == matterAttrOnOffStartUpOnOff {
+		return 4 // Manage
+	}
+	return 3 // Operate
+}
+
+func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	var err error
 	switch cmdID {
 	case matterCmdOff:
 		err = s.l.TurnOff(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOff()
+		}
 	case matterCmdOn:
 		err = s.l.TurnOn(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOn()
+		}
 	case matterCmdToggle:
 		on, observed := s.l.IsOn()
 		if !observed || !on {
 			err = s.l.TurnOn(ctx, priority)
+			if err == nil {
+				s.l.matterTimedHandleOn()
+			}
 		} else {
 			err = s.l.TurnOff(ctx, priority)
+			if err == nil {
+				s.l.matterTimedHandleOff()
+			}
 		}
 	case matterCmdOffWithEffect:
 		// OffWithEffect (LT, mandatory): the bridge has no dimming-effect
@@ -295,16 +360,25 @@ func (s lightOnOffServer) MatterInvoke(ctx context.Context, cmdID uint32, _ any,
 		// device is turned off plainly. matter.js OnOffServer.ts treats
 		// the effect as best-effort. on-off.element.ts:41.
 		err = s.l.TurnOff(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOff()
+		}
 	case matterCmdOnWithRecallGlobalScene:
 		// OnWithRecallGlobalScene (LT, mandatory): no scene engine, so
 		// recall collapses to a plain On. on-off.element.ts:46.
 		err = s.l.TurnOn(ctx, priority)
+		if err == nil {
+			s.l.matterTimedHandleOn()
+		}
 	case matterCmdOnWithTimedOff:
-		// OnWithTimedOff (LT, mandatory): the bridge has no on-timer, so
-		// the timed-off semantics are dropped and the device is turned on
-		// for the duration of the controller's own scheduling.
-		// on-off.element.ts:51.
-		err = s.l.TurnOn(ctx, priority)
+		// OnWithTimedOff (LT, mandatory): full timed-off engine —
+		// AcceptOnlyWhenOn gate, delayed-off guard, OnTime/OffWaitTime
+		// countdowns. matter.js OnOffServer.ts:198-225.
+		control, onTime, offWaitTime, ferr := extractOnWithTimedOff(fields)
+		if ferr != nil {
+			return nil, ferr
+		}
+		err = s.l.matterOnWithTimedOff(ctx, control, onTime, offWaitTime, priority)
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -357,9 +431,14 @@ func (s lightOnOffServer) MatterGeneratedCommands() []uint32 {
 //
 // Transition time is currently ignored; it would map to HM's RAMP_TIME
 // parameter via [Light.TurnOnWith] / [Light.TurnOffWithRamp].
-// MoveToLevel and MoveToLevelWithOnOff differ in whether OnOff state
-// is also affected; on the HM side both collapse to SetLevel because
-// LEVEL=0 implicitly turns the device off and LEVEL>0 turns it on.
+// The non-WithOnOff command variants are gated on the effective
+// ExecuteIfOff option while the device is off (matter.js
+// LevelControlServer.ts:596 #optionsAllowExecution); the WithOnOff
+// variants couple a MinLevel target to Off (LevelControlServer.ts:500).
+// HM dimmers carry a single LEVEL knob (LEVEL=0 implicitly off,
+// LEVEL>0 on), so both couplings collapse onto SetLevel — an
+// ExecuteIfOff level change while off still powers the device on,
+// which is the closest single-knob projection of the Matter state pair.
 type lightLevelServer struct{ l *Light }
 
 func (s lightLevelServer) MatterClusterID() uint32 { return matterClusterLevelControl }
@@ -434,26 +513,54 @@ func (s lightLevelServer) MatterWrite(ctx context.Context, attrID uint32, value 
 func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields any, priority hmenum.CommandPriority) (any, error) {
 	switch cmdID {
 	case matterCmdMoveToLevel, matterCmdMoveToLevelWithOnOff:
-		level, err := extractMoveToLevel(fields)
+		req, err := extractMoveToLevel(fields)
 		if err != nil {
 			return nil, err
 		}
-		if err := s.l.SetLevel(ctx, matterLevelToHM(level), priority); err != nil {
+		withOnOff := cmdID == matterCmdMoveToLevelWithOnOff
+		if !withOnOff && !s.levelOptionsAllowExecution(req.OptionsMask, req.OptionsOverride) {
+			// matter.js LevelControlServer.ts:245 returns without acting
+			// when the effective options forbid execution while the device
+			// is off — a silent Success, not an error status.
+			return nil, nil
+		}
+		level := cropMatterLevel(req.Level)
+		target := matterLevelToHM(level)
+		if withOnOff && level == matterLevelMinDefault {
+			// The WithOnOff variant couples MinLevel to Off: matter.js
+			// LevelControlServer.ts:500 (couple) and chip
+			// LevelControlCluster.cpp:344 flip the OnOff state off when
+			// the target level equals minLevel (Matter §1.6.4.1.2).
+			// HM dimmers carry a single LEVEL knob, so "CurrentLevel=min +
+			// OnOff=false" projects to LEVEL=0.
+			target = 0
+		}
+		if err := s.l.SetLevel(ctx, target, priority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
 		return nil, nil
 
 	case matterCmdMove, matterCmdMoveWithOnOff:
-		// HM has no continuous-rate dimming; treat Move as a no-op that
-		// returns Success so conformance checkers accept the command.
-		// A future implementation could map Rate to RAMP_TIME on devices
-		// that expose it.
+		// A zero rate is rejected before anything else, mirroring
+		// matter.js LevelControlServer.ts:271 (#assertRateValue →
+		// StatusResponseError InvalidCommand); a null/absent rate would
+		// fall back to DefaultMoveRate there and is accepted here.
+		// HM has no continuous-rate dimming; a valid Move is a no-op
+		// that returns Success so conformance checkers accept the
+		// command. A future implementation could map Rate to RAMP_TIME
+		// on devices that expose it.
+		if rate, ok := extractMoveRate(fields); ok && rate == 0 {
+			return nil, errors.New("matter: Move: invalid command argument: rate must not be 0")
+		}
 		return nil, nil
 
 	case matterCmdStep, matterCmdStepWithOnOff:
-		// Apply a discrete brightness step.  StepSize is in the same 0–254
-		// range as CurrentLevel.  The step is clamped by SetLevel to [0,1].
+		// Apply a discrete brightness step. StepSize is in the same
+		// 1–254 range as CurrentLevel; the target is clamped to
+		// [MinLevel, MaxLevel] = [1, 254], mirroring matter.js
+		// Transitions.ts:139 (min/max property clamp) — a plain Step
+		// can therefore never turn the device off.
 		stepSize, err := extractStepSize(fields)
 		if err != nil {
 			return nil, err
@@ -462,14 +569,24 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 		if err != nil {
 			return nil, err
 		}
+		if cmdID == matterCmdStep {
+			// Fields decode first, gate second — matter.js validates the
+			// payload before the options check reaches the handler.
+			mask, override := extractLevelOptions(fields)
+			if !s.levelOptionsAllowExecution(mask, override) {
+				// Silent Success while off; LevelControlServer.ts:387.
+				return nil, nil
+			}
+		}
 		b, _ := s.l.Brightness()
 		current := brightnessToMatter(b)
 		var next uint8
 		if stepMode == wire.LevelStepModeDown {
-			if stepSize >= current {
-				next = 0
+			diff := int(current) - int(stepSize)
+			if diff < int(matterLevelMinDefault) {
+				next = matterLevelMinDefault
 			} else {
-				next = current - stepSize
+				next = uint8(diff) //nolint:gosec // clamped above; see #20
 			}
 		} else {
 			sum := int(current) + int(stepSize)
@@ -479,7 +596,17 @@ func (s lightLevelServer) MatterInvoke(ctx context.Context, cmdID uint32, fields
 				next = uint8(sum) //nolint:gosec // clamped above; see #20
 			}
 		}
-		if err := s.l.SetLevel(ctx, matterLevelToHM(next), priority); err != nil {
+		target := matterLevelToHM(next)
+		if cmdID == matterCmdStepWithOnOff && next == matterLevelMinDefault {
+			// StepWithOnOff clamped to MinLevel turns the device off
+			// (Matter §1.6.7.6: new CurrentLevel == minimum → OnOff
+			// FALSE). Mirrors chip LevelControlCluster.cpp:508, which
+			// compares the post-clamp target; matter.js couple()
+			// compares the pre-clamp target and would stay on — chip +
+			// spec win here. Single-LEVEL-knob projection: LEVEL=0.
+			target = 0
+		}
+		if err := s.l.SetLevel(ctx, target, priority); err != nil {
 			return nil, err
 		}
 		s.l.dataVersion.Bump()
@@ -539,36 +666,136 @@ func (s lightLevelServer) MatterGeneratedCommands() []uint32 {
 	return nil
 }
 
-// extractMoveToLevel pulls the Level field out of a MoveToLevel /
-// MoveToLevelWithOnOff request. The bridge has already TLV-decoded the
-// payload; we accept either a bare uint8 (the minimal "level only"
-// shape) or a map carrying a "level" key. A typed request struct from
-// internal/north/matter/cluster/levelcontrol/ may replace this once
-// that package exists.
-func extractMoveToLevel(fields any) (uint8, error) {
+// levelOptionsAllowExecution mirrors matter.js LevelControlServer.ts:581
+// (#calculateEffectiveOptions) + :596 (#optionsAllowExecution) for the
+// non-WithOnOff command variants: while the device is off, the command
+// only executes when the effective ExecuteIfOff option (bit 0) is set.
+// The Options attribute is a constant 0 on this projection, so the
+// effective option reduces to "mask bit set AND override bit set". An
+// unobserved OnOff data point counts as off, consistent with
+// lightOnOffServer.MatterRead's FALSE default.
+func (s lightLevelServer) levelOptionsAllowExecution(optionsMask, optionsOverride uint8) bool {
+	const executeIfOffBit = 0x01
+	if optionsMask&executeIfOffBit != 0 && optionsOverride&executeIfOffBit != 0 {
+		return true
+	}
+	on, _ := s.l.IsOn()
+	return on
+}
+
+// cropMatterLevel crops a requested level into [MinLevel, MaxLevel] =
+// [1, 254]. Mirrors matter.js LevelControlServer.ts:249
+// cropValueRange(level, this.minLevel, this.maxLevel) with the LT
+// feature's minLevel=1 / maxLevel=254 defaults (LevelControlServer.ts:64-70).
+func cropMatterLevel(level uint8) uint8 {
+	if level < matterLevelMinDefault {
+		return matterLevelMinDefault
+	}
+	if level > matterLevelMax {
+		return matterLevelMax
+	}
+	return level
+}
+
+// extractMoveToLevel pulls the MoveToLevel / MoveToLevelWithOnOff
+// request out of the bridge-decoded fields. The wire path delivers the
+// typed [wire.MoveToLevelRequest]; a bare uint8 and the map carrying a
+// "level" key are legacy shapes kept for in-package callers (both
+// carry no Options, so the ExecuteIfOff gate sees an all-zero bitmap).
+func extractMoveToLevel(fields any) (wire.MoveToLevelRequest, error) {
 	switch v := fields.(type) {
-	case uint8:
+	case wire.MoveToLevelRequest:
 		return v, nil
+	case uint8:
+		return wire.MoveToLevelRequest{Level: v}, nil
 	case map[string]any:
 		raw, ok := v["level"]
 		if !ok {
-			return 0, fmt.Errorf("%w: MoveToLevel missing level field", errMatterValueType)
+			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel missing level field", errMatterValueType)
 		}
 		level, ok := raw.(uint8)
 		if !ok {
-			return 0, fmt.Errorf("%w: MoveToLevel level expected uint8, got %T", errMatterValueType, raw)
+			return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel level expected uint8, got %T", errMatterValueType, raw)
 		}
-		return level, nil
+		return wire.MoveToLevelRequest{Level: level}, nil
 	default:
-		return 0, fmt.Errorf("%w: MoveToLevel expected uint8 or map[string]any, got %T", errMatterValueType, fields)
+		return wire.MoveToLevelRequest{}, fmt.Errorf("%w: MoveToLevel expected wire.MoveToLevelRequest, uint8 or map[string]any, got %T", errMatterValueType, fields)
 	}
 }
 
-// extractStepSize pulls the StepSize field (tag 1) out of a Step /
-// StepWithOnOff payload. Accepts a bare uint8 or a map[string]any
-// with a "step_size" key.
+// extractMoveRate pulls the nullable Rate field (context tag 1) out of
+// a Move / MoveWithOnOff payload. Returns ok=false when the field is
+// absent or null — matter.js substitutes DefaultMoveRate then
+// (LevelControlServer.ts:274). The wire path lands here as
+// decodeGenericTagMap's map[uint8]any; the string-keyed shape serves
+// in-package tests.
+func extractMoveRate(fields any) (uint8, bool) {
+	switch v := fields.(type) {
+	case map[uint8]any:
+		raw, ok := v[1]
+		if !ok || raw == nil {
+			return 0, false
+		}
+		return wireUint8(raw)
+	case map[string]any:
+		raw, ok := v["rate"]
+		if !ok || raw == nil {
+			return 0, false
+		}
+		r, ok := raw.(uint8)
+		return r, ok
+	default:
+		return 0, false
+	}
+}
+
+// extractLevelOptions pulls the OptionsMask / OptionsOverride bitmaps
+// (context tags 3 / 4 per Matter §1.6.7.3) out of a Step payload.
+// Absent fields default to 0, matching the spec default. The wire path
+// lands here as decodeGenericTagMap's map[uint8]any; the string-keyed
+// shape serves in-package tests.
+func extractLevelOptions(fields any) (mask, override uint8) {
+	switch v := fields.(type) {
+	case map[uint8]any:
+		if raw, ok := v[3]; ok {
+			if m, mok := wireUint8(raw); mok {
+				mask = m
+			}
+		}
+		if raw, ok := v[4]; ok {
+			if o, ook := wireUint8(raw); ook {
+				override = o
+			}
+		}
+	case map[string]any:
+		if raw, ok := v["options_mask"].(uint8); ok {
+			mask = raw
+		}
+		if raw, ok := v["options_override"].(uint8); ok {
+			override = raw
+		}
+	}
+	return mask, override
+}
+
+// extractStepSize pulls the StepSize field (context tag 1) out of a
+// Step / StepWithOnOff payload. Step has no typed decoder in the bridge,
+// so the real wire path lands here as the tag-keyed map[uint8]any that
+// decodeGenericTagMap produces (unsigned ints as uint64) — see
+// internal/north/matter/bridge/fields_reader.go. The string-keyed shape
+// is kept for the in-package tests.
 func extractStepSize(fields any) (uint8, error) {
 	switch v := fields.(type) {
+	case map[uint8]any:
+		raw, ok := v[1]
+		if !ok {
+			return 0, fmt.Errorf("%w: Step missing step_size field (tag 1)", errMatterValueType)
+		}
+		s, ok := wireUint8(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_size expected integer, got %T", errMatterValueType, raw)
+		}
+		return s, nil
 	case map[string]any:
 		raw, ok := v["step_size"]
 		if !ok {
@@ -580,24 +807,132 @@ func extractStepSize(fields any) (uint8, error) {
 		}
 		return s, nil
 	default:
-		return 0, fmt.Errorf("%w: Step expected map[string]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: Step expected map[uint8]any, got %T", errMatterValueType, fields)
 	}
 }
 
-// extractStepMode pulls the StepMode field (tag 0) out of a Step /
-// StepWithOnOff payload. Returns [wire.LevelStepModeUp] (0) when absent.
+// extractStepMode pulls the StepMode field (context tag 0) out of a
+// Step / StepWithOnOff payload. Returns [wire.LevelStepModeUp] (0) when
+// absent, matching the pre-decoded default.
 func extractStepMode(fields any) (uint8, error) {
-	m, ok := fields.(map[string]any)
-	if !ok {
+	switch m := fields.(type) {
+	case map[uint8]any:
+		raw, ok := m[0]
+		if !ok {
+			return wire.LevelStepModeUp, nil
+		}
+		mode, ok := wireUint8(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_mode expected integer, got %T", errMatterValueType, raw)
+		}
+		return mode, nil
+	case map[string]any:
+		raw, ok := m["step_mode"]
+		if !ok {
+			return wire.LevelStepModeUp, nil
+		}
+		mode, ok := raw.(uint8)
+		if !ok {
+			return 0, fmt.Errorf("%w: Step step_mode expected uint8, got %T", errMatterValueType, raw)
+		}
+		return mode, nil
+	default:
 		return wire.LevelStepModeUp, nil
 	}
-	raw, ok := m["step_mode"]
-	if !ok {
-		return wire.LevelStepModeUp, nil
+}
+
+// wireUint8 reads an unsigned integer out of a value decoded from the
+// generic tag-keyed fields map, where decodeGenericTagMap stores
+// unsigned ints as uint64. The narrower Go-type cases keep the helper
+// usable from tests that pass those directly.
+func wireUint8(raw any) (uint8, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint8(n & 0xFF), true
+	case uint8:
+		return n, true
+	default:
+		return 0, false
 	}
-	mode, ok := raw.(uint8)
-	if !ok {
-		return 0, fmt.Errorf("%w: Step step_mode expected uint8, got %T", errMatterValueType, raw)
+}
+
+// wireUint16 is the 16-bit sibling of [wireUint8].
+func wireUint16(raw any) (uint16, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint16(n & 0xFFFF), true
+	case uint16:
+		return n, true
+	default:
+		return 0, false
 	}
-	return mode, nil
+}
+
+// matterWriteUint16 coerces an attribute-write value into uint16. The
+// IM write layer delivers decoded TLV unsigned ints as uint64; the
+// narrower types keep in-package callers working.
+func matterWriteUint16(value any) (uint16, bool) {
+	return wireUint16(value)
+}
+
+// matterWriteUint8 coerces an attribute-write value into uint8.
+func matterWriteUint8(value any) (uint8, bool) {
+	return wireUint8(value)
+}
+
+// extractOnWithTimedOff pulls the OnWithTimedOff (0x42) fields out of
+// the bridge-decoded payload. Tags per on-off.element.ts:50-55:
+// [0] OnOffControl (bitmap8, constraint "0 to 1"), [1] OnTime
+// (uint16, max 65534), [2] OffWaitTime (uint16, max 65534). All three
+// are conformance M; absent fields default to 0 for robustness. The
+// constraints reject the reserved 0xFFFF hold value on the command
+// path — it is reachable only via an attribute write.
+func extractOnWithTimedOff(fields any) (control uint8, onTime, offWaitTime uint16, err error) {
+	read := func(rawControl, rawOnTime, rawOffWait any) error {
+		if rawControl != nil {
+			v, ok := wireUint8(rawControl)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OnOffControl expected integer, got %T", errMatterValueType, rawControl)
+			}
+			control = v
+		}
+		if rawOnTime != nil {
+			v, ok := wireUint16(rawOnTime)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OnTime expected integer, got %T", errMatterValueType, rawOnTime)
+			}
+			onTime = v
+		}
+		if rawOffWait != nil {
+			v, ok := wireUint16(rawOffWait)
+			if !ok {
+				return fmt.Errorf("%w: OnWithTimedOff OffWaitTime expected integer, got %T", errMatterValueType, rawOffWait)
+			}
+			offWaitTime = v
+		}
+		return nil
+	}
+	switch v := fields.(type) {
+	case map[uint8]any:
+		err = read(v[0], v[1], v[2])
+	case map[string]any:
+		err = read(v["on_off_control"], v["on_time"], v["off_wait_time"])
+	case nil:
+		// No fields decoded — all defaults.
+	default:
+		return 0, 0, 0, fmt.Errorf("%w: OnWithTimedOff expected map[uint8]any, got %T", errMatterValueType, fields)
+	}
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if control > 1 {
+		return 0, 0, 0, fmt.Errorf("%w: OnOffControl constraint 0..1, got %d", errMatterValueType, control)
+	}
+	if onTime > 0xFFFE {
+		return 0, 0, 0, fmt.Errorf("%w: OnTime constraint max 65534, got %d", errMatterValueType, onTime)
+	}
+	if offWaitTime > 0xFFFE {
+		return 0, 0, 0, fmt.Errorf("%w: OffWaitTime constraint max 65534, got %d", errMatterValueType, offWaitTime)
+	}
+	return control, onTime, offWaitTime, nil
 }

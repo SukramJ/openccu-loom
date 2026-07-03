@@ -655,13 +655,32 @@ func (s climateHumidityServer) MatterAttributes() []uint32 {
 	return []uint32{matterAttrMeasuredValue}
 }
 
-// extractSetpointRaiseLower pulls (mode, amount) out of the request
-// payload. The bridge has already TLV-decoded the payload; we accept
-// either a struct-shaped map or a raw 2-element tuple. A typed request
-// struct from internal/north/matter/cluster/thermostat/ may replace
-// this once that package exists.
+// extractSetpointRaiseLower pulls (mode, amount) out of a
+// SetpointRaiseLower request. Mode is context tag 0 (enum8), Amount is
+// context tag 1 (int8). SetpointRaiseLower has no typed decoder in the
+// bridge, so the real wire path lands here as the tag-keyed map[uint8]any
+// that decodeGenericTagMap produces — unsigned ints as uint64, signed
+// ints as int64 (see internal/north/matter/bridge/fields_reader.go). The
+// string-keyed shape is kept for the in-package tests.
 func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) {
 	switch v := fields.(type) {
+	case map[uint8]any:
+		if rawMode, ok := v[0]; ok {
+			m, ok := wireSetpointMode(rawMode)
+			if !ok {
+				return 0, 0, fmt.Errorf("%w: SetpointRaiseLower mode expected integer, got %T", errMatterValueType, rawMode)
+			}
+			mode = m
+		}
+		rawAmount, ok := v[1]
+		if !ok {
+			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower missing amount (tag 1)", errMatterValueType)
+		}
+		amount, ok = wireSetpointAmount(rawAmount)
+		if !ok {
+			return 0, 0, fmt.Errorf("%w: SetpointRaiseLower amount expected integer, got %T", errMatterValueType, rawAmount)
+		}
+		return mode, amount, nil
 	case map[string]any:
 		rawMode, ok := v["mode"]
 		if !ok {
@@ -681,6 +700,35 @@ func extractSetpointRaiseLower(fields any) (mode uint8, amount int8, err error) 
 		}
 		return mode, amount, nil
 	default:
-		return 0, 0, fmt.Errorf("%w: SetpointRaiseLower expected map[string]any, got %T", errMatterValueType, fields)
+		return 0, 0, fmt.Errorf("%w: SetpointRaiseLower expected map[uint8]any, got %T", errMatterValueType, fields)
+	}
+}
+
+// wireSetpointMode reads the SetpointRaiseLower Mode enum from a value
+// decoded by decodeGenericTagMap (unsigned ints land as uint64).
+func wireSetpointMode(raw any) (uint8, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint8(n & 0xFF), true
+	case uint8:
+		return n, true
+	default:
+		return 0, false
+	}
+}
+
+// wireSetpointAmount reads the SetpointRaiseLower Amount (signed int8)
+// from a value decoded by decodeGenericTagMap (signed ints land as
+// int64).
+func wireSetpointAmount(raw any) (int8, bool) {
+	switch n := raw.(type) {
+	case int64:
+		return int8(n), true //nolint:gosec // field is a signed byte per spec; see #20
+	case int8:
+		return n, true
+	case int:
+		return int8(n), true //nolint:gosec // field is a signed byte per spec; see #20
+	default:
+		return 0, false
 	}
 }

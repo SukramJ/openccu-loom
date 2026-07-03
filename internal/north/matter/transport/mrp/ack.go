@@ -73,6 +73,10 @@ const (
 type AckObligation struct {
 	// AckCounter is the message counter we must acknowledge.
 	AckCounter uint32
+	// SessionID is the session the original Reliable message arrived
+	// on. Exchange IDs are only unique per session (peers pick them
+	// independently), so the obligation carries both halves of the key.
+	SessionID uint16
 	// ExchangeID is the exchange the original Reliable message
 	// belonged to. The standalone ACK rides the same exchange so the
 	// peer's MRP layer correlates it with the in-flight message.
@@ -86,15 +90,28 @@ type AckObligation struct {
 	DueAt time.Time
 }
 
+// ExchangeKey identifies an exchange scoped to its session. Exchange
+// IDs are picked independently by every peer, so two concurrent
+// controllers (or an old and a new CASE session of the same
+// controller) can carry the same 16-bit exchange ID — matter.js
+// treats an exchange whose session no longer matches as a different
+// exchange (ExchangeManager.ts:287 invalidates the lookup when
+// `exchange.session.id !== session.id`).
+type ExchangeKey struct {
+	SessionID  uint16
+	ExchangeID uint16
+}
+
 // AckTracker bookkeeps outstanding ACK obligations across exchanges.
 // It is concurrency-safe and I/O-free; the message dispatcher pumps it
-// via [Owe] / [Discharge] / [Due]. One obligation per exchange is
-// retained at any time — Matter §4.12.4.2 lets the implementation
-// collapse cumulative ACKs (a single ACK for the latest counter
-// implicitly covers earlier counters in the same exchange).
+// via [Owe] / [Discharge] / [Due]. One obligation per (session,
+// exchange) is retained at any time — Matter §4.12.4.2 lets the
+// implementation collapse cumulative ACKs (a single ACK for the
+// latest counter implicitly covers earlier counters in the same
+// exchange).
 type AckTracker struct {
 	mu      sync.Mutex
-	pending map[uint16]AckObligation // keyed on ExchangeID
+	pending map[ExchangeKey]AckObligation
 	delay   time.Duration
 }
 
@@ -106,51 +123,55 @@ func NewAckTracker(delay time.Duration) *AckTracker {
 		delay = 0
 	}
 	return &AckTracker{
-		pending: make(map[uint16]AckObligation),
+		pending: make(map[ExchangeKey]AckObligation),
 		delay:   delay,
 	}
 }
 
-// Owe records an obligation to ACK ackCounter on exchangeID. If a
-// pending obligation already exists for the exchange, it is replaced
-// with the higher counter — only the latest ACK needs to ride the
-// wire (Matter §4.12.4.2 cumulative-ACK semantics).
-func (t *AckTracker) Owe(ackCounter uint32, exchangeID uint16, initiator bool, now time.Time) {
+// Owe records an obligation to ACK ackCounter on the (session,
+// exchange) pair. If a pending obligation already exists for the
+// pair, it is replaced with the higher counter — only the latest ACK
+// needs to ride the wire (Matter §4.12.4.2 cumulative-ACK semantics).
+func (t *AckTracker) Owe(ackCounter uint32, sessionID, exchangeID uint16, initiator bool, now time.Time) {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	prev, ok := t.pending[exchangeID]
+	prev, ok := t.pending[key]
 	if ok && counterGE(prev.AckCounter, ackCounter) {
 		// Earlier obligation already covers ackCounter; keep the older
 		// DueAt so we don't continually slide the deadline forward.
 		return
 	}
-	t.pending[exchangeID] = AckObligation{
+	t.pending[key] = AckObligation{
 		AckCounter: ackCounter,
+		SessionID:  sessionID,
 		ExchangeID: exchangeID,
 		Initiator:  initiator,
 		DueAt:      now.Add(t.delay),
 	}
 }
 
-// Discharge removes the pending obligation for exchangeID. Returns
-// true when an obligation existed (so the caller can decide whether
-// to skip a redundant standalone-ACK emission). Called by the
-// dispatcher when an outbound message piggybacks the ACK or when the
-// exchange is torn down.
-func (t *AckTracker) Discharge(exchangeID uint16) bool {
+// Discharge removes the pending obligation for the (session,
+// exchange) pair. Returns true when an obligation existed (so the
+// caller can decide whether to skip a redundant standalone-ACK
+// emission). Called by the dispatcher when an outbound message
+// piggybacks the ACK or when the exchange is torn down.
+func (t *AckTracker) Discharge(sessionID, exchangeID uint16) bool {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, ok := t.pending[exchangeID]
+	_, ok := t.pending[key]
 	if !ok {
 		return false
 	}
-	delete(t.pending, exchangeID)
+	delete(t.pending, key)
 	return true
 }
 
-// LookupAndDischarge returns the latest pending ack-counter for
-// exchangeID and clears the obligation in one atomic step. Returns
-// (counter, true) when an obligation existed; (0, false) otherwise.
+// LookupAndDischarge returns the latest pending ack-counter for the
+// (session, exchange) pair and clears the obligation in one atomic
+// step. Returns (counter, true) when an obligation existed;
+// (0, false) otherwise.
 //
 // Used by reply-construction paths that want to piggyback the most
 // recent inbound counter — not just the trigger message's. The
@@ -162,15 +183,37 @@ func (t *AckTracker) Discharge(exchangeID uint16) bool {
 // chip-tool's ReliableMessaging drops the reply with
 // `Dropping message without piggyback ack when we are waiting for
 // an ack` and the subscription times out.
-func (t *AckTracker) LookupAndDischarge(exchangeID uint16) (uint32, bool) {
+func (t *AckTracker) LookupAndDischarge(sessionID, exchangeID uint16) (uint32, bool) {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	obl, ok := t.pending[exchangeID]
+	obl, ok := t.pending[key]
 	if !ok {
 		return 0, false
 	}
-	delete(t.pending, exchangeID)
+	delete(t.pending, key)
 	return obl.AckCounter, true
+}
+
+// ExpediteDue makes the pending obligation for the (session, exchange)
+// pair immediately due, so the next pump pass emits its StandaloneAck
+// without waiting out the piggyback grace window. Used on authentic
+// duplicates: the peer is retransmitting precisely because it never
+// saw an ack, so delaying the fresh ack by the grace window invites
+// further retransmits. Mirrors matter.js MessageExchange.ts:428-433
+// (duplicate + requiresAck → sendStandaloneAckForMessage immediately).
+// Returns whether an obligation existed.
+func (t *AckTracker) ExpediteDue(sessionID, exchangeID uint16) bool {
+	key := ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	obl, ok := t.pending[key]
+	if !ok {
+		return false
+	}
+	obl.DueAt = time.Time{}
+	t.pending[key] = obl
+	return true
 }
 
 // Pending reports the count of in-flight obligations.

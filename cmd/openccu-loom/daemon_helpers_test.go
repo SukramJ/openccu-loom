@@ -29,6 +29,8 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/operational"
+	matterstore "github.com/SukramJ/openccu-loom/internal/north/matter/store"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -538,6 +540,86 @@ func TestCaseResumptionStoreAdapter_GetByID_NilManager_ReturnsNilNil(t *testing.
 	}
 	if rec != nil {
 		t.Errorf("expected nil record for nil manager, got %v", rec)
+	}
+}
+
+// TestCaseResumptionStoreAdapter_GetByID_MapsFabricPeerAndCATsThrough
+// verifies that GetByID's manual field-by-field copy
+// (caseResumptionStoreAdapter.GetByID in daemon_matter.go) carries
+// FabricIndex, PeerNodeID and PeerCATs through from the persisted
+// operational.Manager record into the sigma.ResumptionRecord the
+// resume path consumes — without these the Sigma2_Resume path in
+// sigma.Responder.tryResume would adopt a zero-value fabric/peer
+// identity for every resumed session.
+func TestCaseResumptionStoreAdapter_GetByID_MapsFabricPeerAndCATsThrough(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	// buildTestOperationalManager + matterStoreFromManager open TWO
+	// separate SQLite files (the latter is a store-only parallel DB for
+	// tests that don't need manager+store to share state) — the
+	// matter_resumption FOREIGN KEY on fabric_index requires the fabric
+	// row to live in the SAME database the manager persists into, so
+	// this test wires its own store+manager pair against one DSN.
+	dsn := "file:" + t.TempDir() + "/matter_resumption_adapter_test.db?_pragma=journal_mode(WAL)"
+	gooseMigrateMu.Lock()
+	db, err := sqlitestore.Open(ctx, dsn)
+	gooseMigrateMu.Unlock()
+	if err != nil {
+		t.Fatalf("sqlitestore.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	store := matterstore.New(db)
+	mgr := operational.NewManager(store)
+
+	resumptionID := bytes.Repeat([]byte{0x11}, 16)
+	sharedSecret := bytes.Repeat([]byte{0x22}, 32)
+	const fabricIndex uint8 = 3
+	const peerNodeID uint64 = 0x1122334455667788
+	cats := []uint32{0xAABBCCDD}
+
+	// matter_resumption.fabric_index carries a FOREIGN KEY to
+	// matter_fabrics(fabric_index) — the fabric row must exist before
+	// PersistResumption can insert.
+	if _, err := store.AddFabric(ctx, matterstore.FabricRecord{
+		FabricIndex:   fabricIndex,
+		FabricID:      0xF0F0F0F0,
+		NodeID:        peerNodeID,
+		RootPublicKey: bytes.Repeat([]byte{0x04}, 65),
+	}); err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+
+	if err := mgr.PersistResumption(ctx, fabricIndex, peerNodeID, resumptionID, sharedSecret, cats); err != nil {
+		t.Fatalf("PersistResumption: %v", err)
+	}
+
+	a := caseResumptionStoreAdapter{mgr: mgr}
+	rec, err := a.GetByID(resumptionID)
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if rec == nil {
+		t.Fatal("expected non-nil record for a persisted resumption id")
+	}
+	if rec.FabricIndex != fabricIndex {
+		t.Errorf("FabricIndex=%d, want %d", rec.FabricIndex, fabricIndex)
+	}
+	if rec.PeerNodeID != peerNodeID {
+		t.Errorf("PeerNodeID=%#x, want %#x", rec.PeerNodeID, peerNodeID)
+	}
+	if len(rec.PeerCATs) != len(cats) {
+		t.Fatalf("PeerCATs length=%d, want %d", len(rec.PeerCATs), len(cats))
+	}
+	for i, want := range cats {
+		if rec.PeerCATs[i] != want {
+			t.Errorf("PeerCATs[%d]=%#x, want %#x", i, rec.PeerCATs[i], want)
+		}
+	}
+	if !bytes.Equal(rec.SharedSecret, sharedSecret) {
+		t.Errorf("SharedSecret=%x, want %x", rec.SharedSecret, sharedSecret)
+	}
+	if !bytes.Equal(rec.ResumptionID, resumptionID) {
+		t.Errorf("ResumptionID=%x, want %x", rec.ResumptionID, resumptionID)
 	}
 }
 

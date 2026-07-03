@@ -27,6 +27,21 @@ func clusterDataVersion(srv interfaces.MatterClusterServer) uint32 {
 	return 0
 }
 
+// clusterDataVersionFor resolves the DataVersion for srv on ep. Root
+// and Aggregator servers are persistent instances, so their embedded
+// tracker is authoritative. Bridged endpoints materialise their
+// cluster servers fresh on every dispatch ([ClusterServers]) — an
+// instance-embedded tracker would report a new random initial version
+// on every read, so their version identity lives on the persistent
+// [Endpoint] keyed by cluster id instead. Mirrors matter.js
+// Datasource.ts:349 (version set once per lifetime, not per access).
+func clusterDataVersionFor(ep *Endpoint, srv interfaces.MatterClusterServer) uint32 {
+	if ep == nil || ep.IsRoot() || ep.IsAggregator() {
+		return clusterDataVersion(srv)
+	}
+	return ep.ClusterDataVersion(srv.MatterClusterID())
+}
+
 // TopologyDispatcher bridges the assembled [Topology] to the
 // Interaction-Model [im.Dispatcher] surface. Each Read / Write /
 // Invoke call resolves the addressed endpoint via the topology, then
@@ -137,7 +152,7 @@ func (d *TopologyDispatcher) Read(ctx context.Context, path im.ConcreteAttribute
 				aPath := cPath
 				aPath.Attribute = attrID
 				aPath.HasAttribute = true
-				results = append(results, readOne(ctx, srv, aPath))
+				results = append(results, readOne(ctx, ep, srv, aPath))
 			}
 		}
 	}
@@ -180,7 +195,16 @@ func (d *TopologyDispatcher) Write(ctx context.Context, path im.ConcreteAttribut
 				aPath := cPath
 				aPath.Attribute = attrID
 				aPath.HasAttribute = true
-				results = append(results, writeOne(ctx, srv, aPath, value))
+				res := writeOne(ctx, srv, aPath, value)
+				// A successful write mutated cluster state; advance the
+				// endpoint-hosted DataVersion so DataVersionFilters miss
+				// and subscribers see the change (matter.js
+				// Datasource.ts:949). Root/Aggregator servers bump their
+				// own persistent trackers inside the write handler.
+				if res.Status == im.StatusSuccess && !ep.IsRoot() && !ep.IsAggregator() {
+					ep.BumpClusterDataVersion(cPath.Cluster)
+				}
+				results = append(results, res)
 			}
 		}
 	}
@@ -359,8 +383,8 @@ func (d *TopologyDispatcher) attributesFor(srv interfaces.MatterClusterServer, p
 // its current DataVersion is stamped on the ReadResult. The IM layer
 // uses this in HandleReadRequest for DataVersionFilter evaluation.
 // Mirrors matter.js InteractionServer.ts attributeReportPayload building.
-func readOne(ctx context.Context, srv interfaces.MatterClusterServer, path im.ConcreteAttributePath) im.ReadResult {
-	dv := clusterDataVersion(srv)
+func readOne(ctx context.Context, ep *Endpoint, srv interfaces.MatterClusterServer, path im.ConcreteAttributePath) im.ReadResult {
+	dv := clusterDataVersionFor(ep, srv)
 	// Fabric-scoped attributes: prefer MatterReadFiltered when the
 	// cluster server opts in by implementing FabricScopedReader.
 	if fsr, ok := srv.(interfaces.FabricScopedReader); ok {
@@ -602,6 +626,62 @@ func (d *TopologyDispatcher) MinReadPrivilege(endpoint uint16, clusterID, attrID
 	return 1
 }
 
+// MinWritePrivilege implements [im.AttributeWritePrivilegeProvider]. It
+// looks up the cluster server for (endpoint, clusterID) and consults the
+// server's [interfaces.MatterClusterAttributeWritePrivilege] optional
+// interface for the given attrID. Returns 3 (Operate) — the Matter
+// §9.10.4.4 default write privilege — when the cluster is not found, does
+// not implement the interface, or reports no elevated requirement.
+// Returns the server-reported value (e.g. 4=Manage for
+// BasicInformation.NodeLabel, 5=Administer for AccessControl.ACL)
+// otherwise. Mirrors the writeAccess bits in matter.js
+// packages/model/src/standard/elements/*.element.ts.
+func (d *TopologyDispatcher) MinWritePrivilege(endpoint uint16, clusterID, attrID uint32) uint8 {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 3
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		priv, ok := srv.(interfaces.MatterClusterAttributeWritePrivilege)
+		if !ok {
+			return 3
+		}
+		return priv.MinWritePrivilege(attrID)
+	}
+	return 3
+}
+
+// MinInvokePrivilege implements [im.CommandInvokePrivilegeProvider]. It
+// looks up the cluster server for (endpoint, clusterID) and consults the
+// server's [interfaces.MatterClusterCommandInvokePrivilege] optional
+// interface for the given cmdID. Returns 3 (Operate) — the Matter
+// §9.10.4.4 default invoke privilege — when the cluster is not found,
+// does not implement the interface, or reports no elevated requirement.
+// Returns the server-reported value (e.g. 5=Administer for
+// OperationalCredentials.RemoveFabric) otherwise. Mirrors the
+// invokeAccess bits in matter.js
+// packages/model/src/standard/elements/*.element.ts.
+func (d *TopologyDispatcher) MinInvokePrivilege(endpoint uint16, clusterID, cmdID uint32) uint8 {
+	ep := d.topology.FindByID(endpoint)
+	if ep == nil {
+		return 3
+	}
+	for _, srv := range ClusterServers(ep) {
+		if srv.MatterClusterID() != clusterID {
+			continue
+		}
+		priv, ok := srv.(interfaces.MatterClusterCommandInvokePrivilege)
+		if !ok {
+			return 3
+		}
+		return priv.MinInvokePrivilege(cmdID)
+	}
+	return 3
+}
+
 // CheckACL implements [im.ACLChecker] (Matter §9.10). It grants the request
 // when the requesting fabric holds a CASE ACL entry whose subject covers
 // (subjectNodeID, subjectCATs), whose target covers (endpoint, clusterID),
@@ -629,6 +709,12 @@ func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, su
 		// Fail closed: an ACL that cannot be evaluated must not grant access.
 		return im.StatusUnsupportedAccess
 	}
+	// Resolve the endpoint once for device-type-restricted targets;
+	// nil (no topology / unknown endpoint) conservatively fails those.
+	var ep *Endpoint
+	if d.topology != nil {
+		ep = d.topology.FindByID(endpoint)
+	}
 	var best store.Privilege
 	for _, e := range entries {
 		// Operational unicast sessions are CASE-authenticated; only CASE
@@ -639,7 +725,7 @@ func (d *TopologyDispatcher) CheckACL(ctx context.Context, fabricIndex uint8, su
 		if !aclSubjectMatches(e.Subjects, subjectNodeID, subjectCATs) {
 			continue
 		}
-		if !aclTargetMatches(e.Targets, endpoint, clusterID) {
+		if !aclTargetMatches(e.Targets, ep, endpoint, clusterID) {
 			continue
 		}
 		if e.Privilege > best {
@@ -733,9 +819,36 @@ func matchesCATSubject(entryCAT uint32, subjectCATs []uint32) bool {
 	return false
 }
 
+// endpointHasDeviceType reports whether ep advertises deviceType in
+// its Descriptor DeviceTypeList — the resolver behind device-type ACL
+// targets (chip AccessControl.h:53 DeviceTypeResolver /
+// ProviderDeviceTypeResolver.h:34, backed by the data model's
+// per-endpoint device-type list). The list mirrors what the Descriptor
+// cluster serves: RootNode for EP 0, Aggregator for EP 1, and the
+// primary device type + BridgedNode for bridged endpoints (see
+// materialize.go DeviceTypeList assembly).
+func endpointHasDeviceType(ep *Endpoint, deviceType uint32) bool {
+	if ep == nil {
+		return false
+	}
+	switch {
+	case ep.IsRoot():
+		return deviceType == deviceTypeRootNode
+	case ep.IsAggregator():
+		return deviceType == deviceTypeAggregator
+	default:
+		return deviceType == uint32(ep.DeviceType) || deviceType == matterDeviceTypeBridgedNode
+	}
+}
+
 // aclTargetMatches reports whether an ACL entry's target list covers
 // (endpoint, cluster). An empty list means "all targets" (Matter §9.10.4.5).
-func aclTargetMatches(targets []store.ACLTarget, endpoint uint16, clusterID uint32) bool {
+// A DeviceType field restricts the target to endpoints hosting that
+// device type — chip AccessControl.cpp:529-530
+// `IsDeviceTypeOnEndpoint(target.deviceType, requestPath.endpoint)`;
+// ep may be nil (unknown endpoint), which conservatively fails any
+// device-type-restricted target.
+func aclTargetMatches(targets []store.ACLTarget, ep *Endpoint, endpoint uint16, clusterID uint32) bool {
 	if len(targets) == 0 {
 		return true
 	}
@@ -746,10 +859,7 @@ func aclTargetMatches(targets []store.ACLTarget, endpoint uint16, clusterID uint
 		if t.Endpoint != nil && *t.Endpoint != endpoint {
 			continue
 		}
-		// A DeviceType-only target (no cluster, no endpoint) is not matched
-		// here — the dispatcher has no per-target device-type index, and
-		// conservatively not broadening access is the safe choice.
-		if t.Cluster == nil && t.Endpoint == nil && t.DeviceType != nil {
+		if t.DeviceType != nil && !endpointHasDeviceType(ep, *t.DeviceType) {
 			continue
 		}
 		return true
@@ -791,6 +901,12 @@ func (d *TopologyDispatcher) CurrentDataVersion(_ context.Context, endpoint uint
 	for _, srv := range ClusterServers(ep) {
 		if srv.MatterClusterID() != clusterID {
 			continue
+		}
+		// Bridged endpoints host the version on the Endpoint (their
+		// server instances are rebuilt per dispatch) — see
+		// clusterDataVersionFor.
+		if !ep.IsRoot() && !ep.IsAggregator() {
+			return ep.ClusterDataVersion(clusterID), true
 		}
 		dv, ok := srv.(interfaces.MatterClusterDataVersion)
 		if !ok {

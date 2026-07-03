@@ -682,11 +682,13 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 	t.Cleanup(bundle.stop)
 
 	clusters, opCreds, refs, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)
@@ -795,11 +797,13 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 	t.Cleanup(bundle.stop)
 
 	_, _, refs, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		nil,
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

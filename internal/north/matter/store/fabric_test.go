@@ -248,6 +248,58 @@ func TestFabric_UpdateLabel(t *testing.T) {
 	}
 }
 
+// TestFabric_UpdateNodeID verifies that UpdateFabricNodeID rewrites the
+// NodeID for an existing fabric, leaves every other field untouched, and
+// returns [store.ErrFabricNotFound] for a missing index. UpdateNOC calls
+// this when the commissioner's new NOC carries a different operational
+// NodeID for the same fabric (Matter §11.18.6.9); the stored row must
+// follow so destinationID resolution and the operational mDNS instance
+// name stay in sync with the installed certificate.
+func TestFabric_UpdateNodeID(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := store.New(openTestDB(t))
+
+	rec := newFabricRecord(6, 45)
+	if _, err := s.AddFabric(ctx, rec); err != nil {
+		t.Fatalf("AddFabric: %v", err)
+	}
+
+	const newNodeID = uint64(0x0102030405060708)
+	if err := s.UpdateFabricNodeID(ctx, 6, newNodeID); err != nil {
+		t.Fatalf("UpdateFabricNodeID: %v", err)
+	}
+
+	got, err := s.GetFabric(ctx, 6)
+	if err != nil {
+		t.Fatalf("GetFabric: %v", err)
+	}
+	if got.NodeID != newNodeID {
+		t.Errorf("NodeID=%#016x want %#016x", got.NodeID, newNodeID)
+	}
+	// Every other field must be unchanged.
+	if got.FabricID != rec.FabricID {
+		t.Errorf("FabricID changed: got %d, want unchanged %d", got.FabricID, rec.FabricID)
+	}
+	if !bytes.Equal(got.RootPublicKey, rec.RootPublicKey) {
+		t.Errorf("RootPublicKey changed: got %x, want unchanged %x", got.RootPublicKey, rec.RootPublicKey)
+	}
+	if got.VendorID != rec.VendorID {
+		t.Errorf("VendorID changed: got %d, want unchanged %d", got.VendorID, rec.VendorID)
+	}
+	if got.Label != rec.Label {
+		t.Errorf("Label changed: got %q, want unchanged %q", got.Label, rec.Label)
+	}
+	if got.CompressedID != rec.CompressedID {
+		t.Errorf("CompressedID changed: got %x, want unchanged %x", got.CompressedID, rec.CompressedID)
+	}
+
+	// Miss.
+	if err := s.UpdateFabricNodeID(ctx, 99, newNodeID); !errors.Is(err, store.ErrFabricNotFound) {
+		t.Errorf("miss: got %v, want ErrFabricNotFound", err)
+	}
+}
+
 // TestFabric_RemoveHitAndMiss verifies RemoveFabric hit and miss paths.
 func TestFabric_RemoveHitAndMiss(t *testing.T) {
 	t.Parallel()

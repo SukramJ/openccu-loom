@@ -210,6 +210,48 @@ func NewVerifierContext(passcode uint32, salt []byte, iterations int) (*Verifier
 	}, nil
 }
 
+// VerifierW0Size is the byte length of the w0 scalar as it appears in a
+// Matter PAKE passcode verifier (Matter §3.10.5): a 32-byte P-256 scalar
+// (the reduced value), distinct from the wider [WSize] PBKDF2 output.
+const VerifierW0Size = 32
+
+// VerifierLSize is the byte length of the L point in a Matter PAKE
+// passcode verifier: a 65-byte uncompressed P-256 point (0x04 || X || Y).
+const VerifierLSize = 65
+
+// NewVerifierFromValue builds a VerifierContext directly from a Matter
+// PAKE passcode verifier: the w0 scalar (32 bytes) followed by
+// L = w1·G (65-byte uncompressed P-256 point), Matter §3.10.5. This is
+// the path a commissioner uses for an Enhanced Commissioning Window — it
+// computes the verifier from a passcode it chose and hands the device
+// only the (w0, L) pair, never the passcode, so the device can run PASE
+// against the commissioner-selected passcode. Mirrors matter.js
+// PaseServer.fromVerificationValue
+// (packages/protocol/src/session/pase/PaseServer.ts:52-61 —
+// `w0 = asBigInt(slice(0,32)); L = slice(32, 32+65)`).
+//
+// L is validated on the curve: elliptic.Unmarshal rejects off-curve and
+// malformed encodings (and the point at infinity, which has no
+// uncompressed encoding), guarding against invalid-curve attacks; a bad
+// L returns [ErrInvalidPoint]. w0 is taken verbatim as the wire scalar,
+// matching matter.js.
+func NewVerifierFromValue(w0Bytes, lBytes []byte) (*VerifierContext, error) {
+	if len(w0Bytes) != VerifierW0Size {
+		return nil, fmt.Errorf("%w: w0 length=%d, want %d", ErrInvalidPasscode, len(w0Bytes), VerifierW0Size)
+	}
+	if len(lBytes) != VerifierLSize {
+		return nil, fmt.Errorf("%w: L length=%d, want %d", ErrInvalidPoint, len(lBytes), VerifierLSize)
+	}
+	x, y := elliptic.Unmarshal(curve(), lBytes) //nolint:staticcheck // SA1019: see curve()
+	if x == nil {
+		return nil, ErrInvalidPoint
+	}
+	return &VerifierContext{
+		W0: new(big.Int).SetBytes(w0Bytes),
+		L:  &ecdsa.PublicKey{Curve: curve(), X: x, Y: y},
+	}, nil
+}
+
 // Verifier drives the device-side of PASE. Construct with
 // [NewVerifier], call [Verifier.ProcessPake1] with the prover's pA,
 // send the returned [Pake2Output.Y] + [Pake2Output.CB] back, then

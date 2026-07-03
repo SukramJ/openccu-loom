@@ -839,12 +839,12 @@ func TestDecodeMoveToLevelRequest_NonContextTagSkipped(t *testing.T) {
 		enc.PutUint(tlv.AnonymousTag(), 0xFF) // non-context tag → continue
 		enc.PutUint(tlv.ContextTag(0), 100)   // Level
 	})
-	level, err := decodeMoveToLevelRequest(dec)
+	req, err := decodeMoveToLevelRequest(dec)
 	if err != nil {
 		t.Fatalf("decodeMoveToLevelRequest: %v", err)
 	}
-	if level != 100 {
-		t.Errorf("level: want 100, got %d", level)
+	if req.Level != 100 {
+		t.Errorf("level: want 100, got %d", req.Level)
 	}
 }
 
@@ -858,6 +858,60 @@ func TestDecodeMoveToLevelRequest_OverflowReturnsError(t *testing.T) {
 	_, err := decodeMoveToLevelRequest(dec)
 	if err == nil {
 		t.Error("decodeMoveToLevelRequest with Level > 0xFF: want error, got nil")
+	}
+}
+
+// TestDecodeMoveToLevelRequest_AllFields verifies that every
+// MoveToLevelRequest field (Level, TransitionTime, OptionsMask,
+// OptionsOverride) is decoded from its context tag. The Options bitmaps
+// must reach lightLevelServer.MatterInvoke intact for the ExecuteIfOff
+// gate (matter.js LevelControlServer.ts:596), so the decoder needs to
+// carry the full struct, not just the bare Level byte.
+func TestDecodeMoveToLevelRequest_AllFields(t *testing.T) {
+	t.Parallel()
+	dec := buildDecoderAfterStructOpen(func(enc *tlv.Encoder) {
+		enc.PutUint(tlv.ContextTag(0), 200) // Level
+		enc.PutUint(tlv.ContextTag(1), 10)  // TransitionTime
+		enc.PutUint(tlv.ContextTag(2), 1)   // OptionsMask
+		enc.PutUint(tlv.ContextTag(3), 1)   // OptionsOverride
+	})
+	req, err := decodeMoveToLevelRequest(dec)
+	if err != nil {
+		t.Fatalf("decodeMoveToLevelRequest: %v", err)
+	}
+	if req.Level != 200 {
+		t.Errorf("Level: want 200, got %d", req.Level)
+	}
+	if req.TransitionTime == nil || *req.TransitionTime != 10 {
+		t.Errorf("TransitionTime: want pointer to 10, got %v", req.TransitionTime)
+	}
+	if req.OptionsMask != 1 {
+		t.Errorf("OptionsMask: want 1, got %d", req.OptionsMask)
+	}
+	if req.OptionsOverride != 1 {
+		t.Errorf("OptionsOverride: want 1, got %d", req.OptionsOverride)
+	}
+}
+
+// TestDecodeMoveToLevelRequest_NullTransitionTime verifies that a TLV-null
+// TransitionTime (the nullable §1.6.7.1 encoding for "use the default
+// transition time") decodes to a nil pointer rather than a spurious zero
+// value.
+func TestDecodeMoveToLevelRequest_NullTransitionTime(t *testing.T) {
+	t.Parallel()
+	dec := buildDecoderAfterStructOpen(func(enc *tlv.Encoder) {
+		enc.PutUint(tlv.ContextTag(0), 50) // Level
+		enc.PutNull(tlv.ContextTag(1))     // null TransitionTime
+	})
+	req, err := decodeMoveToLevelRequest(dec)
+	if err != nil {
+		t.Fatalf("decodeMoveToLevelRequest: %v", err)
+	}
+	if req.Level != 50 {
+		t.Errorf("Level: want 50, got %d", req.Level)
+	}
+	if req.TransitionTime != nil {
+		t.Errorf("TransitionTime: want nil, got %v", *req.TransitionTime)
 	}
 }
 

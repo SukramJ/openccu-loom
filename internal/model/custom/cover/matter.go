@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -91,6 +92,59 @@ var (
 	errMatterUnknownCommand   = errors.New("matter: unknown command")
 	errMatterValueType        = errors.New("matter: unexpected value type")
 )
+
+// matterTargetState stores the last commanded WindowCovering target
+// per axis, in Matter percent-100ths (0 = open, 10000 = closed).
+// matter.js keeps TargetPosition*Percent100ths as the commanded
+// destination — UpOrOpen/DownOrClose/GoTo*Percentage set it
+// (WindowCoveringServer.ts:522/:546/:578/:600) and StopMotion snaps
+// it back to the current position (:490-493). A nil slot means "no
+// command in effect": the attribute read then mirrors
+// CurrentPosition, matching both the startup initialisation
+// (WindowCoveringServer.ts:142) and the post-stop snap.
+type matterTargetState struct {
+	mu   sync.Mutex
+	lift *uint16
+	tilt *uint16
+}
+
+func (t *matterTargetState) setLift(v uint16) {
+	t.mu.Lock()
+	t.lift = &v
+	t.mu.Unlock()
+}
+
+func (t *matterTargetState) setTilt(v uint16) {
+	t.mu.Lock()
+	t.tilt = &v
+	t.mu.Unlock()
+}
+
+// clear drops both axis targets — the attribute reads mirror
+// CurrentPosition again (the StopMotion snap semantics).
+func (t *matterTargetState) clear() {
+	t.mu.Lock()
+	t.lift, t.tilt = nil, nil
+	t.mu.Unlock()
+}
+
+func (t *matterTargetState) liftTarget() (uint16, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.lift == nil {
+		return 0, false
+	}
+	return *t.lift, true
+}
+
+func (t *matterTargetState) tiltTarget() (uint16, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.tilt == nil {
+		return 0, false
+	}
+	return *t.tilt, true
+}
 
 // hmLevelToMatterPct100ths converts an HM domain-level position
 // (0.0 = closed, 1.0 = open) into Matter's CurrentPositionLiftPercent100ths
@@ -218,10 +272,13 @@ func (s coverWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrTargetPositionLiftPercent100ths:
-		// HM covers do not maintain a separate target; mirror CurrentPosition.
-		// Conformance LF & PA_LF makes this attribute mandatory given the
-		// advertised FeatureMap. Mirrors matter.js WindowCoveringServer.ts
-		// fallback when no explicit target was set.
+		// TargetPosition carries the last commanded destination while a
+		// command is in effect (WindowCoveringServer.ts:522/:546/:578);
+		// with none it mirrors CurrentPosition, matching the matter.js
+		// startup initialisation (:142) and the StopMotion snap (:490).
+		if v, ok := s.c.matterTarget.liftTarget(); ok {
+			return v, true
+		}
 		pos, ok := s.c.Position()
 		if !ok {
 			return nil, true
@@ -246,17 +303,34 @@ func (s coverWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// Target lift = fully open (0). WindowCoveringServer.ts:522.
 		err = s.c.Open(ctx, priority)
+		if err == nil {
+			s.c.matterTarget.setLift(0)
+		}
 	case matterCmdDownOrClose:
+		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
 		err = s.c.Close(ctx, priority)
+		if err == nil {
+			s.c.matterTarget.setLift(matterCoverPctMax)
+		}
 	case matterCmdStopMotion:
+		// Snap the target back to the current position.
+		// WindowCoveringServer.ts:490 handleStopMovement.
 		err = s.c.Stop(ctx, priority)
+		if err == nil {
+			s.c.matterTarget.clear()
+		}
 	case matterCmdGoToLiftPercentage:
 		pct, e := extractGoToPercentage(fields)
 		if e != nil {
 			return nil, e
 		}
 		err = s.c.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
+		if err == nil {
+			// Target lift = requested value. WindowCoveringServer.ts:578.
+			s.c.matterTarget.setLift(pct)
+		}
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -320,10 +394,11 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrTargetPositionLiftPercent100ths:
-		// HM blinds do not maintain a separate target; mirror CurrentPosition.
-		// Conformance LF & PA_LF makes this attribute mandatory given the
-		// advertised FeatureMap. Mirrors matter.js WindowCoveringServer.ts
-		// fallback when no explicit target was set.
+		// Last commanded lift destination; mirrors CurrentPosition when
+		// no command is in effect. See coverWCServer.MatterRead.
+		if v, ok := s.b.matterTarget.liftTarget(); ok {
+			return v, true
+		}
 		pos, ok := s.b.Position()
 		if !ok {
 			return nil, true
@@ -336,10 +411,12 @@ func (s blindWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(tilt.Level()), true
 	case matterAttrTargetPositionTiltPercent100ths:
-		// HM blinds do not maintain a separate tilt target; mirror CurrentPositionTilt.
-		// Conformance TL & PA_TL makes this attribute mandatory given the
-		// advertised FeatureMap. Mirrors matter.js WindowCoveringServer.ts
-		// fallback when no explicit target was set.
+		// Last commanded tilt destination; mirrors CurrentPositionTilt
+		// when no command is in effect (WindowCoveringServer.ts:600 sets
+		// it on GoToTiltPercentage, :524/:548 on UpOrOpen/DownOrClose).
+		if v, ok := s.b.matterTarget.tiltTarget(); ok {
+			return v, true
+		}
 		tilt, ok := s.b.TiltPosition()
 		if !ok {
 			return nil, true
@@ -365,23 +442,48 @@ func (s blindWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields an
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// Both position-aware axes target fully open (0).
+		// WindowCoveringServer.ts:522-525.
 		err = s.b.Open(ctx, priority)
+		if err == nil {
+			s.b.matterTarget.setLift(0)
+			s.b.matterTarget.setTilt(0)
+		}
 	case matterCmdDownOrClose:
+		// Both position-aware axes target fully closed (10000).
+		// WindowCoveringServer.ts:546-549.
 		err = s.b.Close(ctx, priority)
+		if err == nil {
+			s.b.matterTarget.setLift(matterCoverPctMax)
+			s.b.matterTarget.setTilt(matterCoverPctMax)
+		}
 	case matterCmdStopMotion:
+		// Snap both targets back to the current positions.
+		// WindowCoveringServer.ts:490-493 handleStopMovement.
 		err = s.b.Stop(ctx, priority)
+		if err == nil {
+			s.b.matterTarget.clear()
+		}
 	case matterCmdGoToLiftPercentage:
 		pct, e := extractGoToPercentage(fields)
 		if e != nil {
 			return nil, e
 		}
 		err = s.b.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
+		if err == nil {
+			// WindowCoveringServer.ts:578.
+			s.b.matterTarget.setLift(pct)
+		}
 	case matterCmdGoToTiltPercentage:
 		pct, e := extractGoToPercentage(fields)
 		if e != nil {
 			return nil, e
 		}
 		err = s.b.SetTilt(ctx, matterPct100thsToHMLevel(pct), priority)
+		if err == nil {
+			// WindowCoveringServer.ts:600.
+			s.b.matterTarget.setTilt(pct)
+		}
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -445,10 +547,11 @@ func (s garageWCServer) MatterRead(attrID uint32) (any, bool) {
 		}
 		return hmLevelToMatterPct100ths(pos.Level()), true
 	case matterAttrTargetPositionLiftPercent100ths:
-		// HM garage doors do not maintain a separate target; mirror CurrentPosition.
-		// Conformance LF & PA_LF makes this attribute mandatory given the
-		// advertised FeatureMap. Mirrors matter.js WindowCoveringServer.ts
-		// fallback when no explicit target was set.
+		// Last commanded destination; mirrors CurrentPosition when no
+		// command is in effect. See coverWCServer.MatterRead.
+		if v, ok := s.g.matterTarget.liftTarget(); ok {
+			return v, true
+		}
 		pos, ok := s.g.Position()
 		if !ok {
 			return nil, true
@@ -473,17 +576,34 @@ func (s garageWCServer) MatterInvoke(ctx context.Context, cmdID uint32, fields a
 	var err error
 	switch cmdID {
 	case matterCmdUpOrOpen:
+		// Target lift = fully open (0). WindowCoveringServer.ts:522.
 		err = s.g.Open(ctx, priority)
+		if err == nil {
+			s.g.matterTarget.setLift(0)
+		}
 	case matterCmdDownOrClose:
+		// Target lift = fully closed (10000). WindowCoveringServer.ts:546.
 		err = s.g.Close(ctx, priority)
+		if err == nil {
+			s.g.matterTarget.setLift(matterCoverPctMax)
+		}
 	case matterCmdStopMotion:
+		// Snap the target back to the current position.
+		// WindowCoveringServer.ts:490 handleStopMovement.
 		err = s.g.Stop(ctx, priority)
+		if err == nil {
+			s.g.matterTarget.clear()
+		}
 	case matterCmdGoToLiftPercentage:
 		pct, e := extractGoToPercentage(fields)
 		if e != nil {
 			return nil, e
 		}
 		err = s.g.SetPosition(ctx, matterPct100thsToHMLevel(pct), priority)
+		if err == nil {
+			// WindowCoveringServer.ts:578.
+			s.g.matterTarget.setLift(pct)
+		}
 	default:
 		return nil, fmt.Errorf("%w: 0x%02X", errMatterUnknownCommand, cmdID)
 	}
@@ -514,24 +634,37 @@ func (s garageWCServer) MatterAttributes() []uint32 {
 	}
 }
 
-// extractGoToPercentage pulls a uint16 LiftPercent100thsValue or
-// TiltPercent100thsValue out of the request payload. The bridge has
-// already TLV-decoded the payload; we accept either a bare uint16 (the
-// minimal "percent only" shape) or a map carrying a "percent" key.
-// A typed request struct from
-// internal/north/matter/cluster/windowcovering/ may replace this once
-// that package exists.
+// extractGoToPercentage pulls the LiftPercent100thsValue /
+// TiltPercent100thsValue (context tag 0) out of a GoToLiftPercentage /
+// GoToTiltPercentage request. GoTo*Percentage has no typed decoder in
+// the bridge, so the real wire path lands here as the tag-keyed
+// map[uint8]any that decodeGenericTagMap produces (unsigned ints as
+// uint64) — see internal/north/matter/bridge/fields_reader.go. The
+// bare-uint16 and string-keyed shapes are kept for the in-package
+// tests.
+//
+// The value is clamped to 10000 (Percent100ths max, Matter §5.3):
+// matter.js WindowCoveringServer rejects an out-of-range percentage via
+// the schema constraint, and an unclamped value would otherwise convert
+// to an HM domain level above 1.0.
 //
 // This deliberately ignores the variants that carry an `OptionsMask`
 // and `OptionsOverride` field — those are the v1.0 GoToLiftPercentage
 // shape; Matter 1.3+ (incl. 1.5.1) uses a single Percent100ths field.
-//
-// Unused parameter `fields` is named so the linter knows it is the
-// dispatch input.
 func extractGoToPercentage(fields any) (uint16, error) {
 	switch v := fields.(type) {
 	case uint16:
-		return v, nil
+		return clampPercent100ths(v), nil
+	case map[uint8]any:
+		raw, ok := v[0]
+		if !ok {
+			return 0, fmt.Errorf("%w: GoTo*Percentage missing percent field (tag 0)", errMatterValueType)
+		}
+		pct, ok := wireUint16(raw)
+		if !ok {
+			return 0, fmt.Errorf("%w: GoTo*Percentage percent expected integer, got %T", errMatterValueType, raw)
+		}
+		return clampPercent100ths(pct), nil
 	case map[string]any:
 		raw, ok := v["percent"]
 		if !ok {
@@ -541,8 +674,34 @@ func extractGoToPercentage(fields any) (uint16, error) {
 		if !ok {
 			return 0, fmt.Errorf("%w: GoTo*Percentage percent expected uint16, got %T", errMatterValueType, raw)
 		}
-		return pct, nil
+		return clampPercent100ths(pct), nil
 	default:
-		return 0, fmt.Errorf("%w: GoTo*Percentage expected uint16 or map[string]any, got %T", errMatterValueType, fields)
+		return 0, fmt.Errorf("%w: GoTo*Percentage expected uint16 or map[uint8]any, got %T", errMatterValueType, fields)
+	}
+}
+
+// clampPercent100ths bounds a Percent100ths value to its spec maximum of
+// 10000 (100.00 %).
+func clampPercent100ths(pct uint16) uint16 {
+	if pct > 10000 {
+		return 10000
+	}
+	return pct
+}
+
+// wireUint16 reads an unsigned integer out of a value decoded from the
+// generic tag-keyed fields map, where decodeGenericTagMap stores
+// unsigned ints as uint64. The uint16/uint8 cases keep the helper usable
+// from tests that pass narrower Go types directly.
+func wireUint16(raw any) (uint16, bool) {
+	switch n := raw.(type) {
+	case uint64:
+		return uint16(n & 0xFFFF), true
+	case uint16:
+		return n, true
+	case uint8:
+		return uint16(n), true
+	default:
+		return 0, false
 	}
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -73,16 +74,19 @@ func TestSignalStatusResponseRX_NoPendingWait_IsNoop(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
 	// No wait is registered — must not panic.
-	b.signalStatusResponseRX(7)
+	b.signalStatusResponseRX(0, 7)
 }
 
 func TestSignalStatusResponseRX_ClosesChannel(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
-	const exch = uint16(42)
+	const (
+		sess = uint16(1)
+		exch = uint16(42)
+	)
 	ch := make(chan struct{})
-	b.statusResponseWaits.Store(exch, ch)
-	b.signalStatusResponseRX(exch)
+	b.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
+	b.signalStatusResponseRX(sess, exch)
 	// The channel should be closed.
 	select {
 	case <-ch:
@@ -91,7 +95,7 @@ func TestSignalStatusResponseRX_ClosesChannel(t *testing.T) {
 		t.Error("signalStatusResponseRX did not close the registered channel")
 	}
 	// Entry should be deleted from the map.
-	if _, loaded := b.statusResponseWaits.Load(exch); loaded {
+	if _, loaded := b.statusResponseWaits.Load(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}); loaded {
 		t.Error("signalStatusResponseRX should have deleted the map entry")
 	}
 }
@@ -99,12 +103,48 @@ func TestSignalStatusResponseRX_ClosesChannel(t *testing.T) {
 func TestSignalStatusResponseRX_IdempotentOnClosedChannel(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
-	const exch = uint16(55)
+	const (
+		sess = uint16(1)
+		exch = uint16(55)
+	)
 	ch := make(chan struct{})
 	close(ch) // already closed
-	b.statusResponseWaits.Store(exch, ch)
+	b.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
 	// Must not panic despite closed channel.
-	b.signalStatusResponseRX(exch)
+	b.signalStatusResponseRX(sess, exch)
+}
+
+// TestStatusResponseWait_SessionScopedExchangeCollision verifies that two
+// sessions sharing the same exchange ID keep independent rendezvous
+// channels: signalling the wrong session's (session, exchange) pair must
+// not release a waiter armed for a different session on the same exchange
+// ID. Mirrors matter.js ExchangeManager.ts:287 — exchange identity is
+// scoped to its owning session.
+func TestStatusResponseWait_SessionScopedExchangeCollision(t *testing.T) {
+	t.Parallel()
+	b := newStartedBridge(t)
+	const exch = uint16(5)
+
+	waitCh := b.armStatusResponseWait(10, exch)
+
+	// A StatusResponse for a different session on the same exchange ID
+	// must not release the waiter.
+	b.signalStatusResponseRX(20, exch)
+	select {
+	case <-waitCh:
+		t.Fatal("waitCh closed after signal for an unrelated session; want still open")
+	default:
+		// OK — still open.
+	}
+
+	// The StatusResponse for the actual owning session releases it.
+	b.signalStatusResponseRX(10, exch)
+	select {
+	case <-waitCh:
+		// OK — closed.
+	default:
+		t.Fatal("waitCh still open after signal for the owning session; want closed")
+	}
 }
 
 // ─── protocolHeaderSize ───────────────────────────────────────────────────────

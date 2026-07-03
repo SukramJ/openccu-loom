@@ -56,6 +56,11 @@ type BasicInformation struct {
 	// Mutable.
 	nodeLabel string
 	location  string
+	// onPersistentWrite, when non-nil, fires after every successful
+	// Matter write to a non-volatile attribute (NodeLabel / Location)
+	// so the daemon can persist the value across restarts. See
+	// [BasicInformation.SetOnPersistentWrite].
+	onPersistentWrite func(nodeLabel, location string)
 
 	// Capability metadata.
 	capabilityMinima     CapabilityMinimaStruct
@@ -337,14 +342,32 @@ type LeaveEvent struct {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer      = (*BasicInformation)(nil)
-	_ interfaces.MatterClusterEventLister = (*BasicInformation)(nil)
-	_ interfaces.MatterEventReceiver      = (*BasicInformation)(nil)
-	_ interfaces.MatterClusterDataVersion = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterServer                  = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterEventLister             = (*BasicInformation)(nil)
+	_ interfaces.MatterEventReceiver                  = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*BasicInformation)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*BasicInformation)(nil)
 )
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (b *BasicInformation) MatterClusterID() uint32 { return basicInfoClusterID }
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// NodeLabel and LocalConfigDisabled require Manage (4); Location
+// requires Administer (5). Mirrors matter.js
+// packages/model/src/standard/elements/basic-information.element.ts:36
+// (NodeLabel "RW VM"), :40 (Location "RW VA"), :79
+// (LocalConfigDisabled "RW VM").
+func (b *BasicInformation) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case basicInfoAttrNodeLabel, basicInfoAttrLocalConfigDisabled:
+		return 4 // Manage
+	case basicInfoAttrLocation:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // MatterRead implements [interfaces.MatterClusterServer].
 func (b *BasicInformation) MatterRead(attrID uint32) (any, bool) { //nolint:gocyclo,funlen // wire/dispatch table over many attribute/opcode cases
@@ -511,6 +534,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 		b.nodeLabel = s
 		b.mu.Unlock()
 		b.dataVersion.Bump()
+		b.firePersistentWrite()
 		return nil
 	case basicInfoAttrLocation:
 		s, ok := value.(string)
@@ -524,6 +548,7 @@ func (b *BasicInformation) MatterWrite(_ context.Context, attrID uint32, value a
 		b.location = s
 		b.mu.Unlock()
 		b.dataVersion.Bump()
+		b.firePersistentWrite()
 		return nil
 	case basicInfoAttrLocalConfigDisabled:
 		// Persistent across reboots per Matter §11.1.6.17. openccu-loom
@@ -606,8 +631,10 @@ func (b *BasicInformation) MatterAttributes() []uint32 {
 }
 
 // SetNodeLabel updates NodeLabel out-of-band (e.g. from the config
-// UI, not from a Matter write). Goes through the same length check
-// as the Matter write path.
+// UI or the boot-time restore of a persisted commissioner write, not
+// from a Matter write). Goes through the same length check as the
+// Matter write path. Does NOT fire the persistence hook — restores
+// must not echo back into the store.
 func (b *BasicInformation) SetNodeLabel(s string) error {
 	if len(s) > 32 {
 		return errors.New("matter: NodeLabel exceeds 32 utf-8 bytes")
@@ -616,6 +643,44 @@ func (b *BasicInformation) SetNodeLabel(s string) error {
 	b.nodeLabel = s
 	b.mu.Unlock()
 	return nil
+}
+
+// SetLocation updates Location out-of-band (boot-time restore of a
+// persisted commissioner write). Same validation as the Matter write
+// path; does NOT fire the persistence hook.
+func (b *BasicInformation) SetLocation(s string) error {
+	if len(s) != 2 {
+		return fmt.Errorf("matter: Location must be ISO-3166 2-letter (got len=%d)", len(s))
+	}
+	b.mu.Lock()
+	b.location = s
+	b.mu.Unlock()
+	return nil
+}
+
+// SetOnPersistentWrite wires a hook fired after every successful
+// Matter write to a non-volatile ("N" quality, Matter §11.1.6)
+// attribute — NodeLabel and Location — with the cluster's current
+// values. The daemon persists them so a commissioner-set label
+// survives a restart; matter.js gets the same via its persistent
+// behavior state. Pass nil to detach.
+func (b *BasicInformation) SetOnPersistentWrite(fn func(nodeLabel, location string)) {
+	b.mu.Lock()
+	b.onPersistentWrite = fn
+	b.mu.Unlock()
+}
+
+// firePersistentWrite snapshots the current NodeLabel/Location and
+// invokes the persistence hook outside the cluster lock.
+func (b *BasicInformation) firePersistentWrite() {
+	b.mu.RLock()
+	fn := b.onPersistentWrite
+	label := b.nodeLabel
+	loc := b.location
+	b.mu.RUnlock()
+	if fn != nil {
+		fn(label, loc)
+	}
 }
 
 // MatterEvents implements [interfaces.MatterClusterEventLister] so the

@@ -194,6 +194,30 @@ WHERE fabric_index = ?`, label, fabricIndex)
 	return nil
 }
 
+// UpdateFabricNodeID rewrites the operational NodeID for fabricIndex.
+// UpdateNOC installs a NOC that may carry a new NodeID for the same
+// fabric; the stored row must follow so destinationID resolution and
+// the operational mDNS instance name (<compressedID>-<nodeID>) match
+// the new certificate. Mirrors matter.js Fabric.ts:543 lifting nodeId
+// from the new NOC into the rebuilt fabric. Returns
+// [ErrFabricNotFound] when no row exists.
+func (s *Store) UpdateFabricNodeID(ctx context.Context, fabricIndex uint8, nodeID uint64) error {
+	res, err := s.db.ExecContext(ctx, `
+UPDATE matter_fabrics SET node_id = ?, updated_at = CURRENT_TIMESTAMP
+WHERE fabric_index = ?`, uint64ToBE(nodeID), fabricIndex)
+	if err != nil {
+		return fmt.Errorf("matter store: update fabric node id: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("matter store: update fabric node id: rows affected: %w", err)
+	}
+	if n == 0 {
+		return ErrFabricNotFound
+	}
+	return nil
+}
+
 // RemoveFabric deletes the fabric and (via FK CASCADE) its
 // node_identity, group_keys, group_key_map and acl_entries. Returns
 // [ErrFabricNotFound] when no row exists.

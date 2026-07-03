@@ -386,7 +386,33 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 				slog.Int("fabric_index", int(fabricIndex)))
 		}
 	}
-	rootServers, opCreds, rootRefs, err := buildRootClusters(mc, store, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric)
+	// closePaseSessions late-binds opMgr like adoptSessionForFabric —
+	// CommissioningComplete / fail-safe-expiry hooks (wired inside
+	// buildRootClusters, before opMgr exists) call it to clear any
+	// still-established PASE session per Matter §11.10.6.6 step 4.
+	closePaseSessions := func() int {
+		if opMgrSlot == nil {
+			return 0
+		}
+		return opMgrSlot.ClosePASESessions()
+	}
+	// Seed the EventNumber counter from the persisted ceiling and wire
+	// the ceiling persistence BEFORE any event (StartUp / BootReason)
+	// is emitted. Matter §7.14.2.1: event numbers SHALL NOT reset on
+	// reboot — controllers filter reads/subscribes with EventMin keyed
+	// on the last number they saw, so a reset makes them drop every
+	// fresh event silently.
+	if store != nil {
+		if ceiling, ok, gerr := store.GetMetadataCounter(ctx, matterstore.MetadataKeyEventNumber); gerr == nil && ok {
+			bridge.EventLog().SeedNumber(ceiling)
+		}
+		bridge.EventLog().SetCounterPersistence(func(ceiling uint64) { //nolint:contextcheck // fires from the event-emit hot path with no caller ctx; a background ctx is correct for the fire-and-forget ceiling write
+			if perr := store.SetMetadataCounter(context.Background(), matterstore.MetadataKeyEventNumber, ceiling); perr != nil {
+				logger.Warn("matter.bridge.eventlog.persist_ceiling", slog.String("err", perr.Error()))
+			}
+		}, 0)
+	}
+	rootServers, opCreds, rootRefs, err := buildRootClusters(ctx, mc, store, bridge, advertiser, logger, caseRefresh, adoptSessionForFabric, closePaseSessions)
 	if err != nil {
 		logger.Warn("matter.bridge.root_clusters.build", slog.String("err", err.Error()))
 	} else {
@@ -466,6 +492,15 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			return 0, nil, false
 		}
 		return entry.Session.PeerNodeID(), entry.Session.PeerCATs(), true
+	}).WithRetransmitIntervalResolver(func(id uint16, now time.Time) (time.Duration, bool) {
+		// Resolves the peer-appropriate MRP base interval so outbound
+		// retransmissions honour the peer's advertised session
+		// parameters (matter.js MRP.ts:129 retransmissionIntervalOf).
+		entry, err := opMgr.Get(id)
+		if err != nil || entry == nil {
+			return 0, false
+		}
+		return entry.RetransmitBaseInterval(now), true
 	})
 	bridge.AttachSessionLookup(sessionLookup)
 
@@ -566,9 +601,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// (its AbortAllOtherCommunicationOnFabric mirror after UpdateNOC)
 		// but it stays inert unless wired here. Without it the stale CASE
 		// sessions linger and the commissioner's first post-UpdateNOC
-		// message decrypts against the wrong identity. Unlike the removed
-		// path we do NOT drop resumption records or emit a Leave event —
-		// the fabric still exists, only its sessions must be torn down.
+		// message decrypts against the wrong identity.
 		// Mirrors chip FabricTable::AbortAllOtherCommunicationOnFabric.
 		opCreds.SetOnFabricUpdated(func(ctx context.Context, fabricIndex uint8) {
 			// Preserve the session that invoked UpdateNOC: it still has to
@@ -580,6 +613,29 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 			keepSession := mattercore.InvokeSessionIDFromContext(ctx)
 			opMgr.CloseFabricExcept(fabricIndex, keepSession)
 			subMgr.CloseFabricExcept(fabricIndex, keepSession)
+			if store != nil {
+				// Resumption records embed the old session's crypto +
+				// identity; the spec (§11.18.6.9) and matter.js
+				// FailsafeContext.ts:168-171 (replaceFabric →
+				// deleteResumptionRecordsForFabric) invalidate them on
+				// UpdateNOC so no peer can resume into the pre-update
+				// identity.
+				if err := store.RemoveResumptionsByFabric(context.Background(), fabricIndex); err != nil { //nolint:contextcheck // callback ctx may carry the invoking exchange's deadline; cleanup must complete regardless
+					logger.Debug("matter.bridge.fabric.update_remove_resumptions",
+						slog.Int("fabric_index", int(fabricIndex)),
+						slog.String("err", err.Error()))
+				}
+				// Swap the CASE identity for this fabric to the freshly
+				// persisted NOC (new NodeID included) and announce the
+				// new operational instance. The stale instance was
+				// already withdrawn by the cluster's OnFabricWithdraw.
+				// Mirrors matter.js DeviceAdvertiser.ts:65-76 (fabric
+				// update → close old advertisement, re-advertise).
+				if fab, ferr := store.GetFabric(ctx, fabricIndex); ferr == nil {
+					caseRefresh(ctx, fabricIndex, fab.FabricID, fab.NodeID, fab.RootPublicKey)
+					bridge.AnnounceFabric(ctx, fab.CompressedID, fab.NodeID)
+				}
+			}
 			logger.Info("matter.bridge.fabric.updated",
 				slog.Int("fabric_index", int(fabricIndex)),
 				slog.Int("kept_session", int(keepSession)))
@@ -772,6 +828,14 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					opMgr.ReleaseID(sessID)
 					return openErr
 				}
+				// Carry the initiator's Sigma1 MRP hints onto the session
+				// so outbound retransmissions honour the peer's intervals
+				// (matter.js MRP.ts:129).
+				if resp := adapter.SnapshotResponder(); resp != nil {
+					if sp, ok := resp.PeerSessionParameters(); ok {
+						entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+					}
+				}
 				logger.Info("matter.bridge.case.session_established",
 					slog.Int("session_id", int(entry.SessionID)),
 					slog.Int("fabric_index", int(resolvedFabric)),
@@ -788,7 +852,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 					rid := resp.ResumptionID()
 					secret := resp.ECDHSharedSecret()
 					if len(rid) > 0 && len(secret) > 0 {
-						if persistErr := opMgr.PersistResumption(context.Background(), resolvedFabric, peerNodeID, rid, secret); persistErr != nil {
+						if persistErr := opMgr.PersistResumption(context.Background(), resolvedFabric, peerNodeID, rid, secret, peerCATs); persistErr != nil {
 							logger.Debug("matter.bridge.case.resumption_persist_failed",
 								slog.Int("session_id", int(entry.SessionID)),
 								slog.String("err", persistErr.Error()))
@@ -922,6 +986,14 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 		if err != nil {
 			return err
 		}
+		// Carry the initiator's Sigma1 MRP hints onto the session so
+		// outbound retransmissions honour the peer's intervals
+		// (matter.js MRP.ts:129).
+		if resp := caseAdapter.SnapshotResponder(); resp != nil {
+			if sp, ok := resp.PeerSessionParameters(); ok {
+				entry.SetPeerMRPIntervals(sp.SessionIdleInterval, sp.SessionActiveInterval, uint32(sp.SessionActiveThreshold))
+			}
+		}
 		logger.Info("matter.bridge.case.session_established",
 			slog.Int("session_id", int(entry.SessionID)),
 			slog.Uint64("node_id", nodeID),
@@ -934,7 +1006,7 @@ func buildCaseAdapter(ctx context.Context, cfg config.NorthMatterCASE, mgr *oper
 			rid := resp.ResumptionID()
 			secret := resp.ECDHSharedSecret()
 			if len(rid) > 0 && len(secret) > 0 {
-				if persistErr := mgr.PersistResumption(context.Background(), fabricIndex, peerNodeID, rid, secret); persistErr != nil {
+				if persistErr := mgr.PersistResumption(context.Background(), fabricIndex, peerNodeID, rid, secret, resp.PeerCATs()); persistErr != nil {
 					logger.Debug("matter.bridge.case.resumption_persist_failed",
 						slog.Int("session_id", int(entry.SessionID)),
 						slog.String("err", persistErr.Error()))
@@ -1205,6 +1277,25 @@ func (r caseDestinationResolver) ResolveSigma1Destination(destinationID [32]byte
 	return nil, nil, false
 }
 
+// ResolveFabricIndex implements [sigma.FabricIndexResolver] for the
+// Sigma2_Resume path: the resumption record names the fabric directly
+// (there is no Sigma3 / DestinationID on resume), so the lookup is a
+// plain map hit. A miss means the fabric was removed after the record
+// was written; the responder then falls through to Full Sigma.
+// Mirrors matter.js CaseServer.ts:151 taking `fabric` from the record.
+func (r caseDestinationResolver) ResolveFabricIndex(fabricIndex uint8) (*sigma.Identity, sigma.PeerVerifier, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if r.fabrics == nil {
+		return nil, nil, false
+	}
+	entry := (*r.fabrics)[fabricIndex]
+	if entry == nil || entry.identity == nil {
+		return nil, nil, false
+	}
+	return entry.identity, entry.verifier, true
+}
+
 // deriveOperationalIPK turns the raw IPKValue persisted from
 // AddNOC into the per-fabric "Operational Identity Protection Key"
 // per Matter Core §11.2.4 (Group Identity Protection Key derivation):
@@ -1293,9 +1384,16 @@ func (a caseResumptionStoreAdapter) GetByID(resumptionID []byte) (*sigma.Resumpt
 	if len(rec.ResumptionID) == 0 || len(rec.SharedSecret) == 0 {
 		return nil, nil
 	}
+	// Hand the full record through: the resume path has no Sigma3, so
+	// FabricIndex / PeerNodeID / CATs are authoritative from persistence
+	// alone (matter.js CaseServer.ts:151 destructures fabric, peerNodeId
+	// and caseAuthenticatedTags straight from the record).
 	return &sigma.ResumptionRecord{
 		ResumptionID: rec.ResumptionID,
 		SharedSecret: rec.SharedSecret,
+		FabricIndex:  rec.FabricIndex,
+		PeerNodeID:   rec.PeerNodeID,
+		PeerCATs:     rec.CASEAuthTags,
 	}, nil
 }
 
@@ -1331,7 +1429,7 @@ type rootClusterRefs struct {
 // Operators that disable Matter via cfg.Enabled never reach this
 // function. Construction errors are surfaced individually so a
 // single misconfigured cluster cannot block the rest.
-func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8)) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
+func buildRootClusters(ctx context.Context, mc config.NorthMatter, store *matterstore.Store, bridge *matterbridge.Bridge, adv mdns.Advertiser, logger *slog.Logger, onFabricInstalledExtra func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte), adoptSessionForFabric func(ctx context.Context, fabricIndex uint8), closePaseSessions func() int) ([]interfaces.MatterClusterServer, *mattercore.OperationalCredentials, rootClusterRefs, error) { //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential setup
 	out := make([]interfaces.MatterClusterServer, 0, 8)
 	var opCreds *mattercore.OperationalCredentials
 	var refs rootClusterRefs
@@ -1369,6 +1467,34 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 	})
 	if err != nil {
 		return nil, nil, refs, fmt.Errorf("BasicInformation: %w", err)
+	}
+	if store != nil {
+		// Restore commissioner-written NodeLabel / Location — both carry
+		// Matter §11.1.6 "N" (non-volatile) quality, so a value a
+		// controller wrote must survive the restart and override the
+		// config default. matter.js restores them via its persistent
+		// behavior state.
+		if v, ok, gerr := store.GetSetting(ctx, matterstore.SettingNodeLabel); gerr == nil && ok {
+			if serr := bi.SetNodeLabel(v); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.restore_node_label", slog.String("err", serr.Error()))
+			}
+		}
+		if v, ok, gerr := store.GetSetting(ctx, matterstore.SettingLocation); gerr == nil && ok {
+			if serr := bi.SetLocation(v); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.restore_location", slog.String("err", serr.Error()))
+			}
+		}
+		bi.SetOnPersistentWrite(func(nodeLabel, location string) { //nolint:contextcheck // fires from an inbound Matter write with no caller ctx; a background ctx is correct for the fire-and-forget persist
+			persistCtx := context.Background()
+			if serr := store.SetSetting(persistCtx, matterstore.SettingNodeLabel, nodeLabel); serr != nil {
+				logger.Warn("matter.bridge.basicinfo.persist_node_label", slog.String("err", serr.Error()))
+			}
+			if location != "" {
+				if serr := store.SetSetting(persistCtx, matterstore.SettingLocation, location); serr != nil {
+					logger.Warn("matter.bridge.basicinfo.persist_location", slog.String("err", serr.Error()))
+				}
+			}
+		})
 	}
 	out = append(out, bi)
 	refs.BasicInformation = bi
@@ -1634,14 +1760,19 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 			PAI:                      pai,
 			CertificationDeclaration: cd,
 			OnMDNSReannounce: func(ctx context.Context) {
-				// Withdraw the stale per-fabric _matter._tcp record after
-				// RemoveFabric and republish the remaining fabric set so
-				// commissioners do not resolve a CompressedFabricID that no
-				// longer exists. Mirrors matter.js Fabric.remove() triggering
-				// MdnsServer.reannounceInstance.
+				// Republish the remaining fabric set after RemoveFabric.
+				// The stale instance itself is retired by OnFabricWithdraw
+				// below — republish alone cannot do that. Mirrors matter.js
+				// Fabric.remove() triggering MdnsServer.reannounceInstance.
 				if z, ok := adv.(*mdns.Zeroconf); ok {
 					z.TriggerReannounce(ctx)
 				}
+			},
+			OnFabricWithdraw: func(ctx context.Context, compressedID [8]byte, nodeID uint64) {
+				// Retire the operational instance of a removed fabric (or
+				// the old-NodeID instance after UpdateNOC). Mirrors
+				// matter.js DeviceAdvertiser.ts:76-86.
+				bridge.WithdrawFabric(ctx, compressedID, nodeID)
 			},
 			OnFabricInstalled: func(ctx context.Context, fabricIndex uint8, fabricID, nodeID uint64, rootPub []byte) {
 				// Adopt-Fabric on the invoking session FIRST so the
@@ -1758,6 +1889,16 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 				if w := bridge.CommissioningWindow(); w != nil {
 					_ = w.RevokeWindow(ctx)
 				}
+				// Clear any still-established PASE session — the failed
+				// commissioner's channel must not outlive its fail-safe.
+				// Mirrors matter.js FailsafeContext.ts:291 (fail-safe
+				// expired → closePaseSession(FailsafeExpiredError)).
+				if closePaseSessions != nil {
+					if n := closePaseSessions(); n > 0 {
+						logger.Info("matter.bridge.failsafe.pase_sessions_closed",
+							slog.Int("count", n))
+					}
+				}
 				logger.Info("matter.bridge.failsafe.expired",
 					slog.Int("fabric_index", int(fabricIndex)))
 			})
@@ -1770,6 +1911,24 @@ func buildRootClusters(mc config.NorthMatter, store *matterstore.Store, bridge *
 			// path of CommissioningWindowManager::OnCommissioningComplete.
 			gc.SetOnCommissioningComplete(func(ctx context.Context, fabricIndex uint8) {
 				gcOpCreds.ClearPendingState()
+				// Matter §11.10.6.6 step 4: "The Secure Session Context of
+				// any PASE session still established at the Server SHALL be
+				// cleared." Deferred by a grace period because Apple sends
+				// CommissioningComplete over the fabric-adopted PASE session
+				// (see AdoptFabricIndex) — an immediate close would drop the
+				// CommissioningCompleteResponse before it reaches the wire.
+				// Same delayed-teardown pattern as the RemoveFabric session
+				// eviction. Mirrors matter.js FailsafeContext.ts:154
+				// completeCommission → closePaseSession.
+				if closePaseSessions != nil {
+					go func() {
+						time.Sleep(100 * time.Millisecond)
+						if n := closePaseSessions(); n > 0 {
+							logger.Info("matter.bridge.commissioning_complete.pase_sessions_closed",
+								slog.Int("count", n))
+						}
+					}()
+				}
 				w := bridge.CommissioningWindow()
 				if w == nil {
 					return
@@ -2163,6 +2322,39 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 	if err != nil {
 		return nil, fmt.Errorf("spake2 verifier context: %w", err)
 	}
+	return buildPaseAdapterFromContext(vc, salt, iterations, mgr, opCreds, gc, logger)
+}
+
+// buildPaseAdapterFromVerifier builds a PASE adapter from a Matter
+// §3.10.5 passcode verifier (w0 || L) instead of a passcode. This is the
+// Enhanced Commissioning Window path: a multi-admin commissioner derives
+// the verifier from a passcode it chose and supplies only (w0, L) in
+// OpenCommissioningWindow, so the bridge accepts PASE against that
+// passcode without ever seeing it. Mirrors matter.js
+// PaseServer.fromVerificationValue
+// (packages/protocol/src/session/pase/PaseServer.ts:52-61).
+// gc is intentionally omitted: the Enhanced Commissioning Window is
+// driven by a commissioner that sends its own ArmFailSafe, so the
+// defensive AutoArmOnPaseEstablished hook (which needs GeneralCommissioning)
+// is not wired on this path — matching the ephemeral provider, which also
+// passes a nil gc.
+func buildPaseAdapterFromVerifier(verifier, salt []byte, iterations int, mgr *operational.Manager, opCreds *mattercore.OperationalCredentials, logger *slog.Logger) (*matterbridge.PaseAdapter, error) {
+	const want = spake2.VerifierW0Size + spake2.VerifierLSize // 97 bytes, Matter §3.10.5
+	if len(verifier) != want {
+		return nil, fmt.Errorf("matter: PAKE passcode verifier length=%d, want %d", len(verifier), want)
+	}
+	vc, err := spake2.NewVerifierFromValue(verifier[:spake2.VerifierW0Size], verifier[spake2.VerifierW0Size:])
+	if err != nil {
+		return nil, fmt.Errorf("spake2 verifier from value: %w", err)
+	}
+	return buildPaseAdapterFromContext(vc, salt, iterations, mgr, opCreds, nil, logger)
+}
+
+// buildPaseAdapterFromContext wires a fully-configured [matterbridge.PaseAdapter]
+// around a prepared SPAKE2+ verifier context — the shared tail of
+// buildPaseAdapterFromCreds (passcode path) and buildPaseAdapterFromVerifier
+// (supplied-verifier / Enhanced Commissioning Window path).
+func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterations int, mgr *operational.Manager, opCreds *mattercore.OperationalCredentials, gc *mattercore.GeneralCommissioning, logger *slog.Logger) (*matterbridge.PaseAdapter, error) {
 	// Pre-allocate the operational session id BEFORE the adapter is
 	// constructed. The id is embedded in PBKDFParamResponse as
 	// ResponderSessionID; the commissioner echoes it back as
@@ -2191,6 +2383,18 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 	// pre-allocated sessID as ResponderSessionID so the commissioner
 	// echoes back the correct id on post-PASE IM traffic.
 	paseAdapter.SetPBKDFParams(uint32(iterations), salt, sessID) //nolint:gosec // iterations was validated by NewVerifierContext; see #20
+	// Advertise the bridge's MRP profile as PBKDFParamResponse tag 5 —
+	// the same idle/active/threshold triplet Sigma2 tag 5 and the mDNS
+	// SII/SAI keys carry. Mirrors matter.js PaseServer.ts:151.
+	sp := bridgeSessionParameters()
+	idle := uint16(sp.SessionIdleInterval)     //nolint:gosec // bridgeSessionParameters values are spec defaults ≤ 4000
+	active := uint16(sp.SessionActiveInterval) //nolint:gosec // see above
+	thresh := sp.SessionActiveThreshold
+	paseAdapter.SetResponderMRPParams(&spake2.MRPParameters{
+		IdleRetransTimeoutMs:   &idle,
+		ActiveRetransTimeoutMs: &active,
+		ActiveThresholdTimeMs:  &thresh,
+	})
 	paseAdapter.SetOnSessionEstablished(func(sharedSecret []byte, peerSessionID uint16) error {
 		// PASE pre-dates the operational fabric; both node ids ride
 		// as the bridge-allocated PASE-temporary values per Matter
@@ -2202,6 +2406,23 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 		if err != nil {
 			mgr.ReleaseID(sessID)
 			return err
+		}
+		// Honour the commissioner's InitiatorMRPParams (tag 5) so
+		// outbound retransmissions on the PASE session use the peer's
+		// advertised intervals. Mirrors matter.js PaseServer.ts:155-157
+		// `session.timingParameters = initiatorSessionParams`.
+		if pm := paseAdapter.PeerMRPParams(); pm != nil {
+			var idleMs, activeMs, threshMs uint32
+			if pm.IdleRetransTimeoutMs != nil {
+				idleMs = uint32(*pm.IdleRetransTimeoutMs)
+			}
+			if pm.ActiveRetransTimeoutMs != nil {
+				activeMs = uint32(*pm.ActiveRetransTimeoutMs)
+			}
+			if pm.ActiveThresholdTimeMs != nil {
+				threshMs = uint32(*pm.ActiveThresholdTimeMs)
+			}
+			entry.SetPeerMRPIntervals(idleMs, activeMs, threshMs)
 		}
 		// Plumb the AttestationChallenge into OperationalCredentials
 		// so AttestationRequest / CSRRequest signatures bind to the
@@ -2227,6 +2448,36 @@ func buildPaseAdapterFromCreds(passcode uint32, salt []byte, iterations int, mgr
 }
 
 // --- commissioning-window hook adapters ----------------------------------
+
+// matterWindowTransitionHook returns the [matterbridge.CommissioningWindow]
+// transition callback. On a transition into an Enhanced Commissioning Window
+// opened with a commissioner-supplied verifier it advertises the window over
+// mDNS with CM=2 + the ECW discriminator (so a second controller can
+// discover the multi-admin window); on a transition into the closed state it
+// withdraws the commissionable record. An Enhanced window opened via the
+// REST opener (its own passcode, CM=1) carries no supplied verifier and is
+// left to the opener's own announce. `enhancedAdvert` is the CM=2 template;
+// the discriminator is stamped per fire. Mirrors matter.js
+// DeviceCommissioner.ts:166 (enterCommissioningMode with Enhanced).
+func matterWindowTransitionHook(mb *matterbridge.Bridge, window *matterbridge.CommissioningWindow, enhancedAdvert matterbridge.CommissioningAdvertisement, logger *slog.Logger) func() {
+	return func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
+		if mb == nil {
+			return
+		}
+		snap := window.CurrentWindow()
+		if snap.Status == matterwire.WindowStatusEnhanced && window.HasSuppliedVerifier() {
+			adv := enhancedAdvert
+			adv.Discriminator = window.Discriminator()
+			if err := mb.AnnounceCommissioning(context.Background(), adv); err != nil {
+				logger.Warn("matter.bridge.commissioning.enhanced_announce", slog.String("err", err.Error()))
+			}
+			return
+		}
+		if snap.Status != matterwire.WindowStatusEnhanced {
+			mb.WithdrawCommissioning(context.Background())
+		}
+	}
+}
 
 // failSafeArmerAdapter wires the Matter fail-safe arm hook to
 // GeneralCommissioning. Matter §11.19.6 mandates that
@@ -2482,6 +2733,34 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			opMgr:  bundle.opMgr,
 			logger: logger,
 		})
+		// Wire the Enhanced Commissioning Window PASE-verifier installer: when
+		// a Matter commissioner opens a window via the AdministratorCommissioning
+		// cluster command with a supplied PAKE verifier (multi-admin), install a
+		// PASE acceptor built from that verifier for the window lifetime
+		// (Matter §11.19 / §3.10.5). Wired independently of the operator's
+		// EphemeralWindow REST preference — the cluster path does not go through
+		// the REST opener. In ConcurrentPairings mode the restore rebuilds the
+		// configured per-exchange provider; otherwise it re-arms the configured
+		// singleton adapter (bundle.configuredPase, nil → noop between windows).
+		var verifierConfiguredFactory func() *matterbridge.PaseAdapter
+		if cfg.North.Matter.Commissioning.ConcurrentPairings {
+			cmCopy := cfg.North.Matter.Commissioning
+			opMgrLocal := bundle.opMgr
+			opCredsLocal := bundle.opCreds
+			gcLocal := bundle.rootRefs.GeneralCommissioning
+			loggerLocal := logger
+			verifierConfiguredFactory = func() *matterbridge.PaseAdapter { //nolint:contextcheck // factory signature is fixed by interface; buildPaseAdapter has no ctx
+				a, err := buildPaseAdapter(cmCopy, opMgrLocal, opCredsLocal, gcLocal, loggerLocal)
+				if err != nil {
+					loggerLocal.Warn("matter.bridge.pase.build", slog.String("err", err.Error()))
+					return nil
+				}
+				return a
+			}
+		}
+		window.SetPaseVerifierInstaller(newMatterVerifierInstaller(
+			mb, bundle.opMgr, bundle.opCreds, bundle.configuredPase, verifierConfiguredFactory, logger,
+		))
 		opener := matterbridge.NewCommissioningWindowOpener(
 			window,
 			cfg.North.Matter.Discriminator,
@@ -2540,17 +2819,20 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 				DeviceTypeID: 0x0016, // §10.3 RootNode — DT=0x000E empirically worse for Apple Multi-Admin flow
 			},
 		}
-		// Withdraw the commissionable record on every transition into
-		// "closed" so commissioners stop discovering the bridge once
-		// the window has expired or been revoked.
-		window.SetTransitionHook(func() { //nolint:contextcheck // hook fires asynchronously on window state change; no caller ctx is available
-			if mb == nil {
-				return
-			}
-			if window.CurrentWindow().Status != matterwire.WindowStatusEnhanced {
-				mb.WithdrawCommissioning(context.Background())
-			}
-		})
+		// Transition hook: advertise an Enhanced Commissioning Window opened
+		// with a supplied verifier (CM=2) and withdraw the commissionable
+		// record when the window closes. Extracted to keep this function's
+		// cyclomatic complexity in check.
+		//nolint:contextcheck // the returned hook fires asynchronously on a window state change; there is no caller ctx to thread, so the mDNS announce/withdraw use context.Background()
+		window.SetTransitionHook(matterWindowTransitionHook(mb, window, matterbridge.CommissioningAdvertisement{
+			InstanceID:        instanceID,
+			VendorID:          cfg.North.Matter.VendorID,
+			ProductID:         cfg.North.Matter.ProductID,
+			NodeLabel:         cfg.North.Matter.NodeLabel,
+			RotatingID:        rotatingID,
+			CommissioningMode: 2, // §4.3.1.4 CM=2: enhanced commissioning window
+			DeviceTypeID:      0x0016,
+		}, logger))
 
 		// Ephemeral-window mode: each OpenCommissioningWindow call
 		// generates a fresh discriminator + passcode + Spake2+ verifier

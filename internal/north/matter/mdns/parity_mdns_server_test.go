@@ -329,9 +329,10 @@ func TestParityMdnsServer_CommissionableTXTSchemaLock(t *testing.T) {
 	if sai := txtMap["SAI"]; sai == "0" || sai == "" {
 		t.Errorf("commissionable SAI=%q, want 300 (matter.js MATTER_COMMISSION_SAI_DEFAULT)", sai)
 	}
-	// SII default must be 5000 ms per matter.js MATTER_COMMISSION_SII_DEFAULT.
+	// SII default must resolve to a non-zero value (500 ms — matter.js
+	// SessionIntervals.defaults.idleInterval), not be omitted.
 	if sii := txtMap["SII"]; sii == "0" || sii == "" {
-		t.Errorf("commissionable SII=%q, want 5000 (matter.js MATTER_COMMISSION_SII_DEFAULT)", sii)
+		t.Errorf("commissionable SII=%q, want the 500 ms idle default (matter.js SessionIntervals)", sii)
 	}
 }
 

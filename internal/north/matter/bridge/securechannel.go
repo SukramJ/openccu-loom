@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/spake2"
@@ -77,11 +78,13 @@ type CaseHandler interface {
 // that carries HasAck=true regardless of opcode, so the IM and
 // SecureChannel paths share this hook.
 type AckHandler interface {
-	// Discharge marks the obligation for exchangeID as fulfilled
-	// (the peer ACKed our outbound message). Returns whether an
-	// obligation existed (informational; the router does not branch
-	// on the result).
-	Discharge(exchangeID uint16) bool
+	// Discharge marks the obligation for the (session, exchange)
+	// pair as fulfilled (the peer ACKed our outbound message).
+	// Exchange IDs are only unique per session, so the session half
+	// keeps concurrent controllers from discharging each other's
+	// obligations. Returns whether an obligation existed
+	// (informational; the router does not branch on the result).
+	Discharge(sessionID, exchangeID uint16) bool
 }
 
 // noopPaseHandler is the default when no PASE handler is wired.
@@ -118,7 +121,7 @@ func (noopCaseHandler) ProcessSigma2Resume([]byte) (opcode uint8, payload []byte
 // every Discharge returns false (obligation never existed).
 type noopAckHandler struct{}
 
-func (noopAckHandler) Discharge(uint16) bool { return false }
+func (noopAckHandler) Discharge(uint16, uint16) bool { return false }
 
 // AttachPaseHandler wires the PASE port. Pass nil to revert to noop.
 // Calling this twice replaces the previous handler.
@@ -129,8 +132,14 @@ func (noopAckHandler) Discharge(uint16) bool { return false }
 // [Bridge.AttachPaseHandlerProvider] instead; when a provider is
 // wired the singleton handler is ignored.
 func (b *Bridge) AttachPaseHandler(h PaseHandler) {
+	// A fresh acceptor marks a commissioning-window boundary; give the new
+	// window its own PASE brute-force budget and a free
+	// single-active-PASE slot.
+	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.paseInFlightExchange = 0
+	b.paseInFlightSince = time.Time{}
 	if h == nil {
 		b.paseHandler = noopPaseHandler{}
 		return
@@ -155,8 +164,14 @@ type PaseHandlerProvider func(exchangeID uint16) PaseHandler
 // for every inbound PASE opcode. Pass nil to clear and fall back to
 // the singleton handler.
 func (b *Bridge) AttachPaseHandlerProvider(p PaseHandlerProvider) {
+	// A fresh acceptor marks a commissioning-window boundary; give the new
+	// window its own PASE brute-force budget and a free
+	// single-active-PASE slot.
+	b.resetPaseFailures()
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.paseInFlightExchange = 0
+	b.paseInFlightSince = time.Time{}
 	b.paseProvider = p
 }
 
@@ -271,7 +286,7 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		ack := b.ackHandler
 		b.mu.RUnlock()
 		if ack != nil {
-			ack.Discharge(proto.ExchangeID)
+			ack.Discharge(requestHdr.SessionID, proto.ExchangeID)
 		}
 	}
 
@@ -286,6 +301,19 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 		return nil
 
 	case mrp.SCOpcodePBKDFParamRequest:
+		if !b.claimPaseInFlight(proto.ExchangeID) {
+			// Single-active-PASE (Matter §4.13.1): a second
+			// commissioner's PBKDFParamRequest while a handshake is in
+			// progress is IGNORED — matter.js PaseServer.ts:80-86
+			// onNewExchange logs "Pairing already in progress" and
+			// drops the exchange. The MRP layer has already acked the
+			// datagram; the rejected commissioner times out and
+			// retries after the active handshake finished or expired.
+			b.logger.Info("matter.rx.sc.pase_busy",
+				slog.String("src", srcString(src)),
+				slog.Int("exchange_id", int(proto.ExchangeID)))
+			return nil
+		}
 		h := b.resolvePaseHandler(proto.ExchangeID)
 		return b.handlePase(src, requestHdr, proto, payload, "pbkdf_param_req",
 			h.ProcessPBKDFParamRequest)
@@ -295,8 +323,15 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 			h.ProcessPake1)
 	case mrp.SCOpcodePake3:
 		h := b.resolvePaseHandler(proto.ExchangeID)
-		return b.handlePase(src, requestHdr, proto, payload, "pake3",
+		err := b.handlePase(src, requestHdr, proto, payload, "pake3",
 			h.ProcessPake3)
+		// Pake3 terminates the handshake either way (success installs
+		// the session, failure aborts the attempt) — release the
+		// single-active-PASE claim so the next commissioner can start.
+		// matter.js clears #pairingMessenger in the finally block of
+		// onNewExchange (PaseServer.ts:112-118).
+		b.releasePaseInFlight(proto.ExchangeID)
+		return err
 
 	case mrp.SCOpcodeSigma1:
 		// Apple iOS multicasts the same Sigma1 onto IPv4 + IPv6-LL +
@@ -374,6 +409,81 @@ func (b *Bridge) dispatchSecureChannel(src *net.UDPAddr, requestHdr *message.Hea
 	}
 }
 
+// paseMaxErrors is the number of PASE pairing failures within a
+// commissioning window that aborts the window. Mirrors matter.js
+// PaseServer.ts PASE_COMMISSIONING_MAX_ERRORS (= 20). Without this cap an
+// attacker on the LAN could hammer passcode guesses for the whole window
+// — up to 900 s commissioned, or 48 h for an uncommissioned bridge.
+const paseMaxErrors = 20
+
+// pasePairingTimeout bounds how long a single PASE handshake may hold
+// the single-active-PASE claim. Mirrors matter.js PaseServer.ts:33
+// PASE_PAIRING_TIMEOUT (60 s) — an abandoned handshake (commissioner
+// crashed between PBKDFParamRequest and Pake3) self-expires so pairing
+// is not locked out for the rest of the window.
+const pasePairingTimeout = 60 * time.Second
+
+// claimPaseInFlight attempts to claim the single-active-PASE slot for
+// exchangeID. Returns true when the claim succeeds: the slot was idle,
+// expired, or already owned by the SAME exchange (PBKDFParamRequest
+// retransmit). Mirrors matter.js PaseServer.ts:80-86 onNewExchange.
+func (b *Bridge) claimPaseInFlight(exchangeID uint16) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	now := time.Now()
+	idle := b.paseInFlightSince.IsZero() || now.Sub(b.paseInFlightSince) > pasePairingTimeout
+	if !idle && b.paseInFlightExchange != exchangeID {
+		return false
+	}
+	b.paseInFlightExchange = exchangeID
+	b.paseInFlightSince = now
+	return true
+}
+
+// releasePaseInFlight clears the single-active-PASE claim held by
+// exchangeID. A claim held by a DIFFERENT exchange stays untouched.
+func (b *Bridge) releasePaseInFlight(exchangeID uint16) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.paseInFlightExchange == exchangeID {
+		b.paseInFlightExchange = 0
+		b.paseInFlightSince = time.Time{}
+	}
+}
+
+// recordPaseFailure increments the PASE failure counter and, when it
+// reaches [paseMaxErrors], revokes the open commissioning window and
+// resets the counter. Mirrors matter.js PaseServer.ts:95-110 (count →
+// MaximumPasePairingErrorsReachedError) + DeviceCommissioner.ts:70-72
+// (tooManyPaseErrors → endCommissioning). Called from the handlePase
+// error path for genuine pairing failures only (not missing-handler or
+// state-replay retransmits).
+func (b *Bridge) recordPaseFailure() {
+	if b.paseFailures.Add(1) < paseMaxErrors {
+		return
+	}
+	b.paseFailures.Store(0)
+	win := b.CommissioningWindow()
+	if win == nil {
+		return
+	}
+	b.logger.Warn("matter.rx.sc.pase_bruteforce",
+		slog.Int("max_errors", paseMaxErrors),
+		slog.String("hint", "too many PASE pairing failures; revoking commissioning window"))
+	_ = win.RevokeWindow(context.Background())
+}
+
+// resetPaseFailures clears the per-window PASE state — the failure counter
+// and the unsecured duplicate-detection windows. Called when a fresh PASE
+// acceptor is installed ([Bridge.AttachPaseHandler] /
+// [Bridge.AttachPaseHandlerProvider]) — a commissioning-window boundary —
+// so each window gets its own [paseMaxErrors] budget and a clean set of
+// per-source dedup windows.
+func (b *Bridge) resetPaseFailures() {
+	b.paseFailures.Store(0)
+	b.unsecuredWindows.Clear()
+}
+
 // handlePase + handleCase share the handler-invocation + reply-send
 // pattern. Pulled into helpers so the opcode switch stays a flat
 // table and the reply-path bookkeeping (errors, log scoping) lives
@@ -427,6 +537,10 @@ func (b *Bridge) handlePase(
 					slog.String("stage", stage),
 					slog.String("err", sendErr.Error()))
 			}
+			// Brute-force protection: a genuine pairing failure (bad Pake1
+			// decode, confirmation mismatch, …). Count it and abort the
+			// window once too many accumulate.
+			b.recordPaseFailure()
 		}
 		return err
 	}
@@ -435,11 +549,18 @@ func (b *Bridge) handlePase(
 		// happy-path, for instance). Nothing more to do.
 		return nil
 	}
-	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
+	// Reliable: PASE continuation messages (PBKDFParamResponse, Pake2)
+	// are part of the reliable Secure-Channel exchange. A dropped Pake2
+	// aborts commissioning — the commissioner waits for a reply that the
+	// bridge, absent MRP tracking, would never rebroadcast. matter.js
+	// makes every non-standalone-ack reply reliable (MessageExchange.ts:602);
+	// the Sigma3/Pake3 piggyback ack (or a standalone ack) stops the
+	// retransmit via the universal inbound Ack path (receive.go).
+	if err := b.sendReplyReliable(src, requestHdr, proto, respOpcode, respPayload); err != nil {
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 
@@ -509,11 +630,17 @@ func (b *Bridge) handleCase(
 	if respPayload == nil {
 		return nil
 	}
-	if err := b.sendReply(src, requestHdr, proto, respOpcode, respPayload); err != nil {
+	// Reliable: Sigma2 is a CASE continuation message on the reliable
+	// Secure-Channel exchange. A dropped Sigma2 aborts CASE — the
+	// commissioner waits for a reply the bridge would otherwise never
+	// rebroadcast. matter.js makes every non-standalone-ack reply
+	// reliable (MessageExchange.ts:602); the Sigma3 piggyback ack stops
+	// the retransmit via the universal inbound Ack path (receive.go).
+	if err := b.sendReplyReliable(src, requestHdr, proto, respOpcode, respPayload); err != nil {
 		debugReplyError(b.logger, "send_"+stage, src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 

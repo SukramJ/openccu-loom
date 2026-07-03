@@ -143,6 +143,11 @@ type Cover struct {
 	// DataVersionFilter evaluation correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
+	// matterTarget stores the last commanded WindowCovering target
+	// positions for the Matter projection (lift + tilt axis). Owned
+	// here so the value survives cluster-server reconstruction.
+	matterTarget matterTargetState
+
 	address      string
 	writer       Writer
 	Capabilities custom.CoverCapabilities

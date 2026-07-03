@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/channel"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/sigma"
@@ -88,6 +89,19 @@ type PaseAdapter struct {
 	// this value (NOT its own local session id) into outbound
 	// Header.SessionID for any encrypted reply.
 	peerSessionID uint16
+
+	// peerMRPParams retains the commissioner's InitiatorMRPParams
+	// (PBKDFParamRequest tag 5, nil when absent) so the PASE session
+	// opener can size retransmissions to the peer's advertised
+	// intervals. Mirrors matter.js PaseServer.ts:155-157.
+	peerMRPParams *spake2.MRPParameters
+
+	// responderMRPParams, when non-nil, is emitted as
+	// PBKDFParamResponse tag 5 (ResponderMRPParams) so the
+	// commissioner aligns its retransmit budget with the bridge's
+	// advertised intervals. Mirrors matter.js PaseServer.ts:151
+	// `responderSessionParams = this.sessions.sessionParameters`.
+	responderMRPParams *spake2.MRPParameters
 }
 
 // PaseSessionEstablished fires after a successful Pake3 verification.
@@ -177,6 +191,31 @@ func (a *PaseAdapter) SetRandomSource(fn func() [spake2.PBKDFRandomSize]byte) {
 	a.randomSource = fn
 }
 
+// SetResponderMRPParams configures the MRP retransmit profile the
+// adapter advertises as PBKDFParamResponse tag 5. Nil omits the field
+// (commissioners fall back to spec defaults). Mirrors matter.js
+// PaseServer.ts:151 responderSessionParams.
+func (a *PaseAdapter) SetResponderMRPParams(p *spake2.MRPParameters) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.responderMRPParams = p
+}
+
+// PeerMRPParams returns the commissioner's InitiatorMRPParams from
+// the most recent PBKDFParamRequest, or nil when the commissioner
+// omitted the field. The daemon's PASE onEstablished callback stamps
+// these onto the operational entry (matter.js PaseServer.ts:155-157
+// `session.timingParameters = initiatorSessionParams`).
+func (a *PaseAdapter) PeerMRPParams() *spake2.MRPParameters {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.peerMRPParams == nil {
+		return nil
+	}
+	cp := *a.peerMRPParams
+	return &cp
+}
+
 // ProcessPBKDFParamRequest decodes the commissioner's request, picks
 // a fresh ResponderRandom, and assembles the PBKDFParamResponse.
 // The response carries the bridge's PBKDF salt + iterations only when
@@ -210,6 +249,9 @@ func (a *PaseAdapter) ProcessPBKDFParamRequest(payload []byte) (opcode uint8, re
 		InitiatorRandom:    req.InitiatorRandom,
 		ResponderRandom:    respRand[:],
 		ResponderSessionID: a.responderSessionID,
+		// Advertise the bridge's MRP profile (tag 5) when configured
+		// — matter.js PaseServer.ts:151/:160 responderSessionParams.
+		ResponderMRPParams: a.responderMRPParams,
 	}
 	if !req.HasPBKDFParameters {
 		resp.Parameters = &spake2.PBKDFParameters{
@@ -226,6 +268,9 @@ func (a *PaseAdapter) ProcessPBKDFParamRequest(payload []byte) (opcode uint8, re
 	// Capture the commissioner's local session id so the post-Pake3
 	// session pickup can hand it to the operational manager.
 	a.peerSessionID = req.InitiatorSessionID
+	// Retain the commissioner's MRP tuning (tag 5) for the session
+	// opener — matter.js PaseServer.ts:155-157.
+	a.peerMRPParams = req.InitiatorMRPParams
 	return mrp.SCOpcodePBKDFParamResponse, respBytes, nil
 }
 
@@ -492,7 +537,14 @@ func (a *CaseAdapter) ProcessSigma1(payload []byte) (opcode uint8, respPayload [
 		a.established = true
 		a.mu.Unlock()
 		if firstEstablish && a.onEstablished != nil {
-			if err := a.onEstablished(result.ResumeKeys, result.Sigma2Resume.ResponderSessionID); err != nil {
+			// The callback's second argument is the PEER's session id
+			// (Sigma1.initiatorSessionID) — the id the initiator expects
+			// stamped into Header.SessionID of every outbound packet.
+			// matter.js CaseServer.ts:179 `peerSessionId: cx.peerSessionId`.
+			// Passing our own ResponderSessionID here registered the
+			// resumed session under a peer id the initiator never
+			// allocated, so it dropped every reply.
+			if err := a.onEstablished(result.ResumeKeys, r.PeerSessionID()); err != nil {
 				return 0, nil, fmt.Errorf("bridge: CASE resume session pickup: %w", err)
 			}
 		}
@@ -605,11 +657,11 @@ func NewMRPAckAdapter(t *mrp.AckTracker) *MRPAckAdapter {
 }
 
 // Discharge forwards to [mrp.AckTracker.Discharge].
-func (a *MRPAckAdapter) Discharge(exchangeID uint16) bool {
+func (a *MRPAckAdapter) Discharge(sessionID, exchangeID uint16) bool {
 	if a.tracker == nil {
 		return false
 	}
-	return a.tracker.Discharge(exchangeID)
+	return a.tracker.Discharge(sessionID, exchangeID)
 }
 
 // OperationalSessionLookup wraps a session-lookup function from the
@@ -625,9 +677,10 @@ func (a *MRPAckAdapter) Discharge(exchangeID uint16) bool {
 // non-nil `fabricFor` closure — Subscribe, ACL checks and any other
 // fabric-scoped logic can then resolve `(sessionID → fabricIndex)`.
 type OperationalSessionLookup struct {
-	get        func(sessionID uint16) (*channel.Session, bool)
-	fabricFor  func(sessionID uint16) (uint8, bool)
-	subjectFor func(sessionID uint16) (uint64, []uint32, bool)
+	get         func(sessionID uint16) (*channel.Session, bool)
+	fabricFor   func(sessionID uint16) (uint8, bool)
+	subjectFor  func(sessionID uint16) (uint64, []uint32, bool)
+	intervalFor func(sessionID uint16, now time.Time) (time.Duration, bool)
 }
 
 // SessionFabricResolver is an optional capability a [SessionLookup]
@@ -640,6 +693,17 @@ type OperationalSessionLookup struct {
 // need a fabric usually fall back to 0 (pre-fabric semantics).
 type SessionFabricResolver interface {
 	FabricFor(sessionID uint16) (uint8, bool)
+}
+
+// SessionRetransmitIntervalResolver is an optional capability a
+// [SessionLookup] can implement so the outbound-reliable tracker can
+// size its retransmission backoff to the peer's advertised MRP
+// session parameters (active/idle interval selected by peer
+// activity — matter.js MRP.ts:129 retransmissionIntervalOf). Sessions
+// the resolver does not know (session 0 / PASE) return (_, false)
+// and the tracker falls back to the spec idle default.
+type SessionRetransmitIntervalResolver interface {
+	RetransmitBaseInterval(sessionID uint16, now time.Time) (time.Duration, bool)
 }
 
 // SessionSubjectResolver is an optional capability a [SessionLookup]
@@ -706,6 +770,30 @@ func (l *OperationalSessionLookup) WithSubjectResolver(subjectFor func(sessionID
 	}
 	l.subjectFor = subjectFor
 	return l
+}
+
+// WithRetransmitIntervalResolver wires the optional
+// RetransmitBaseInterval side of the adapter. Pass a closure that
+// resolves the peer-appropriate MRP base interval (typically
+// `operational.Entry.RetransmitBaseInterval`) for known sessions and
+// returns `(0, false)` for unknown ones. Returns the receiver so
+// callers can chain.
+func (l *OperationalSessionLookup) WithRetransmitIntervalResolver(intervalFor func(sessionID uint16, now time.Time) (time.Duration, bool)) *OperationalSessionLookup {
+	if l == nil {
+		return nil
+	}
+	l.intervalFor = intervalFor
+	return l
+}
+
+// RetransmitBaseInterval implements [SessionRetransmitIntervalResolver].
+// Returns (0, false) when the adapter was built without an interval
+// resolver closure.
+func (l *OperationalSessionLookup) RetransmitBaseInterval(sessionID uint16, now time.Time) (time.Duration, bool) {
+	if l == nil || l.intervalFor == nil {
+		return 0, false
+	}
+	return l.intervalFor(sessionID, now)
 }
 
 // SubjectFor implements [SessionSubjectResolver]. Returns (0, nil,

@@ -63,6 +63,11 @@ type Garage struct {
 	// DataVersionFilter evaluation correctly detects cluster changes.
 	dataVersion hmtypes.DataVersionTracker
 
+	// matterTarget stores the last commanded WindowCovering target
+	// position for the Matter projection (lift axis only). Owned here
+	// so the value survives cluster-server reconstruction.
+	matterTarget matterTargetState
+
 	// key is the composite data-point key used by [DataPointKey] to
 	// satisfy [device.AttachableDataPoint]. Keyed on DOOR_COMMAND
 	// (the primary write parameter for garage doors).

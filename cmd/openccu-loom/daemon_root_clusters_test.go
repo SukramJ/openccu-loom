@@ -38,12 +38,14 @@ func TestBuildRootClusters_WithLiveBridge(t *testing.T) {
 	// Call it directly here with a live bridge + live store to cover the
 	// additional store-guarded code paths (AccessControl, OperationalCredentials).
 	clusters, opCreds, refs, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
 		func(_ context.Context, _ uint8, _, _ uint64, _ []byte) {},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -86,11 +88,13 @@ func TestBuildRootClusters_NilStore(t *testing.T) {
 
 	// nil store → store-guarded branches are skipped.
 	clusters, opCreds, refs, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		nil, // nil store
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

@@ -79,14 +79,18 @@ func (h *recordingCaseHandler) ProcessSigma2Resume(_ []byte) (opcode uint8, payl
 	return h.sigma2ResumeRespCode, h.sigma2ResumeResp, h.sigma2ResumeErr
 }
 
-// recordingAckHandler implements AckHandler and records every Discharge call.
+// recordingAckHandler implements AckHandler and records every Discharge call,
+// including the SessionID half of the key so tests can assert the router
+// forwards both halves (not just the ExchangeID) to the handler.
 type recordingAckHandler struct {
 	discharges     atomic.Int32
+	lastSessionID  atomic.Uint32
 	lastExchangeID atomic.Uint32
 }
 
-func (h *recordingAckHandler) Discharge(exchangeID uint16) bool {
+func (h *recordingAckHandler) Discharge(sessionID, exchangeID uint16) bool {
 	h.discharges.Add(1)
+	h.lastSessionID.Store(uint32(sessionID))
 	h.lastExchangeID.Store(uint32(exchangeID))
 	return true
 }
@@ -338,7 +342,8 @@ func TestDispatchSC_PaseHandlerErrorPropagates(t *testing.T) {
 // ─── Ack discharge (3) ────────────────────────────────────────────────────────
 
 // TestDispatchSC_AckDischargedOnHasAck verifies that when proto.HasAck==true the
-// AckHandler.Discharge is called exactly once with the datagram's ExchangeID.
+// AckHandler.Discharge is called exactly once with the datagram's (SessionID,
+// ExchangeID) pair.
 func TestDispatchSC_AckDischargedOnHasAck(t *testing.T) {
 	t.Parallel()
 	b := newStartedBridge(t)
@@ -350,6 +355,9 @@ func TestDispatchSC_AckDischargedOnHasAck(t *testing.T) {
 	_ = b.dispatchSecureChannel(loopbackSrc(), scHdr(), proto, nil)
 	if got := ack.discharges.Load(); got != 1 {
 		t.Errorf("discharges: want 1, got %d", got)
+	}
+	if got := ack.lastSessionID.Load(); got != 0 {
+		t.Errorf("lastSessionID: want 0 (scHdr's SessionID), got %d", got)
 	}
 	if got := ack.lastExchangeID.Load(); got != 7 {
 		t.Errorf("lastExchangeID: want 7, got %d", got)

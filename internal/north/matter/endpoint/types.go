@@ -4,8 +4,11 @@
 package endpoint
 
 import (
+	"sync"
+
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/store"
+	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
 )
 
@@ -122,6 +125,53 @@ type Endpoint struct {
 	// AggregatorEndpoint requirements (Parts + Index mandatory, Identify
 	// optional) in `packages/node/src/endpoints/aggregator.ts`.
 	AggregatorClusterServers []interfaces.MatterClusterServer
+
+	// dataVersions hosts the per-cluster DataVersion trackers for a
+	// BRIDGED endpoint. Bridged cluster servers are materialised fresh
+	// on every dispatch (see [ClusterServers]) so an instance-embedded
+	// tracker would install a new random initial version per read —
+	// controllers' DataVersionFilters then never match and Apple
+	// re-transfers every endpoint on each re-subscribe. Hosting the
+	// tracker on the persistent Endpoint keyed by cluster id gives the
+	// same (endpoint, cluster) a stable version for the topology's
+	// lifetime, bumped on state changes. Mirrors matter.js
+	// packages/node/src/behavior/state/managed/Datasource.ts:349 (set
+	// once per lifetime) / :949 (increment per change). Root and
+	// Aggregator endpoints keep their persistent instance-hosted
+	// trackers.
+	dataVersionsMu sync.Mutex
+	dataVersions   map[uint32]*hmtypes.DataVersionTracker
+}
+
+// clusterTracker returns (lazily creating) the endpoint-hosted
+// DataVersion tracker for clusterID. Safe for concurrent use.
+func (e *Endpoint) clusterTracker(clusterID uint32) *hmtypes.DataVersionTracker {
+	e.dataVersionsMu.Lock()
+	defer e.dataVersionsMu.Unlock()
+	if e.dataVersions == nil {
+		e.dataVersions = make(map[uint32]*hmtypes.DataVersionTracker)
+	}
+	t := e.dataVersions[clusterID]
+	if t == nil {
+		t = &hmtypes.DataVersionTracker{}
+		e.dataVersions[clusterID] = t
+	}
+	return t
+}
+
+// ClusterDataVersion returns the stable per-(endpoint, cluster)
+// DataVersion for a bridged endpoint. First access installs the
+// random non-zero initial value (see [hmtypes.DataVersionTracker]).
+func (e *Endpoint) ClusterDataVersion(clusterID uint32) uint32 {
+	return e.clusterTracker(clusterID).Current()
+}
+
+// BumpClusterDataVersion advances the per-(endpoint, cluster)
+// DataVersion after a state change so DataVersionFilters miss and
+// subscribers receive the fresh value. Mirrors matter.js
+// Datasource.ts:949.
+func (e *Endpoint) BumpClusterDataVersion(clusterID uint32) {
+	e.clusterTracker(clusterID).Bump()
 }
 
 // IsRoot reports whether this is the root bridge endpoint (ID 0).

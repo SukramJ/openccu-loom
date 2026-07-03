@@ -278,9 +278,11 @@ func (g *GeneralCommissioning) SetIsCommissioningWindowOpen(fn func() bool) {
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterCommandLister = (*GeneralCommissioning)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*GeneralCommissioning)(nil)
+	_ interfaces.MatterClusterServer                  = (*GeneralCommissioning)(nil)
+	_ interfaces.MatterClusterCommandLister           = (*GeneralCommissioning)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*GeneralCommissioning)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege  = (*GeneralCommissioning)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*GeneralCommissioning)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -293,6 +295,32 @@ func (g *GeneralCommissioning) MatterDataVersion() uint32 { return g.dataVersion
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (g *GeneralCommissioning) MatterClusterID() uint32 { return gencommClusterID }
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// ArmFailSafe, SetRegulatoryConfig, and CommissioningComplete require
+// Administer (5) per Matter §11.10 (access "A"). Mirrors matter.js
+// packages/model/src/standard/elements/general-commissioning.element.ts:63,78,92.
+func (g *GeneralCommissioning) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case gencommCmdArmFailSafe, gencommCmdSetRegulatoryConfig, gencommCmdCommissioningComplete:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// Breadcrumb (0x0000) requires Administer (5) per Matter §11.10 (access
+// "RW VA"). Mirrors matter.js packages/model/src/standard/elements/
+// general-commissioning.element.ts:26.
+func (g *GeneralCommissioning) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case gencommAttrBreadcrumb:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // BasicCommissioningInfoStruct mirrors Matter §11.10.5.3.
 type BasicCommissioningInfoStruct struct {
@@ -478,6 +506,40 @@ func (g *GeneralCommissioning) handleArmFailSafe(ctx context.Context, fields any
 		}
 	}()
 
+	// sessFabric is the requesting fabric (0 == PASE / commissioning
+	// session). It gates the fail-safe ownership rules below.
+	_, sessFabric := im.FabricFilterFromContext(ctx)
+
+	// (a) A CASE session may not arm the fail-safe while a commissioning
+	// window is open for another admin and the fail-safe is not yet armed:
+	// the short window is reserved for the PASE commissioner. Mirrors
+	// matter.js GeneralCommissioningServer.ts:82-90 (`!isFailsafeArmed &&
+	// windowStatus !== WindowNotOpen && !session.isPase` → BusyWithOtherAdmin).
+	// sessFabric != 0 identifies a CASE session (a PASE invoke resolves to
+	// fabric 0). The window hook is only consulted when wired; test paths
+	// without it fall through (no window means no reservation to protect).
+	if !g.failSafeArmed && sessFabric != 0 && g.isCommissioningWindowOpen != nil && g.isCommissioningWindowOpen() {
+		return ArmFailSafeResponse{
+			ErrorCode: CommissioningErrorBusyWithOtherAdmin,
+			DebugText: "cannot arm fail-safe over CASE while a commissioning window is open",
+		}, nil
+	}
+
+	// (b)+(c) Ownership: once the fail-safe is armed by a fabric, only that
+	// same fabric may re-arm OR disarm it — regardless of window state. A
+	// different fabric attempting either leaves the fail-safe unchanged and
+	// is rejected with BusyWithOtherAdmin. This stops fabric B from
+	// disarming fabric A's fail-safe mid-commissioning (which would roll
+	// back A's pending NOC) or hijacking A's arm. Mirrors matter.js
+	// FailsafeTimer.reArm (FailsafeTimer.ts:53-57): a fabricIndex mismatch
+	// throws, which GeneralCommissioningServer maps to BusyWithOtherAdmin.
+	if g.failSafeArmed && g.failSafeFabricIndex != sessFabric {
+		return ArmFailSafeResponse{
+			ErrorCode: CommissioningErrorBusyWithOtherAdmin,
+			DebugText: fmt.Sprintf("fail-safe owned by fabric %d; requesting fabric %d rejected", g.failSafeFabricIndex, sessFabric),
+		}, nil
+	}
+
 	if req.ExpiryLengthSeconds == 0 {
 		// Spec: ExpiryLengthSeconds=0 disarms the fail-safe and resets the
 		// cumulative cap so the next commissioning attempt starts fresh.
@@ -537,24 +599,6 @@ func (g *GeneralCommissioning) handleArmFailSafe(ctx context.Context, fields any
 			ErrorCode: CommissioningErrorBusyWithOtherAdmin,
 			DebugText: fmt.Sprintf("cumulative fail-safe cap of %d s exceeded", g.cumulativeFailSafeMaxSec),
 		}, nil
-	}
-	// CASE-steal protection: if a FailSafe is already armed by a different
-	// fabric AND a commissioning window is currently open (PASE), reject
-	// with BusyWithOtherAdmin so a malicious CASE session cannot hijack
-	// an ongoing PASE commissioning attempt.
-	// Mirrors chip GeneralCommissioningCluster.cpp:419-427:
-	//   if !IsFailSafeArmed() && IsCommissioningWindowOpen() && authMode==kCase
-	//     → BusyWithOtherAdmin
-	_, sessFabric := im.FabricFilterFromContext(ctx)
-	if g.failSafeArmed && g.failSafeFabricIndex != 0 && sessFabric != g.failSafeFabricIndex {
-		// Another CASE fabric owns the current fail-safe window.
-		isWinOpen := g.isCommissioningWindowOpen
-		if isWinOpen == nil || isWinOpen() {
-			return ArmFailSafeResponse{
-				ErrorCode: CommissioningErrorBusyWithOtherAdmin,
-				DebugText: fmt.Sprintf("fail-safe owned by fabric %d; requesting fabric %d rejected", g.failSafeFabricIndex, sessFabric),
-			}, nil
-		}
 	}
 	g.failSafeArmed = true
 	g.failSafeExpiresAt = now.Add(time.Duration(req.ExpiryLengthSeconds) * time.Second)

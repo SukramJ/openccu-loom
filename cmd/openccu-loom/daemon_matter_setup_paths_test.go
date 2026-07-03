@@ -225,11 +225,13 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 	t.Cleanup(bundle.stop)
 
 	servers, opCreds, refs, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)
@@ -278,6 +280,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 	var mu sync.Mutex
 	var called bool
 	_, _, _, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
 		bundle.bridge,
@@ -288,6 +291,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 			called = true
 			mu.Unlock()
 		},
+		nil,
 		nil,
 	)
 	if err != nil {
@@ -633,11 +637,13 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 
 	// Build root clusters to get an opCreds instance.
 	_, opCreds, _, err := buildRootClusters(
+		context.Background(),
 		cfg.North.Matter,
 		bundle.store,
 		bundle.bridge,
 		nil,
 		slog.New(slog.DiscardHandler),
+		nil,
 		nil,
 		nil,
 	)

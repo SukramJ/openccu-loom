@@ -33,7 +33,7 @@ func TestAckTrackerOweAndPending(t *testing.T) {
 	if tracker.Pending() != 0 {
 		t.Fatalf("Pending() = %d on fresh tracker, want 0", tracker.Pending())
 	}
-	tracker.Owe(100, 1, true, t0)
+	tracker.Owe(100, 0, 1, true, t0)
 	if tracker.Pending() != 1 {
 		t.Fatalf("Pending() = %d after Owe, want 1", tracker.Pending())
 	}
@@ -43,15 +43,15 @@ func TestAckTrackerOweAndPending(t *testing.T) {
 // (entry found), false the second (already removed), and Pending drops to 0.
 func TestAckTrackerDischarge(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
-	tracker.Owe(100, 1, true, t0)
-	if !tracker.Discharge(1) {
-		t.Fatal("Discharge(1) = false on first call, want true")
+	tracker.Owe(100, 0, 1, true, t0)
+	if !tracker.Discharge(0, 1) {
+		t.Fatal("Discharge(0, 1) = false on first call, want true")
 	}
 	if tracker.Pending() != 0 {
 		t.Fatalf("Pending() = %d after Discharge, want 0", tracker.Pending())
 	}
-	if tracker.Discharge(1) {
-		t.Fatal("Discharge(1) = true on second call, want false")
+	if tracker.Discharge(0, 1) {
+		t.Fatal("Discharge(0, 1) = true on second call, want false")
 	}
 }
 
@@ -60,7 +60,7 @@ func TestAckTrackerDischarge(t *testing.T) {
 func TestAckTrackerDueWithDelay(t *testing.T) {
 	const delay = 100 * time.Millisecond
 	tracker := mrp.NewAckTracker(delay)
-	tracker.Owe(100, 1, true, t0)
+	tracker.Owe(100, 0, 1, true, t0)
 
 	// Before delay — nothing due.
 	before := tracker.Due(t0)
@@ -82,7 +82,7 @@ func TestAckTrackerDueWithDelay(t *testing.T) {
 // the tracker is empty afterwards; a second Due call returns nil.
 func TestAckTrackerDueRemovesEntries(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
-	tracker.Owe(42, 7, false, t0)
+	tracker.Owe(42, 0, 7, false, t0)
 
 	first := tracker.Due(t0)
 	if len(first) != 1 {
@@ -102,8 +102,8 @@ func TestAckTrackerDueRemovesEntries(t *testing.T) {
 // Pending stays at 1 and Due returns the latest counter.
 func TestAckTrackerOweUpgradeKeepsLatest(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
-	tracker.Owe(100, 1, true, t0)
-	tracker.Owe(150, 1, true, t0)
+	tracker.Owe(100, 0, 1, true, t0)
+	tracker.Owe(150, 0, 1, true, t0)
 
 	if tracker.Pending() != 1 {
 		t.Fatalf("Pending() = %d after two Owes on same exchange, want 1", tracker.Pending())
@@ -123,9 +123,9 @@ func TestAckTrackerOweUpgradeKeepsLatest(t *testing.T) {
 func TestAckTrackerOweOlderCounterIsIgnored(t *testing.T) {
 	const delay = 50 * time.Millisecond
 	tracker := mrp.NewAckTracker(delay)
-	tracker.Owe(150, 1, true, t0)
+	tracker.Owe(150, 0, 1, true, t0)
 	// Attempt to overwrite with a lower counter at a later time.
-	tracker.Owe(100, 1, true, t0.Add(50*time.Millisecond))
+	tracker.Owe(100, 0, 1, true, t0.Add(50*time.Millisecond))
 
 	if tracker.Pending() != 1 {
 		t.Fatalf("Pending() = %d, want 1", tracker.Pending())
@@ -146,8 +146,8 @@ func TestAckTrackerOweOlderCounterIsIgnored(t *testing.T) {
 // round-trip through the tracker.
 func TestAckTrackerMultipleExchangesIndependent(t *testing.T) {
 	tracker := mrp.NewAckTracker(0)
-	tracker.Owe(100, 1, true, t0)
-	tracker.Owe(200, 2, false, t0)
+	tracker.Owe(100, 0, 1, true, t0)
+	tracker.Owe(200, 0, 2, false, t0)
 
 	if tracker.Pending() != 2 {
 		t.Fatalf("Pending() = %d, want 2", tracker.Pending())
@@ -184,5 +184,82 @@ func TestAckTrackerMultipleExchangesIndependent(t *testing.T) {
 	}
 	if obl2.Initiator {
 		t.Error("ExchangeID 2: Initiator = true, want false")
+	}
+}
+
+// TestAckTrackerSessionScopedExchangeCollision verifies that two sessions
+// sharing the same exchange ID keep fully independent obligations. Exchange
+// IDs are picked independently by every peer, so a bare-exchange key would
+// let a second controller (or a fresh CASE session replacing an old one)
+// silently clobber or discharge the first controller's pending obligation.
+// Mirrors matter.js ExchangeManager.ts:287, which invalidates an exchange
+// lookup as soon as `exchange.session.id !== session.id` — the session id
+// is part of the exchange identity, not just routing metadata.
+func TestAckTrackerSessionScopedExchangeCollision(t *testing.T) {
+	tracker := mrp.NewAckTracker(0)
+	const exch = uint16(5)
+	tracker.Owe(111, 10, exch, true, t0)
+	tracker.Owe(222, 20, exch, false, t0)
+
+	if got := tracker.Pending(); got != 2 {
+		t.Fatalf("Pending() = %d after two sessions on the same exchange, want 2", got)
+	}
+
+	// Discharging session 10's obligation must not touch session 20's.
+	if !tracker.Discharge(10, exch) {
+		t.Fatal("Discharge(10, 5) = false, want true (obligation existed)")
+	}
+	if got := tracker.Pending(); got != 1 {
+		t.Fatalf("Pending() = %d after Discharge(10, 5), want 1 (session 20 must survive)", got)
+	}
+
+	// LookupAndDischarge on the surviving session returns its own counter,
+	// not session 10's (already-discharged) one.
+	counter, ok := tracker.LookupAndDischarge(20, exch)
+	if !ok {
+		t.Fatal("LookupAndDischarge(20, 5) = (_, false), want (_, true)")
+	}
+	if counter != 222 {
+		t.Errorf("LookupAndDischarge(20, 5) counter = %d, want 222 (session 20's own counter)", counter)
+	}
+	if got := tracker.Pending(); got != 0 {
+		t.Fatalf("Pending() = %d after both sessions discharged, want 0", got)
+	}
+}
+
+// TestAckTrackerExpediteDue verifies that ExpediteDue rewrites a pending
+// obligation's DueAt to immediately-due without waiting out the piggyback
+// grace delay, and that it reports false for a (session, exchange) pair with
+// no pending obligation. Mirrors matter.js MessageExchange.ts:428-433, where
+// a duplicate + requiresAck message triggers sendStandaloneAckForMessage
+// without delay rather than through the normal piggyback path.
+func TestAckTrackerExpediteDue(t *testing.T) {
+	const delay = 200 * time.Millisecond
+	tracker := mrp.NewAckTracker(delay)
+	tracker.Owe(100, 0, 1, true, t0)
+
+	// Grace window has not elapsed yet — nothing due.
+	if got := tracker.Due(t0); len(got) != 0 {
+		t.Fatalf("Due at t0 before ExpediteDue: got %d obligations, want 0", len(got))
+	}
+
+	if !tracker.ExpediteDue(0, 1) {
+		t.Fatal("ExpediteDue(0, 1) = false, want true (obligation existed)")
+	}
+
+	// Still evaluated at t0 (the grace window has NOT elapsed by wall-clock
+	// time) — the obligation must be due anyway because ExpediteDue zeroed
+	// its DueAt.
+	obligations := tracker.Due(t0)
+	if len(obligations) != 1 {
+		t.Fatalf("Due at t0 after ExpediteDue: got %d obligations, want 1", len(obligations))
+	}
+	if obligations[0].AckCounter != 100 {
+		t.Errorf("AckCounter = %d, want 100", obligations[0].AckCounter)
+	}
+
+	// Unknown (session, exchange) pair — no obligation to expedite.
+	if tracker.ExpediteDue(0, 999) {
+		t.Error("ExpediteDue(0, 999) = true, want false (no obligation exists)")
 	}
 }

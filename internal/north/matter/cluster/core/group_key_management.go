@@ -72,10 +72,36 @@ const (
 )
 
 // Errors.
-var (
-	errGroupKeyMgmtInvalidArg = errors.New("matter: GroupKeyManagement invalid argument")
-	errGroupKeyMgmtNotFound   = errors.New("matter: GroupKeyManagement key set not found")
-)
+var errGroupKeyMgmtInvalidArg = errors.New("matter: GroupKeyManagement invalid argument")
+
+// groupKeyNotFoundErr is the typed [im.StatusCodeError] returned when a
+// KeySetRead / KeySetRemove targets a group key set that does not exist on
+// the fabric. Maps to IM NotFound (0x8b), matching matter.js
+// GroupKeyManagementServer.ts (Status.NotFound) rather than a generic
+// failure.
+type groupKeyNotFoundErr struct{ id uint16 }
+
+func (e groupKeyNotFoundErr) Error() string {
+	return fmt.Sprintf("matter: GroupKeyManagement key set not found: id=%d", e.id)
+}
+
+func (groupKeyNotFoundErr) MatterStatusCode() im.StatusCode { return im.StatusNotFound }
+
+var _ im.StatusCodeError = groupKeyNotFoundErr{}
+
+// groupKeyExhaustedErr is the typed error a KeySetWrite raises when
+// adding a new key set would exceed the fabric's MaxGroupKeysPerFabric
+// budget. Maps to IM ResourceExhausted (0x89), matching matter.js
+// GroupKeyManagementServer.ts:386-394.
+type groupKeyExhaustedErr struct{ maxKeys uint16 }
+
+func (e groupKeyExhaustedErr) Error() string {
+	return fmt.Sprintf("matter: GroupKeyManagement key sets exhausted: max=%d per fabric", e.maxKeys)
+}
+
+func (groupKeyExhaustedErr) MatterStatusCode() im.StatusCode { return im.StatusResourceExhausted }
+
+var _ im.StatusCodeError = groupKeyExhaustedErr{}
 
 // GroupKeyMgmtConfig drives [NewGroupKeyManagement]. Defaults mirror
 // matter.js HEAD GroupKeyManagementServer.ts:531-532
@@ -118,9 +144,11 @@ func NewGroupKeyManagement(s GroupStoreFacade, cfg GroupKeyMgmtConfig) (*GroupKe
 
 // Compile-time assertions.
 var (
-	_ interfaces.MatterClusterServer        = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterCommandLister = (*GroupKeyManagement)(nil)
-	_ interfaces.MatterClusterDataVersion   = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterServer                  = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterCommandLister           = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterDataVersion             = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterCommandInvokePrivilege  = (*GroupKeyManagement)(nil)
+	_ interfaces.MatterClusterAttributeWritePrivilege = (*GroupKeyManagement)(nil)
 )
 
 // MatterDataVersion implements [interfaces.MatterClusterDataVersion].
@@ -134,6 +162,32 @@ func (g *GroupKeyManagement) MatterDataVersion() uint32 {
 
 // MatterClusterID implements [interfaces.MatterClusterServer].
 func (g *GroupKeyManagement) MatterClusterID() uint32 { return groupKeyMgmtClusterID }
+
+// MinInvokePrivilege implements [interfaces.MatterClusterCommandInvokePrivilege].
+// Every GroupKeyManagement command requires Administer (5) per Matter
+// §11.2.10 (access "F A"). Mirrors matter.js
+// packages/model/src/standard/elements/group-key-management.element.ts:48,54,65,71.
+func (g *GroupKeyManagement) MinInvokePrivilege(cmdID uint32) uint8 {
+	switch cmdID {
+	case groupKeyMgmtCmdKeySetWrite, groupKeyMgmtCmdKeySetRead, groupKeyMgmtCmdKeySetRemove, groupKeyMgmtCmdKeySetReadAllIndices:
+		return 5 // Administer
+	default:
+		return 3 // Operate — standard default
+	}
+}
+
+// MinWritePrivilege implements [interfaces.MatterClusterAttributeWritePrivilege].
+// GroupKeyMap (0x0000) requires Manage (4) per Matter §11.2.10 (access
+// "RW F VM"). Mirrors matter.js packages/model/src/standard/elements/
+// group-key-management.element.ts:28.
+func (g *GroupKeyManagement) MinWritePrivilege(attrID uint32) uint8 {
+	switch attrID {
+	case groupKeyMgmtAttrGroupKeyMap:
+		return 4 // Manage
+	default:
+		return 3 // Operate — standard default
+	}
+}
 
 // GroupKeyMapStruct mirrors Matter §11.2.10.4.1.
 type GroupKeyMapStruct struct {
@@ -514,6 +568,10 @@ func (g *GroupKeyManagement) handleKeySetWrite(ctx context.Context, fabric uint8
 		return nil, errors.New("matter: KeySetWrite: invalid command argument: GroupKeySecurityPolicy must be TrustFirst")
 	}
 
+	if err := g.enforceKeySetBudget(ctx, fabric, gks.GroupKeySetID); err != nil {
+		return nil, err
+	}
+
 	rec := store.GroupKeySet{
 		FabricIndex:    fabric,
 		GroupKeySetID:  gks.GroupKeySetID,
@@ -534,6 +592,29 @@ func (g *GroupKeyManagement) handleKeySetWrite(ctx context.Context, fabric uint8
 	return nil, nil
 }
 
+// enforceKeySetBudget rejects ADDING a new key-set id once the
+// fabric's MaxGroupKeysPerFabric budget is reached — updating an
+// existing key set is always allowed. matter.js
+// GroupKeyManagementServer.ts:386-394 counts the fabric's key sets
+// plus the implicit IPK key set 0 and rejects with ResourceExhausted
+// at the cap; our store persists the IPK as key set 0 (installed by
+// AddNOC), so the plain list length carries the same total.
+func (g *GroupKeyManagement) enforceKeySetBudget(ctx context.Context, fabric uint8, id uint16) error {
+	existing, err := g.store.ListGroupKeySets(ctx, fabric)
+	if err != nil {
+		return fmt.Errorf("matter: KeySetWrite: %w", err)
+	}
+	for _, ks := range existing {
+		if ks.GroupKeySetID == id {
+			return nil
+		}
+	}
+	if uint16(len(existing)) >= g.maxGroupKeysPerFabric { //nolint:gosec // key-set counts stay far below uint16 max
+		return groupKeyExhaustedErr{maxKeys: g.maxGroupKeysPerFabric}
+	}
+	return nil
+}
+
 func (g *GroupKeyManagement) handleKeySetRead(ctx context.Context, fabric uint8, fields any) (any, error) {
 	req, ok := fields.(KeySetReadRequest)
 	if !ok {
@@ -541,7 +622,7 @@ func (g *GroupKeyManagement) handleKeySetRead(ctx context.Context, fabric uint8,
 	}
 	rec, err := g.store.GetGroupKeySet(ctx, fabric, req.GroupKeySetID)
 	if errors.Is(err, store.ErrGroupKeySetNotFound) {
-		return nil, fmt.Errorf("%w: id=%d", errGroupKeyMgmtNotFound, req.GroupKeySetID)
+		return nil, groupKeyNotFoundErr{req.GroupKeySetID}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("matter: KeySetRead: %w", err)
@@ -574,6 +655,15 @@ func (g *GroupKeyManagement) handleKeySetRemove(ctx context.Context, fabric uint
 	// `invokeErrorStatus` in dispatcher.go.
 	if req.GroupKeySetID == 0 {
 		return nil, errors.New("matter: KeySetRemove: invalid command argument: GroupKeySet 0 (IPK) cannot be removed")
+	}
+	// Removing a non-existent key set must return NotFound, not silent
+	// success. matter.js GroupKeyManagementServer.ts throws Status.NotFound
+	// (the bridge's store RemoveGroupKeySet is idempotent, so an existence
+	// check is needed to surface the correct status).
+	if _, err := g.store.GetGroupKeySet(ctx, fabric, req.GroupKeySetID); errors.Is(err, store.ErrGroupKeySetNotFound) {
+		return nil, groupKeyNotFoundErr{req.GroupKeySetID}
+	} else if err != nil {
+		return nil, fmt.Errorf("matter: KeySetRemove: %w", err)
 	}
 	if err := g.store.RemoveGroupKeySet(ctx, fabric, req.GroupKeySetID); err != nil {
 		return nil, fmt.Errorf("matter: KeySetRemove: %w", err)

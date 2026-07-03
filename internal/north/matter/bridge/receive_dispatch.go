@@ -28,7 +28,7 @@ import (
 // retransmits its previous request indefinitely after pairing,
 // which Apple eventually surfaces as "device added" → immediate
 // disconnect.
-func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, proto message.ProtocolHeader) error {
+func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader) error {
 	// Do NOT call dischargeOwedAck here. The previous code did
 	// — the rationale "we just piggyback-acked on an outbound reply"
 	// is correct for *request* opcodes that immediately produce a
@@ -52,7 +52,7 @@ func (b *Bridge) absorbStatusResponse(src *net.UDPAddr, proto message.ProtocolHe
 	// fires past Apple's state-machine and
 	// `ProcessSubscribeResponse` never triggers (Run 19 of the
 	// Apple-pair-diagnose cycle).
-	b.signalStatusResponseRX(proto.ExchangeID)
+	b.signalStatusResponseRX(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.status_ack",
 		slog.String("src", srcString(src)),
 		slog.Int("exchange", int(proto.ExchangeID)))
@@ -87,7 +87,7 @@ func (b *Bridge) rejectGroupSession(src *net.UDPAddr, requestHdr *message.Header
 		debugReplyError(b.logger, "send_group_reject", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 			debugReplyError(b.logger, "send_read_path_reject", src, err)
 			return err
 		}
-		b.dischargeOwedAck(proto.ExchangeID)
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 		return nil
 	}
 	// Stamp the FabricFiltered flag + the requesting FabricIndex
@@ -185,7 +185,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		// `ProcessReadResponse` state machine drops late chunks.
 		// Subscribe path applied this fix as P15; this closes
 		// the symmetric drift on Read.
-		waitCh := b.armStatusResponseWait(proto.ExchangeID)
+		waitCh := b.armStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		// Piggyback the latest peer-sent counter on this chunk's
 		// AckCounter. Without this rewrite every chunk carries
 		// the stale ReadRequest counter, and python-matter-server's
@@ -196,15 +196,15 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 		chunkHdr := *requestHdr
 		b.refreshAckCounter(&chunkHdr, proto.ExchangeID)
 		if err := b.sendReplyReliable(src, &chunkHdr, proto, im.OpcodeReportData, body); err != nil {
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			debugReplyError(b.logger, "send_report", src, err)
 			return err
 		}
 		select {
 		case <-waitCh:
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 		case <-time.After(perChunkStatusRespTimeout):
-			b.disarmStatusResponseWait(proto.ExchangeID)
+			b.disarmStatusResponseWait(requestHdr.SessionID, proto.ExchangeID)
 			b.logger.Debug("matter.tx.read.chunk_ack_timeout",
 				slog.String("src", srcString(src)),
 				slog.Int("chunk", i),
@@ -219,7 +219,7 @@ func (b *Bridge) dispatchReadRequest(ctx context.Context, src *net.UDPAddr, requ
 			slog.Int("bytes", len(body)),
 			slog.Bool("more", chunk.MoreChunkedMessages))
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.read",
 		slog.String("src", srcString(src)),
 		slog.Int("attribute_reports", len(report.Reports)),
@@ -238,8 +238,22 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 			slog.Any("attribute", w.Path.Attribute),
 			slog.String("value_type", fmt.Sprintf("%T", w.Value.Value)))
 	}
+	// A chunked write may not suppress the response — matter.js
+	// InteractionServer.ts:397-402 rejects the combination with
+	// InvalidAction before any timed-interaction handling.
+	if req.MoreChunkedMessages && req.SuppressResponse {
+		return b.replyTimedStatus(src, requestHdr, proto, "write_chunked_suppress", im.StatusInvalidAction)
+	}
 	if status, gated := b.checkTimedGate(req.TimedRequest, requestHdr.SessionID, proto.ExchangeID); gated {
 		return b.replyTimedStatus(src, requestHdr, proto, "write", status)
+	}
+	// A write inside a timed interaction may not be chunked — matter.js
+	// InteractionServer.ts:408-413 ("Write Request action that is part
+	// of a Timed Write Interaction SHALL NOT be chunked"). The gate
+	// above passed, so a set TimedRequest flag means the timed window
+	// existed and was valid.
+	if req.TimedRequest && req.MoreChunkedMessages {
+		return b.replyTimedStatus(src, requestHdr, proto, "write_timed_chunked", im.StatusInvalidAction)
 	}
 	// Stamp the session FabricIndex onto ctx so fabric-scoped writes
 	// (AccessControl.ACL above all) resolve the caller's fabric the
@@ -265,7 +279,7 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 	// drive the side-effects (cluster writes already happened
 	// inside HandleWriteRequest) and discharge any owed MRP ack.
 	if req.SuppressResponse {
-		b.dischargeOwedAck(proto.ExchangeID)
+		b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 		b.logger.Debug("matter.rx.im.write.suppressed",
 			slog.String("src", srcString(src)),
 			slog.Int("attribute_statuses", len(resp.Responses)))
@@ -276,11 +290,18 @@ func (b *Bridge) dispatchWriteRequest(ctx context.Context, src *net.UDPAddr, req
 		debugReplyError(b.logger, "encode_write", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeWriteResponse, body); err != nil {
+	// Reliable: a lost WriteResponse leaves the controller waiting and
+	// retrying the whole write. matter.js ships every non-standalone-ack
+	// reply on an MRP session reliably (MessageExchange.ts:602
+	// `requiresAck ?? (session.usesMrp && !isStandaloneAck)`); the ACK
+	// pump retransmits until the peer acks. The response is a pure
+	// outcome report, so it meets sendReplyReliable's idempotency
+	// contract.
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeWriteResponse, body); err != nil {
 		debugReplyError(b.logger, "send_write", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.write",
 		slog.String("src", srcString(src)),
 		slog.Int("attribute_statuses", len(resp.Responses)))
@@ -363,11 +384,17 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 		debugReplyError(b.logger, "encode_invoke", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeInvokeResponse, body); err != nil {
+	// Reliable: a lost InvokeResponse surfaces to the controller as
+	// "Not Responding" (Apple Home) even though the command executed.
+	// matter.js ships every non-standalone-ack reply on an MRP session
+	// reliably (MessageExchange.ts:602); the ACK pump retransmits the
+	// identical datagram until the peer acks. The response is a pure
+	// outcome report, meeting sendReplyReliable's idempotency contract.
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeInvokeResponse, body); err != nil {
 		debugReplyError(b.logger, "send_invoke", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	// Diagnose: capture Endpoint/Cluster/Command per InvokeRequest +
 	// Status per InvokeResponse. Apple retransmit-loops on Invokes
 	// whose response is malformed or contains an unexpected status,
@@ -412,11 +439,15 @@ func (b *Bridge) dispatchTimedRequest(src *net.UDPAddr, requestHdr *message.Head
 		debugReplyError(b.logger, "encode_status", src, err)
 		return err
 	}
-	if err := b.sendReply(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
+	// Reliable: this StatusResponse is the go-ahead the controller waits
+	// for before sending its timed Write/Invoke (Matter §8.7). If it is
+	// dropped the timed action never arrives and the exchange dies.
+	// matter.js ships it reliably (MessageExchange.ts:602).
+	if err := b.sendReplyReliable(src, requestHdr, proto, im.OpcodeStatusResponse, body); err != nil {
 		debugReplyError(b.logger, "send_status", src, err)
 		return err
 	}
-	b.dischargeOwedAck(proto.ExchangeID)
+	b.dischargeOwedAck(requestHdr.SessionID, proto.ExchangeID)
 	b.logger.Debug("matter.rx.im.timed",
 		slog.String("src", srcString(src)),
 		slog.Int("timeout_ms", int(req.TimeoutMs)))
