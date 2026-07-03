@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
@@ -288,6 +289,8 @@ func configImport(args []string, stdout, stderr io.Writer) error { //nolint:funl
 }
 
 // dbDSN returns the DSN for the daemon SQLite database given a DataDir.
+// It routes through [sqlite.FileDSN] so the CLI opens the database with the
+// same connection pragmas (foreign_keys in particular) as the daemon.
 func dbDSN(dataDir string) string {
-	return dataDir + "/openccu-loom.db"
+	return sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 }

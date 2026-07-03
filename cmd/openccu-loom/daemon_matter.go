@@ -140,7 +140,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer dbCancel()
 	db, err := sqlitestore.Open(dbCtx, dsn)

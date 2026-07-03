@@ -58,14 +58,16 @@ func OpenHistory(ctx context.Context, dsn string) (*sql.DB, error) {
 func migrateHistory(ctx context.Context, db *sql.DB) error {
 	migrateMu.Lock()
 	defer migrateMu.Unlock()
-	goose.SetBaseFS(historyMigrationsFS)
-	if err := goose.SetDialect(string(goose.DialectSQLite3)); err != nil {
-		return fmt.Errorf("sqlite: history set dialect: %w", err)
-	}
-	if err := goose.UpContext(ctx, db, "migrations_history"); err != nil {
-		return fmt.Errorf("sqlite: history migrate: %w", err)
-	}
-	return nil
+	return withMigrationLock(ctx, db, func() error {
+		goose.SetBaseFS(historyMigrationsFS)
+		if err := goose.SetDialect(string(goose.DialectSQLite3)); err != nil {
+			return fmt.Errorf("sqlite: history set dialect: %w", err)
+		}
+		if err := goose.UpContext(ctx, db, "migrations_history"); err != nil {
+			return fmt.Errorf("sqlite: history migrate: %w", err)
+		}
+		return nil
+	})
 }
 
 // MeasurementSample is one numeric measurement row. The recorder builds
