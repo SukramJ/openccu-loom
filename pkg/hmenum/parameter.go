@@ -14,6 +14,7 @@ type Parameter string
 // code that does `param == "SET_TEMPERATURE"` compares against the
 // string form, not the typed constant.
 const (
+	ParameterAccessAuthorization           Parameter = "ACCESS_AUTHORIZATION"
 	ParameterAcousticAlarmActive           Parameter = "ACOUSTIC_ALARM_ACTIVE"
 	ParameterAirPressure                   Parameter = "AIR_PRESSURE"
 	ParameterAcousticAlarmSelection        Parameter = "ACOUSTIC_ALARM_SELECTION"

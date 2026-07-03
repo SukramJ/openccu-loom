@@ -286,8 +286,13 @@ func parameterIsWildcardIgnored(name string) bool {
 // unIgnoreParametersByDevice lists parameters that are normally ignored but
 // should be created for specific device models.
 var unIgnoreParametersByDevice = map[string]map[hmenum.Parameter]struct{}{
-	"HmIP-DLD": {hmenum.ParameterErrorJammed: {}},
+	// ACCESS_AUTHORIZATION is globally ignored (see ignoredParameters);
+	// un-ignore it on the access-control devices so the write-only control
+	// exists as a generic data point for the IPAccessPermission custom DP to
+	// resolve and consume hidden on the per-user ACCESS_RECEIVER channels.
+	"HmIP-DLD": {hmenum.ParameterErrorJammed: {}, hmenum.ParameterAccessAuthorization: {}},
 	"HmIP-DLP": {hmenum.ParameterErrorJammed: {}},
+	"HmIP-FWI": {hmenum.ParameterAccessAuthorization: {}},
 	"HmIP-SWSD": {
 		hmenum.ParameterDirtLevel:                {},
 		hmenum.ParameterSmokeLevel:               {},

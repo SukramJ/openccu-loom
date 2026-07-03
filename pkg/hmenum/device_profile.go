@@ -37,8 +37,9 @@ const (
 	DeviceProfileIPSoundPlayerLed DeviceProfile = "IPSoundPlayerLed"
 
 	// Switch profiles.
-	DeviceProfileIPSwitch DeviceProfile = "IPSwitch"
-	DeviceProfileRfSwitch DeviceProfile = "RfSwitch"
+	DeviceProfileIPAccessPermission DeviceProfile = "IPAccessPermission"
+	DeviceProfileIPSwitch           DeviceProfile = "IPSwitch"
+	DeviceProfileRfSwitch           DeviceProfile = "RfSwitch"
 
 	// Valve profiles.
 	DeviceProfileIPIrrigationValve DeviceProfile = "IPIrrigationValve"

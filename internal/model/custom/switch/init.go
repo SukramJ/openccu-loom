@@ -54,6 +54,19 @@ func init() {
 
 	reg.MustRegisterConstructor(hmenum.DeviceProfileIPSwitch, ipSwitchConstructor)
 	reg.MustRegisterConstructor(hmenum.DeviceProfileRfSwitch, rfSwitchConstructor)
+	reg.MustRegisterConstructor(hmenum.DeviceProfileIPAccessPermission, ipAccessPermissionConstructor)
+}
+
+// ipAccessPermissionConstructor materialises the per-user access-permission
+// switch on an ACCESS_RECEIVER channel (HmIP-DLD / HmIP-FWI). Returns nil
+// when the channel carries neither the read-only STATE nor the un-ignored
+// write-only ACCESS_AUTHORIZATION control, so the materializer skips it.
+func ipAccessPermissionConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
+	ap := NewAccessPermission(ch)
+	if ap == nil {
+		return nil, nil //nolint:nilnil // required field absent — no custom DP, reference parity
+	}
+	return ap, nil
 }
 
 func ipSwitchConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig) (device.AttachableDataPoint, error) {
@@ -72,5 +85,9 @@ func rfSwitchConstructor(ch *device.Channel, _ custom.RebasedChannelGroupConfig)
 	return sw, nil
 }
 
-// Compile-time assertion: *Switch satisfies [device.AttachableDataPoint].
-var _ device.AttachableDataPoint = (*Switch)(nil)
+// Compile-time assertions: *Switch and *AccessPermission satisfy
+// [device.AttachableDataPoint].
+var (
+	_ device.AttachableDataPoint = (*Switch)(nil)
+	_ device.AttachableDataPoint = (*AccessPermission)(nil)
+)
