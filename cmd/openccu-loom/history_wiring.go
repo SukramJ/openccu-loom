@@ -90,6 +90,8 @@ func wireHistoryRecorder(
 			func() float64 { return float64(rec.Metrics().Recorded) })
 		healthTracker.RegisterGauge("history.dropped",
 			func() float64 { return float64(rec.Metrics().Dropped) })
+		healthTracker.RegisterGauge("history.flush_errors",
+			func() float64 { return float64(rec.Metrics().FlushErrors) })
 		healthTracker.RegisterGauge("history.rows_written",
 			func() float64 { return float64(store.MetricsSnapshot().RowsWritten) })
 		healthTracker.RegisterGauge("history.retention_deleted",

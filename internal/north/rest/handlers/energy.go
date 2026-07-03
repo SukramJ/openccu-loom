@@ -189,6 +189,15 @@ func deviceAddressOf(channelAddress string) string {
 	return channelAddress
 }
 
+// counterReading is one bucket's (first, last) pair for a single cumulative
+// counter series (one channel, one parameter), tagged with the bucket start
+// so the readings can be ordered before the range total is computed.
+type counterReading struct {
+	ts    int64
+	first float64
+	last  float64
+}
+
 // FoldEnergyRows folds per-channel per-bucket rollup rows into the
 // per-device [EnergyResponse] shape. This is the correctness-critical
 // part of the energy endpoint — instantaneous POWER and monotonic
@@ -201,18 +210,24 @@ func deviceAddressOf(channelAddress string) string {
 //     POWER channels on the same device accumulate additively (their
 //     instantaneous loads sum; the running mean of each channel is
 //     summed as an approximation of the device's total average load).
-//   - ENERGY_COUNTER (cumulative, Wh): consumed_wh = last - first.
-//     Counter-reset rule: the meter can reset to 0 on device re-pair or
-//     a firmware event, so last < first is possible; when that happens
-//     the bucket's contribution is last (energy accumulated since the
-//     reset) and Reset is set — a negative delta is never emitted.
+//   - ENERGY_COUNTER (cumulative, Wh): each bucket reports consumed_wh =
+//     last - first for the chart. Counter-reset rule: the meter can reset
+//     to 0 on device re-pair or a firmware event, so last < first is
+//     possible; when that happens the bucket's contribution is last
+//     (energy accumulated since the reset) and Reset is set — a negative
+//     delta is never emitted.
 //   - ENERGY_COUNTER_FEED_IN: identical delta/reset logic, folded into
 //     feed_in_wh instead of consumed_wh.
 //
-// Device totals are the sum of their own buckets; the response totals
-// are the sum of the device totals. rows need not be pre-sorted — the
-// output devices and each device's buckets are always sorted
-// (address, then bucket start) for a deterministic response.
+// Device totals are NOT a sum of per-bucket deltas — that drops the
+// consumption between one bucket's last reading and the next bucket's
+// first. Each cumulative series (one channel) is instead treated as one
+// ordered reading sequence over the whole range and totalled with
+// reset-aware segmentation (see [counterRangeTotal]); the per-channel
+// totals then sum into the device total. The response totals are the sum
+// of the device totals. rows need not be pre-sorted — the output devices
+// and each device's buckets are always sorted (address, then bucket start)
+// for a deterministic response.
 func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) EnergyResponse {
 	type bucketKey struct {
 		device string
@@ -220,6 +235,7 @@ func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) Ener
 	}
 	buckets := make(map[bucketKey]*EnergyBucket)
 	deviceOf := make(map[string]struct{})
+	series := make(map[energySeriesKey][]counterReading)
 
 	for i := range rows {
 		row := &rows[i]
@@ -243,12 +259,18 @@ func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) Ener
 			delta, reset := energyDelta(row.First, row.Last)
 			b.ConsumedWh += delta
 			b.Reset = b.Reset || reset
+			sk := energySeriesKey{dev, row.ChannelAddress, row.Parameter}
+			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last})
 		case energyParameterEnergyCounterFeedIn:
 			delta, reset := energyDelta(row.First, row.Last)
 			b.FeedInWh += delta
 			b.Reset = b.Reset || reset
+			sk := energySeriesKey{dev, row.ChannelAddress, row.Parameter}
+			series[sk] = append(series[sk], counterReading{row.BucketTS.UnixMilli(), row.First, row.Last})
 		}
 	}
+
+	totals := deviceCounterTotals(series)
 
 	devices := make([]string, 0, len(deviceOf))
 	for dev := range deviceOf {
@@ -272,16 +294,68 @@ func FoldEnergyRows(q EnergyQuery, rows []EnergyRawRow, nameOf DeviceNamer) Ener
 				name = n
 			}
 		}
-		d := EnergyDevice{Address: dev, Name: name, Buckets: bs}
-		for _, b := range bs {
-			d.TotalConsumedWh += b.ConsumedWh
-			d.TotalFeedInWh += b.FeedInWh
+		dt := totals[dev]
+		d := EnergyDevice{
+			Address:         dev,
+			Name:            name,
+			Buckets:         bs,
+			TotalConsumedWh: dt.consumed,
+			TotalFeedInWh:   dt.feedIn,
 		}
 		out.Devices = append(out.Devices, d)
 		out.TotalConsumedWh += d.TotalConsumedWh
 		out.TotalFeedInWh += d.TotalFeedInWh
 	}
 	return out
+}
+
+// energySeriesKey identifies one cumulative-counter series: a single
+// parameter on a single channel of a device. Each series is totalled
+// independently (see [deviceCounterTotals]).
+type energySeriesKey struct {
+	device  string
+	channel string
+	param   string
+}
+
+// deviceEnergyTotals holds a device's reset-aware range totals in Wh.
+type deviceEnergyTotals struct {
+	consumed float64
+	feedIn   float64
+}
+
+// deviceCounterTotals computes per-device reset-aware range totals from the
+// per-series counter readings, summing each device's channels. Series keys
+// are visited in a deterministic (sorted) order so the float accumulation is
+// reproducible across runs.
+func deviceCounterTotals(series map[energySeriesKey][]counterReading) map[string]deviceEnergyTotals {
+	keys := make([]energySeriesKey, 0, len(series))
+	for sk := range series {
+		keys = append(keys, sk)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := keys[i], keys[j]
+		if a.device != b.device {
+			return a.device < b.device
+		}
+		if a.channel != b.channel {
+			return a.channel < b.channel
+		}
+		return a.param < b.param
+	})
+	totals := make(map[string]deviceEnergyTotals)
+	for _, sk := range keys {
+		total := counterRangeTotal(series[sk])
+		dt := totals[sk.device]
+		switch sk.param {
+		case energyParameterEnergyCounter:
+			dt.consumed += total
+		case energyParameterEnergyCounterFeedIn:
+			dt.feedIn += total
+		}
+		totals[sk.device] = dt
+	}
+	return totals
 }
 
 // energyDelta applies the counter-reset rule to one cumulative-counter
@@ -293,4 +367,39 @@ func energyDelta(first, last float64) (delta float64, reset bool) {
 		return last, true
 	}
 	return last - first, false
+}
+
+// counterRangeTotal returns the total consumption of one cumulative counter
+// over its buckets, counting inter-bucket rise and segmenting on resets.
+// Sorted by bucket time, the per-bucket (first, last) readings flatten to
+// the ordered sequence first0, last0, first1, last1, …; each adjacent step
+// contributes its rise (b - a) or, when the counter went backwards (a
+// reset to 0), the post-reset reading b. The very first reading is the
+// baseline and is not itself counted. This recovers the consumption a plain
+// Σ(last - first) per bucket drops in the gap between adjacent buckets.
+func counterRangeTotal(readings []counterReading) float64 {
+	if len(readings) == 0 {
+		return 0
+	}
+	sort.Slice(readings, func(i, j int) bool { return readings[i].ts < readings[j].ts })
+	seq := make([]float64, 0, len(readings)*2)
+	for _, r := range readings {
+		seq = append(seq, r.first, r.last)
+	}
+	var total float64
+	for i := 1; i < len(seq); i++ {
+		total += counterSegment(seq[i-1], seq[i])
+	}
+	return total
+}
+
+// counterSegment is one step of a cumulative-counter reading sequence: the
+// rise b - a, or — when the counter decreased (a reset to 0) — the
+// post-reset reading b. Never negative. Mirrors [energyDelta]'s per-bucket
+// rule at the inter-reading granularity.
+func counterSegment(a, b float64) float64 {
+	if b >= a {
+		return b - a
+	}
+	return b
 }

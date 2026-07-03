@@ -256,6 +256,14 @@ func (c HistoryConfig) HistoryFeatureEnabled() bool {
 // tier's consumers (e.g. the energy view's month-over-month comparisons).
 const RetentionHourlyDefault = 13 * 30 * 24 * time.Hour
 
+// HistoryRetentionFloor is the smallest raw-sample retention the daemon
+// accepts. It mirrors the recorder's hourly-rollup lag (one hour): a
+// retention below it would let the retention purge delete raw rows before
+// the hourly fold has folded them, permanently losing that data. An
+// explicit value below this floor is clamped up to it at config load; zero
+// still means "use the daemon default", which is far above the floor.
+const HistoryRetentionFloor = time.Hour
+
 // RetentionHourlyOrDefault returns RetentionHourly, falling back to
 // [RetentionHourlyDefault] when unset.
 func (c HistoryConfig) RetentionHourlyOrDefault() time.Duration {
@@ -1455,6 +1463,13 @@ func (c *Config) Validate() error {
 				return fmt.Errorf("config: centrals[%d].ports[%q]: out of range 1-65535: %d", i, iface, port)
 			}
 		}
+	}
+	// Clamp an explicit history.retention below the hourly-rollup lag up to
+	// the floor: keeping it lower would let the purge delete raw rows before
+	// the hourly fold folds them (permanent loss). Zero is left untouched —
+	// it selects the daemon default, which is well above the floor.
+	if h := &c.Persistence.History; h.Retention > 0 && h.Retention < HistoryRetentionFloor {
+		h.Retention = HistoryRetentionFloor
 	}
 	return validateMQTT(&c.North.MQTT)
 }
