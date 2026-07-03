@@ -25,6 +25,11 @@ type Session struct {
 	Identity Identity
 	Created  time.Time
 	Expires  time.Time
+
+	// lastSeen tracks the most recent successful Lookup for the idle
+	// timeout. It is in-memory only (not persisted) — a restart resets the
+	// idle clock to the absolute Expires window, which is acceptable.
+	lastSeen time.Time
 }
 
 // SessionPersistence is the durable backing store for [SessionStore].
@@ -50,7 +55,12 @@ type SessionPersistence interface {
 // [SessionPersistence] so they survive a daemon restart. Persisted
 // sessions pair with OIDC refresh tokens.
 type SessionStore struct {
-	TTL     time.Duration
+	TTL time.Duration
+	// IdleTTL, when > 0, evicts a session that has not been looked up
+	// within the window even if its absolute TTL has not elapsed — capping
+	// how long a stolen-but-idle cookie stays usable. Zero disables the
+	// idle check (absolute TTL only), preserving the historical behaviour.
+	IdleTTL time.Duration
 	now     func() time.Time
 	mu      sync.RWMutex
 	items   map[string]*Session
@@ -86,6 +96,9 @@ func NewPersistentSessionStore(persist SessionPersistence, logger *slog.Logger) 
 			return nil, err
 		}
 		for _, sess := range active {
+			if sess.lastSeen.IsZero() {
+				sess.lastSeen = sess.Created
+			}
 			s.items[sess.ID] = sess
 		}
 	}
@@ -116,7 +129,7 @@ func (s *SessionStore) Issue(id Identity) (*Session, error) {
 		return nil, err
 	}
 	now := s.now()
-	session := &Session{ID: raw, Identity: id, Created: now, Expires: now.Add(s.TTL)}
+	session := &Session{ID: raw, Identity: id, Created: now, Expires: now.Add(s.TTL), lastSeen: now}
 	s.mu.Lock()
 	s.items[raw] = session
 	s.mu.Unlock()
@@ -126,21 +139,25 @@ func (s *SessionStore) Issue(id Identity) (*Session, error) {
 	return session, nil
 }
 
-// Lookup returns the session for sid or nil when it is absent or
-// expired. Expired sessions are evicted on read.
+// Lookup returns the session for sid or nil when it is absent, past its
+// absolute expiry, or idle beyond IdleTTL. Evicted sessions are removed
+// on read; a live one has its idle clock refreshed.
 func (s *SessionStore) Lookup(sid string) *Session {
+	now := s.now()
 	s.mu.Lock()
 	sess, ok := s.items[sid]
 	if !ok {
 		s.mu.Unlock()
 		return nil
 	}
-	if s.now().After(sess.Expires) {
+	idle := s.IdleTTL > 0 && !sess.lastSeen.IsZero() && now.Sub(sess.lastSeen) > s.IdleTTL
+	if now.After(sess.Expires) || idle {
 		delete(s.items, sid)
 		s.mu.Unlock()
 		s.persistBest("delete", func(ctx context.Context) error { return s.persist.DeleteSession(ctx, sid) })
 		return nil
 	}
+	sess.lastSeen = now
 	s.mu.Unlock()
 	return sess
 }
@@ -151,6 +168,43 @@ func (s *SessionStore) Revoke(sid string) {
 	delete(s.items, sid)
 	s.mu.Unlock()
 	s.persistBest("delete", func(ctx context.Context) error { return s.persist.DeleteSession(ctx, sid) })
+}
+
+// RevokeBySubject removes every session belonging to subject and returns
+// the number evicted. It is the invalidation hook for credential changes:
+// a password change, role change, or account deletion must not leave a
+// stolen or stale session usable for the remainder of its TTL. No-op for
+// an empty subject.
+func (s *SessionStore) RevokeBySubject(subject string) int {
+	return s.revokeBySubject(subject, "")
+}
+
+// RevokeBySubjectExcept is RevokeBySubject but preserves the session with
+// id keepSID — used by a self-service password change so the caller's own
+// session survives while every *other* session for that subject is killed.
+func (s *SessionStore) RevokeBySubjectExcept(subject, keepSID string) int {
+	return s.revokeBySubject(subject, keepSID)
+}
+
+func (s *SessionStore) revokeBySubject(subject, keepSID string) int {
+	if subject == "" {
+		return 0
+	}
+	s.mu.Lock()
+	ids := make([]string, 0)
+	for id, sess := range s.items {
+		if sess.Identity.Subject == subject && id != keepSID {
+			ids = append(ids, id)
+		}
+	}
+	for _, id := range ids {
+		delete(s.items, id)
+	}
+	s.mu.Unlock()
+	for _, id := range ids {
+		s.persistBest("delete", func(ctx context.Context) error { return s.persist.DeleteSession(ctx, id) })
+	}
+	return len(ids)
 }
 
 // PurgeExpired evicts expired sessions from the in-memory map and, when

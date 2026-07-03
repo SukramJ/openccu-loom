@@ -5,6 +5,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/base64"
 	"log/slog"
 	"net/http"
@@ -43,6 +44,13 @@ type oidcState struct {
 
 const oidcStateTTL = 5 * time.Minute
 
+// oidcStateCookieName carries the flow's state value in the initiating
+// browser so the callback can prove it is the same agent that started the
+// flow. Without this binding an attacker could complete a flow, capture a
+// valid state+code, and replay it into a victim's browser to log the
+// victim into the attacker's account (login CSRF).
+const oidcStateCookieName = "openccu_loom_oidc_state"
+
 // NewOIDCDeps constructs the deps from an already-initialised client.
 func NewOIDCDeps(client *oidc.Client, authDeps *AuthDeps, logger *slog.Logger) *OIDCDeps {
 	return &OIDCDeps{
@@ -60,7 +68,16 @@ func (d *OIDCDeps) putState(verifier string) (string, error) {
 		return "", err
 	}
 	d.mu.Lock()
-	d.states[key] = oidcState{verifier: verifier, created: d.now()}
+	// Sweep expired entries on every insert so states that are minted but
+	// never completed (the common abandoned-login case) cannot accumulate
+	// unbounded — consumeState alone never reclaims them.
+	now := d.now()
+	for k, e := range d.states {
+		if now.Sub(e.created) > oidcStateTTL {
+			delete(d.states, k)
+		}
+	}
+	d.states[key] = oidcState{verifier: verifier, created: now}
 	d.mu.Unlock()
 	return key, nil
 }
@@ -98,6 +115,7 @@ func OIDCStart(d *OIDCDeps) http.HandlerFunc {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		writeOIDCStateCookie(w, state, d.secureCookie())
 		http.Redirect(w, r, d.Client.AuthURL(state, pkce), http.StatusSeeOther)
 	}
 }
@@ -120,6 +138,16 @@ func OIDCCallback(d *OIDCDeps) http.HandlerFunc {
 		state := q.Get("state")
 		if code == "" || state == "" {
 			oidcRedirectError(w, r, "missing_code", d.SPARedirectURL)
+			return
+		}
+		// Bind the callback to the browser that started the flow: the state
+		// query parameter must match the state cookie set by OIDCStart. A
+		// forged callback replayed into a victim's browser carries the
+		// attacker's state but not a matching cookie, so it is rejected.
+		clearOIDCStateCookie(w)
+		cookie, cerr := r.Cookie(oidcStateCookieName)
+		if cerr != nil || cookie.Value == "" || subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(state)) != 1 {
+			oidcRedirectError(w, r, "bad_state", d.SPARedirectURL)
 			return
 		}
 		verifier, ok := d.consumeState(state)
@@ -194,6 +222,41 @@ func isSafeRelativeTarget(target string) bool {
 		return false // schemes embed a colon ("javascript:", "https:")
 	}
 	return true
+}
+
+// secureCookie reports whether the OIDC state cookie should carry the
+// Secure flag, mirroring the session cookie's runtime TLS binding.
+func (d *OIDCDeps) secureCookie() bool {
+	return d != nil && d.Auth != nil && d.Auth.Secure
+}
+
+// writeOIDCStateCookie sets the short-lived, HttpOnly state cookie that
+// binds the callback to the initiating browser.
+func writeOIDCStateCookie(w http.ResponseWriter, state string, secure bool) {
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is runtime-bound to TLS; HttpOnly + SameSite=Lax always set
+		Name:     oidcStateCookieName,
+		Value:    state,
+		Path:     "/",
+		MaxAge:   int(oidcStateTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// clearOIDCStateCookie invalidates the state cookie once the callback has
+// read it (single use). Secure=true (mirroring ClearSessionCookie) so an
+// active reverse-proxy terminator strips it correctly across redirects.
+func clearOIDCStateCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     oidcStateCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 func randomKey() (string, error) {

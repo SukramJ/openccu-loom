@@ -111,7 +111,7 @@ func newRouterWithOpsExtended() *opsExtendedBundle {
 
 func dispatchOps(t *testing.T, r *Router, name string) any {
 	t.Helper()
-	res := r.Dispatch(context.Background(), name, json.RawMessage(`{}`))
+	res := r.Dispatch(ctxForCommand(name), name, json.RawMessage(`{}`))
 	if res.Error != nil {
 		t.Fatalf("%s: dispatch err: %v", name, res.Error.Message)
 	}
@@ -120,7 +120,7 @@ func dispatchOps(t *testing.T, r *Router, name string) any {
 
 func dispatchOpsExpectErr(t *testing.T, r *Router, name string) {
 	t.Helper()
-	res := r.Dispatch(context.Background(), name, json.RawMessage(`{}`))
+	res := r.Dispatch(ctxForCommand(name), name, json.RawMessage(`{}`))
 	if res.Error == nil {
 		t.Fatalf("%s: expected error, got data: %v", name, res.Data)
 	}
@@ -152,7 +152,7 @@ func TestCCUThrottleStatsHandlerError(t *testing.T) {
 
 func dispatchCacheClear(t *testing.T, r *Router, raw string) any {
 	t.Helper()
-	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(raw))
+	res := r.Dispatch(adminCtx(), "ccu.cache_clear", json.RawMessage(raw))
 	if res.Error != nil {
 		t.Fatalf("ccu.cache_clear: dispatch err: %v", res.Error.Message)
 	}
@@ -213,7 +213,7 @@ func TestCCUCacheClearHandlerReportFields(t *testing.T) {
 		CentralsReinit: []string{"ccu1"},
 	}}
 	RegisterExtendedCommands(r, ExtendedCommandsConfig{CacheClearer: cc})
-	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(`{}`))
+	res := r.Dispatch(adminCtx(), "ccu.cache_clear", json.RawMessage(`{}`))
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %v", res.Error.Message)
 	}
@@ -232,7 +232,7 @@ func TestCCUCacheClearHandlerBadScope(t *testing.T) {
 	r := NewRouter()
 	cc := &stubCacheClearer{}
 	RegisterExtendedCommands(r, ExtendedCommandsConfig{CacheClearer: cc})
-	res := r.Dispatch(context.Background(), "ccu.cache_clear", json.RawMessage(`{"kind":"central"}`))
+	res := r.Dispatch(adminCtx(), "ccu.cache_clear", json.RawMessage(`{"kind":"central"}`))
 	if res.Error == nil {
 		t.Fatal("expected error for missing central field, got none")
 	}

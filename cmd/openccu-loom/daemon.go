@@ -593,6 +593,8 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		sqUsers:                 sqUsers,
 		sqCentrals:              sqCentrals,
 		sqSections:              sqSections,
+		sqTokens:                sqTokens,
+		sessions:                sessions,
 		matter:                  matter,
 		reload:                  deps,
 		healthAdapter:           healthAdapter,

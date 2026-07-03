@@ -129,7 +129,7 @@ func TestSessionOpenStoresInitialValues(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	r, store := newSessionRouter(t, backend)
 
-	res := r.Dispatch(context.Background(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("open err: %+v", res.Error)
 	}
@@ -141,7 +141,7 @@ func TestSessionOpenStoresInitialValues(t *testing.T) {
 func TestSessionSetThenChangesReportsDirty(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	r, _ := newSessionRouter(t, backend)
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name":    "test",
@@ -150,7 +150,7 @@ func TestSessionSetThenChangesReportsDirty(t *testing.T) {
 		"parameter":       "BOOST_MODE",
 		"value":           true,
 	})
-	res := r.Dispatch(context.Background(), "config.session.set", setArgs)
+	res := r.Dispatch(opCtx(), "config.session.set", setArgs)
 	if res.Error != nil {
 		t.Fatalf("set err: %+v", res.Error)
 	}
@@ -176,7 +176,7 @@ func TestSessionSetThenChangesReportsDirty(t *testing.T) {
 func TestSessionUndoRedo(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	r, _ := newSessionRouter(t, backend)
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name":    "test",
@@ -185,9 +185,9 @@ func TestSessionUndoRedo(t *testing.T) {
 		"parameter":       "BOOST_MODE",
 		"value":           true,
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.undo", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.undo", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("undo err: %+v", res.Error)
 	}
@@ -195,7 +195,7 @@ func TestSessionUndoRedo(t *testing.T) {
 		t.Fatal("undo must report performed")
 	}
 
-	res = r.Dispatch(context.Background(), "config.session.redo", sessionArgs("addr:1", "MASTER"))
+	res = r.Dispatch(opCtx(), "config.session.redo", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("redo err: %+v", res.Error)
 	}
@@ -207,7 +207,7 @@ func TestSessionUndoRedo(t *testing.T) {
 func TestSessionSaveCommitsAndDeletes(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	r, store := newSessionRouter(t, backend)
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name":    "test",
 		"channel_address": "addr:1",
@@ -215,9 +215,9 @@ func TestSessionSaveCommitsAndDeletes(t *testing.T) {
 		"parameter":       "BOOST_MODE",
 		"value":           true,
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("save err: %+v", res.Error)
 	}
@@ -236,8 +236,8 @@ func TestSessionSaveCommitsAndDeletes(t *testing.T) {
 func TestSessionSaveWithNoChangesIsNoOp(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	r, store := newSessionRouter(t, backend)
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("save err: %+v", res.Error)
 	}
@@ -254,8 +254,8 @@ func TestSessionSaveWithNoChangesIsNoOp(t *testing.T) {
 func TestSessionDiscard(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"X": 1}}
 	r, store := newSessionRouter(t, backend)
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
-	res := r.Dispatch(context.Background(), "config.session.discard", sessionArgs("addr:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.discard", sessionArgs("addr:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("discard err: %+v", res.Error)
 	}
@@ -267,7 +267,7 @@ func TestSessionDiscard(t *testing.T) {
 func TestSessionCommandsSurfaceBackendErrors(t *testing.T) {
 	backend := &stubBackend{openErr: errors.New("connection lost")}
 	r, _ := newSessionRouter(t, backend)
-	res := r.Dispatch(context.Background(), "config.session.open", sessionArgs("addr:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.open", sessionArgs("addr:1", "MASTER"))
 	if res.Error == nil {
 		t.Fatal("backend Open error must propagate")
 	}
@@ -291,7 +291,7 @@ func TestSessionOpenIncludesDescriptions(t *testing.T) {
 		},
 	}
 	r, _ := newSessionRouter(t, backend)
-	res := r.Dispatch(context.Background(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("open err: %+v", res.Error)
 	}
@@ -322,7 +322,7 @@ func TestSessionOpenDescriptionsNilIsForwarded(t *testing.T) {
 	backend := &stubBackend{openInitial: map[string]any{"BOOST_MODE": false}}
 	// openDescriptions is nil → backend returns nil
 	r, _ := newSessionRouter(t, backend)
-	res := r.Dispatch(context.Background(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.open", sessionArgs("0001ABCD:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("open err: %+v", res.Error)
 	}
@@ -583,7 +583,7 @@ func TestProgramsListAndExecute(t *testing.T) {
 	}
 
 	args, _ := json.Marshal(map[string]any{"id": "P1"})
-	res = r.Dispatch(context.Background(), "programs.execute", args)
+	res = r.Dispatch(opCtx(), "programs.execute", args)
 	if res.Error != nil {
 		t.Fatalf("execute err: %+v", res.Error)
 	}
@@ -595,7 +595,7 @@ func TestProgramsListAndExecute(t *testing.T) {
 func TestProgramsExecuteRequiresID(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
-	res := r.Dispatch(context.Background(), "programs.execute", json.RawMessage(`{}`))
+	res := r.Dispatch(opCtx(), "programs.execute", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -617,7 +617,7 @@ func TestSysvarsListAndSet(t *testing.T) {
 	}
 
 	args, _ := json.Marshal(map[string]any{"name": "PartyMode", "value": true})
-	res = r.Dispatch(context.Background(), "sysvars.set", args)
+	res = r.Dispatch(opCtx(), "sysvars.set", args)
 	if res.Error != nil {
 		t.Fatalf("set err: %+v", res.Error)
 	}
@@ -630,7 +630,7 @@ func TestSysvarsSetRequiresName(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
 	args, _ := json.Marshal(map[string]any{"value": 42})
-	res := r.Dispatch(context.Background(), "sysvars.set", args)
+	res := r.Dispatch(opCtx(), "sysvars.set", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -653,7 +653,7 @@ func TestAlarmAndServiceMessagesListAndAck(t *testing.T) {
 	}
 
 	args, _ := json.Marshal(map[string]any{"id": "A1"})
-	res = r.Dispatch(context.Background(), "alarm_messages.ack", args)
+	res = r.Dispatch(opCtx(), "alarm_messages.ack", args)
 	if res.Error != nil || hub.ackedAlarmID != "A1" {
 		t.Fatalf("ack alarm: err=%+v hub.ackedAlarmID=%q", res.Error, hub.ackedAlarmID)
 	}
@@ -664,7 +664,7 @@ func TestAlarmAndServiceMessagesListAndAck(t *testing.T) {
 	}
 
 	args2, _ := json.Marshal(map[string]any{"id": "S1"})
-	res = r.Dispatch(context.Background(), "service_messages.ack", args2)
+	res = r.Dispatch(opCtx(), "service_messages.ack", args2)
 	if res.Error != nil || hub.ackedServiceID != "S1" {
 		t.Fatalf("ack service: err=%+v hub.ackedServiceID=%q", res.Error, hub.ackedServiceID)
 	}
@@ -673,7 +673,7 @@ func TestAlarmAndServiceMessagesListAndAck(t *testing.T) {
 func TestAlarmAckRequiresID(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
-	res := r.Dispatch(context.Background(), "alarm_messages.ack", json.RawMessage(`{}`))
+	res := r.Dispatch(opCtx(), "alarm_messages.ack", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -690,7 +690,7 @@ func TestInstallModeFullCycle(t *testing.T) {
 	}
 
 	enableArgs, _ := json.Marshal(map[string]any{"interface_id": "HmIP-RF", "duration_seconds": 60})
-	res = r.Dispatch(context.Background(), "install_mode.enable", enableArgs)
+	res = r.Dispatch(opCtx(), "install_mode.enable", enableArgs)
 	if res.Error != nil {
 		t.Fatalf("enable err: %+v", res.Error)
 	}
@@ -699,7 +699,7 @@ func TestInstallModeFullCycle(t *testing.T) {
 	}
 
 	disableArgs, _ := json.Marshal(map[string]any{"interface_id": "HmIP-RF"})
-	res = r.Dispatch(context.Background(), "install_mode.disable", disableArgs)
+	res = r.Dispatch(opCtx(), "install_mode.disable", disableArgs)
 	if res.Error != nil {
 		t.Fatalf("disable err: %+v", res.Error)
 	}
@@ -713,13 +713,13 @@ func TestInstallModeEnableValidatesArgs(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
 
 	noIface, _ := json.Marshal(map[string]any{"duration_seconds": 60})
-	res := r.Dispatch(context.Background(), "install_mode.enable", noIface)
+	res := r.Dispatch(opCtx(), "install_mode.enable", noIface)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("missing interface: %+v", res.Error)
 	}
 
 	zeroDur, _ := json.Marshal(map[string]any{"interface_id": "HmIP-RF", "duration_seconds": 0})
-	res = r.Dispatch(context.Background(), "install_mode.enable", zeroDur)
+	res = r.Dispatch(opCtx(), "install_mode.enable", zeroDur)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("zero duration: %+v", res.Error)
 	}
@@ -875,7 +875,7 @@ func TestLinksListAddRemove(t *testing.T) {
 	}
 
 	addArgs, _ := json.Marshal(map[string]any{"sender": "S:1", "receiver": "R:1", "name": "test"})
-	res = r.Dispatch(context.Background(), "links.add", addArgs)
+	res = r.Dispatch(opCtx(), "links.add", addArgs)
 	if res.Error != nil {
 		t.Fatalf("add err: %+v", res.Error)
 	}
@@ -884,7 +884,7 @@ func TestLinksListAddRemove(t *testing.T) {
 	}
 
 	removeArgs, _ := json.Marshal(map[string]any{"sender": "S:1", "receiver": "R:1"})
-	res = r.Dispatch(context.Background(), "links.remove", removeArgs)
+	res = r.Dispatch(opCtx(), "links.remove", removeArgs)
 	if res.Error != nil {
 		t.Fatalf("remove err: %+v", res.Error)
 	}
@@ -894,7 +894,7 @@ func TestLinksAddRequiresSenderAndReceiver(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: &stubLinks{}})
 	args, _ := json.Marshal(map[string]any{"sender": "S:1"})
-	res := r.Dispatch(context.Background(), "links.add", args)
+	res := r.Dispatch(opCtx(), "links.add", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -958,7 +958,7 @@ func TestWSLinksPutParamset(t *testing.T) {
 		"peer_address": "0002EFGH:1",
 		"parameters":   params,
 	})
-	res := r.Dispatch(context.Background(), "links.put_paramset", args)
+	res := r.Dispatch(opCtx(), "links.put_paramset", args)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}
@@ -980,7 +980,7 @@ func TestWSLinksPutParamset_MissingPeer(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Links: &stubLinks{}})
 
 	args, _ := json.Marshal(map[string]any{"address": "0001ABCD:1"}) // missing peer_address
-	res := r.Dispatch(context.Background(), "links.put_paramset", args)
+	res := r.Dispatch(opCtx(), "links.put_paramset", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -1004,7 +1004,7 @@ func TestSchedulesClimateGetSet(t *testing.T) {
 		"channel_address": "0001ABCD:1",
 		"profile":         map[string]any{"P1": "data"},
 	})
-	res = r.Dispatch(context.Background(), "schedules.climate.set", setArgs)
+	res = r.Dispatch(opCtx(), "schedules.climate.set", setArgs)
 	if res.Error != nil {
 		t.Fatalf("set err: %+v", res.Error)
 	}
@@ -1036,7 +1036,7 @@ func TestSchedulesDeviceGetSet(t *testing.T) {
 		"device_address": "0001ABCD",
 		"profile":        map[string]any{"kind": "simple", "x": 1},
 	})
-	res = r.Dispatch(context.Background(), "schedules.device.set", setArgs)
+	res = r.Dispatch(opCtx(), "schedules.device.set", setArgs)
 	if res.Error != nil {
 		t.Fatalf("set err: %+v", res.Error)
 	}
@@ -1059,7 +1059,7 @@ func TestSchedulesDeviceSetRejectsMissingProfile(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
 	args, _ := json.Marshal(map[string]any{"device_address": "X"})
-	res := r.Dispatch(context.Background(), "schedules.device.set", args)
+	res := r.Dispatch(opCtx(), "schedules.device.set", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -1071,7 +1071,7 @@ func TestSchedulesDeviceActiveProfileSet(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: sched})
 
 	args, _ := json.Marshal(map[string]any{"device_address": "0001ABCD", "profile": "P2"})
-	res := r.Dispatch(context.Background(), "schedules.device.active_profile.set", args)
+	res := r.Dispatch(opCtx(), "schedules.device.active_profile.set", args)
 	if res.Error != nil {
 		t.Fatalf("err: %+v", res.Error)
 	}
@@ -1084,7 +1084,7 @@ func TestSchedulesDeviceActiveProfileRejectsEmptyProfile(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
 	args, _ := json.Marshal(map[string]any{"device_address": "X"})
-	res := r.Dispatch(context.Background(), "schedules.device.active_profile.set", args)
+	res := r.Dispatch(opCtx(), "schedules.device.active_profile.set", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -1095,7 +1095,7 @@ func TestBackupTriggerAndStatus(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: hub})
 
-	res := r.Dispatch(context.Background(), "backup.trigger", nil)
+	res := r.Dispatch(adminCtx(), "backup.trigger", nil)
 	if res.Error != nil {
 		t.Fatalf("trigger err: %+v", res.Error)
 	}
@@ -1125,7 +1125,7 @@ func TestFirmwareInfoAndUpdate(t *testing.T) {
 		t.Fatalf("info=%+v", res.Data)
 	}
 
-	res = r.Dispatch(context.Background(), "firmware.update", nil)
+	res = r.Dispatch(opCtx(), "firmware.update", nil)
 	if res.Error != nil {
 		t.Fatalf("update err: %+v", res.Error)
 	}
@@ -1150,7 +1150,7 @@ func TestInboxListAndAccept(t *testing.T) {
 	}
 
 	args, _ := json.Marshal(map[string]any{"device_address": "0009ABCD"})
-	res = r.Dispatch(context.Background(), "inbox.accept", args)
+	res = r.Dispatch(opCtx(), "inbox.accept", args)
 	if res.Error != nil {
 		t.Fatalf("accept err: %+v", res.Error)
 	}
@@ -1162,7 +1162,7 @@ func TestInboxListAndAccept(t *testing.T) {
 func TestInboxAcceptRequiresAddress(t *testing.T) {
 	r := NewRouter()
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Hub: &stubHub{}})
-	res := r.Dispatch(context.Background(), "inbox.accept", json.RawMessage(`{}`))
+	res := r.Dispatch(opCtx(), "inbox.accept", json.RawMessage(`{}`))
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("missing address: %+v", res.Error)
 	}
@@ -1173,14 +1173,14 @@ func TestSchedulesActiveProfileBoundsCheck(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
 	for _, idx := range []int{0, 7, -1, 99} {
 		args, _ := json.Marshal(map[string]any{"channel_address": "0001ABCD:1", "profile_index": idx})
-		res := r.Dispatch(context.Background(), "schedules.active_profile.set", args)
+		res := r.Dispatch(opCtx(), "schedules.active_profile.set", args)
 		if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 			t.Fatalf("idx=%d: got %+v want bad_request", idx, res.Error)
 		}
 	}
 	// In-bounds index passes.
 	args, _ := json.Marshal(map[string]any{"channel_address": "0001ABCD:1", "profile_index": 2})
-	res := r.Dispatch(context.Background(), "schedules.active_profile.set", args)
+	res := r.Dispatch(opCtx(), "schedules.active_profile.set", args)
 	if res.Error != nil {
 		t.Fatalf("valid idx: %+v", res.Error)
 	}
@@ -1196,7 +1196,7 @@ func TestSessionMutationsRequireOpenSession(t *testing.T) {
 		"config.session.changes",
 		"config.session.save",
 	} {
-		res := r.Dispatch(context.Background(), cmd, sessionArgs("ghost:1", "MASTER"))
+		res := r.Dispatch(ctxForCommand(cmd), cmd, sessionArgs("ghost:1", "MASTER"))
 		if res.Error == nil {
 			t.Fatalf("%s without open must error", cmd)
 		}
@@ -1220,14 +1220,14 @@ func TestSessionSaveRecordsToChangeLog(t *testing.T) {
 	})
 
 	// Open a session then change a parameter.
-	r.Dispatch(context.Background(), "config.session.open", sessionArgs("ch:1", "MASTER"))
+	r.Dispatch(opCtx(), "config.session.open", sessionArgs("ch:1", "MASTER"))
 	setArgs, _ := json.Marshal(map[string]any{
 		"central_name": "test", "channel_address": "ch:1",
 		"paramset_key": "MASTER", "parameter": "BOOST_MODE", "value": true,
 	})
-	r.Dispatch(context.Background(), "config.session.set", setArgs)
+	r.Dispatch(opCtx(), "config.session.set", setArgs)
 
-	res := r.Dispatch(context.Background(), "config.session.save", sessionArgs("ch:1", "MASTER"))
+	res := r.Dispatch(opCtx(), "config.session.save", sessionArgs("ch:1", "MASTER"))
 	if res.Error != nil {
 		t.Fatalf("save err: %+v", res.Error)
 	}
@@ -1276,7 +1276,7 @@ func TestSchedulesCopy_HappyPath(t *testing.T) {
 		"source_device_address": "DEV1",
 		"target_device_address": "DEV2",
 	})
-	res := r.Dispatch(context.Background(), "schedules.copy", args)
+	res := r.Dispatch(opCtx(), "schedules.copy", args)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}
@@ -1299,7 +1299,7 @@ func TestSchedulesCopy_MissingTarget(t *testing.T) {
 	RegisterDefaultCommands(r, DefaultCommandsConfig{Schedules: &stubSchedules{}})
 
 	args, _ := json.Marshal(map[string]any{"source_device_address": "DEV1"})
-	res := r.Dispatch(context.Background(), "schedules.copy", args)
+	res := r.Dispatch(opCtx(), "schedules.copy", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request, got %+v", res.Error)
 	}
@@ -1323,7 +1323,7 @@ func TestSchedulesClimateCopyProfile_HappyPath(t *testing.T) {
 		"target_channel_address": "B:2",
 		"target_profile":         2,
 	})
-	res := r.Dispatch(context.Background(), "schedules.climate.copy_profile", args)
+	res := r.Dispatch(opCtx(), "schedules.climate.copy_profile", args)
 	if res.Error != nil {
 		t.Fatalf("unexpected error: %+v", res.Error)
 	}
@@ -1351,7 +1351,7 @@ func TestSchedulesClimateCopyProfile_InvalidProfile(t *testing.T) {
 		"target_channel_address": "B:2",
 		"target_profile":         2,
 	})
-	res := r.Dispatch(context.Background(), "schedules.climate.copy_profile", args)
+	res := r.Dispatch(opCtx(), "schedules.climate.copy_profile", args)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("expected bad_request for profile 0, got %+v", res.Error)
 	}

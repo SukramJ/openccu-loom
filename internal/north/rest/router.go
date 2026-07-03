@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -141,6 +142,15 @@ type Deps struct {
 	// PATCH /auth/me/password. Nil disables the route.
 	SelfPassword handlers.SelfPasswordService
 
+	// SessionRevoker invalidates a subject's server-side sessions when a
+	// credential changes (password reset, role change, deletion). Nil skips
+	// the revocation hook; wired to the *auth.SessionStore in production.
+	SessionRevoker handlers.SessionRevoker
+
+	// TokenPurger deletes a subject's bearer tokens on account deletion.
+	// Nil skips the purge; wired to the *sqlite.TokenStore in production.
+	TokenPurger handlers.TokenPurger
+
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
@@ -234,11 +244,13 @@ type Deps struct {
 	RateLimit *middleware.RateLimitConfig
 	// RequireOperator wraps mutations that an operator-grade user is
 	// allowed to perform (paramset writes, link CRUD, schedule edits,
-	// sysvar writes). Nil falls back to AuthRequire — i.e. any
-	// authenticated user is allowed (current behaviour).
+	// sysvar writes, device pairing / install mode, firmware update).
+	// Nil falls back to AuthRequire (any authenticated user); when
+	// AuthRequire is also nil the shim fails closed (401).
 	RequireOperator func(http.Handler) http.Handler
-	// RequireAdmin gates dangerous operations (delete device, install
-	// mode, backup trigger, interface reconnect). Nil → AuthRequire.
+	// RequireAdmin gates dangerous operations (delete device, backup
+	// trigger, cache clear, interface reconnect, user/token/central CRUD).
+	// Nil falls back to AuthRequire; when that is also nil it fails closed.
 	RequireAdmin func(http.Handler) http.Handler
 	CORS         *middleware.CORSConfig
 	Idempotent   bool
@@ -527,10 +539,12 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			r.Get("/auth/oidc/callback", handlers.OIDCCallback(d.OIDC))
 		}
 
-		// Permission shorthands. When a role middleware isn't wired
-		// (legacy single-tier setups), all authenticated users pass —
-		// matches the previous behaviour so upgrades don't lock
-		// anyone out.
+		// Permission shorthands. When a specific role middleware isn't
+		// wired it falls back to the blanket AuthRequire (any authenticated
+		// user). The final pass-through fallback exists only for tests that
+		// build a router without an auth chain; production is protected by
+		// [AssertAuthWired], called from the composition root, which refuses
+		// to start a router whose auth middleware is nil.
 		op := d.RequireOperator
 		if op == nil {
 			op = d.AuthRequire
@@ -580,7 +594,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Any authenticated role; the handler verifies the current
 			// password and preserves the role.
 			if d.SelfPassword != nil {
-				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder))
+				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder, d.SessionRevoker))
 			}
 			// Per-user preferences (favorites / dashboard). Any
 			// authenticated role; scoped to the caller's subject.
@@ -887,8 +901,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))
 				pr.With(admin).Post("/users", handlers.CreateUser(d.UserAdmin, d.AuditRecorder))
-				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder))
-				pr.With(admin).Delete("/users/{subject}", handlers.DeleteUser(d.UserAdmin, d.AuditRecorder))
+				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker))
+				pr.With(admin).Delete("/users/{subject}", handlers.DeleteUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker, d.TokenPurger))
 			}
 			if d.TokenAdmin != nil {
 				pr.With(admin).Get("/auth/tokens/v2", handlers.ListTokensV2(d.TokenAdmin))
@@ -944,4 +958,18 @@ func safeIngressPrefix(r *http.Request) string {
 		return ""
 	}
 	return strings.TrimRight(p, "/")
+}
+
+// AssertAuthWired reports an error when d has no auth enforcement wired —
+// AuthRequire is the blanket gate every protected route depends on, and a
+// nil value would leave the router's role shims falling through to an
+// open pass-through. The composition root calls this before serving so a
+// mis-wired production build fails fast instead of silently exposing write
+// routes to anonymous callers (the router's own pass-through fallback
+// exists only for auth-less unit tests).
+func (d Deps) AssertAuthWired() error {
+	if d.AuthRequire == nil {
+		return errors.New("rest: AuthRequire middleware is not wired — refusing to serve with no auth gate")
+	}
+	return nil
 }

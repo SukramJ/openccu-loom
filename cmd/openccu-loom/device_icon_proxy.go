@@ -97,8 +97,19 @@ func newDeviceIconProxyWith(
 
 // Icon implements handlers.DeviceIconProxy. Cached results — including a
 // cached miss (empty data) — short-circuit the upstream fetch.
+//
+// The route is unauthenticated (an <img> tag cannot carry auth), so an
+// unknown address must NEVER create a cache entry: otherwise a caller
+// could grow the cache without bound — and probe which addresses exist —
+// by requesting random addresses in a loop. Only addresses that resolve
+// to a real device are cached, which naturally bounds the map to the
+// device fleet.
 func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte, contentType string, ok bool) {
 	if p == nil || p.locate == nil || address == "" {
+		return nil, "", false
+	}
+	filename, centralName, known := p.locate(address)
+	if !known {
 		return nil, "", false
 	}
 	p.mu.RLock()
@@ -108,18 +119,18 @@ func (p *deviceIconProxy) Icon(ctx context.Context, address string) (data []byte
 		return c.data, c.contentType, len(c.data) > 0
 	}
 
-	data, contentType = p.fetch(ctx, address)
+	data, contentType = p.fetch(ctx, filename, centralName)
 	p.mu.Lock()
 	p.cache[address] = cachedIcon{data: data, contentType: contentType}
 	p.mu.Unlock()
 	return data, contentType, len(data) > 0
 }
 
-// fetch resolves the device + central and pulls the icon from the CCU.
-// Returns nil on any failure so Icon caches the miss.
-func (p *deviceIconProxy) fetch(ctx context.Context, address string) (data []byte, contentType string) {
-	filename, centralName, ok := p.locate(address)
-	if !ok || filename == "" || strings.Contains(filename, "..") || !safeIconName.MatchString(filename) {
+// fetch pulls the icon for an already-resolved device from its CCU.
+// Returns nil on any failure so Icon caches the (known-device) miss and
+// does not hammer an unreachable CCU on every request.
+func (p *deviceIconProxy) fetch(ctx context.Context, filename, centralName string) (data []byte, contentType string) {
+	if filename == "" || strings.Contains(filename, "..") || !safeIconName.MatchString(filename) {
 		return nil, ""
 	}
 	if p.resolve == nil {

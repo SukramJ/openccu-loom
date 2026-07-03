@@ -32,6 +32,21 @@ type UserAdminService interface {
 	Count(ctx context.Context) (int, error)
 }
 
+// SessionRevoker invalidates server-side sessions for a subject so a
+// credential change (password reset, role change, deletion) takes effect
+// immediately instead of lingering for the full session TTL.
+// *auth.SessionStore satisfies it. A nil revoker disables the hook.
+type SessionRevoker interface {
+	RevokeBySubject(subject string) int
+	RevokeBySubjectExcept(subject, keepSID string) int
+}
+
+// TokenPurger deletes every bearer token issued to a subject, called when
+// the user account itself is removed. *sqlite.TokenStore satisfies it.
+type TokenPurger interface {
+	DeleteBySubject(ctx context.Context, subject string) (int, error)
+}
+
 // createUserRequest is the body of POST /admin/users.
 type createUserRequest struct {
 	Username string    `json:"username"`
@@ -117,8 +132,10 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 
 // UpdateUser handles PATCH /admin/users/{subject}. Requires both
 // password and role in the request body to perform a full upsert.
-// Returns 404 when the subject does not exist.
-func UpdateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
+// Returns 404 when the subject does not exist. On success every existing
+// session for the subject is revoked so a password reset or role change
+// cannot be outrun by a still-cached session.
+func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		subject := chi.URLParam(r, "subject")
 		if subject == "" {
@@ -169,6 +186,9 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 				problem.New(problem.TypeInternal, r, "User update failed", err.Error()))
 			return
 		}
+		if revoker != nil {
+			revoker.RevokeBySubject(subject)
+		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {
 			rec.Record(audit.Entry{
@@ -183,8 +203,9 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 
 // DeleteUser handles DELETE /admin/users/{subject}. Returns 404 when
 // the user does not exist and 409 when removing the subject would
-// leave no admins.
-func DeleteUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
+// leave no admins. On success the subject's sessions are revoked and its
+// bearer tokens purged so a deleted account retains no live credentials.
+func DeleteUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker, tokens TokenPurger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		subject := chi.URLParam(r, "subject")
 		if subject == "" {
@@ -208,6 +229,17 @@ func DeleteUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 			problem.Write(w, http.StatusInternalServerError,
 				problem.New(problem.TypeInternal, r, "User deletion failed", err.Error()))
 			return
+		}
+		if revoker != nil {
+			revoker.RevokeBySubject(subject)
+		}
+		if tokens != nil {
+			if _, err := tokens.DeleteBySubject(r.Context(), subject); err != nil {
+				// The account is already gone; a token-purge miss is logged by
+				// the store layer and must not turn a successful delete into a
+				// 500. Surface nothing to the caller.
+				_ = err
+			}
 		}
 		actor := identityFromCtx(r.Context())
 		if rec != nil {

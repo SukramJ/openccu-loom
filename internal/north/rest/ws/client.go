@@ -406,7 +406,17 @@ func (c *client) handleCommand(msg inboundMessage) {
 	case msg.Command == "":
 		resp.Error = NewCommandError(CommandErrorBadRequest, "missing command")
 	default:
-		ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+		// Carry the connection's authenticated identity into the dispatch
+		// context. The command outlives the inbound frame read, so the base
+		// is a detached context.Background() rather than the frame's — but it
+		// must still carry the identity so the router can enforce per-command
+		// role gating and key the rate limiter / user_permissions by subject
+		// instead of collapsing every caller to "anonymous".
+		base := context.Background()
+		if id := c.Identity(); id.Subject != "" {
+			base = auth.ContextWithIdentity(base, id)
+		}
+		ctx, cancel := context.WithTimeout(base, commandTimeout)
 		defer cancel()
 		result := c.hub.router.Dispatch(ctx, msg.Command, msg.Args)
 		if result.Error != nil {

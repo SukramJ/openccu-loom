@@ -6,7 +6,46 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Northbound auth hardening from a code-vs-code security audit.** A deep audit
+  of the REST/WebSocket/auth surface found and closed several issues:
+  - **WebSocket commands now enforce role gating.** State-changing commands
+    (`paramset.put`, `device.install_mode`, `master_profiles.apply`,
+    `backup.trigger`, …) require the connection's identity to hold the same
+    minimum role the equivalent REST route demands. Previously a read-only
+    *viewer* could invoke operator/admin writes over the socket, because the
+    command dispatch dropped the caller identity — that also collapsed the
+    per-command rate-limiter and `system.user_permissions` to "anonymous". Both
+    are fixed by threading the connection identity into the dispatch context.
+  - **CCU passwords are no longer returned in the clear.** `GET
+    /api/v1/admin/centrals` now masks `password_plain` to `***` (with a
+    restore-on-save round-trip), mirroring `GET /config`.
+  - **Credential changes revoke sessions immediately.** A password change,
+    role change, or user deletion now revokes that subject's other sessions
+    (and, on deletion, purges its API tokens) instead of letting a stolen or
+    stale session live out the 12 h TTL.
+  - **The at-rest encryption key is excluded from backups**, so a stolen backup
+    tarball no longer carries both the key and the ciphertext. *Operator note:*
+    restoring a backup onto a fresh host now requires the `OPENCCU_LOOM_SECRET_KEY`
+    env key (or copying `secret.key` out of band); otherwise encrypted secrets
+    must be re-entered.
+  - **OIDC login-CSRF closed:** the `state` value is now bound to an HttpOnly
+    cookie and verified on callback; abandoned-flow state entries are swept.
+  - **Session cookies are marked `Secure`** whenever the deployment terminates
+    TLS (directly, via `csrf_secure`, or an `https` `public_url`).
+  - Hardened the unauthenticated device-icon proxy against unbounded cache
+    growth / address enumeration (only known devices are cached); added the
+    1 MiB body cap to channel-config import; a dummy bcrypt compare on the
+    unknown-user login path (anti-enumeration timing); and a fail-fast guard
+    that refuses to serve REST with no auth middleware wired.
+
 ### Added
+
+- **Optional API-token expiry.** `POST /auth/tokens/v2` accepts
+  `expires_in_days`; expired tokens are rejected at authentication and
+  `expires_at` is surfaced in the token list. Omitted → never expires
+  (unchanged). API version 2.13.0.
 
 - **User access-permission switches for HmIP-DLD and HmIP-FWI.** The per-user
   access-receiver channels (HmIP-DLD channels 2–9, HmIP-FWI channels 1–8) are now

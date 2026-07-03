@@ -8,6 +8,7 @@ import (
 	gosql "database/sql"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/auth"
@@ -174,11 +175,18 @@ func wireREST(ctx context.Context, d restWiringDeps) restWiring {
 			func() float64 { return float64(sm.TotalRequests()) })
 	}
 
+	// Mark the session cookie Secure whenever the deployment terminates
+	// TLS — directly (TLSEnabled) or behind a proxy the operator has
+	// declared via CSRFSecure or an https public_url. Without this the
+	// cookie rides plaintext requests and a downgraded request can leak it.
+	secureCookie := cfg.North.REST.TLSEnabled() ||
+		cfg.North.REST.CSRFSecure ||
+		strings.HasPrefix(strings.ToLower(cfg.North.REST.PublicURL), "https://")
 	restAuth := &handlers.AuthDeps{
 		Users:         d.users,
 		Sessions:      d.sessions,
 		Tokens:        d.tokens,
-		Secure:        false, // dev/plain HTTP; flip when TLS is wired
+		Secure:        secureCookie,
 		AuditRecorder: d.auditBuf,
 	}
 	// When SQLite-backed user persistence is available, route the

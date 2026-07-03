@@ -21,6 +21,7 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/secret"
 	"github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -130,6 +131,13 @@ func backupCreate(args []string, stdout, stderr io.Writer) error { //nolint:gocy
 			// Skip the live DB, WAL, and SHM files — the VACUUMed copy is added separately.
 			base := filepath.Base(p)
 			if base == "openccu-loom.db" || base == "openccu-loom.db-wal" || base == "openccu-loom.db-shm" {
+				return nil
+			}
+			// Never archive the at-rest encryption key alongside the
+			// ciphertext it protects — a stolen backup would otherwise carry
+			// both the key and the encrypted DB, defeating the encryption for
+			// exactly the stolen-copy threat it exists to counter.
+			if base == secret.KeyFileName {
 				return nil
 			}
 			entries = append(entries, entry{

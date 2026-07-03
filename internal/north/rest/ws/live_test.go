@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/configui"
 )
 
@@ -187,17 +188,42 @@ func newTestHub(t *testing.T) (*Hub, *stubHub, *stubDeviceQuery, *stubLinks, *st
 	return hub, sh, dq, sl, ss, backend
 }
 
-// waitForRegistered polls until hub.ClientCount() >= 1 or deadline.
+// waitForRegistered polls until hub.ClientCount() >= 1 or deadline,
+// then stamps every registered connection with an operator identity.
+// Handler (see handler.go) only picks up an identity from the
+// upgrade request's context — these tests dial a bare TCP handshake
+// with no auth layer in front, so without this the connection stays
+// at the zero-value (unauthenticated) identity and every write
+// command dispatched via wsConn.call fails the writeCommandRoles gate
+// in Router.Dispatch before the handler under test ever runs. Reads
+// are ungated and unaffected either way. A test that needs the
+// admin tier (e.g. backup.trigger) escalates further by calling
+// grantIdentity(hub, testAdminIdentity) after this returns.
 func waitForRegistered(t *testing.T, hub *Hub) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if hub.ClientCount() >= 1 {
+			grantIdentity(hub, testOperatorIdentity)
 			return
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("client never registered with hub")
+}
+
+// grantIdentity stamps every currently-registered connection with id.
+// The role gate in Router.Dispatch reads the identity Handler copied
+// from the upgrade request's context onto the *client (see
+// client.SetIdentity / client.Identity in client.go); test connections
+// dialed directly via net.Dial carry no such request-scoped identity,
+// so tests reach in here to grant one after the handshake completes.
+func grantIdentity(hub *Hub, id auth.Identity) {
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	for c := range hub.clients {
+		c.SetIdentity(id)
+	}
 }
 
 // --- handleCommand / readPump / writePump ------------------------------------
@@ -678,6 +704,7 @@ func TestLiveBackupTriggerError(t *testing.T) {
 
 	c := dialWS(t, server)
 	waitForRegistered(t, hub)
+	grantIdentity(hub, testAdminIdentity) // backup.trigger is admin-tier
 
 	res := c.call("r1", "backup.trigger", map[string]any{})
 	if res.Error == nil || res.Error.Code != CommandErrorInternal {
@@ -2201,7 +2228,7 @@ func TestExtendedDeviceRenameError(t *testing.T) {
 	r, devs, _, _, _, _ := newRouterWithExtended()
 	devs.failOnAddress = "FAIL0001"
 	raw, _ := json.Marshal(map[string]any{"address": "FAIL0001", "name": "X"})
-	res := r.Dispatch(context.Background(), "device.rename", raw)
+	res := r.Dispatch(opCtx(), "device.rename", raw)
 	if res.Error == nil {
 		t.Fatalf("expected error, got %+v", res.Data)
 	}
@@ -2213,7 +2240,7 @@ func TestExtendedDeviceInstallModeError(t *testing.T) {
 	// Override to return an error.
 	r.Register("device.install_mode", deviceInstallModeHandler(&failOnInstallDevice{}))
 	raw, _ := json.Marshal(map[string]any{"address": "ABC0001", "duration_seconds": 60})
-	res := r.Dispatch(context.Background(), "device.install_mode", raw)
+	res := r.Dispatch(opCtx(), "device.install_mode", raw)
 	if res.Error == nil {
 		t.Fatalf("expected error, got %+v", res.Data)
 	}
@@ -2263,7 +2290,7 @@ func TestExtendedCentralConnectivityError(t *testing.T) {
 func TestExtendedCentralReconcileError(t *testing.T) {
 	r, _, _, _, c, _ := newRouterWithExtended()
 	c.reconcileErr = errors.New("ccu offline")
-	res := r.Dispatch(context.Background(), "central.reconcile", nil)
+	res := r.Dispatch(opCtx(), "central.reconcile", nil)
 	if res.Error == nil {
 		t.Fatalf("expected error, got %+v", res.Data)
 	}
@@ -2284,7 +2311,7 @@ func TestExtendedMasterProfilesApplyMissingFields(t *testing.T) {
 	r, _, _, _, _, _ := newRouterWithExtended()
 	// Missing both device_type and channel_address.
 	raw, _ := json.Marshal(map[string]any{"id": 1})
-	res := r.Dispatch(context.Background(), "master_profiles.apply", raw)
+	res := r.Dispatch(opCtx(), "master_profiles.apply", raw)
 	if res.Error == nil || res.Error.Code != CommandErrorBadRequest {
 		t.Fatalf("want bad_request, got %+v", res.Error)
 	}
@@ -2316,7 +2343,7 @@ func TestMissingSchedulesSetEnabledError(t *testing.T) {
 	r := NewRouter()
 	r.Register("schedules.set_enabled", schedulesSetEnabledHandler(&stubScheduleEnablerErr{}))
 	raw, _ := json.Marshal(map[string]any{"device_address": "ABC0001", "enabled": true})
-	res := r.Dispatch(context.Background(), "schedules.set_enabled", raw)
+	res := r.Dispatch(opCtx(), "schedules.set_enabled", raw)
 	if res.Error == nil {
 		t.Fatalf("expected error, got %+v", res.Data)
 	}

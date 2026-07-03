@@ -247,6 +247,88 @@ func TestDeviceIconProxy_Icon_UnknownDevice_Returns_False(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// deviceIconProxy.Icon — unknown addresses never grow the cache
+// ---------------------------------------------------------------------------
+
+// TestDeviceIconProxy_Icon_UnknownAddress_NeverCached guards the
+// anti-enumeration property documented on [deviceIconProxy.Icon]: the icon
+// route is unauthenticated, so an unknown address must never create a
+// cache entry — otherwise a caller could grow the cache without bound (and
+// probe which addresses exist) by requesting random addresses in a loop.
+// Repeated calls with distinct unknown addresses must leave the cache
+// empty.
+func TestDeviceIconProxy_Icon_UnknownAddress_NeverCached(t *testing.T) {
+	t.Parallel()
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	locate := func(_ string) (string, string, bool) { return "", "", false }
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals())
+
+	addresses := []string{"UNKNOWN-1", "UNKNOWN-2", "RANDOM-ABC123", "does-not-exist"}
+	for _, addr := range addresses {
+		_, _, ok := proxy.Icon(context.Background(), addr)
+		if ok {
+			t.Fatalf("address %q: expected ok=false for unknown device", addr)
+		}
+	}
+
+	proxy.mu.RLock()
+	n := len(proxy.cache)
+	proxy.mu.RUnlock()
+	if n != 0 {
+		t.Errorf("cache size = %d after %d unknown-address lookups, want 0 (anti-enumeration guard)", n, len(addresses))
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("server must not be hit for unknown addresses, got %d hits", hits.Load())
+	}
+}
+
+// TestDeviceIconProxy_Icon_KnownAddress_FetchFailure_CachesSingleEntry
+// verifies the counterpart of the anti-enumeration guard: once an address
+// resolves to a real device, a failed upstream fetch still caches the
+// (known-device) miss, and repeated lookups of the same known address do
+// not grow the cache beyond a single entry.
+func TestDeviceIconProxy_Icon_KnownAddress_FetchFailure_CachesSingleEntry(t *testing.T) {
+	t.Parallel()
+
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		hits.Add(1)
+		http.NotFound(w, nil) //nolint:staticcheck // test double
+	}))
+	defer srv.Close()
+
+	host, port := splitHostPort(t, srv.URL)
+	cc := config.CentralConfig{Name: "ccu", Host: host, JSONRPCPort: port, TLS: false}
+
+	locate := func(_ string) (string, string, bool) { return "swdo.png", "ccu", true }
+	proxy := newDeviceIconProxyWith(locate, resolverFromCentrals(cc))
+
+	for range 3 {
+		_, _, ok := proxy.Icon(context.Background(), "AABB0001")
+		if ok {
+			t.Fatal("expected ok=false for a known device whose upstream fetch fails")
+		}
+	}
+
+	proxy.mu.RLock()
+	n := len(proxy.cache)
+	proxy.mu.RUnlock()
+	if n != 1 {
+		t.Errorf("cache size = %d after repeated lookups of one known address, want 1", n)
+	}
+	if hits.Load() != 1 {
+		t.Errorf("server hits = %d, want 1 (subsequent lookups must hit the cached miss)", hits.Load())
+	}
+}
+
+// ---------------------------------------------------------------------------
 // deviceIconProxy.Icon — unsafe filenames
 // ---------------------------------------------------------------------------
 

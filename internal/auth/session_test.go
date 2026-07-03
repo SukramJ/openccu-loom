@@ -43,6 +43,140 @@ func TestSessionExpiresEvicts(t *testing.T) {
 	}
 }
 
+// TestSessionRevokeBySubjectRemovesAllForSubject verifies that
+// RevokeBySubject evicts every session belonging to a subject and leaves
+// sessions for other subjects untouched.
+func TestSessionRevokeBySubjectRemovesAllForSubject(t *testing.T) {
+	store := NewSessionStore()
+	a1, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue a1: %v", err)
+	}
+	a2, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue a2: %v", err)
+	}
+	b1, err := store.Issue(Identity{Subject: "bob"})
+	if err != nil {
+		t.Fatalf("issue b1: %v", err)
+	}
+
+	if n := store.RevokeBySubject("alice"); n != 2 {
+		t.Fatalf("RevokeBySubject count=%d want 2", n)
+	}
+	if store.Lookup(a1.ID) != nil {
+		t.Error("alice session a1 still present after RevokeBySubject")
+	}
+	if store.Lookup(a2.ID) != nil {
+		t.Error("alice session a2 still present after RevokeBySubject")
+	}
+	if store.Lookup(b1.ID) == nil {
+		t.Error("bob session was evicted by RevokeBySubject(alice)")
+	}
+}
+
+// TestSessionRevokeBySubjectExceptPreservesNamedSession verifies that
+// RevokeBySubjectExcept evicts every session for the subject except the
+// one whose id is passed as keepSID.
+func TestSessionRevokeBySubjectExceptPreservesNamedSession(t *testing.T) {
+	store := NewSessionStore()
+	keep, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue keep: %v", err)
+	}
+	other, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue other: %v", err)
+	}
+
+	if n := store.RevokeBySubjectExcept("alice", keep.ID); n != 1 {
+		t.Fatalf("RevokeBySubjectExcept count=%d want 1", n)
+	}
+	if store.Lookup(keep.ID) == nil {
+		t.Error("kept session was revoked by RevokeBySubjectExcept")
+	}
+	if store.Lookup(other.ID) != nil {
+		t.Error("other session for subject still present after RevokeBySubjectExcept")
+	}
+}
+
+// TestSessionRevokeBySubjectEmptySubjectNoOp verifies that an empty
+// subject is a no-op — it must never wipe every session in the store.
+func TestSessionRevokeBySubjectEmptySubjectNoOp(t *testing.T) {
+	store := NewSessionStore()
+	sess, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	if n := store.RevokeBySubject(""); n != 0 {
+		t.Errorf("RevokeBySubject(\"\") count=%d want 0", n)
+	}
+	if store.Lookup(sess.ID) == nil {
+		t.Error("session evicted by empty-subject RevokeBySubject")
+	}
+	if n := store.RevokeBySubjectExcept("", sess.ID); n != 0 {
+		t.Errorf("RevokeBySubjectExcept(\"\", ...) count=%d want 0", n)
+	}
+}
+
+// TestSessionIdleTTLEvictsIdleSession verifies that with IdleTTL set, a
+// session looked up within the idle window survives and refreshes its
+// idle clock, while one idle beyond the window since the last successful
+// Lookup is evicted on the next Lookup.
+func TestSessionIdleTTLEvictsIdleSession(t *testing.T) {
+	store := NewSessionStore()
+	store.IdleTTL = 10 * time.Millisecond
+	vnow := time.Now()
+	store.now = func() time.Time { return vnow }
+
+	sess, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	// Looked up within the idle window: survives and refreshes lastSeen.
+	vnow = vnow.Add(5 * time.Millisecond)
+	if got := store.Lookup(sess.ID); got == nil {
+		t.Fatal("session evicted within idle window")
+	}
+
+	// Idle beyond the window since the last successful Lookup: evicted.
+	vnow = vnow.Add(20 * time.Millisecond)
+	if got := store.Lookup(sess.ID); got != nil {
+		t.Fatal("session survived beyond IdleTTL")
+	}
+}
+
+// TestSessionIdleTTLDisabledPreservesAbsoluteTTLOnly verifies that
+// IdleTTL==0 disables the idle check (a session survives however long it
+// sits between lookups) while the absolute TTL still applies unchanged.
+func TestSessionIdleTTLDisabledPreservesAbsoluteTTLOnly(t *testing.T) {
+	store := NewSessionStore()
+	store.TTL = 100 * time.Millisecond
+	store.IdleTTL = 0
+	vnow := time.Now()
+	store.now = func() time.Time { return vnow }
+
+	sess, err := store.Issue(Identity{Subject: "alice"})
+	if err != nil {
+		t.Fatalf("issue: %v", err)
+	}
+
+	// Advance close to (but before) the absolute TTL; with IdleTTL disabled
+	// this must not evict even though it would exceed a typical idle window.
+	vnow = vnow.Add(90 * time.Millisecond)
+	if got := store.Lookup(sess.ID); got == nil {
+		t.Fatal("session evicted despite IdleTTL disabled and within absolute TTL")
+	}
+
+	// Past the absolute TTL: evicted regardless of IdleTTL.
+	vnow = vnow.Add(20 * time.Millisecond)
+	if got := store.Lookup(sess.ID); got != nil {
+		t.Fatal("session survived past absolute TTL")
+	}
+}
+
 func TestSessionMiddlewareAttachesIdentity(t *testing.T) {
 	store := NewSessionStore()
 	sess, _ := store.Issue(Identity{Subject: "alice", Role: RoleViewer})

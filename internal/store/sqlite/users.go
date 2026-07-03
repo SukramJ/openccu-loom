@@ -105,6 +105,11 @@ func (s *UserStore) Delete(ctx context.Context, subject string) error {
 	return tx.Commit()
 }
 
+// dummyBcryptHash is a pre-generated bcrypt hash compared against on the
+// unknown-user path so the login latency does not leak whether a subject
+// exists. It never matches any real password.
+var dummyBcryptHash = []byte("$2a$12$w3j05DkTLbO8bN3FgkOfxuNFDLEzElC42sZuPYO0eACSU6dKRLyFG")
+
 // AuthenticateBasic resolves credentials. Uses bcrypt.CompareHashAndPassword
 // for constant-time comparison.
 func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password string) (auth.Identity, error) {
@@ -116,6 +121,10 @@ func (s *UserStore) AuthenticateBasic(ctx context.Context, username, password st
 	err := s.db.QueryRowContext(ctx,
 		`SELECT password_hash, role FROM users WHERE subject = ?`, subject).Scan(&hash, &role)
 	if errors.Is(err, sql.ErrNoRows) {
+		// Consume roughly the same wall-clock as a real bcrypt verify so an
+		// attacker cannot distinguish "no such user" from "wrong password"
+		// by measuring response latency (user enumeration via timing).
+		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(password))
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	if err != nil {

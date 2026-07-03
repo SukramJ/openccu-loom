@@ -52,6 +52,10 @@ type restMountDeps struct {
 	sqUsers    *sqlitestore.UserStore
 	sqCentrals *sqlitestore.CentralsStore
 	sqSections *sqlitestore.ConfigSectionStore
+	sqTokens   *sqlitestore.TokenStore
+	// sessions backs the credential-change session-revocation hooks
+	// (password change / user update / user delete).
+	sessions *auth.SessionStore
 
 	healthAdapter          *adapter.HealthAdapter
 	configAdapter          *adapter.ConfigAdapter
@@ -196,6 +200,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ConfigChanges:         restartState,
 		UserAdmin:             d.userSvc,
 		SelfPassword:          d.passwordSvc,
+		SessionRevoker:        d.sessions,
+		TokenPurger:           d.sqTokens,
 		Preferences:           d.prefSvc,
 		RoomFunctionAdmin:     d.roomFunctionAdmin,
 		TLSCert:               tlsCertSvc,
@@ -305,6 +311,13 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		DeviceLookup:          newDeviceLookupAdapter(d.reg),
 		CSRFEnabled:           cfg.North.REST.CSRFIsEnabled(),
 		CSRFSecure:            cfg.North.REST.CSRFSecure,
+	}
+	// Fail fast if the composition root ever stops wiring the auth chain:
+	// the router's role shims fall through to an open pass-through when
+	// AuthRequire is nil, which must never happen in a served build.
+	if err := deps.AssertAuthWired(); err != nil {
+		logger.Error("rest.auth_not_wired — refusing to serve", slog.String("err", err.Error()))
+		return func() {}
 	}
 	router := rest.NewRouter(deps)
 	var topHandler http.Handler = router

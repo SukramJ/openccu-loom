@@ -251,6 +251,164 @@ func TestUpdateCentral_MissingHost_Returns400(t *testing.T) {
 	}
 }
 
+// --- Password masking ---
+
+func TestListCentrals_MasksPassword(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/admin/centrals", http.NoBody)
+	w := httptest.NewRecorder()
+	ListCentrals(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var rows []sqlite.CentralRow
+	if err := json.Unmarshal(w.Body.Bytes(), &rows); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 central, got %d", len(rows))
+	}
+	if rows[0].PasswordPlain != maskSentinel {
+		t.Errorf("expected masked password %q, got %q", maskSentinel, rows[0].PasswordPlain)
+	}
+	// Masking the response must not mutate the stored row.
+	if svc.centrals["home"].PasswordPlain != "s3cret" {
+		t.Error("masking must not mutate the stored central row")
+	}
+}
+
+func TestGetCentral_MasksPassword(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/admin/centrals/home", http.NoBody)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	GetCentral(svc).ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	var row sqlite.CentralRow
+	if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if row.PasswordPlain != maskSentinel {
+		t.Errorf("expected masked password %q, got %q", maskSentinel, row.PasswordPlain)
+	}
+}
+
+func TestGetCentral_EmptyPasswordStaysEmpty(t *testing.T) {
+	t.Parallel()
+	svc := newFakeCentralSvc() // password_plain is empty on the fixture row
+	req := httptest.NewRequest(http.MethodGet, "/admin/centrals/home", http.NoBody)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	GetCentral(svc).ServeHTTP(w, req)
+
+	var row sqlite.CentralRow
+	if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if row.PasswordPlain != "" {
+		t.Errorf("expected empty password to stay empty (not masked), got %q", row.PasswordPlain)
+	}
+}
+
+func TestGetCentral_PasswordEnvStaysVisible(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordEnv: "CCU_HOME_PASSWORD"},
+	}}
+	req := httptest.NewRequest(http.MethodGet, "/admin/centrals/home", http.NoBody)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	GetCentral(svc).ServeHTTP(w, req)
+
+	var row sqlite.CentralRow
+	if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if row.PasswordEnv != "CCU_HOME_PASSWORD" {
+		t.Errorf("expected password_env to stay visible, got %q", row.PasswordEnv)
+	}
+}
+
+// --- UpdateCentral password restore ---
+
+func TestUpdateCentral_MaskedPassword_RestoresStoredCredential(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"***"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	// The masked round-trip must restore the ORIGINAL stored credential,
+	// not persist the literal sentinel.
+	if got := svc.centrals["home"].PasswordPlain; got != "s3cret" {
+		t.Errorf("expected stored password s3cret to be restored, got %q", got)
+	}
+}
+
+func TestUpdateCentral_RealPassword_PersistsAsIs(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{centrals: map[string]sqlite.CentralRow{
+		"home": {Name: "home", Host: "192.168.1.10", PasswordPlain: "s3cret"},
+	}}
+	body := strings.NewReader(`{"Host":"192.168.1.99","password_plain":"newpass"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/centrals/home", body)
+	req = withChiParam(req, "name", "home")
+	w := httptest.NewRecorder()
+	UpdateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	// A genuinely changed (non-sentinel) password must persist as sent.
+	if got := svc.centrals["home"].PasswordPlain; got != "newpass" {
+		t.Errorf("expected password to persist as newpass, got %q", got)
+	}
+}
+
+// --- CreateCentral password sentinel clearing ---
+
+func TestCreateCentral_MaskedPassword_ClearsToEmpty(t *testing.T) {
+	t.Parallel()
+	svc := &fakeCentralAdminService{}
+	body := strings.NewReader(`{"Name":"office","Host":"10.0.0.5","password_plain":"***"}`)
+	req := httptest.NewRequest(http.MethodPost, "/admin/centrals", body)
+	w := httptest.NewRecorder()
+	CreateCentral(svc, nil).ServeHTTP(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", w.Code, w.Body.String())
+	}
+	// A fresh central has nothing stored to restore; the sentinel must be
+	// cleared to empty rather than persisted as the literal "***".
+	if got := svc.centrals["office"].PasswordPlain; got != "" {
+		t.Errorf("expected sentinel password cleared to empty on create, got %q", got)
+	}
+	var row sqlite.CentralRow
+	if err := json.Unmarshal(w.Body.Bytes(), &row); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if row.PasswordPlain != "" {
+		t.Errorf("expected empty password in create response, got %q", row.PasswordPlain)
+	}
+}
+
 // --- DeleteCentral ---
 
 func TestDeleteCentral_Happy(t *testing.T) {
