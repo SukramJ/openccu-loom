@@ -69,6 +69,43 @@ func (f *fakeUserAdminService) Count(_ context.Context) (int, error) {
 	return len(f.users), nil
 }
 
+// fakeSessionRevoker is an in-memory SessionRevoker for tests: it records
+// every call so handler tests can assert revocation happened exactly when
+// expected (on success, never on a validation or not-found failure).
+type fakeSessionRevoker struct {
+	revokeBySubjectCalls       []string
+	revokeBySubjectExceptCalls []fakeRevokeExceptCall
+}
+
+type fakeRevokeExceptCall struct {
+	subject string
+	keepSID string
+}
+
+func (f *fakeSessionRevoker) RevokeBySubject(subject string) int {
+	f.revokeBySubjectCalls = append(f.revokeBySubjectCalls, subject)
+	return 1
+}
+
+func (f *fakeSessionRevoker) RevokeBySubjectExcept(subject, keepSID string) int {
+	f.revokeBySubjectExceptCalls = append(f.revokeBySubjectExceptCalls, fakeRevokeExceptCall{subject: subject, keepSID: keepSID})
+	return 1
+}
+
+// fakeTokenPurger is an in-memory TokenPurger for tests.
+type fakeTokenPurger struct {
+	deleteBySubjectCalls []string
+	deleteErr            error
+}
+
+func (f *fakeTokenPurger) DeleteBySubject(_ context.Context, subject string) (int, error) {
+	f.deleteBySubjectCalls = append(f.deleteBySubjectCalls, subject)
+	if f.deleteErr != nil {
+		return 0, f.deleteErr
+	}
+	return 1, nil
+}
+
 // withChiParam wraps a request so that chi.URLParam resolves correctly.
 func withChiParam(r *http.Request, key, val string) *http.Request {
 	rctx := chi.NewRouteContext()
@@ -186,42 +223,54 @@ func TestCreateUser_InvalidRole_Returns400(t *testing.T) {
 func TestUpdateUser_Happy(t *testing.T) {
 	t.Parallel()
 	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
 	body := strings.NewReader(`{"password":"newpass","role":"viewer"}`)
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	UpdateUser(svc, audit.NoopRecorder(), revoker).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", w.Code, w.Body.String())
+	}
+	if len(revoker.revokeBySubjectCalls) != 1 || revoker.revokeBySubjectCalls[0] != "bob" {
+		t.Errorf("expected RevokeBySubject(bob) exactly once, got %v", revoker.revokeBySubjectCalls)
 	}
 }
 
 func TestUpdateUser_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
 	body := strings.NewReader(`{"password":"newpass","role":"viewer"}`)
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/ghost", body)
 	req = withChiParam(req, "subject", "ghost")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, nil).ServeHTTP(w, req)
+	UpdateUser(svc, nil, revoker).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation on 404, got %v", revoker.revokeBySubjectCalls)
 	}
 }
 
 func TestUpdateUser_InvalidRole_Returns400(t *testing.T) {
 	t.Parallel()
 	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
 	body := strings.NewReader(`{"password":"newpass","role":"superuser"}`)
 	req := httptest.NewRequest(http.MethodPatch, "/admin/users/bob", body)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	UpdateUser(svc, nil).ServeHTTP(w, req)
+	UpdateUser(svc, nil, revoker).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation on 400, got %v", revoker.revokeBySubjectCalls)
 	}
 }
 
@@ -230,26 +279,42 @@ func TestUpdateUser_InvalidRole_Returns400(t *testing.T) {
 func TestDeleteUser_Happy(t *testing.T) {
 	t.Parallel()
 	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
+	tokens := &fakeTokenPurger{}
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/bob", http.NoBody)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	DeleteUser(svc, audit.NoopRecorder()).ServeHTTP(w, req)
+	DeleteUser(svc, audit.NoopRecorder(), revoker, tokens).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", w.Code)
+	}
+	if len(revoker.revokeBySubjectCalls) != 1 || revoker.revokeBySubjectCalls[0] != "bob" {
+		t.Errorf("expected RevokeBySubject(bob) exactly once, got %v", revoker.revokeBySubjectCalls)
+	}
+	if len(tokens.deleteBySubjectCalls) != 1 || tokens.deleteBySubjectCalls[0] != "bob" {
+		t.Errorf("expected DeleteBySubject(bob) exactly once, got %v", tokens.deleteBySubjectCalls)
 	}
 }
 
 func TestDeleteUser_NotFound_Returns404(t *testing.T) {
 	t.Parallel()
 	svc := newFakeUserSvc()
+	revoker := &fakeSessionRevoker{}
+	tokens := &fakeTokenPurger{}
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/ghost", http.NoBody)
 	req = withChiParam(req, "subject", "ghost")
 	w := httptest.NewRecorder()
-	DeleteUser(svc, nil).ServeHTTP(w, req)
+	DeleteUser(svc, nil, revoker, tokens).ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", w.Code)
+	}
+	if len(revoker.revokeBySubjectCalls) != 0 {
+		t.Errorf("expected no revocation on 404, got %v", revoker.revokeBySubjectCalls)
+	}
+	if len(tokens.deleteBySubjectCalls) != 0 {
+		t.Errorf("expected no token purge on 404, got %v", tokens.deleteBySubjectCalls)
 	}
 }
 
@@ -260,7 +325,7 @@ func TestDeleteUser_LastAdmin_Returns409(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/admin", http.NoBody)
 	req = withChiParam(req, "subject", "admin")
 	w := httptest.NewRecorder()
-	DeleteUser(svc, nil).ServeHTTP(w, req)
+	DeleteUser(svc, nil, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict for last-admin, got %d body=%s", w.Code, w.Body.String())
@@ -274,7 +339,7 @@ func TestDeleteUser_OtherError_Returns500(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/admin/users/bob", http.NoBody)
 	req = withChiParam(req, "subject", "bob")
 	w := httptest.NewRecorder()
-	DeleteUser(svc, nil).ServeHTTP(w, req)
+	DeleteUser(svc, nil, nil, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)

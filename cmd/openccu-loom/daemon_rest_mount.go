@@ -52,6 +52,10 @@ type restMountDeps struct {
 	sqUsers    *sqlitestore.UserStore
 	sqCentrals *sqlitestore.CentralsStore
 	sqSections *sqlitestore.ConfigSectionStore
+	sqTokens   *sqlitestore.TokenStore
+	// sessions backs the credential-change session-revocation hooks
+	// (password change / user update / user delete).
+	sessions *auth.SessionStore
 
 	healthAdapter          *adapter.HealthAdapter
 	configAdapter          *adapter.ConfigAdapter
@@ -196,6 +200,8 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		ConfigChanges:         restartState,
 		UserAdmin:             d.userSvc,
 		SelfPassword:          d.passwordSvc,
+		SessionRevoker:        d.sessions,
+		TokenPurger:           d.sqTokens,
 		Preferences:           d.prefSvc,
 		RoomFunctionAdmin:     d.roomFunctionAdmin,
 		TLSCert:               tlsCertSvc,

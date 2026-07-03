@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.12.0
+  version: 2.13.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -6703,6 +6703,13 @@ components:
         role:
           type: string
           enum: [viewer, operator, admin]
+        expires_in_days:
+          type: integer
+          minimum: 1
+          description: |
+            Optional token lifetime in days. When set and positive, the token
+            is rejected after this many days. Omitted or non-positive creates a
+            token that never expires.
 
     TokenCreated:
       type: object
@@ -6717,6 +6724,10 @@ components:
         fingerprint:
           type: string
           description: Stable opaque identifier derived from the token (sha256-based).
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry instant. Absent when the token never expires.
 
     TokenSummary:
       type: object
@@ -6737,6 +6748,10 @@ components:
           type: string
           format: date-time
           description: Last successful authentication time. Absent when never used.
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry instant. Absent when the token never expires.
 
     InterfaceSpec:
       type: object

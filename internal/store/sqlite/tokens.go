@@ -20,10 +20,11 @@ import (
 
 // TokenStore is the SQLite-backed [auth.TokenStore].
 //
-// Tokens are stored as bcrypt-style salted SHA-256 hashes — we keep
-// the SHA-256 fingerprint (last 6 chars of the URL-safe base64) for
-// UI display and the full hash for authentication. Plaintext is
-// returned exactly once at creation.
+// Tokens are stored as SHA-256 hashes; the plaintext is returned exactly
+// once at creation and never persisted. The display fingerprint is a
+// prefix of the SHA-256 hash — derived from the hash, never from the
+// plaintext, so nothing recoverable about the secret is persisted or
+// surfaced in list responses / audit notes.
 type TokenStore struct {
 	db *sql.DB
 }
@@ -45,20 +46,25 @@ func hashToken(secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// fingerprint derives the last-six-chars display fingerprint of a
-// token. Stable for a given token, never collides for cleanly random
-// 32-byte tokens.
-func fingerprint(secret string) string {
-	if len(secret) <= 6 {
-		return secret
+// fingerprintFromHash derives the display fingerprint from a token's
+// SHA-256 hash (hex). A 12-hex-char (48-bit) prefix is short enough to
+// eyeball yet collision-free in practice, and — unlike a slice of the
+// plaintext — reveals nothing usable about the secret. Create returns it
+// so the operator can record which handle maps to the token they saved.
+func fingerprintFromHash(hash string) string {
+	if len(hash) <= 12 {
+		return hash
 	}
-	return "…" + secret[len(secret)-6:]
+	return hash[:12]
 }
 
 // CreateInput is the payload for [TokenStore.Create].
 type CreateInput struct {
 	Subject string
 	Role    auth.Role
+	// ExpiresAt, when non-nil, bounds the token's lifetime; a nil value
+	// creates a token that never expires (the historical behaviour).
+	ExpiresAt *time.Time
 }
 
 // CreateResult carries the plaintext token (returned exactly once)
@@ -85,14 +91,35 @@ func (s *TokenStore) Create(ctx context.Context, in CreateInput) (CreateResult, 
 		return CreateResult{}, fmt.Errorf("sqlite: token rand: %w", err)
 	}
 	token := base64.RawURLEncoding.EncodeToString(buf)
-	fp := fingerprint(token)
+	hash := hashToken(token)
+	fp := fingerprintFromHash(hash)
+	var expires any
+	if in.ExpiresAt != nil {
+		expires = in.ExpiresAt.UTC()
+	}
 	if _, err := s.db.ExecContext(ctx,
-		`INSERT INTO tokens (fingerprint, token_hash, subject, role, created_at)
-		 VALUES (?, ?, ?, ?, ?)`,
-		fp, hashToken(token), subject, string(in.Role), time.Now().UTC()); err != nil {
+		`INSERT INTO tokens (fingerprint, token_hash, subject, role, created_at, expires_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		fp, hash, subject, string(in.Role), time.Now().UTC(), expires); err != nil {
 		return CreateResult{}, fmt.Errorf("sqlite: token insert: %w", err)
 	}
 	return CreateResult{Token: token, Fingerprint: fp}, nil
+}
+
+// DeleteBySubject removes every token issued to subject and returns the
+// count removed. Called when the underlying user account is deleted so a
+// bearer token bound to a now-nonexistent subject cannot keep
+// authenticating.
+func (s *TokenStore) DeleteBySubject(ctx context.Context, subject string) (int, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res, err := s.db.ExecContext(ctx, `DELETE FROM tokens WHERE subject = ?`, subject)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: tokens delete by subject: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // Delete removes a token by fingerprint.
@@ -117,18 +144,24 @@ func (s *TokenStore) AuthenticateToken(ctx context.Context, secret string) (auth
 	}
 	hash := hashToken(secret)
 	var (
-		fp      string
-		subject string
-		role    string
+		fp        string
+		subject   string
+		role      string
+		expiresAt sql.NullTime
 	)
 	err := s.db.QueryRowContext(ctx,
-		`SELECT fingerprint, subject, role FROM tokens WHERE token_hash = ?`,
-		hash).Scan(&fp, &subject, &role)
+		`SELECT fingerprint, subject, role, expires_at FROM tokens WHERE token_hash = ?`,
+		hash).Scan(&fp, &subject, &role, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	if err != nil {
 		return auth.Identity{}, fmt.Errorf("sqlite: token authn: %w", err)
+	}
+	// Reject an expired token as if it were unknown — a uniform 401, no
+	// distinction that would confirm the secret was once valid.
+	if expiresAt.Valid && !time.Now().UTC().Before(expiresAt.Time) {
+		return auth.Identity{}, auth.ErrUnauthenticated
 	}
 	_, _ = s.db.ExecContext(ctx,
 		`UPDATE tokens SET last_seen_at = ? WHERE fingerprint = ?`,
@@ -149,12 +182,13 @@ type TokenRow struct {
 	Role        auth.Role
 	CreatedAt   time.Time
 	LastSeenAt  *time.Time
+	ExpiresAt   *time.Time
 }
 
 // List returns every token sorted by subject.
 func (s *TokenStore) List(ctx context.Context) ([]TokenRow, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT fingerprint, subject, role, created_at, last_seen_at
+		`SELECT fingerprint, subject, role, created_at, last_seen_at, expires_at
 		 FROM tokens ORDER BY subject, fingerprint`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite: tokens list: %w", err)
@@ -163,12 +197,15 @@ func (s *TokenStore) List(ctx context.Context) ([]TokenRow, error) {
 	var out []TokenRow
 	for rows.Next() {
 		var r TokenRow
-		var lastSeen sql.NullTime
-		if err := rows.Scan(&r.Fingerprint, &r.Subject, &r.Role, &r.CreatedAt, &lastSeen); err != nil {
+		var lastSeen, expiresAt sql.NullTime
+		if err := rows.Scan(&r.Fingerprint, &r.Subject, &r.Role, &r.CreatedAt, &lastSeen, &expiresAt); err != nil {
 			return nil, fmt.Errorf("sqlite: tokens list scan: %w", err)
 		}
 		if lastSeen.Valid {
 			r.LastSeenAt = &lastSeen.Time
+		}
+		if expiresAt.Valid {
+			r.ExpiresAt = &expiresAt.Time
 		}
 		out = append(out, r)
 	}

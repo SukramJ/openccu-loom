@@ -5,9 +5,11 @@ package sqlite
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
-	"strings"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/auth"
 )
@@ -17,9 +19,9 @@ func newTokenStore(t *testing.T) *TokenStore {
 	return NewTokenStore(openTestDB(t, "tokens.db"))
 }
 
-// TestTokenStoreCreateReturnsPlaintextAndFingerprint verifies that
-// Create returns a non-empty token and a fingerprint of the form
-// "…XXXXXX" (ellipsis + last 6 chars).
+// TestTokenStoreCreateReturnsPlaintextAndFingerprint verifies that Create
+// returns a non-empty token and a fingerprint that is the 12-lowercase-hex
+// prefix of the token's SHA-256 hash — never a slice of the plaintext.
 func TestTokenStoreCreateReturnsPlaintextAndFingerprint(t *testing.T) {
 	s := newTokenStore(t)
 	ctx := context.Background()
@@ -31,18 +33,24 @@ func TestTokenStoreCreateReturnsPlaintextAndFingerprint(t *testing.T) {
 	if res.Token == "" {
 		t.Fatal("Token is empty")
 	}
-	if res.Fingerprint == "" {
-		t.Fatal("Fingerprint is empty")
+	if len(res.Fingerprint) != 12 {
+		t.Fatalf("Fingerprint=%q length=%d want 12", res.Fingerprint, len(res.Fingerprint))
 	}
-	// Fingerprint must start with the ellipsis character.
-	if !strings.HasPrefix(res.Fingerprint, "…") {
-		t.Errorf("Fingerprint=%q does not start with '…'", res.Fingerprint)
+	for _, c := range res.Fingerprint {
+		isLowerHex := (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')
+		if !isLowerHex {
+			t.Fatalf("Fingerprint=%q contains non-lowercase-hex char %q", res.Fingerprint, c)
+		}
 	}
-	// The last 6 chars of the token must be the suffix after "…".
-	wantSuffix := res.Token[len(res.Token)-6:]
-	gotSuffix := res.Fingerprint[len("…"):]
-	if gotSuffix != wantSuffix {
-		t.Errorf("Fingerprint suffix %q != last 6 of token %q", gotSuffix, wantSuffix)
+	sum := sha256.Sum256([]byte(res.Token))
+	wantFingerprint := hex.EncodeToString(sum[:])[:12]
+	if res.Fingerprint != wantFingerprint {
+		t.Errorf("Fingerprint=%q want %q (sha256(token) prefix)", res.Fingerprint, wantFingerprint)
+	}
+	// Defensive: the fingerprint must not be recoverable as a slice of the
+	// plaintext token — it is derived from the hash, not the secret.
+	if len(res.Token) >= 12 && res.Fingerprint == res.Token[len(res.Token)-12:] {
+		t.Error("Fingerprint equals a plaintext token slice — must be hash-derived")
 	}
 }
 
@@ -124,6 +132,113 @@ func TestTokenStoreAuthenticateTokenEmpty(t *testing.T) {
 	}
 }
 
+// TestTokenStoreAuthenticateTokenExpiredRejected verifies that a token
+// created with an ExpiresAt in the past fails authentication with
+// [auth.ErrUnauthenticated], the same uniform outcome as an unknown token.
+func TestTokenStoreAuthenticateTokenExpiredRejected(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	past := time.Now().UTC().Add(-time.Hour)
+	res, err := s.Create(ctx, CreateInput{Subject: "grace", Role: auth.RoleViewer, ExpiresAt: &past})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := s.AuthenticateToken(ctx, res.Token); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Errorf("expired token: want ErrUnauthenticated, got %v", err)
+	}
+}
+
+// TestTokenStoreAuthenticateTokenFutureExpiryAccepted verifies that a
+// token with an ExpiresAt still in the future authenticates normally.
+func TestTokenStoreAuthenticateTokenFutureExpiryAccepted(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	future := time.Now().UTC().Add(time.Hour)
+	res, err := s.Create(ctx, CreateInput{Subject: "heidi", Role: auth.RoleOperator, ExpiresAt: &future})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	id, err := s.AuthenticateToken(ctx, res.Token)
+	if err != nil {
+		t.Fatalf("AuthenticateToken with future ExpiresAt: %v", err)
+	}
+	if id.Subject != "heidi" {
+		t.Errorf("Subject=%q want heidi", id.Subject)
+	}
+}
+
+// TestTokenStoreAuthenticateTokenNilExpiryNeverExpires verifies that a
+// token created without ExpiresAt (nil) authenticates without a time bound
+// — the historical behaviour is preserved for tokens that opt out of
+// expiry.
+func TestTokenStoreAuthenticateTokenNilExpiryNeverExpires(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	res, err := s.Create(ctx, CreateInput{Subject: "ivan", Role: auth.RoleOperator})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := s.AuthenticateToken(ctx, res.Token); err != nil {
+		t.Fatalf("AuthenticateToken with nil ExpiresAt: %v", err)
+	}
+}
+
+// TestTokenStoreDeleteBySubjectRemovesAllForSubject verifies that
+// DeleteBySubject removes every token issued to a subject, returns the
+// count removed, and leaves other subjects' tokens authenticating.
+func TestTokenStoreDeleteBySubjectRemovesAllForSubject(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	res1, err := s.Create(ctx, CreateInput{Subject: "judy", Role: auth.RoleViewer})
+	if err != nil {
+		t.Fatalf("Create judy 1: %v", err)
+	}
+	res2, err := s.Create(ctx, CreateInput{Subject: "judy", Role: auth.RoleViewer})
+	if err != nil {
+		t.Fatalf("Create judy 2: %v", err)
+	}
+	other, err := s.Create(ctx, CreateInput{Subject: "mallory", Role: auth.RoleViewer})
+	if err != nil {
+		t.Fatalf("Create mallory: %v", err)
+	}
+
+	n, err := s.DeleteBySubject(ctx, "judy")
+	if err != nil {
+		t.Fatalf("DeleteBySubject: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("DeleteBySubject count=%d want 2", n)
+	}
+	if _, err := s.AuthenticateToken(ctx, res1.Token); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Error("judy token 1 still authenticates after DeleteBySubject")
+	}
+	if _, err := s.AuthenticateToken(ctx, res2.Token); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Error("judy token 2 still authenticates after DeleteBySubject")
+	}
+	if _, err := s.AuthenticateToken(ctx, other.Token); err != nil {
+		t.Errorf("mallory token no longer authenticates after DeleteBySubject(judy): %v", err)
+	}
+}
+
+// TestTokenStoreDeleteBySubjectUnknownSubjectIsZero verifies that deleting
+// tokens for a subject with none returns a zero count and no error.
+func TestTokenStoreDeleteBySubjectUnknownSubjectIsZero(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	n, err := s.DeleteBySubject(ctx, "nobody")
+	if err != nil {
+		t.Fatalf("DeleteBySubject: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("DeleteBySubject count=%d want 0", n)
+	}
+}
+
 // TestTokenStoreDeleteHappyPath verifies that Delete by fingerprint
 // removes the token.
 func TestTokenStoreDeleteHappyPath(t *testing.T) {
@@ -188,6 +303,48 @@ func TestTokenStoreListRedacted(t *testing.T) {
 	// is not accidentally the full token.
 	if r.Fingerprint == res.Token {
 		t.Error("Fingerprint equals plaintext token — row is not redacted")
+	}
+}
+
+// TestTokenStoreListSurfacesExpiresAt verifies that List reports the
+// stored ExpiresAt for a token created with one, and nil for a token
+// created without.
+func TestTokenStoreListSurfacesExpiresAt(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	future := time.Now().UTC().Add(time.Hour).Truncate(time.Second)
+	if _, err := s.Create(ctx, CreateInput{Subject: "niaj", Role: auth.RoleViewer, ExpiresAt: &future}); err != nil {
+		t.Fatalf("Create niaj: %v", err)
+	}
+	if _, err := s.Create(ctx, CreateInput{Subject: "oscar", Role: auth.RoleViewer}); err != nil {
+		t.Fatalf("Create oscar: %v", err)
+	}
+
+	rows, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	var niaj, oscar *TokenRow
+	for i := range rows {
+		switch rows[i].Subject {
+		case "niaj":
+			niaj = &rows[i]
+		case "oscar":
+			oscar = &rows[i]
+		}
+	}
+	if niaj == nil || oscar == nil {
+		t.Fatalf("expected rows for both niaj and oscar, got %+v", rows)
+	}
+	if niaj.ExpiresAt == nil {
+		t.Fatal("niaj.ExpiresAt is nil, want the stored expiry")
+	}
+	if !niaj.ExpiresAt.Equal(future) {
+		t.Errorf("niaj.ExpiresAt=%v want %v", niaj.ExpiresAt, future)
+	}
+	if oscar.ExpiresAt != nil {
+		t.Errorf("oscar.ExpiresAt=%v want nil (no expiry set)", oscar.ExpiresAt)
 	}
 }
 

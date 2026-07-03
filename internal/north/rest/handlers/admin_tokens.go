@@ -32,17 +32,21 @@ type TokenAdminService interface {
 }
 
 // createTokenRequest is the body of POST /admin/auth/tokens.
+// ExpiresInDays, when set and positive, bounds the token's lifetime; a
+// nil or non-positive value creates a token that never expires.
 type createTokenRequest struct {
-	Subject string    `json:"subject"`
-	Role    auth.Role `json:"role"`
+	Subject       string    `json:"subject"`
+	Role          auth.Role `json:"role"`
+	ExpiresInDays *int      `json:"expires_in_days,omitempty"`
 }
 
 // createTokenResponse carries the plaintext token shown exactly once.
 type createTokenResponse struct {
-	Token       string    `json:"token"`
-	Fingerprint string    `json:"fingerprint"`
-	Subject     string    `json:"subject"`
-	Role        auth.Role `json:"role"`
+	Token       string     `json:"token"`
+	Fingerprint string     `json:"fingerprint"`
+	Subject     string     `json:"subject"`
+	Role        auth.Role  `json:"role"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 // tokenListEntry is one element of the GET /admin/auth/tokens response.
@@ -53,6 +57,7 @@ type tokenListEntry struct {
 	Role        auth.Role  `json:"role"`
 	CreatedAt   time.Time  `json:"created_at"`
 	LastSeenAt  *time.Time `json:"last_seen_at,omitempty"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 }
 
 // CreateTokenAdmin handles POST /admin/auth/tokens. It generates a fresh
@@ -78,9 +83,15 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 					"role must be one of: admin, operator, viewer"))
 			return
 		}
+		var expiresAt *time.Time
+		if body.ExpiresInDays != nil && *body.ExpiresInDays > 0 {
+			exp := time.Now().UTC().Add(time.Duration(*body.ExpiresInDays) * 24 * time.Hour)
+			expiresAt = &exp
+		}
 		res, err := svc.Create(r.Context(), sqlite.CreateInput{
-			Subject: body.Subject,
-			Role:    body.Role,
+			Subject:   body.Subject,
+			Role:      body.Role,
+			ExpiresAt: expiresAt,
 		})
 		if err != nil {
 			problem.Write(w, http.StatusInternalServerError,
@@ -100,6 +111,7 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			Fingerprint: res.Fingerprint,
 			Subject:     body.Subject,
 			Role:        body.Role,
+			ExpiresAt:   expiresAt,
 		})
 	}
 }
@@ -155,6 +167,7 @@ func ListTokensV2(svc TokenAdminService) http.HandlerFunc {
 				Role:        row.Role,
 				CreatedAt:   row.CreatedAt,
 				LastSeenAt:  row.LastSeenAt,
+				ExpiresAt:   row.ExpiresAt,
 			})
 		}
 		JSON(w, http.StatusOK, out)

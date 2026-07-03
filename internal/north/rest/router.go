@@ -141,6 +141,15 @@ type Deps struct {
 	// PATCH /auth/me/password. Nil disables the route.
 	SelfPassword handlers.SelfPasswordService
 
+	// SessionRevoker invalidates a subject's server-side sessions when a
+	// credential changes (password reset, role change, deletion). Nil skips
+	// the revocation hook; wired to the *auth.SessionStore in production.
+	SessionRevoker handlers.SessionRevoker
+
+	// TokenPurger deletes a subject's bearer tokens on account deletion.
+	// Nil skips the purge; wired to the *sqlite.TokenStore in production.
+	TokenPurger handlers.TokenPurger
+
 	// Preferences backs per-user UI state (favorites, dashboard) at
 	// /me/preferences/{key}. Nil disables those routes.
 	Preferences handlers.UserPreferencesService
@@ -580,7 +589,7 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			// Any authenticated role; the handler verifies the current
 			// password and preserves the role.
 			if d.SelfPassword != nil {
-				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder))
+				pr.Patch("/auth/me/password", handlers.ChangeOwnPassword(d.SelfPassword, d.AuditRecorder, d.SessionRevoker))
 			}
 			// Per-user preferences (favorites / dashboard). Any
 			// authenticated role; scoped to the caller's subject.
@@ -887,8 +896,8 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			if d.UserAdmin != nil {
 				pr.With(admin).Get("/users", handlers.ListUsersV2(d.UserAdmin))
 				pr.With(admin).Post("/users", handlers.CreateUser(d.UserAdmin, d.AuditRecorder))
-				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder))
-				pr.With(admin).Delete("/users/{subject}", handlers.DeleteUser(d.UserAdmin, d.AuditRecorder))
+				pr.With(admin).Patch("/users/{subject}", handlers.UpdateUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker))
+				pr.With(admin).Delete("/users/{subject}", handlers.DeleteUser(d.UserAdmin, d.AuditRecorder, d.SessionRevoker, d.TokenPurger))
 			}
 			if d.TokenAdmin != nil {
 				pr.With(admin).Get("/auth/tokens/v2", handlers.ListTokensV2(d.TokenAdmin))

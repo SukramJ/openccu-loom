@@ -39,7 +39,12 @@ type changeOwnPasswordRequest struct {
 //
 // Accounts without a local password (OIDC / bearer-token identities)
 // have no row to verify against and receive 409.
-func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder) http.HandlerFunc {
+//
+// On a successful change every *other* session for the caller is revoked
+// (the caller's own session is preserved) so a change made in response to
+// a suspected compromise immediately invalidates any parallel stolen
+// session instead of letting it live out the session TTL.
+func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder, revoker SessionRevoker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -86,6 +91,13 @@ func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder) http.Handler
 			problem.Write(w, http.StatusInternalServerError,
 				problem.New(problem.TypeInternal, r, "Password change failed", err.Error()))
 			return
+		}
+		if revoker != nil {
+			keepSID := ""
+			if c, err := r.Cookie(auth.SessionCookieName); err == nil {
+				keepSID = c.Value
+			}
+			revoker.RevokeBySubjectExcept(ident.Subject, keepSID)
 		}
 		if rec != nil {
 			rec.Record(audit.Entry{

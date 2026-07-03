@@ -722,6 +722,10 @@
       "name": "DeviceProfile",
       "values": [
         {
+          "go_name": "DeviceProfileIPAccessPermission",
+          "wire_value": "IPAccessPermission"
+        },
+        {
           "go_name": "DeviceProfileIPButtonLock",
           "wire_value": "IPButtonLock"
         },
@@ -1512,6 +1516,10 @@
     {
       "name": "Parameter",
       "values": [
+        {
+          "go_name": "ParameterAccessAuthorization",
+          "wire_value": "ACCESS_AUTHORIZATION"
+        },
         {
           "go_name": "ParameterAcousticAlarmActive",
           "wire_value": "ACOUSTIC_ALARM_ACTIVE"

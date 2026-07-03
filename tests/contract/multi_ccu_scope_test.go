@@ -512,6 +512,7 @@ func TestStoreMethodsHaveCentralNameAsFirstNonCtxParam(t *testing.T) {
 		// via [config.Config.Centrals]. See Wave-B SQL migration 017.
 		"UserStore:Delete":            "reason: users table is daemon-global; subject is the natural key",
 		"TokenStore:Delete":           "reason: tokens table is daemon-global; fingerprint is the natural key",
+		"TokenStore:DeleteBySubject":  "reason: tokens table is daemon-global; subject is the natural key, not a CCU",
 		"UserPreferencesStore:Get":    "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
 		"UserPreferencesStore:Delete": "reason: user_preferences is per-user daemon-global UI state; subject+key is the natural key, not a CCU",
 		"ConfigSectionStore:Get":      "reason: config_sections is daemon-global; section is the natural key",
