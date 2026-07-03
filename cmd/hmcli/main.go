@@ -95,10 +95,12 @@ func newRootCmd(stdout, stderr io.Writer) *cobra.Command {
 
 	// Declarative shared connection flags. The command groups below re-parse
 	// them from their own flag.FlagSet, so these only shape `--help` output.
-	root.PersistentFlags().String("host", "http://localhost:8119", "daemon REST base URL")
-	root.PersistentFlags().String("token", "", "API bearer token (Authorization: Bearer)")
+	root.PersistentFlags().String("host", defaultHost, "daemon REST base URL")
+	root.PersistentFlags().String("token", "", "API bearer token (Authorization: Bearer; or set "+envToken+")")
 	root.PersistentFlags().String("user", "", "basic-auth username (alternative to --token)")
-	root.PersistentFlags().String("password", "", "basic-auth password")
+	root.PersistentFlags().String("password", "", "basic-auth password (or set "+envPassword+")")
+	root.PersistentFlags().String("cacert", "", "path to a PEM CA bundle to trust for TLS")
+	root.PersistentFlags().Bool("insecure", false, "skip TLS certificate verification (dangerous; off by default)")
 	root.PersistentFlags().Duration("timeout", 0, "request timeout")
 
 	root.AddCommand(

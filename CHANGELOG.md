@@ -40,6 +40,34 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     unknown-user login path (anti-enumeration timing); and a fail-fast guard
     that refuses to serve REST with no auth middleware wired.
 
+- **`hmcli` admin-CLI hardening from a code-vs-code security audit.** Five
+  issues found and closed across every command group (`devices`, `sysvar`,
+  `program`, `paramset`, `events`, `export-def`, `cache`):
+  - **Off-argv credentials.** A bearer token / basic-auth password no longer has
+    to be passed via `--token` / `--password` (where it leaks into shell history
+    and the process table). Both now fall back to the `OPENCCU_LOOM_TOKEN` /
+    `OPENCCU_LOOM_PASSWORD` environment variables, and a missing basic-auth
+    password is prompted for on an interactive terminal. The flags remain a
+    last-resort override; the token is never logged.
+  - **User arguments are URL-escaped.** Device addresses, sysvar/program IDs,
+    paramset keys, and query values are now `url.PathEscape`/`url.QueryEscape`-d
+    before being spliced into the REST path/query, so a `/` (or other special
+    character) can no longer inject extra path segments.
+  - **Terminal-output sanitisation.** Server-controlled strings (device
+    name/model, sysvar name/value, event type/topic/payload, …) are stripped of
+    C0/C1 control bytes and ANSI escape sequences before being printed to a
+    human-readable table, closing a terminal-injection vector. JSON output is
+    unchanged (already escaped).
+  - **`events tail` distinguishes clean from abnormal stream ends.** A clean
+    server close still exits 0; an abnormal drop (daemon death, network loss,
+    abrupt close) now triggers a bounded auto-reconnect with exponential backoff
+    and, only after exhausting the retry budget, exits non-zero — a lost stream
+    is no longer silently reported as success.
+  - **TLS trust controls.** New `--cacert` (trust a custom PEM CA bundle) and
+    `--insecure` (explicit opt-out of verification; **off** by default —
+    verification is never weakened implicitly) flags, plus a warning when
+    credentials would be sent over plaintext `http://` to a non-loopback host.
+
 ### Added
 
 - **Optional API-token expiry.** `POST /auth/tokens/v2` accepts

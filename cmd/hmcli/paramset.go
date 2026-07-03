@@ -10,32 +10,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"text/tabwriter"
-	"time"
 )
-
-type paramsetFlags struct {
-	host     string
-	token    string
-	user     string
-	password string
-	timeout  time.Duration
-	jsonOut  bool
-}
-
-func (f *paramsetFlags) bindTo(fs *flag.FlagSet) {
-	fs.StringVar(&f.host, "host", "http://localhost:8119", "daemon REST base URL")
-	fs.StringVar(&f.token, "token", "", "API bearer token")
-	fs.StringVar(&f.user, "user", "", "basic-auth username")
-	fs.StringVar(&f.password, "password", "", "basic-auth password")
-	fs.DurationVar(&f.timeout, "timeout", 60*time.Second, "request timeout")
-	fs.BoolVar(&f.jsonOut, "json", false, "emit raw JSON instead of a human-readable table")
-}
-
-func (f *paramsetFlags) client() *daemonClient {
-	return newDaemonClient(f.host, f.token, f.user, f.password, f.timeout)
-}
 
 func cmdParamset(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -60,8 +38,8 @@ var validParamsetKeys = map[string]bool{
 func cmdParamsetGet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("paramset get", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f paramsetFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -74,11 +52,16 @@ func cmdParamsetGet(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("paramset get: invalid KEY %q (must be VALUES, MASTER, or LINK)", key)
 	}
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	var params map[string]any
-	if err := f.client().getJSON(ctx, "/api/v1/devices/"+addr+"/paramsets/"+key, &params); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/devices/"+url.PathEscape(addr)+"/paramsets/"+url.PathEscape(key), &params); err != nil {
 		return err
 	}
 
@@ -95,7 +78,7 @@ func cmdParamsetGet(args []string, stdout, stderr io.Writer) error {
 	tw := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
 	_, _ = fmt.Fprintln(tw, "PARAM\tVALUE")
 	for _, k := range keys {
-		_, _ = fmt.Fprintf(tw, "%s\t%v\n", k, params[k])
+		_, _ = fmt.Fprintf(tw, "%s\t%s\n", sanitizeForTerminal(k), sanitizeValue(params[k]))
 	}
 	return tw.Flush()
 }
@@ -103,8 +86,8 @@ func cmdParamsetGet(args []string, stdout, stderr io.Writer) error {
 func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("paramset set", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f paramsetFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -117,11 +100,16 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("paramset set: invalid KEY %q (must be VALUES, MASTER, or LINK)", key)
 	}
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	body := map[string]any{param: coerceValue(rawVal)}
-	if err := f.client().sendJSON(ctx, http.MethodPut, "/api/v1/devices/"+addr+"/paramsets/"+key, body, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPut, "/api/v1/devices/"+url.PathEscape(addr)+"/paramsets/"+url.PathEscape(key), body, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")

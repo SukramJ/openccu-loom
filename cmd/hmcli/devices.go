@@ -11,10 +11,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 )
 
 // ─── local DTO types ──────────────────────────────────────────────────────────
@@ -67,32 +67,6 @@ type setValueRequest struct {
 	Priority string `json:"priority,omitempty"`
 }
 
-// ─── shared flags ─────────────────────────────────────────────────────────────
-
-// devicesFlags holds the common connection flags shared by all devices sub-ops.
-type devicesFlags struct {
-	host     string
-	token    string
-	user     string
-	password string
-	timeout  time.Duration
-	jsonOut  bool
-}
-
-// bindTo registers the flags on fs and returns a pointer to the populated struct.
-func (f *devicesFlags) bindTo(fs *flag.FlagSet) {
-	fs.StringVar(&f.host, "host", "http://localhost:8119", "daemon REST base URL")
-	fs.StringVar(&f.token, "token", "", "API bearer token")
-	fs.StringVar(&f.user, "user", "", "basic-auth username")
-	fs.StringVar(&f.password, "password", "", "basic-auth password")
-	fs.DurationVar(&f.timeout, "timeout", 60*time.Second, "request timeout")
-	fs.BoolVar(&f.jsonOut, "json", false, "emit raw JSON instead of a human-readable table")
-}
-
-func (f *devicesFlags) client() *daemonClient {
-	return newDaemonClient(f.host, f.token, f.user, f.password, f.timeout)
-}
-
 // ─── dispatcher ───────────────────────────────────────────────────────────────
 
 // cmdDevices dispatches `devices <op> [args…]` to the appropriate handler.
@@ -119,9 +93,14 @@ func cmdDevices(args []string, stdout, stderr io.Writer) error {
 func cmdDevicesList(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("devices list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f devicesFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client, err := f.client(stderr)
+	if err != nil {
 		return err
 	}
 
@@ -129,7 +108,7 @@ func cmdDevicesList(args []string, stdout, stderr io.Writer) error {
 	defer cancel()
 
 	var resp deviceListResponse
-	if err := f.client().getJSON(ctx, "/api/v1/devices", &resp); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/devices", &resp); err != nil {
 		return err
 	}
 
@@ -166,10 +145,13 @@ func printDeviceList(w io.Writer, items []deviceSummary, total int) error {
 		}
 		if multiCentral {
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n",
-				d.Address, d.Model, d.Name, d.Interface, d.Central, avail)
+				sanitizeForTerminal(d.Address), sanitizeForTerminal(d.Model),
+				sanitizeForTerminal(d.Name), sanitizeForTerminal(d.Interface),
+				sanitizeForTerminal(d.Central), avail)
 		} else {
 			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n",
-				d.Address, d.Model, d.Name, d.Interface, avail)
+				sanitizeForTerminal(d.Address), sanitizeForTerminal(d.Model),
+				sanitizeForTerminal(d.Name), sanitizeForTerminal(d.Interface), avail)
 		}
 	}
 	if err := tw.Flush(); err != nil {
@@ -184,8 +166,8 @@ func printDeviceList(w io.Writer, items []deviceSummary, total int) error {
 func cmdDevicesGet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("devices get", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f devicesFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -195,11 +177,16 @@ func cmdDevicesGet(args []string, stdout, stderr io.Writer) error {
 	}
 	addr := rest[0]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	var detail deviceDetail
-	if err := f.client().getJSON(ctx, "/api/v1/devices/"+addr, &detail); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/devices/"+url.PathEscape(addr), &detail); err != nil {
 		return err
 	}
 
@@ -214,12 +201,12 @@ func printDeviceDetail(w io.Writer, d deviceDetail) error {
 	if !d.Available {
 		avail = "no"
 	}
-	_, _ = fmt.Fprintf(w, "Address:   %s\n", d.Address)
-	_, _ = fmt.Fprintf(w, "Model:     %s\n", d.Model)
-	_, _ = fmt.Fprintf(w, "Name:      %s\n", d.Name)
-	_, _ = fmt.Fprintf(w, "Interface: %s\n", d.Interface)
+	_, _ = fmt.Fprintf(w, "Address:   %s\n", sanitizeForTerminal(d.Address))
+	_, _ = fmt.Fprintf(w, "Model:     %s\n", sanitizeForTerminal(d.Model))
+	_, _ = fmt.Fprintf(w, "Name:      %s\n", sanitizeForTerminal(d.Name))
+	_, _ = fmt.Fprintf(w, "Interface: %s\n", sanitizeForTerminal(d.Interface))
 	if d.Central != "" {
-		_, _ = fmt.Fprintf(w, "Central:   %s\n", d.Central)
+		_, _ = fmt.Fprintf(w, "Central:   %s\n", sanitizeForTerminal(d.Central))
 	}
 	_, _ = fmt.Fprintf(w, "Available: %s\n", avail)
 	if len(d.Channels) > 0 {
@@ -227,7 +214,8 @@ func printDeviceDetail(w io.Writer, d deviceDetail) error {
 		tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 		_, _ = fmt.Fprintln(tw, "  NO\tADDRESS\tTYPE\tNAME")
 		for _, ch := range d.Channels {
-			_, _ = fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\n", ch.Number, ch.Address, ch.Type, ch.Name)
+			_, _ = fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\n", ch.Number,
+				sanitizeForTerminal(ch.Address), sanitizeForTerminal(ch.Type), sanitizeForTerminal(ch.Name))
 		}
 		if err := tw.Flush(); err != nil {
 			return fmt.Errorf("devices get: flush table: %w", err)
@@ -241,8 +229,8 @@ func printDeviceDetail(w io.Writer, d deviceDetail) error {
 func cmdDevicesGetValue(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("devices get-value", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f devicesFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -252,19 +240,25 @@ func cmdDevicesGetValue(args []string, stdout, stderr io.Writer) error {
 	}
 	addr, ch, param := rest[0], rest[1], rest[2]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
-	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s", addr, ch, param)
+	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s",
+		url.PathEscape(addr), url.PathEscape(ch), url.PathEscape(param))
 	var dp dataPointSummary
-	if err := f.client().getJSON(ctx, path, &dp); err != nil {
+	if err := client.getJSON(ctx, path, &dp); err != nil {
 		return err
 	}
 
 	if f.jsonOut {
 		return writeJSON(stdout, dp)
 	}
-	_, _ = fmt.Fprintf(stdout, "%v\n", dp.Value)
+	_, _ = fmt.Fprintf(stdout, "%s\n", sanitizeValue(dp.Value))
 	return nil
 }
 
@@ -273,8 +267,8 @@ func cmdDevicesGetValue(args []string, stdout, stderr io.Writer) error {
 func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("devices set", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f devicesFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	priority := fs.String("priority", "", "command priority (e.g. normal, high)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -285,6 +279,11 @@ func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 	}
 	addr, ch, param, rawVal := rest[0], rest[1], rest[2], rest[3]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
@@ -292,8 +291,9 @@ func cmdDevicesSet(args []string, stdout, stderr io.Writer) error {
 		Value:    coerceValue(rawVal),
 		Priority: *priority,
 	}
-	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s/value", addr, ch, param)
-	if err := f.client().sendJSON(ctx, http.MethodPut, path, body, nil); err != nil {
+	path := fmt.Sprintf("/api/v1/devices/%s/channels/%s/data-points/%s/value",
+		url.PathEscape(addr), url.PathEscape(ch), url.PathEscape(param))
+	if err := client.sendJSON(ctx, http.MethodPut, path, body, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")

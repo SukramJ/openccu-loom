@@ -26,12 +26,14 @@ import (
 func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("export-def", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	host := fs.String("host", "http://localhost:8119", "daemon REST base URL")
+	host := fs.String("host", defaultHost, "daemon REST base URL")
 	address := fs.String("address", "", "device address to export (required)")
 	out := fs.String("out", "", `output file (default: "<model>.zip"; "-" writes to stdout)`)
-	token := fs.String("token", "", "API token (sent as Authorization: Bearer)")
+	token := fs.String("token", "", "API token (sent as Authorization: Bearer; or set "+envToken+")")
 	user := fs.String("user", "", "basic-auth username (alternative to -token)")
-	password := fs.String("password", "", "basic-auth password")
+	password := fs.String("password", "", "basic-auth password (or set "+envPassword+")")
+	cacert := fs.String("cacert", "", "path to a PEM CA bundle to trust for TLS")
+	insecure := fs.Bool("insecure", false, "skip TLS certificate verification (dangerous; off by default)")
 	timeout := fs.Duration("timeout", 60*time.Second, "request timeout")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -40,19 +42,32 @@ func cmdExportDef(args []string, stdout, stderr io.Writer) error {
 		return errors.New("export-def: -address is required")
 	}
 
+	// Fill credentials from the environment / a prompt so a token never has to
+	// appear on the command line, then warn if they would cross a plaintext link.
+	authToken, authUser, authPassword := resolveCredentials(*token, *user, *password, os.Stdin, stderr)
+	warnIfPlaintextCredentials(*host, authToken, authUser, stderr)
+
+	tlsCfg, err := buildTLSConfig(*cacert, *insecure)
+	if err != nil {
+		return fmt.Errorf("export-def: %w", err)
+	}
+
 	endpoint := strings.TrimRight(*host, "/") + "/api/v1/devices/" + url.PathEscape(*address) + "/export-definition"
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return fmt.Errorf("export-def: build request: %w", err)
 	}
 	switch {
-	case *token != "":
-		req.Header.Set("Authorization", "Bearer "+*token)
-	case *user != "":
-		req.SetBasicAuth(*user, *password)
+	case authToken != "":
+		req.Header.Set("Authorization", "Bearer "+authToken)
+	case authUser != "":
+		req.SetBasicAuth(authUser, authPassword)
 	}
 
 	client := &http.Client{Timeout: *timeout}
+	if tlsCfg != nil {
+		client.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("export-def: request failed: %w", err)

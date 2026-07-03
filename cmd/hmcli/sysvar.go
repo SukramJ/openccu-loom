@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"text/tabwriter"
-	"time"
 )
 
 type sysvarSummary struct {
@@ -29,28 +29,6 @@ type sysvarSummary struct {
 
 type sysvarSetRequest struct {
 	Value any `json:"value"`
-}
-
-type sysvarFlags struct {
-	host     string
-	token    string
-	user     string
-	password string
-	timeout  time.Duration
-	jsonOut  bool
-}
-
-func (f *sysvarFlags) bindTo(fs *flag.FlagSet) {
-	fs.StringVar(&f.host, "host", "http://localhost:8119", "daemon REST base URL")
-	fs.StringVar(&f.token, "token", "", "API bearer token")
-	fs.StringVar(&f.user, "user", "", "basic-auth username")
-	fs.StringVar(&f.password, "password", "", "basic-auth password")
-	fs.DurationVar(&f.timeout, "timeout", 60*time.Second, "request timeout")
-	fs.BoolVar(&f.jsonOut, "json", false, "emit raw JSON instead of a human-readable table")
-}
-
-func (f *sysvarFlags) client() *daemonClient {
-	return newDaemonClient(f.host, f.token, f.user, f.password, f.timeout)
 }
 
 func cmdSysvar(args []string, stdout, stderr io.Writer) error {
@@ -74,9 +52,14 @@ func cmdSysvar(args []string, stdout, stderr io.Writer) error {
 func cmdSysvarList(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("sysvar list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f sysvarFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client, err := f.client(stderr)
+	if err != nil {
 		return err
 	}
 
@@ -84,7 +67,7 @@ func cmdSysvarList(args []string, stdout, stderr io.Writer) error {
 	defer cancel()
 
 	var items []sysvarSummary
-	if err := f.client().getJSON(ctx, "/api/v1/sysvars", &items); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/sysvars", &items); err != nil {
 		return err
 	}
 
@@ -112,9 +95,12 @@ func cmdSysvarList(args []string, stdout, stderr io.Writer) error {
 	for i := range items {
 		s := &items[i]
 		if multiCentral {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%v\t%s\n", s.Name, s.ValueType, s.Value, s.Central)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+				sanitizeForTerminal(s.Name), sanitizeForTerminal(s.ValueType),
+				sanitizeValue(s.Value), sanitizeForTerminal(s.Central))
 		} else {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%v\n", s.Name, s.ValueType, s.Value)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n",
+				sanitizeForTerminal(s.Name), sanitizeForTerminal(s.ValueType), sanitizeValue(s.Value))
 		}
 	}
 	if err := tw.Flush(); err != nil {
@@ -127,8 +113,8 @@ func cmdSysvarList(args []string, stdout, stderr io.Writer) error {
 func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("sysvar get", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f sysvarFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -138,11 +124,16 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 	}
 	name := rest[0]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	var sv sysvarSummary
-	if err := f.client().getJSON(ctx, "/api/v1/sysvars/"+name, &sv); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/sysvars/"+url.PathEscape(name), &sv); err != nil {
 		return err
 	}
 
@@ -150,14 +141,14 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 		return writeJSON(stdout, sv)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "Name:     %s\n", sv.Name)
-	_, _ = fmt.Fprintf(stdout, "Type:     %s\n", sv.ValueType)
-	_, _ = fmt.Fprintf(stdout, "Value:    %v\n", sv.Value)
+	_, _ = fmt.Fprintf(stdout, "Name:     %s\n", sanitizeForTerminal(sv.Name))
+	_, _ = fmt.Fprintf(stdout, "Type:     %s\n", sanitizeForTerminal(sv.ValueType))
+	_, _ = fmt.Fprintf(stdout, "Value:    %s\n", sanitizeValue(sv.Value))
 	if sv.Unit != "" {
-		_, _ = fmt.Fprintf(stdout, "Unit:     %s\n", sv.Unit)
+		_, _ = fmt.Fprintf(stdout, "Unit:     %s\n", sanitizeForTerminal(sv.Unit))
 	}
 	if sv.Central != "" {
-		_, _ = fmt.Fprintf(stdout, "Central:  %s\n", sv.Central)
+		_, _ = fmt.Fprintf(stdout, "Central:  %s\n", sanitizeForTerminal(sv.Central))
 	}
 	obs := "no"
 	if sv.Observed {
@@ -170,8 +161,8 @@ func cmdSysvarGet(args []string, stdout, stderr io.Writer) error {
 func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("sysvar set", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f sysvarFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -181,11 +172,16 @@ func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 	}
 	name, rawVal := rest[0], rest[1]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	body := sysvarSetRequest{Value: coerceValue(rawVal)}
-	if err := f.client().sendJSON(ctx, http.MethodPut, "/api/v1/sysvars/"+name, body, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPut, "/api/v1/sysvars/"+url.PathEscape(name), body, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")
@@ -195,11 +191,16 @@ func cmdSysvarSet(args []string, stdout, stderr io.Writer) error {
 func cmdSysvarFetch(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("sysvar fetch", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f sysvarFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	var central string
 	fs.StringVar(&central, "central", "", "limit fetch to this central")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client, err := f.client(stderr)
+	if err != nil {
 		return err
 	}
 
@@ -208,9 +209,9 @@ func cmdSysvarFetch(args []string, stdout, stderr io.Writer) error {
 
 	path := "/api/v1/sysvars/fetch"
 	if central != "" {
-		path += "?central=" + central
+		path += "?" + url.Values{"central": {central}}.Encode()
 	}
-	if err := f.client().sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPost, path, nil, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")

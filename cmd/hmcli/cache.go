@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -53,8 +54,10 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	iface := fs.String("interface", "", "interface name (required for scope=interface/device)")
 	device := fs.String("device", "", "device address (required for scope=device)")
 	offline := fs.Bool("offline", false, "clear persisted rows directly against SQLite instead of calling the daemon")
-	url := fs.String("url", "http://localhost:8119", "daemon base URL (online mode)")
-	token := fs.String("token", "", "API bearer token (online mode)")
+	url := fs.String("url", defaultHost, "daemon base URL (online mode)")
+	token := fs.String("token", "", "API bearer token (online mode; or set "+envToken+")")
+	cacert := fs.String("cacert", "", "path to a PEM CA bundle to trust for TLS (online mode)")
+	insecure := fs.Bool("insecure", false, "skip TLS certificate verification (online mode; dangerous, off by default)")
 	cfgPath := fs.String("config", "", "config file path (offline mode; required for scope=global/central)")
 	dbPath := fs.String("db", "", "override DB path (offline mode; skips the config DataDir lookup)")
 
@@ -101,7 +104,7 @@ func cmdCacheClear(args []string, stdout, stderr io.Writer) error {
 	if *offline {
 		return runCacheClearOffline(kind, *central, *iface, *device, *cfgPath, *dbPath, stdout)
 	}
-	return runCacheClearOnline(kind, *central, *iface, *device, *url, *token, stdout, stderr)
+	return runCacheClearOnline(kind, *central, *iface, *device, *url, *token, *cacert, *insecure, stdout, stderr)
 }
 
 // clearSummary is the human-facing roll-up the CLI prints after a clear. It is
@@ -122,9 +125,20 @@ type clearSummary struct {
 // stderr and returns a non-nil error so the process exits non-zero.
 func runCacheClearOnline(
 	kind cachereset.ScopeKind,
-	central, iface, device, baseURL, token string,
+	central, iface, device, baseURL, token, cacert string,
+	insecure bool,
 	stdout, stderr io.Writer,
 ) error {
+	// Fill the token from the environment / a prompt so it need not appear on
+	// the command line, then warn if it would cross a plaintext link.
+	token, _, _ = resolveCredentials(token, "", "", os.Stdin, stderr)
+	warnIfPlaintextCredentials(baseURL, token, "", stderr)
+
+	tlsCfg, err := buildTLSConfig(cacert, insecure)
+	if err != nil {
+		return fmt.Errorf("cache clear: %w", err)
+	}
+
 	// The handler ignores qualifiers above the scope level, so sending all four
 	// (empty strings included) keeps the body shape uniform.
 	body := map[string]string{
@@ -152,7 +166,11 @@ func runCacheClearOnline(
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{}
+	if tlsCfg != nil {
+		client.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("cache clear: %w", err)
 	}
