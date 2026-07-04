@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Warm-boot descriptor cache now covers the whole fleet.** Hydration
+  stores every fetched paramset description in the registry (and, via
+  the persistence sink, in SQLite) instead of only the per-channel
+  reload path — after one boot against a reachable CCU, all VALUES and
+  MASTER descriptors survive restarts. Entity naming is unaffected:
+  verified by a byte-identical model snapshot (the naming source
+  counts materialised sibling data points and never consulted the
+  registry index, which has no production reader).
+
 ### Removed
 
 - **Masked `loom:reachable` annotations resolved.** The whitelist audit
