@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-07-04
+
 ### Fixed
 
 - **Matter: bridge could not be commissioned after a restart even with devices

@@ -108,7 +108,6 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
-	client := f.client()
 	body := map[string]any{param: coerceValue(rawVal)}
 	headers := map[string]string(nil)
 	// MASTER and LINK writes are configuration changes the daemon gates

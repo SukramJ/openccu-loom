@@ -1,5 +1,30 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.25.0
+
+- **Security & robustness hardening across the whole northbound surface.** A
+  deep code-vs-code audit closed a wave of issues: WebSocket write commands now
+  enforce the same roles as REST, the audit trail and CCU passwords are no
+  longer exposed to non-admin users, API tokens can be given an expiry, OIDC
+  login-CSRF is closed, and session cookies are marked Secure behind TLS.
+- **Matter pairing now works reliably.** The bridge reassembles its topology
+  automatically once the CCU devices finish loading, so commissioning succeeds
+  after a restart without having to toggle a device exposure first. MASTER
+  configuration writes are enforced against the edit lock server-side.
+- **Backups are encrypted at rest.** Archives are sealed with the data-dir key
+  (mode 0600), so a stolen backup no longer leaks live session tokens or
+  credentials; restore is atomic and rejects path-traversal entries. Note:
+  restoring onto a fresh host needs the `OPENCCU_LOOM_SECRET_KEY` (or `secret.key`
+  copied out of band).
+- **Correct energy & history figures.** The measurement rollup was rebuilt so
+  “energy today” is populated and totals no longer under-count, and retention no
+  longer corrupts finalized buckets.
+- **Steadier CCU communication.** A duty-cycle stall no longer blocks unrelated
+  reads, reconnects are staggered, and a slow MQTT broker no longer freezes
+  event delivery.
+- Plus `hmcli` and config-pipeline hardening and many smaller fixes — see the
+  project CHANGELOG for the full list.
+
 ## 0.24.0
 
 - **More Matter parity and hardening.** A second, independent code-vs-code
