@@ -118,7 +118,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
-	bcaller := client.NewBackendCaller(ic, 0)
+	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backends.KindCUxD, backends.FactoryInput{
 		BINRPC:    bcaller,

@@ -612,7 +612,7 @@ func wireInterface(
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
-	bcaller := client.NewBackendCaller(ic, 0 /* Low priority — backends override per method */)
+	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backendKind, backends.FactoryInput{
 		XMLRPC:    bcaller,

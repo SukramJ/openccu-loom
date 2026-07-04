@@ -14,6 +14,22 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// TestBackendCallerPriorityIsNonCritical guards the zero-value trap: the
+// backend wire path must not run at CommandPriorityCritical (the enum's zero
+// value), because Critical bypasses the throttle's bounded queue + pacing.
+// The wiring passes CommandPriorityLow explicitly; a bare 0 would silently
+// disable the throttle for every read and write.
+func TestBackendCallerPriorityIsNonCritical(t *testing.T) {
+	t.Parallel()
+	bc := NewBackendCaller(nil, hmenum.CommandPriorityLow)
+	if bc.Priority() != hmenum.CommandPriorityLow {
+		t.Fatalf("priority = %v, want Low", bc.Priority())
+	}
+	if bc.Priority() == hmenum.CommandPriorityCritical {
+		t.Fatal("backend wire path must not default to Critical (bypasses throttle)")
+	}
+}
+
 // TestCoalesceKeyForIsValueInclusive locks in that the setValue coalesce key
 // includes the value. The wire layout is [address, parameter, value], so two
 // concurrent writes to the same data point with DIFFERENT values must produce

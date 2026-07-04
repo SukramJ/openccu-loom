@@ -19,9 +19,13 @@ type BackendCaller struct {
 	priority hmenum.CommandPriority
 }
 
-// NewBackendCaller constructs an adapter with the given default
-// priority. Most backend operations use `Low`; commands (SetValue)
-// override per call.
+// NewBackendCaller constructs an adapter that drives every backend call
+// at priority. Pass CommandPriorityLow for the normal wire path so reads
+// and writes are subject to the throttle's bounded queue and pacing;
+// reserve CommandPriorityCritical for paths that must bypass the queue
+// (init/ping already bypass the throttle at a lower layer). The zero value
+// is Critical, so an explicit priority is required — passing a bare 0
+// silently runs the whole path at Critical.
 func NewBackendCaller(c *InterfaceClient, priority hmenum.CommandPriority) *BackendCaller {
 	return &BackendCaller{client: c, priority: priority}
 }
