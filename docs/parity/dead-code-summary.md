@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 74d4ce6
-HEAD: 74d4ce6
+Generated: 14ba348
+HEAD: 14ba348
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24023 |
-| Reachable | 3786 |
-| Whitelisted | 17306 |
-| **Unreachable** | **2931** |
+| Total Exported | 24041 |
+| Reachable | 3791 |
+| Whitelisted | 17370 |
+| **Unreachable** | **2880** |
 
 ## Top-20 Packages by Dead Code
 
@@ -18,10 +18,10 @@ HEAD: 74d4ce6
 |---|---|---|---|
 | internal/central/adapter | 66 | 88 | 46 |
 | internal/model/naming | 25 | 2 | 4 |
-| internal/model/custom | 23 | 53 | 10 |
+| internal/model/custom | 23 | 49 | 10 |
+| internal/north/mqtt | 20 | 80 | 2 |
 | internal/client/backends | 19 | 37 | 4 |
-| internal/north/mqtt | 19 | 100 | 2 |
-| internal/store/sqlite | 19 | 62 | 22 |
+| internal/store/sqlite | 19 | 60 | 22 |
 | internal/auth | 14 | 24 | 4 |
 | internal/metrics | 12 | 60 | 2 |
 | internal/payload | 12 | 232 | 6 |
@@ -98,10 +98,10 @@ HEAD: 74d4ce6
 |---|---|---|---|
 | internal/central/adapter | 66 | 88 | 46 |
 | internal/model/naming | 25 | 2 | 4 |
-| internal/model/custom | 23 | 53 | 10 |
+| internal/model/custom | 23 | 49 | 10 |
+| internal/north/mqtt | 20 | 80 | 2 |
 | internal/client/backends | 19 | 37 | 4 |
-| internal/north/mqtt | 19 | 100 | 2 |
-| internal/store/sqlite | 19 | 62 | 22 |
+| internal/store/sqlite | 19 | 60 | 22 |
 | internal/auth | 14 | 24 | 4 |
 | internal/metrics | 12 | 60 | 2 |
 | internal/payload | 12 | 232 | 6 |
@@ -116,7 +116,7 @@ HEAD: 74d4ce6
 | internal/north/matter/tlv | 8 | 11 | 26 |
 | internal/metrics/wiring | 7 | 7 | 0 |
 | internal/routingkey | 7 | 0 | 2 |
-| pkg/hmerr | 7 | 7 | 24 |
+| pkg/hmerr | 7 | 5 | 24 |
 | internal/ccudata | 6 | 31 | 4 |
 | internal/client/transport/xmlrpc | 6 | 21 | 0 |
 | internal/model/device | 6 | 43 | 12 |
@@ -137,7 +137,7 @@ HEAD: 74d4ce6
 | internal/health | 2 | 16 | 0 |
 | internal/history | 2 | 12 | 0 |
 | internal/model/custom/cdpkind | 2 | 0 | 0 |
-| internal/model/custom/light | 2 | 22 | 22 |
+| internal/model/custom/light | 2 | 20 | 22 |
 | internal/model/device/definitionexport | 2 | 6 | 2 |
 | internal/model/optimistic | 2 | 6 | 0 |
 | internal/north/matter/bootid | 2 | 0 | 0 |
@@ -149,8 +149,8 @@ HEAD: 74d4ce6
 | pkg/hmevent | 2 | 5 | 0 |
 | internal/build | 1 | 0 | 8 |
 | internal/central/cachereset | 1 | 20 | 0 |
-| internal/client/transport/jsonrpc | 1 | 13 | 0 |
-| internal/model/custom/switch | 1 | 2 | 0 |
+| internal/client/transport/jsonrpc | 1 | 11 | 0 |
+| internal/model/custom/switch | 1 | 0 | 0 |
 | internal/north/bridge | 1 | 7 | 0 |
 | internal/north/discovery | 1 | 1 | 0 |
 | internal/north/discovery/ssdp | 1 | 3 | 0 |
@@ -170,17 +170,16 @@ HEAD: 74d4ce6
 | internal/i18n | 0 | 2 | 0 |
 | internal/model/calculated | 0 | 10 | 0 |
 | internal/model/combined | 0 | 8 | 0 |
-| internal/model/custom/climate | 0 | 14 | 18 |
-| internal/model/custom/cover | 0 | 20 | 18 |
-| internal/model/custom/lock | 0 | 14 | 14 |
-| internal/model/custom/siren | 0 | 14 | 18 |
+| internal/model/custom/climate | 0 | 8 | 18 |
+| internal/model/custom/cover | 0 | 18 | 18 |
+| internal/model/custom/lock | 0 | 12 | 14 |
+| internal/model/custom/siren | 0 | 12 | 18 |
 | internal/model/custom/textdisplay | 0 | 5 | 18 |
-| internal/model/custom/valve | 0 | 2 | 0 |
 | internal/model/datapoint | 0 | 3 | 0 |
 | internal/model/value | 0 | 0 | 1 |
 | internal/north/filter | 0 | 1 | 0 |
 | internal/north/matter/commissioning | 0 | 6 | 9 |
-| internal/north/matter/eligibility | 0 | 3 | 0 |
+| internal/north/matter/eligibility | 0 | 1 | 0 |
 | internal/north/matter/endpoint | 0 | 9 | 0 |
 | internal/north/matter/im/subscription | 0 | 5 | 4 |
 | internal/north/matter/secure/aesccm | 0 | 1 | 10 |
@@ -196,4 +195,3 @@ HEAD: 74d4ce6
 | internal/restapi | 0 | 5 | 0 |
 | internal/scheduler | 0 | 4 | 0 |
 | internal/store/linkprofile | 0 | 1 | 1 |
-| internal/syncx | 0 | 2 | 0 |

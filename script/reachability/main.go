@@ -105,6 +105,7 @@ const (
 	autoWhitelistMockPrefix      autoWhitelistReason = "auto-whitelist:pattern=mock-fake-stub-dummy"
 	autoWhitelistScriptTool      autoWhitelistReason = "auto-whitelist:pattern=script-tools"
 	autoWhitelistRESTHandler     autoWhitelistReason = "auto-whitelist:pattern=rest-handler-pkg"
+	autoWhitelistTypeAlias       autoWhitelistReason = "auto-whitelist:pattern=type-alias"
 	autoWhitelistWSHandler       autoWhitelistReason = "auto-whitelist:pattern=ws-command-pkg"
 	autoWhitelistDiscovery       autoWhitelistReason = "auto-whitelist:pattern=mqtt-discovery-builder"
 	autoWhitelistMatterImpl      autoWhitelistReason = "auto-whitelist:pattern=matter-cluster-impl"
@@ -300,6 +301,22 @@ func run(logger *slog.Logger, repoRoot, outPath, summaryPath string, productionO
 			// Position bestimmen (für Auto-Whitelist-Checks benötigt)
 			pos := prog.Fset.Position(member.Pos())
 			relFile := strings.TrimPrefix(pos.Filename, absRoot+"/")
+
+			// Type aliases re-export a foreign type under a local name;
+			// every use resolves to the aliased type, so RTA can never
+			// observe the alias itself as reachable. Listing them is noise.
+			if t, isType := member.(*ssa.Type); isType {
+				if tn, isName := t.Object().(*types.TypeName); isName && tn.IsAlias() {
+					whitelistedItems = append(whitelistedItems, WhitelistEntry{
+						Package:    relPkg,
+						Identifier: name,
+						Reason:     string(autoWhitelistTypeAlias),
+						File:       relFile,
+						Line:       pos.Line,
+					})
+					continue
+				}
+			}
 
 			// Auto-Whitelist Verfeinerung 2+5: Test-Files und weitere Patterns
 			if reason, ok := checkAutoWhitelist(relFile, name); ok {

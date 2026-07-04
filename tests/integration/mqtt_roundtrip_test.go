@@ -42,7 +42,7 @@ func TestMQTTRoundTripAgainstRealBroker(t *testing.T) {
 	var mu sync.Mutex
 	var received []string
 	ready := make(chan struct{})
-	if err := sub.Subscribe(ctx, "gh/test/#", mqtt.QoS1, func(topic string, _ []byte, _ bool) {
+	if _, err := sub.Subscribe(ctx, "gh/test/#", mqtt.QoS1, mqtt.LegacyHandler(func(topic string, _ []byte, _ bool) {
 		mu.Lock()
 		received = append(received, topic)
 		mu.Unlock()
@@ -51,7 +51,7 @@ func TestMQTTRoundTripAgainstRealBroker(t *testing.T) {
 		default:
 			close(ready)
 		}
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 

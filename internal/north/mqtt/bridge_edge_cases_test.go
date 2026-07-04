@@ -47,7 +47,7 @@ func TestNoopClientUnsubscribe(t *testing.T) {
 	t.Parallel()
 	nc := NewNoopClient()
 	ctx := context.Background()
-	_ = nc.Subscribe(ctx, "a/b/c", QoS1, func(string, []byte, bool) {})
+	_, _ = nc.Subscribe(ctx, "a/b/c", QoS1, LegacyHandler(func(string, []byte, bool) {}))
 	if err := nc.Unsubscribe(ctx, "a/b/c"); err != nil {
 		t.Fatalf("Unsubscribe: %v", err)
 	}
@@ -65,9 +65,9 @@ type nopSubscriber struct {
 	handler MessageHandler
 }
 
-func (n *nopSubscriber) Subscribe(_ context.Context, _ string, _ QoS, h MessageHandler) error {
+func (n *nopSubscriber) Subscribe(_ context.Context, _ string, _ QoS, h MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
 	n.handler = h
-	return nil
+	return SubscribeResult{}, nil
 }
 
 func (n *nopSubscriber) Unsubscribe(_ context.Context, _ string) error {
@@ -76,7 +76,7 @@ func (n *nopSubscriber) Unsubscribe(_ context.Context, _ string) error {
 
 func (n *nopSubscriber) deliver(topic string, payload []byte) {
 	if n.handler != nil {
-		n.handler(topic, payload, false)
+		n.handler(&Message{Topic: topic, Payload: payload, Retain: false})
 	}
 }
 
@@ -1510,7 +1510,7 @@ func TestNewMqttCircuitBreakerDefaults(t *testing.T) {
 
 type errPublisher struct{}
 
-func (e *errPublisher) Publish(_ context.Context, _ string, _ []byte, _ QoS, _ bool) error {
+func (e *errPublisher) Publish(_ context.Context, _ string, _ []byte, _ QoS, _ bool, _ ...PublishOption) error {
 	return errCleanupClientLacksSubscribe // reuse an existing sentinel
 }
 
@@ -2035,12 +2035,12 @@ func TestBridgePublishDiscoveryOnlyWithBuilder(t *testing.T) {
 
 type failSubscriber struct{ n int }
 
-func (f *failSubscriber) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler) error {
+func (f *failSubscriber) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
 	f.n++
 	if f.n == 1 {
-		return errCleanupClientLacksSubscribe
+		return SubscribeResult{}, errCleanupClientLacksSubscribe
 	}
-	return nil
+	return SubscribeResult{}, nil
 }
 
 func (f *failSubscriber) Unsubscribe(_ context.Context, _ string) error { return nil }
@@ -2324,12 +2324,12 @@ type nthFailSubscriber struct {
 	failOn    int
 }
 
-func (f *nthFailSubscriber) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler) error {
+func (f *nthFailSubscriber) Subscribe(_ context.Context, _ string, _ QoS, _ MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
 	f.callCount++
 	if f.callCount == f.failOn {
-		return errCleanupClientLacksSubscribe
+		return SubscribeResult{}, errCleanupClientLacksSubscribe
 	}
-	return nil
+	return SubscribeResult{}, nil
 }
 
 func (f *nthFailSubscriber) Unsubscribe(_ context.Context, _ string) error { return nil }

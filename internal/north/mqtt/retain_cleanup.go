@@ -264,7 +264,7 @@ func (b *Bridge) RunRetainCleanupOnce(ctx context.Context, snapshotWindow time.D
 	}
 	cleanup := NewRetainCleanup(b)
 	filter := b.cfg.Base + "/#"
-	if err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, cleanup.collect); err != nil {
+	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.State, LegacyHandler(cleanup.collect)); err != nil {
 		return 0, err
 	}
 	// Wait for the broker to deliver retained messages.
@@ -374,7 +374,7 @@ func (b *Bridge) RunDiscoveryOrphanCleanupOnce(ctx context.Context, snapshotWind
 	}
 
 	filter := prefix + "#"
-	if err := subClient.Subscribe(ctx, filter, b.cfg.QoS.Discovery, handler); err != nil {
+	if _, err := subClient.Subscribe(ctx, filter, b.cfg.QoS.Discovery, LegacyHandler(handler)); err != nil {
 		return 0, err
 	}
 	timer := time.NewTimer(snapshotWindow)

@@ -988,6 +988,12 @@ type NorthMQTT struct {
 	RawEnabled       bool   `yaml:"raw_enabled" json:"raw_enabled" cfg:"basic"`
 	DiscoveryEnabled bool   `yaml:"discovery_enabled" json:"discovery_enabled" cfg:"basic"`
 
+	// ProtocolVersion selects the MQTT wire dialect: "5" (default when
+	// empty) or "3.1.1" for brokers without MQTT 5.0 support. There is
+	// no silent downgrade — a v5 connect against a v3-only broker
+	// surfaces a named error, and this knob is the fix.
+	ProtocolVersion string `yaml:"protocol_version,omitempty" json:"protocol_version,omitempty" cfg:"expert"`
+
 	// PayloadFormat selects the wire format the bridge publishes to
 	// state topics. Empty / "bare" (default) keeps primitive scalar
 	// payloads — backwards-compatible with non-HA consumers.

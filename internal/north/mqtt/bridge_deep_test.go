@@ -53,7 +53,7 @@ type recordingPublisher struct {
 	err  error
 }
 
-func (r *recordingPublisher) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool) error {
+func (r *recordingPublisher) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	if r.err != nil {
 		return r.err
 	}

@@ -289,6 +289,7 @@ The MQTT bridge (Home Assistant Discovery and/or raw topic planes).
 | `north.mqtt.topic_base` | string | `openccu-loom` | — | no |
 | `north.mqtt.raw_enabled` | bool | `false` | — | no |
 | `north.mqtt.discovery_enabled` | bool | `false` | — | no |
+| `north.mqtt.protocol_version` | string | `"5"` | — | no |
 | `north.mqtt.payload_format` | string | `bare` | — | no |
 | `north.mqtt.sub_devices_enabled` | bool | `false` | — | no |
 

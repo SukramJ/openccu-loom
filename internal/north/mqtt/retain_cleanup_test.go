@@ -88,14 +88,14 @@ type publishedMsg struct {
 	retain  bool
 }
 
-func (m *mockRetainClient) Publish(_ context.Context, topic string, payload []byte, _ QoS, retain bool) error {
+func (m *mockRetainClient) Publish(_ context.Context, topic string, payload []byte, _ QoS, retain bool, _ ...PublishOption) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.published = append(m.published, publishedMsg{topic: topic, payload: payload, retain: retain})
 	return nil
 }
 
-func (m *mockRetainClient) Subscribe(_ context.Context, _ string, _ QoS, handler MessageHandler) error {
+func (m *mockRetainClient) Subscribe(_ context.Context, _ string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
 	// Deliver retained messages synchronously — the cleanup logic waits
 	// with a timer, so we deliver before RunRetainCleanupOnce's snapshot
 	// window expires.
@@ -104,9 +104,9 @@ func (m *mockRetainClient) Subscribe(_ context.Context, _ string, _ QoS, handler
 	copy(retained, m.retained)
 	m.mu.Unlock()
 	for _, msg := range retained {
-		handler(msg.topic, msg.payload, true)
+		handler(&Message{Topic: msg.topic, Payload: msg.payload, Retain: true})
 	}
-	return nil
+	return SubscribeResult{}, nil
 }
 
 func (m *mockRetainClient) Unsubscribe(_ context.Context, _ string) error {

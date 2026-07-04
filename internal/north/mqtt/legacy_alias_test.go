@@ -231,7 +231,7 @@ type selectivePublisher struct {
 	failCount int
 }
 
-func (s *selectivePublisher) Publish(ctx context.Context, topic string, payload []byte, qos QoS, retain bool) error {
+func (s *selectivePublisher) Publish(ctx context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	if strings.HasPrefix(topic, s.failOnce) {
 		s.failCount++
 		return errSelectiveFail

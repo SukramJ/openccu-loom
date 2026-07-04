@@ -305,16 +305,34 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		// wiring without a broker.
 		client = mqtt.NewNoopClient()
 	} else {
+		// MQTT 5.0 is the transport default; operators pin
+		// north.mqtt.protocol_version to "3.1.1" for brokers without
+		// v5 support (no silent downgrade on the wire).
+		var protoVersion mqtt.ProtocolVersion
+		switch cfg.North.MQTT.ProtocolVersion {
+		case "", "5":
+			protoVersion = mqtt.ProtocolV50
+		case "3.1.1":
+			protoVersion = mqtt.ProtocolV311
+		default:
+			logger.Warn("mqtt.protocol_version.unknown",
+				slog.String("value", cfg.North.MQTT.ProtocolVersion),
+				slog.String("effect", "using MQTT 5.0"))
+			protoVersion = mqtt.ProtocolV50
+		}
 		tcp := mqtt.NewTCPClient(mqtt.TCPConfig{
-			BrokerURL:    cfg.North.MQTT.BrokerURL,
-			ClientID:     cfg.North.MQTT.ClientID,
-			Username:     cfg.North.MQTT.Username,
-			Password:     cfg.North.MQTT.Password,
-			WillTopic:    buildLWTTopic(cfg),
-			WillPayload:  []byte("offline"),
-			WillRetain:   true,
-			CleanSession: true,
-			Logger:       logger,
+			BrokerURL: cfg.North.MQTT.BrokerURL,
+			ClientID:  cfg.North.MQTT.ClientID,
+			Username:  cfg.North.MQTT.Username,
+			Password:  cfg.North.MQTT.Password,
+			Will: &mqtt.Will{
+				Topic:   buildLWTTopic(cfg),
+				Payload: []byte("offline"),
+				Retain:  true,
+			},
+			CleanStart:      true,
+			ProtocolVersion: protoVersion,
+			Logger:          logger,
 		})
 		client = tcp
 		connector = tcp

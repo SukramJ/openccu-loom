@@ -1,5 +1,5 @@
-github.com/SukramJ/go-mqtt v0.2.0 h1:N+6DgPXJy5AN5tDK7rPUmGQtQH1iGr404ol/YZh/OxY=
-github.com/SukramJ/go-mqtt v0.2.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
+github.com/SukramJ/go-mqtt v1.0.0 h1:yjwWYy72ofPoSLVUc7rOw1S56RsRdbADJrQ3rXRTJDo=
+github.com/SukramJ/go-mqtt v1.0.0/go.mod h1:VYpxzNQSbOiPO1xtW0nrL6uSYtjf58hGkYGJ6ebjxXA=
 github.com/SukramJ/godevccu v0.1.5 h1:QTSqXz9UaqXOLuqQVHIndq9qt9ETCmPvBsDbjTid8I8=
 github.com/SukramJ/godevccu v0.1.5/go.mod h1:/DUyYtwh4Bp8leJE3/ms9cwiuzCW6K2eurL83wIssLY=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=

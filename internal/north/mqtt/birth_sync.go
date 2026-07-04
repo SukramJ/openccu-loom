@@ -56,7 +56,8 @@ func (b *BirthSync) Start(ctx context.Context) error {
 	if b.sub == nil || b.bridge == nil {
 		return errors.New("mqtt/birth_sync: subscriber or bridge missing")
 	}
-	return b.sub.Subscribe(ctx, HABirthTopic, QoS1, b.handle)
+	_, err := b.sub.Subscribe(ctx, HABirthTopic, QoS1, LegacyHandler(b.handle))
+	return err
 }
 
 func (b *BirthSync) handle(topic string, payload []byte, _ bool) {
