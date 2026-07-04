@@ -833,7 +833,7 @@ func TestLoadTranslations_EmptyPath_UsesEmbedded(t *testing.T) {
 
 func TestLoadEasymode_EmbeddedLoads(t *testing.T) {
 	t.Parallel()
-	em := loadEasymode(slog.New(slog.DiscardHandler))
+	em := loadEasymode(config.Default(), slog.New(slog.DiscardHandler))
 	if em == nil {
 		t.Error("expected non-nil easymode")
 	}

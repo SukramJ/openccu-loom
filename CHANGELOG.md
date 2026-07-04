@@ -6,6 +6,21 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auth: `north.rest.auth.basic_enabled` / `bearer_enabled` now actually
+  gate their schemes.** Both flags existed in the config (and the SPA
+  editor) but were never evaluated — Basic auth was active whenever users
+  were configured, Bearer whenever tokens existed. They are now tri-state
+  gates (omit → enabled, explicit `false` rejects the scheme even with
+  credentials configured), so what the config claims is what the daemon
+  does. The never-evaluated `session_enabled` flag was removed: session
+  cookies are the SPA's core login mechanism and are always on.
+- **CCU data: `ccu_data.easymode_path` override is honored.** The
+  documented file override (ADR 0003) was silently ignored — the easymode
+  archive always loaded from the embedded bundle. It now follows the same
+  file-first/embedded-fallback contract as `translations_path`.
+
 ## [0.25.0] — 2026-07-04
 
 ### Fixed

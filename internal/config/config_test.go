@@ -708,3 +708,44 @@ north:
 		t.Fatalf("override without enabled key must still default-on")
 	}
 }
+
+func TestAuthSchemeGateAccessors(t *testing.T) {
+	t.Parallel()
+	var a AuthConfig
+	if !a.BasicAuthEnabled() || !a.BearerAuthEnabled() {
+		t.Fatal("unset flags must default to enabled")
+	}
+	off, on := false, true
+	a.BasicEnabled, a.BearerEnabled = &off, &off
+	if a.BasicAuthEnabled() || a.BearerAuthEnabled() {
+		t.Fatal("explicit false must disable the scheme")
+	}
+	a.BasicEnabled, a.BearerEnabled = &on, &on
+	if !a.BasicAuthEnabled() || !a.BearerAuthEnabled() {
+		t.Fatal("explicit true must keep the scheme enabled")
+	}
+}
+
+func TestAuthSchemeGatesFromYAML(t *testing.T) {
+	t.Parallel()
+	cfg, err := Parse([]byte(minimalCentralYAML + `
+north:
+  rest:
+    auth:
+      basic_enabled: false
+      bearer_enabled: false
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if cfg.North.REST.Auth.BasicAuthEnabled() || cfg.North.REST.Auth.BearerAuthEnabled() {
+		t.Fatal("yaml false must disable both schemes")
+	}
+	cfg, err = Parse([]byte(minimalCentralYAML))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if !cfg.North.REST.Auth.BasicAuthEnabled() || !cfg.North.REST.Auth.BearerAuthEnabled() {
+		t.Fatal("absent keys must stay enabled (default-on)")
+	}
+}

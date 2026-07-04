@@ -5,8 +5,11 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
@@ -47,11 +50,60 @@ func TestLoadTranslations_InvalidPath_FallsBackToEmbedded(t *testing.T) {
 
 func TestLoadEasymode_Embedded_ReturnsNonNil(t *testing.T) {
 	t.Parallel()
+	cfg := config.Default()
+	cfg.CCUData.EasymodePath = "" // use embedded
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	got := loadEasymode(logger)
+	got := loadEasymode(cfg, logger)
 	if got == nil {
 		t.Fatal("expected non-nil easymode from embedded data")
+	}
+	if len(got.ChannelMetadata) == 0 {
+		t.Fatal("embedded easymode archive must carry channel metadata")
+	}
+}
+
+func TestLoadEasymode_PathOverride_IsHonored(t *testing.T) {
+	t.Parallel()
+	// A valid but empty archive: proves the file (not the embedded
+	// bundle, which has channel metadata) served the result.
+	path := filepath.Join(t.TempDir(), "easymode.json.gz")
+	var raw bytes.Buffer
+	zw := gzip.NewWriter(&raw)
+	if _, err := zw.Write([]byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.CCUData.EasymodePath = path
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadEasymode(cfg, logger)
+	if got == nil {
+		t.Fatal("expected non-nil easymode from override file")
+	}
+	if len(got.ChannelMetadata) != 0 {
+		t.Fatal("override file must win over the embedded archive")
+	}
+}
+
+func TestLoadEasymode_InvalidPath_FallsBackToEmbedded(t *testing.T) {
+	t.Parallel()
+	cfg := config.Default()
+	cfg.CCUData.EasymodePath = "/nonexistent/easymode.json.gz"
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	got := loadEasymode(cfg, logger)
+	if got == nil || len(got.ChannelMetadata) == 0 {
+		t.Fatal("invalid override path must fall back to the embedded archive")
+	}
+	if !bytes.Contains(buf.Bytes(), []byte("ccudata.easymode.load")) {
+		t.Errorf("expected load warning in log; got:\n%s", buf.String())
 	}
 }
 

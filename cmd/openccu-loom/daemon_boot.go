@@ -163,7 +163,7 @@ type ccuArchive struct {
 func loadCCUArchive(cfg *config.Config, logger *slog.Logger) *ccuArchive {
 	return &ccuArchive{
 		translations: loadTranslations(cfg, logger),
-		easymode:     loadEasymode(logger),
+		easymode:     loadEasymode(cfg, logger),
 		profiles:     loadProfiles(logger),
 	}
 }
