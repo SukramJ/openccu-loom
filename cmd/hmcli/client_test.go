@@ -23,7 +23,12 @@ func newTestClient(t *testing.T, token, user, password string, handler http.Hand
 	// CloseIdleConnections" error on the next request over the reused socket.
 	ts.Config.SetKeepAlivesEnabled(false)
 	t.Cleanup(ts.Close)
-	c := newDaemonClient(ts.URL, token, user, password, 5*time.Second)
+	c, err := newDaemonClient(clientConfig{
+		baseURL: ts.URL, token: token, user: user, password: password, timeout: 5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("newDaemonClient: %v", err)
+	}
 	c.http.Transport = &http.Transport{DisableKeepAlives: true}
 	return c, ts
 }
@@ -277,7 +282,10 @@ func TestNewDaemonClientTrimsTrailingSlash(t *testing.T) {
 		_, _ = w.Write([]byte(`{}`))
 	}))
 	t.Cleanup(ts.Close)
-	c := newDaemonClient(ts.URL+"/", "", "", "", 5*time.Second)
+	c, err := newDaemonClient(clientConfig{baseURL: ts.URL + "/", timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("newDaemonClient: %v", err)
+	}
 	var out map[string]any
 	if err := c.getJSON(context.Background(), "/api/v1/foo", &out); err != nil {
 		t.Fatalf("getJSON: %v", err)

@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"text/tabwriter"
-	"time"
 )
 
 type programSummary struct {
@@ -38,28 +38,6 @@ func activeStar(b *bool) string {
 	return "no"
 }
 
-type programFlags struct {
-	host     string
-	token    string
-	user     string
-	password string
-	timeout  time.Duration
-	jsonOut  bool
-}
-
-func (f *programFlags) bindTo(fs *flag.FlagSet) {
-	fs.StringVar(&f.host, "host", "http://localhost:8119", "daemon REST base URL")
-	fs.StringVar(&f.token, "token", "", "API bearer token")
-	fs.StringVar(&f.user, "user", "", "basic-auth username")
-	fs.StringVar(&f.password, "password", "", "basic-auth password")
-	fs.DurationVar(&f.timeout, "timeout", 60*time.Second, "request timeout")
-	fs.BoolVar(&f.jsonOut, "json", false, "emit raw JSON instead of a human-readable table")
-}
-
-func (f *programFlags) client() *daemonClient {
-	return newDaemonClient(f.host, f.token, f.user, f.password, f.timeout)
-}
-
 func cmdProgram(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
 		return errors.New("program: missing operation (try: list, get, run, enable, disable)")
@@ -83,9 +61,14 @@ func cmdProgram(args []string, stdout, stderr io.Writer) error {
 func cmdProgramList(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("program list", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f programFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	client, err := f.client(stderr)
+	if err != nil {
 		return err
 	}
 
@@ -93,7 +76,7 @@ func cmdProgramList(args []string, stdout, stderr io.Writer) error {
 	defer cancel()
 
 	var items []programSummary
-	if err := f.client().getJSON(ctx, "/api/v1/programs", &items); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/programs", &items); err != nil {
 		return err
 	}
 
@@ -120,9 +103,12 @@ func cmdProgramList(args []string, stdout, stderr io.Writer) error {
 	}
 	for _, p := range items {
 		if multiCentral {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", p.ID, p.Name, activeStar(p.Active), p.Central)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n",
+				sanitizeForTerminal(p.ID), sanitizeForTerminal(p.Name),
+				activeStar(p.Active), sanitizeForTerminal(p.Central))
 		} else {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", p.ID, p.Name, activeStar(p.Active))
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n",
+				sanitizeForTerminal(p.ID), sanitizeForTerminal(p.Name), activeStar(p.Active))
 		}
 	}
 	if err := tw.Flush(); err != nil {
@@ -135,8 +121,8 @@ func cmdProgramList(args []string, stdout, stderr io.Writer) error {
 func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("program get", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f programFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -146,11 +132,16 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 	}
 	id := rest[0]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	var p programSummary
-	if err := f.client().getJSON(ctx, "/api/v1/programs/"+id, &p); err != nil {
+	if err := client.getJSON(ctx, "/api/v1/programs/"+url.PathEscape(id), &p); err != nil {
 		return err
 	}
 
@@ -158,17 +149,17 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 		return writeJSON(stdout, p)
 	}
 
-	_, _ = fmt.Fprintf(stdout, "ID:     %s\n", p.ID)
-	_, _ = fmt.Fprintf(stdout, "Name:   %s\n", p.Name)
+	_, _ = fmt.Fprintf(stdout, "ID:     %s\n", sanitizeForTerminal(p.ID))
+	_, _ = fmt.Fprintf(stdout, "Name:   %s\n", sanitizeForTerminal(p.Name))
 	_, _ = fmt.Fprintf(stdout, "Active: %s\n", activeStar(p.Active))
 	if p.Central != "" {
-		_, _ = fmt.Fprintf(stdout, "Central: %s\n", p.Central)
+		_, _ = fmt.Fprintf(stdout, "Central: %s\n", sanitizeForTerminal(p.Central))
 	}
 	if p.LastExecuted != "" {
-		_, _ = fmt.Fprintf(stdout, "LastExecuted: %s\n", p.LastExecuted)
+		_, _ = fmt.Fprintf(stdout, "LastExecuted: %s\n", sanitizeForTerminal(p.LastExecuted))
 	}
 	if p.Description != "" {
-		_, _ = fmt.Fprintf(stdout, "Description: %s\n", p.Description)
+		_, _ = fmt.Fprintf(stdout, "Description: %s\n", sanitizeForTerminal(p.Description))
 	}
 	return nil
 }
@@ -176,8 +167,8 @@ func cmdProgramGet(args []string, stdout, stderr io.Writer) error {
 func cmdProgramRun(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("program run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f programFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -187,10 +178,15 @@ func cmdProgramRun(args []string, stdout, stderr io.Writer) error {
 	}
 	id := rest[0]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
-	if err := f.client().sendJSON(ctx, http.MethodPost, "/api/v1/programs/"+id+"/execute", nil, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPost, "/api/v1/programs/"+url.PathEscape(id)+"/execute", nil, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")
@@ -212,8 +208,8 @@ func cmdProgramSetActive(args []string, stdout, stderr io.Writer, active bool) e
 	}
 	fs := flag.NewFlagSet("program "+opName, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	var f programFlags
-	f.bindTo(fs)
+	var f connFlags
+	f.bind(fs)
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -223,11 +219,16 @@ func cmdProgramSetActive(args []string, stdout, stderr io.Writer, active bool) e
 	}
 	id := rest[0]
 
+	client, err := f.client(stderr)
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
 	body := setProgramActiveRequest{Active: active}
-	if err := f.client().sendJSON(ctx, http.MethodPatch, "/api/v1/programs/"+id, body, nil); err != nil {
+	if err := client.sendJSON(ctx, http.MethodPatch, "/api/v1/programs/"+url.PathEscape(id), body, nil); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")

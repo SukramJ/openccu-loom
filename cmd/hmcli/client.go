@@ -24,17 +24,39 @@ type daemonClient struct {
 	http     *http.Client
 }
 
+// clientConfig carries everything newDaemonClient needs to build a client:
+// connection target, resolved credentials, TLS trust settings, and the request
+// timeout budget.
+type clientConfig struct {
+	baseURL  string
+	token    string
+	user     string
+	password string
+	cacert   string        // optional PEM CA bundle to trust
+	insecure bool          // skip TLS verification (explicit opt-out)
+	timeout  time.Duration // zero means no deadline
+}
+
 // newDaemonClient constructs a daemonClient. baseURL trailing slashes are
 // stripped so path joins produce clean URLs. The caller owns the timeout
-// budget: a zero timeout means no deadline.
-func newDaemonClient(baseURL, token, user, password string, timeout time.Duration) *daemonClient {
-	return &daemonClient{
-		baseURL:  strings.TrimRight(baseURL, "/"),
-		token:    token,
-		user:     user,
-		password: password,
-		http:     &http.Client{Timeout: timeout},
+// budget: a zero timeout means no deadline. It returns an error only when the
+// configured CA bundle cannot be loaded.
+func newDaemonClient(cfg clientConfig) (*daemonClient, error) {
+	tlsCfg, err := buildTLSConfig(cfg.cacert, cfg.insecure)
+	if err != nil {
+		return nil, err
 	}
+	httpClient := &http.Client{Timeout: cfg.timeout}
+	if tlsCfg != nil {
+		httpClient.Transport = &http.Transport{TLSClientConfig: tlsCfg}
+	}
+	return &daemonClient{
+		baseURL:  strings.TrimRight(cfg.baseURL, "/"),
+		token:    cfg.token,
+		user:     cfg.user,
+		password: cfg.password,
+		http:     httpClient,
+	}, nil
 }
 
 // applyAuth attaches credentials to req. Bearer token wins over basic-auth
