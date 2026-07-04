@@ -110,6 +110,37 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Measurement-history rollup + energy engine, from a data-integrity audit.**
+  Six confirmed correctness bugs in the history / rollup / energy subsystem are
+  fixed with a coherent rollup redesign:
+  - **Bounded, watermark-driven rollups.** The hourly and daily folds used to
+    re-scan every source row below the lag cutoff and ON-CONFLICT-rewrite every
+    historical bucket on every tick — an ever-growing write that held a long
+    write lock and starved the recorder's `SaveBatch`, whose flush then silently
+    dropped the batch (lost live samples). Each tier now tracks a per-tier
+    high-water-mark and folds only the newly-eligible, bucket-aligned window
+    `[watermark, cutoff)`; a new history migration adds the watermark table and
+    the `measurements(ts)` / `measurements_hourly(bucket_ts)` fold-scan indexes.
+    A failed flush now re-queues the batch (bounded, metered via a new
+    `history.flush_errors` gauge) instead of silently dropping it.
+  - **Energy endpoint shows the current period.** `GET /api/v1/energy` merged
+    only the rolled-up tiers, so the un-rolled recent window ("energy today",
+    the current hour) was missing. The query now merges the raw (and hourly)
+    tail for the un-rolled window into every group (hour/day/month).
+  - **Retention no longer corrupts finalized aggregates.** Purge cutoffs are
+    bucket-aligned and floored by the fold watermark, so a purge can never
+    split a boundary bucket or delete a source row before it has been folded.
+  - **Device energy totals include inter-bucket consumption.** A device total
+    was a sum of per-bucket `last-first` deltas, dropping everything consumed
+    between buckets. It is now a reset-aware range total (positive counter
+    segments across the whole range), so a meter reset is handled without a
+    negative or under-counted total.
+  - **`history.retention` is clamped** to at least the hourly-rollup lag (1 h)
+    at config load, so it can never be set below the point where the purge would
+    delete raw rows before they are folded.
+  - **Chart bucketing off-by-one fixed.** `QueryBuckets` no longer emits a
+    spurious extra tail bucket for samples adjacent to the range end.
+
 - **CCU value loading: skip the init getValue fallback for BidCos-RF.** Passive /
   battery BidCos-RF devices that have not reported since a CCU restart no longer
   have their readable VALUES seeded from the paramset default and marked as a

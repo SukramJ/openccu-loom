@@ -266,14 +266,17 @@ func TestMeasurement_QueryBuckets_Isolation(t *testing.T) {
 // TestMeasurement_DeleteOlderThan_RemovesOnlyOldRows verifies that
 // DeleteOlderThan removes rows before the cutoff, keeps rows after it,
 // returns the correct removed count, and bumps MetricsSnapshot().RetentionDeleted.
+// The old row must first be folded into the hourly tier: the purge floors
+// its cutoff by the hourly watermark, so a fold has to run before the row
+// is eligible for deletion (the never-purge-before-fold guard).
 func TestMeasurement_DeleteOlderThan_RemovesOnlyOldRows(t *testing.T) {
 	t.Parallel()
 	s := freshMeasurementStore(t)
 	ctx := context.Background()
 
-	old := time.UnixMilli(1000)
-	cutoff := time.UnixMilli(5000)
-	fresh := time.UnixMilli(9000)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+	old := base                      // hour bucket [10:00, 11:00)
+	fresh := base.Add(2 * time.Hour) // hour bucket [12:00, 13:00)
 
 	samples := []MeasurementSample{
 		{CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "D:1", Parameter: "P", TS: old, Value: 1},
@@ -283,7 +286,13 @@ func TestMeasurement_DeleteOlderThan_RemovesOnlyOldRows(t *testing.T) {
 		t.Fatalf("SaveBatch: %v", err)
 	}
 
-	n, err := s.DeleteOlderThan(ctx, cutoff)
+	// Fold the old row so it is below the hourly watermark and thus safe to
+	// purge; the fresh row stays un-folded and un-purgeable.
+	if _, err := s.RollupHourly(ctx, base.Add(90*time.Minute)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	n, err := s.DeleteOlderThan(ctx, base.Add(2*time.Hour))
 	if err != nil {
 		t.Fatalf("DeleteOlderThan: %v", err)
 	}
@@ -771,11 +780,12 @@ func TestMeasurement_RollupHourly_AggregatesCorrectly(t *testing.T) {
 	}
 }
 
-// TestMeasurement_RollupHourly_Idempotent verifies that running
-// RollupHourly twice against the same raw rows (nothing deleted in
-// between) produces exactly one unchanged hourly row: the fold recomputes
-// the whole bucket from source every run rather than accumulating, so a
-// re-run is a no-op overwrite, not a double-count.
+// TestMeasurement_RollupHourly_Idempotent verifies that re-running
+// RollupHourly against the same cutoff is a no-op: the first run folds the
+// eligible rows and advances the watermark to the cutoff, so a second run
+// with the same cutoff folds zero rows (proving the fold is bounded to the
+// newly-eligible window and never re-scans a finalized bucket) and leaves
+// the one hourly row unchanged.
 func TestMeasurement_RollupHourly_Idempotent(t *testing.T) {
 	t.Parallel()
 	s := freshMeasurementStore(t)
@@ -801,6 +811,9 @@ func TestMeasurement_RollupHourly_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RollupHourly (1st): %v", err)
 	}
+	if n1 != 2 {
+		t.Errorf("1st run folded = %d, want 2", n1)
+	}
 	first := queryHourly(t, s, central, iface, ch, param)
 	if len(first) != 1 {
 		t.Fatalf("hourly rows after 1st run = %d, want 1", len(first))
@@ -810,12 +823,12 @@ func TestMeasurement_RollupHourly_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RollupHourly (2nd): %v", err)
 	}
+	if n2 != 0 {
+		t.Errorf("2nd run folded = %d, want 0 (watermark past cutoff, no re-scan)", n2)
+	}
 	second := queryHourly(t, s, central, iface, ch, param)
 	if len(second) != 1 {
 		t.Fatalf("hourly rows after 2nd run = %d, want 1 (idempotent)", len(second))
-	}
-	if n1 != n2 {
-		t.Errorf("folded count changed across re-runs: %d then %d", n1, n2)
 	}
 	if first[0] != second[0] {
 		t.Errorf("hourly row changed across re-runs: %+v then %+v", first[0], second[0])
@@ -1290,5 +1303,328 @@ func TestMeasurement_QueryEnergy_NilStore_NoOps(t *testing.T) {
 	rows, err := s.QueryEnergy(context.Background(), "ccu1", "", time.Now(), time.Now().Add(time.Hour), "day")
 	if rows != nil || err != nil {
 		t.Errorf("nil store QueryEnergy = (%v, %v), want (nil, nil)", rows, err)
+	}
+}
+
+// energyRowsForParam filters QueryEnergy output to one parameter and maps it
+// by bucket-start epoch ms, so a test can assert which buckets are present.
+func energyRowsForParam(rows []EnergyRow, param string) map[int64]EnergyRow {
+	out := make(map[int64]EnergyRow)
+	for _, r := range rows {
+		if r.Parameter == param {
+			out[r.BucketTS.UnixMilli()] = r
+		}
+	}
+	return out
+}
+
+// TestMeasurement_RollupHourly_BoundedFold_NoReFoldBelowWatermark is the
+// core guard for the rollup redesign: once a bucket has been folded and the
+// watermark advanced past it, a later raw sample landing in that same
+// (already finalized) hour bucket is NOT re-folded — proving the fold is
+// bounded to the newly-eligible [watermark, cutoff) window rather than
+// re-scanning and rewriting every historical bucket on every tick.
+func TestMeasurement_RollupHourly_BoundedFold_NoReFoldBelowWatermark(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:1"
+		param   = "POWER"
+	)
+	base := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC) // hour-aligned
+
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(10 * time.Minute), Value: 42},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	n1, err := s.RollupHourly(ctx, base.Add(90*time.Minute))
+	if err != nil {
+		t.Fatalf("RollupHourly (1st): %v", err)
+	}
+	if n1 != 1 {
+		t.Fatalf("1st fold = %d, want 1", n1)
+	}
+	before := queryHourly(t, s, central, iface, ch, param)
+	if len(before) != 1 {
+		t.Fatalf("hourly rows = %d, want 1", len(before))
+	}
+
+	// A late sample lands in the SAME already-finalized hour bucket.
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(20 * time.Minute), Value: 999},
+	}); err != nil {
+		t.Fatalf("SaveBatch late: %v", err)
+	}
+	n2, err := s.RollupHourly(ctx, base.Add(90*time.Minute))
+	if err != nil {
+		t.Fatalf("RollupHourly (2nd): %v", err)
+	}
+	if n2 != 0 {
+		t.Errorf("2nd fold = %d, want 0 (watermark already past the bucket)", n2)
+	}
+	after := queryHourly(t, s, central, iface, ch, param)
+	if len(after) != 1 || after[0] != before[0] {
+		t.Errorf("finalized bucket was re-folded: before=%+v after=%+v", before, after)
+	}
+	if after[0].Sum != 42 {
+		t.Errorf("bucket sum = %v, want 42 (the late 999 must NOT be folded in)", after[0].Sum)
+	}
+}
+
+// TestMeasurement_RollupFoldScanIndexesExist verifies the migration created
+// the time-axis indexes the bounded fold and purge range-scan on, so those
+// scans do not fall back to a full-table walk.
+func TestMeasurement_RollupFoldScanIndexesExist(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	rows, err := s.db.QueryContext(context.Background(),
+		`SELECT name FROM sqlite_master WHERE type='index' AND name IN
+		 ('idx_measurements_ts','idx_measurements_hourly_bucket_ts')`)
+	if err != nil {
+		t.Fatalf("query indexes: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+	found := map[string]bool{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		found[name] = true
+	}
+	if !found["idx_measurements_ts"] || !found["idx_measurements_hourly_bucket_ts"] {
+		t.Errorf("missing fold-scan indexes: %v", found)
+	}
+}
+
+// TestMeasurement_QueryEnergy_Hour_MergesRawTail verifies that the hourly
+// energy query returns the still-un-rolled recent hours (the raw tail)
+// alongside the folded hourly tier, so "the current hour" is never missing.
+func TestMeasurement_QueryEnergy_Hour_MergesRawTail(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:4"
+		param   = "ENERGY_COUNTER"
+	)
+	base := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		// hour 0 — will be folded.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base, Value: 1000},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(30 * time.Minute), Value: 1100},
+		// hour 2 — the un-rolled tail.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(2 * time.Hour), Value: 1200},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: base.Add(2*time.Hour + 30*time.Minute), Value: 1250},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	// Fold only hour 0 (cutoff aligns to base+1h; watermark = base+1h).
+	if _, err := s.RollupHourly(ctx, base.Add(90*time.Minute)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "", base.Add(-time.Hour), base.Add(3*time.Hour), "hour")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	byBucket := energyRowsForParam(rows, param)
+	tierBucket, okTier := byBucket[base.UnixMilli()]
+	if !okTier {
+		t.Errorf("folded hour-0 bucket missing from energy result")
+	} else if tierBucket.First != 1000 || tierBucket.Last != 1100 {
+		t.Errorf("hour-0 bucket first/last = %v/%v, want 1000/1100", tierBucket.First, tierBucket.Last)
+	}
+	tailBucket, okTail := byBucket[base.Add(2*time.Hour).UnixMilli()]
+	if !okTail {
+		t.Fatalf("un-rolled hour-2 tail bucket missing from energy result (raw tail not merged)")
+	}
+	if tailBucket.First != 1200 || tailBucket.Last != 1250 {
+		t.Errorf("hour-2 tail bucket first/last = %v/%v, want 1200/1250", tailBucket.First, tailBucket.Last)
+	}
+}
+
+// TestMeasurement_QueryEnergy_Day_MergesTiersAndTail verifies the day query
+// assembles all three sources — the daily tier, the hourly tail folded to
+// day, and the raw tail folded to day — and that the one day bucket the
+// hourly and raw tails share is merged with the earlier (hourly) first and
+// the later (raw) last.
+func TestMeasurement_QueryEnergy_Day_MergesTiersAndTail(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:4"
+		param   = "ENERGY_COUNTER"
+	)
+	day0 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	day1 := day0.Add(24 * time.Hour)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		// day0 — fully rolled to the daily tier.
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(1 * time.Hour), Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(3 * time.Hour), Value: 300},
+		// day1 — two hours folded into the hourly tier (single sample each).
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(1 * time.Hour), Value: 400},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(3 * time.Hour), Value: 600},
+		// day1 — a later raw sample that stays un-folded (the raw tail).
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day1.Add(4*time.Hour + 30*time.Minute), Value: 700},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	// Fold day0 + day1's first hours into hourly (cutoff = day1+4h), but roll
+	// only day0 into daily (cutoff aligns to day1). The day1 hourly buckets
+	// stay in the hourly tier; the day1+4h30m raw sample stays un-folded.
+	if _, err := s.RollupHourly(ctx, day1.Add(4*time.Hour+30*time.Minute)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, day1.Add(time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+
+	rows, err := s.QueryEnergy(ctx, central, "", day0.Add(-time.Hour), day1.Add(6*time.Hour), "day")
+	if err != nil {
+		t.Fatalf("QueryEnergy: %v", err)
+	}
+	byBucket := energyRowsForParam(rows, param)
+
+	day0Bucket, ok := byBucket[day0.UnixMilli()]
+	if !ok {
+		t.Errorf("day0 (daily tier) bucket missing")
+	} else if day0Bucket.First != 100 || day0Bucket.Last != 300 {
+		t.Errorf("day0 first/last = %v/%v, want 100/300", day0Bucket.First, day0Bucket.Last)
+	}
+
+	day1Bucket, ok := byBucket[day1.UnixMilli()]
+	if !ok {
+		t.Fatalf("day1 (hourly tail + raw tail) bucket missing")
+	}
+	// hourly tail: first=400 (earliest hour), last=600; raw tail: 700 (later).
+	if day1Bucket.First != 400 {
+		t.Errorf("day1 first = %v, want 400 (earliest hourly-tail reading)", day1Bucket.First)
+	}
+	if day1Bucket.Last != 700 {
+		t.Errorf("day1 last = %v, want 700 (latest raw-tail reading)", day1Bucket.Last)
+	}
+	if day1Bucket.Sum != 1700 || day1Bucket.Count != 3 {
+		t.Errorf("day1 sum/count = %v/%v, want 1700/3", day1Bucket.Sum, day1Bucket.Count)
+	}
+	if day1Bucket.Min != 400 || day1Bucket.Max != 700 {
+		t.Errorf("day1 min/max = %v/%v, want 400/700", day1Bucket.Min, day1Bucket.Max)
+	}
+}
+
+// TestMeasurement_Retention_FinalizedDailyNotCorruptedByPurge verifies the
+// retention corruption fix: after the source raw and hourly rows are purged,
+// re-running the daily fold must NOT recompute the finalized daily bucket
+// from the surviving (partial) rows — the watermark keeps the fold from ever
+// re-reading below the frontier, so the aggregate is stable.
+func TestMeasurement_Retention_FinalizedDailyNotCorruptedByPurge(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "DEV:4"
+		param   = "ENERGY_COUNTER"
+	)
+	day0 := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(1 * time.Hour), Value: 100},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: day0.Add(3 * time.Hour), Value: 400},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	if _, err := s.RollupHourly(ctx, day0.Add(24*time.Hour)); err != nil {
+		t.Fatalf("RollupHourly: %v", err)
+	}
+	if _, err := s.RollupDaily(ctx, day0.Add(48*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily: %v", err)
+	}
+	before := queryDaily(t, s, central, iface, ch, param)
+	if len(before) != 1 {
+		t.Fatalf("daily rows = %d, want 1", len(before))
+	}
+	if before[0].Sum != 500 || before[0].First != 100 || before[0].Last != 400 {
+		t.Fatalf("daily aggregate = %+v, want sum=500 first=100 last=400", before[0])
+	}
+
+	// Purge the source rows (both below their fold frontier).
+	if _, err := s.DeleteOlderThan(ctx, day0.Add(24*time.Hour)); err != nil {
+		t.Fatalf("DeleteOlderThan: %v", err)
+	}
+	if _, err := s.DeleteHourlyOlderThan(ctx, day0.Add(48*time.Hour)); err != nil {
+		t.Fatalf("DeleteHourlyOlderThan: %v", err)
+	}
+
+	// Re-run the daily fold as the loop would; it must be a no-op, not a
+	// recompute from the now-purged partial rows.
+	if n, err := s.RollupDaily(ctx, day0.Add(48*time.Hour)); err != nil {
+		t.Fatalf("RollupDaily (re-run): %v", err)
+	} else if n != 0 {
+		t.Errorf("re-run folded = %d, want 0 (watermark blocks re-fold)", n)
+	}
+	after := queryDaily(t, s, central, iface, ch, param)
+	if len(after) != 1 || after[0] != before[0] {
+		t.Errorf("finalized daily aggregate corrupted by purge+refold: before=%+v after=%+v", before, after)
+	}
+}
+
+// TestMeasurement_QueryBuckets_FinalBucketIndexClamped verifies that a
+// sample whose timestamp sits just below `to` folds into the last valid
+// bucket (buckets-1) instead of overflowing into a spurious extra bucket at
+// index `buckets` (the integer-width truncation bug).
+func TestMeasurement_QueryBuckets_FinalBucketIndexClamped(t *testing.T) {
+	t.Parallel()
+	s := freshMeasurementStore(t)
+	ctx := context.Background()
+
+	const (
+		central = "ccu1"
+		iface   = "HmIP-RF"
+		ch      = "SENSOR:1"
+		param   = "TEMP"
+	)
+	from := time.UnixMilli(0)
+	to := time.UnixMilli(10) // width = 10/3 = 3ms; ts=9 → index 9/3 = 3 == buckets
+	if err := s.SaveBatch(ctx, []MeasurementSample{
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(0), Value: 1},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(6), Value: 2},
+		{CentralName: central, InterfaceID: iface, ChannelAddress: ch, Parameter: param, TS: time.UnixMilli(9), Value: 3},
+	}); err != nil {
+		t.Fatalf("SaveBatch: %v", err)
+	}
+	buckets, err := s.QueryBuckets(ctx, central, iface, ch, param, from, to, 3)
+	if err != nil {
+		t.Fatalf("QueryBuckets: %v", err)
+	}
+	// Expect exactly two buckets: index 0 (TS=0, ts=0) and index 2 (TS=6,
+	// holding both ts=6 and the clamped ts=9). No spurious index-3 bucket.
+	if len(buckets) != 2 {
+		t.Fatalf("QueryBuckets returned %d buckets, want 2 (no overflow bucket): %+v", len(buckets), buckets)
+	}
+	last := buckets[len(buckets)-1]
+	if last.TS.UnixMilli() != 6 {
+		t.Errorf("final bucket TS = %d ms, want 6 (index 2, clamped)", last.TS.UnixMilli())
+	}
+	if last.Count != 2 {
+		t.Errorf("final bucket count = %d, want 2 (ts=6 and clamped ts=9)", last.Count)
+	}
+	for _, b := range buckets {
+		if b.TS.UnixMilli() == 9 {
+			t.Errorf("found spurious overflow bucket at TS=9ms (index 3)")
+		}
 	}
 }

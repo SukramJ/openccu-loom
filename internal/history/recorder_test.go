@@ -594,3 +594,73 @@ func TestRollup_DailyRetentionZero_KeepsDailyForever(t *testing.T) {
 		t.Errorf("measurements_daily rows = %d, want 1 (RetentionDaily<=0 must never purge the daily tier)", dailyRows)
 	}
 }
+
+// TestFlush_RequeuesOnErrorNoSilentDrop verifies the no-silent-drop fix: a
+// flush that fails to persist re-queues the batch (bounded by maxBuffer) and
+// bumps the flush-error metric instead of dropping the samples. A subsequent
+// flush against a healthy store then persists them, so a transient write
+// error costs a retry, not lost live samples.
+func TestFlush_RequeuesOnErrorNoSilentDrop(t *testing.T) {
+	// A store over a closed DB: SaveBatch fails ("database is closed").
+	dsn := "file:" + filepath.Join(t.TempDir(), "hist.db") + "?_pragma=journal_mode(WAL)"
+	openHistoryMu.Lock()
+	db, err := sqlite.OpenHistory(context.Background(), dsn)
+	openHistoryMu.Unlock()
+	if err != nil {
+		t.Fatalf("OpenHistory: %v", err)
+	}
+	store := sqlite.NewMeasurementStore(db)
+
+	rec := New(store, Options{MaxBuffer: 8})
+	rec.enqueue(sqlite.MeasurementSample{
+		CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1",
+		Parameter: "TEMP", TS: time.Now(), Value: 21.5,
+	})
+
+	// Force the failure path.
+	if err := db.Close(); err != nil {
+		t.Fatalf("db.Close: %v", err)
+	}
+	rec.flush(context.Background())
+
+	m := rec.Metrics()
+	if m.FlushErrors != 1 {
+		t.Errorf("FlushErrors = %d, want 1", m.FlushErrors)
+	}
+	if m.Recorded != 0 {
+		t.Errorf("Recorded = %d, want 0 (nothing persisted)", m.Recorded)
+	}
+	if m.Dropped != 0 {
+		t.Errorf("Dropped = %d, want 0 (re-queued, not dropped)", m.Dropped)
+	}
+	// The sample must still be buffered (re-queued), not silently lost.
+	if got := rec.drain(); len(got) != 1 {
+		t.Fatalf("re-queued buffer has %d samples, want 1 (batch must not be dropped)", len(got))
+	}
+}
+
+// TestRequeue_BoundedByMaxBufferCountsDrops verifies that re-queuing a batch
+// larger than the free buffer space drops the oldest samples and counts them
+// (bounded, metered loss) rather than growing without limit.
+func TestRequeue_BoundedByMaxBufferCountsDrops(t *testing.T) {
+	t.Parallel()
+	rec := New(nil, Options{MaxBuffer: 3})
+	mk := func(v float64) sqlite.MeasurementSample {
+		return sqlite.MeasurementSample{
+			CentralName: "ccu1", InterfaceID: "HmIP-RF", ChannelAddress: "DEV:1",
+			Parameter: "TEMP", TS: time.Now(), Value: v,
+		}
+	}
+	rec.requeue([]sqlite.MeasurementSample{mk(1), mk(2), mk(3), mk(4), mk(5)})
+	if got := rec.Metrics().Dropped; got != 2 {
+		t.Errorf("Dropped = %d, want 2 (5 requeued into a buffer of 3)", got)
+	}
+	got := rec.drain()
+	if len(got) != 3 {
+		t.Fatalf("buffer len = %d, want 3 (bounded by maxBuffer)", len(got))
+	}
+	// The two oldest were dropped; the three newest survive.
+	if got[0].Value != 3 || got[2].Value != 5 {
+		t.Errorf("kept values = %v..%v, want the three newest (3..5)", got[0].Value, got[2].Value)
+	}
+}

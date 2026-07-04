@@ -330,3 +330,86 @@ func TestFoldEnergyRows_MonthGroupPassesThroughToResponse(t *testing.T) {
 		t.Errorf("expected no devices for empty rows, got %+v", resp.Devices)
 	}
 }
+
+// TestFoldEnergyRows_RangeTotalIncludesInterBucketConsumption is the
+// correctness guard for finding #4: a device total must be the range total
+// of the cumulative counter (last of the last bucket minus first of the
+// first bucket), NOT a sum of per-bucket last-first deltas — the latter
+// drops everything consumed between one bucket's last reading and the next
+// bucket's first.
+func TestFoldEnergyRows_RangeTotalIncludesInterBucketConsumption(t *testing.T) {
+	t.Parallel()
+	t1 := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	t2 := bucketTS(time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC))
+	// Bucket 1: 100 -> 150 (per-bucket delta 50).
+	// Bucket 2: 210 -> 260 (per-bucket delta 50).
+	// The 60 Wh consumed between 150 (b1.last) and 210 (b2.first) is what a
+	// naive Σ per-bucket delta (=100) drops. Range total = 260 - 100 = 160.
+	rows := []EnergyRawRow{
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: t2, First: 210, Last: 260},
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: t1, First: 100, Last: 150},
+	}
+	resp := FoldEnergyRows(EnergyQuery{Group: "day"}, rows, nil)
+	if len(resp.Devices) != 1 {
+		t.Fatalf("devices = %d, want 1", len(resp.Devices))
+	}
+	if got := resp.Devices[0].TotalConsumedWh; got != 160 {
+		t.Errorf("device total = %v, want 160 (range total, incl. inter-bucket 60)", got)
+	}
+	if resp.TotalConsumedWh != 160 {
+		t.Errorf("response total = %v, want 160", resp.TotalConsumedWh)
+	}
+	// Per-bucket breakdown still reports the per-bucket deltas for the chart.
+	var perBucketSum float64
+	for _, b := range resp.Devices[0].Buckets {
+		perBucketSum += b.ConsumedWh
+	}
+	if perBucketSum != 100 {
+		t.Errorf("per-bucket ConsumedWh sum = %v, want 100 (chart deltas unchanged)", perBucketSum)
+	}
+}
+
+// TestFoldEnergyRows_RangeTotalSegmentsOnReset verifies the reset-aware
+// segmentation across buckets: a decrease between readings is treated as a
+// meter reset (consumption since the reset = the post-reset value), never a
+// negative contribution.
+func TestFoldEnergyRows_RangeTotalSegmentsOnReset(t *testing.T) {
+	t.Parallel()
+	t1 := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	t2 := bucketTS(time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC))
+	// Readings flatten to 100,150, 20,60. Segments: 100->150 = 50,
+	// 150->20 (reset) = 20, 20->60 = 40. Total = 110.
+	rows := []EnergyRawRow{
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: t1, First: 100, Last: 150},
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: t2, First: 20, Last: 60},
+	}
+	resp := FoldEnergyRows(EnergyQuery{Group: "day"}, rows, nil)
+	if got := resp.Devices[0].TotalConsumedWh; got != 110 {
+		t.Errorf("device total = %v, want 110 (reset-segmented range total)", got)
+	}
+	if got := resp.TotalConsumedWh; got < 0 {
+		t.Fatalf("response total must never be negative, got %v", got)
+	}
+}
+
+// TestFoldEnergyRows_RangeTotalPerChannelIndependent verifies that two
+// channels on one device are totalled as independent counters (each
+// segmented on its own), then summed — never concatenated into one series
+// (which would fabricate a reset between the two channels).
+func TestFoldEnergyRows_RangeTotalPerChannelIndependent(t *testing.T) {
+	t.Parallel()
+	ts := bucketTS(time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC))
+	next := bucketTS(time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC))
+	rows := []EnergyRawRow{
+		// Channel :4 over two buckets: 0->100, 100->300 → range 300.
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: ts, First: 0, Last: 100},
+		{ChannelAddress: "DEV1:4", Parameter: "ENERGY_COUNTER", BucketTS: next, First: 100, Last: 300},
+		// Channel :5 single bucket: 1000->1050 → range 50. If the two
+		// channels were concatenated, 300 vs 1000 would look like a jump.
+		{ChannelAddress: "DEV1:5", Parameter: "ENERGY_COUNTER", BucketTS: ts, First: 1000, Last: 1050},
+	}
+	resp := FoldEnergyRows(EnergyQuery{Group: "day"}, rows, nil)
+	if got := resp.Devices[0].TotalConsumedWh; got != 350 {
+		t.Errorf("device total = %v, want 350 (300 + 50, per-channel)", got)
+	}
+}

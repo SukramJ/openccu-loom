@@ -85,8 +85,9 @@ type Recorder struct {
 	mu  sync.Mutex
 	buf []sqlite.MeasurementSample
 
-	dropped  atomic.Int64
-	recorded atomic.Int64
+	dropped     atomic.Int64
+	recorded    atomic.Int64
+	flushErrors atomic.Int64
 }
 
 // Options configures a Recorder. The zero value of each field falls back
@@ -161,6 +162,10 @@ func New(store *sqlite.MeasurementStore, opts Options) *Recorder {
 type Metrics struct {
 	Recorded int64
 	Dropped  int64
+	// FlushErrors counts flush attempts that failed to persist (the batch
+	// was re-queued for the next flush rather than dropped). A rising value
+	// signals sustained write pressure on the history DB.
+	FlushErrors int64
 }
 
 // Metrics returns the recorder's cumulative counters since start.
@@ -168,7 +173,11 @@ func (r *Recorder) Metrics() Metrics {
 	if r == nil {
 		return Metrics{}
 	}
-	return Metrics{Recorded: r.recorded.Load(), Dropped: r.dropped.Load()}
+	return Metrics{
+		Recorded:    r.recorded.Load(),
+		Dropped:     r.dropped.Load(),
+		FlushErrors: r.flushErrors.Load(),
+	}
 }
 
 // Wire subscribes the recorder to every enabled central's EventBus and
@@ -327,6 +336,27 @@ func (r *Recorder) drain() []sqlite.MeasurementSample {
 	return out
 }
 
+// requeue puts a failed batch back in front of any samples that arrived
+// during the flush, so a transient write error (e.g. a busy history DB)
+// retries on the next tick instead of dropping the batch. The combined
+// buffer is still bounded by maxBuffer; on overflow the oldest samples are
+// dropped and counted — bounded, metered loss, never a silent drop.
+func (r *Recorder) requeue(batch []sqlite.MeasurementSample) {
+	if len(batch) == 0 {
+		return
+	}
+	r.mu.Lock()
+	combined := make([]sqlite.MeasurementSample, 0, len(batch)+len(r.buf))
+	combined = append(combined, batch...)
+	combined = append(combined, r.buf...)
+	if over := len(combined) - r.maxBuffer; over > 0 {
+		combined = combined[over:]
+		r.dropped.Add(int64(over))
+	}
+	r.buf = combined
+	r.mu.Unlock()
+}
+
 // Flush writes any buffered samples immediately. The background loop
 // calls the same path on its ticker; exposed so callers (and tests) can
 // drain synchronously.
@@ -337,14 +367,20 @@ func (r *Recorder) Flush(ctx context.Context) {
 	r.flush(ctx)
 }
 
-// flush writes the buffered samples in one batch. On error the samples
-// are lost (history is best-effort, never a source of backpressure).
+// flush writes the buffered samples in one batch. On error the batch is
+// re-queued (bounded by maxBuffer) and a flush-error metric is bumped, so a
+// transient write failure retries on the next tick rather than silently
+// dropping live samples. History stays best-effort — it never applies
+// backpressure to the event bus — but it no longer loses a whole batch to a
+// single busy-lock error.
 func (r *Recorder) flush(ctx context.Context) {
 	batch := r.drain()
 	if len(batch) == 0 {
 		return
 	}
 	if err := r.store.SaveBatch(ctx, batch); err != nil {
+		r.flushErrors.Add(1)
+		r.requeue(batch)
 		r.logger.Warn("history.flush_err",
 			slog.Int("samples", len(batch)),
 			slog.String("err", err.Error()))
