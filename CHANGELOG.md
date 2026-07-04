@@ -67,6 +67,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     `--insecure` (explicit opt-out of verification; **off** by default —
     verification is never weakened implicitly) flags, plus a warning when
     credentials would be sent over plaintext `http://` to a non-loopback host.
+- **Audit / observability hardening from a code-vs-code audit of the
+  change-log surface.** A follow-up audit of the audit and telemetry paths
+  found and closed several leaks:
+  - **`GET /api/v1/audit` is now admin-only.** The change-log — which exposes
+    subjects, device addresses and operator actions across every central — was
+    readable by any authenticated user (including a viewer); it is now gated on
+    the admin role like `/auth/users` and `/auth/tokens`.
+  - **Custom-DP write audit notes no longer embed the raw written values.** The
+    note records only the *names* of the written parameters, so a write payload
+    that carries a secret (e.g. a lock PIN) never lands in the append-only audit
+    log.
+  - **Trace/span export no longer bypasses log redaction.** Span and event
+    attributes keyed like a secret (`password`, `token`, `client_secret`, …) are
+    now masked to `***REDACTED***` in the OTLP payload, matching the logging
+    redactor instead of shipping cleartext to the collector.
+  - **User-management audit notes are unspoofable.** New usernames carrying
+    `=`, whitespace, or control characters are rejected at creation, so a
+    username can no longer tamper with the `subject=<name> role=<role>` note
+    shape or inject forged log lines.
+  - Prometheus MQTT counters now **sanitize the central-name segment** (with a
+    deterministic hash suffix to avoid collisions) so an unusual CCU name can no
+    longer emit an invalid exposition line that makes Prometheus drop the whole
+    scrape.
 
 ### Added
 

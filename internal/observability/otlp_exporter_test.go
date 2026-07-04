@@ -4,6 +4,7 @@
 package observability_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/observability"
+	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
 // These tests must NOT run in parallel: SetSpanExporter installs a
@@ -184,6 +186,89 @@ func TestOTLPJSON_WireShape(t *testing.T) {
 	events := mustSlice(t, span0, "events")
 	if len(events) == 0 {
 		t.Error("expected at least one event in OTLP span")
+	}
+}
+
+// TestOTLPJSON_RedactsSensitiveAttributes verifies that span and event
+// attributes keyed like a secret are exported with their value masked, so
+// tracing cannot become a side channel that bypasses the log redactor.
+func TestOTLPJSON_RedactsSensitiveAttributes(t *testing.T) {
+	var received atomic.Pointer[[]byte]
+	gate := make(chan struct{})
+	var once sync.Once
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		snapshot := append([]byte(nil), body...)
+		once.Do(func() {
+			received.Store(&snapshot)
+			close(gate)
+		})
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	exp := observability.NewOTLPHTTPExporter(observability.OTLPHTTPConfig{
+		Endpoint:      ts.URL,
+		BatchSize:     1,
+		FlushInterval: time.Hour,
+		Client:        ts.Client(),
+	})
+	prev := observability.SetSpanExporter(exp)
+	defer observability.SetSpanExporter(prev)
+
+	const secret = "s3cr3t-value"
+	sp, _ := observability.StartSpan(context.Background(), "redact_test", nil)
+	sp.SetAttribute("password", secret)                          // sensitive key on the span
+	sp.SetAttribute("host", "ccu.local")                         // benign key must survive
+	sp.AddEvent("auth", map[string]any{"client_secret": secret}) // sensitive event attr
+	sp.End()
+
+	select {
+	case <-gate:
+	case <-time.After(5 * time.Second):
+		t.Fatal("collector did not receive a POST within 5 s")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = exp.Shutdown(ctx)
+
+	body := *received.Load()
+	if bytes.Contains(body, []byte(secret)) {
+		t.Fatalf("OTLP payload leaked the raw secret value: %s", body)
+	}
+	if !bytes.Contains(body, []byte(hmlog.RedactMask)) {
+		t.Errorf("expected redaction mask %q in payload: %s", hmlog.RedactMask, body)
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(body, &doc); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	rs := mustSlice(t, doc, "resourceSpans")
+	ss := mustSlice(t, mustMap(t, rs[0]), "scopeSpans")
+	spans := mustSlice(t, mustMap(t, ss[0]), "spans")
+	span0 := mustMap(t, spans[0])
+
+	var sawHost, sawMaskedPassword bool
+	for _, a := range mustSlice(t, span0, "attributes") {
+		am := mustMap(t, a)
+		switch mustStr(t, am, "key") {
+		case "host":
+			if mustMap(t, am["value"])["stringValue"] == "ccu.local" {
+				sawHost = true
+			}
+		case "password":
+			if mustMap(t, am["value"])["stringValue"] == hmlog.RedactMask {
+				sawMaskedPassword = true
+			}
+		}
+	}
+	if !sawHost {
+		t.Error("non-sensitive attribute host must round-trip unmasked")
+	}
+	if !sawMaskedPassword {
+		t.Error("sensitive attribute password must be masked in span attributes")
 	}
 }
 

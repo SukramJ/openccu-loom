@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -796,13 +798,19 @@ func (d *CustomDPDispatcher) recordAudit(
 	name, operation, source string,
 	params map[string]any,
 ) {
-	paramsJSON, _ := json.Marshal(params)
+	// Record only the NAMES of the written parameters, never their raw
+	// values: a write payload can carry secrets (e.g. a lock PIN) that
+	// must not be persisted into the append-only audit log.
+	note := fmt.Sprintf("source=%s op=%s", source, operation)
+	if len(params) > 0 {
+		note += " params=" + strings.Join(slices.Sorted(maps.Keys(params)), ",")
+	}
 	d.audit.Record(audit.Entry{
 		Action:        audit.ActionDataPointWrite,
 		DeviceAddress: deviceAddress,
 		ChannelNo:     chNo,
 		Parameter:     name,
-		Note:          fmt.Sprintf("source=%s op=%s params=%s", source, operation, string(paramsJSON)),
+		Note:          note,
 	})
 }
 

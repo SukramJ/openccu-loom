@@ -15,6 +15,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/SukramJ/openccu-loom/pkg/hmlog"
 )
 
 // OTLPHTTPConfig configures the lean OTLP/HTTP span exporter.
@@ -382,13 +384,23 @@ func padOrTrunc(s string, n int) string {
 // Type mapping: string→stringValue, bool→boolValue, int/int64→intValue
 // (decimal string per OTLP spec), float64→doubleValue; all others fall
 // back to fmt.Sprint → stringValue.
+//
+// Attribute keys are filtered through the same redaction predicate the
+// log pipeline uses ([hmlog.IsSensitiveKey]): a span or event attribute
+// keyed like a secret (e.g. "password", "token") is emitted with its
+// value replaced by [hmlog.RedactMask], so tracing never becomes a side
+// channel that bypasses the RedactingHandler.
 func anyMapToOTLP(m map[string]any) []otlpAttribute {
 	if len(m) == 0 {
 		return nil
 	}
 	out := make([]otlpAttribute, 0, len(m))
 	for k, v := range m {
-		out = append(out, otlpAttribute{Key: k, Value: anyToOTLPValue(v)})
+		val := anyToOTLPValue(v)
+		if hmlog.IsSensitiveKey(k) {
+			val = map[string]any{"stringValue": hmlog.RedactMask}
+		}
+		out = append(out, otlpAttribute{Key: k, Value: val})
 	}
 	return out
 }
