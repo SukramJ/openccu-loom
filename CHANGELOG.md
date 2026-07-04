@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Client lifecycle state has a single source of truth.** The interface
+  client kept its state twice: a raw field (feeding `ClientState()`,
+  `WaitForState` and all predicates) plus the validated state machine —
+  and `Close()` only updated the raw field, leaving the machine claiming
+  CONNECTED on a stopped client. The machine is now authoritative: reads
+  and predicates consult it, `Close()`/`SetState` route through it, and
+  its transition listener wakes `WaitForState` waiters (armed before the
+  state check, closing a lost-wakeup window). Graceful STOPPING is now a
+  valid transition from every non-terminal state, so shutdown paths no
+  longer depend on forced transitions. A second, never-instantiated
+  client state machine (with a silently diverged transition table) and
+  the unused ConnectionState tracker were removed.
+
 - **Warm boot: device and paramset descriptions are actually persisted.**
   `docs/caching.md` promised that descriptors survive a restart, the
   `devices`/`paramsets` tables and their stores existed, and the boot path

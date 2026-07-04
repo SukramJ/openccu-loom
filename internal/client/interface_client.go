@@ -185,15 +185,14 @@ type InterfaceClient struct {
 	payload.ServiceRegistry
 
 	mu          sync.Mutex
-	state       hmenum.ClientState
 	closed      bool
 	enabled     bool            // mirrors Config.Enabled; runtime-mutable via Disable()
 	stateWakers []chan struct{} // released on every state transition
 
-	// sm is the validated state machine. It is created in [New] and kept in sync
-	// with the legacy inline state via [SetState]. Callers that need the full
-	// state-machine API (TransitionTo, Reset, FailureMessage, FailureReason, …)
-	// access it via [StateMachine].
+	// sm is the single source of lifecycle-state truth. It is created in
+	// [New]; its transition listener wakes the [WaitForState] waiters.
+	// Callers that need the full state-machine API (TransitionTo, Reset,
+	// FailureMessage, FailureReason, …) access it via [StateMachine].
 	sm *ClientStateMachine
 
 	// callbackMu protects the last-callback timestamp the central's
@@ -314,12 +313,27 @@ func New(cfg Config) (*InterfaceClient, error) {
 	// client call Disable() after construction. The Config.Enabled field
 	// documents intent but the runtime kill-switch is the enabled field
 	// on InterfaceClient.
-	return &InterfaceClient{
+	c := &InterfaceClient{
 		cfg:     cfg,
-		state:   hmenum.ClientStateCreated,
 		enabled: true,
 		sm:      NewClientStateMachine(),
-	}, nil
+	}
+	// The machine is the single source of state truth; its listener
+	// wakes every WaitForState waiter on each successful transition.
+	c.sm.AddOnStateChange(func(_, _ hmenum.ClientState) { c.wakeStateWaiters() })
+	return c, nil
+}
+
+// wakeStateWaiters releases every goroutine blocked in [WaitForState].
+// Called by the state machine's transition listener.
+func (c *InterfaceClient) wakeStateWaiters() {
+	c.mu.Lock()
+	wakers := c.stateWakers
+	c.stateWakers = nil
+	c.mu.Unlock()
+	for _, w := range wakers {
+		close(w)
+	}
 }
 
 // Capabilities returns the capability profile this client exposes.
@@ -526,16 +540,13 @@ func (c *InterfaceClient) SetConnectionIssueGate(fn func() bool) {
 func (c *InterfaceClient) Close() {
 	c.mu.Lock()
 	c.closed = true
-	prev := c.state
-	c.state = hmenum.ClientStateStopped
-	wakers := c.stateWakers
-	c.stateWakers = nil
 	c.mu.Unlock()
-	if prev != hmenum.ClientStateStopped {
-		for _, w := range wakers {
-			close(w)
-		}
-	}
+	// Route the terminal transition through the state machine — the
+	// single source of state truth; its listener wakes WaitForState
+	// waiters. force: Close terminates the client from any state, and
+	// the same-state no-op keeps a second Close silent.
+	_ = c.sm.TransitionTo(hmenum.ClientStateStopping, "close", true, hmenum.FailureReasonNone)
+	_ = c.sm.TransitionTo(hmenum.ClientStateStopped, "close", true, hmenum.FailureReasonNone)
 	// Cancel any stale retry chains so they do not keep wire resources occupied
 	// after the interface shuts down.
 	if c.cfg.Retrier != nil {
@@ -583,26 +594,17 @@ func (c *InterfaceClient) closeThrottles() {
 
 // ClientState returns the current client state.
 func (c *InterfaceClient) ClientState() hmenum.ClientState {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.state
+	return c.sm.State()
 }
 
-// SetState updates the client state and unblocks every goroutine
-// currently waiting in [WaitForState] for the new value.
+// SetState forces the client into state s, bypassing transition
+// validation — a seam for tests and low-level orchestration. It
+// delegates to the state machine (the single source of truth); the
+// machine's listener unblocks every goroutine waiting in
+// [WaitForState]. Prefer [TransitionTo] for coordinator-level
+// transitions, which validates against the table.
 func (c *InterfaceClient) SetState(s hmenum.ClientState) {
-	c.mu.Lock()
-	if c.state == s {
-		c.mu.Unlock()
-		return
-	}
-	c.state = s
-	wakers := c.stateWakers
-	c.stateWakers = nil
-	c.mu.Unlock()
-	for _, w := range wakers {
-		close(w)
-	}
+	_ = c.sm.TransitionTo(s, "set_state", true, hmenum.FailureReasonNone)
 }
 
 // WaitForState blocks until the client transitions to `target` or the context
@@ -612,13 +614,16 @@ func (c *InterfaceClient) SetState(s hmenum.ClientState) {
 func (c *InterfaceClient) WaitForState(ctx context.Context, target hmenum.ClientState) error {
 	for {
 		c.mu.Lock()
-		if c.state == target {
-			c.mu.Unlock()
-			return nil
-		}
 		w := make(chan struct{})
 		c.stateWakers = append(c.stateWakers, w)
 		c.mu.Unlock()
+		// Check AFTER arming the waker: the state lives behind the
+		// machine's own lock, so a check-then-arm order could miss a
+		// transition firing in between (lost wakeup). A waker armed for
+		// an already-reached target is released by the next transition.
+		if c.sm.State() == target {
+			return nil
+		}
 		select {
 		case <-w:
 			// loop back; state may have changed to target or to a
@@ -739,9 +744,7 @@ func (c *InterfaceClient) AllCircuitBreakersClosed() bool {
 // ClientStateInitialized or beyond (Connected, Reconnecting, …). CREATED and
 // INITIALIZING states return false.
 func (c *InterfaceClient) IsInitialized() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	switch s {
 	case hmenum.ClientStateCreated, hmenum.ClientStateInitializing:
 		return false
@@ -753,33 +756,25 @@ func (c *InterfaceClient) IsInitialized() bool {
 // IsAvailable reports whether the current client state implies the interface
 // can accept commands (CONNECTED or RECONNECTING).
 func (c *InterfaceClient) IsAvailable() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	return s == hmenum.ClientStateConnected || s == hmenum.ClientStateReconnecting
 }
 
 // IsConnected reports whether the current client state is CONNECTED.
 func (c *InterfaceClient) IsConnected() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	return s == hmenum.ClientStateConnected
 }
 
 // IsFailed reports whether the current client state is FAILED.
 func (c *InterfaceClient) IsFailed() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	return s == hmenum.ClientStateFailed
 }
 
 // IsStopped reports whether the current client state is STOPPED.
 func (c *InterfaceClient) IsStopped() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	return s == hmenum.ClientStateStopped
 }
 
@@ -787,9 +782,7 @@ func (c *InterfaceClient) IsStopped() bool {
 // coordinator to initiate a reconnect cycle. Only DISCONNECTED and FAILED
 // support reconnect.
 func (c *InterfaceClient) CanReconnect() bool {
-	c.mu.Lock()
-	s := c.state
-	c.mu.Unlock()
+	s := c.sm.State()
 	return s == hmenum.ClientStateDisconnected || s == hmenum.ClientStateFailed
 }
 
@@ -1028,12 +1021,7 @@ func (c *InterfaceClient) TransitionTo(
 	force bool,
 	failureReason hmenum.FailureReason,
 ) error {
-	if err := c.sm.TransitionTo(target, reason, force, failureReason); err != nil {
-		return err
-	}
-	// Propagate to the inline state so WaitForState / State still work.
-	c.SetState(target)
-	return nil
+	return c.sm.TransitionTo(target, reason, force, failureReason)
 }
 
 // CanTransitionTo reports whether the state machine allows moving from its

@@ -53,8 +53,8 @@ func (c *InterfaceClient) State() payload.StatePayload {
 	if c == nil {
 		return nil
 	}
+	state := c.sm.State()
 	c.mu.Lock()
-	state := c.state
 	closed := c.closed
 	c.mu.Unlock()
 
