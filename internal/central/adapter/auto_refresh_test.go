@@ -166,7 +166,7 @@ func TestWireConfigPendingHookIgnoresClassicHM(t *testing.T) {
 	ch := dev.AddChannel("0001CCCC:1", 1, "TEST_TYPE", hmenum.ParamsetKeyMaster)
 	ch.SetRefresher(fakeRefresher)
 
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 
 	// Simulate CONFIG_PENDING True→False on a BidCos-RF interface.
 	c.Events.SetOnConfigSettled(func(interfaceID, deviceAddress string) {
@@ -209,7 +209,7 @@ func TestWireConfigPendingHookFansOutForHmIP(t *testing.T) {
 	ch1.SetRefresher(fakeRef)
 	ch2.SetRefresher(fakeRef)
 
-	wireConfigPendingHook(c, nil, "", nil, nil)
+	wireConfigPendingHook(context.Background(), c, nil, "", nil, nil)
 
 	// Retrieve and call the hook directly (simulating an HmIP CONFIG_PENDING event).
 	// The hook was set on c.Events by wireConfigPendingHook; we reconstruct the

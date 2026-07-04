@@ -334,7 +334,7 @@ func bringUpCentral( //nolint:funlen // composition/wiring: long sequential setu
 	// Per-central interface→backend lookup, populated by wireInterface as each
 	// iface comes up. The CONFIG_PENDING hook resolves the backend lazily.
 	backendsByInterface := newBackendRegistry()
-	wireConfigPendingHook(unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger) //nolint:contextcheck // hook installs a background goroutine that must outlive the wiring ctx
+	wireConfigPendingHook(ctx, unit, deps.MasterValues, cc.Name, backendsByInterface.getter, logger)
 
 	// Source-token lifecycle on the central's bus: ConnectionLost → stale,
 	// RecoveryCompleted → live.
@@ -473,7 +473,15 @@ func registerCentralCallbacks(deps WireDeps, cc *config.CentralConfig, unit *cen
 		callbackURL = fmt.Sprintf("http://%s:%d/RPC2/%s", callbackHost, deps.CallbackPort, cc.Name)
 		centralName := cc.Name
 		srv := deps.CallbackServer
-		deregister = func() { srv.Deregister(centralName) }
+		cbHandlers := handlers
+		// Deregister the route first so no new callback can be dispatched, then
+		// Stop() the handler to cancel its context and drain the in-flight
+		// self-reload / device-refresh goroutines. Without the Stop() call those
+		// background goroutines would leak past a live RemoveCentral / shutdown.
+		deregister = func() {
+			srv.Deregister(centralName)
+			cbHandlers.Stop()
+		}
 	case deps.CallbackServer != nil && callbackHost == "":
 		logger.Warn("wire.callback.no_host",
 			slog.String("central", cc.Name),
@@ -602,21 +610,17 @@ func wireInterface(
 			Initial: relCfg.CommandRetryInitialDelay,
 		})
 	}
-	if relCfg.CommandThrottleInterCommandDelay > 0 {
-		icCfg.Throttle = reliability.NewThrottle(reliability.ThrottleConfig{
-			InterCommandDelay: relCfg.CommandThrottleInterCommandDelay,
-		})
-	}
-	// ReadThrottle / WriteThrottle / ControlThrottle are intentionally left nil
-	// here. client.New fills each nil per-class slot with icCfg.Throttle (the
-	// single shared pool above), so all three RPC classes share one throttle in
-	// production. Separate per-class pools are reserved for a future operator
-	// tuning surface; see docs/parity/by_design.md "Per-class southbound throttles".
+	// Wire independent per-RPC-class throttle pools (read / write / control)
+	// instead of a single shared pool, so a backing-off write does not block
+	// reads or liveness pings behind one permit. Each pool bounds its waiter
+	// queue; the operator-configured inter-command delay paces writes only.
+	// See [perClassThrottlePools].
+	icCfg.ReadThrottle, icCfg.WriteThrottle, icCfg.ControlThrottle = perClassThrottlePools(relCfg.CommandThrottleInterCommandDelay)
 	ic, err := client.New(icCfg)
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
-	bcaller := client.NewBackendCaller(ic, 0 /* Low priority — backends override per method */)
+	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backendKind, backends.FactoryInput{
 		XMLRPC:    bcaller,

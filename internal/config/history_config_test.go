@@ -3,7 +3,42 @@
 
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
+
+// TestConfig_Validate_ClampsHistoryRetention verifies finding #5: an
+// explicit history.retention below the hourly-rollup lag is clamped up to
+// HistoryRetentionFloor at config load (so the purge can never delete raw
+// rows before the hourly fold folds them), while zero (use-default) and
+// any value at or above the floor pass through unchanged.
+func TestConfig_Validate_ClampsHistoryRetention(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   time.Duration
+		want time.Duration
+	}{
+		{"below floor is clamped", 30 * time.Minute, HistoryRetentionFloor},
+		{"zero stays zero (use default)", 0, 0},
+		{"at floor unchanged", HistoryRetentionFloor, HistoryRetentionFloor},
+		{"above floor unchanged", 720 * time.Hour, 720 * time.Hour},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := Default()
+			c.Persistence.History.Retention = tc.in
+			if err := c.Validate(); err != nil {
+				t.Fatalf("Validate: %v", err)
+			}
+			if got := c.Persistence.History.Retention; got != tc.want {
+				t.Errorf("retention after Validate = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 func TestHistoryConfig_NilEnabled(t *testing.T) {
 	t.Parallel()

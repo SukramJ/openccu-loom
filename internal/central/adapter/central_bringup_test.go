@@ -5,6 +5,7 @@ package adapter
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"testing"
@@ -400,4 +401,47 @@ func TestBringUpManager_RemoveCentral_DropsHandleAndRunsShutdown(t *testing.T) {
 	if m.RemoveCentral("ccu1") {
 		t.Fatal("second RemoveCentral returned true")
 	}
+}
+
+// TestBringUpManager_TeardownSnapshotsHandlesUnderLock hammers Teardown
+// concurrently with AddCentral/RemoveCentral. Teardown must snapshot
+// m.byCentral under the lock (maps.Clone) before iterating it; aliasing the
+// live map and reading handles[name] after the unlock races the mutator's
+// map writes — a fatal concurrent map read/write that the -race detector (and
+// Go's own built-in concurrent-map guard) trips. The handles carry no started
+// generation, so every shutdown/teardown is a clean no-op. Run under -race.
+func TestBringUpManager_TeardownSnapshotsHandlesUnderLock(t *testing.T) {
+	m := newBringUpManager()
+	// Seed a permanent handle so Teardown's iteration always has an entry to
+	// read while the mutator churns the map.
+	m.add(&centralBringUp{logger: slog.Default(), cc: config.CentralConfig{Name: "seed"}})
+
+	stop := make(chan struct{})
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			name := fmt.Sprintf("churn-%d", i%16)
+			m.add(&centralBringUp{logger: slog.Default(), cc: config.CentralConfig{Name: name}})
+			m.RemoveCentral(name)
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for range 500 {
+			m.Teardown()
+		}
+		close(stop)
+	}()
+
+	wg.Wait()
 }

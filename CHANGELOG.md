@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-07-04
+
+### Fixed
+
+- **Matter: bridge could not be commissioned after a restart even with devices
+  exposed.** The bridge topology is assembled at daemon start, before the CCU
+  device load finishes, so it was empty of bridged endpoints — and the
+  commissioning window (correctly) refuses to open an empty bridge — until an
+  operator toggled a device exposure to force a rebuild. The bridge now
+  reassembles automatically once each central's initial device load completes
+  (`CentralSouthboundReadyEvent`), so persisted exposures take effect on their
+  own. The 503 error text no longer references a signal that was never emitted.
+
 ### Security
 
 - **Northbound auth hardening from a code-vs-code security audit.** A deep audit
@@ -30,6 +43,25 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     restoring a backup onto a fresh host now requires the `OPENCCU_LOOM_SECRET_KEY`
     env key (or copying `secret.key` out of band); otherwise encrypted secrets
     must be re-entered.
+  - **Daemon-state backups are now fully encrypted at rest and hardened on
+    restore.** The `backup create` archive previously wrote the unencrypted
+    SQLite DB world-readable (0644), leaking live session tokens, Matter PSKs,
+    and CCU passwords. The whole archive is now sealed with AES-256-GCM using
+    the data-dir master key (a versioned container; legacy plaintext archives
+    are auto-detected and still restorable) and created `0600`; if no master
+    key is available the tool warns loudly rather than silently writing
+    plaintext. `backup restore` gained a Zip-Slip guard (tar entries that
+    escape the data dir are rejected), decompression-bomb bounds
+    (total/per-entry/entry-count caps, streamed to disk), a schema-compat check
+    (a backup from a newer daemon is refused unless `--force`), and
+    all-or-nothing atomic staging (a mid-restore failure rolls back instead of
+    leaving half-applied live data). *Operator note:* as with the key
+    exclusion above, restoring an encrypted archive onto a fresh host needs the
+    original `OPENCCU_LOOM_SECRET_KEY` (or `secret.key`).
+  - **Scheduled-backup rotation race fixed.** The per-central scheduled job now
+    awaits backup creation before pruning, so rotation settles at exactly
+    `KeepLast` instead of `KeepLast+1`; concurrent runs for one central are
+    serialized.
   - **OIDC login-CSRF closed:** the `state` value is now bound to an HttpOnly
     cookie and verified on callback; abandoned-flow state entries are swept.
   - **Session cookies are marked `Secure`** whenever the deployment terminates
@@ -39,6 +71,69 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     1 MiB body cap to channel-config import; a dummy bcrypt compare on the
     unknown-user login path (anti-enumeration timing); and a fail-fast guard
     that refuses to serve REST with no auth middleware wired.
+
+- **`hmcli` admin-CLI hardening from a code-vs-code security audit.** Five
+  issues found and closed across every command group (`devices`, `sysvar`,
+  `program`, `paramset`, `events`, `export-def`, `cache`):
+  - **Off-argv credentials.** A bearer token / basic-auth password no longer has
+    to be passed via `--token` / `--password` (where it leaks into shell history
+    and the process table). Both now fall back to the `OPENCCU_LOOM_TOKEN` /
+    `OPENCCU_LOOM_PASSWORD` environment variables, and a missing basic-auth
+    password is prompted for on an interactive terminal. The flags remain a
+    last-resort override; the token is never logged.
+  - **User arguments are URL-escaped.** Device addresses, sysvar/program IDs,
+    paramset keys, and query values are now `url.PathEscape`/`url.QueryEscape`-d
+    before being spliced into the REST path/query, so a `/` (or other special
+    character) can no longer inject extra path segments.
+  - **Terminal-output sanitisation.** Server-controlled strings (device
+    name/model, sysvar name/value, event type/topic/payload, …) are stripped of
+    C0/C1 control bytes and ANSI escape sequences before being printed to a
+    human-readable table, closing a terminal-injection vector. JSON output is
+    unchanged (already escaped).
+  - **`events tail` distinguishes clean from abnormal stream ends.** A clean
+    server close still exits 0; an abnormal drop (daemon death, network loss,
+    abrupt close) now triggers a bounded auto-reconnect with exponential backoff
+    and, only after exhausting the retry budget, exits non-zero — a lost stream
+    is no longer silently reported as success.
+  - **TLS trust controls.** New `--cacert` (trust a custom PEM CA bundle) and
+    `--insecure` (explicit opt-out of verification; **off** by default —
+    verification is never weakened implicitly) flags, plus a warning when
+    credentials would be sent over plaintext `http://` to a non-loopback host.
+- **Audit / observability hardening from a code-vs-code audit of the
+  change-log surface.** A follow-up audit of the audit and telemetry paths
+  found and closed several leaks:
+  - **`GET /api/v1/audit` is now admin-only.** The change-log — which exposes
+    subjects, device addresses and operator actions across every central — was
+    readable by any authenticated user (including a viewer); it is now gated on
+    the admin role like `/auth/users` and `/auth/tokens`.
+  - **Custom-DP write audit notes no longer embed the raw written values.** The
+    note records only the *names* of the written parameters, so a write payload
+    that carries a secret (e.g. a lock PIN) never lands in the append-only audit
+    log.
+  - **Trace/span export no longer bypasses log redaction.** Span and event
+    attributes keyed like a secret (`password`, `token`, `client_secret`, …) are
+    now masked to `***REDACTED***` in the OTLP payload, matching the logging
+    redactor instead of shipping cleartext to the collector.
+  - **User-management audit notes are unspoofable.** New usernames carrying
+    `=`, whitespace, or control characters are rejected at creation, so a
+    username can no longer tamper with the `subject=<name> role=<role>` note
+    shape or inject forged log lines.
+  - Prometheus MQTT counters now **sanitize the central-name segment** (with a
+    deterministic hash suffix to avoid collisions) so an unusual CCU name can no
+    longer emit an invalid exposition line that makes Prometheus drop the whole
+    scrape.
+- **Server-side edit-lock enforcement for configuration writes.** The
+  per-resource edit lock (`POST /sessions/edit`) is now enforced, not merely
+  advisory: every MASTER and LINK paramset write must present a valid
+  `X-Edit-Token` that currently holds the lock, else it is rejected `423
+  Locked` before any CCU call. This applies to `PUT
+  /devices/{addr}/paramsets/{MASTER,LINK}`, `PUT /devices/{addr}/link-ps/{peer}`,
+  and the WebSocket `paramset.put` command (via a new optional `edit_token`
+  arg, rejected with a `locked` command error). Real-time VALUES writes
+  (device control) are **not** gated. The config UI already holds the lock and
+  now sends its token automatically; non-interactive clients must open an edit
+  session first — `hmcli paramset set … MASTER|LINK` does this transparently.
+  API version 2.14.0.
 
 ### Added
 
@@ -59,6 +154,78 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Measurement-history rollup + energy engine, from a data-integrity audit.**
+  Six confirmed correctness bugs in the history / rollup / energy subsystem are
+  fixed with a coherent rollup redesign:
+  - **Bounded, watermark-driven rollups.** The hourly and daily folds used to
+    re-scan every source row below the lag cutoff and ON-CONFLICT-rewrite every
+    historical bucket on every tick — an ever-growing write that held a long
+    write lock and starved the recorder's `SaveBatch`, whose flush then silently
+    dropped the batch (lost live samples). Each tier now tracks a per-tier
+    high-water-mark and folds only the newly-eligible, bucket-aligned window
+    `[watermark, cutoff)`; a new history migration adds the watermark table and
+    the `measurements(ts)` / `measurements_hourly(bucket_ts)` fold-scan indexes.
+    A failed flush now re-queues the batch (bounded, metered via a new
+    `history.flush_errors` gauge) instead of silently dropping it.
+  - **Energy endpoint shows the current period.** `GET /api/v1/energy` merged
+    only the rolled-up tiers, so the un-rolled recent window ("energy today",
+    the current hour) was missing. The query now merges the raw (and hourly)
+    tail for the un-rolled window into every group (hour/day/month).
+  - **Retention no longer corrupts finalized aggregates.** Purge cutoffs are
+    bucket-aligned and floored by the fold watermark, so a purge can never
+    split a boundary bucket or delete a source row before it has been folded.
+  - **Device energy totals include inter-bucket consumption.** A device total
+    was a sum of per-bucket `last-first` deltas, dropping everything consumed
+    between buckets. It is now a reset-aware range total (positive counter
+    segments across the whole range), so a meter reset is handled without a
+    negative or under-counted total.
+  - **`history.retention` is clamped** to at least the hourly-rollup lag (1 h)
+    at config load, so it can never be set below the point where the purge would
+    delete raw rows before they are folded.
+  - **Chart bucketing off-by-one fixed.** `QueryBuckets` no longer emits a
+    spurious extra tail bucket for samples adjacent to the range end.
+
+- **Config pipeline hardening from a code-vs-code audit.** Four issues in the
+  config + configstore pipeline were found and closed:
+  - **`OPENCCU_LOOM_REST_LISTEN` / `north.rest.listen` now survives every boot.**
+    The REST bind address is bootstrap-tier: it is no longer persisted into or
+    read back from the `north.rest` config section, so the env/YAML value always
+    wins instead of being pinned to a stale value seeded on first boot. The SPA's
+    source pill reports it as `bootstrap`, and the field is no longer shown as an
+    editable REST field.
+  - **`restart_required` in the section-PUT response is now computed per changed
+    field** (via `config.RestartRequiredDiff`), so a mixed section (e.g.
+    `north.rest`, where CORS is hot-appliable but `public_url` needs a restart)
+    and the fully-restart-required webhook section report correctly — consistent
+    with `GET /system/config-changes`.
+  - **Semantic validation now runs on the section-PUT path.** A well-typed but
+    semantically-invalid section (empty `broker_url` with MQTT enabled, a callback
+    port out of range, an `ftp://` `public_url`) is rejected with 400 and never
+    persisted, instead of being saved and only warned about at the next boot.
+  - **A REST PUT can no longer wipe basic-auth users or API tokens.** Credentials
+    are managed exclusively by the SQLite user/token stores (the `/api/v1/users`
+    and `/auth/tokens` CRUD) and no longer round-trip through the `north.rest`
+    section. Config-file (YAML) users **and** API tokens are migrated into SQLite
+    once on boot (idempotent, preserving each token's exact secret), so no
+    operator loses a login on upgrade.
+- **A slow or half-open MQTT broker can no longer stall event delivery.** The
+  internal event bus dispatches handlers serially, and the value-change handler
+  used to publish to MQTT inline — so a QoS1 publish waiting for a PUBACK (up to
+  the broker AckTimeout) froze bus dispatch, and with the broker shared across
+  every CCU that meant no central delivered events until the broker recovered.
+  The north-bound MQTT fan-out for live value changes is now decoupled onto a
+  bounded per-broker worker queue with drop-oldest backpressure (a dropped
+  counter is exposed for monitoring); the bus dispatch goroutine never blocks on
+  the broker again. The boot-time snapshot path stays synchronous.
+- **Event-bus unsubscribe is now a barrier.** The closure returned by
+  `Subscribe` waits for any in-flight dispatch that already captured the handler
+  to finish before returning, and a handler detached mid-dispatch is skipped
+  rather than invoked — so a consumer can free the resources a handler touches
+  immediately after unsubscribing, without racing a late callback (previously a
+  recovered-and-swallowed send-on-closed-channel / nil-map panic).
+- **`EventBridge.Start` is now idempotent** — a second call detaches the previous
+  run's subscriptions and fan-out worker before re-attaching instead of
+  double-subscribing; the subscription list is mutex-guarded.
 - **CCU value loading: skip the init getValue fallback for BidCos-RF.** Passive /
   battery BidCos-RF devices that have not reported since a CCU restart no longer
   have their readable VALUES seeded from the paramset default and marked as a

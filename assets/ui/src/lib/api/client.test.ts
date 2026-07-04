@@ -98,6 +98,44 @@ describe("api endpoint paths", () => {
   });
 });
 
+describe("api paramset writes — edit-lock token header", () => {
+  it("putParamset sends X-Edit-Token when a token is held", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.putParamset("00021BE9957782:4", "MASTER", { TEMPERATURE: 21 }, "tok-abc");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/v1/devices/00021BE9957782%3A4/paramsets/MASTER");
+    expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBe("tok-abc");
+    expect(headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("putParamset omits X-Edit-Token when no token is held", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.putParamset("00021BE9957782:4", "MASTER", { TEMPERATURE: 21 });
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBeUndefined();
+    expect(headers["Content-Type"]).toBe("application/json");
+  });
+
+  it("putLinkParamset sends X-Edit-Token when a token is held", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(undefined, 202));
+    await api.putLinkParamset(
+      "00021BE9957782:4",
+      "00021BE9957783:1",
+      { LEVEL: 1 },
+      "tok-xyz",
+    );
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "/api/v1/devices/00021BE9957782%3A4/link-paramsets/00021BE9957783%3A1",
+    );
+    expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
+    const headers = headersOf(fetchMock.mock.calls[0]);
+    expect(headers["X-Edit-Token"]).toBe("tok-xyz");
+  });
+});
+
 describe("getHistory", () => {
   const BASE_PARAMS = {
     central: "ccu1",

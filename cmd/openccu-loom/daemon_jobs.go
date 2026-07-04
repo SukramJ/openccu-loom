@@ -124,7 +124,11 @@ func registerScheduledBackupJobs(reg *central.Registry, cfg *config.Config, back
 		name := u.Name()
 		keepLast := cfg.Backup.KeepLast
 		run := func(ctx context.Context) error {
-			if _, err := backupAdapter.TriggerBackupForCentral(ctx, name); err != nil {
+			// Await create completion (synchronous) so the new backup is
+			// durably saved BEFORE pruning. The old detached trigger returned
+			// immediately, so Prune ran against the pre-create fleet and left
+			// KeepLast+1 in steady state.
+			if _, err := backupAdapter.CreateBackupForCentral(ctx, name); err != nil {
 				return err
 			}
 			if keepLast > 0 {

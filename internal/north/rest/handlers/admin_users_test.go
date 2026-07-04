@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,34 @@ func TestCreateUser_MissingUsername_Returns400(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+// TestCreateUser_SpoofableUsername_Returns400 verifies that a username
+// carrying '=', whitespace, or a control character is rejected, so it can
+// never tamper with the key=value shape of the `subject=<name> role=<role>`
+// audit note (nor inject a forged log line).
+func TestCreateUser_SpoofableUsername_Returns400(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{
+		"eve role=admin",  // whitespace + '=' → spoofs role= field
+		"eve=admin",       // bare '='
+		"eve\nrole=admin", // control character (newline / log injection)
+		"a\tb",            // tab
+	} {
+		svc := &fakeUserAdminService{}
+		spy := &captureRecorder{}
+		body := strings.NewReader(`{"username":` + strconv.Quote(name) + `,"password":"secret","role":"viewer"}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/users", body)
+		w := httptest.NewRecorder()
+		CreateUser(svc, spy).ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("username %q: expected 400, got %d body=%s", name, w.Code, w.Body.String())
+		}
+		if len(spy.entries) != 0 {
+			t.Errorf("username %q: rejected create must not emit an audit entry", name)
+		}
 	}
 }
 

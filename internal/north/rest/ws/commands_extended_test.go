@@ -529,3 +529,82 @@ func TestIncidentsListEmptyReturnsEmptyArray(t *testing.T) {
 		t.Fatalf("expected 0 incidents, got %d", len(items))
 	}
 }
+
+// fakeEditLocks is a minimal [EditLockVerifier] fake: it holds exactly
+// one valid (key, token) pair and rejects everything else.
+type fakeEditLocks struct{ key, token string }
+
+func (f fakeEditLocks) Verify(key, token string) bool {
+	return token != "" && key == f.key && token == f.token
+}
+
+// TestExtendedParamsetPut_EditLockEnforced asserts that paramset.put
+// gates MASTER/LINK writes behind EditLockVerifier.Verify using the
+// "channel:{channel_address}:{paramset_key}" lock key, while VALUES
+// writes remain ungated.
+func TestExtendedParamsetPut_EditLockEnforced(t *testing.T) {
+	pw := &stubParamsetWriter{}
+	r := NewRouter()
+	RegisterExtendedCommands(r, ExtendedCommandsConfig{
+		Paramsets: pw,
+		EditLocks: fakeEditLocks{key: "channel:ABC0001:1:MASTER", token: "good-token"},
+	})
+
+	// 1. MASTER write with no edit_token: locked, no write recorded.
+	raw, _ := json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "MASTER",
+		"values":          map[string]any{"CTRL_MODE": 1},
+	})
+	res := r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("MASTER write without edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(pw.calls) != 0 {
+		t.Fatalf("MASTER write without edit_token must not be forwarded; got %d calls", len(pw.calls))
+	}
+
+	// 2. MASTER write with a wrong edit_token: still locked, no write recorded.
+	raw, _ = json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "MASTER",
+		"values":          map[string]any{"CTRL_MODE": 1},
+		"edit_token":      "wrong-token",
+	})
+	res = r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error == nil || res.Error.Code != CommandErrorLocked {
+		t.Fatalf("MASTER write with wrong edit_token: expected code %q, got %+v", CommandErrorLocked, res.Error)
+	}
+	if len(pw.calls) != 0 {
+		t.Fatalf("MASTER write with wrong edit_token must not be forwarded; got %d calls", len(pw.calls))
+	}
+
+	// 3. MASTER write with the correct edit_token: succeeds, write recorded.
+	raw, _ = json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "MASTER",
+		"values":          map[string]any{"CTRL_MODE": 1},
+		"edit_token":      "good-token",
+	})
+	res = r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error != nil {
+		t.Fatalf("MASTER write with correct edit_token: unexpected error: %+v", res.Error)
+	}
+	if len(pw.calls) != 1 {
+		t.Fatalf("MASTER write with correct edit_token: expected 1 write, got %d", len(pw.calls))
+	}
+
+	// 4. VALUES write with EditLocks set but no token: never gated.
+	raw, _ = json.Marshal(map[string]any{
+		"channel_address": "ABC0001:1",
+		"paramset_key":    "VALUES",
+		"values":          map[string]any{"STATE": true},
+	})
+	res = r.Dispatch(opCtx(), "paramset.put", raw)
+	if res.Error != nil {
+		t.Fatalf("VALUES write: unexpected error: %+v", res.Error)
+	}
+	if len(pw.calls) != 2 {
+		t.Fatalf("VALUES write: expected 2 total writes, got %d", len(pw.calls))
+	}
+}

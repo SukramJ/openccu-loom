@@ -140,7 +140,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
 	defer dbCancel()
 	db, err := sqlitestore.Open(dbCtx, dsn)
@@ -2694,12 +2694,94 @@ type matterWiring struct {
 	bi            *mattercore.BasicInformation
 }
 
+// matterReassembleReadyDebounce coalesces a burst of CentralSouthboundReadyEvents
+// (staggered multi-CCU bring-ups) into a single topology reassemble.
+const matterReassembleReadyDebounce = 750 * time.Millisecond
+
+// wireMatterReassembleOnReady rebuilds the Matter bridge topology once each
+// central's southbound bring-up has completed. The topology is first assembled
+// at daemon start — before the async CCU device load finishes — so without this
+// the bridge stays empty of bridged endpoints (and the commissioning window is
+// refused) until an operator toggles an exposure, even though exposures are
+// already enabled. Subscribing to CentralSouthboundReadyEvent closes that gap:
+// the persisted exposures take effect automatically once the devices load.
+//
+// The event handler only signals (non-blocking) so it never blocks the
+// serialized bus dispatch; the actual Reassemble runs on a dedicated debounce
+// goroutine that stops when ctx is cancelled. Returns the subscription closers.
+func wireMatterReassembleOnReady(
+	ctx context.Context,
+	buses []*events.Bus,
+	reassemble func(context.Context) error,
+	debounce time.Duration,
+	logger *slog.Logger,
+) []func() {
+	if reassemble == nil {
+		return nil
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	signal := make(chan struct{}, 1)
+	closers := make([]func(), 0, len(buses))
+	for _, bus := range buses {
+		if bus == nil {
+			continue
+		}
+		unsub := events.Subscribe(bus, func(hmevent.CentralSouthboundReadyEvent) {
+			select {
+			case signal <- struct{}{}:
+			default:
+			}
+		})
+		closers = append(closers, unsub)
+	}
+	if len(closers) == 0 {
+		return nil
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-signal:
+			}
+			// Debounce: wait for a quiet window so a staggered multi-CCU boot
+			// coalesces into one reassemble instead of one per central.
+			for settling := true; settling; {
+				select {
+				case <-ctx.Done():
+					return
+				case <-signal:
+				case <-time.After(debounce):
+					settling = false
+				}
+			}
+			runMatterReassemble(ctx, reassemble, logger)
+		}
+	}()
+	return closers
+}
+
+// runMatterReassemble invokes reassemble with panic isolation so a fault in the
+// topology build cannot crash the daemon from the debounce goroutine.
+func runMatterReassemble(ctx context.Context, reassemble func(context.Context) error, logger *slog.Logger) {
+	defer func() {
+		if r := recover(); r != nil {
+			logger.Error("matter.reassemble_on_ready.panic", slog.Any("panic", r))
+		}
+	}()
+	if err := reassemble(ctx); err != nil {
+		logger.Warn("matter.reassemble_on_ready.failed", slog.String("err", err.Error()))
+	}
+}
+
 // wireMatterRuntime stands up the Matter bridge runtime when enabled and
 // returns the REST/WS adapters, any device-availability unsubscribe
 // closures to register, and a teardown to defer. Returns a zero
 // matterWiring + nil closers + a no-op teardown when the bridge is off.
 //
-//nolint:gocognit,funlen // composition/wiring: long sequential Matter bridge setup
+//nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential Matter bridge setup
 func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
 	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, labels, logger); bundle != nil {
@@ -2753,6 +2835,17 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			})
 			closers = append(closers, unsub)
 		}
+		// Reassemble the topology once each central's initial device load
+		// completes: the boot-time assembly above runs before the async CCU
+		// load, so the persisted exposures would otherwise not take effect
+		// (empty bridge → commissioning refused) until an operator toggles one.
+		readyBuses := make([]*events.Bus, 0, len(reg.List()))
+		for _, u := range reg.List() {
+			if u != nil && u.EventBus != nil {
+				readyBuses = append(readyBuses, u.EventBus)
+			}
+		}
+		closers = append(closers, wireMatterReassembleOnReady(ctx, readyBuses, mb.Reassemble, matterReassembleReadyDebounce, logger)...)
 		// Wire the Root Descriptor's dynamic PartsList provider to
 		// the bridge's live topology so `0:0x001D:0x0003` reflects the
 		// freshly-assembled bridged endpoints. Apple Home reads

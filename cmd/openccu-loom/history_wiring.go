@@ -31,7 +31,7 @@ func wireHistoryStore(cfg *config.Config, logger *slog.Logger) *sqlite.Measureme
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "history.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "history.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := sqlite.OpenHistory(ctx, dsn)
@@ -90,6 +90,8 @@ func wireHistoryRecorder(
 			func() float64 { return float64(rec.Metrics().Recorded) })
 		healthTracker.RegisterGauge("history.dropped",
 			func() float64 { return float64(rec.Metrics().Dropped) })
+		healthTracker.RegisterGauge("history.flush_errors",
+			func() float64 { return float64(rec.Metrics().FlushErrors) })
 		healthTracker.RegisterGauge("history.rows_written",
 			func() float64 { return float64(store.MetricsSnapshot().RowsWritten) })
 		healthTracker.RegisterGauge("history.retention_deleted",

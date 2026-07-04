@@ -27,6 +27,11 @@ type stubParamsetService struct {
 	getLinkResult map[string]any
 	getLinkErr    error
 	putLinkErr    error
+
+	// putCalls / putLinkCalls count invocations so lock-gating tests can
+	// assert the service was never reached when a write is rejected.
+	putCalls     int
+	putLinkCalls int
 }
 
 func (s *stubParamsetService) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
@@ -34,6 +39,7 @@ func (s *stubParamsetService) GetParamset(_ context.Context, _ string, _ hmenum.
 }
 
 func (s *stubParamsetService) PutParamset(_ context.Context, _ string, _ hmenum.ParamsetKey, _ map[string]any) error {
+	s.putCalls++
 	return s.putErr
 }
 
@@ -42,6 +48,7 @@ func (s *stubParamsetService) GetLinkParamset(_ context.Context, _, _ string) (m
 }
 
 func (s *stubParamsetService) PutLinkParamset(_ context.Context, _, _ string, _ map[string]any) error {
+	s.putLinkCalls++
 	return s.putLinkErr
 }
 
@@ -112,7 +119,7 @@ func TestPutParamset_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
 	w := httptest.NewRecorder()
-	PutParamset(svc).ServeHTTP(w, req)
+	PutParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -126,7 +133,7 @@ func TestPutParamset_InvalidJSON_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
 	w := httptest.NewRecorder()
-	PutParamset(svc).ServeHTTP(w, req)
+	PutParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", w.Code)
@@ -168,7 +175,7 @@ func TestPutLinkParamset_HappyPath(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -187,7 +194,7 @@ func TestPutParamset_HiddenParam_Returns403(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
 	w := httptest.NewRecorder()
-	PutParamset(svc).ServeHTTP(w, req)
+	PutParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for hidden parameter, got %d body=%s", w.Code, w.Body.String())
@@ -209,7 +216,7 @@ func TestPutLinkParamset_HiddenParam_Returns403(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for hidden link parameter, got %d body=%s", w.Code, w.Body.String())
@@ -225,7 +232,7 @@ func TestPutParamset_BackendError_Returns502(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/", body)
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
 	w := httptest.NewRecorder()
-	PutParamset(svc).ServeHTTP(w, req)
+	PutParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502 for backend error, got %d", w.Code)
@@ -237,7 +244,7 @@ func TestPutParamset_BackendError_Returns502(t *testing.T) {
 func TestPutLinkParamset_NilService_Returns503(t *testing.T) {
 	t.Parallel()
 	r := chi.NewRouter()
-	r.Put("/devices/{addr}/link-paramsets/{peer}", PutLinkParamset(nil))
+	r.Put("/devices/{addr}/link-paramsets/{peer}", PutLinkParamset(nil, nil))
 	req := httptest.NewRequest(http.MethodPut, "/devices/DEV001:1/link-paramsets/DEV002:1", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -254,7 +261,7 @@ func TestPutLinkParamset_EmptyPeer_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/link-paramsets/", strings.NewReader(`{}`))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": ""}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for empty peer, got %d body=%s", w.Code, w.Body.String())
@@ -267,7 +274,7 @@ func TestPutLinkParamset_BadBody_Returns400(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/link-paramsets/peer", strings.NewReader("not-json"))
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -281,7 +288,7 @@ func TestPutLinkParamset_HiddenParamDirect_Returns403(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d body=%s", w.Code, w.Body.String())
@@ -295,7 +302,7 @@ func TestPutLinkParamset_ServiceError_Returns502(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
@@ -309,7 +316,7 @@ func TestPutLinkParamset_HappyPath_Returns202(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
 	w := httptest.NewRecorder()
-	PutLinkParamset(svc).ServeHTTP(w, req)
+	PutLinkParamset(svc, nil).ServeHTTP(w, req)
 
 	if w.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
@@ -326,5 +333,137 @@ func TestGetLinkParamset_ServiceError_Returns502(t *testing.T) {
 
 	if w.Code != http.StatusBadGateway {
 		t.Fatalf("expected 502, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// --- Strict edit-lock enforcement (MASTER/LINK gated, VALUES not) ---
+
+func TestPutParamset_MasterNoToken_Returns423(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"CTRL_MODE": 1}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "MASTER"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("expected problem+json content type, got %q", ct)
+	}
+	if svc.putCalls != 0 {
+		t.Fatalf("expected service NOT to be called, got %d calls", svc.putCalls)
+	}
+}
+
+func TestPutParamset_MasterWrongToken_Returns423(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	if _, ok := locks.Open("channel:DEV001:1:MASTER", "test"); !ok {
+		t.Fatal("open failed")
+	}
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"CTRL_MODE": 1}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req.Header.Set(EditTokenHeader, "wrong-token")
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "MASTER"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.putCalls != 0 {
+		t.Fatalf("expected service NOT to be called, got %d calls", svc.putCalls)
+	}
+}
+
+func TestPutParamset_MasterHeldToken_Returns202(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	lock, ok := locks.Open("channel:DEV001:1:MASTER", "test")
+	if !ok {
+		t.Fatal("open failed")
+	}
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"CTRL_MODE": 1}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req.Header.Set(EditTokenHeader, lock.Token)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "MASTER"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.putCalls != 1 {
+		t.Fatalf("expected service to be called once, got %d calls", svc.putCalls)
+	}
+}
+
+// TestPutParamset_ValuesNoToken_Returns202 proves VALUES writes are
+// never gated even when a real edit-lock verifier is wired in.
+func TestPutParamset_ValuesNoToken_Returns202(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"LEVEL": 0.5}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "key": "VALUES"}))
+	w := httptest.NewRecorder()
+	PutParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.putCalls != 1 {
+		t.Fatalf("expected service to be called once, got %d calls", svc.putCalls)
+	}
+}
+
+func TestPutLinkParamset_NoToken_Returns423(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"SHORT_ON_TIME": 1.0}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
+	w := httptest.NewRecorder()
+	PutLinkParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusLocked {
+		t.Fatalf("expected 423, got %d body=%s", w.Code, w.Body.String())
+	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("expected problem+json content type, got %q", ct)
+	}
+	if svc.putLinkCalls != 0 {
+		t.Fatalf("expected service NOT to be called, got %d calls", svc.putLinkCalls)
+	}
+}
+
+func TestPutLinkParamset_HeldToken_Returns202(t *testing.T) {
+	t.Parallel()
+	locks := NewEditSessions()
+	lock, ok := locks.Open("channel:DEV001:1:LINK:DEV002:1", "test")
+	if !ok {
+		t.Fatal("open failed")
+	}
+	svc := &stubParamsetService{}
+	body := strings.NewReader(`{"SHORT_ON_TIME": 1.0}`)
+	req := httptest.NewRequest(http.MethodPut, "/", body)
+	req.Header.Set(EditTokenHeader, lock.Token)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001:1", "peer": "DEV002:1"}))
+	w := httptest.NewRecorder()
+	PutLinkParamset(svc, locks).ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", w.Code, w.Body.String())
+	}
+	if svc.putLinkCalls != 1 {
+		t.Fatalf("expected service to be called once, got %d calls", svc.putLinkCalls)
 	}
 }

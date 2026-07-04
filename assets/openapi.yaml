@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: openccu-loom REST API
-  version: 2.13.0
+  version: 2.14.0
   description: |
     North-bound REST + WebSocket surface of the openccu-loom daemon.
     Errors follow RFC 9457 problem+json.
@@ -412,6 +412,17 @@ paths:
           required: false
           schema: { type: string }
           description: Optional UUID for client-side retry de-duplication. See description.
+        - name: X-Edit-Token
+          in: header
+          required: false
+          schema: { type: string }
+          description: >-
+            Edit-lock token for MASTER and LINK writes. These configuration
+            paramsets are gated behind the per-resource edit lock: the caller
+            must open an edit session (`POST /sessions/edit` with key
+            `channel:{addr}:{key}`) and present the returned token here, else
+            the write is rejected 423 Locked. VALUES writes are ungated and
+            ignore this header.
       requestBody:
         required: true
         content:
@@ -424,6 +435,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "423":
+          $ref: "#/components/responses/Locked"
         "502":
           $ref: "#/components/responses/BadGateway"
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -2134,10 +2147,21 @@ paths:
       parameters:
         - { in: path, name: addr, required: true, schema: { type: string } }
         - { in: path, name: peer, required: true, schema: { type: string } }
+        - name: X-Edit-Token
+          in: header
+          required: false
+          schema: { type: string }
+          description: >-
+            Edit-lock token. A LINK paramset is per-peer configuration gated
+            behind the per-resource edit lock: the caller must open an edit
+            session (`POST /sessions/edit` with key
+            `channel:{addr}:LINK:{peer}`) and present the returned token here,
+            else the write is rejected 423 Locked.
       responses:
         "202": { description: Scheduled }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "423": { $ref: "#/components/responses/Locked" }
         "502": { $ref: "#/components/responses/BadGateway" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /devices/{addr}/central-links:
@@ -4456,6 +4480,13 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
     Conflict:
       description: Request conflicts with current server state
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Locked:
+      description: >-
+        The resource is locked by an edit session and the request did not
+        present a valid X-Edit-Token that currently holds that lock.
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }

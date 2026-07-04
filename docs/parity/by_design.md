@@ -3369,28 +3369,38 @@ preserving the shipped behaviour. The other eight behavior toggles
 `include_internal_programs`, `sysvar_markers`/`program_markers`,
 `delay_new_device_creation`) match the reference defaults.
 
-## Per-class southbound throttles — single shared pool in production
+## Per-class southbound throttles — independent bounded pools in production
 
 `InterfaceClient` exposes three per-RPC-class throttle slots —
-`ReadThrottle`, `WriteThrottle`, `ControlThrottle` — so reads can be
-paced independently of writes. In production wiring
-(`internal/central/adapter/ccu_wiring.go`) only the single-pool
-`Throttle` is filled from operator config; the three per-class slots
-are left nil and `client.New` maps them all to the shared pool. The
-three-pool code path is therefore reachable only in tests that
-construct `client.Config` directly.
+`ReadThrottle`, `WriteThrottle`, `ControlThrottle` — so reads are
+paced independently of writes. Production wiring
+(`internal/central/adapter/ccu_wiring.go` +
+`cuxd_wiring.go` via `perClassThrottlePools` in
+`internal/central/adapter/throttle_pools.go`) now fills all three
+slots with independent bounded pools instead of aliasing them to one
+shared pool. Read and write keep an in-flight capacity of 1 (matching
+the historic single-pool capacity) but no longer share a permit;
+control is sized near-unbounded (capacity 8) so a reconnect storm does
+not stall device traffic. Each pool bounds its pending-waiter heap at
+4× its capacity (`ThrottleConfig.MaxQueueDepth`) so a stalled CCU fails
+non-critical work fast (`ErrThrottleQueueFull` → the retrier's backoff)
+instead of growing the queue until the daemon OOMs. The operator's
+`command_throttle_inter_command_delay` paces the **write** pool only —
+RF duty cycle is a transmit-side concern, so reads and control are not
+gated by it.
 
-**Rationale:** The reference stack (aiohomematic) provides no
-per-class throttle concept; all CCU RPCs share one
-`InterCommandDelay`. The three-pool split was added speculatively to
-allow future tuning without a public API break. Until an operator
-config surface (`reliability.read_throttle_delay`,
-`reliability.write_throttle_delay`) is added, wiring separate pools
-would require hard-coded heuristic ratios (e.g. 2× write vs. read)
-that are unjustified by real load data and would differ from the
-reference. The single shared pool is therefore the correct production
-default; the per-class slots remain available for the future tuning
-surface.
+**Rationale:** The reference stack (aiohomematic) shares one
+`InterCommandDelay` across all CCU RPCs, but that couples unrelated
+traffic: a write backing off on a CCU `DUTY_CYCLE` fault (tens of
+seconds) parked the sole shared permit and blocked every read and
+liveness ping behind it. Splitting into independent pools decouples the
+classes; combined with acquiring the throttle permit per wire-attempt
+inside the retry loop (released before each backoff sleep, see
+`InterfaceClient.Call` / `SetValue` / `PutParamset`) and checking the
+circuit breaker before taking a permit, a backing-off or shed command
+no longer starves independent traffic. Capacities are conservative
+(read/write = 1, matching the historic single pool) rather than tuned
+ratios; a future operator surface can expose them without an API break.
 
 ### BD-Export-OrderedFetchXMLBINOnly — device-definition export reads descriptions over XML-RPC + BIN-RPC only
 

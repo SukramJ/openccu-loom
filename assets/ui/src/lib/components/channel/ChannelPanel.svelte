@@ -166,16 +166,16 @@
       if (ev.type !== "data_point") return;
       const p = ev.payload as DataPointChangedEvent;
       if (p.channel_address !== wantedChannel) return;
-      // Update server snapshot unconditionally; for the working
-      // copy, only mirror when the user has not touched the field.
+      // Decide whether the operator holds an unsaved edit for this
+      // parameter BEFORE patching the server snapshot: once
+      // serverValues carries the incoming value the field would no
+      // longer register as dirty, so we'd lose the ability to tell an
+      // edit apart from a settled value. The working copy only follows
+      // the CCU push when the field is not dirty, so a pending edit is
+      // never clobbered.
+      const userTouched = dirtySet.has(p.parameter);
+      // The server snapshot always tracks the CCU's latest value.
       serverValues = { ...serverValues, [p.parameter]: p.value };
-      const userTouched =
-        p.parameter in values &&
-        JSON.stringify(values[p.parameter]) !== JSON.stringify(serverValues[p.parameter]) &&
-        // The condition above is never true on first patch since we
-        // just patched serverValues; check against the previous user
-        // edit by re-reading the values map directly.
-        false;
       if (!userTouched) {
         values = { ...values, [p.parameter]: p.value };
       }
@@ -211,6 +211,11 @@
   // and we surface the conflict in the banner.
   let lockSession = $state<EditSessionResponse | null>(null);
   let lockedByOther = $state<string | null>(null);
+  // True once a lock we HELD was lost mid-life (heartbeat failure /
+  // take-over). Distinct from "never acquired" (e.g. 503 when sessions
+  // aren't wired), which stays optimistic; a lost lock blocks saves
+  // because another operator may now own the paramset.
+  let lockLost = $state(false);
   let lockKey = $state("");
   $effect(() => {
     const key = `channel:${channelAddress}:${paramset}${peer ? `:${peer}` : ""}`;
@@ -223,6 +228,7 @@
         if (!cancelled) {
           lockSession = sess;
           lockedByOther = null;
+          lockLost = false;
         }
       } catch (err) {
         if (err instanceof ApiError && err.status === 423) {
@@ -238,8 +244,10 @@
         const next = await api.heartbeatEditSession(lockSession);
         lockSession = next;
       } catch {
-        // Lock expired or revoked; clear so save shows the warning.
+        // Lock expired or revoked; clear and flag so save() blocks
+        // instead of clobbering whoever took the lock over.
         lockSession = null;
+        lockLost = true;
       }
     }, 90_000);
     return () => {
@@ -398,21 +406,30 @@
 
   async function save() {
     if (!schema || dirtyNames.length === 0 || hasErrors) return;
+    // Refuse to write once our edit lock was taken over or dropped
+    // mid-life: PUTting now would silently clobber whoever holds the
+    // lock. A lock we never acquired (sessions unwired → both null)
+    // still saves optimistically. The server's 409/423 is the backstop.
+    if (lockedByOther || lockLost) {
+      toastStore.error(t("channel.lock_lost"), t("channel.lock_lost_detail"));
+      return;
+    }
     saving = true;
     banner = null;
     try {
       if (paramset === "MASTER") {
         // MASTER writes must go through putParamset: the CCU applies
         // configuration changes atomically and rejects individual
-        // per-parameter writes for many MASTER fields.
+        // per-parameter writes for many MASTER fields. The daemon
+        // enforces the edit lock, so we present the held token.
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putParamset(channelAddress, "MASTER", batch);
+        await api.putParamset(channelAddress, "MASTER", batch, lockSession?.token);
       } else if (paramset === "LINK") {
         if (!peer) throw new Error("LINK save requires a peer address");
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putLinkParamset(channelAddress, peer, batch);
+        await api.putLinkParamset(channelAddress, peer, batch, lockSession?.token);
       } else {
         for (const name of dirtyNames) {
           await api.setValue(address, channel, name, values[name]);
@@ -425,7 +442,15 @@
       toastStore.success(t("channel.saved_short"));
       banner = null;
     } catch (err) {
-      toastStore.error(t("channel.save_failed"), friendlyError(err, t));
+      // 423 Locked: our edit lock lapsed (heartbeat missed, taken over,
+      // or never acquired). Clear it so the "locked by other" recovery
+      // banner shows, and prompt the user to re-open the session.
+      if (err instanceof ApiError && err.status === 423) {
+        lockSession = null;
+        toastStore.error(t("channel.save_failed"), t("channel.lock_lost"));
+      } else {
+        toastStore.error(t("channel.save_failed"), friendlyError(err, t));
+      }
     } finally {
       saving = false;
     }
@@ -589,6 +614,7 @@
           const sess = await api.openEditSession(lockKey);
           lockSession = sess;
           lockedByOther = null;
+          lockLost = false;
         } catch (err) {
           if (err instanceof ApiError && err.status === 423) {
             lockedByOther = err.message;
@@ -598,6 +624,12 @@
     >
       {t("channel.take_over")}
     </button>
+  </div>
+{/if}
+
+{#if lockLost}
+  <div class="mb-3 flex flex-wrap items-center gap-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+    <span class="flex-1">{t("channel.lock_lost_detail")}</span>
   </div>
 {/if}
 

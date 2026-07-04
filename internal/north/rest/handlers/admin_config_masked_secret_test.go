@@ -73,16 +73,14 @@ func putSection(svc ConfigAdminService, section, body string) *httptest.Response
 	return w
 }
 
-// TestPutConfigSection_RestoresMaskedSecrets reproduces the operator's report:
-// editing north.rest.public_url and saving did nothing because the section
-// carries the complex secret fields auth.users / auth.tokens (map[string]string).
-// The GET masks them to "***"; the SPA echoes the sentinel back; without
-// restoration the strict unmarshal of "***" into a map fails (so the save
-// 400s) — or, for a string secret, the sentinel would overwrite the real value.
-// The fix restores every masked sentinel to the current real value before
-// validation + persistence, so the edited field saves and existing secrets
-// are preserved.
-func TestPutConfigSection_RestoresMaskedSecrets(t *testing.T) {
+// TestPutConfigSection_StripsAuthCredentials verifies the north.rest section
+// PUT can neither carry nor wipe the basic-auth users / API tokens: those
+// credentials live only in the SQLite user/token stores now (managed by the
+// /api/v1/users and /auth/tokens CRUD). A REST PUT that echoes back the masked
+// auth maps (or omits them) must still persist the edited public_url, and the
+// persisted section JSON must contain no auth credentials at all — so a REST
+// save can never overwrite an operator's logins.
+func TestPutConfigSection_StripsAuthCredentials(t *testing.T) {
 	t.Parallel()
 
 	current := &config.Config{
@@ -117,11 +115,16 @@ func TestPutConfigSection_RestoresMaskedSecrets(t *testing.T) {
 	if saved.PublicURL != "https://loom-rc.toonlan.de/" {
 		t.Errorf("edited public_url not persisted: %q", saved.PublicURL)
 	}
-	if got := saved.Auth.Users["admin"]; got != "$2a$10$realhashvalue" {
-		t.Errorf("masked secret map auth.users not restored: %#v", saved.Auth.Users)
+	// Auth credentials must never be carried by the section row.
+	if len(saved.Auth.Users) != 0 {
+		t.Errorf("auth.users must not be persisted in the REST section: %#v", saved.Auth.Users)
 	}
-	if got := saved.Auth.Tokens["tok"]; got != "admin" {
-		t.Errorf("masked secret map auth.tokens not restored: %#v", saved.Auth.Tokens)
+	if len(saved.Auth.Tokens) != 0 {
+		t.Errorf("auth.tokens must not be persisted in the REST section: %#v", saved.Auth.Tokens)
+	}
+	// The raw persisted JSON must carry no auth key at all.
+	if strings.Contains(string(fake.putJSON), `"users"`) || strings.Contains(string(fake.putJSON), `"tokens"`) {
+		t.Errorf("persisted REST section still carries auth credentials: %s", fake.putJSON)
 	}
 }
 
@@ -199,32 +202,32 @@ func TestPutConfigSection_RestoresWebhookSecret(t *testing.T) {
 }
 
 // TestPutConfigSection_KeepsOperatorSuppliedSecret verifies a genuinely changed
-// secret (a non-sentinel value) is persisted verbatim — restoration only
-// touches the "***" sentinel, never operator-supplied new secrets.
+// string secret (a non-sentinel value) is persisted verbatim — restoration
+// only touches the "***" sentinel, never operator-supplied new secrets. Uses
+// the outbound-webhook signing secret, a string secret that still lives in its
+// section (unlike the auth credentials, which moved to the SQLite stores).
 func TestPutConfigSection_KeepsOperatorSuppliedSecret(t *testing.T) {
 	t.Parallel()
 
 	current := &config.Config{
 		North: config.NorthConfig{
-			REST: config.NorthREST{
-				Auth: config.AuthConfig{Users: map[string]string{"admin": "$2a$10$old"}},
-			},
+			Webhook: config.NorthWebhook{Enabled: true, URL: "https://hook.example", Secret: "old-key"},
 		},
 	}
 	fake := &fakeConfigAdminSvc{effectiveResult: &configstore.EffectiveResult{Config: current}}
 
-	body := `{"auth":{"users":{"admin":"$2a$10$brandnew"}}}`
-	w := putSection(fake, "north.rest", body)
+	body := `{"enabled":true,"url":"https://hook.example","secret":"brand-new-key"}`
+	w := putSection(fake, "north.webhook", body)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("save should succeed; got %d: %s", w.Code, w.Body.String())
 	}
-	var saved config.NorthREST
+	var saved config.NorthWebhook
 	if err := json.Unmarshal(fake.putJSON, &saved); err != nil {
 		t.Fatalf("persisted section JSON is invalid: %v", err)
 	}
-	if got := saved.Auth.Users["admin"]; got != "$2a$10$brandnew" {
-		t.Errorf("operator-supplied new secret was not persisted: %#v", saved.Auth.Users)
+	if saved.Secret != "brand-new-key" {
+		t.Errorf("operator-supplied new secret was not persisted: %q", saved.Secret)
 	}
 }
 

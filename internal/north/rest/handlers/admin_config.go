@@ -192,7 +192,16 @@ func GetConfigSchema() http.HandlerFunc {
 		for _, sec := range configstore.AllSections() {
 			out.Sections = append(out.Sections, string(sec))
 		}
+		unmanaged := configstore.UnmanagedFieldPaths()
 		for _, f := range fields {
+			// Skip fields that are not editable through the section editor:
+			// bootstrap-tier north.rest.listen and the SQLite-managed auth
+			// credentials (north.rest.auth.users / .tokens). They are managed
+			// by BootstrapConfig and the dedicated user/token CRUD surfaces,
+			// so the SPA must not render them as REST-section fields.
+			if _, skip := unmanaged[f.Path]; skip {
+				continue
+			}
 			_, restart := restartRequiredPaths[f.Path]
 			def := consumerDefaults[f.Path]
 			out.Fields = append(out.Fields, SchemaField{
@@ -459,17 +468,50 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 				problem.New(problem.TypeValidation, r, "Invalid JSON", err.Error()))
 			return
 		}
+		// Drop fields the section must never carry: bootstrap-tier
+		// north.rest.listen and the SQLite-managed auth credentials
+		// (north.rest.auth.users / .tokens). This is what makes a REST PUT
+		// that omits auth unable to wipe an operator's logins — the
+		// credentials live only in the user/token stores now.
+		raw = configstore.StripUnmanagedSectionFields(section, raw)
 		// Turn any masked-secret sentinel the SPA echoed back into the real
 		// stored value before validation/persistence, so a round-tripped "***"
 		// neither fails type-validation nor overwrites the secret. Best-effort:
 		// if the current config is unavailable the raw payload validates as-is.
+		var current *config.Config
 		if cur, cerr := svc.Effective(r.Context()); cerr == nil && cur != nil {
+			current = cur.Config
 			raw = restoreMaskedSecrets(cur.Config, section, raw)
 		}
 		if err := validateSection(section, raw); err != nil {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
 			return
+		}
+		// Semantic validation: a section can be a well-typed instance of its
+		// struct yet still be semantically invalid (empty broker_url with mqtt
+		// enabled, callback port out of range, ftp:// public_url). Assemble the
+		// candidate effective config with the new section overlaid and run
+		// config.Validate so such a section is rejected with 400 instead of
+		// being persisted and only warned about at the next boot. The same
+		// candidate answers the restart-required question per changed field.
+		restartRequired := false
+		if current != nil {
+			base := cloneConfig(current)
+			base.ApplyDefaults()
+			candidate := cloneConfig(current)
+			if err := configstore.ApplySectionToConfig(section, raw, candidate); err != nil {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
+				return
+			}
+			candidate.ApplyDefaults()
+			if err := candidate.Validate(); err != nil {
+				problem.Write(w, http.StatusBadRequest,
+					problem.New(problem.TypeValidation, r, "Section validation failed", err.Error()))
+				return
+			}
+			restartRequired = len(config.RestartRequiredDiff(base, candidate)) > 0
 		}
 		updatedBy := identityFromCtx(r.Context())
 		row, err := svc.PutSection(r.Context(), section, raw, updatedBy)
@@ -490,9 +532,28 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 			"section":          string(section),
 			"version":          row.Version,
 			"updated_at":       row.UpdatedAt,
-			"restart_required": sectionRestartRequired(section),
+			"restart_required": restartRequired,
 		})
 	}
+}
+
+// cloneConfig returns an independent deep copy of c via a JSON round-trip so
+// the REST handler can assemble a candidate effective config (current with a
+// section overlaid) without mutating the caller's config. A nil input or a
+// round-trip failure degrades to a fresh defaulted config.
+func cloneConfig(c *config.Config) *config.Config {
+	if c == nil {
+		return config.Default()
+	}
+	raw, err := json.Marshal(c)
+	if err != nil {
+		return config.Default()
+	}
+	out := &config.Config{}
+	if err := json.Unmarshal(raw, out); err != nil {
+		return config.Default()
+	}
+	return out
 }
 
 // DeleteConfigSection reverts to defaults.
@@ -599,24 +660,6 @@ func strictUnmarshal(raw json.RawMessage, target any) error {
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	dec.DisallowUnknownFields()
 	return dec.Decode(target)
-}
-
-// sectionRestartRequired returns true for sections whose changes
-// cannot be hot-reloaded. Every other section is hot-applied; the
-// default-false return is intentional so adding a new
-// [configstore.Section] does not silently mark it restart-required.
-//
-//nolint:exhaustive // hot-reload is the default; explicit cases only for restart-required sections.
-func sectionRestartRequired(section configstore.Section) bool {
-	switch section {
-	case configstore.SectionCallback,
-		configstore.SectionMatter,
-		configstore.SectionMCP,
-		configstore.SectionCCUAuth,
-		configstore.SectionHAIngress:
-		return true
-	}
-	return false
 }
 
 func itoa(n int) string {

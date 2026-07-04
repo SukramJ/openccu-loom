@@ -26,7 +26,7 @@ func wireMasterValuesStore(cfg *config.Config, logger *slog.Logger) *sqlite.Mast
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := sqlite.Open(ctx, dsn)

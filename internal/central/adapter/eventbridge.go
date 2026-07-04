@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -55,7 +56,22 @@ type EventBridge struct {
 	vis      filter.VisibilitySet
 	labels   mqtt.ParameterLabeler
 
-	unsubs []func()
+	// startMu guards unsubs and started so Start/Stop are safe to call
+	// concurrently and Start is idempotent. It is only held around the
+	// (bounded) subscription bookkeeping — never while invoking a handler or
+	// a broker publish — so it cannot stall dispatch.
+	startMu sync.Mutex
+	started bool
+	unsubs  []func()
+
+	// fanout decouples the live value-change MQTT publish work from the bus
+	// dispatch goroutine (see mqtt_fanout.go). Created in Start, drained by a
+	// single worker, torn down in Stop. Held behind an atomic pointer so the
+	// hot dispatch path (dispatchLive) reads it lock-free. Nil before the
+	// first Start — the live dispatch path falls back to a synchronous publish
+	// in that case so unit tests that invoke handlers without Start keep
+	// working.
+	fanout atomic.Pointer[mqttFanout]
 
 	// availabilityCache is keyed by `<central>|<iface>|<deviceAddr>` and
 	// holds the last availability state we published for that device.
@@ -108,8 +124,18 @@ func (b *EventBridge) WithParameterLabels(l mqtt.ParameterLabeler) *EventBridge 
 	return b
 }
 
-// Start attaches a subscription per central.
+// Start attaches a subscription per central and brings up the MQTT fan-out
+// worker. It is idempotent: a second Start first detaches the previous run's
+// subscriptions and worker, so it never double-subscribes.
 func (b *EventBridge) Start(ctx context.Context) {
+	// Idempotent guard: tear down any previous run before re-attaching. detach
+	// runs its blocking work (unsub barriers, worker drain) without startMu
+	// held, so it composes with the locked section below.
+	b.detach()
+
+	b.startMu.Lock()
+	defer b.startMu.Unlock()
+
 	// Initialise a bridge-lifetime cancellable context. Background goroutines
 	// spawned during PublishInitialSnapshot hold lifetimeCtx so Stop()
 	// can cancel them early (via stopCancel) and then drain via goroutineWG.
@@ -118,48 +144,85 @@ func (b *EventBridge) Start(ctx context.Context) {
 	if b.registry == nil {
 		return
 	}
+
+	// The MQTT fan-out worker decouples broker I/O from bus dispatch: the live
+	// value-change handlers enqueue here instead of publishing inline, so a
+	// slow / half-open broker never stalls the dispatch goroutine of any
+	// central. See mqtt_fanout.go and dispatchLive.
+	f := newMQTTFanout()
+	//nolint:contextcheck // worker inherits the bridge-lifetime context, not Start's ctx; stop() cancels it
+	f.start(b.lifetimeCtx)
+	b.fanout.Store(f)
+	b.started = true
+
 	for _, u := range b.registry.List() {
 		bus := u.EventBus
-		unsub := events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
-			b.onValueChanged(ctx, u.Name(), e)
-		})
-		b.unsubs = append(b.unsubs, unsub)
-
-		unsubCentral := events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
-			b.onCentralState(u.Name(), e)
-		})
-		b.unsubs = append(b.unsubs, unsubCentral)
-
-		// Wire-DP source-token transitions (cache → live, live →
-		// stale, stale → live) republish the same topic even though
-		// the value did not change. Without this consumers that gate
-		// on value diff (HA without `force_update`) miss freshness
-		// flips. ADR 0019.
-		unsubSrc := events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
-			b.onSourceChanged(ctx, u.Name(), e)
-		})
-		b.unsubs = append(b.unsubs, unsubSrc)
-
-		// Prune the MQTT bridge's declared map when a device is removed so
-		// the dedup gate does not suppress subsequent orphan-cleanup evictions
-		// of the same topics, and so snapshot passes do not re-emit discovery
-		// configs for a device that no longer exists in the model.
-		unsubRemoved := events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
-			b.onDeviceRemoved(ctx, e)
-		})
-		b.unsubs = append(b.unsubs, unsubRemoved)
-
-		// Per-central southbound-ready: the readiness-gated bring-up loads each
-		// central's devices (with names) asynchronously, after this boot-time
-		// PublishInitialSnapshot would have run. Publish that central's snapshot
-		// when it signals ready so its devices reach the broker without waiting
-		// for a restart. Idempotent (the bridge diff-gates on its declared map),
-		// so it composes safely with the catch-up PublishInitialSnapshot call.
-		unsubReady := events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
-			b.PublishCentralSnapshot(ctx, e.CentralName)
-		})
-		b.unsubs = append(b.unsubs, unsubReady)
+		b.unsubs = append(
+			b.unsubs,
+			events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) {
+				b.onValueChanged(u.Name(), e)
+			}),
+			events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) {
+				b.onCentralState(u.Name(), e)
+			}),
+			// Wire-DP source-token transitions (cache → live, live →
+			// stale, stale → live) republish the same topic even though
+			// the value did not change. Without this consumers that gate
+			// on value diff (HA without `force_update`) miss freshness
+			// flips. ADR 0019.
+			events.Subscribe(bus, func(e hmevent.DataPointSourceChangedEvent) {
+				b.onSourceChanged(u.Name(), e)
+			}),
+			// Prune the MQTT bridge's declared map when a device is removed so
+			// the dedup gate does not suppress subsequent orphan-cleanup evictions
+			// of the same topics, and so snapshot passes do not re-emit discovery
+			// configs for a device that no longer exists in the model.
+			events.Subscribe(bus, func(e hmevent.DeviceRemovedEvent) {
+				b.onDeviceRemoved(ctx, e)
+			}),
+			// Per-central southbound-ready: the readiness-gated bring-up loads each
+			// central's devices (with names) asynchronously, after this boot-time
+			// PublishInitialSnapshot would have run. Publish that central's snapshot
+			// when it signals ready so its devices reach the broker without waiting
+			// for a restart. Idempotent (the bridge diff-gates on its declared map),
+			// so it composes safely with the catch-up PublishInitialSnapshot call.
+			events.Subscribe(bus, func(e hmevent.CentralSouthboundReadyEvent) {
+				b.PublishCentralSnapshot(ctx, e.CentralName)
+			}),
+		)
 	}
+}
+
+// detach releases every subscription, stops the MQTT fan-out worker and waits
+// for background goroutines to exit. It is shared by Start (idempotent
+// re-attach) and Stop. Safe to call when the bridge was never started.
+//
+// The teardown bookkeeping (snapshot + clear the subscription slice and worker
+// handle) runs under startMu, but the blocking teardown steps run without it:
+// each unsub is a barrier that waits for any in-flight dispatch of that
+// handler, so holding startMu across it could stall a concurrent Start/Stop.
+func (b *EventBridge) detach() {
+	b.startMu.Lock()
+	unsubs := b.unsubs
+	b.unsubs = nil
+	stopCancel := b.stopCancel
+	b.started = false
+	b.startMu.Unlock()
+
+	fanout := b.fanout.Swap(nil)
+
+	for _, u := range unsubs {
+		if u != nil {
+			u()
+		}
+	}
+	if stopCancel != nil {
+		stopCancel()
+	}
+	if fanout != nil {
+		fanout.stop()
+	}
+	b.goroutineWG.Wait()
 }
 
 // onSourceChanged fans a lifecycle transition out to the same MQTT
@@ -168,7 +231,7 @@ func (b *EventBridge) Start(ctx context.Context) {
 // dedup gate downstream treats it as a fresh emission. The value
 // itself comes from the source-changed event's Value field, which
 // the DP layer fills with its current RawValue at transition time.
-func (b *EventBridge) onSourceChanged(ctx context.Context, centralName string, e hmevent.DataPointSourceChangedEvent) {
+func (b *EventBridge) onSourceChanged(centralName string, e hmevent.DataPointSourceChangedEvent) {
 	if b == nil || b.mqtt == nil {
 		return
 	}
@@ -179,7 +242,7 @@ func (b *EventBridge) onSourceChanged(ctx context.Context, centralName string, e
 	if err != nil {
 		return
 	}
-	b.onValueChangedKind(ctx, centralName, ws.KindRefresh, hmevent.DataPointValueChangedEvent{
+	b.dispatchLive(centralName, ws.KindRefresh, hmevent.DataPointValueChangedEvent{
 		Base: hmevent.NewBase(),
 		Key: hmtypes.DataPointKey{
 			InterfaceID:    e.InterfaceID,
@@ -605,201 +668,276 @@ func (b *EventBridge) registerAndLoadUnobservedCalculatedDP(
 	b.publishDiscoveryForUnobservedDP(ctx, centralName, ifaceID, d, ch, channelNo, parameter, hmenum.ParamsetKeyValues)
 }
 
-// Stop releases every subscription, cancels background goroutines and waits
-// for them to exit. Safe to call before Start (stopCancel may be nil).
+// Stop releases every subscription, stops the MQTT fan-out worker, cancels
+// background goroutines and waits for them to exit. Idempotent and safe to call
+// before Start.
 func (b *EventBridge) Stop() {
-	for _, u := range b.unsubs {
-		if u != nil {
-			u()
-		}
-	}
-	b.unsubs = nil
-	if b.stopCancel != nil {
-		b.stopCancel()
-	}
-	b.goroutineWG.Wait()
+	b.detach()
 }
 
-func (b *EventBridge) onValueChanged(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
-	b.onValueChangedKind(ctx, centralName, ws.KindChange, e)
+// FanoutDropped reports how many live value-change MQTT publishes were dropped
+// because the per-broker fan-out queue was full (drop-oldest backpressure).
+// Zero until a broker is slow enough to overflow the queue.
+func (b *EventBridge) FanoutDropped() uint64 {
+	if f := b.fanout.Load(); f != nil {
+		return f.droppedCount()
+	}
+	return 0
+}
+
+// FanoutQueueDepth reports how many live value-change publishes are currently
+// queued for the fan-out worker. A steadily growing depth indicates a broker
+// that cannot keep up.
+func (b *EventBridge) FanoutQueueDepth() int {
+	if f := b.fanout.Load(); f != nil {
+		return f.queueDepth()
+	}
+	return 0
+}
+
+// Flush blocks until the MQTT fan-out worker has drained every publish enqueued
+// before the call. It is a test barrier — the live path is intentionally
+// asynchronous — and a no-op before Start.
+func (b *EventBridge) Flush() {
+	if f := b.fanout.Load(); f != nil {
+		f.flush()
+	}
+}
+
+func (b *EventBridge) onValueChanged(centralName string, e hmevent.DataPointValueChangedEvent) {
+	b.dispatchLive(centralName, ws.KindChange, e)
+}
+
+// dispatchLive fans a live bus event (a real value change or a source-token
+// refresh) out to both north-bound sinks. The WebSocket publish stays inline on
+// the dispatch goroutine because the hub's per-client enqueue is already
+// bounded and non-blocking (drop-on-full closes the slow client). The MQTT
+// publish is handed to the per-broker fan-out worker so a slow / half-open
+// broker never blocks bus dispatch — the finding this method exists to fix.
+//
+// When the bridge has no MQTT wiring there is nothing to fan out. When the
+// fan-out worker is not running (a unit test that drives a handler without
+// calling Start), the publish falls back to running inline so behaviour is
+// preserved.
+func (b *EventBridge) dispatchLive(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+	b.publishValueChangedWS(centralName, envKind, e)
+	if b.mqtt == nil {
+		return
+	}
+	f := b.fanout.Load()
+	if f == nil {
+		b.publishValueChangedMQTT(b.lifetimeCtx, centralName, e)
+		return
+	}
+	f.enqueue(func() {
+		b.publishValueChangedMQTT(f.ctx, centralName, e)
+	})
 }
 
 // onValueChangedKind is the envelope-kind-aware variant. Callers in
 // the initial-snapshot loop pass [ws.KindInitial]; the source-token
 // re-emit path passes [ws.KindRefresh]; the regular bus subscription
 // flows through [onValueChanged] which defaults to [ws.KindChange].
+//
+// This is the SYNCHRONOUS composition used by the boot-time snapshot
+// path, which runs off the bus dispatch goroutine and needs the broker
+// publish to complete inline. The live bus subscriptions do NOT call
+// this — they go through [EventBridge.dispatchLive], which runs the WS
+// side inline and hands the MQTT side to the fan-out worker.
 func (b *EventBridge) onValueChangedKind(ctx context.Context, centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
-	channel, channelNo := parseChannel(e.Key.ChannelAddress)
+	b.publishValueChangedWS(centralName, envKind, e)
+	b.publishValueChangedMQTT(ctx, centralName, e)
+}
+
+// publishValueChangedWS emits the WebSocket-side fan-out for a value change.
+// The hub's per-client enqueue is bounded and non-blocking, so this is safe to
+// run inline on the bus dispatch goroutine.
+func (b *EventBridge) publishValueChangedWS(centralName, envKind string, e hmevent.DataPointValueChangedEvent) {
+	if b.wsHub == nil {
+		return
+	}
+	_, channelNo := parseChannel(e.Key.ChannelAddress)
 	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
-
 	iface := inferInterface(e.Key)
-	model, name := lookupDevice(b.registry, deviceAddr)
 
-	if b.wsHub != nil {
-		// Resolve the channel once: it feeds both the inline DP
-		// classification (category / functional type) and the CDP-state
-		// aggregate below. The look-up is in-memory and nil-safe.
-		ch := lookupChannel(b.registry, deviceAddr, channelNo)
-		category, dpType := valueChangedClassification(ch, e.Key.Parameter)
-		serialSuffix := b.registry.SerialSuffix(centralName)
-		uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
-		b.wsHub.PublishDataPointValueChangedKind(
-			envKind,
-			centralName, iface, deviceAddr, channelNo,
-			e.Key.Parameter, string(e.Key.ParamsetKey),
-			e.NewValue.Unwrap(), e.OldValue.Unwrap(),
-			e.Timestamp(),
-			category, dpType, uniqueID,
-		)
-		// CDP-state aggregate: when the affected channel hosts a
-		// Custom-DP, also emit a state snapshot on
-		// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
-		// once per CDP instead of N times per slot. The look-up is
-		// cheap (in-memory) and only runs when a CDP exists.
-		if ch != nil {
-			if cdp := ch.CustomDataPoint(); cdp != nil {
-				if state, ok := customDPStatePayload(cdp); ok {
-					// The wire NAME must match the identity the cdps
-					// REST/WS surface assigns (`GET …/cdps`): a profile
-					// channel group materialises the same parameter as a
-					// CDP on several channels (a switch's STATE on
-					// ch3/vch4/vch5), so the bare parameter name no longer
-					// identifies one CDP. [custom.WireName] disambiguates
-					// colliding names as `PARAM@<channel>` (e.g. `STATE@3`)
-					// and keeps unique names bare. Publishing the bare name
-					// here would mismatch the client's `(addr, name)` CDP
-					// key and the event would be silently dropped — leaving
-					// channel-group switch entities stuck on the optimistic
-					// state. The reference stack re-renders each custom DP
-					// on its own member events; using the WireName keeps the
-					// state topic aligned with the catalogue entry.
-					wireName := cdp.DataPointKey().Parameter
-					if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
-						wireName = custom.WireName(dev, cdp, channelNo)
-					}
-					b.wsHub.PublishCustomDataPointStateChangedKind(
-						envKind,
-						centralName, deviceAddr, channelNo,
-						wireName,
-						cdpkind.Of(cdp),
-						state, e.Timestamp(),
-						routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
-					)
+	// Resolve the channel once: it feeds both the inline DP
+	// classification (category / functional type) and the CDP-state
+	// aggregate below. The look-up is in-memory and nil-safe.
+	ch := lookupChannel(b.registry, deviceAddr, channelNo)
+	category, dpType := valueChangedClassification(ch, e.Key.Parameter)
+	serialSuffix := b.registry.SerialSuffix(centralName)
+	uniqueID := routingkey.CanonicalUniqueID(serialSuffix, e.Key.ChannelAddress, e.Key.Parameter, "")
+	b.wsHub.PublishDataPointValueChangedKind(
+		envKind,
+		centralName, iface, deviceAddr, channelNo,
+		e.Key.Parameter, string(e.Key.ParamsetKey),
+		e.NewValue.Unwrap(), e.OldValue.Unwrap(),
+		e.Timestamp(),
+		category, dpType, uniqueID,
+	)
+	// CDP-state aggregate: when the affected channel hosts a
+	// Custom-DP, also emit a state snapshot on
+	// `device.<addr>.cdps.<name>` so SPA tiles can subscribe
+	// once per CDP instead of N times per slot. The look-up is
+	// cheap (in-memory) and only runs when a CDP exists.
+	if ch != nil {
+		if cdp := ch.CustomDataPoint(); cdp != nil {
+			if state, ok := customDPStatePayload(cdp); ok {
+				// The wire NAME must match the identity the cdps
+				// REST/WS surface assigns (`GET …/cdps`): a profile
+				// channel group materialises the same parameter as a
+				// CDP on several channels (a switch's STATE on
+				// ch3/vch4/vch5), so the bare parameter name no longer
+				// identifies one CDP. [custom.WireName] disambiguates
+				// colliding names as `PARAM@<channel>` (e.g. `STATE@3`)
+				// and keeps unique names bare. Publishing the bare name
+				// here would mismatch the client's `(addr, name)` CDP
+				// key and the event would be silently dropped — leaving
+				// channel-group switch entities stuck on the optimistic
+				// state. The reference stack re-renders each custom DP
+				// on its own member events; using the WireName keeps the
+				// state topic aligned with the catalogue entry.
+				wireName := cdp.DataPointKey().Parameter
+				if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
+					wireName = custom.WireName(dev, cdp, channelNo)
 				}
+				b.wsHub.PublishCustomDataPointStateChangedKind(
+					envKind,
+					centralName, deviceAddr, channelNo,
+					wireName,
+					cdpkind.Of(cdp),
+					state, e.Timestamp(),
+					routingkey.CanonicalUniqueID(serialSuffix, cdp.DataPointKey().ChannelAddress, cdp.DataPointKey().Parameter, ""),
+				)
 			}
 		}
 	}
-	if b.mqtt != nil {
-		ev, ch, ok, discoveryEligible := b.buildPublishEvent(centralName, iface, deviceAddr, channel, channelNo, model, name, e.Key, e.NewValue.Unwrap(), e.Key.ParamsetKey)
-		if !ok {
-			// Globally suppressed (operator's ignoredParameters
-			// hiddenParameters / un-ignore overrides) — drop every
-			// downstream publish.
-			return
-		}
-		// Discovery has TWO independent gates:
-		//
-		// 1. **Aggregate channel-level discovery** (climate / cover
-		// lock / light / siren / valve …): fires whenever the
-		// channel carries a Custom-DP (`ev.Source != nil`),
-		// regardless of the triggering DP's own visibility.
-		// HMIP-PSM ch3 STATE is the canonical case: its STATE is
-		// NoCreate-suppressed by the custom-DP composition, so
-		// `discoveryEligible == false`, but the channel still
-		// hosts a Switch Custom-DP — without an unconditional
-		// aggregate publish, HA never sees the switch entity at
-		// all. The bridge's `declared` dedup keeps repeat events
-		// on the same channel from re-publishing the aggregate.
-		//
-		// 2. **Per-DP discovery** (sensor / binary_sensor / select
-		// number …): fires only when the DP itself is
-		// discovery-eligible (Visible() == true via CDPVisible
-		// DataPoint usage). NoCreate-suppressed DPs skip this
-		// publish; their slot state still emits below so the
-		// custom-DP HA-Discovery's `temperature_state_topic` etc.
-		// references resolve to live values.
+}
+
+// publishValueChangedMQTT emits the MQTT-side fan-out for a value change: raw
+// plane, HA-Discovery, per-DP slot state, custom-DP aggregates and device
+// availability. Every call in its body may block on the broker (a QoS1 publish
+// waits for a PUBACK up to the transport's AckTimeout), so on the live path it
+// runs on the fan-out worker rather than the bus dispatch goroutine. The
+// boot-time snapshot path calls it inline via [onValueChangedKind].
+func (b *EventBridge) publishValueChangedMQTT(ctx context.Context, centralName string, e hmevent.DataPointValueChangedEvent) {
+	if b.mqtt == nil {
+		return
+	}
+	channel, channelNo := parseChannel(e.Key.ChannelAddress)
+	deviceAddr, _ := deviceAddrAndChannel(e.Key.ChannelAddress)
+	iface := inferInterface(e.Key)
+	model, name := lookupDevice(b.registry, deviceAddr)
+
+	ev, ch, ok, discoveryEligible := b.buildPublishEvent(centralName, iface, deviceAddr, channel, channelNo, model, name, e.Key, e.NewValue.Unwrap(), e.Key.ParamsetKey)
+	if !ok {
+		// Globally suppressed (operator's ignoredParameters
+		// hiddenParameters / un-ignore overrides) — drop every
+		// downstream publish.
+		return
+	}
+	// Discovery has TWO independent gates:
+	//
+	// 1. **Aggregate channel-level discovery** (climate / cover
+	// lock / light / siren / valve …): fires whenever the
+	// channel carries a Custom-DP (`ev.Source != nil`),
+	// regardless of the triggering DP's own visibility.
+	// HMIP-PSM ch3 STATE is the canonical case: its STATE is
+	// NoCreate-suppressed by the custom-DP composition, so
+	// `discoveryEligible == false`, but the channel still
+	// hosts a Switch Custom-DP — without an unconditional
+	// aggregate publish, HA never sees the switch entity at
+	// all. The bridge's `declared` dedup keeps repeat events
+	// on the same channel from re-publishing the aggregate.
+	//
+	// 2. **Per-DP discovery** (sensor / binary_sensor / select
+	// number …): fires only when the DP itself is
+	// discovery-eligible (Visible() == true via CDPVisible
+	// DataPoint usage). NoCreate-suppressed DPs skip this
+	// publish; their slot state still emits below so the
+	// custom-DP HA-Discovery's `temperature_state_topic` etc.
+	// references resolve to live values.
+	if ev.Source != nil {
+		// Aggregate path (Source set → aggregateChannel → climate/cover/...).
+		b.mqtt.Publish(ctx, ev)
+	}
+	if discoveryEligible {
 		if ev.Source != nil {
-			// Aggregate path (Source set → aggregateChannel → climate/cover/...).
+			// Custom-DP channel + visible sub-DP → also emit the
+			// per-DP discovery alongside the aggregate (HmIP-BWTH
+			// HUMIDITY / ACTUAL_TEMPERATURE / HEATING_COOLING
+			// WINDOW_STATE — the `additional_data_points` from
+			// PublishDiscoveryOnly
+			// with `Source = nil` falls through `aggregateChannel`
+			// and reaches `classifyComponent` → standalone sensor.
+			perDP := ev
+			perDP.Source = nil
+			_ = b.mqtt.Bridge().PublishDiscoveryOnly(ctx, perDP)
+		} else {
+			// No Custom-DP on the channel → straight per-DP path.
 			b.mqtt.Publish(ctx, ev)
 		}
-		if discoveryEligible {
-			if ev.Source != nil {
-				// Custom-DP channel + visible sub-DP → also emit the
-				// per-DP discovery alongside the aggregate (HmIP-BWTH
-				// HUMIDITY / ACTUAL_TEMPERATURE / HEATING_COOLING
-				// WINDOW_STATE — the `additional_data_points` from
-				// PublishDiscoveryOnly
-				// with `Source = nil` falls through `aggregateChannel`
-				// and reaches `classifyComponent` → standalone sensor.
-				perDP := ev
-				perDP.Source = nil
-				_ = b.mqtt.Bridge().PublishDiscoveryOnly(ctx, perDP)
-			} else {
-				// No Custom-DP on the channel → straight per-DP path.
-				b.mqtt.Publish(ctx, ev)
-			}
+	}
+
+	// Press-event aggregation: when the channel has 2+ PRESS_*
+	// parameters, publish a non-retained per-channel aggregate event
+	// to `<base>/<central>/<iface>/<addr>/<ch>/event`. HA's event
+	// entity (one per channel) reads `value_json.event_type` from
+	// this topic.
+	// Best-effort — a broker error here does not roll back the main
+	// publish above.
+	if discoveryEligible {
+		b.publishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ev.Channel)
+	}
+
+	// ADR 0011 phase 1b — additionally publish the per-DP slot
+	// topic (`channels/<ch>/values/<param>/state`) with the
+	// canonical JSON wrapper. Always runs — slot state is the
+	// raw plane that HA-Discovery references via
+	// `temperature_state_topic`, `current_position_topic`,
+	// etc., regardless of whether the DP itself is exposed as
+	// a HA entity.
+	b.publishSlotState(ctx, centralName, iface, deviceAddr, channelNo, e, ch)
+
+	// A `<X>_STATUS` event updates the base parameter's measurement
+	// status out-of-band; republish the base slot so its availability
+	// reflects the new status under the IsValid() gate.
+	if _, isPair := hmenum.Parameter(e.Key.Parameter).BasePair(); isPair {
+		b.republishBaseForStatusPair(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ch)
+	}
+
+	// ADR 0011 phase 1c — when the channel carries a custom-DP,
+	// publish its derived-field aggregate to
+	// `channels/<ch>/custom/<kind>/state` so HA's discovery (which
+	// references this slot for hvac_mode / preset_mode / action
+	// lock_state / …) sees the latest derived view. The config
+	// companion (channels/<ch>/custom/<kind>/config) carries the
+	// static capability set — modes / preset_modes / min_temp
+	// max_temp / supports_tilt / available_tones / etc. The config
+	// re-publishes on every value change so DiscoveryDynamic
+	// (mode-aware Profiles, capability-conditional modes) gets
+	// reflected; the bridge diff-gates the broker traffic.
+	b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
+	b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
+
+	// Re-publish device availability when a reachability-relevant
+	// parameter just flipped. The Device.Available() result is
+	// derived from the same parameter the model just absorbed, so
+	// reading it here gives the post-update view.
+	if isReachabilityParameter(e.Key.Parameter) {
+		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
+			b.markAvailability(ctx, centralName, iface, deviceAddr, dev.Available())
 		}
-
-		// Press-event aggregation: when the channel has 2+ PRESS_*
-		// parameters, publish a non-retained per-channel aggregate event
-		// to `<base>/<central>/<iface>/<addr>/<ch>/event`. HA's event
-		// entity (one per channel) reads `value_json.event_type` from
-		// this topic.
-		// Best-effort — a broker error here does not roll back the main
-		// publish above.
-		if discoveryEligible {
-			b.publishChannelEventState(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ev.Channel)
-		}
-
-		// ADR 0011 phase 1b — additionally publish the per-DP slot
-		// topic (`channels/<ch>/values/<param>/state`) with the
-		// canonical JSON wrapper. Always runs — slot state is the
-		// raw plane that HA-Discovery references via
-		// `temperature_state_topic`, `current_position_topic`,
-		// etc., regardless of whether the DP itself is exposed as
-		// a HA entity.
-		b.publishSlotState(ctx, centralName, iface, deviceAddr, channelNo, e, ch)
-
-		// A `<X>_STATUS` event updates the base parameter's measurement
-		// status out-of-band; republish the base slot so its availability
-		// reflects the new status under the IsValid() gate.
-		if _, isPair := hmenum.Parameter(e.Key.Parameter).BasePair(); isPair {
-			b.republishBaseForStatusPair(ctx, centralName, iface, deviceAddr, channelNo, e.Key.Parameter, ch)
-		}
-
-		// ADR 0011 phase 1c — when the channel carries a custom-DP,
-		// publish its derived-field aggregate to
-		// `channels/<ch>/custom/<kind>/state` so HA's discovery (which
-		// references this slot for hvac_mode / preset_mode / action
-		// lock_state / …) sees the latest derived view. The config
-		// companion (channels/<ch>/custom/<kind>/config) carries the
-		// static capability set — modes / preset_modes / min_temp
-		// max_temp / supports_tilt / available_tones / etc. The config
-		// re-publishes on every value change so DiscoveryDynamic
-		// (mode-aware Profiles, capability-conditional modes) gets
-		// reflected; the bridge diff-gates the broker traffic.
-		b.publishCustomDPState(ctx, centralName, iface, deviceAddr, channelNo, ch)
-		b.publishCustomDPConfig(ctx, centralName, iface, deviceAddr, channelNo, ch)
-
-		// Re-publish device availability when a reachability-relevant
-		// parameter just flipped. The Device.Available() result is
-		// derived from the same parameter the model just absorbed, so
-		// reading it here gives the post-update view.
-		if isReachabilityParameter(e.Key.Parameter) {
-			if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil {
-				b.markAvailability(ctx, centralName, iface, deviceAddr, dev.Available())
-			}
-		} else {
-			// Any non-reachability value change implies the device just
-			// produced data — flip it to online if we previously held
-			// the cache at offline (cache-gated, so the broker only
-			// sees the transition publish, not every event). This is
-			// what unfreezes a device that booted before any DP was
-			// observed: the first real value-change event ushers the
-			// device into the available state.
-			if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil && dev.Available() {
-				b.markAvailability(ctx, centralName, iface, deviceAddr, true)
-			}
+	} else {
+		// Any non-reachability value change implies the device just
+		// produced data — flip it to online if we previously held
+		// the cache at offline (cache-gated, so the broker only
+		// sees the transition publish, not every event). This is
+		// what unfreezes a device that booted before any DP was
+		// observed: the first real value-change event ushers the
+		// device into the available state.
+		if dev := lookupDeviceObject(b.registry, deviceAddr); dev != nil && dev.Available() {
+			b.markAvailability(ctx, centralName, iface, deviceAddr, true)
 		}
 	}
 }

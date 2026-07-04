@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -2015,5 +2016,57 @@ func TestResolveActionReadWriteReturnsSwitch(t *testing.T) {
 	dp := resolveAction(cfg, "TOGGLE", cfg.Descriptor)
 	if dp == nil {
 		t.Fatal("read+write action must resolve to a Switch")
+	}
+}
+
+// TestRecordAudit_OmitsRawValues verifies that the audit note captures only
+// the NAMES of the written parameters, never the raw written values — a
+// write payload can carry secrets (e.g. a lock PIN) that must not be
+// persisted into the audit log.
+func TestRecordAudit_OmitsRawValues(t *testing.T) {
+	t.Parallel()
+	spy := &spyAudit{}
+	d := NewCustomDPDispatcher(central.NewRegistry()).SetAuditRecorder(spy)
+
+	const secretPIN = "8765"
+	d.recordAudit("00021BE9957782", 1, "PIN", "set_pin", "rest", map[string]any{
+		"PIN":   secretPIN,
+		"STATE": true,
+	})
+
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+	e := spy.entries[0]
+	if e.Parameter != "PIN" {
+		t.Errorf("Parameter=%q, want PIN", e.Parameter)
+	}
+	if strings.Contains(e.Note, secretPIN) {
+		t.Errorf("audit note must NOT contain the raw written value %q: %q", secretPIN, e.Note)
+	}
+	// Parameter names are recorded (sorted, comma-joined) so the note stays
+	// useful for a reviewer without leaking the payload.
+	if want := "params=PIN,STATE"; !strings.Contains(e.Note, want) {
+		t.Errorf("audit note must list parameter names %q: %q", want, e.Note)
+	}
+	if !strings.Contains(e.Note, "source=rest") || !strings.Contains(e.Note, "op=set_pin") {
+		t.Errorf("audit note must carry source + operation: %q", e.Note)
+	}
+}
+
+// TestRecordAudit_NoParams keeps the note well-formed when no parameters
+// were written (the params= segment is dropped rather than left empty).
+func TestRecordAudit_NoParams(t *testing.T) {
+	t.Parallel()
+	spy := &spyAudit{}
+	d := NewCustomDPDispatcher(central.NewRegistry()).SetAuditRecorder(spy)
+
+	d.recordAudit("ADDR", 2, "STATE", "turn_on", "ws", nil)
+
+	if spy.count() != 1 {
+		t.Fatalf("expected 1 audit entry, got %d", spy.count())
+	}
+	if note := spy.entries[0].Note; strings.Contains(note, "params=") {
+		t.Errorf("empty params must not emit a params= segment: %q", note)
 	}
 }

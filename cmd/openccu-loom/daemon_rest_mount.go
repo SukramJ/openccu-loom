@@ -57,11 +57,15 @@ type restMountDeps struct {
 	// (password change / user update / user delete).
 	sessions *auth.SessionStore
 
-	healthAdapter          *adapter.HealthAdapter
-	configAdapter          *adapter.ConfigAdapter
-	devicesAdapter         *adapter.DevicesAdapter
-	deviceAdminDomain      *adapter.DeviceAdminDomain
-	deviceReloader         *adapter.DeviceReloaderAdapter
+	healthAdapter     *adapter.HealthAdapter
+	configAdapter     *adapter.ConfigAdapter
+	devicesAdapter    *adapter.DevicesAdapter
+	deviceAdminDomain *adapter.DeviceAdminDomain
+	deviceReloader    *adapter.DeviceReloaderAdapter
+	// editSessions is the shared edit-lock registry — backs both the
+	// `/sessions/edit` endpoints and the strict MASTER/LINK paramset-write
+	// gate, and is shared with the WS `paramset.put` enforcement.
+	editSessions           *handlers.EditSessions
 	dpWriterAdapter        *adapter.DataPointWriterAdapter
 	customDPDispatcher     *adapter.CustomDPDispatcher
 	paramsetsDomain        *adapter.ParamsetsDomain
@@ -221,7 +225,7 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		LoginRateLimit: middleware.NewLoginRateLimiter(),
 		Backup:         d.backupAdapter,
 		CacheReset:     d.cacheResetSvc,
-		EditSessions:   handlers.NewEditSessions(),
+		EditSessions:   d.editSessions,
 		WSHandler:      d.wsHandler,
 		AuthResolve:    d.restResolve,
 		AuthRequire:    d.authMw.Require,

@@ -22,7 +22,7 @@ var openMu sync.Mutex
 // in t's temp directory and registers a cleanup to close it.
 func openTestDB(t *testing.T, name string) *sql.DB {
 	t.Helper()
-	dsn := "file:" + filepath.Join(t.TempDir(), name) + "?_pragma=journal_mode(WAL)"
+	dsn := FileDSN(filepath.Join(t.TempDir(), name))
 	openMu.Lock()
 	db, err := Open(context.Background(), dsn)
 	openMu.Unlock()

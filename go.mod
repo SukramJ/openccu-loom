@@ -28,6 +28,8 @@ require (
 	modernc.org/sqlite v1.52.0
 )
 
+require github.com/rogpeppe/go-internal v1.15.0
+
 require (
 	github.com/SukramJ/go-mqtt v0.2.0
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect

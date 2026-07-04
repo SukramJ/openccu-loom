@@ -372,3 +372,78 @@ func TestTokenStoreListSortedBySubject(t *testing.T) {
 		}
 	}
 }
+
+// TestTokenStoreImportPreservesSecret verifies the legacy-token migration path:
+// Import stores a token whose plaintext is already known (a config-file token)
+// so the exact bearer value keeps authenticating, and Count reflects it.
+func TestTokenStoreImportPreservesSecret(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	const secret = "legacy-config-token-value"
+	fp, err := s.Import(ctx, secret, "config-token", auth.RoleOperator)
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if len(fp) != 12 {
+		t.Errorf("fingerprint=%q length=%d want 12", fp, len(fp))
+	}
+
+	// The exact secret must authenticate to the imported identity.
+	id, err := s.AuthenticateToken(ctx, secret)
+	if err != nil {
+		t.Fatalf("AuthenticateToken(imported secret): %v", err)
+	}
+	if id.Role != auth.RoleOperator {
+		t.Errorf("role=%q want operator", id.Role)
+	}
+	if id.Subject != "config-token" {
+		t.Errorf("subject=%q want config-token", id.Subject)
+	}
+
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("Count=%d want 1", n)
+	}
+}
+
+// TestTokenStoreImportIsIdempotent verifies a re-run of the migration does not
+// duplicate an already-imported token (ON CONFLICT DO NOTHING on fingerprint).
+func TestTokenStoreImportIsIdempotent(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	const secret = "same-secret"
+	if _, err := s.Import(ctx, secret, "config-token", auth.RoleAdmin); err != nil {
+		t.Fatalf("Import #1: %v", err)
+	}
+	if _, err := s.Import(ctx, secret, "config-token", auth.RoleAdmin); err != nil {
+		t.Fatalf("Import #2: %v", err)
+	}
+	n, err := s.Count(ctx)
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("Count=%d want 1 (import must be idempotent)", n)
+	}
+}
+
+// TestTokenStoreImportRejectsEmpty verifies the guards on the migration path.
+func TestTokenStoreImportRejectsEmpty(t *testing.T) {
+	s := newTokenStore(t)
+	ctx := context.Background()
+
+	if _, err := s.Import(ctx, "", "config-token", auth.RoleAdmin); err == nil {
+		t.Error("Import with empty secret must fail")
+	}
+	if _, err := s.Import(ctx, "secret", "", auth.RoleAdmin); err == nil {
+		t.Error("Import with empty subject must fail")
+	}
+	if _, err := s.Import(ctx, "secret", "config-token", ""); err == nil {
+		t.Error("Import with empty role must fail")
+	}
+}

@@ -7,16 +7,19 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
+	"github.com/SukramJ/openccu-loom/internal/central/events"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/model/device"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
+	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
 )
 
@@ -285,6 +288,92 @@ func TestCentralOrchestratorIsRegisteredReflectsSharedRegistry(t *testing.T) {
 	}
 	if orch.isRegistered("adopted-live") {
 		t.Error("isRegistered(adopted-live) = true after removeCentral, want false")
+	}
+}
+
+// TestRemoveCentralRetractsDevicesBeforeStoppingBus verifies removeCentral
+// evicts the in-memory model — which publishes a DeviceRemovedEvent per device
+// — BEFORE Unit.Stop clears every EventBus subscription. Stopping first would
+// land those retractions on a bus with no subscribers, so HA/MQTT discovery
+// configs for the removed central's devices would never be retracted
+// (orphaned entities).
+func TestRemoveCentralRetractsDevicesBeforeStoppingBus(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	reg := central.NewRegistry()
+	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
+
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("retract-live")); err != nil {
+		t.Fatalf("adoptCentral: %v", err)
+	}
+	unit, ok := reg.Get("retract-live")
+	if !ok {
+		t.Fatal("adopted unit not present in the registry")
+	}
+
+	// Inject a device so evictModel has something to retract.
+	d := device.New(device.Config{
+		InterfaceID: "HmIP-RF", Interface: hmenum.InterfaceHmIPRF,
+		Address: "AAAA0009", Model: "HmIP-STH", Name: "Sensor",
+	})
+	d.AddChannel("AAAA0009:1", 1, "MAINTENANCE", hmenum.ParamsetKeyValues)
+	unit.ModelRegistry.Put(d)
+
+	var mu sync.Mutex
+	var removed []string
+	// Publishing is synchronous (handlers run on the publisher's goroutine), so
+	// the slice is fully populated by the time removeCentral returns.
+	unsub := events.Subscribe(unit.EventBus, func(e hmevent.DeviceRemovedEvent) {
+		mu.Lock()
+		removed = append(removed, e.Address)
+		mu.Unlock()
+	})
+	defer unsub()
+
+	if err := orch.removeCentral(ctx, "retract-live"); err != nil {
+		t.Fatalf("removeCentral: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(removed) != 1 || removed[0] != "AAAA0009" {
+		t.Fatalf("DeviceRemovedEvent subscriber notified with %v, want [AAAA0009]; "+
+			"evictModel must run before Unit.Stop clears EventBus subscriptions", removed)
+	}
+}
+
+// TestAdoptCentralRollbackKeepsForeignBringUpHandle verifies the incremental
+// rollback: when AddCentral returns false (the name is already managed by a
+// pre-existing bring-up handle), the rollback must NOT call
+// bringUp.RemoveCentral — doing so would tear down that foreign handle.
+func TestAdoptCentralRollbackKeepsForeignBringUpHandle(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	reg := central.NewRegistry()
+	orch := buildLiveTestOrchestrator(ctx, t, reg, &config.Config{})
+
+	// First adopt: the name is now present in BOTH the registry and the
+	// bring-up manager.
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("foreign")); err != nil {
+		t.Fatalf("adoptCentral(first): %v", err)
+	}
+	if !slices.Contains(orch.bringUp.Centrals(), "foreign") {
+		t.Fatal("precondition: a bring-up handle for 'foreign' must exist after the first adopt")
+	}
+
+	// Simulate the inconsistent state a second adopt must tolerate: the name is
+	// no longer in the registry (so reg.Register succeeds) but its bring-up
+	// handle still exists (so AddCentral returns false and rollback runs).
+	reg.Unregister("foreign")
+
+	if err := orch.adoptCentral(ctx, unreachableTestCentralConfig("foreign")); err == nil {
+		t.Fatal("adoptCentral(second) succeeded; want an error (already managed by bring-up)")
+	}
+	if !slices.Contains(orch.bringUp.Centrals(), "foreign") {
+		t.Fatal("rollback tore down the pre-existing foreign bring-up handle; " +
+			"bringUp.RemoveCentral must run only after a successful AddCentral")
 	}
 }
 

@@ -65,10 +65,18 @@ func isHmIPInterface(iface hmenum.Interface) bool {
 // targeted MASTER refresh then becomes a no-op (week-profile reload
 // still runs).
 //
+// `ctx` is the central's teardown-bounded bring-up context: the
+// per-settle refresh goroutine derives its own timeout from it, so a
+// central teardown / re-init cancels an in-flight refresh instead of
+// letting it linger. The goroutine body runs under [SafeGo] so a panic
+// in the week-profile reload / MASTER refresh is contained (logged with
+// a stack trace) rather than crashing the whole daemon.
+//
 // Must be called once per central, after the EventCoordinator exists.
 // It is idempotent (installs a new closure each call; callers must not
 // call it more than once per central).
 func wireConfigPendingHook(
+	ctx context.Context,
 	unit *central.Unit,
 	masterValues *sqlite.MasterValuesStore,
 	centralName string,
@@ -87,8 +95,8 @@ func wireConfigPendingHook(
 		if !ok || dev == nil {
 			return
 		}
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		SafeGo("auto_refresh.config_pending."+dev.Address, func() {
+			ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 			defer cancel()
 
 			// Week-profile reload (unique per device, has_schedule-gated).
@@ -132,7 +140,7 @@ func wireConfigPendingHook(
 			case <-time.After(configPendingSettleDelay):
 			}
 			refreshDeviceMasterCache(ctx, dev, interfaceID, centralName, getter, masterValues, logger)
-		}()
+		})
 	})
 }
 

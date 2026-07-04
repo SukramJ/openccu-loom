@@ -484,14 +484,19 @@ func (c *CacheCoordinator) IsDataCacheInitializationComplete() bool {
 // Calling SubscribeToBus a second time first unsubscribes the previous
 // subscriptions. Safe to call before or after operations on the cache.
 func (c *CacheCoordinator) SubscribeToBus(bus *events.Bus) {
-	// Unsubscribe any previous subscriptions.
+	// Detach any previous subscriptions. Each unsubscribe is a barrier that
+	// waits for an in-flight dispatch of that handler to finish, and the
+	// handlers here (evictDevice / dirty-mark) take c.mu — so the unsubscribes
+	// must run with c.mu released, otherwise the barrier would deadlock against
+	// a concurrent dispatch blocked on c.mu.
 	c.mu.Lock()
-	for _, unsub := range c.unsubs {
-		unsub()
-	}
-	c.unsubs = c.unsubs[:0]
+	prev := c.unsubs
+	c.unsubs = nil
 	c.bus = bus
 	c.mu.Unlock()
+	for _, unsub := range prev {
+		unsub()
+	}
 
 	if bus == nil {
 		return
@@ -514,12 +519,16 @@ func (c *CacheCoordinator) SubscribeToBus(bus *events.Bus) {
 // UnsubscribeAll removes all bus subscriptions installed by
 // [SubscribeToBus]. Call on shutdown to prevent goroutine leaks.
 func (c *CacheCoordinator) UnsubscribeAll() {
+	// Snapshot and clear under the lock, then run the unsubscribe barriers with
+	// c.mu released: the handlers take c.mu, so calling the blocking unsubscribe
+	// while holding it would deadlock against an in-flight dispatch.
 	c.mu.Lock()
-	for _, unsub := range c.unsubs {
+	prev := c.unsubs
+	c.unsubs = nil
+	c.mu.Unlock()
+	for _, unsub := range prev {
 		unsub()
 	}
-	c.unsubs = c.unsubs[:0]
-	c.mu.Unlock()
 }
 
 // --- Session-recorder and IncidentRecorder ---------------------------

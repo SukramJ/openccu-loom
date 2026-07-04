@@ -50,6 +50,7 @@ func (b *syncBuffer) String() string {
 // the ctx to verify shutdown drains.
 func TestDaemonServeBootsAndShutsDownGracefully(t *testing.T) {
 	cfg := config.Default()
+	cfg.DataDir = t.TempDir() // isolate the SQLite DB from the shared "./var"
 	cfg.North.REST.Enabled = new(true)
 	cfg.North.REST.Listen = "127.0.0.1:0"
 	cfg.North.UI.Enabled = new(true)
@@ -85,6 +86,7 @@ func TestDaemonServeBootsAndShutsDownGracefully(t *testing.T) {
 
 func TestDaemonServeAcceptsDefaultsWithoutCentrals(t *testing.T) {
 	cfg := config.Default()
+	cfg.DataDir = t.TempDir() // isolate the SQLite DB from the shared "./var"
 	cfg.North.REST.Enabled = new(false)
 	cfg.North.UI.Enabled = new(false)
 

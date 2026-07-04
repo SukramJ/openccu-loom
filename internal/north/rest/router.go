@@ -684,7 +684,10 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 					handlers.PostCopyProfile(d.Schedules))
 			}
 			if d.Audit != nil {
-				pr.Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
+				// The change-log can expose subjects, device addresses and
+				// operator actions across every central, so it is admin-only —
+				// a viewer / operator identity must not read it.
+				pr.With(admin).Get("/audit", handlers.ListAudit(d.Audit, d.Devices))
 			}
 			if d.History != nil {
 				pr.Get("/history", handlers.GetHistory(d.History))
@@ -834,9 +837,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.Paramsets != nil {
 				pr.Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets))
+				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
 				pr.Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets))
+				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
 			}
 			if d.Hub != nil {
 				pr.Get("/programs", handlers.ListPrograms(d.Hub))

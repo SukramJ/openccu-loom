@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -377,5 +379,166 @@ func TestFilesystemBackupStorageDeleteRejectsPathTraversal(t *testing.T) {
 	ctx := context.Background()
 	if err := st.Delete(ctx, "../secret"); err == nil {
 		t.Fatal("expected error for path-traversal id, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// CreateBackupForCentral — synchronous create + rotation ordering
+// ---------------------------------------------------------------------------
+
+// wireCreateBackup gives the named central a create-and-download function that
+// returns fixed bytes, so CreateBackupForCentral can complete synchronously.
+func wireCreateBackup(t *testing.T, reg *central.Registry, name string, fn func(context.Context) ([]byte, error)) {
+	t.Helper()
+	u, ok := reg.Get(name)
+	if !ok || u == nil {
+		t.Fatalf("central %q not registered", name)
+	}
+	u.SetCreateBackupFn(fn)
+}
+
+// TestCreateBackupForCentralIsSynchronous verifies the new synchronous variant
+// saves the backup before it returns (unlike the detached TriggerBackup).
+func TestCreateBackupForCentralIsSynchronous(t *testing.T) {
+	t.Parallel()
+
+	reg := newRegistryWith(t, "alpha")
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		return []byte("payload"), nil
+	})
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	a := NewBackupAdapter(reg).SetStorage(storage)
+
+	id, err := a.CreateBackupForCentral(context.Background(), "alpha")
+	if err != nil {
+		t.Fatalf("CreateBackupForCentral: %v", err)
+	}
+	// The file exists immediately on return — no polling / sleep needed.
+	if _, err := os.Stat(filepath.Join(dir, id+".sbk")); err != nil {
+		t.Fatalf("backup not durably saved on return: %v", err)
+	}
+}
+
+// TestCreateBackupForCentralUnknownCentral checks the unknown-central guard.
+func TestCreateBackupForCentralUnknownCentral(t *testing.T) {
+	t.Parallel()
+	reg := newRegistryWith(t, "alpha")
+	a := NewBackupAdapter(reg)
+	if _, err := a.CreateBackupForCentral(context.Background(), "nope"); err == nil {
+		t.Fatal("want error for unknown central, got nil")
+	}
+}
+
+// TestScheduledCreateThenPruneKeepsExactlyKeepLast reproduces the rotation
+// race: because the create is now awaited before Prune runs, the steady state
+// is exactly KeepLast — not KeepLast+1 as the old detached trigger left it.
+func TestScheduledCreateThenPruneKeepsExactlyKeepLast(t *testing.T) {
+	t.Parallel()
+
+	const keepLast = 3
+	ctx := context.Background()
+
+	reg := newRegistryWith(t, "alpha")
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		return []byte("payload"), nil
+	})
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	a := NewBackupAdapter(reg).SetStorage(storage)
+
+	// Seed keepLast existing alpha backups with distinct, older mtimes so the
+	// freshly-created one is unambiguously the newest.
+	base := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	seeded := make([]string, keepLast)
+	for i := range keepLast {
+		id := "alpha-" + base.Add(time.Duration(i)*time.Hour).Format(backupTimestampLayout)
+		seeded[i] = id
+		if err := storage.Save(ctx, id, []byte("old")); err != nil {
+			t.Fatalf("seed save: %v", err)
+		}
+		mt := base.Add(time.Duration(i) * time.Hour)
+		if err := os.Chtimes(filepath.Join(dir, id+".sbk"), mt, mt); err != nil {
+			t.Fatalf("chtimes: %v", err)
+		}
+	}
+
+	// The scheduled job body: create (awaited) then prune.
+	newID, err := a.CreateBackupForCentral(ctx, "alpha")
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := a.Prune(ctx, "alpha", keepLast); err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+
+	list, err := storage.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(list) != keepLast {
+		t.Fatalf("after create+prune: %d backups, want exactly %d (rotation race would leave %d)",
+			len(list), keepLast, keepLast+1)
+	}
+	// The new backup survives; the oldest seed is pruned.
+	present := map[string]bool{}
+	for _, e := range list {
+		present[e.ID] = true
+	}
+	if !present[newID] {
+		t.Errorf("newly-created backup %q was pruned", newID)
+	}
+	if present[seeded[0]] {
+		t.Errorf("oldest backup %q should have been pruned", seeded[0])
+	}
+}
+
+// TestCreateBackupForCentralSerializesPerCentral verifies the per-central lock
+// prevents two create runs for the same central from overlapping.
+func TestCreateBackupForCentralSerializesPerCentral(t *testing.T) {
+	t.Parallel()
+
+	reg := newRegistryWith(t, "alpha")
+	var (
+		inFlight atomic.Int32
+		maxSeen  atomic.Int32
+	)
+	wireCreateBackup(t, reg, "alpha", func(context.Context) ([]byte, error) {
+		n := inFlight.Add(1)
+		for {
+			m := maxSeen.Load()
+			if n <= m || maxSeen.CompareAndSwap(m, n) {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+		inFlight.Add(-1)
+		return []byte("payload"), nil
+	})
+	dir := t.TempDir()
+	storage, err := NewFilesystemBackupStorage(dir)
+	if err != nil {
+		t.Fatalf("storage: %v", err)
+	}
+	a := NewBackupAdapter(reg).SetStorage(storage)
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = a.CreateBackupForCentral(context.Background(), "alpha")
+		}()
+	}
+	wg.Wait()
+
+	if got := maxSeen.Load(); got != 1 {
+		t.Fatalf("per-central create ran with concurrency %d, want serialized (1)", got)
 	}
 }

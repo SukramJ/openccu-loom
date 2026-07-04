@@ -1,5 +1,5 @@
 {
-  "version": "1.0",
+  "version": "1.1",
   "envelope": {
     "description": "Shape of every WebSocket frame the daemon emits — both command replies and broadcasts. The `payload` member is replaced per-frame; broadcast entries below name the OpenAPI schema (in assets/openapi.yaml under components.schemas) that pins its structure.",
     "fields": {
@@ -533,12 +533,13 @@
     },
     {
       "category": "paramsets",
-      "description": "Write a paramset directly to the CCU without a session (non-transactional from a daemon-session perspective, but atomic on the wire: forwarded as one setParamsetValues XML-RPC call so the CCU applies all values together or none). Returns {written: N} on success. The CCU does not surface per-parameter status on this path — for that, use a config.session.* flow.",
+      "description": "Write a paramset directly to the CCU without a session (non-transactional from a daemon-session perspective, but atomic on the wire: forwarded as one setParamsetValues XML-RPC call so the CCU applies all values together or none). Returns {written: N} on success. The CCU does not surface per-parameter status on this path — for that, use a config.session.* flow. MASTER and LINK writes are configuration changes gated behind the per-resource edit lock: pass edit_token (issued by POST /sessions/edit with key channel:{channel_address}:{paramset_key}) or the write is rejected with a 'locked' command error. VALUES writes are ungated.",
       "name": "paramset.put",
       "args": {
         "channel_address": "string",
         "paramset_key": "string",
-        "values": "object"
+        "values": "object",
+        "edit_token": "string"
       },
       "result": { "written": "integer" }
     },

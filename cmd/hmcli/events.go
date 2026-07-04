@@ -6,6 +6,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"os/signal"
 	"strings"
 	"sync"
@@ -57,6 +59,8 @@ type eventsFlags struct {
 	token    string
 	user     string
 	password string
+	cacert   string
+	insecure bool
 	// timeout bounds only the initial WebSocket handshake; the stream itself
 	// runs until closed or interrupted so that --timeout 0 streams indefinitely.
 	timeout  time.Duration
@@ -66,10 +70,12 @@ type eventsFlags struct {
 }
 
 func (f *eventsFlags) bindTo(fs *flag.FlagSet) {
-	fs.StringVar(&f.host, "host", "http://localhost:8119", "daemon REST base URL")
-	fs.StringVar(&f.token, "token", "", "API bearer token")
+	fs.StringVar(&f.host, "host", defaultHost, "daemon REST base URL")
+	fs.StringVar(&f.token, "token", "", "API bearer token (or set "+envToken+")")
 	fs.StringVar(&f.user, "user", "", "basic-auth username")
-	fs.StringVar(&f.password, "password", "", "basic-auth password")
+	fs.StringVar(&f.password, "password", "", "basic-auth password (or set "+envPassword+")")
+	fs.StringVar(&f.cacert, "cacert", "", "path to a PEM CA bundle to trust for TLS")
+	fs.BoolVar(&f.insecure, "insecure", false, "skip TLS certificate verification (dangerous; off by default)")
 	fs.DurationVar(&f.timeout, "timeout", 0,
 		"handshake timeout only; 0 = no handshake deadline (stream runs until closed or interrupted)")
 	fs.StringVar(&f.topics, "topics", "*", "comma-separated topics to subscribe; supports exact strings and prefix wildcards (e.g. device.*)")
@@ -121,8 +127,32 @@ func cmdEvents(args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+// reconnectPolicy bounds the auto-reconnect behaviour after an abnormal stream
+// drop: a capped number of consecutive retry attempts with exponential backoff.
+// The counter resets once a connection has stayed up for resetAfter, so a
+// long-lived healthy stream that hiccups is not penalised for old, unrelated
+// drops while a rapidly flapping endpoint still exhausts the budget and exits.
+type reconnectPolicy struct {
+	maxRetries  int
+	baseBackoff time.Duration
+	maxBackoff  time.Duration
+	resetAfter  time.Duration
+}
+
+// defaultReconnectPolicy is the production reconnect budget for `events tail`.
+func defaultReconnectPolicy() reconnectPolicy {
+	return reconnectPolicy{
+		maxRetries:  5,
+		baseBackoff: 500 * time.Millisecond,
+		maxBackoff:  8 * time.Second,
+		resetAfter:  30 * time.Second,
+	}
+}
+
 // cmdEventsTail connects to the daemon's WebSocket event stream and prints
-// arriving events until the connection closes or the process is interrupted.
+// arriving events until the connection closes cleanly or the process is
+// interrupted. An abnormal drop (daemon death, network loss, abrupt peer close)
+// triggers a bounded auto-reconnect; exhausting the retry budget exits non-zero.
 func cmdEventsTail(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("events tail", flag.ContinueOnError)
 	fs.SetOutput(stderr)
@@ -132,36 +162,55 @@ func cmdEventsTail(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 
+	// Resolve off-argv credentials once so they are reused across reconnects
+	// without re-prompting. The plaintext warning uses the http(s) host — ws://
+	// is as exposed as http://.
+	f.token, f.user, f.password = resolveCredentials(f.token, f.user, f.password, os.Stdin, stderr)
+	warnIfPlaintextCredentials(f.host, f.token, f.user, stderr)
+
 	target, err := wsURL(strings.TrimRight(f.host, "/"), "/api/v1/events")
 	if err != nil {
 		return err
 	}
 
-	conn, err := dialEventStream(f, target)
+	tlsCfg, err := buildTLSConfig(f.cacert, f.insecure)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = conn.Close() }()
 
-	return runEventStream(conn, f, stdout, stderr)
+	// The signal context spans the whole (re)connect lifecycle so a Ctrl-C
+	// during the handshake, a backoff, or a reconnect still exits cleanly.
+	streamCtx, stopStream := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopStream()
+
+	// The initial connection fails fast: a daemon that is not reachable at
+	// startup is an operator error, not a mid-stream drop to retry.
+	conn, err := dialEventStream(streamCtx, f, target, tlsCfg)
+	if err != nil {
+		return err
+	}
+
+	return streamWithReconnect(streamCtx, conn, f, target, tlsCfg, defaultReconnectPolicy(), stdout, stderr)
 }
 
 // dialEventStream dials the WebSocket endpoint, applying the timeout to the
-// handshake only. The returned connection is ready to use.
-func dialEventStream(f eventsFlags, target string) (*websocket.Conn, error) {
+// handshake only and the supplied TLS config (may be nil for defaults). The
+// dial honours ctx, so a signal cancels an in-flight handshake. The returned
+// connection is ready to use.
+func dialEventStream(ctx context.Context, f eventsFlags, target string, tlsCfg *tls.Config) (*websocket.Conn, error) {
 	hdrs := http.Header{}
 	if auth := f.authHeader(); auth != "" {
 		hdrs.Set("Authorization", auth)
 	}
 
-	dialCtx := context.Background()
+	dialCtx := ctx
 	var dialCancel context.CancelFunc
 	if f.timeout > 0 {
-		dialCtx, dialCancel = context.WithTimeout(dialCtx, f.timeout)
+		dialCtx, dialCancel = context.WithTimeout(ctx, f.timeout)
 		defer dialCancel()
 	}
 
-	dialer := websocket.Dialer{HandshakeTimeout: f.timeout}
+	dialer := websocket.Dialer{HandshakeTimeout: f.timeout, TLSClientConfig: tlsCfg}
 	conn, resp, err := dialer.DialContext(dialCtx, target, hdrs)
 	if resp != nil {
 		_ = resp.Body.Close()
@@ -172,9 +221,91 @@ func dialEventStream(f eventsFlags, target string) (*websocket.Conn, error) {
 	return conn, nil
 }
 
-// runEventStream sends the subscribe frame, then reads and prints events until
-// the connection closes or the process is interrupted (SIGINT / SIGTERM).
-func runEventStream(conn *websocket.Conn, f eventsFlags, stdout, stderr io.Writer) error {
+// streamWithReconnect runs the event stream over conn and, on an abnormal drop,
+// re-dials with exponential backoff up to the policy's retry budget. A clean
+// server close or a user interrupt returns nil (exit 0); exhausting the budget
+// returns the last error (exit non-zero).
+func streamWithReconnect(
+	ctx context.Context,
+	conn *websocket.Conn,
+	f eventsFlags,
+	target string,
+	tlsCfg *tls.Config,
+	pol reconnectPolicy,
+	stdout, stderr io.Writer,
+) error {
+	failures := 0
+	for {
+		if conn == nil {
+			c, derr := dialEventStream(ctx, f, target, tlsCfg)
+			if derr != nil {
+				failures++
+				if failures > pol.maxRetries {
+					return fmt.Errorf("events tail: reconnect failed after %d attempts: %w", pol.maxRetries, derr)
+				}
+				_, _ = fmt.Fprintf(stderr, "events tail: reconnect attempt %d/%d failed: %v\n", failures, pol.maxRetries, derr)
+				if !sleepCtx(ctx, backoffFor(pol, failures)) {
+					return nil
+				}
+				continue
+			}
+			conn = c
+			_, _ = fmt.Fprintln(stderr, "events tail: reconnected")
+		}
+
+		start := time.Now()
+		err := runEventStream(ctx, conn, f, stdout, stderr)
+		_ = conn.Close()
+		conn = nil
+
+		if err == nil {
+			return nil // clean server close or user interrupt
+		}
+		if ctx.Err() != nil {
+			return nil //nolint:nilerr // a signal-cancelled context is a clean shutdown, not a stream failure
+		}
+		if time.Since(start) >= pol.resetAfter {
+			failures = 0 // the connection was stable for a while: fresh budget
+		}
+		failures++
+		if failures > pol.maxRetries {
+			return fmt.Errorf("events tail: stream lost, gave up after %d reconnect attempts: %w", pol.maxRetries, err)
+		}
+		_, _ = fmt.Fprintf(stderr, "events tail: stream dropped (%v); reconnecting %d/%d\n", err, failures, pol.maxRetries)
+		if !sleepCtx(ctx, backoffFor(pol, failures)) {
+			return nil
+		}
+	}
+}
+
+// backoffFor returns the exponential backoff for the given 1-based attempt,
+// capped at the policy's maximum.
+func backoffFor(pol reconnectPolicy, attempt int) time.Duration {
+	d := pol.baseBackoff << (attempt - 1)
+	if d <= 0 || d > pol.maxBackoff {
+		return pol.maxBackoff
+	}
+	return d
+}
+
+// sleepCtx sleeps for d, returning true if the full duration elapsed or false
+// if ctx was cancelled first (a user interrupt during backoff).
+func sleepCtx(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+		return true
+	}
+}
+
+// runEventStream subscribes, then reads and prints events over a single
+// connection until it closes or ctx is cancelled. It returns nil for a clean
+// end (normal/going-away close or a ctx cancel) and a non-nil error for an
+// abnormal drop.
+func runEventStream(ctx context.Context, conn *websocket.Conn, f eventsFlags, stdout, stderr io.Writer) error {
 	// writeMu guards all conn.Write* calls. gorilla/websocket forbids
 	// concurrent writes; both the subscribe frame and pong replies must
 	// go through this mutex.
@@ -184,20 +315,23 @@ func runEventStream(conn *websocket.Conn, f eventsFlags, stdout, stderr io.Write
 		return err
 	}
 
-	// Signal context: stream until interrupted.
-	streamCtx, stopStream := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stopStream()
-
-	// Close the connection cleanly when the stream context fires (Ctrl-C / SIGTERM).
+	// Close this connection cleanly when ctx fires (Ctrl-C / SIGTERM). The done
+	// channel stops the watcher when the read loop returns for any other reason,
+	// so it never outlives the connection it guards across reconnects.
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-streamCtx.Done()
-		writeMu.Lock()
-		_ = conn.WriteMessage(websocket.CloseMessage,
-			websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-		writeMu.Unlock()
+		select {
+		case <-ctx.Done():
+			writeMu.Lock()
+			_ = conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			writeMu.Unlock()
+		case <-done:
+		}
 	}()
 
-	return readEvents(streamCtx, conn, &writeMu, stdout, stderr, f.jsonOut)
+	return readEvents(ctx, conn, &writeMu, stdout, stderr, f.jsonOut)
 }
 
 // sendSubscribe marshals and writes the subscribe frame.
@@ -221,28 +355,27 @@ func sendSubscribe(conn *websocket.Conn, mu *sync.Mutex, topics string, classify
 }
 
 // readEvents is the main read loop. It blocks until the connection closes or
-// the stream context is cancelled.
+// the stream context is cancelled. It returns nil for a clean end (user
+// interrupt or a normal / going-away server close) and a non-nil error for an
+// abnormal drop.
 func readEvents(ctx context.Context, conn *websocket.Conn, writeMu *sync.Mutex, stdout, stderr io.Writer, jsonOut bool) error {
-	streamCtx := ctx
 	for {
 		msgType, data, err := conn.ReadMessage()
 		if err != nil {
 			// Interrupted by the user (SIGINT/SIGTERM): clean exit.
-			if streamCtx.Err() != nil {
+			if ctx.Err() != nil {
 				return nil //nolint:nilerr // context cancelled by signal is a clean exit, not an error
 			}
 			// Clean server-initiated close: exit silently.
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				return nil
 			}
-			// Any other read error after a live subscription means the stream
-			// ended: the daemon went away, the network dropped, or the peer
-			// closed the socket abruptly (some platforms surface that as
-			// ECONNRESET / wsarecv rather than a WebSocket close frame). For a
-			// tail that is end-of-stream, not a command failure — note it on
-			// stderr and exit cleanly so scripts still see exit 0.
-			_, _ = fmt.Fprintf(stderr, "events tail: stream ended: %v\n", err)
-			return nil
+			// Abnormal end: the daemon went away, the network dropped, or the
+			// peer closed the socket abruptly (some platforms surface that as
+			// ECONNRESET / wsarecv rather than a WebSocket close frame). Report
+			// it as an error so the caller can auto-reconnect and, if that
+			// fails, exit non-zero — a silent exit 0 would hide a lost stream.
+			return fmt.Errorf("events tail: stream ended abnormally: %w", err)
 		}
 		if msgType != websocket.TextMessage {
 			continue
@@ -290,10 +423,14 @@ func printEvent(w io.Writer, msg eventsInbound, jsonOut bool) error {
 		return err
 	}
 
-	// Human line: "HH:MM:SS  <type>  <topic>  <payload-summary>"
-	ts := formatEventTS(msg.TS)
-	payload := compactPayload(msg.Payload)
-	_, err := fmt.Fprintf(w, "%s  %-30s  %-40s  %s\n", ts, msg.Type, msg.Topic, payload)
+	// Human line: "HH:MM:SS  <type>  <topic>  <payload-summary>". Every
+	// server-controlled field is sanitised so a crafted name/type/topic or a
+	// raw control byte inside the payload cannot rewrite the operator's
+	// terminal (the JSON branch above already escapes control bytes).
+	ts := sanitizeForTerminal(formatEventTS(msg.TS))
+	payload := sanitizeForTerminal(compactPayload(msg.Payload))
+	_, err := fmt.Fprintf(w, "%s  %-30s  %-40s  %s\n",
+		ts, sanitizeForTerminal(msg.Type), sanitizeForTerminal(msg.Topic), payload)
 	return err
 }
 

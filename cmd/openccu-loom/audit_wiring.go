@@ -83,7 +83,7 @@ func wireSessionRecorderPersistence(cfg *config.Config, reg *central.Registry, l
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
 	defer cancel()
 	db, err := sqlite.Open(ctx, dsn)
@@ -141,7 +141,7 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
 	defer cancel()
 	db, err := sqlite.Open(ctx, dsn)
@@ -202,7 +202,7 @@ func wireAuditPersistenceWithDB(cfg *config.Config, buf *audit.Buffer, logger *s
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
 	defer cancel()
 	db, err := sqlite.Open(ctx, dsn)

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/central"
@@ -42,11 +43,33 @@ type BackupAdapter struct {
 	storage  BackupStorage
 	restorer BackupRestorer
 	logger   *slog.Logger
+
+	// locksMu guards locks; locks holds one mutex per central so that a
+	// scheduled create and a manual trigger for the same central never run
+	// concurrently — the create-then-prune rotation must be serialized.
+	locksMu sync.Mutex
+	locks   map[string]*sync.Mutex
 }
 
 // NewBackupAdapter wires the live adapter.
 func NewBackupAdapter(r *central.Registry) *BackupAdapter {
 	return &BackupAdapter{registry: r}
+}
+
+// centralLock returns the per-central serialization mutex, creating it on
+// first use.
+func (a *BackupAdapter) centralLock(name string) *sync.Mutex {
+	a.locksMu.Lock()
+	defer a.locksMu.Unlock()
+	if a.locks == nil {
+		a.locks = make(map[string]*sync.Mutex)
+	}
+	m, ok := a.locks[name]
+	if !ok {
+		m = &sync.Mutex{}
+		a.locks[name] = m
+	}
+	return m
 }
 
 // SetLogger sets the logger used for the asynchronous backup goroutine.
@@ -103,6 +126,27 @@ func (a *BackupAdapter) TriggerBackupForCentral(_ context.Context, centralName s
 	return id, nil
 }
 
+// CreateBackupForCentral is the synchronous sibling of
+// [BackupAdapter.TriggerBackupForCentral]: it creates and durably saves the
+// backup for the named central before returning, so a caller (the scheduled
+// job) can prune only after the new backup exists. It serializes on the
+// per-central lock, so a concurrent manual trigger or a second scheduled run
+// for the same central waits rather than racing the rotation.
+func (a *BackupAdapter) CreateBackupForCentral(ctx context.Context, centralName string) (string, error) {
+	if a.registry == nil {
+		return "", ErrUnimplemented
+	}
+	u, ok := a.registry.Get(centralName)
+	if !ok || u == nil {
+		return "", fmt.Errorf("backup: unknown central %q", centralName)
+	}
+	id := backupID(u.Name())
+	if err := a.createAndSave(ctx, u, id); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // Prune implements [interfaces.BackupService]. It keeps the newest keepLast
 // backups for the named central and deletes the rest. keepLast <= 0 (or no
 // storage) is a no-op.
@@ -142,23 +186,8 @@ func (a *BackupAdapter) runBackup(u *central.Unit, id string) {
 	ctx, cancel := context.WithTimeout(context.Background(), backupRunTimeout)
 	defer cancel()
 
-	data, err := u.CreateBackup(ctx)
-	if err != nil {
+	if err := a.createAndSave(ctx, u, id); err != nil {
 		a.log().Error("backup.create.failed",
-			slog.String("central", u.Name()),
-			slog.String("id", id),
-			slog.String("err", err.Error()))
-		return
-	}
-	if a.storage == nil {
-		a.log().Warn("backup.create.no_storage",
-			slog.String("central", u.Name()),
-			slog.String("id", id),
-			slog.Int("bytes", len(data)))
-		return
-	}
-	if err := a.storage.Save(ctx, id, data); err != nil {
-		a.log().Error("backup.save.failed",
 			slog.String("central", u.Name()),
 			slog.String("id", id),
 			slog.String("err", err.Error()))
@@ -166,8 +195,34 @@ func (a *BackupAdapter) runBackup(u *central.Unit, id string) {
 	}
 	a.log().Info("backup.create.ok",
 		slog.String("central", u.Name()),
-		slog.String("id", id),
-		slog.Int("bytes", len(data)))
+		slog.String("id", id))
+}
+
+// createAndSave is the shared create-then-persist core used by both the
+// asynchronous [BackupAdapter.runBackup] and the synchronous
+// [BackupAdapter.CreateBackupForCentral]. It holds the per-central lock for
+// the whole create+save so a rotation prune (which the scheduled job runs
+// only after this returns) never sees the fleet in a mid-save state.
+func (a *BackupAdapter) createAndSave(ctx context.Context, u *central.Unit, id string) error {
+	lock := a.centralLock(u.Name())
+	lock.Lock()
+	defer lock.Unlock()
+
+	data, err := u.CreateBackup(ctx)
+	if err != nil {
+		return fmt.Errorf("backup: create: %w", err)
+	}
+	if a.storage == nil {
+		a.log().Warn("backup.create.no_storage",
+			slog.String("central", u.Name()),
+			slog.String("id", id),
+			slog.Int("bytes", len(data)))
+		return nil
+	}
+	if err := a.storage.Save(ctx, id, data); err != nil {
+		return fmt.Errorf("backup: save: %w", err)
+	}
+	return nil
 }
 
 // backupTimestampLayout is the fixed-width UTC timestamp appended to every

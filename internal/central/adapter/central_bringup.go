@@ -6,6 +6,7 @@ package adapter
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"slices"
 	"sync"
 
@@ -318,9 +319,13 @@ func (m *BringUpManager) Centrals() []string {
 // each handle's goroutine and running its closers. This is the daemon-shutdown
 // path and replaces the bare teardown func WireCentrals used to return.
 func (m *BringUpManager) Teardown() {
+	// Snapshot both the order slice and the handle map under the lock. Aliasing
+	// m.byCentral and then reading it after the unlock would race a concurrent
+	// AddCentral/RemoveCentral mutating the same map (a fatal concurrent map
+	// read/write); maps.Clone gives the iteration below its own copy.
 	m.mu.Lock()
 	order := slices.Clone(m.order)
-	handles := m.byCentral
+	handles := maps.Clone(m.byCentral)
 	m.mu.Unlock()
 	for _, name := range slices.Backward(order) {
 		if b := handles[name]; b != nil {

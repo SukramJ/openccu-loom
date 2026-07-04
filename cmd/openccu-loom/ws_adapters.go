@@ -59,7 +59,11 @@ type wsCommandWiring struct {
 	deviceReloader *adapter.DeviceReloaderAdapter
 	// cacheResetSvc backs ccu.cache_clear — scope-aware cache clear + re-pull.
 	cacheResetSvc *cachereset.Service
-	logger        *slog.Logger
+	// editSessions is the shared edit-lock registry (also wired into the
+	// REST router). Backs the strict MASTER/LINK enforcement on
+	// `paramset.put` so REST and WS share one lock namespace.
+	editSessions *handlers.EditSessions
+	logger       *slog.Logger
 	// centralName scopes every WS-command log record. Empty in multi-
 	// central setups; populated from [singleCentralName] in daemon.go.
 	centralName string
@@ -117,8 +121,11 @@ func wireWSCommands(hub *ws.Hub, w wsCommandWiring) {
 	})
 
 	ws.RegisterExtendedCommands(router, ws.ExtendedCommandsConfig{
-		Devices:        &wsDeviceWriter{admin: w.deviceAdmin},
-		Paramsets:      &wsParamsetWriter{domain: w.paramsets},
+		Devices:   &wsDeviceWriter{admin: w.deviceAdmin},
+		Paramsets: &wsParamsetWriter{domain: w.paramsets},
+		// EditLocks: shared registry — MASTER/LINK paramset.put writes
+		// must hold the edit lock, mirroring the REST strict gate.
+		EditLocks:      w.editSessions,
 		MasterProfiles: w.masterProfiles,
 		// CacheClearer: wired — delegates to the cachereset.Service (ADR 0042).
 		CacheClearer: wsCacheClearerFrom(w.cacheResetSvc),

@@ -600,6 +600,8 @@ export interface paths {
                 header?: {
                     /** @description Optional UUID for client-side retry de-duplication. See description. */
                     "Idempotency-Key"?: string;
+                    /** @description Edit-lock token for MASTER and LINK writes. These configuration paramsets are gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:{key}`) and present the returned token here, else the write is rejected 423 Locked. VALUES writes are ungated and ignore this header. */
+                    "X-Edit-Token"?: string;
                 };
                 path: {
                     addr: components["parameters"]["Address"];
@@ -624,6 +626,7 @@ export interface paths {
                 };
                 400: components["responses"]["BadRequest"];
                 403: components["responses"]["Forbidden"];
+                423: components["responses"]["Locked"];
                 502: components["responses"]["BadGateway"];
                 503: components["responses"]["ServiceUnavailable"];
             };
@@ -5508,6 +5511,12 @@ export interface components {
             subject: string;
             /** @enum {string} */
             role: "viewer" | "operator" | "admin";
+            /**
+             * @description Optional token lifetime in days. When set and positive, the token
+             *     is rejected after this many days. Omitted or non-positive creates a
+             *     token that never expires.
+             */
+            expires_in_days?: number;
         };
         /**
          * @description Returned by `POST /auth/tokens/v2`. The `token` field carries the
@@ -5518,6 +5527,11 @@ export interface components {
             token: string;
             /** @description Stable opaque identifier derived from the token (sha256-based). */
             fingerprint: string;
+            /**
+             * Format: date-time
+             * @description Expiry instant. Absent when the token never expires.
+             */
+            expires_at?: string;
         };
         TokenSummary: {
             /** @description Stable opaque identifier used as the delete key. */
@@ -5532,6 +5546,11 @@ export interface components {
              * @description Last successful authentication time. Absent when never used.
              */
             last_seen_at?: string;
+            /**
+             * Format: date-time
+             * @description Expiry instant. Absent when the token never expires.
+             */
+            expires_at?: string;
         };
         /** @description One Homematic interface attached to a central. */
         InterfaceSpec: {
@@ -5970,6 +5989,15 @@ export interface components {
         };
         /** @description Request conflicts with current server state */
         Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The resource is locked by an edit session and the request did not present a valid X-Edit-Token that currently holds that lock. */
+        Locked: {
             headers: {
                 [name: string]: unknown;
             };
@@ -7638,7 +7666,10 @@ export interface operations {
     putLinkParamset: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Edit-lock token. A LINK paramset is per-peer configuration gated behind the per-resource edit lock: the caller must open an edit session (`POST /sessions/edit` with key `channel:{addr}:LINK:{peer}`) and present the returned token here, else the write is rejected 423 Locked. */
+                "X-Edit-Token"?: string;
+            };
             path: {
                 addr: string;
                 peer: string;
@@ -7656,6 +7687,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            423: components["responses"]["Locked"];
             502: components["responses"]["BadGateway"];
             503: components["responses"]["ServiceUnavailable"];
         };
