@@ -46,6 +46,7 @@
   import Icon from "$lib/components/ui/Icon.svelte";
   import LoadingState from "$lib/components/ui/LoadingState.svelte";
   import { dirty } from "$lib/stores/dirty.svelte";
+  import { confirmStore } from "$lib/stores/confirm.svelte";
   import { t } from "$lib/i18n";
   import RestartBanner from "$lib/components/RestartBanner.svelte";
   import { refreshRestartPending } from "$lib/stores/restartPending.svelte";
@@ -57,11 +58,49 @@
     location.hash.replace(/^#/, "") || "/devices",
   );
 
-  function onHash() {
-    path = location.hash.replace(/^#/, "") || "/devices";
+  // The raw hash we last committed to. Kept so a cancelled navigation
+  // can roll the URL back — hashchange fires only AFTER location.hash
+  // has already moved, so we cannot read the previous value from the
+  // event itself.
+  let committedHash = location.hash;
+  // Set while we programmatically restore the hash after a cancelled
+  // navigation, so the resulting hashchange echo is swallowed instead
+  // of re-prompting.
+  let revertingHash = false;
+
+  async function onHash() {
+    const nextHash = location.hash;
+    const next = nextHash.replace(/^#/, "") || "/devices";
+    if (revertingHash) {
+      revertingHash = false;
+      committedHash = nextHash;
+      return;
+    }
+    if (next === path) {
+      committedHash = nextHash;
+      return;
+    }
+    // In-app navigation would swap the rendered view. If an editor has
+    // unsaved edits, confirm before discarding them; on cancel, restore
+    // the URL to the view we were on.
+    if (dirty.any()) {
+      const ok = await confirmStore.ask({
+        title: t("nav.leave_title"),
+        body: t("nav.leave_body"),
+        confirmLabel: t("nav.leave_confirm"),
+        destructive: true,
+      });
+      if (!ok) {
+        revertingHash = true;
+        location.hash = committedHash;
+        return;
+      }
+    }
+    committedHash = nextHash;
+    path = next;
     void refreshRestartPending();
   }
-  window.addEventListener("hashchange", onHash);
+  window.addEventListener("hashchange", () => void onHash());
 
   onMount(() => {
     authStore.probe();

@@ -163,8 +163,33 @@
 
   async function copyToken() {
     if (!revealToken) return;
-    await navigator.clipboard.writeText(revealToken.token);
-    copied = true;
+    try {
+      // The Clipboard API only exists in a secure context (HTTPS or
+      // localhost); over plain http navigator.clipboard is undefined
+      // and writeText would throw. Guard so the reject is handled.
+      if (!navigator.clipboard) throw new Error("clipboard unavailable");
+      await navigator.clipboard.writeText(revealToken.token);
+      copied = true;
+    } catch {
+      // Insecure context or a denied permission: fall back to selecting
+      // the token so the operator can copy it manually, and tell them
+      // why the button did nothing.
+      copied = false;
+      selectTokenText();
+      toastStore.error(t("tokens.copy_failed"));
+    }
+  }
+
+  // Selects the revealed token's text so the operator can copy it with
+  // the keyboard when the Clipboard API is unavailable.
+  function selectTokenText() {
+    const el = document.querySelector('[data-testid="token-value"]');
+    const selection = window.getSelection();
+    if (!el || !selection) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }
 
   async function deleteToken(tk: TokenSummaryV2) {
