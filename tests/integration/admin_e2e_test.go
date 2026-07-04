@@ -5,17 +5,17 @@
 
 package integration
 
-// End-to-end test for the Wave-A..G admin path: walks the
-// multi-step setup wizard via HTTP, logs in with the wizard-
-// created admin, exercises the new /users / /auth/tokens/v2 /
-// /centrals / /config/sections endpoints against the same SQLite
+// End-to-end test for the admin lifecycle over the REST surface: walks
+// the first-run onboarding endpoints the SPA wizard drives (ADR 0045 —
+// `GET /api/v1/setup/status`, `POST /api/v1/setup`), logs in with the
+// onboarding-created admin, and exercises the /users, /auth/tokens/v2,
+// /centrals and /config/sections endpoints against the same SQLite
 // stores the daemon would use in production. Validates that the
-// chained user store (Wave-wiring) resolves wizard-created
-// admins and that the new admin handlers persist+read back via
-// the SQLite-backed services.
+// chained user store resolves onboarding-created admins and that the
+// admin handlers persist + read back via the SQLite-backed services.
 //
-// Does NOT exercise the central/CCU stack — the wizard skips the
-// CCU + MQTT steps so the test runs in-process with zero
+// Does NOT exercise the central/CCU stack — the onboarding payload
+// omits the CCU + MQTT steps so the test runs in-process with zero
 // external dependencies (no godevccu, no Mosquitto).
 
 import (
@@ -27,7 +27,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -38,10 +37,8 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/configstore"
 	"github.com/SukramJ/openccu-loom/internal/health"
-	"github.com/SukramJ/openccu-loom/internal/i18n"
 	"github.com/SukramJ/openccu-loom/internal/north/rest"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
-	"github.com/SukramJ/openccu-loom/internal/north/ui"
 	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 )
 
@@ -50,7 +47,6 @@ import (
 type adminE2EHarness struct {
 	t        *testing.T
 	api      *httptest.Server // REST listener
-	wizard   *httptest.Server // UI listener (setup + login form)
 	users    *sqlitestore.UserStore
 	tokens   *sqlitestore.TokenStore
 	centrals *sqlitestore.CentralsStore
@@ -59,7 +55,7 @@ type adminE2EHarness struct {
 }
 
 // newAdminE2EHarness opens a fresh SQLite DB in a t.TempDir() and
-// builds the minimal Deps both routers need.
+// builds the minimal Deps the REST router needs.
 func newAdminE2EHarness(t *testing.T) *adminE2EHarness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -104,7 +100,7 @@ func newAdminE2EHarness(t *testing.T) *adminE2EHarness {
 	tr.Record("central", health.Sample{Healthy: true, Note: "ok"})
 
 	restRouter := rest.NewRouter(rest.Deps{
-		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:    slog.New(slog.DiscardHandler),
 		StartedAt: time.Now(),
 		Health:    tr,
 		Audit:     auditBuf,
@@ -119,6 +115,19 @@ func newAdminE2EHarness(t *testing.T) *adminE2EHarness {
 				Secondary: memUsers,
 			},
 		},
+		Setup: &handlers.SetupService{
+			Users:    users,
+			Centrals: centrals,
+			Sections: sections,
+			// Mirrors the daemon's first-run probe: onboarding is
+			// required only while no local admin exists. YAML users,
+			// CCU-delegated login, and OIDC are not configured in
+			// this harness, so the SQLite count is the whole truth.
+			Required: func(ctx context.Context) bool {
+				n, err := users.Count(ctx)
+				return err == nil && n == 0
+			},
+		},
 		AuthResolve:     restResolve,
 		AuthRequire:     authMw.Require,
 		RequireAdmin:    func(next http.Handler) http.Handler { return authMw.RequireRole(auth.RoleAdmin, next) },
@@ -128,37 +137,17 @@ func newAdminE2EHarness(t *testing.T) *adminE2EHarness {
 		UserAdmin:       users,
 		TokenAdmin:      tokens,
 		CentralAdmin:    centrals,
-		// Disable the OpenAPI validator middleware so the test
-		// focuses on behavioural roundtrip; spec coverage is
-		// pinned by tests/contract/openapi_wave_c_paths_test.go.
-	})
-
-	catalogs, _ := i18n.NewCatalogs()
-	uiRouter := ui.NewRouter(ui.Deps{
-		Logger:   slog.New(slog.NewTextHandler(io.Discard, nil)),
-		Lang:     "en",
-		Health:   tr,
-		Catalogs: catalogs,
-		Auth:     &ui.AuthDeps{Users: memUsers, Sessions: sessions, Secure: false},
-		Setup: &ui.SetupWizardDeps{
-			Users:    users,
-			Centrals: centrals,
-			Sections: sections,
-			Sessions: ui.NewSetupSessionStore(),
-		},
-		AuthResolve: sessionResolve,
-		AuthRequire: nil,
+		// The OpenAPI validator middleware stays unwired so the test
+		// focuses on the behavioural roundtrip; spec coverage is
+		// pinned by the contract suite under tests/contract/.
 	})
 
 	api := httptest.NewServer(restRouter)
 	t.Cleanup(api.Close)
-	wizard := httptest.NewServer(uiRouter)
-	t.Cleanup(wizard.Close)
 
 	return &adminE2EHarness{
 		t:        t,
 		api:      api,
-		wizard:   wizard,
 		users:    users,
 		tokens:   tokens,
 		centrals: centrals,
@@ -192,9 +181,8 @@ func (a adminE2EConfigSvc) DeleteSection(ctx context.Context, section configstor
 	return a.sections.Delete(ctx, string(section))
 }
 
-// newCookieClient builds an http.Client that follows redirects
-// but stops at "303 See Other" boundaries so the wizard's
-// per-step redirects don't auto-collapse to /login.
+// newCookieClient builds an http.Client with a cookie jar so the
+// session cookie from /api/v1/auth/login sticks to subsequent calls.
 func newCookieClient(t *testing.T) *http.Client {
 	t.Helper()
 	jar, err := cookiejar.New(nil)
@@ -204,24 +192,7 @@ func newCookieClient(t *testing.T) *http.Client {
 	return &http.Client{
 		Jar:     jar,
 		Timeout: 10 * time.Second,
-		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
 	}
-}
-
-// postForm posts form values; helper around the wizard's
-// HTML form-style POSTs.
-func (h *adminE2EHarness) postForm(client *http.Client, path string, form url.Values) *http.Response {
-	h.t.Helper()
-	req, _ := http.NewRequest(http.MethodPost, h.wizard.URL+path,
-		strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	res, err := client.Do(req)
-	if err != nil {
-		h.t.Fatalf("POST %s: %v", path, err)
-	}
-	return res
 }
 
 // apiJSON is the helper used for all JSON REST calls.
@@ -251,124 +222,81 @@ func (h *adminE2EHarness) apiJSON(client *http.Client, method, path string, body
 	return res, buf
 }
 
-// findCSRFToken pulls the CSRF token out of an HTML form. The
-// wizard templates render <input type="hidden" name="_csrf"
-// value="...">.
-func findCSRFToken(t *testing.T, html string) string {
-	t.Helper()
-	const marker = `name="_csrf" value="`
-	i := strings.Index(html, marker)
-	if i < 0 {
-		t.Fatalf("CSRF token marker not found in HTML")
+// setupStatus fetches GET /api/v1/setup/status and returns the
+// `required` flag.
+func (h *adminE2EHarness) setupStatus(client *http.Client) bool {
+	h.t.Helper()
+	res, buf := h.apiJSON(client, http.MethodGet, "/api/v1/setup/status", nil, nil)
+	if res.StatusCode != 200 {
+		h.t.Fatalf("setup/status status=%d body=%s", res.StatusCode, buf)
 	}
-	rest := html[i+len(marker):]
-	end := strings.IndexByte(rest, '"')
-	if end < 0 {
-		t.Fatalf("CSRF token value not closed")
+	var status struct {
+		Required bool `json:"required"`
 	}
-	return rest[:end]
+	if err := json.Unmarshal(buf, &status); err != nil {
+		h.t.Fatalf("setup/status unmarshal: %v body=%s", err, buf)
+	}
+	return status.Required
 }
 
 // TestAdminE2E walks the complete admin lifecycle:
 //
-//  1. GET /setup → wizard renders step 1
-//  2. POST /setup/admin → advances to step 2
-//  3. POST /setup/locale → step 3
-//  4. POST /setup/ccu with skip=1 → step 4
-//  5. POST /setup/mqtt with skip=1 → finalize + redirect to /login
-//  6. Verify SQLite has one admin user; locale section is set
-//  7. Login via /api/v1/auth/login → session cookie
-//  8. GET /api/v1/config/schema → contains data_dir + north.mqtt.broker_url
-//  9. GET /api/v1/config/effective → returns config + sources
-//  10. POST /api/v1/users → second user created
-//  11. POST /api/v1/auth/tokens/v2 → plaintext + fingerprint
-//  12. Bearer-auth with that token reaches /api/v1/info
-//  13. PUT /api/v1/config/sections/north.mqtt → 200, version=1
-//  14. GET /api/v1/config/sections/north.mqtt → matches PUT body
-//  15. PUT same section again → version=2
-//  16. POST /api/v1/centrals → 201
-//  17. GET /api/v1/centrals → contains created row
-//  18. GET /api/v1/config/effective → now reports the central
-//  19. DELETE /api/v1/centrals/{name} → 204
-//  20. DELETE /api/v1/users/{subject} on the second user → 204
-//  21. DELETE the last admin → 409 (last-admin protection)
-//  22. Audit buffer carries entries for the section / user /
+//  1. GET /api/v1/setup/status → onboarding required
+//  2. POST /api/v1/setup (admin + locale, CCU/MQTT skipped) → 204
+//  3. GET /api/v1/setup/status → no longer required
+//  4. POST /api/v1/setup again → 409 (single-shot gate)
+//  5. Verify SQLite has one admin user; locale section is set
+//  6. Login via /api/v1/auth/login → session cookie
+//  7. GET /api/v1/config/schema → contains north.mqtt.broker_url
+//  8. GET /api/v1/config/effective → returns config + sources
+//  9. POST /api/v1/users → second user created
+//  10. POST /api/v1/auth/tokens/v2 → plaintext + fingerprint
+//  11. Bearer-auth with that token reaches /api/v1/info
+//  12. PUT /api/v1/config/sections/north.mqtt → 200, version=1
+//  13. GET /api/v1/config/sections/north.mqtt → matches PUT body
+//  14. PUT same section again → version=2
+//  15. POST /api/v1/centrals → 201
+//  16. GET /api/v1/centrals → contains created row
+//  17. GET /api/v1/config/effective → now reports the central
+//  18. DELETE /api/v1/centrals/{name} → 204
+//  19. DELETE /api/v1/users/{subject} on the second user → 204
+//  20. DELETE the last admin → 409 (last-admin protection)
+//  21. Audit buffer carries entries for the section / user /
 //     central mutations.
 func TestAdminE2E(t *testing.T) {
 	h := newAdminE2EHarness(t)
 	client := newCookieClient(t)
 	ctx := context.Background()
 
-	// --- Step 1: GET /setup ---
-	res, err := client.Get(h.wizard.URL + "/setup")
-	if err != nil {
-		t.Fatalf("GET /setup: %v", err)
+	// --- First-run probe: onboarding required ---
+	if !h.setupStatus(client) {
+		t.Fatal("setup/status reported required=false on a fresh DB, want true")
 	}
-	if res.StatusCode != 200 {
-		t.Fatalf("step1 status=%d", res.StatusCode)
-	}
-	body, _ := io.ReadAll(res.Body)
-	_ = res.Body.Close()
-	csrf := findCSRFToken(t, string(body))
 
-	// --- Step 1 POST: admin ---
-	res = h.postForm(client, "/setup/admin", url.Values{
-		"_csrf":    {csrf},
-		"username": {"alice"},
-		"password": {"correcthorse"},
-		"confirm":  {"correcthorse"},
-	})
-	if res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("setup/admin status=%d", res.StatusCode)
+	// --- Finalize onboarding (CCU + MQTT steps skipped) ---
+	setupBody := map[string]any{
+		"admin":  map[string]string{"username": "alice", "password": "correcthorse"},
+		"locale": map[string]string{"locale": "de", "theme": "system"},
 	}
-	_ = res.Body.Close()
+	res, buf := h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("setup finalize status=%d body=%s", res.StatusCode, buf)
+	}
 
-	// --- Step 2 GET → locale form, step 2 POST ---
-	res, _ = client.Get(h.wizard.URL + "/setup")
-	body, _ = io.ReadAll(res.Body)
-	_ = res.Body.Close()
-	csrf = findCSRFToken(t, string(body))
-	res = h.postForm(client, "/setup/locale", url.Values{
-		"_csrf":  {csrf},
-		"locale": {"de"},
-		"theme":  {"system"},
-	})
-	if res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("setup/locale status=%d", res.StatusCode)
+	// --- Probe flips to not-required ---
+	if h.setupStatus(client) {
+		t.Fatal("setup/status still reports required=true after finalize")
 	}
-	_ = res.Body.Close()
 
-	// --- Step 3 SKIP ---
-	res, _ = client.Get(h.wizard.URL + "/setup")
-	body, _ = io.ReadAll(res.Body)
-	_ = res.Body.Close()
-	csrf = findCSRFToken(t, string(body))
-	res = h.postForm(client, "/setup/ccu", url.Values{
-		"_csrf": {csrf},
-		"skip":  {"1"},
-	})
-	if res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("setup/ccu status=%d", res.StatusCode)
+	// --- Single-shot gate: a second finalize must be refused ---
+	res, buf = h.apiJSON(client, http.MethodPost, "/api/v1/setup", setupBody, nil)
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("second setup finalize status=%d body=%s (want 409)", res.StatusCode, buf)
 	}
-	_ = res.Body.Close()
-
-	// --- Step 4 SKIP → finalize ---
-	res, _ = client.Get(h.wizard.URL + "/setup")
-	body, _ = io.ReadAll(res.Body)
-	_ = res.Body.Close()
-	csrf = findCSRFToken(t, string(body))
-	res = h.postForm(client, "/setup/mqtt", url.Values{
-		"_csrf": {csrf},
-		"skip":  {"1"},
-	})
-	if res.StatusCode != http.StatusSeeOther {
-		t.Fatalf("setup/mqtt status=%d", res.StatusCode)
-	}
-	_ = res.Body.Close()
 
 	// --- Verify SQLite persistence ---
 	if n, err := h.users.Count(ctx); err != nil || n != 1 {
-		t.Fatalf("post-wizard users.Count = %d (err=%v), want 1", n, err)
+		t.Fatalf("post-onboarding users.Count = %d (err=%v), want 1", n, err)
 	}
 	locale, err := h.sections.Get(ctx, "locale")
 	if err != nil {
@@ -380,7 +308,7 @@ func TestAdminE2E(t *testing.T) {
 
 	// --- API login ---
 	apiClient := newCookieClient(t)
-	res, buf := h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/login",
+	res, buf = h.apiJSON(apiClient, http.MethodPost, "/api/v1/auth/login",
 		map[string]string{"username": "alice", "password": "correcthorse"}, nil)
 	if res.StatusCode != 200 {
 		t.Fatalf("login status=%d body=%s", res.StatusCode, buf)

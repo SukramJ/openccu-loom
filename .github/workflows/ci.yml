@@ -116,6 +116,18 @@ jobs:
           cache: true
       - name: go vet
         run: go vet ./...
+      # Build-tag-gated test packages are invisible to a tag-less
+      # `go vet ./...`, and the integration workflow is skipped on
+      # unlabeled PRs — without these explicit compile checks a PR
+      # can merge an integration-tag build break that only surfaces
+      # as a post-merge failure on main. The integration_live suite
+      # is never executed in CI at all (it needs a real CCU), so a
+      # compile-only `go test -run '^$'` is its sole standing guard.
+      - name: go vet (integration tag)
+        run: go vet -tags=integration ./tests/integration/
+      - name: compile check (integration_live tag)
+        shell: bash
+        run: go test -tags=integration_live -run '^$' -count=1 ./tests/integration/
       - name: go test
         # Force bash on all OSes (Windows runners default to PowerShell,
         # which mis-parses `-coverprofile=coverage.out ./...` and feeds go

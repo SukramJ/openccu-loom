@@ -24,10 +24,7 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/central"
 	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
-	"github.com/SukramJ/openccu-loom/internal/model/device"
-	"github.com/SukramJ/openccu-loom/internal/model/generic"
 	"github.com/SukramJ/openccu-loom/internal/north/mqtt"
-	"github.com/SukramJ/openccu-loom/internal/payload"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
@@ -109,7 +106,7 @@ func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 			if ch == nil {
 				continue
 			}
-			driveChannelDPs(ctx, bridge, d, ch)
+			driveChannelDPs(ctx, bridge, "ccu-01", d, ch)
 		}
 	}
 
@@ -141,141 +138,6 @@ func TestDiscoverySnapshotDumpAgainstGodevccu(t *testing.T) {
 		t.Fatalf("write %s: %v", out, err)
 	}
 	t.Logf("discovery snapshot written: %s (entities=%d)", out, len(entities))
-}
-
-// driveChannelDPs builds an [mqtt.Event] for every Generic-DP on the
-// channel (both VALUES and MASTER paramsets) and pushes it through the
-// bridge's HA-Discovery path. The recorder captures the resulting
-// publishes; per-topic deduplication in the bridge ensures we get one
-// entity per unique discovery topic regardless of how many DPs share
-// it.
-func driveChannelDPs(ctx context.Context, bridge *mqtt.Bridge, d *device.Device, ch *device.Channel) {
-	model := d.Model
-	iface := string(d.Interface)
-	addr := d.Address
-
-	// Mirror the EventBridge: surface the channel's CustomDataPoint as
-	// `ev.Source` so the channel-aware aggregator (climate / cover /
-	// light / lock / siren / valve) can fire. Without this every
-	// custom-domain channel falls through to the per-parameter path
-	// and the snapshot misses every aggregate entity.
-	var source payload.Source
-	if cdp := ch.CustomDataPoint(); cdp != nil {
-		if src, ok := cdp.(payload.Source); ok && src != nil {
-			source = src
-		}
-	}
-
-	common := mqtt.Event{
-		Central:        "ccu-01",
-		Interface:      iface,
-		DeviceAddress:  addr,
-		DeviceName:     d.Name,
-		Model:          model,
-		ChannelNo:      ch.Number,
-		ChannelAddress: ch.Address,
-		ChannelType:    ch.Type,
-		Channel:        ch,
-		Device:         d,
-		Source:         source,
-	}
-
-	// VALUES paramset — primary surface. Mirror the EventBridge's
-	// visibility gate: a DP whose runtime Usage was forced to
-	// NO_CREATE (e.g. SuppressUndefinedGenericDataPoints on linked
-	// virtual channels) is invisible and must not produce a Discovery
-	// payload — without this gate the snapshot reports thousands of
-	// over-emitted entities relative to the Production-EventBridge.
-	for _, dp := range ch.DataPoints() {
-		if !visibleForDiscovery(dp) {
-			continue
-		}
-		ev := buildEvent(common, hmenum.ParamsetKeyValues, dp)
-		_ = bridge.PublishState(ctx, ev)
-	}
-	// MASTER paramset — config-category surface.
-	for _, dp := range ch.MasterDataPoints() {
-		if !visibleForDiscovery(dp) {
-			continue
-		}
-		ev := buildEvent(common, hmenum.ParamsetKeyMaster, dp)
-		_ = bridge.PublishState(ctx, ev)
-	}
-}
-
-// visibleForDiscovery mirrors the EventBridge visibility gate
-// (`internal/central/adapter/eventbridge.go:444-446`). DPs whose
-// `Visible()` returns false (typically because the runtime usage
-// pipeline forced them to NO_CREATE) never reach the Production
-// MQTT bridge; the snapshot test must filter them out to mirror
-// Production behaviour.
-func visibleForDiscovery(dp device.ParameterDataPoint) bool {
-	if v, ok := dp.(interface{ Visible() bool }); ok {
-		return v.Visible()
-	}
-	return true
-}
-
-// buildEvent fills the descriptor-derived fields on a base Event so
-// the discovery builder has min / max / default / value_list /
-// writability / category — mirroring what the EventBridge populates
-// at runtime. The Category propagation enables the model-driven
-// component resolution ().
-func buildEvent(base mqtt.Event, paramset hmenum.ParamsetKey, dp device.ParameterDataPoint) mqtt.Event {
-	desc := dp.ParameterData()
-	ev := base
-	ev.Parameter = string(dp.Parameter())
-	ev.Writable = desc.IsWritable()
-	if cd, ok := dp.(interface {
-		Category() hmenum.DataPointCategory
-	}); ok {
-		ev.Category = cd.Category()
-	}
-	gc := &payload.GenericConfig{
-		Paramset:  paramset,
-		Unit:      generic.CleanupUnit(dp.Parameter(), desc.Unit),
-		ValueList: append([]string(nil), desc.ValueList...),
-		Type:      desc.Type,
-	}
-	if v, ok := decodeFloat(desc.Min); ok {
-		gc.Min = &v
-	}
-	if v, ok := decodeFloat(desc.Max); ok {
-		gc.Max = &v
-	}
-	if v, ok := decodeFloat(desc.Default); ok {
-		gc.Default = &v
-	}
-	ev.Descriptor = gc
-	return ev
-}
-
-func decodeFloat(rm json.RawMessage) (float64, bool) {
-	if len(rm) == 0 {
-		return 0, false
-	}
-	var v any
-	if err := json.Unmarshal(rm, &v); err != nil {
-		return 0, false
-	}
-	switch x := v.(type) {
-	case float64:
-		return x, true
-	case bool:
-		if x {
-			return 1, true
-		}
-		return 0, true
-	case string:
-		if x == "" {
-			return 0, false
-		}
-		var f float64
-		if err := json.Unmarshal([]byte(x), &f); err == nil {
-			return f, true
-		}
-	}
-	return 0, false
 }
 
 // ---------------------------------------------------------------------------
