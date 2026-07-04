@@ -44,12 +44,12 @@ func ParseFormat(raw string) Format {
 	return FormatJSON
 }
 
-// StackOptions configures the handler chain returned by [BuildStack]
+// StackOptions configures the handler chain returned by [BuildFullStack]
 // and [ForSubsystem].
 //
 // The default chain, in order from outer to inner, is:
 //
-//	RequestContextFilter (adds request_id / trace_id / central_name)
+//	reqctx.ContextHandler (adds request_id / operation / trace fields)
 //	  → RedactingHandler (masks sensitive attribute values)
 //	    → core handler (JSON or text, gated by a Leveler)
 //
@@ -61,7 +61,7 @@ type StackOptions struct {
 	Sensitive []string // nil ⇒ defaults; empty slice ⇒ disabled
 }
 
-// Stack bundles the components built by [BuildStack].
+// Stack bundles the components built by [BuildFullStack].
 type Stack struct {
 	// Logger is the root [slog.Logger]; caller installs it via
 	// [slog.SetDefault].
@@ -79,23 +79,14 @@ type Stack struct {
 	Live *LiveLog
 }
 
-// BuildStack returns the global root logger plus its level registry
-// and capture tee. The root logger is gated by the registry's
-// default level — every subsequent [LevelRegistry.SetDefault] call
-// takes effect on the next log record without rebuilding the logger.
+// BuildFullStack returns the global root logger plus its level
+// registry, capture tee, and live ring. The root logger is gated by
+// the registry's default level — every subsequent
+// [LevelRegistry.SetDefault] call takes effect on the next log record
+// without rebuilding the logger.
 //
 // Callers typically wire [Stack.Logger] into [slog.SetDefault] and
 // hold [Stack.Levels] + [Stack.Tee] for the diagnostics endpoints.
-//
-// loom:reachable:reason="legacy two-return-value variant used by tests and tooling that do not need TeeHandler"
-func BuildStack(opts StackOptions, defaultLevel slog.Level) (*slog.Logger, *LevelRegistry) {
-	stack := BuildFullStack(opts, defaultLevel)
-	return stack.Logger, stack.Levels
-}
-
-// BuildFullStack is the variant that exposes the [TeeHandler] for
-// the capture endpoint. New callers should prefer this; [BuildStack]
-// stays for tests and tooling that do not need the capture surface.
 func BuildFullStack(opts StackOptions, defaultLevel slog.Level) Stack {
 	reg := NewLevelRegistry(defaultLevel)
 	logger, tee := loggerForLevelerWithTee(opts, reg.Leveler(""))
@@ -108,7 +99,7 @@ func BuildFullStack(opts StackOptions, defaultLevel slog.Level) Stack {
 
 // ForSubsystem returns a logger gated by the level configured (or
 // inherited) for path. The handler chain is identical to the one
-// installed by [BuildStack] so that subsystem records carry the same
+// installed by [BuildFullStack] so that subsystem records carry the same
 // request-context fields and the same redaction guarantees as the
 // root logger.
 //

@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 11022af
-HEAD: 11022af
+Generated: eec4550
+HEAD: eec4550
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24039 |
-| Reachable | 3792 |
-| Whitelisted | 17368 |
-| **Unreachable** | **2879** |
+| Total Exported | 24002 |
+| Reachable | 3788 |
+| Whitelisted | 17337 |
+| **Unreachable** | **2877** |
 
 ## Top-20 Packages by Dead Code
 
@@ -25,7 +25,7 @@ HEAD: 11022af
 | internal/auth | 14 | 24 | 4 |
 | internal/metrics | 12 | 60 | 2 |
 | internal/payload | 12 | 232 | 6 |
-| pkg/hmlog | 12 | 20 | 0 |
+| pkg/hmlog | 12 | 18 | 0 |
 | internal/central/events | 11 | 9 | 0 |
 | internal/north/matter/im | 11 | 74 | 14 |
 | internal/model/hub | 10 | 41 | 30 |
@@ -105,7 +105,7 @@ HEAD: 11022af
 | internal/auth | 14 | 24 | 4 |
 | internal/metrics | 12 | 60 | 2 |
 | internal/payload | 12 | 232 | 6 |
-| pkg/hmlog | 12 | 20 | 0 |
+| pkg/hmlog | 12 | 18 | 0 |
 | internal/central/events | 11 | 9 | 0 |
 | internal/north/matter/im | 11 | 74 | 14 |
 | internal/model/hub | 10 | 41 | 30 |

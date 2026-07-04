@@ -1,6 +1,6 @@
 {
-  "generated": "11022af",
-  "head": "11022af",
+  "generated": "eec4550",
+  "head": "eec4550",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24039,
-    "reachable": 3578,
-    "whitelisted": 17368,
-    "unreachable": 3093
+    "total_exported": 24002,
+    "reachable": 3574,
+    "whitelisted": 17337,
+    "unreachable": 3091
   },
   "by_package": [
     {
@@ -41,7 +41,7 @@
     {
       "package": "pkg/hmlog",
       "unreachable_funcs": 22,
-      "unreachable_types": 25,
+      "unreachable_types": 23,
       "unreachable_other": 0
     },
     {
@@ -6667,7 +6667,7 @@
       "package": "internal/metrics",
       "identifier": "CacheMetricsSnapshot",
       "file": "internal/metrics/snapshots.go",
-      "line": 116,
+      "line": 115,
       "kind": "type"
     },
     {
@@ -6772,7 +6772,7 @@
       "package": "internal/metrics",
       "identifier": "EventMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 90,
+      "line": 89,
       "kind": "type"
     },
     {
@@ -6800,7 +6800,7 @@
       "package": "internal/metrics",
       "identifier": "HealthMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 141,
+      "line": 140,
       "kind": "type"
     },
     {
@@ -6926,28 +6926,28 @@
       "package": "internal/metrics",
       "identifier": "MetricsSnapshot",
       "file": "internal/metrics/snapshots.go",
-      "line": 211,
+      "line": 210,
       "kind": "type"
     },
     {
       "package": "internal/metrics",
       "identifier": "MetricsSnapshot",
       "file": "internal/metrics/snapshots.go",
-      "line": 211,
+      "line": 210,
       "kind": "type"
     },
     {
       "package": "internal/metrics",
       "identifier": "ModelMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 178,
+      "line": 177,
       "kind": "type"
     },
     {
       "package": "internal/metrics",
       "identifier": "ModelMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 178,
+      "line": 177,
       "kind": "type"
     },
     {
@@ -7010,7 +7010,7 @@
       "package": "internal/metrics",
       "identifier": "RecoveryMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 160,
+      "line": 159,
       "kind": "type"
     },
     {
@@ -7052,21 +7052,21 @@
       "package": "internal/metrics",
       "identifier": "RpcMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 14,
+      "line": 13,
       "kind": "type"
     },
     {
       "package": "internal/metrics",
       "identifier": "RpcServerMetrics",
       "file": "internal/metrics/snapshots.go",
-      "line": 65,
+      "line": 64,
       "kind": "type"
     },
     {
       "package": "internal/metrics",
       "identifier": "ServiceMetricsSnapshot",
       "file": "internal/metrics/snapshots.go",
-      "line": 192,
+      "line": 191,
       "kind": "type"
     },
     {
@@ -10650,21 +10650,21 @@
       "package": "internal/model/naming",
       "identifier": "Bucket",
       "file": "internal/model/naming/pathdata.go",
-      "line": 52,
+      "line": 47,
       "kind": "type"
     },
     {
       "package": "internal/model/naming",
       "identifier": "Bucket",
       "file": "internal/model/naming/pathdata.go",
-      "line": 52,
+      "line": 47,
       "kind": "type"
     },
     {
       "package": "internal/model/naming",
       "identifier": "DiscoveryConfigTopic",
       "file": "internal/model/naming/pathdata.go",
-      "line": 455,
+      "line": 450,
       "kind": "func"
     },
     {
@@ -10685,14 +10685,14 @@
       "package": "internal/model/naming",
       "identifier": "EmptyPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 120,
+      "line": 115,
       "kind": "var"
     },
     {
       "package": "internal/model/naming",
       "identifier": "EmptyPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 120,
+      "line": 115,
       "kind": "var"
     },
     {
@@ -10706,119 +10706,119 @@
       "package": "internal/model/naming",
       "identifier": "MQTTCustomDPInvoke",
       "file": "internal/model/naming/pathdata.go",
-      "line": 790,
+      "line": 770,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubAlarmMessages",
       "file": "internal/model/naming/pathdata.go",
-      "line": 749,
+      "line": 729,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubConnectivity",
       "file": "internal/model/naming/pathdata.go",
-      "line": 773,
+      "line": 753,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubDiagnostics",
       "file": "internal/model/naming/pathdata.go",
-      "line": 650,
+      "line": 630,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubInbox",
       "file": "internal/model/naming/pathdata.go",
-      "line": 761,
+      "line": 741,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubInfo",
       "file": "internal/model/naming/pathdata.go",
-      "line": 644,
+      "line": 624,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubInstallMode",
       "file": "internal/model/naming/pathdata.go",
-      "line": 714,
+      "line": 694,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubInstallModeCommand",
       "file": "internal/model/naming/pathdata.go",
-      "line": 738,
+      "line": 718,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubInstallModeForInterface",
       "file": "internal/model/naming/pathdata.go",
-      "line": 723,
+      "line": 703,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubProgramState",
       "file": "internal/model/naming/pathdata.go",
-      "line": 699,
+      "line": 679,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubProgramTrigger",
       "file": "internal/model/naming/pathdata.go",
-      "line": 683,
+      "line": 663,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubServiceMessages",
       "file": "internal/model/naming/pathdata.go",
-      "line": 755,
+      "line": 735,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubStatus",
       "file": "internal/model/naming/pathdata.go",
-      "line": 638,
+      "line": 618,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubSysvarCommand",
       "file": "internal/model/naming/pathdata.go",
-      "line": 669,
+      "line": 649,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubSysvarState",
       "file": "internal/model/naming/pathdata.go",
-      "line": 656,
+      "line": 636,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTHubUpdate",
       "file": "internal/model/naming/pathdata.go",
-      "line": 767,
+      "line": 747,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "MQTTSystemStatus",
       "file": "internal/model/naming/pathdata.go",
-      "line": 784,
+      "line": 764,
       "kind": "func"
     },
     {
@@ -10832,49 +10832,49 @@
       "package": "internal/model/naming",
       "identifier": "NewChannelPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 471,
+      "line": 466,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "NewCustomDPPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 510,
+      "line": 505,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "NewDataPointPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 554,
+      "line": 549,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "NewDevicePathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 489,
+      "line": 484,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "NewProgramPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 595,
+      "line": 590,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "NewSysvarPathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 608,
+      "line": 603,
       "kind": "func"
     },
     {
       "package": "internal/model/naming",
       "identifier": "PathData",
       "file": "internal/model/naming/pathdata.go",
-      "line": 93,
+      "line": 88,
       "kind": "type"
     },
     {
@@ -10888,7 +10888,7 @@
       "package": "internal/model/naming",
       "identifier": "TopicSafe",
       "file": "internal/model/naming/pathdata.go",
-      "line": 531,
+      "line": 526,
       "kind": "func"
     },
     {
@@ -17321,14 +17321,14 @@
       "package": "internal/payload",
       "identifier": "Merge",
       "file": "internal/payload/payload.go",
-      "line": 89,
+      "line": 77,
       "kind": "func"
     },
     {
       "package": "internal/payload",
       "identifier": "Merge",
       "file": "internal/payload/payload.go",
-      "line": 89,
+      "line": 77,
       "kind": "func"
     },
     {
@@ -21353,7 +21353,7 @@
       "package": "pkg/hmlog",
       "identifier": "BuildFullStack",
       "file": "pkg/hmlog/factory.go",
-      "line": 99,
+      "line": 90,
       "kind": "func"
     },
     {
@@ -21367,42 +21367,42 @@
       "package": "pkg/hmlog",
       "identifier": "ContextualLogger",
       "file": "pkg/hmlog/contextual.go",
-      "line": 38,
+      "line": 36,
       "kind": "type"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "ContextualLogger",
       "file": "pkg/hmlog/contextual.go",
-      "line": 38,
+      "line": 36,
       "kind": "type"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "Fields",
       "file": "pkg/hmlog/contextual.go",
-      "line": 33,
+      "line": 31,
       "kind": "type"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "Fields",
       "file": "pkg/hmlog/contextual.go",
-      "line": 33,
+      "line": 31,
       "kind": "type"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "ForSubsystem",
       "file": "pkg/hmlog/factory.go",
-      "line": 120,
+      "line": 111,
       "kind": "func"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "ForSubsystem",
       "file": "pkg/hmlog/factory.go",
-      "line": 120,
+      "line": 111,
       "kind": "func"
     },
     {
@@ -21430,21 +21430,21 @@
       "package": "pkg/hmlog",
       "identifier": "Get",
       "file": "pkg/hmlog/contextual.go",
-      "line": 59,
+      "line": 57,
       "kind": "func"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "Get",
       "file": "pkg/hmlog/contextual.go",
-      "line": 59,
+      "line": 57,
       "kind": "func"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "IsSensitiveKey",
       "file": "pkg/hmlog/redact.go",
-      "line": 117,
+      "line": 106,
       "kind": "func"
     },
     {
@@ -21479,14 +21479,14 @@
       "package": "pkg/hmlog",
       "identifier": "New",
       "file": "pkg/hmlog/contextual.go",
-      "line": 45,
+      "line": 43,
       "kind": "func"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "New",
       "file": "pkg/hmlog/contextual.go",
-      "line": 45,
+      "line": 43,
       "kind": "func"
     },
     {
@@ -21582,20 +21582,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "RequestContextFilter",
-      "file": "pkg/hmlog/request_filter.go",
-      "line": 27,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "RequestContextFilter",
-      "file": "pkg/hmlog/request_filter.go",
-      "line": 27,
-      "kind": "type"
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "SpanCloser",
       "file": "pkg/hmlog/op.go",
       "line": 18,
@@ -21661,14 +21647,14 @@
       "package": "pkg/hmlog",
       "identifier": "WithContext",
       "file": "pkg/hmlog/contextual.go",
-      "line": 73,
+      "line": 71,
       "kind": "func"
     },
     {
       "package": "pkg/hmlog",
       "identifier": "WithContext",
       "file": "pkg/hmlog/contextual.go",
-      "line": 73,
+      "line": 71,
       "kind": "func"
     },
     {
@@ -31286,20 +31272,6 @@
     },
     {
       "package": "internal/central/adapter",
-      "identifier": "StaticCallbackBaseURL",
-      "reason": "used in daemon.go WireDeps.CallbackBaseURL assembly for fixed-port mode",
-      "file": "internal/central/adapter/xmlrpc_announcer.go",
-      "line": 20
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "StaticCallbackBaseURL",
-      "reason": "used in daemon.go WireDeps.CallbackBaseURL assembly for fixed-port mode",
-      "file": "internal/central/adapter/xmlrpc_announcer.go",
-      "line": 20
-    },
-    {
-      "package": "internal/central/adapter",
       "identifier": "TestAddLink_BackendError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/adapter_multi_unit_test.go",
@@ -32472,7 +32444,7 @@
       "identifier": "TestCallbackURLProviderEmptyStringSkipsInit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/reconnector_callback_url_test.go",
-      "line": 195
+      "line": 174
     },
     {
       "package": "internal/central/adapter",
@@ -32486,7 +32458,7 @@
       "identifier": "TestCallbackURLProviderNilSkipsInit",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/reconnector_callback_url_test.go",
-      "line": 166
+      "line": 145
     },
     {
       "package": "internal/central/adapter",
@@ -41544,14 +41516,14 @@
       "identifier": "TestRecoveryReconnectorCentralFoundNilStep",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/reconnector_callback_url_test.go",
-      "line": 214
+      "line": 193
     },
     {
       "package": "internal/central/adapter",
       "identifier": "TestRecoveryReconnectorCentralFoundWithStep",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/reconnector_callback_url_test.go",
-      "line": 229
+      "line": 208
     },
     {
       "package": "internal/central/adapter",
@@ -43743,13 +43715,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/central/adapter/ccu_readiness_waiting_test.go",
       "line": 91
-    },
-    {
-      "package": "internal/central/adapter",
-      "identifier": "TestStaticCallbackBaseURLProvider",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/central/adapter/reconnector_callback_url_test.go",
-      "line": 145
     },
     {
       "package": "internal/central/adapter",
@@ -49844,28 +49809,28 @@
     {
       "package": "internal/central/events",
       "identifier": "WithExternal",
-      "reason": "called by MQTT and REST adapters to tag external subscriptions for grouped teardown",
+      "reason": "sole setter for the external flag consumed by Bus.ClearExternalSubscriptions during central teardown; no production subscriber passes it yet",
       "file": "internal/central/events/bus.go",
       "line": 86
     },
     {
       "package": "internal/central/events",
       "identifier": "WithExternal",
-      "reason": "called by MQTT and REST adapters to tag external subscriptions for grouped teardown",
+      "reason": "sole setter for the external flag consumed by Bus.ClearExternalSubscriptions during central teardown; no production subscriber passes it yet",
       "file": "internal/central/events/bus.go",
       "line": 86
     },
     {
       "package": "internal/central/events",
       "identifier": "WithName",
-      "reason": "called by north-bound adapters and diagnostic tooling to annotate subscriptions",
+      "reason": "sole setter for the handler name surfaced by Bus.HandlerStats; retained as a diagnostics seam — test-only callers today",
       "file": "internal/central/events/bus.go",
       "line": 75
     },
     {
       "package": "internal/central/events",
       "identifier": "WithName",
-      "reason": "called by north-bound adapters and diagnostic tooling to annotate subscriptions",
+      "reason": "sole setter for the handler name surfaced by Bus.HandlerStats; retained as a diagnostics seam — test-only callers today",
       "file": "internal/central/events/bus.go",
       "line": 75
     },
@@ -52504,14 +52469,14 @@
     {
       "package": "internal/client/backends",
       "identifier": "NewCcuBackend",
-      "reason": "used in tests and legacy call sites that do not need interface-type dispatch; production wiring uses NewCcuBackendForInterface",
+      "reason": "test convenience constructor without interface-type dispatch; production wiring always uses NewCcuBackendForInterface",
       "file": "internal/client/backends/ccu.go",
       "line": 73
     },
     {
       "package": "internal/client/backends",
       "identifier": "NewCcuBackend",
-      "reason": "used in tests and legacy call sites that do not need interface-type dispatch; production wiring uses NewCcuBackendForInterface",
+      "reason": "test convenience constructor without interface-type dispatch; production wiring always uses NewCcuBackendForInterface",
       "file": "internal/client/backends/ccu.go",
       "line": 73
     },
@@ -64418,28 +64383,28 @@
     {
       "package": "internal/health",
       "identifier": "WithHistorySize",
-      "reason": "functional option for NewTracker; consumed in tests and by future production callers that need non-default history depth",
+      "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
       "line": 124
     },
     {
       "package": "internal/health",
       "identifier": "WithHistorySize",
-      "reason": "functional option for NewTracker; consumed in tests and by future production callers that need non-default history depth",
+      "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
       "line": 124
     },
     {
       "package": "internal/health",
       "identifier": "WithStaleAfter",
-      "reason": "functional option for NewTracker; production callers that need custom stale windows will consume this",
+      "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
       "line": 138
     },
     {
       "package": "internal/health",
       "identifier": "WithStaleAfter",
-      "reason": "functional option for NewTracker; production callers that need custom stale windows will consume this",
+      "reason": "functional option retained as a deliberate NewTracker config seam; test-only callers today",
       "file": "internal/health/tracker.go",
       "line": 138
     },
@@ -64708,20 +64673,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/i18n/i18n_extra_test.go",
       "line": 69
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "Round2",
-      "reason": "used by REST snapshot handlers and calculated-DP formulas to normalise float precision",
-      "file": "internal/metrics/snapshots.go",
-      "line": 239
-    },
-    {
-      "package": "internal/metrics",
-      "identifier": "Round2",
-      "reason": "used by REST snapshot handlers and calculated-DP formulas to normalise float precision",
-      "file": "internal/metrics/snapshots.go",
-      "line": 239
     },
     {
       "package": "internal/metrics",
@@ -65103,17 +65054,10 @@
     },
     {
       "package": "internal/metrics",
-      "identifier": "TestRound2",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/metrics/snapshots_test.go",
-      "line": 251
-    },
-    {
-      "package": "internal/metrics",
       "identifier": "TestRpcMetricsCoalesceRate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/metrics/snapshots_test.go",
-      "line": 276
+      "line": 251
     },
     {
       "package": "internal/metrics",
@@ -65127,7 +65071,7 @@
       "identifier": "TestRpcMetricsRejectionRate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/metrics/snapshots_test.go",
-      "line": 288
+      "line": 263
     },
     {
       "package": "internal/metrics",
@@ -79264,20 +79208,6 @@
     },
     {
       "package": "internal/model/device",
-      "identifier": "CheckChannelIsOnlyPrimaryChannel",
-      "reason": "called by MQTT entity-description builder to determine whether the channel-number suffix can be omitted",
-      "file": "internal/model/device/aggregate.go",
-      "line": 968
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "CheckChannelIsOnlyPrimaryChannel",
-      "reason": "called by MQTT entity-description builder to determine whether the channel-number suffix can be omitted",
-      "file": "internal/model/device/aggregate.go",
-      "line": 968
-    },
-    {
-      "package": "internal/model/device",
       "identifier": "TestAllowUndefinedFalseWhenNoCustomDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_test.go",
@@ -79540,14 +79470,14 @@
       "identifier": "TestChannelFullNameNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 342
+      "line": 299
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelFullNameWithDeviceName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 324
+      "line": 281
     },
     {
       "package": "internal/model/device",
@@ -79778,28 +79708,28 @@
       "identifier": "TestChannelLinkPeerSourceCategoriesAfterSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 425
+      "line": 382
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelLinkPeerSourceCategoriesDefaultNil",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 413
+      "line": 370
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelLinkPeerSourceCategoriesReturnsCopy",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 440
+      "line": 397
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelLinkPeerTargetCategoriesAfterSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 459
+      "line": 416
     },
     {
       "package": "internal/model/device",
@@ -79848,14 +79778,14 @@
       "identifier": "TestChannelNameDataDeviceNamePropagated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 355
+      "line": 312
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelNameDataNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 372
+      "line": 329
     },
     {
       "package": "internal/model/device",
@@ -80170,14 +80100,14 @@
       "identifier": "TestChannelTypeTranslationAfterSet",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 398
+      "line": 355
     },
     {
       "package": "internal/model/device",
       "identifier": "TestChannelTypeTranslationFallsBackToType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 385
+      "line": 342
     },
     {
       "package": "internal/model/device",
@@ -80206,34 +80136,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/channel_parameter_accessor_test.go",
       "line": 521
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TestCheckChannelIsOnlyPrimaryChannelFalseMultipleChannels",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/device/device_accessor_test.go",
-      "line": 292
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TestCheckChannelIsOnlyPrimaryChannelFalseWhenBothMultiAndNotPrimary",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/device/device_accessor_test.go",
-      "line": 312
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TestCheckChannelIsOnlyPrimaryChannelFalseWhenNotPrimary",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/device/device_accessor_test.go",
-      "line": 302
-    },
-    {
-      "package": "internal/model/device",
-      "identifier": "TestCheckChannelIsOnlyPrimaryChannelTrue",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/device/device_accessor_test.go",
-      "line": 281
     },
     {
       "package": "internal/model/device",
@@ -81129,14 +81031,14 @@
       "identifier": "TestUpdateFullNameFallsBackWhenNoDeviceName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 498
+      "line": 455
     },
     {
       "package": "internal/model/device",
       "identifier": "TestUpdateFullNamePrefixedWithDeviceName",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 486
+      "line": 443
     },
     {
       "package": "internal/model/device",
@@ -81157,7 +81059,7 @@
       "identifier": "TestUpdateNameReturnsUpdate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 475
+      "line": 432
     },
     {
       "package": "internal/model/device",
@@ -81171,14 +81073,14 @@
       "identifier": "TestUpdateRegisterNilSafe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 533
+      "line": 490
     },
     {
       "package": "internal/model/device",
       "identifier": "TestUpdateRegisterUnregister",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/device/device_accessor_test.go",
-      "line": 511
+      "line": 468
     },
     {
       "package": "internal/model/device",
@@ -88812,20 +88714,6 @@
     },
     {
       "package": "internal/model/naming",
-      "identifier": "NewHubPathData",
-      "reason": "called by Hub-DP constructors to set the north-bound publish path",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 623
-    },
-    {
-      "package": "internal/model/naming",
-      "identifier": "NewHubPathData",
-      "reason": "called by Hub-DP constructors to set the north-bound publish path",
-      "file": "internal/model/naming/pathdata.go",
-      "line": 623
-    },
-    {
-      "package": "internal/model/naming",
       "identifier": "TestChannelUniqueIDNoParameter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/naming/uniqueid_test.go",
@@ -89400,13 +89288,6 @@
     },
     {
       "package": "internal/model/naming",
-      "identifier": "TestNewHubPathData",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/model/naming/pathdata_test.go",
-      "line": 133
-    },
-    {
-      "package": "internal/model/naming",
       "identifier": "TestNewProgramPathData",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/naming/pathdata_test.go",
@@ -89424,21 +89305,21 @@
       "identifier": "TestPathData_DeviceSetStateRoots",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/naming/pathdata_test.go",
-      "line": 147
+      "line": 133
     },
     {
       "package": "internal/model/naming",
       "identifier": "TestPathData_EmptyAddressIsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/naming/pathdata_test.go",
-      "line": 158
+      "line": 144
     },
     {
       "package": "internal/model/naming",
       "identifier": "TestPathData_EmptyKindIsZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/model/naming/pathdata_test.go",
-      "line": 166
+      "line": 152
     },
     {
       "package": "internal/model/naming",
@@ -104892,28 +104773,28 @@
     {
       "package": "internal/north/matter/schema",
       "identifier": "ClusterName",
-      "reason": "used in Matter debug logging, parity tests, and cluster-server introspection paths",
+      "reason": "introspection companion to the generated cluster tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
       "line": 20
     },
     {
       "package": "internal/north/matter/schema",
       "identifier": "ClusterName",
-      "reason": "used in Matter debug logging, parity tests, and cluster-server introspection paths",
+      "reason": "introspection companion to the generated cluster tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
       "line": 20
     },
     {
       "package": "internal/north/matter/schema",
       "identifier": "DeviceTypeName",
-      "reason": "used in Matter debug logging and device-type descriptor introspection",
+      "reason": "introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
       "line": 44
     },
     {
       "package": "internal/north/matter/schema",
       "identifier": "DeviceTypeName",
-      "reason": "used in Matter debug logging and device-type descriptor introspection",
+      "reason": "introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet",
       "file": "internal/north/matter/schema/lookup.go",
       "line": 44
     },
@@ -131631,24 +131512,10 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "ForKinds",
-      "reason": "called by north-bound adapters that need all three payload buckets",
-      "file": "internal/payload/payload.go",
-      "line": 79
-    },
-    {
-      "package": "internal/payload",
-      "identifier": "ForKinds",
-      "reason": "called by north-bound adapters that need all three payload buckets",
-      "file": "internal/payload/payload.go",
-      "line": 79
-    },
-    {
-      "package": "internal/payload",
       "identifier": "TestDescribeCached",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/payload_test.go",
-      "line": 132
+      "line": 115
     },
     {
       "package": "internal/payload",
@@ -131669,7 +131536,7 @@
       "identifier": "TestForEmbeddedFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/payload_test.go",
-      "line": 111
+      "line": 94
     },
     {
       "package": "internal/payload",
@@ -131680,17 +131547,10 @@
     },
     {
       "package": "internal/payload",
-      "identifier": "TestForKinds",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/payload/payload_test.go",
-      "line": 64
-    },
-    {
-      "package": "internal/payload",
       "identifier": "TestForNilAndNonStruct",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/payload_test.go",
-      "line": 90
+      "line": 73
     },
     {
       "package": "internal/payload",
@@ -131704,7 +131564,7 @@
       "identifier": "TestForSkipsDash",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/payload_test.go",
-      "line": 81
+      "line": 64
     },
     {
       "package": "internal/payload",
@@ -131753,7 +131613,7 @@
       "identifier": "TestMerge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/payload/payload_test.go",
-      "line": 119
+      "line": 102
     },
     {
       "package": "internal/payload",
@@ -133389,14 +133249,14 @@
     {
       "package": "internal/store/sqlite",
       "identifier": "AliveKey",
-      "reason": "called by GC callers building the alive-set before invoking GCDeadRows; exported so coordinator code can construct keys without importing internal format",
+      "reason": "key encoder paired with GCDeadRows so alive-set construction stays in sync with the scan comparison; the GC job is not production-wired yet — callers are integration tests",
       "file": "internal/store/sqlite/values_cache.go",
       "line": 579
     },
     {
       "package": "internal/store/sqlite",
       "identifier": "AliveKey",
-      "reason": "called by GC callers building the alive-set before invoking GCDeadRows; exported so coordinator code can construct keys without importing internal format",
+      "reason": "key encoder paired with GCDeadRows so alive-set construction stays in sync with the scan comparison; the GC job is not production-wired yet — callers are integration tests",
       "file": "internal/store/sqlite/values_cache.go",
       "line": 579
     },
@@ -140297,48 +140157,6 @@
     },
     {
       "package": "pkg/hmlog",
-      "identifier": "BuildStack",
-      "reason": "legacy two-return-value variant used by tests and tooling that do not need TeeHandler",
-      "file": "pkg/hmlog/factory.go",
-      "line": 91
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "BuildStack",
-      "reason": "legacy two-return-value variant used by tests and tooling that do not need TeeHandler",
-      "file": "pkg/hmlog/factory.go",
-      "line": 91
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "DefaultSensitiveKeys",
-      "reason": "used by config-UI and REST handlers that need to extend the redaction list",
-      "file": "pkg/hmlog/redact.go",
-      "line": 105
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "DefaultSensitiveKeys",
-      "reason": "used by config-UI and REST handlers that need to extend the redaction list",
-      "file": "pkg/hmlog/redact.go",
-      "line": 105
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewRequestContextFilter",
-      "reason": "used by BuildFullStack to enrich log records with per-request fields",
-      "file": "pkg/hmlog/request_filter.go",
-      "line": 36
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "NewRequestContextFilter",
-      "reason": "used by BuildFullStack to enrich log records with per-request fields",
-      "file": "pkg/hmlog/request_filter.go",
-      "line": 36
-    },
-    {
-      "package": "pkg/hmlog",
       "identifier": "TestContextLevelMethodsCarryFields",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmlog/contextual_level_test.go",
@@ -140518,55 +140336,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "pkg/hmlog/factory_color_test.go",
       "line": 13
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_EnrichesLogRecord",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 21
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_ImplementsHandler",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 107
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_NoEnrichmentWhenAbsent",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 50
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_PanicOnNilInner",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 98
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_TraceFields",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 116
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_WithAttrs",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 68
-    },
-    {
-      "package": "pkg/hmlog",
-      "identifier": "TestRequestContextFilter_WithGroup",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "pkg/hmlog/request_filter_test.go",
-      "line": 88
     },
     {
       "package": "pkg/hmlog",

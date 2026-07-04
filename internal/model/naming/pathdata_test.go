@@ -130,20 +130,6 @@ func TestNewSysvarPathData(t *testing.T) {
 	}
 }
 
-func TestNewHubPathData(t *testing.T) {
-	t.Parallel()
-	pd := NewHubPathData("alarm_messages")
-	if pd.SetPath != "hub/set/alarm_messages" {
-		t.Errorf("SetPath = %q, want %q", pd.SetPath, "hub/set/alarm_messages")
-	}
-	if pd.StatePath != "hub/status/alarm_messages" {
-		t.Errorf("StatePath = %q, want %q", pd.StatePath, "hub/status/alarm_messages")
-	}
-	if got := NewHubPathData(""); !got.IsZero() {
-		t.Errorf("empty name must yield zero PathData, got %+v", got)
-	}
-}
-
 func TestPathData_DeviceSetStateRoots(t *testing.T) {
 	t.Parallel()
 	pd := NewDataPointPathData(hmenum.InterfaceHmIPRF, "VCU1234567", 1, BucketValues, "STATE")

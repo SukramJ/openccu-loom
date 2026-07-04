@@ -61,23 +61,6 @@ func TestForOmitZero(t *testing.T) {
 	}
 }
 
-func TestForKinds(t *testing.T) {
-	d := sampleDevice{
-		Address: "0001ABCD", Model: "HmIP-STH", Icon: "x.png",
-		Level: 42, Available: true,
-	}
-	out := ForKinds(&d, Options{})
-	if out[KindInfo]["model"] != "HmIP-STH" {
-		t.Fatalf("info=%+v", out[KindInfo])
-	}
-	if out[KindConfig]["icon"] != "x.png" {
-		t.Fatalf("config=%+v", out[KindConfig])
-	}
-	if out[KindState]["level"] != 42 || out[KindState]["available"] != true {
-		t.Fatalf("state=%+v", out[KindState])
-	}
-}
-
 func TestForSkipsDash(t *testing.T) {
 	d := sampleDevice{Secret: "x"}
 	for _, k := range []Kind{KindInfo, KindConfig, KindState} {

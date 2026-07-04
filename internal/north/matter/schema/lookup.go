@@ -16,7 +16,7 @@ func ClusterRevision(id uint32) (uint16, bool) {
 // ClusterName returns the canonical matter.js cluster name for the given id,
 // or ("", false) if the cluster is not present in the snapshot.
 //
-// loom:reachable:reason="used in Matter debug logging, parity tests, and cluster-server introspection paths"
+// loom:reachable:reason="introspection companion to the generated cluster tables; retained for diagnostics — no production caller yet"
 func ClusterName(id uint32) (string, bool) {
 	name, ok := ClusterNames[id]
 	return name, ok
@@ -40,7 +40,7 @@ func DeviceTypeRevision(id uint32) (uint16, bool) {
 // DeviceTypeName returns the canonical matter.js device-type name for the
 // given id, or ("", false) if the device type is not present in the snapshot.
 //
-// loom:reachable:reason="used in Matter debug logging and device-type descriptor introspection"
+// loom:reachable:reason="introspection companion to the generated device-type tables; retained for diagnostics — no production caller yet"
 func DeviceTypeName(id uint32) (string, bool) {
 	name, ok := DeviceTypeNames[id]
 	return name, ok

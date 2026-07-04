@@ -6,6 +6,26 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- **Masked `loom:reachable` annotations resolved.** The whitelist audit
+  (`script/reachability/whitelist_audit.go`) now counts same-file
+  production call sites (outside the symbol's own declaration), which
+  removes its false MASKED positives (`TypeOfValue`, `RecalcUnit`,
+  `NewParamsetRegistry`, `NewAlarmMessagesWithCentral`,
+  `NewConnectionRecoveryCoordinatorWithLimit`). Genuinely dead exports
+  whose annotation reasons claimed call sites that never existed were
+  deleted: `adapter.StaticCallbackBaseURL`, `metrics.Round2`,
+  `device.CheckChannelIsOnlyPrimaryChannel`, `naming.NewHubPathData`
+  (plus the orphaned `HubSetPathRoot`/`HubStatePathRoot` constants),
+  `payload.ForKinds`, `hmlog.BuildStack`, `hmlog.DefaultSensitiveKeys`,
+  and `hmlog.RequestContextFilter` (an unwired duplicate of the
+  production `reqctx.ContextHandler` chain). The nine deliberately
+  retained seams (functional options, test constructors, schema
+  introspection helpers, the values-cache GC key encoder) carry
+  truthful annotation reasons now — no fabricated call-site claims.
+  Production-unreachable baseline: 3093 → 3091.
+
 ### Changed
 
 - **MQTT publishes are circuit-protected.** The bridge now publishes

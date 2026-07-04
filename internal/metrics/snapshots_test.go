@@ -245,31 +245,6 @@ func TestServiceMetricsSnapshotErrorRateZeroCalls(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Round2
-// ---------------------------------------------------------------------------
-
-func TestRound2(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		in   float64
-		want float64
-	}{
-		{3.14159, 3.14},
-		{0.005, 0.01},
-		{1.0, 1.0},
-		{math.Inf(1), 0},
-		{math.Inf(-1), 0},
-		{math.NaN(), 0},
-	}
-	for _, c := range cases {
-		got := Round2(c.in)
-		if !math.IsNaN(c.want) && math.Abs(got-c.want) > 0.001 {
-			t.Errorf("Round2(%v)=%v, want %v", c.in, got, c.want)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
 // RpcMetrics — CoalesceRate and RejectionRate
 // ---------------------------------------------------------------------------
 

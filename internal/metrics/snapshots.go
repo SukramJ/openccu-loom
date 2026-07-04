@@ -4,7 +4,6 @@
 package metrics
 
 import (
-	"math"
 	"time"
 )
 
@@ -219,21 +218,3 @@ type MetricsSnapshot struct {
 	Model     ModelMetrics           `json:"model"`
 	Services  ServiceMetricsSnapshot `json:"services"`
 }
-
-// Round2 rounds to two decimal places
-// snapshot rounding so that JSON consumers parsing both sides see the
-// same scalar precision. Currently unused inside the package — exported
-// as a helper for downstream snapshot consumers via [Round2].
-func round2(f float64) float64 {
-	if math.IsInf(f, 0) || math.IsNaN(f) {
-		return 0
-	}
-	return math.Round(f*100) / 100
-}
-
-// Round2 exposes [round2] for callers building snapshots outside this
-// package (e.g. north-bound REST handlers that mirror
-// two-decimal precision).
-//
-// loom:reachable:reason="used by REST snapshot handlers and calculated-DP formulas to normalise float precision"
-func Round2(f float64) float64 { return round2(f) }

@@ -97,19 +97,8 @@ func NewRedactingHandlerWithKeys(inner slog.Handler, patterns []string) *Redacti
 	return &RedactingHandler{inner: inner, patterns: lc}
 }
 
-// DefaultSensitiveKeys returns a copy of the built-in pattern list.
-// Callers that want to extend rather than replace the defaults can use
-// this to seed a custom list.
-//
-// loom:reachable:reason="used by config-UI and REST handlers that need to extend the redaction list"
-func DefaultSensitiveKeys() []string {
-	out := make([]string, len(defaultSensitiveKeys))
-	copy(out, defaultSensitiveKeys)
-	return out
-}
-
 // IsSensitiveKey reports whether key matches one of the built-in
-// sensitive-key patterns ([DefaultSensitiveKeys]). Matching is
+// sensitive-key patterns. Matching is
 // case-insensitive and substring-based, identical to the predicate the
 // [RedactingHandler] applies. Callers that serialise their own attribute
 // graphs outside the slog pipeline (e.g. the OTLP span exporter) use this

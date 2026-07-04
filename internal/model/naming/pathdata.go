@@ -33,11 +33,6 @@ const (
 	SysvarSetPathRoot = "sysvar/set"
 	// SysvarStatePathRoot is the read-side counterpart.
 	SysvarStatePathRoot = "sysvar/status"
-	// HubSetPathRoot is the first segment for hub-level DPs (alarm
-	// messages, install mode, connectivity, metrics, service messages).
-	HubSetPathRoot = "hub/set"
-	// HubStatePathRoot is the read-side counterpart.
-	HubStatePathRoot = "hub/status"
 )
 
 // Bucket identifies the paramset family a data point belongs to. The
@@ -613,21 +608,6 @@ func NewSysvarPathData(vid string) PathData {
 		SetPath:   SysvarSetPathRoot + "/" + vid,
 		StatePath: SysvarStatePathRoot + "/" + vid,
 		Kind:      vid,
-	}
-}
-
-// NewHubPathData builds the path data for a hub-level data point (alarm
-// messages, install mode, connectivity, metrics, service messages).
-//
-// loom:reachable:reason="called by Hub-DP constructors to set the north-bound publish path"
-func NewHubPathData(name string) PathData {
-	if name == "" {
-		return EmptyPathData
-	}
-	return PathData{
-		SetPath:   HubSetPathRoot + "/" + name,
-		StatePath: HubStatePathRoot + "/" + name,
-		Kind:      name,
 	}
 }
 

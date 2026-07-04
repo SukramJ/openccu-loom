@@ -120,7 +120,7 @@ func WithClock(c clock.Clock) Option {
 // a positive value; non-positive arguments fall back to
 // [DefaultHistorySize].
 //
-// loom:reachable:reason="functional option for NewTracker; consumed in tests and by future production callers that need non-default history depth"
+// loom:reachable:reason="functional option retained as a deliberate NewTracker config seam; test-only callers today"
 func WithHistorySize(n int) Option {
 	return func(t *Tracker) {
 		if n > 0 {
@@ -134,7 +134,7 @@ func WithHistorySize(n int) Option {
 // disables the decay (every component sticks at its last reported
 // status forever).
 //
-// loom:reachable:reason="functional option for NewTracker; production callers that need custom stale windows will consume this"
+// loom:reachable:reason="functional option retained as a deliberate NewTracker config seam; test-only callers today"
 func WithStaleAfter(d time.Duration) Option {
 	return func(t *Tracker) { t.staleAfter = d }
 }

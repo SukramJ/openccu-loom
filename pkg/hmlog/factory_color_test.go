@@ -42,11 +42,11 @@ func TestFormatTextColor_NonTTYFallsBackToPlainText(t *testing.T) {
 	// returns false, the factory must pick plain TextHandler so no
 	// escape sequences leak into the captured output.
 	var buf bytes.Buffer
-	logger, _ := BuildStack(StackOptions{
+	stack := BuildFullStack(StackOptions{
 		Writer: &buf,
 		Format: FormatTextColor,
 	}, slog.LevelInfo)
-	logger.Info("smoke", slog.String("kind", "non-tty"))
+	stack.Logger.Info("smoke", slog.String("kind", "non-tty"))
 
 	got := buf.String()
 	if strings.Contains(got, "\x1b[") {

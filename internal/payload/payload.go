@@ -21,7 +21,7 @@ const (
 	KindState  Kind = "state"
 )
 
-// Options tweak the [For] / [ForKinds] extraction.
+// Options tweak the [For] / [ForWith] extraction.
 type Options struct {
 	// UseAltNames tells the extractor to prefer the tag's `alt=`
 	// override over the field's lower-cased name.
@@ -70,18 +70,6 @@ func ForWith(obj any, k Kind, opts Options) map[string]any {
 		out[name] = val.Interface()
 	}
 	return out
-}
-
-// ForKinds bundles three calls so callers that need every bucket
-// don't walk the struct thrice.
-//
-// loom:reachable:reason="called by north-bound adapters that need all three payload buckets"
-func ForKinds(obj any, opts Options) map[Kind]map[string]any {
-	return map[Kind]map[string]any{
-		KindInfo:   ForWith(obj, KindInfo, opts),
-		KindConfig: ForWith(obj, KindConfig, opts),
-		KindState:  ForWith(obj, KindState, opts),
-	}
 }
 
 // Merge combines two maps into a fresh one. The second argument wins

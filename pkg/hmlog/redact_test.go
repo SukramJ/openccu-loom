@@ -228,22 +228,6 @@ func TestRedactingHandler_CustomPattern_OnlyMatchesConfigured(t *testing.T) {
 }
 
 // --------------------------------------------------------------------------
-// DefaultSensitiveKeys returns a copy
-// --------------------------------------------------------------------------
-
-func TestDefaultSensitiveKeys_IsCopy(t *testing.T) {
-	first := hmlog.DefaultSensitiveKeys()
-	first[0] = "MUTATED"
-
-	second := hmlog.DefaultSensitiveKeys()
-	for _, k := range second {
-		if k == "MUTATED" {
-			t.Error("mutation of first return value affected second call; DefaultSensitiveKeys must return a copy")
-		}
-	}
-}
-
-// --------------------------------------------------------------------------
 // Nil inner handler panics
 // --------------------------------------------------------------------------
 

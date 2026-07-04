@@ -386,7 +386,7 @@ func (t *Timer) SendDefault(
 // TimerUnitHours so the CCU re-interprets the "disabled" marker
 // correctly without unit-conversion artefacts.
 //
-// loom:reachable:reason="called internally by Timer.Set to pick the correct unit before writing to the CCU"
+// loom:reachable:reason="called by Timer.SetDuration to pick the correct unit before writing to the CCU"
 func RecalcUnit(seconds float64) (float64, TimerUnit) {
 	if seconds == timerNotUsed {
 		return seconds, TimerUnitHours
