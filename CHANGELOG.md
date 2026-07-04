@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-07-04
+
 ### Changed
 
 - **Warm-boot descriptor cache now covers the whole fleet.** Hydration

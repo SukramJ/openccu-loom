@@ -1,5 +1,33 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.0
+
+- **MQTT 5.0 by default + circuit breaker.** The MQTT transport was
+  upgraded (shared go-mqtt v1.1.0): the bridge speaks MQTT 5.0 on the
+  wire — if your broker only supports 3.1.1 (e.g. very old Mosquitto),
+  set the new expert option `north.mqtt.protocol_version: "3.1.1"`;
+  the connect error names this fix explicitly. Publishes are now
+  protected by a circuit breaker: a degraded broker (link up, acks
+  missing) no longer stalls the publish pipeline on ack timeouts, and
+  breaker trips are visible in the diagnostics counters.
+- **Faster, more resilient restarts.** Device and paramset
+  descriptions are now persisted across restarts (fleet-wide after one
+  boot against a reachable CCU) and the "clear caches + re-pull" admin
+  action also clears these persisted rows.
+- **Config options now tell the truth.** `basic_enabled` /
+  `bearer_enabled` actually gate their auth schemes (default on; an
+  explicit `false` rejects the scheme even with credentials
+  configured); the never-evaluated `session_enabled` option was
+  removed — session login is always available. The
+  `ccu_data.easymode_path` override is honored.
+- **Diagnostics that were silently empty now work**: the metrics
+  snapshot's model section (device/channel/data-point/program counts),
+  circuit-breaker/ping-pong/retry incidents, and the reliability event
+  stream.
+- Internal: large dead-code cleanup (~7,500 lines of unwired
+  duplicates removed) guarded by a new CI ratchet; repaired
+  integration test suites and their CI gate.
+
 ## 0.25.0
 
 - **Security & robustness hardening across the whole northbound surface.** A
