@@ -715,3 +715,49 @@ func (f *pipelineFakeCombinedDP) OnAnyUpdate(_ func(old, next any)) func() {
 	f.subscribed = true
 	return func() {}
 }
+
+// TestHydrateStoresParamsetDescriptionsInRegistry locks the fleet-wide
+// descriptor capture: hydration must store every fetched paramset
+// description in the central's ParamsetRegistry (which feeds
+// channel-paramset reads and, via the persistence sink, the warm-boot
+// descriptor cache) — not only the per-channel reload path.
+func TestHydrateStoresParamsetDescriptionsInRegistry(t *testing.T) {
+	t.Parallel()
+
+	c, _ := central.New(central.Config{Name: "ccu-psreg-01"})
+	p := NewDevicePipeline(c)
+
+	b := backendWithParams("AABBCC77", "HmIP-STH", "SOME_CHANNEL", map[string]hmproto.ParameterData{
+		"STATE": {
+			Type:       hmenum.ParameterTypeBool,
+			Operations: hmenum.OperationsRead | hmenum.OperationsWrite | hmenum.OperationsEvent,
+		},
+	})
+
+	if err := p.IngestFromBackend(
+		context.Background(), "HmIP-RF", hmenum.InterfaceHmIPRF,
+		b, &fakeWriter{}, nil, slog.Default(),
+	); err != nil {
+		t.Fatalf("IngestFromBackend: %v", err)
+	}
+
+	if c.ParamsetReg.Len() == 0 {
+		t.Fatal("hydration stored no paramset descriptions in the registry")
+	}
+	d, ok := c.ModelRegistry.Get("AABBCC77")
+	if !ok {
+		t.Fatal("device missing")
+	}
+	found := false
+	for _, ch := range d.Channels() {
+		descs := c.ParamsetReg.GetChannelParamsetDescriptions(hmenum.InterfaceHmIPRF, ch.Address)
+		if ps, ok := descs[hmenum.ParamsetKeyValues]; ok {
+			if _, ok := ps["STATE"]; ok {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("VALUES description with STATE not found in registry for any hydrated channel")
+	}
+}

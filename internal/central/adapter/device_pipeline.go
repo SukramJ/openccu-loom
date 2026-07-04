@@ -1391,6 +1391,15 @@ func (p *DevicePipeline) hydrateParamset(
 	// 4.5/30.5 to match.
 	if reg := p.unit.ParamsetReg; reg != nil {
 		reg.ApplyPatches(ch.Device().Model, ch.Address, key, paramset)
+		// Store the patched descriptor so the registry serves
+		// channel-paramset reads for every hydrated channel (and, via
+		// the persistence sink, fills the warm-boot descriptor cache)
+		// instead of only for per-channel reloads. Put copies during
+		// normalisation, so the map used for data-point construction
+		// below stays untouched; the registry's secondary index has no
+		// production reader, so entity naming
+		// (Channel.IsParameterInMultipleChannels) is unaffected.
+		reg.Put(hmenum.Interface(interfaceID), ch.Address, key, paramset)
 	}
 
 	for name := range paramset {
