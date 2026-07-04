@@ -537,6 +537,11 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// and recreates missing channels/DPs. The same instance is reused for
 	// both the WS reload commands and the REST reload endpoints.
 	deviceReloader := adapter.NewDeviceReloaderAdapter(reg, valueWriter)
+	// Shared edit-lock registry: one instance backs both the REST
+	// `/sessions/edit` endpoints (+ the strict MASTER/LINK paramset-write
+	// gate) and the WS `paramset.put` enforcement, so both transports
+	// share a single lock namespace.
+	editSessions := handlers.NewEditSessions()
 	wireWSCommands(wsHub, wsCommandWiring{
 		health:           healthAdapter,
 		devices:          devicesAdapter,
@@ -553,6 +558,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		valueWriter:      valueWriter,
 		registry:         reg,
 		deviceReloader:   deviceReloader,
+		editSessions:     editSessions,
 		// cacheResetSvc backs ccu.cache_clear — scope-aware clear + re-pull.
 		cacheResetSvc: cacheResetSvc,
 		logger:        logger,
@@ -602,6 +608,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		devicesAdapter:          devicesAdapter,
 		deviceAdminDomain:       deviceAdminDomain,
 		deviceReloader:          deviceReloader,
+		editSessions:            editSessions,
 		dpWriterAdapter:         dpWriterAdapter,
 		customDPDispatcher:      customDPDispatcher,
 		paramsetsDomain:         paramsetsDomain,

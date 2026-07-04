@@ -18,6 +18,35 @@ import (
 // ParamsetService is an alias for the canonical interface in pkg/interfaces.
 type ParamsetService = interfaces.ParamsetService
 
+// EditTokenHeader carries the edit-lock token a client must present on
+// a MASTER or LINK paramset write under strict edit-lock enforcement.
+// The token is issued by `POST /sessions/edit` and refreshed by the
+// heartbeat endpoint. VALUES writes (real-time device control) are not
+// gated and ignore this header.
+const EditTokenHeader = "X-Edit-Token" //nolint:gosec // G101 false positive: HTTP header name, not a credential value
+
+// enforceEditLock is the strict gate for configuration writes: a
+// MASTER/LINK paramset write must present an X-Edit-Token that
+// currently holds the lock for lockKey, else the request is rejected
+// 423 Locked and the caller must not touch the CCU. A nil registry
+// disables enforcement — a test-only escape hatch; the production
+// mount always wires the shared [EditSessions] instance (see
+// cmd/openccu-loom/daemon_rest_mount.go). Returns true when the write
+// may proceed; returns false after writing the 423 problem response.
+func enforceEditLock(w http.ResponseWriter, r *http.Request, locks *EditSessions, lockKey string) bool {
+	if locks == nil {
+		return true
+	}
+	token := r.Header.Get(EditTokenHeader)
+	if locks.Verify(lockKey, token) {
+		return true
+	}
+	problem.Write(w, http.StatusLocked,
+		problem.New(problem.TypeConflict, r, "Edit lock required",
+			"hold an edit session ("+lockKey+") and present its token via "+EditTokenHeader))
+	return false
+}
+
 // GetParamset proxies the read request to svc.
 func GetParamset(svc ParamsetService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +72,13 @@ func GetParamset(svc ParamsetService) http.HandlerFunc {
 	}
 }
 
-// PutParamset writes a paramset.
-func PutParamset(svc ParamsetService) http.HandlerFunc {
+// PutParamset writes a paramset. MASTER and LINK writes are
+// configuration changes that require holding the per-resource edit
+// lock: the caller must present a valid [EditTokenHeader] token via
+// `locks`, else the request is rejected 423 Locked before any CCU
+// call. VALUES writes (device control) are not gated. `locks` may be
+// nil only in tests; the production mount always wires it.
+func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -57,6 +91,16 @@ func PutParamset(svc ParamsetService) http.HandlerFunc {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "Invalid paramset key", chi.URLParam(r, "key")))
 			return
+		}
+		// Strict edit-lock enforcement for configuration paramsets. The
+		// lock key mirrors the SPA's channel:{addr}:{key} format
+		// (ChannelPanel.svelte). A LINK write through this route carries
+		// no peer suffix — the SPA uses the dedicated link-ps route for
+		// per-peer LINK writes, so this path locks the whole LINK set.
+		if key == hmenum.ParamsetKeyMaster || key == hmenum.ParamsetKeyLink {
+			if !enforceEditLock(w, r, locks, "channel:"+addr+":"+string(key)) {
+				return
+			}
 		}
 		values := map[string]any{}
 		if err := DecodeJSON(r, &values); err != nil {
@@ -103,8 +147,12 @@ func GetLinkParamset(svc ParamsetService) http.HandlerFunc {
 	}
 }
 
-// PutLinkParamset serves PUT /devices/{addr}/link-ps/{peer}.
-func PutLinkParamset(svc ParamsetService) http.HandlerFunc {
+// PutLinkParamset serves PUT /devices/{addr}/link-ps/{peer}. A LINK
+// paramset is per-peer configuration, so the write requires holding
+// the edit lock for that specific peer; the caller presents its
+// [EditTokenHeader] token via `locks`, else the request is rejected
+// 423 Locked. `locks` may be nil only in tests.
+func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if svc == nil {
 			problem.Write(w, http.StatusServiceUnavailable,
@@ -116,6 +164,11 @@ func PutLinkParamset(svc ParamsetService) http.HandlerFunc {
 		if peer == "" {
 			problem.Write(w, http.StatusBadRequest,
 				problem.New(problem.TypeBadRequest, r, "peer required", ""))
+			return
+		}
+		// Strict edit-lock enforcement. The lock key mirrors the SPA's
+		// channel:{addr}:LINK:{peer} format (ChannelPanel.svelte).
+		if !enforceEditLock(w, r, locks, "channel:"+addr+":"+string(hmenum.ParamsetKeyLink)+":"+peer) {
 			return
 		}
 		values := map[string]any{}

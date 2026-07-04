@@ -96,6 +96,25 @@ func (s *EditSessions) Heartbeat(key, token string) (*EditLock, bool) {
 	return cur, true
 }
 
+// Verify reports whether a live (non-expired) lock for `key` is
+// currently held by exactly `token`. Unlike [EditSessions.Heartbeat]
+// it does NOT refresh the deadline — enforcement callers only ask
+// "does this token still hold the lock?" and must not extend it as a
+// side effect. A nil registry or empty token can never hold a lock,
+// so both short-circuit to false (the nil case keeps the strict
+// paramset-write gate fail-closed once wired).
+func (s *EditSessions) Verify(key, token string) bool {
+	if s == nil || token == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	s.prune(now)
+	cur, ok := s.locks[key]
+	return ok && cur.Token == token && cur.Expires.After(now)
+}
+
 // Close drops the lock if `token` matches.
 func (s *EditSessions) Close(key, token string) bool {
 	s.mu.Lock()

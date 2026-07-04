@@ -40,6 +40,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     unknown-user login path (anti-enumeration timing); and a fail-fast guard
     that refuses to serve REST with no auth middleware wired.
 
+- **Server-side edit-lock enforcement for configuration writes.** The
+  per-resource edit lock (`POST /sessions/edit`) is now enforced, not merely
+  advisory: every MASTER and LINK paramset write must present a valid
+  `X-Edit-Token` that currently holds the lock, else it is rejected `423
+  Locked` before any CCU call. This applies to `PUT
+  /devices/{addr}/paramsets/{MASTER,LINK}`, `PUT /devices/{addr}/link-ps/{peer}`,
+  and the WebSocket `paramset.put` command (via a new optional `edit_token`
+  arg, rejected with a `locked` command error). Real-time VALUES writes
+  (device control) are **not** gated. The config UI already holds the lock and
+  now sends its token automatically; non-interactive clients must open an edit
+  session first — `hmcli paramset set … MASTER|LINK` does this transparently.
+  API version 2.14.0.
+
 ### Added
 
 - **Optional API-token expiry.** `POST /auth/tokens/v2` accepts

@@ -834,9 +834,9 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 			}
 			if d.Paramsets != nil {
 				pr.Get("/devices/{addr}/paramsets/{key}", handlers.GetParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets))
+				pr.With(op).Put("/devices/{addr}/paramsets/{key}", handlers.PutParamset(d.Paramsets, d.EditSessions))
 				pr.Get("/devices/{addr}/link-ps/{peer}", handlers.GetLinkParamset(d.Paramsets))
-				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets))
+				pr.With(op).Put("/devices/{addr}/link-ps/{peer}", handlers.PutLinkParamset(d.Paramsets, d.EditSessions))
 			}
 			if d.Hub != nil {
 				pr.Get("/programs", handlers.ListPrograms(d.Hub))
