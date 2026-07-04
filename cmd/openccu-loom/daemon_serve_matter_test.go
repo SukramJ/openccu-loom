@@ -53,6 +53,7 @@ func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 func TestDaemonServe_WithMQTTEnabled(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
+	cfg.DataDir = t.TempDir() // isolate the SQLite DB from the shared "./var" so parallel daemon-serve tests don't contend on the DB / migration lock
 	cfg.North.REST.Enabled = new(false)
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.MQTT.Enabled = true
