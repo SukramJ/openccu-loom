@@ -106,6 +106,47 @@ func (s *TokenStore) Create(ctx context.Context, in CreateInput) (CreateResult, 
 	return CreateResult{Token: token, Fingerprint: fp}, nil
 }
 
+// Count returns the number of tokens in the table.
+func (s *TokenStore) Count(ctx context.Context) (int, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tokens`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("sqlite: tokens count: %w", err)
+	}
+	return n, nil
+}
+
+// Import inserts a token whose plaintext secret is already known — a
+// legacy config-file (YAML) token migrated into the store on upgrade,
+// now that API tokens live only in SQLite and no longer round-trip
+// through the north.rest config section. Unlike [TokenStore.Create] it
+// preserves the operator's exact secret (only its SHA-256 hash is
+// persisted), so external clients keep authenticating with the same
+// bearer value. Idempotent: a token whose fingerprint already exists is
+// left untouched, so re-running the migration is a no-op.
+func (s *TokenStore) Import(ctx context.Context, secret, subject string, role auth.Role) (string, error) {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return "", errors.New("sqlite: token secret required")
+	}
+	subject = strings.TrimSpace(subject)
+	if subject == "" {
+		return "", errors.New("sqlite: token subject required")
+	}
+	if role == "" {
+		return "", errors.New("sqlite: token role required")
+	}
+	hash := hashToken(secret)
+	fp := fingerprintFromHash(hash)
+	if _, err := s.db.ExecContext(ctx,
+		`INSERT INTO tokens (fingerprint, token_hash, subject, role, created_at)
+		 VALUES (?, ?, ?, ?, ?)
+		 ON CONFLICT(fingerprint) DO NOTHING`,
+		fp, hash, subject, string(role), time.Now().UTC()); err != nil {
+		return "", fmt.Errorf("sqlite: token import: %w", err)
+	}
+	return fp, nil
+}
+
 // DeleteBySubject removes every token issued to subject and returns the
 // count removed. Called when the underlying user account is deleted so a
 // bearer token bound to a now-nonexistent subject cannot keep

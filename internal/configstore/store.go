@@ -66,6 +66,101 @@ func New(bootstrap *config.BootstrapConfig, sections SectionLoader, centrals Cen
 
 func noopLookup(string) string { return "" }
 
+// sectionUnmanagedPaths lists full config field paths that are NOT carried
+// by their nominal editable config section. They are stripped from every
+// section payload on both persist (marshalSection / SeedSectionsFromConfig)
+// and load (applySection), and filtered out of the SPA's editable schema,
+// so a section PUT can neither override nor wipe them:
+//
+//   - north.rest.listen is a BOOTSTRAP-tier field owned by BootstrapConfig
+//     (the OPENCCU_LOOM_REST_LISTEN env / YAML value). Keeping it out of the
+//     REST section means the bootstrap value always wins and a stale stored
+//     row can never pin an old bind address after a restart.
+//   - north.rest.auth.users and north.rest.auth.tokens are credentials
+//     managed exclusively by the SQLite user/token stores (the
+//     /api/v1/users and /auth/tokens CRUD). Keeping them out of the REST
+//     section means a REST PUT that omits them can never wipe an operator's
+//     logins.
+var sectionUnmanagedPaths = map[string]struct{}{
+	"north.rest.listen":      {},
+	"north.rest.auth.users":  {},
+	"north.rest.auth.tokens": {},
+}
+
+// UnmanagedFieldPaths returns the set of config field paths that are not
+// editable through the SPA section editor (bootstrap-tier fields and
+// SQLite-managed credentials). The schema handler filters these out so the
+// SPA never renders them as section fields.
+func UnmanagedFieldPaths() map[string]struct{} {
+	out := make(map[string]struct{}, len(sectionUnmanagedPaths))
+	for k := range sectionUnmanagedPaths {
+		out[k] = struct{}{}
+	}
+	return out
+}
+
+// StripUnmanagedSectionFields removes every unmanaged field that falls under
+// sec from a section PUT payload before it is validated and persisted. It is
+// the exported entry point the REST handler uses; the boot-time overlay uses
+// the same logic via applySection / marshalSection.
+func StripUnmanagedSectionFields(sec Section, raw []byte) []byte {
+	return stripUnmanagedFields(sec, raw)
+}
+
+// stripUnmanagedFields removes every unmanaged field that falls under sec from
+// a section's JSON payload, returning the payload unchanged when it carries
+// none (the common case) or is not a JSON object.
+func stripUnmanagedFields(sec Section, raw []byte) []byte {
+	prefix := string(sec) + "."
+	var rels []string
+	for full := range sectionUnmanagedPaths {
+		if rel, ok := strings.CutPrefix(full, prefix); ok {
+			rels = append(rels, rel)
+		}
+	}
+	if len(rels) == 0 {
+		return raw
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return raw
+	}
+	changed := false
+	for _, rel := range rels {
+		if deleteDeep(m, rel) {
+			changed = true
+		}
+	}
+	if !changed {
+		return raw
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// deleteDeep removes a dotted path from nested JSON objects, reporting
+// whether anything was removed. Missing intermediate objects are a no-op.
+func deleteDeep(m map[string]any, path string) bool {
+	parts := strings.Split(path, ".")
+	cur := m
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := cur[part].(map[string]any)
+		if !ok {
+			return false
+		}
+		cur = next
+	}
+	last := parts[len(parts)-1]
+	if _, ok := cur[last]; !ok {
+		return false
+	}
+	delete(cur, last)
+	return true
+}
+
 // FieldSource records the resolved origin of a config field for the
 // SPA's source-attribution UI.
 type FieldSource string
@@ -103,6 +198,11 @@ type EffectiveResult struct {
 // changed in the SPA.
 func (s *Store) OverlayInto(ctx context.Context, cfg *config.Config) (map[string]FieldSource, error) {
 	srcs := make(map[string]FieldSource)
+	// north.rest.listen is bootstrap-tier: the value already in cfg came from
+	// the YAML/OPENCCU_LOOM_REST_LISTEN bootstrap layer, so attribute it to
+	// bootstrap up front. layerSections skips it, so a stored REST row can
+	// neither overwrite the value nor flip the source pill to db.
+	srcs["north.rest.listen"] = SourceBootstrap
 	if s.sections != nil {
 		if err := s.layerSections(ctx, cfg, srcs); err != nil {
 			return nil, err
@@ -185,6 +285,13 @@ func (s *Store) layerSections(ctx context.Context, cfg *config.Config, srcs map[
 		// bootstrap attribution.
 		tree := sectionTree(sec, row.ValueJSON)
 		for _, path := range owned[sec] {
+			// Unmanaged paths are never carried by a section row (they are
+			// bootstrap-tier or SQLite-managed), so they must never be
+			// attributed to the DB tier even when their owning section is
+			// present. north.rest.listen keeps its bootstrap attribution.
+			if _, unmanaged := sectionUnmanagedPaths[path]; unmanaged {
+				continue
+			}
 			if existing, ok := srcs[path]; ok && existing == SourceBootstrap {
 				continue
 			}
@@ -278,9 +385,21 @@ func sectionFieldPaths() map[Section][]string {
 	return out
 }
 
+// ApplySectionToConfig overlays one section payload onto cfg, mirroring
+// the boot-time overlay so callers (e.g. the REST section-PUT handler)
+// can assemble the candidate effective config a save would produce and
+// validate it before persisting. Unmanaged fields are stripped exactly
+// as at boot, so the candidate reflects what actually lands on disk.
+func ApplySectionToConfig(sec Section, raw []byte, cfg *config.Config) error {
+	return applySection(sec, raw, cfg)
+}
+
 // applySection routes one section payload to the corresponding
-// [config.Config] sub-tree.
+// [config.Config] sub-tree. Unmanaged fields (bootstrap-tier listen,
+// SQLite-managed auth credentials) are stripped first so a stored or
+// hand-crafted section row can neither pin nor wipe them.
 func applySection(sec Section, raw []byte, cfg *config.Config) error {
+	raw = stripUnmanagedFields(sec, raw)
 	switch sec {
 	case SectionMQTT:
 		return json.Unmarshal(raw, &cfg.North.MQTT)
@@ -375,7 +494,11 @@ func marshalSection(sec Section, cfg *config.Config) (raw []byte, ok bool, err e
 	if err != nil {
 		return nil, false, fmt.Errorf("configstore: marshal %s: %w", sec, err)
 	}
-	return raw, true, nil
+	// Never persist unmanaged fields into a section row: north.rest.listen
+	// is bootstrap-tier and the auth credentials live only in the SQLite
+	// user/token stores. Stripping here keeps the seed and every save free
+	// of them.
+	return stripUnmanagedFields(sec, raw), true, nil
 }
 
 // SeedSectionsFromConfig performs a one-shot copy of the YAML-loaded

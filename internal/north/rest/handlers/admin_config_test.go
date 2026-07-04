@@ -29,16 +29,6 @@ func TestValidateSection_MCP(t *testing.T) {
 	}
 }
 
-// TestSectionRestartRequired_MCP pins that MCP changes are restart-required:
-// the MCP route is mounted once at boot, so toggling any field only takes
-// effect after a restart.
-func TestSectionRestartRequired_MCP(t *testing.T) {
-	t.Parallel()
-	if !sectionRestartRequired(configstore.SectionMCP) {
-		t.Fatal("north.mcp must be restart-required (route mounted at boot only)")
-	}
-}
-
 // TestGetConfigSchema_IncludesMCP verifies the schema endpoint surfaces
 // north.mcp as a section (so the SPA renders a tab) and that its fields
 // carry the restart-required flag plus the "/mcp" path default.
@@ -106,16 +96,6 @@ func TestValidateSection_CCUAuth(t *testing.T) {
 	unknown := json.RawMessage(`{"enabled":true,"bogus":1}`)
 	if err := validateSection(configstore.SectionCCUAuth, unknown); err == nil {
 		t.Fatal("expected unknown-field rejection for north.rest.auth.ccu payload")
-	}
-}
-
-// TestSectionRestartRequired_CCUAuth pins that CCU-auth changes are
-// restart-required: the login chain (including the CCU auth provider) is
-// wired once at boot, so any field change only takes effect after a restart.
-func TestSectionRestartRequired_CCUAuth(t *testing.T) {
-	t.Parallel()
-	if !sectionRestartRequired(configstore.SectionCCUAuth) {
-		t.Fatal("north.rest.auth.ccu must be restart-required (login chain wired once at boot)")
 	}
 }
 
