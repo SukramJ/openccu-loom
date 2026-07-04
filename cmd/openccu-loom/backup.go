@@ -672,7 +672,11 @@ func safeDataDirJoin(dataDir, rel string) (string, error) {
 	if rel == "" || rel == "." {
 		return "", errors.New("backup restore: empty archive path under state/")
 	}
-	if filepath.IsAbs(rel) {
+	// Reject absolute paths on any platform. filepath.IsAbs is OS-specific — a
+	// Unix "/etc/x" is not "absolute" on Windows — but a leading separator must
+	// never appear in a state/-relative entry, regardless of where the archive
+	// was built or is being restored.
+	if filepath.IsAbs(rel) || rel[0] == '/' || rel[0] == '\\' {
 		return "", fmt.Errorf("backup restore: absolute path in archive: %q", rel)
 	}
 	cleanBase := filepath.Clean(dataDir)

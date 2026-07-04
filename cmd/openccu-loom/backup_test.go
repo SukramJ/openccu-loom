@@ -16,6 +16,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -473,8 +474,12 @@ func TestBackupCreateEncryptedFilePerms(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := fi.Mode().Perm(); perm != 0o600 {
-		t.Errorf("archive perms = %o, want 0600", perm)
+	// Windows does not honour Unix file modes (os.Create yields 0666), so the
+	// 0600 request the production code makes is only observable off Windows.
+	if runtime.GOOS != "windows" {
+		if perm := fi.Mode().Perm(); perm != 0o600 {
+			t.Errorf("archive perms = %o, want 0600", perm)
+		}
 	}
 	assertEncryptedArchive(t, archivePath)
 }
@@ -649,9 +654,15 @@ func TestBackupRestoreAtomicRollbackOnError(t *testing.T) {
 	if err := os.WriteFile(liveDB, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	// Occupy the destination of the second entry with a directory so its
-	// commit-time rename fails after the DB has already been placed.
-	if err := os.Mkdir(filepath.Join(dstDir, "blocked"), 0o750); err != nil {
+	// Occupy the destination of the second entry with a NON-EMPTY directory so
+	// its commit-time rename fails after the DB has already been placed. A
+	// non-empty directory cannot be replaced by a file rename on either Unix or
+	// Windows (an empty one can be, on Windows), so the failure is deterministic.
+	blockedDir := filepath.Join(dstDir, "blocked")
+	if err := os.Mkdir(blockedDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(blockedDir, "keep"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
