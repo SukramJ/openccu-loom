@@ -40,6 +40,7 @@ type southboundWiringDeps struct {
 	visReg            *visibility.Registry
 	masterValuesStore *sqlite.MasterValuesStore
 	valuesCacheStore  *sqlite.ValuesCacheStore
+	descriptorStores  adapter.DescriptorStores
 	// sqCentrals persists per-central serials backfilled at bring-up so SSDP
 	// discovery recognises configured centrals by serial. Nil disables backfill.
 	sqCentrals              *sqlite.CentralsStore
@@ -210,6 +211,7 @@ func wireSouthbound(ctx context.Context, d southboundWiringDeps, availClosers *[
 		Visibility:           d.visReg,
 		MasterValues:         d.masterValuesStore,
 		ValuesCache:          d.valuesCacheStore,
+		Descriptors:          d.descriptorStores,
 		ValuesCacheCentralFilter: func(centralName string) bool {
 			return cfg.Persistence.ValuesCache.ValuesCacheEnabled(centralName)
 		},

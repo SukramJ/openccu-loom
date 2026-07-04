@@ -8,6 +8,18 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Warm boot: device and paramset descriptions are actually persisted.**
+  `docs/caching.md` promised that descriptors survive a restart, the
+  `devices`/`paramsets` tables and their stores existed, and the boot path
+  (`CheckAndCreateDevicesFromCache`) was written to consume the cache — but
+  the glue between the in-memory registries and SQLite was never wired, so
+  the tables stayed empty forever and every boot re-pulled all descriptions
+  from the CCU. Each central's registries are now hydrated from SQLite
+  before its bring-up starts and mirror every later mutation back
+  (normalised + patched, with content hashes for change detection). The
+  ADR-0042 cache-clear now also clears the persisted descriptor rows —
+  previously its `Devices`/`Paramsets` clearer slots were silently nil.
+
 - **Reliability observability is actually wired.** The hooks connecting
   the per-client reliability primitives to the bus and the incident
   store existed but were never installed: circuit-breaker transitions

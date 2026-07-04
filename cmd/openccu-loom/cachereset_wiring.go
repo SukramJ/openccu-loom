@@ -57,16 +57,18 @@ func (t configTopology) Interfaces(centralName string) []string {
 }
 
 // buildCacheResetService wires the cache-reset service (ADR 0042) from the
-// daemon's already-constructed collaborators. Device/paramset descriptions are
-// refreshed by the re-pull (re-ingest overwrites the in-memory registries), so
-// only the persisted VALUES and MASTER caches are cleared here; the nil-guarded
-// store methods make a disabled cache a safe no-op. Returns nil only if there
-// is no re-init manager (south-bound never wired) — callers guard on nil.
+// daemon's already-constructed collaborators. All four persisted caches are
+// cleared: VALUES, MASTER and the device-/paramset-description rows (whose
+// registries the re-pull then repopulates — and, via the persistence sinks,
+// re-persists). The nil-guarded store methods make a disabled cache a safe
+// no-op. Returns nil only if there is no re-init manager (south-bound never
+// wired) — callers guard on nil.
 func buildCacheResetService(
 	cfg *config.Config,
 	reg *central.Registry,
 	values *sqlite.ValuesCacheStore,
 	master *sqlite.MasterValuesStore,
+	descriptors adapter.DescriptorStores,
 	mgr *adapter.BringUpManager,
 	auditRec audit.Recorder,
 	logger *slog.Logger,
@@ -85,6 +87,17 @@ func buildCacheResetService(
 			}
 		},
 		Logger: logger,
+	}
+	// Persisted descriptor rows participate in the ADR-0042 clear:
+	// without this an operator "clear caches + re-pull" would leave
+	// stale descriptions on disk for the next boot. Typed nil-checks —
+	// cachereset.Deps carries interfaces, so assigning a nil *store
+	// directly would produce a non-nil interface.
+	if descriptors.Devices != nil {
+		deps.Devices = descriptors.Devices
+	}
+	if descriptors.Paramsets != nil {
+		deps.Paramsets = descriptors.Paramsets
 	}
 	if auditRec != nil {
 		deps.Audit = func(_ context.Context, scope cachereset.Scope, rep cachereset.Report) {

@@ -19,16 +19,39 @@ type DeviceDescriptionKey struct {
 	Address   string
 }
 
+// DescriptionSink mirrors registry mutations into a persistence
+// backend so descriptions survive a daemon restart. Implementations
+// must be safe for concurrent use; they are invoked synchronously on
+// the mutating goroutine (coordinator callback paths), outside the
+// registry lock, and must treat persistence as best-effort.
+type DescriptionSink interface {
+	// PutDescription persists the normalised description.
+	PutDescription(iface hmenum.Interface, desc hmproto.DeviceDescription)
+	// DeleteDescription removes the persisted description.
+	DeleteDescription(iface hmenum.Interface, address string)
+}
+
 // DeviceDescriptionRegistry caches device descriptions per interface.
 // It stores the normalised form so callers can hash without re-work.
 type DeviceDescriptionRegistry struct {
 	mu    sync.RWMutex
 	items map[DeviceDescriptionKey]hmproto.DeviceDescription
+	sink  DescriptionSink
 }
 
 // NewDeviceDescriptionRegistry returns an empty registry.
 func NewDeviceDescriptionRegistry() *DeviceDescriptionRegistry {
 	return &DeviceDescriptionRegistry{items: make(map[DeviceDescriptionKey]hmproto.DeviceDescription)}
+}
+
+// SetSink installs the persistence sink; nil detaches it. Install the
+// sink AFTER hydrating the registry from the persistent store —
+// loading through Put with an attached sink would write every row
+// straight back.
+func (r *DeviceDescriptionRegistry) SetSink(s DescriptionSink) {
+	r.mu.Lock()
+	r.sink = s
+	r.mu.Unlock()
 }
 
 // Put stores desc under (iface, desc.Address). The description is
@@ -37,7 +60,11 @@ func (r *DeviceDescriptionRegistry) Put(iface hmenum.Interface, desc hmproto.Dev
 	normalised := hmproto.NormalizeDevice(desc)
 	r.mu.Lock()
 	r.items[DeviceDescriptionKey{Interface: iface, Address: normalised.Address}] = normalised
+	sink := r.sink
 	r.mu.Unlock()
+	if sink != nil {
+		sink.PutDescription(iface, normalised)
+	}
 }
 
 // Get returns the stored description and reports whether it exists.
@@ -51,13 +78,17 @@ func (r *DeviceDescriptionRegistry) Get(iface hmenum.Interface, address string) 
 // Delete removes a description. Returns true when the entry was present.
 func (r *DeviceDescriptionRegistry) Delete(iface hmenum.Interface, address string) bool {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	key := DeviceDescriptionKey{Interface: iface, Address: address}
-	if _, ok := r.items[key]; !ok {
-		return false
+	_, ok := r.items[key]
+	if ok {
+		delete(r.items, key)
 	}
-	delete(r.items, key)
-	return true
+	sink := r.sink
+	r.mu.Unlock()
+	if ok && sink != nil {
+		sink.DeleteDescription(iface, address)
+	}
+	return ok
 }
 
 // All returns a snapshot of descriptions for iface, ordered by address.

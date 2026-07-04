@@ -5,12 +5,14 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/build"
 	"github.com/SukramJ/openccu-loom/internal/central"
+	"github.com/SukramJ/openccu-loom/internal/central/adapter"
 	clientpkg "github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/health"
@@ -42,6 +44,8 @@ type sharedInfra struct {
 	masterValuesStore *sqlite.MasterValuesStore
 	valuesCacheStore  *sqlite.ValuesCacheStore
 	historyStore      *sqlite.MeasurementStore
+	descriptorStores  adapter.DescriptorStores
+	descriptorDB      *sql.DB
 
 	wsHub       *ws.Hub
 	wsHandler   http.Handler
@@ -98,6 +102,11 @@ func wireSharedInfrastructure(
 	si.visibilityAdapter = newVisibilityAdapter(si.visReg, si.visibilityStore, reg)
 	si.masterValuesStore = wireMasterValuesStore(cfg, logger) //nolint:contextcheck // wireMasterValuesStore has no ctx parameter
 	si.valuesCacheStore = wireValuesCacheStore(cfg, logger)   //nolint:contextcheck // wireValuesCacheStore has no ctx parameter
+	// Persistent device- / paramset-description caches (warm-boot
+	// registry hydration + mirror-on-mutation; see
+	// adapter.WireDescriptorPersistence). Zero-value stores disable the
+	// feature when the DB cannot be opened.
+	si.descriptorStores, si.descriptorDB = wireDescriptorStores(cfg, logger) //nolint:contextcheck // wireDescriptorStores has no ctx parameter
 	// Start the periodic WAL checkpoint for the values-cache DB. Without
 	// this the WAL file can grow unbounded on embedded or busy ARM targets
 	// because the values-cache DB is a separate *sql.DB from the audit DB
@@ -193,6 +202,9 @@ func wireSharedInfrastructure(
 		_ = si.historyStore.Close()
 		_ = si.masterValuesStore.Close()
 		_ = si.visibilityStore.Close()
+		if si.descriptorDB != nil {
+			_ = si.descriptorDB.Close()
+		}
 	}
 
 	return si, teardown
