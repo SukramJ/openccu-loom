@@ -648,6 +648,14 @@ func TestBackupRestoreRejectsNewerSchema(t *testing.T) {
 // restore. The failure is forced by a state entry whose live destination is
 // occupied by a directory (an un-renameable target).
 func TestBackupRestoreAtomicRollbackOnError(t *testing.T) {
+	// The commit failure is induced by renaming a directory onto an existing
+	// sidecar file, which fails on Unix (ENOTDIR/EEXIST) but not on Windows,
+	// whose MoveFileEx tolerates it. The rollback logic itself is not
+	// OS-specific and is exercised on the Unix runners; there is no portable
+	// way to force a mid-commit rename failure on Windows here.
+	if runtime.GOOS == "windows" {
+		t.Skip("commit-failure induction relies on Unix rename semantics")
+	}
 	dstDir := t.TempDir()
 	liveDB := filepath.Join(dstDir, "openccu-loom.db")
 	const original = "ORIGINAL-DB-CONTENT"
