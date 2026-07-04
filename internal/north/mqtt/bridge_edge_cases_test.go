@@ -20,25 +20,6 @@ import (
 // CircuitState.String
 // ---------------------------------------------------------------------------
 
-func TestCircuitStateString(t *testing.T) {
-	t.Parallel()
-	cases := []struct {
-		s    CircuitState
-		want string
-	}{
-		{CircuitClosed, "closed"},
-		{CircuitOpen, "open"},
-		{CircuitHalfOpen, "half_open"},
-		{CircuitState(99), "unknown"},
-	}
-	for _, c := range cases {
-		got := c.s.String()
-		if got != c.want {
-			t.Errorf("CircuitState(%d).String() = %q, want %q", c.s, got, c.want)
-		}
-	}
-}
-
 // ---------------------------------------------------------------------------
 // NoopClient.Unsubscribe
 // ---------------------------------------------------------------------------
@@ -1491,18 +1472,6 @@ func TestComponentFromCategory(t *testing.T) {
 // ---------------------------------------------------------------------------
 // NewMqttCircuitBreaker: default values path.
 // ---------------------------------------------------------------------------
-
-func TestNewMqttCircuitBreakerDefaults(t *testing.T) {
-	t.Parallel()
-	// Pass 0 for both → defaults must be applied.
-	cb := NewMqttCircuitBreaker(0, 0, nil)
-	if cb.FailureThreshold != 5 {
-		t.Errorf("FailureThreshold: got %d, want 5", cb.FailureThreshold)
-	}
-	if cb.RecoveryTimeout != 30e9 { // 30 seconds in nanoseconds
-		t.Errorf("RecoveryTimeout: got %v, want 30s", cb.RecoveryTimeout)
-	}
-}
 
 // ---------------------------------------------------------------------------
 // Wiring: error path for Publish (bridge returns error from PublishState)

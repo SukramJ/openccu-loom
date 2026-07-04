@@ -339,6 +339,21 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 	}
 
 	startedAt := time.Now().UTC()
+	// Circuit breaker between the bridge and the broker: during a
+	// degraded-broker phase (link up, acks missing) publishes fail
+	// fast with ErrCircuitOpen instead of each stalling on the
+	// AckTimeout. Open-transitions feed the CircuitBreakerOpened
+	// counter; the reconnect loop stays in charge of the link itself.
+	pub := mqtt.NewBreaker(client, mqtt.BreakerConfig{
+		OnStateChange: func(from, to mqtt.BreakerState) {
+			logger.Warn("mqtt.breaker.state",
+				slog.String("from", from.String()),
+				slog.String("to", to.String()))
+			if to == mqtt.BreakerOpen && collector != nil && collector.CircuitBreakerOpened != nil {
+				collector.CircuitBreakerOpened.Inc()
+			}
+		},
+	})
 	bridge := mqtt.NewBridge(mqtt.BridgeConfig{
 		Base:               cfg.North.MQTT.TopicBase,
 		CentralName:        pickFirstCentral(cfg),
@@ -347,7 +362,7 @@ func buildMQTT(cfg *config.Config, logger *slog.Logger, collector *metrics.MqttC
 		SubDevicesEnabled:  cfg.North.MQTT.SubDevicesEnabled,
 		HealthSupplier:     bridgeHealthSupplier(cfg, startedAt),
 		Collector:          collector,
-	}, client)
+	}, pub)
 	wiring := mqtt.NewWiring(bridge, logger)
 
 	stack := &mqttStack{wiring: wiring, client: client}

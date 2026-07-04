@@ -1,10 +1,10 @@
 # loom:reachable Whitelist Audit
 
-Generated: 2026-07-04T12:11:03Z
+Generated: 2026-07-04T15:20:38Z
 
-Total annotated items: 32 — PRODUCTIVE: 9 — MASKED: 23
+Total annotated items: 31 — PRODUCTIVE: 9 — MASKED: 22
 
-## MASKED — Annotation hides genuine dead code (23 items)
+## MASKED — Annotation hides genuine dead code (22 items)
 
 These items have zero production callers outside their definition file.
 **Action required:** either wire them into a real production call site, or
@@ -29,7 +29,6 @@ A `loom:reachable` annotation alone is not sufficient justification.
 | `NewHubPathData` | `internal/model/naming/pathdata.go` | 623 | called by Hub-DP constructors to set the north-bound publish path |
 | `ClusterName` | `internal/north/matter/schema/lookup.go` | 20 | used in Matter debug logging, parity tests, and cluster-server introspection paths |
 | `DeviceTypeName` | `internal/north/matter/schema/lookup.go` | 44 | used in Matter debug logging and device-type descriptor introspection |
-| `NewMqttCircuitBreaker` | `internal/north/mqtt/circuit_breaker.go` | 65 | currently unwired; retained until breaker semantics move into the shared go-mqtt module, which will replace this type |
 | `ForKinds` | `internal/payload/payload.go` | 79 | called by north-bound adapters that need all three payload buckets |
 | `TypeOfValue` | `internal/store/sqlite/values_cache.go` | 62 | called internally by ValuesCacheStore.SaveValue and SaveBatch to determine column type |
 | `AliveKey` | `internal/store/sqlite/values_cache.go` | 579 | called by GC callers building the alive-set before invoking GCDeadRows; exported so coordinator code can construct keys without importing internal format |

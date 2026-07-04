@@ -1,16 +1,16 @@
 # Dead-Code Summary
 
-Generated: 14ba348
-HEAD: 14ba348
+Generated: 11022af
+HEAD: 11022af
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24041 |
-| Reachable | 3791 |
-| Whitelisted | 17370 |
-| **Unreachable** | **2880** |
+| Total Exported | 24039 |
+| Reachable | 3792 |
+| Whitelisted | 17368 |
+| **Unreachable** | **2879** |
 
 ## Top-20 Packages by Dead Code
 
@@ -19,7 +19,7 @@ HEAD: 14ba348
 | internal/central/adapter | 66 | 88 | 46 |
 | internal/model/naming | 25 | 2 | 4 |
 | internal/model/custom | 23 | 49 | 10 |
-| internal/north/mqtt | 20 | 80 | 2 |
+| internal/north/mqtt | 21 | 76 | 4 |
 | internal/client/backends | 19 | 37 | 4 |
 | internal/store/sqlite | 19 | 60 | 22 |
 | internal/auth | 14 | 24 | 4 |
@@ -99,7 +99,7 @@ HEAD: 14ba348
 | internal/central/adapter | 66 | 88 | 46 |
 | internal/model/naming | 25 | 2 | 4 |
 | internal/model/custom | 23 | 49 | 10 |
-| internal/north/mqtt | 20 | 80 | 2 |
+| internal/north/mqtt | 21 | 76 | 4 |
 | internal/client/backends | 19 | 37 | 4 |
 | internal/store/sqlite | 19 | 60 | 22 |
 | internal/auth | 14 | 24 | 4 |

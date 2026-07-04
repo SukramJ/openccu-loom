@@ -8,6 +8,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **MQTT publishes are circuit-protected.** The bridge now publishes
+  through go-mqtt v1.1.0's `Breaker`: during a degraded-broker phase
+  (link up, acks missing) publishes fail fast with `ErrCircuitOpen`
+  instead of each stalling on the 20-second AckTimeout, with bounded
+  half-open probing once the recovery window elapses. Open-transitions
+  increment the previously never-incremented `CircuitBreakerOpened`
+  counter and are logged. The unwired local circuit-breaker copy is
+  gone — breaker semantics live in the shared transport module now.
+
+### Changed
+
 - **MQTT transport upgraded to go-mqtt v1.0.0 (MQTT 5.0 by default).**
   The bridge now speaks MQTT 5.0 on the wire; brokers without v5
   support are pinned via the new expert setting
