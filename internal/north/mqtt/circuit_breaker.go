@@ -61,7 +61,7 @@ type CircuitBreaker struct {
 // supplied thresholds. Default values are used when zero is passed:
 // 5 failures and a 30-second recovery window.
 //
-// loom:reachable:reason="constructed in MQTT supervisor setup to gate broker publish operations during connectivity failures"
+// loom:reachable:reason="currently unwired; retained until breaker semantics move into the shared go-mqtt module, which will replace this type"
 func NewMqttCircuitBreaker(failureThreshold int, recoveryTimeout time.Duration, logger *slog.Logger) *CircuitBreaker {
 	if failureThreshold <= 0 {
 		failureThreshold = 5

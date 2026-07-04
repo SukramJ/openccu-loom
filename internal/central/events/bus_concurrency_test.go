@@ -48,10 +48,6 @@ type concEvtPrio struct{ hmevent.Base }
 
 func (concEvtPrio) Type() hmevent.EventType { return "conc.evt.prio" }
 
-type concEvtLeak struct{ hmevent.Base }
-
-func (concEvtLeak) Type() hmevent.EventType { return "conc.evt.leak" }
-
 // ---------- 1. TestPanicInHandlerIsolation ----------
 
 // TestPanicInHandlerIsolation verifies that a handler which panics does NOT

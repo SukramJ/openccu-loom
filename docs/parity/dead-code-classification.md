@@ -1,5 +1,28 @@
 # Dead-Code Classification
 
+> **Addendum (2026-07-04):** The classification below is HISTORICAL
+> (based on the 2026-05-29/06-08 inventory at commit 849b1da). The
+> wiring-audit cleanup executed or invalidated most of it:
+>
+> - Most Klasse-A items were resolved — wired (reliability Wire* hooks,
+>   WithDeviceProvider/WithHubManager, DeviceStore/ParamsetStore
+>   descriptor persistence, easymode path override) or removed
+>   (WireSchedulerEvents, NewScheduleFacade, NewCentralRegistry,
+>   NewPersistentCache; see `by_design.md` "Removed Unwired
+>   Subsystems").
+> - Several Klasse-B "false positive" verdicts were WRONG: e.g.
+>   `NewMqttCircuitBreaker` ("via MQTT-Bridge-Setup"), the hub factory
+>   wrappers ("via Hub-Coordinator-Setup") and `NewConnectionState`
+>   ("via Connection-State-Machine-Setup") had no such call sites.
+>   Whitelist claims are now audited mechanically:
+>   `go run ./script/reachability/whitelist_audit.go` →
+>   `docs/parity/loom-reachable-audit.md` (PRODUCTIVE vs MASKED).
+> - Ongoing enforcement is the CI ratchet
+>   (`.github/workflows/reachability.yml`): the production-unreachable
+>   count must never exceed the checked-in baseline in
+>   `docs/parity/dead-code-production-only.json`.
+
+
 Source: `docs/parity/dead-code-genuine.json` (406 items, 2026-05-29)
 
 ## Methodology

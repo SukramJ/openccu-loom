@@ -8,6 +8,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Dead-code guard is enforced, not advisory.** A new CI ratchet
+  (`.github/workflows/reachability.yml`) regenerates the reachability
+  inventory on every PR and fails when the number of
+  production-unreachable exports grows past the checked-in baseline.
+  `loom:reachable` whitelist claims are now audited mechanically
+  (`script/reachability/whitelist_audit.go` →
+  `docs/parity/loom-reachable-audit.md`) — several annotations claimed
+  wiring that never existed. The generic SQLite `PersistentCache`
+  wrapper (superseded by the direct descriptor-persistence sinks) was
+  removed, and the historical dead-code classification carries an
+  addendum marking which of its verdicts the cleanup executed or
+  disproved.
+
 - **Superseded duplicate subsystems removed.** The unwired
   aiohomematic-config form-schema port (configui generator/grouping/
   labels/widget half plus the easymode use-case tree — the live UI
