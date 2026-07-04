@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestOpenEditSession_HappyPath(t *testing.T) {
@@ -281,6 +282,79 @@ func TestCloseEditSession_HappyPath_Returns204(t *testing.T) {
 
 	if wClose.Code != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d body=%s", wClose.Code, wClose.Body.String())
+	}
+}
+
+// --- EditSessions.Verify ---
+
+func TestEditSessions_Verify_HeldToken_ReturnsTrue(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	lock, ok := s.Open("channel:DEV001:1:MASTER", "user1")
+	if !ok {
+		t.Fatal("open failed")
+	}
+	if !s.Verify("channel:DEV001:1:MASTER", lock.Token) {
+		t.Fatal("expected Verify to return true for the held token")
+	}
+}
+
+func TestEditSessions_Verify_WrongToken_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	if _, ok := s.Open("channel:DEV001:1:MASTER", "user1"); !ok {
+		t.Fatal("open failed")
+	}
+	if s.Verify("channel:DEV001:1:MASTER", "wrong-token") {
+		t.Fatal("expected Verify to return false for a mismatched token")
+	}
+}
+
+func TestEditSessions_Verify_AbsentKey_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	if s.Verify("channel:DEV999:1:MASTER", "any-token") {
+		t.Fatal("expected Verify to return false for a key that was never opened")
+	}
+}
+
+func TestEditSessions_Verify_EmptyToken_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	if _, ok := s.Open("channel:DEV001:1:MASTER", "user1"); !ok {
+		t.Fatal("open failed")
+	}
+	if s.Verify("channel:DEV001:1:MASTER", "") {
+		t.Fatal("expected Verify to return false for an empty token")
+	}
+}
+
+func TestEditSessions_Verify_NilReceiver_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	var s *EditSessions
+	if s.Verify("channel:DEV001:1:MASTER", "some-token") {
+		t.Fatal("expected Verify on a nil *EditSessions to return false")
+	}
+}
+
+// TestEditSessions_Verify_ExpiredLock_ReturnsFalse manipulates the
+// unexported lock map directly (this test file is in package
+// handlers) to push a live lock's deadline into the past, since
+// EditSessionTTL (5 minutes) makes natural expiry impractical to
+// exercise without a clock seam.
+func TestEditSessions_Verify_ExpiredLock_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	s := NewEditSessions()
+	lock, ok := s.Open("channel:DEV001:1:MASTER", "user1")
+	if !ok {
+		t.Fatal("open failed")
+	}
+	s.mu.Lock()
+	lock.Expires = time.Now().Add(-1 * time.Minute)
+	s.mu.Unlock()
+
+	if s.Verify("channel:DEV001:1:MASTER", lock.Token) {
+		t.Fatal("expected Verify to return false for an expired lock")
 	}
 }
 

@@ -420,15 +420,16 @@
       if (paramset === "MASTER") {
         // MASTER writes must go through putParamset: the CCU applies
         // configuration changes atomically and rejects individual
-        // per-parameter writes for many MASTER fields.
+        // per-parameter writes for many MASTER fields. The daemon
+        // enforces the edit lock, so we present the held token.
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putParamset(channelAddress, "MASTER", batch);
+        await api.putParamset(channelAddress, "MASTER", batch, lockSession?.token);
       } else if (paramset === "LINK") {
         if (!peer) throw new Error("LINK save requires a peer address");
         const batch: Record<string, unknown> = {};
         for (const name of dirtyNames) batch[name] = values[name];
-        await api.putLinkParamset(channelAddress, peer, batch);
+        await api.putLinkParamset(channelAddress, peer, batch, lockSession?.token);
       } else {
         for (const name of dirtyNames) {
           await api.setValue(address, channel, name, values[name]);
@@ -441,7 +442,15 @@
       toastStore.success(t("channel.saved_short"));
       banner = null;
     } catch (err) {
-      toastStore.error(t("channel.save_failed"), friendlyError(err, t));
+      // 423 Locked: our edit lock lapsed (heartbeat missed, taken over,
+      // or never acquired). Clear it so the "locked by other" recovery
+      // banner shows, and prompt the user to re-open the session.
+      if (err instanceof ApiError && err.status === 423) {
+        lockSession = null;
+        toastStore.error(t("channel.save_failed"), t("channel.lock_lost"));
+      } else {
+        toastStore.error(t("channel.save_failed"), friendlyError(err, t));
+      }
     } finally {
       saving = false;
     }

@@ -120,6 +120,11 @@ const (
 	// CommandErrorRateLimited is returned when a connection exceeds the
 	// per-identity command rate. Clients should back off and retry.
 	CommandErrorRateLimited = "rate_limited"
+	// CommandErrorLocked mirrors REST's 423 Locked: a MASTER/LINK
+	// paramset write was rejected because the caller does not hold the
+	// per-resource edit lock. The client must open an edit session and
+	// pass its token as `edit_token` before retrying.
+	CommandErrorLocked = "locked"
 )
 
 // Router routes inbound `call` frames to a registered handler by

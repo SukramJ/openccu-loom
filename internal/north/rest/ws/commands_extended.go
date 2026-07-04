@@ -46,6 +46,17 @@ type ParamsetReader interface {
 	GetParamset(ctx context.Context, key configui.SessionKey) (map[string]any, error)
 }
 
+// EditLockVerifier reports whether `token` currently holds the edit
+// lock for a resource `key`. It mirrors the REST strict edit-lock
+// gate so `paramset.put` enforces the same contract as
+// `PUT /devices/{addr}/paramsets/{key}`. *handlers.EditSessions
+// satisfies it. A nil verifier disables enforcement — a test-only
+// escape hatch; the production mount always wires the shared registry
+// (see cmd/openccu-loom/ws_adapters.go).
+type EditLockVerifier interface {
+	Verify(key, token string) bool
+}
+
 // ChangeHistoryQuery is the read-only contract for `change_history.list`.
 // The daemon journals every paramset write via the change-history store;
 // the WebSocket command exposes the most recent entries.
@@ -169,8 +180,13 @@ type UISchemaQuery interface {
 // `RegisterExtendedCommands` consumes. Same nil-disables semantics
 // as [DefaultCommandsConfig].
 type ExtendedCommandsConfig struct {
-	Devices       DeviceWriter
-	Paramsets     ParamsetWriter
+	Devices   DeviceWriter
+	Paramsets ParamsetWriter
+	// EditLocks enforces the strict per-resource edit lock on
+	// `paramset.put` for MASTER/LINK keys. Nil disables enforcement
+	// (test-only); production wires the shared REST edit-session
+	// registry so REST and WS share one lock namespace.
+	EditLocks     EditLockVerifier
 	ChangeHistory ChangeHistoryQuery
 	// ChangeHistoryClearer backs `change_history.clear`.
 	ChangeHistoryClearer ChangeHistoryClearer
@@ -216,7 +232,7 @@ func RegisterExtendedCommands(router *Router, cfg ExtendedCommandsConfig) {
 		router.Register("device.install_mode", deviceInstallModeHandler(cfg.Devices))
 	}
 	if cfg.Paramsets != nil {
-		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets))
+		router.Register("paramset.put", paramsetPutHandler(cfg.Paramsets, cfg.EditLocks))
 	}
 	if cfg.MasterProfiles != nil {
 		router.Register("master_profiles.list", masterProfilesListHandler(cfg.MasterProfiles))
@@ -343,12 +359,15 @@ func deviceInstallModeHandler(d DeviceWriter) CommandHandler {
 	}
 }
 
-func paramsetPutHandler(w ParamsetWriter) CommandHandler {
+func paramsetPutHandler(w ParamsetWriter, locks EditLockVerifier) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var p struct {
 			Channel  string         `json:"channel_address"`
 			Paramset string         `json:"paramset_key"`
 			Values   map[string]any `json:"values"`
+			// EditToken carries the edit-lock token for MASTER/LINK
+			// writes under strict enforcement. Ignored for VALUES.
+			EditToken string `json:"edit_token"`
 		}
 		if err := decodeOrEmpty(raw, &p); err != nil {
 			return nil, err
@@ -359,7 +378,19 @@ func paramsetPutHandler(w ParamsetWriter) CommandHandler {
 		if len(p.Values) == 0 {
 			return nil, NewCommandError(CommandErrorBadRequest, "values must not be empty")
 		}
-		key := configui.SessionKey{ChannelAddress: p.Channel, ParamsetKey: hmenum.ParamsetKey(p.Paramset)}
+		psKey := hmenum.ParamsetKey(p.Paramset)
+		// Strict edit-lock enforcement mirrors the REST gate: MASTER and
+		// LINK are configuration writes that require holding the lock.
+		// The lock key mirrors the SPA's channel:{addr}:{key} format;
+		// this WS path carries no peer suffix (per-peer LINK writes use
+		// the REST link-ps route), so it locks the whole set.
+		if locks != nil && (psKey == hmenum.ParamsetKeyMaster || psKey == hmenum.ParamsetKeyLink) {
+			if !locks.Verify("channel:"+p.Channel+":"+string(psKey), p.EditToken) {
+				return nil, NewCommandError(CommandErrorLocked,
+					"edit lock required for "+string(psKey)+" write; open an edit session and pass edit_token")
+			}
+		}
+		key := configui.SessionKey{ChannelAddress: p.Channel, ParamsetKey: psKey}
 		if err := w.PutParamset(ctx, key, p.Values); err != nil {
 			return nil, fmt.Errorf("paramset.put: %w", err)
 		}

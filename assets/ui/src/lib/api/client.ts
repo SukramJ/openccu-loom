@@ -210,6 +210,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return JSON.parse(text) as T;
 }
 
+// editLockHeaders builds the header set for a configuration paramset
+// write: always JSON, plus the X-Edit-Token when the caller holds an
+// edit-lock token. The daemon rejects a MASTER/LINK write without a
+// valid token with 423 Locked.
+function editLockHeaders(editToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (editToken) headers["X-Edit-Token"] = editToken;
+  return headers;
+}
+
 export const api = {
   login(username: string, password: string) {
     return request<Identity>(`/auth/login`, {
@@ -354,12 +366,16 @@ export const api = {
     channelAddress: string,
     peer: string,
     values: Record<string, unknown>,
+    // Edit-lock token. LINK writes are configuration changes the daemon
+    // gates behind the per-resource edit lock; pass the held token so
+    // the write carries the X-Edit-Token header. Omitting it yields 423.
+    editToken?: string,
   ) {
     return request<void>(
       `/devices/${encodeURIComponent(channelAddress)}/link-paramsets/${encodeURIComponent(peer)}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: editLockHeaders(editToken),
         body: JSON.stringify(values),
       },
     );
@@ -368,12 +384,16 @@ export const api = {
     channelAddress: string,
     paramset: "VALUES" | "MASTER",
     values: Record<string, unknown>,
+    // Edit-lock token. MASTER writes are gated behind the edit lock;
+    // pass the held token so the write carries X-Edit-Token. VALUES
+    // writes ignore it. Omitting it on MASTER yields 423 Locked.
+    editToken?: string,
   ) {
     return request<void>(
       `/devices/${encodeURIComponent(channelAddress)}/paramsets/${paramset}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: editLockHeaders(editToken),
         body: JSON.stringify(values),
       },
     );

@@ -108,8 +108,22 @@ func cmdParamsetSet(args []string, stdout, stderr io.Writer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), f.timeout)
 	defer cancel()
 
+	client := f.client()
 	body := map[string]any{param: coerceValue(rawVal)}
-	if err := client.sendJSON(ctx, http.MethodPut, "/api/v1/devices/"+url.PathEscape(addr)+"/paramsets/"+url.PathEscape(key), body, nil); err != nil {
+	headers := map[string]string(nil)
+	// MASTER and LINK writes are configuration changes the daemon gates
+	// behind the strict edit lock. Open a session, present its token on
+	// the write, then release it. VALUES writes are ungated.
+	if key == "MASTER" || key == "LINK" {
+		lockKey := "channel:" + addr + ":" + key
+		token, err := client.openEditSession(ctx, lockKey)
+		if err != nil {
+			return fmt.Errorf("paramset set: acquire edit lock: %w", err)
+		}
+		defer func() { _ = client.closeEditSession(ctx, lockKey, token) }()
+		headers = map[string]string{editTokenHeader: token}
+	}
+	if err := client.sendJSONHeaders(ctx, http.MethodPut, "/api/v1/devices/"+url.PathEscape(addr)+"/paramsets/"+url.PathEscape(key), body, nil, headers); err != nil {
 		return err
 	}
 	_, _ = fmt.Fprintln(stdout, "ok")
