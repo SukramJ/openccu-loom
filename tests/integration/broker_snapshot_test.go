@@ -195,7 +195,7 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 			if ch == nil {
 				continue
 			}
-			driveChannelDPs(ctx, bridge, d, ch)
+			driveChannelDPs(ctx, bridge, "ccu-01", d, ch)
 		}
 	}
 
