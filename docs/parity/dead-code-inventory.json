@@ -1,6 +1,6 @@
 {
-  "generated": "14ba348",
-  "head": "14ba348",
+  "generated": "11022af",
+  "head": "11022af",
   "entry_points": [
     "cmd/hmcli/main.go",
     "cmd/hmcli/main.go",
@@ -8,10 +8,10 @@
     "cmd/openccu-loom/main.go"
   ],
   "summary": {
-    "total_exported": 24041,
-    "reachable": 3791,
-    "whitelisted": 17370,
-    "unreachable": 2880
+    "total_exported": 24039,
+    "reachable": 3792,
+    "whitelisted": 17368,
+    "unreachable": 2879
   },
   "by_package": [
     {
@@ -34,9 +34,9 @@
     },
     {
       "package": "internal/north/mqtt",
-      "unreachable_funcs": 20,
-      "unreachable_types": 80,
-      "unreachable_other": 2
+      "unreachable_funcs": 21,
+      "unreachable_types": 76,
+      "unreachable_other": 4
     },
     {
       "package": "internal/client/backends",
@@ -14437,34 +14437,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "CircuitBreaker",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 47,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CircuitBreaker",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 47,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CircuitState",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 16,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "CircuitState",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 16,
-      "kind": "type"
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "CombinedDPSink",
       "file": "internal/north/mqtt/command_subscriber.go",
       "line": 74,
@@ -14579,7 +14551,7 @@
       "package": "internal/north/mqtt",
       "identifier": "DefaultLifecycle",
       "file": "internal/north/mqtt/client.go",
-      "line": 84,
+      "line": 104,
       "kind": "func"
     },
     {
@@ -14623,6 +14595,20 @@
       "file": "internal/north/mqtt/hub_discovery.go",
       "line": 30,
       "kind": "type"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "ErrCircuitOpen",
+      "file": "internal/north/mqtt/client.go",
+      "line": 84,
+      "kind": "var"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "ErrCircuitOpen",
+      "file": "internal/north/mqtt/client.go",
+      "line": 84,
+      "kind": "var"
     },
     {
       "package": "internal/north/mqtt",
@@ -14740,7 +14726,7 @@
       "package": "internal/north/mqtt",
       "identifier": "LegacyHandler",
       "file": "internal/north/mqtt/client.go",
-      "line": 71,
+      "line": 91,
       "kind": "func"
     },
     {
@@ -14755,6 +14741,13 @@
       "identifier": "NewBirthSync",
       "file": "internal/north/mqtt/birth_sync.go",
       "line": 34,
+      "kind": "func"
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "NewBreaker",
+      "file": "internal/north/mqtt/client.go",
+      "line": 87,
       "kind": "func"
     },
     {
@@ -14789,7 +14782,7 @@
       "package": "internal/north/mqtt",
       "identifier": "NewLifecycle",
       "file": "internal/north/mqtt/client.go",
-      "line": 79,
+      "line": 99,
       "kind": "func"
     },
     {
@@ -14810,7 +14803,7 @@
       "package": "internal/north/mqtt",
       "identifier": "NewTCPClient",
       "file": "internal/north/mqtt/client.go",
-      "line": 76,
+      "line": 96,
       "kind": "func"
     },
     {
@@ -106622,6 +106615,48 @@
     },
     {
       "package": "internal/north/mqtt",
+      "identifier": "Breaker",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 41
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "Breaker",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 41
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "BreakerConfig",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "BreakerConfig",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 43
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "BreakerState",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 45
+    },
+    {
+      "package": "internal/north/mqtt",
+      "identifier": "BreakerState",
+      "reason": "auto-whitelist:pattern=type-alias",
+      "file": "internal/north/mqtt/client.go",
+      "line": 45
+    },
+    {
+      "package": "internal/north/mqtt",
       "identifier": "Client",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
@@ -106639,14 +106674,14 @@
       "identifier": "Connector",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 45
+      "line": 51
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "Connector",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 45
+      "line": 51
     },
     {
       "package": "internal/north/mqtt",
@@ -106835,28 +106870,28 @@
       "identifier": "Lifecycle",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 51
+      "line": 57
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "Lifecycle",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 51
+      "line": 57
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LifecycleConfig",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 53
+      "line": 59
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "LifecycleConfig",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 53
+      "line": 59
     },
     {
       "package": "internal/north/mqtt",
@@ -107112,20 +107147,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "NewMqttCircuitBreaker",
-      "reason": "currently unwired; retained until breaker semantics move into the shared go-mqtt module, which will replace this type",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 65
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "NewMqttCircuitBreaker",
-      "reason": "currently unwired; retained until breaker semantics move into the shared go-mqtt module, which will replace this type",
-      "file": "internal/north/mqtt/circuit_breaker.go",
-      "line": 65
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "NewRetainCleanup",
       "reason": "auto-whitelist:pattern=mqtt-entity-lookup",
       "file": "internal/north/mqtt/retain_cleanup.go",
@@ -107157,14 +107178,14 @@
       "identifier": "PublishOption",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 41
+      "line": 47
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "PublishOption",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 41
+      "line": 47
     },
     {
       "package": "internal/north/mqtt",
@@ -107213,14 +107234,14 @@
       "identifier": "SubscribeOption",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 43
+      "line": 49
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "SubscribeOption",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 43
+      "line": 49
     },
     {
       "package": "internal/north/mqtt",
@@ -107255,28 +107276,28 @@
       "identifier": "TCPClient",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 47
+      "line": 53
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TCPClient",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 47
+      "line": 53
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TCPConfig",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 49
+      "line": 55
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TCPConfig",
       "reason": "auto-whitelist:pattern=type-alias",
       "file": "internal/north/mqtt/client.go",
-      "line": 49
+      "line": 55
     },
     {
       "package": "internal/north/mqtt",
@@ -107332,42 +107353,42 @@
       "identifier": "TestBirthSyncHandleOfflineIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 125
+      "line": 106
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBirthSyncHandleOnlineRepublishes",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 92
+      "line": 73
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBirthSyncHandleRepublishError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1591
+      "line": 1560
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBirthSyncHandleRespectsLifecycleCtxCancel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1562
+      "line": 1531
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBirthSyncStartMissingArgs",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 83
+      "line": 64
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBirthSyncWithLifecycleContextReturnsSelf",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1552
+      "line": 1521
     },
     {
       "package": "internal/north/mqtt",
@@ -107388,7 +107409,7 @@
       "identifier": "TestBridgeAnnounceOnlineStatusAndHealth",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1291
+      "line": 1272
     },
     {
       "package": "internal/north/mqtt",
@@ -107430,21 +107451,21 @@
       "identifier": "TestBridgeEvictStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1395
+      "line": 1376
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeEvictStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1408
+      "line": 1389
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeEvictStateWithLegacy",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 3005
+      "line": 2974
     },
     {
       "package": "internal/north/mqtt",
@@ -107500,56 +107521,56 @@
       "identifier": "TestBridgePublishAlarmMessages",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1909
+      "line": 1878
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishAlarmMessagesRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2275
+      "line": 2244
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishAvailabilityOffline",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1864
+      "line": 1833
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishAvailabilityOnline",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1845
+      "line": 1814
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishChannelEventDiscoveryDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 448
+      "line": 429
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishChannelEventDiscoveryNoBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1823
+      "line": 1792
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishChannelEventStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1941
+      "line": 1910
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishChannelEventStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1954
+      "line": 1923
     },
     {
       "package": "internal/north/mqtt",
@@ -107563,7 +107584,7 @@
       "identifier": "TestBridgePublishConnectivityRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2303
+      "line": 2272
     },
     {
       "package": "internal/north/mqtt",
@@ -107577,84 +107598,84 @@
       "identifier": "TestBridgePublishCustomDPStateNilState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 339
+      "line": 320
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishCustomDPStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 311
+      "line": 292
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishCustomDPStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 325
+      "line": 306
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceDiagnosticsEmptyCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2393
+      "line": 2362
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceDiagnosticsRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 422
+      "line": 403
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceDiagnosticsRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 435
+      "line": 416
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceInfoEmptyCentral",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2374
+      "line": 2343
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceInfoRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 395
+      "line": 376
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDeviceInfoRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 408
+      "line": 389
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDiscoveryOnlyRawDisabledHAEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 290
+      "line": 271
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDiscoveryOnlyVisibilityGated",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 3147
+      "line": 3116
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishDiscoveryOnlyWithBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2007
+      "line": 1976
     },
     {
       "package": "internal/north/mqtt",
@@ -107675,14 +107696,14 @@
       "identifier": "TestBridgePublishInstallModeRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2259
+      "line": 2228
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishInstallModeRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1887
+      "line": 1856
     },
     {
       "package": "internal/north/mqtt",
@@ -107696,77 +107717,77 @@
       "identifier": "TestBridgePublishServiceMessages",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1923
+      "line": 1892
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishServiceMessagesRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2287
+      "line": 2256
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSlotConfigDeduplicates",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 380
+      "line": 361
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSlotConfigEmptySkips",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 365
+      "line": 346
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSlotConfigRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 351
+      "line": 332
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSlotStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1363
+      "line": 1344
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSlotStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1377
+      "line": 1358
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSourceStateNilPayload",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2356
+      "line": 2325
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSourceStateNilSource",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1333
+      "line": 1314
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSourceStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1320
+      "line": 1301
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSourceStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1346
+      "line": 1327
     },
     {
       "package": "internal/north/mqtt",
@@ -107780,14 +107801,14 @@
       "identifier": "TestBridgePublishSystemStatusRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 260
+      "line": 241
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishSystemStatusRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 272
+      "line": 253
     },
     {
       "package": "internal/north/mqtt",
@@ -107808,63 +107829,63 @@
       "identifier": "TestBridgePublishUpdateDiscoveryHADisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2128
+      "line": 2097
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishUpdateDiscoveryNilBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2140
+      "line": 2109
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishUpdateStateNilState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2114
+      "line": 2083
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishUpdateStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2080
+      "line": 2049
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishUpdateStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2094
+      "line": 2063
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishWeekProfileDiscoveryHADisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2153
+      "line": 2122
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishWeekProfileDiscoveryNilBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2165
+      "line": 2134
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishWeekProfileStateRawDisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2178
+      "line": 2147
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgePublishWeekProfileStateRawEnabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2190
+      "line": 2159
     },
     {
       "package": "internal/north/mqtt",
@@ -107878,14 +107899,14 @@
       "identifier": "TestBridgeRenderStatePayloadEnumResolved",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1266
+      "line": 1247
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeRenderStatePayloadJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1252
+      "line": 1233
     },
     {
       "package": "internal/north/mqtt",
@@ -107920,28 +107941,28 @@
       "identifier": "TestBridgeSetHubInfoNilBridge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 233
+      "line": 214
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeSetHubInfoNoDiscoveryBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 240
+      "line": 221
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeSetHubInfoWithDefaultBuilder",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1988
+      "line": 1957
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBridgeTopics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 248
+      "line": 229
     },
     {
       "package": "internal/north/mqtt",
@@ -108088,35 +108109,35 @@
       "identifier": "TestBuildUpdateDiscoveryBuilderReturnsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2839
+      "line": 2808
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBuildUpdateDiscoveryDeviceNameFallback",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2881
+      "line": 2850
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBuildUpdateDiscoveryHappyPath",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2852
+      "line": 2821
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBuildUpdateDiscoveryNilUpdate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2830
+      "line": 2799
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestBytesEqualBothEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1971
+      "line": 1940
     },
     {
       "package": "internal/north/mqtt",
@@ -108152,13 +108173,6 @@
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/schedule_switch_discovery_test.go",
       "line": 88
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestCircuitStateString",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 23
     },
     {
       "package": "internal/north/mqtt",
@@ -108228,7 +108242,7 @@
       "identifier": "TestCommandSubscriberCDPInvokeBadTopicShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1195
+      "line": 1176
     },
     {
       "package": "internal/north/mqtt",
@@ -108270,21 +108284,21 @@
       "identifier": "TestCommandSubscriberDataPointBadChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1042
+      "line": 1023
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberDataPointBucketAwareValues",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1020
+      "line": 1001
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberDataPointNonValuesBucketDropped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1001
+      "line": 982
     },
     {
       "package": "internal/north/mqtt",
@@ -108354,14 +108368,14 @@
       "identifier": "TestCommandSubscriberProgramBadTopicShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1138
+      "line": 1119
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberProgramSinkError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1152
+      "line": 1133
     },
     {
       "package": "internal/north/mqtt",
@@ -108375,70 +108389,70 @@
       "identifier": "TestCommandSubscriberServiceMethodBadChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 810
+      "line": 791
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberServiceMethodBadTopicShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 827
+      "line": 808
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberServiceMethodNoSink",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 796
+      "line": 777
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberServiceMethodSinkError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 859
+      "line": 840
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberServiceMethodSuccess",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 843
+      "line": 824
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberStartNilSubscriber",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 987
+      "line": 968
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberStartSecondSubscribeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2337
+      "line": 2306
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberStartSubscribeError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2048
+      "line": 2017
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberSysvarBadTopicShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1104
+      "line": 1085
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCommandSubscriberSysvarSinkError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1119
+      "line": 1100
     },
     {
       "package": "internal/north/mqtt",
@@ -108459,7 +108473,7 @@
       "identifier": "TestCommandSubscriberWeekProfileBadChannel",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1058
+      "line": 1039
     },
     {
       "package": "internal/north/mqtt",
@@ -108480,7 +108494,7 @@
       "identifier": "TestCommandSubscriberWeekProfileSinkError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1074
+      "line": 1055
     },
     {
       "package": "internal/north/mqtt",
@@ -108494,14 +108508,14 @@
       "identifier": "TestComponentDeviceClassAllBranches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2906
+      "line": 2875
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestComponentFromCategory",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1434
+      "line": 1415
     },
     {
       "package": "internal/north/mqtt",
@@ -108543,42 +108557,42 @@
       "identifier": "TestCustomDPSlotForEventEmptyParameter",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2596
+      "line": 2565
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCustomDPSlotForEventFillsAddressFromEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2626
+      "line": 2595
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCustomDPSlotForEventNilSource",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2577
+      "line": 2546
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCustomDPSlotForEventNotSlotted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2586
+      "line": 2555
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestCustomDPSlotForEventSlottedOk",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2610
+      "line": 2579
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestDeviceClassFor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2415
+      "line": 2384
     },
     {
       "package": "internal/north/mqtt",
@@ -108669,7 +108683,7 @@
       "identifier": "TestDiscoveryCtxTopicsNilSource",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1786
+      "line": 1755
     },
     {
       "package": "internal/north/mqtt",
@@ -108760,35 +108774,35 @@
       "identifier": "TestDisplayChannelNameChannelZero",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2539
+      "line": 2508
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestDisplayChannelNameNoCustomDP",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2530
+      "line": 2499
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestDisplayChannelNamePrimaryMultiple",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2505
+      "line": 2474
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestDisplayChannelNamePrimarySingle",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2518
+      "line": 2487
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestDisplayChannelNameSecondary",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2492
+      "line": 2461
     },
     {
       "package": "internal/north/mqtt",
@@ -108809,7 +108823,7 @@
       "identifier": "TestEntityDescriptionForExtEvent",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2233
+      "line": 2202
     },
     {
       "package": "internal/north/mqtt",
@@ -108823,7 +108837,7 @@
       "identifier": "TestEntityDescriptionForExtSensor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2227
+      "line": 2196
     },
     {
       "package": "internal/north/mqtt",
@@ -108837,14 +108851,14 @@
       "identifier": "TestEntityDescriptionForExtText",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2239
+      "line": 2208
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEntityDescriptionForExtUnknownNoResult",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2245
+      "line": 2214
     },
     {
       "package": "internal/north/mqtt",
@@ -108921,28 +108935,28 @@
       "identifier": "TestEventDescDefault",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2652
+      "line": 2621
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEventDescDefaultNilDescriptor",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2665
+      "line": 2634
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEventDescDefaultString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2989
+      "line": 2958
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestEventDescDefaultWrongType",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2673
+      "line": 2642
     },
     {
       "package": "internal/north/mqtt",
@@ -109054,7 +109068,7 @@
       "identifier": "TestHubSysvarCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 644
+      "line": 625
     },
     {
       "package": "internal/north/mqtt",
@@ -109068,7 +109082,7 @@
       "identifier": "TestIndexFromValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 465
+      "line": 446
     },
     {
       "package": "internal/north/mqtt",
@@ -109117,14 +109131,14 @@
       "identifier": "TestIsMotionDeviceClass",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2727
+      "line": 2696
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestJSONValueTemplate",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2688
+      "line": 2657
     },
     {
       "package": "internal/north/mqtt",
@@ -109145,14 +109159,14 @@
       "identifier": "TestLegacyDataPointStateMatcherEdgeCases",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1624
+      "line": 1593
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLegacySlotStateMatcherEdgeCases",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1663
+      "line": 1632
     },
     {
       "package": "internal/north/mqtt",
@@ -109250,7 +109264,7 @@
       "identifier": "TestLookupButtonRule",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1741
+      "line": 1710
     },
     {
       "package": "internal/north/mqtt",
@@ -109264,14 +109278,14 @@
       "identifier": "TestLookupDeviceOnlyRulesNilMap",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2938
+      "line": 2907
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestLookupDeviceOnlyRulesNonEmptyParameterSkipped",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2946
+      "line": 2915
     },
     {
       "package": "internal/north/mqtt",
@@ -109285,7 +109299,7 @@
       "identifier": "TestLookupExtRuleForComponentAllBranches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2206
+      "line": 2175
     },
     {
       "package": "internal/north/mqtt",
@@ -109313,7 +109327,7 @@
       "identifier": "TestLookupLockRule",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1730
+      "line": 1699
     },
     {
       "package": "internal/north/mqtt",
@@ -109327,7 +109341,7 @@
       "identifier": "TestLookupRulesForComponentAllBranches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1705
+      "line": 1674
     },
     {
       "package": "internal/north/mqtt",
@@ -109362,7 +109376,7 @@
       "identifier": "TestLookupValveRule",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1736
+      "line": 1705
     },
     {
       "package": "internal/north/mqtt",
@@ -109457,34 +109471,6 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestMqttCircuitBreakerClosedToOpen",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/circuit_breaker_test.go",
-      "line": 15
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestMqttCircuitBreakerHalfOpenToClosedOnSuccess",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/circuit_breaker_test.go",
-      "line": 68
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestMqttCircuitBreakerOpenToHalfOpen",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/circuit_breaker_test.go",
-      "line": 41
-    },
-    {
-      "package": "internal/north/mqtt",
-      "identifier": "TestMqttCircuitBreakerReset",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/circuit_breaker_test.go",
-      "line": 89
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "TestMqttCollectorCountsMessages",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/mqtt_collector_test.go",
@@ -109541,17 +109527,10 @@
     },
     {
       "package": "internal/north/mqtt",
-      "identifier": "TestNewMqttCircuitBreakerDefaults",
-      "reason": "auto-whitelist:pattern=test-file",
-      "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1495
-    },
-    {
-      "package": "internal/north/mqtt",
       "identifier": "TestNoopClientUnsubscribe",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 46
+      "line": 27
     },
     {
       "package": "internal/north/mqtt",
@@ -109789,14 +109768,14 @@
       "identifier": "TestQuoteIfBareString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 958
+      "line": 939
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRenderValue",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1215
+      "line": 1196
     },
     {
       "package": "internal/north/mqtt",
@@ -109810,105 +109789,105 @@
       "identifier": "TestResolveEnumLabelEmptyList",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 516
+      "line": 497
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveEnumLabelNonEnum",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 498
+      "line": 479
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveEnumLabelOutOfBounds",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 507
+      "line": 488
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveSensorDeviceClassKnownParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2789
+      "line": 2758
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveSensorDeviceClassUnknownParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2780
+      "line": 2749
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveSensorStateClassUnknownParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2798
+      "line": 2767
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestResolveSwitchDeviceClassUnknownParam",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2806
+      "line": 2775
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRetainCleanupCollectNilBridge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1610
+      "line": 1579
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRetainCleanupErrorString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 719
+      "line": 700
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRetractDiscoveryForDeviceDiscoveryDisabledIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 3130
+      "line": 3099
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRetractDiscoveryForDeviceEmptyAddressIsNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 3106
+      "line": 3075
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRetractDiscoveryForDeviceRetractsMatchingTopics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 3042
+      "line": 3011
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRunDiscoveryOrphanCleanupOnce_HADisabled",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 749
+      "line": 730
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRunDiscoveryOrphanCleanupOnce_NotAClient",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 739
+      "line": 720
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestRunDiscoveryOrphanCleanupOnce_OrphansEvicted",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 762
+      "line": 743
     },
     {
       "package": "internal/north/mqtt",
@@ -109922,7 +109901,7 @@
       "identifier": "TestRunRetainCleanupOnce_NotAClient",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 727
+      "line": 708
     },
     {
       "package": "internal/north/mqtt",
@@ -109943,49 +109922,49 @@
       "identifier": "TestScalarPayloadToParamsBadJSON",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 949
+      "line": 930
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsEmpty",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 880
+      "line": 861
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsJSONObject",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 891
+      "line": 872
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsNoKeyFromResolver",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 937
+      "line": 918
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsScalarBareString",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 926
+      "line": 907
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsScalarBool",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 904
+      "line": 885
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestScalarPayloadToParamsScalarNumber",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 915
+      "line": 896
     },
     {
       "package": "internal/north/mqtt",
@@ -110034,7 +110013,7 @@
       "identifier": "TestSetOriginVersion",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2062
+      "line": 2031
     },
     {
       "package": "internal/north/mqtt",
@@ -110132,7 +110111,7 @@
       "identifier": "TestSystemStatusPublisherNilRegNoop",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1693
+      "line": 1662
     },
     {
       "package": "internal/north/mqtt",
@@ -110307,14 +110286,14 @@
       "identifier": "TestTopicBuilderCustomDPServiceMethod",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 594
+      "line": 575
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderCustomDPServiceMethodShape",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 538
+      "line": 519
     },
     {
       "package": "internal/north/mqtt",
@@ -110328,7 +110307,7 @@
       "identifier": "TestTopicBuilderDataPointConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 528
+      "line": 509
     },
     {
       "package": "internal/north/mqtt",
@@ -110349,28 +110328,28 @@
       "identifier": "TestTopicBuilderDeviceDiagnostics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 663
+      "line": 644
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderDeviceInfo",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 653
+      "line": 634
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderDeviceUpdateCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 683
+      "line": 664
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderDeviceUpdateState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 673
+      "line": 654
     },
     {
       "package": "internal/north/mqtt",
@@ -110384,28 +110363,28 @@
       "identifier": "TestTopicBuilderHubDiagnostics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 634
+      "line": 615
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderHubInfo",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 624
+      "line": 605
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderHubStatus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 614
+      "line": 595
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderParamterPathDataEmptyBucket",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 704
+      "line": 685
     },
     {
       "package": "internal/north/mqtt",
@@ -110426,42 +110405,42 @@
       "identifier": "TestTopicBuilderSlotCommand",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 570
+      "line": 551
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderSlotCommandCustom",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 581
+      "line": 562
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderSlotConfig",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 549
+      "line": 530
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderSlotConfigCustom",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 560
+      "line": 541
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderSlotStateNonCustom",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 693
+      "line": 674
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestTopicBuilderSystemStatus",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 604
+      "line": 585
     },
     {
       "package": "internal/north/mqtt",
@@ -110496,7 +110475,7 @@
       "identifier": "TestUpdateDiscoveryCtxTopics",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1750
+      "line": 1719
     },
     {
       "package": "internal/north/mqtt",
@@ -110552,7 +110531,7 @@
       "identifier": "TestVarNameMatches",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2749
+      "line": 2718
     },
     {
       "package": "internal/north/mqtt",
@@ -110608,56 +110587,56 @@
       "identifier": "TestWiringBridge",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 159
+      "line": 140
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublish",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 169
+      "line": 150
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishLogsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1517
+      "line": 1486
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishNilInterface",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 2966
+      "line": 2935
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishProgramState",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 188
+      "line": 169
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishProgramStateLogsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1532
+      "line": 1501
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishSysvar",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 207
+      "line": 188
     },
     {
       "package": "internal/north/mqtt",
       "identifier": "TestWiringPublishSysvarLogsError",
       "reason": "auto-whitelist:pattern=test-file",
       "file": "internal/north/mqtt/bridge_edge_cases_test.go",
-      "line": 1540
+      "line": 1509
     },
     {
       "package": "internal/north/mqtt",

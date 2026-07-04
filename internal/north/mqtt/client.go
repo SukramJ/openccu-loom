@@ -37,6 +37,12 @@ type (
 	Will = gomqtt.Will
 	// ProtocolVersion selects the MQTT dialect (zero value = 5.0).
 	ProtocolVersion = gomqtt.ProtocolVersion
+	// Breaker is the circuit-breaking Publisher decorator.
+	Breaker = gomqtt.Breaker
+	// BreakerConfig tunes the circuit breaker.
+	BreakerConfig = gomqtt.BreakerConfig
+	// BreakerState is the circuit state (closed / open / half-open).
+	BreakerState = gomqtt.BreakerState
 	// PublishOption tunes a single Publish call.
 	PublishOption = gomqtt.PublishOption
 	// SubscribeOption tunes a single Subscribe call.
@@ -65,6 +71,20 @@ const (
 	ProtocolV50  = gomqtt.ProtocolV50
 	ProtocolV311 = gomqtt.ProtocolV311
 )
+
+// Breaker states.
+const (
+	BreakerClosed   = gomqtt.BreakerClosed
+	BreakerOpen     = gomqtt.BreakerOpen
+	BreakerHalfOpen = gomqtt.BreakerHalfOpen
+)
+
+// ErrCircuitOpen is returned by a tripped [Breaker] instead of
+// blocking on the broker's AckTimeout.
+var ErrCircuitOpen = gomqtt.ErrCircuitOpen
+
+// NewBreaker wraps a Publisher in a circuit breaker.
+func NewBreaker(pub Publisher, cfg BreakerConfig) *Breaker { return gomqtt.NewBreaker(pub, cfg) }
 
 // LegacyHandler adapts the pre-v1 (topic, payload, retained) handler
 // shape to a [MessageHandler].
