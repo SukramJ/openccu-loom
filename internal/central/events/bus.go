@@ -19,8 +19,10 @@ package events
 import (
 	"fmt"
 	"log/slog"
+	"runtime"
 	"runtime/debug"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -102,6 +104,13 @@ type Bus struct {
 	deferred  []func()   // re-entrant publishes land here until dispatch unwinds
 	activeTyp hmevent.EventType
 
+	// dispatchGID is the goroutine id of the goroutine that currently owns
+	// b.dispatch (0 when no dispatch is in progress). The unsubscribe barrier
+	// reads it to detect a handler unsubscribing itself on the dispatch
+	// goroutine, where waiting on the in-flight count would deadlock on the
+	// current invocation.
+	dispatchGID atomic.Int64
+
 	// statsMu guards published — incremented on every dispatchNow call
 	// regardless of subscriber count. Snapshot via [EventStats].
 	statsMu   sync.RWMutex
@@ -124,6 +133,19 @@ type registered struct {
 	name     string
 	external bool // set via WithExternal()
 	fn       func(any)
+
+	// dead is set the moment the unsubscribe closure removes this handler
+	// from the registry. A dispatch that already snapshotted the handler
+	// slice re-checks the flag immediately before invoking, so a handler
+	// unsubscribed mid-pass never fires. Pairs with inflight to give the
+	// unsubscribe closure barrier semantics.
+	dead atomic.Bool
+	// inflight counts the dispatch passes that captured this handler in
+	// their snapshot but have not yet finished with it. The unsubscribe
+	// closure waits on it, so a caller can free resources the handler
+	// touches once unsubscribe returns without racing an in-flight
+	// invocation.
+	inflight sync.WaitGroup
 
 	calls   atomic.Uint64
 	matches atomic.Uint64
@@ -184,13 +206,33 @@ func Subscribe[T hmevent.Event](b *Bus, fn func(T), opts ...HandlerOption) func(
 	return func() {
 		once.Do(func() {
 			b.mu.Lock()
-			defer b.mu.Unlock()
 			list := b.handlers[typ]
 			for i, h := range list {
-				if h.id == id {
+				if h == entry {
 					b.handlers[typ] = append(list[:i], list[i+1:]...)
 					break
 				}
+			}
+			// Flip dead under b.mu so a dispatch pass that snapshots after
+			// this point either misses the handler entirely or observes dead
+			// and skips it (see dispatchNow). Ordered before the barrier Wait.
+			entry.dead.Store(true)
+			b.mu.Unlock()
+
+			// Barrier: block until any dispatch pass that already captured
+			// this handler in its snapshot has finished with it. After this
+			// returns the handler is guaranteed not to be executing, so the
+			// caller may safely free resources the handler references without
+			// racing a still-running invocation.
+			//
+			// Exception: when we are the dispatch goroutine (a handler
+			// unsubscribing itself), waiting on the in-flight count would
+			// deadlock on the current invocation — which is our own caller on
+			// this stack, so there is nothing to race against anyway. The dead
+			// flag set above already stops the handler from firing on any later
+			// pass. Only cross-goroutine unsubscribers block.
+			if goid() != b.dispatchGID.Load() {
+				entry.inflight.Wait()
 			}
 		})
 	}
@@ -201,6 +243,9 @@ func Subscribe[T hmevent.Event](b *Bus, fn func(T), opts ...HandlerOption) func(
 // outer dispatch completes.
 func Publish[T hmevent.Event](b *Bus, e T) {
 	if b.dispatch.TryLock() {
+		// Record which goroutine owns the dispatch so a self-unsubscribing
+		// handler can skip the barrier wait (see the unsubscribe closure).
+		b.dispatchGID.Store(goid())
 		// flushDeferred releases b.dispatch (under b.mu) once the queue
 		// drains — see the handoff note there. Do NOT defer-unlock here.
 		b.dispatchNow(e)
@@ -228,6 +273,7 @@ func Publish[T hmevent.Event](b *Bus, e T) {
 	b.mu.Unlock()
 	b.observeDeferredDepth(depth, e.Type())
 	if tookOver {
+		b.dispatchGID.Store(goid())
 		b.flushDeferred()
 	}
 }
@@ -273,18 +319,21 @@ func (b *Bus) DeferredDepth() int {
 	return len(b.deferred)
 }
 
-// PublishSync is a synchronous publish alias.
+// PublishSync is an explicit alias of [Publish]. It exists purely for
+// API parity with the reference stack's separate publish_sync entry
+// point and carries no stronger delivery guarantee than [Publish].
 //
-// loom:reachable:reason="API-parity alias for callers that document they need guaranteed-synchronous dispatch"
+// loom:reachable:reason="API-parity alias retained for callers that mirror the reference publish_sync entry point"
 //
-// The Go event bus already dispatches handlers synchronously on the
-// caller's goroutine (unlike the asyncio-based Python bus which needs
-// a separate `publish_sync` path to schedule from sync code). This
-// Function exists purely for API parity
-// `EventBus.publish_sync` (`central/events/bus.py:812`): callers that
-// document they need guaranteed-synchronous dispatch can call this to
-// make that intent explicit. The implementation is identical to
-// [Publish].
+// It is NOT guaranteed to be synchronous: in the uncontended case
+// [Publish] dispatches every handler on the caller's goroutine before
+// returning, but when another goroutine already holds the dispatch lock
+// (or the caller is inside a handler), the event is buffered and drained
+// by the active dispatcher — so handlers may run after this call returns.
+// Do not rely on a read-after-publish caller observing the handler's
+// side effects; if you need that, dispatch on the same goroutine that
+// will read the result. There is no production caller that depends on a
+// synchronous-drain contract here.
 func PublishSync[T hmevent.Event](b *Bus, e T) {
 	Publish(b, e)
 }
@@ -296,6 +345,16 @@ func (b *Bus) dispatchNow(e hmevent.Event) {
 	b.mu.Lock()
 	b.activeTyp = e.Type()
 	handlers := append([]*registered(nil), b.handlers[e.Type()]...)
+	// Register in-flight interest under b.mu — the same lock the
+	// unsubscribe closure takes to detach a handler and flip its dead
+	// flag. Serialising "snapshot + mark in-flight" against "detach + mark
+	// dead" is what makes the unsubscribe barrier correct: an unsubscribe
+	// that wins the lock removes the handler before this snapshot (so it is
+	// never invoked below); one that loses observes a pending inflight
+	// count and blocks on it until the matching Done runs.
+	for _, h := range handlers {
+		h.inflight.Add(1)
+	}
 	b.mu.Unlock()
 
 	// Bump the publish counter even when there are no subscribers
@@ -308,11 +367,16 @@ func (b *Bus) dispatchNow(e hmevent.Event) {
 	key := e.EventKey()
 	for _, h := range handlers {
 		h.calls.Add(1)
-		if h.key != "" && h.key != key {
+		// Skip a handler detached after the snapshot: dead is flipped under
+		// b.mu by the unsubscribe closure, so a handler removed mid-pass
+		// never fires. Also honour the per-handler key filter.
+		if h.dead.Load() || (h.key != "" && h.key != key) {
+			h.inflight.Done()
 			continue
 		}
 		h.matches.Add(1)
 		b.callHandler(h, e)
+		h.inflight.Done()
 	}
 
 	b.mu.Lock()
@@ -368,6 +432,10 @@ func (b *Bus) flushDeferred() {
 	for {
 		b.mu.Lock()
 		if len(b.deferred) == 0 {
+			// Clear the dispatch-owner id before releasing the lock so a later
+			// unsubscribe on this goroutine (now no longer dispatching) does not
+			// mistake itself for a self-unsubscribe and skip the barrier.
+			b.dispatchGID.Store(0)
 			b.dispatch.Unlock()
 			b.mu.Unlock()
 			return
@@ -563,22 +631,32 @@ func (b *Bus) LeakedSubscriptions() []string {
 	return out
 }
 
-// formatHandlerID renders the auto-generated handler id as a short
-// string. We avoid pulling strconv into the bus's import surface for
-// such a small concern.
+// formatHandlerID renders the auto-generated handler id as a short string.
 func formatHandlerID(id uint64) string {
-	if id == 0 {
-		return "h0"
+	return "h" + strconv.FormatUint(id, 10)
+}
+
+// goid returns the current goroutine's numeric id by parsing the runtime
+// stack header ("goroutine <id> [status]:"). It is used only to detect a
+// handler unsubscribing itself on the dispatch goroutine, so the unsubscribe
+// barrier can skip waiting on the current invocation instead of deadlocking.
+// The cost is paid once per dispatch-lock acquisition and on the cold
+// unsubscribe path, never per handler call.
+func goid() int64 {
+	var buf [32]byte
+	n := runtime.Stack(buf[:], false)
+	const prefix = "goroutine "
+	s := buf[:n]
+	if len(s) < len(prefix) {
+		return 0
 	}
-	const digits = "0123456789"
-	var buf [20]byte
-	i := len(buf)
-	for id > 0 {
-		i--
-		buf[i] = digits[id%10]
-		id /= 10
+	s = s[len(prefix):]
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
 	}
-	return "h" + string(buf[i:])
+	id, _ := strconv.ParseInt(string(s[:i]), 10, 64)
+	return id
 }
 
 func insertSorted(list []*registered, r *registered) []*registered {

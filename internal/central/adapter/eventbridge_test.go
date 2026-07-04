@@ -101,8 +101,7 @@ func TestEventBridgeValueChangedFansOut(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
-	// Allow async-free dispatch; the bus is synchronous by default so
-	// this is safe without waiting.
+	ebridge.Flush()
 
 	// MQTT assertion. Filter the orthogonal availability + config side-publishes.
 	// The new bucket-aware topology produces "openccu-loom/<central>/<iface>/<addr>/<ch>/values/<param>".
@@ -166,6 +165,7 @@ func TestVisibilityFilterAppliedAtMQTTOutbound(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
+	ebridge.Flush()
 
 	// Hidden parameter must not be published to MQTT.
 	if got := pub.Published(); len(got) != 0 {
@@ -200,6 +200,7 @@ func TestVisibilityFilterDoesNotBlockVisibleMQTTPublish(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(false),
 	})
+	ebridge.Flush()
 
 	// Visible parameter must reach MQTT (filter availability side-publish).
 	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 {
@@ -261,6 +262,7 @@ func TestPerDataPointVisibilityGateBlocksHiddenDP(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
+	ebridge.Flush()
 
 	if got := pub.Published(); len(got) != 0 {
 		t.Fatalf("DP forced-marked NoCreate must not reach MQTT; got %+v", got)
@@ -309,6 +311,7 @@ func TestPerDataPointVisibilityGateLetsVisibleDPsPass(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
+	ebridge.Flush()
 
 	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 {
 		t.Fatalf("CDPVisible DP must reach MQTT; got %d publishes: %+v", len(got), got)
@@ -340,6 +343,7 @@ func TestVisibilityFilterNilAllowsAllMQTTPublish(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
+	ebridge.Flush()
 
 	// Nil vis → everything is published (filter availability side-publish).
 	if got := nonAvailabilityPublishes(pub.Published()); len(got) != 1 {

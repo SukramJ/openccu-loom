@@ -183,6 +183,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     section. Config-file (YAML) users **and** API tokens are migrated into SQLite
     once on boot (idempotent, preserving each token's exact secret), so no
     operator loses a login on upgrade.
+- **A slow or half-open MQTT broker can no longer stall event delivery.** The
+  internal event bus dispatches handlers serially, and the value-change handler
+  used to publish to MQTT inline — so a QoS1 publish waiting for a PUBACK (up to
+  the broker AckTimeout) froze bus dispatch, and with the broker shared across
+  every CCU that meant no central delivered events until the broker recovered.
+  The north-bound MQTT fan-out for live value changes is now decoupled onto a
+  bounded per-broker worker queue with drop-oldest backpressure (a dropped
+  counter is exposed for monitoring); the bus dispatch goroutine never blocks on
+  the broker again. The boot-time snapshot path stays synchronous.
+- **Event-bus unsubscribe is now a barrier.** The closure returned by
+  `Subscribe` waits for any in-flight dispatch that already captured the handler
+  to finish before returning, and a handler detached mid-dispatch is skipped
+  rather than invoked — so a consumer can free the resources a handler touches
+  immediately after unsubscribing, without racing a late callback (previously a
+  recovered-and-swallowed send-on-closed-channel / nil-map panic).
+- **`EventBridge.Start` is now idempotent** — a second call detaches the previous
+  run's subscriptions and fan-out worker before re-attaching instead of
+  double-subscribing; the subscription list is mutex-guarded.
 - **CCU value loading: skip the init getValue fallback for BidCos-RF.** Passive /
   battery BidCos-RF devices that have not reported since a CCU restart no longer
   have their readable VALUES seeded from the paramset default and marked as a

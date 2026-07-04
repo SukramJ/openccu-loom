@@ -174,6 +174,7 @@ func TestEventBus_StatusPairEvent_OverflowRepublishesUnavailable(t *testing.T) {
 		},
 		NewValue: hmtypes.FloatValue(2.0), // numeric status index for OVERFLOW
 	})
+	eb.Flush()
 
 	body := latestSlotPayload(pub, "ACTUAL_TEMPERATURE")
 	if body == "" {

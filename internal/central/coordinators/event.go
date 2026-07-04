@@ -305,14 +305,20 @@ func (c *EventCoordinator) AddDataPointSubscriptionForKey(dpk hmtypes.DataPointK
 // P2.
 func (c *EventCoordinator) Clear() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	for _, unsub := range c.dpUnsubs {
-		unsub()
-	}
-	c.dpUnsubs = c.dpUnsubs[:0]
+	unsubs := c.dpUnsubs
+	c.dpUnsubs = nil
 	// Reset the timestamp maps so recovered state is not stale.
 	c.lastEventStamp = make(map[string]time.Time)
 	c.lastEventWall = make(map[string]time.Time)
+	c.mu.Unlock()
+
+	// Run the unsubscribe barriers with c.mu released. Each unsubscribe blocks
+	// until an in-flight dispatch of the handler completes, so holding c.mu
+	// across it risks deadlocking against a subscriber callback that reaches
+	// back into the coordinator.
+	for _, unsub := range unsubs {
+		unsub()
+	}
 }
 
 // GetLastEventSeenForInterface returns the wall-clock time of the most recent

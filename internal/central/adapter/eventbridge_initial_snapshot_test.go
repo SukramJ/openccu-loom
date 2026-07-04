@@ -267,6 +267,7 @@ func TestEventBridgePublishesGenericDPConfig(t *testing.T) {
 	}
 	emit(true)
 	emit(false) // identical descriptor → config must NOT republish.
+	eb.Flush()
 
 	// New bucket-aware topology: config topic is "<addr>/<ch>/<bucket>/<param>/config".
 	suffix := "/0001ABCD/1/values/STATE/config"
@@ -323,6 +324,7 @@ func TestEventBridgeRoutesCalculatedDPToCalculatedBucket(t *testing.T) {
 		},
 		NewValue: hmtypes.FloatValue(9.4),
 	})
+	eb.Flush()
 
 	// New bucket-aware topology: slot topic is "<addr>/<ch>/<bucket>/<param>"
 	// (no "/channels/" infix, no "/state" suffix).
@@ -394,6 +396,7 @@ func TestEventBridgePublishesADR0011SlotState(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(true),
 	})
+	eb.Flush()
 
 	// New bucket-aware slot-state topic shape:
 	// `<base>/<central>/<iface>/<address>/<ch>/<bucket>/<param>`
@@ -482,6 +485,7 @@ func TestEventBridgePublishesOnlineAtBootAndDoesNotRepublish(t *testing.T) {
 		},
 		NewValue: hmtypes.BoolValue(false),
 	})
+	eb.Flush()
 
 	// Collect availability publishes in order.
 	got := pub.Published()

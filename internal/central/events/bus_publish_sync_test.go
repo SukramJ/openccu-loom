@@ -13,6 +13,7 @@ package events
 import (
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -21,6 +22,12 @@ import (
 type w10EvtSync struct{ hmevent.Base }
 
 func (w10EvtSync) Type() hmevent.EventType { return "w10.evt.sync" }
+
+// syncEvtOther is a distinct event type used to exercise PublishSync under
+// dispatch contention from a different handler.
+type syncEvtOther struct{ hmevent.Base }
+
+func (syncEvtOther) Type() hmevent.EventType { return "w10.evt.sync.other" }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // TestPublishSyncDispatchesHandlersSynchronously
@@ -105,4 +112,55 @@ func TestPublishSyncCountedInEventStats(t *testing.T) {
 	if got := stats[string(typ)]; got != 2 {
 		t.Errorf("event stats for %q: want 2, got %d", typ, got)
 	}
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TestPublishSyncIsNotGuaranteedSynchronousUnderContention
+// ──────────────────────────────────────────────────────────────────────────────
+
+// TestPublishSyncIsNotGuaranteedSynchronousUnderContention pins the honest
+// contract: PublishSync is a plain alias of Publish, so when another goroutine
+// already holds the dispatch lock, PublishSync buffers the event and returns
+// BEFORE its handler runs — it does not block-drain. A caller must not treat it
+// as a synchronous read-after-publish barrier.
+func TestPublishSyncIsNotGuaranteedSynchronousUnderContention(t *testing.T) {
+	t.Parallel()
+	bus := NewBus()
+
+	inHandler := make(chan struct{})
+	release := make(chan struct{})
+	var otherRan atomic.Bool
+
+	// Handler A occupies the dispatch lock for the duration of the test.
+	unsubA := Subscribe(bus, func(_ w10EvtSync) {
+		close(inHandler)
+		<-release
+	})
+	unsubB := Subscribe(bus, func(_ syncEvtOther) { otherRan.Store(true) })
+	defer unsubB()
+
+	go Publish(bus, w10EvtSync{Base: hmevent.NewBase()}) // acquires dispatch, then blocks
+	<-inHandler
+
+	// The dispatch lock is held by A. PublishSync of a different event must
+	// return promptly (buffered to the deferred queue), not block until B runs.
+	done := make(chan struct{})
+	go func() {
+		PublishSync(bus, syncEvtOther{Base: hmevent.NewBase()})
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("PublishSync blocked while another goroutine held the dispatch lock")
+	}
+
+	// B has not run yet — proving PublishSync is not synchronous under
+	// contention. B is still queued and drains once A releases the lock.
+	if otherRan.Load() {
+		t.Fatal("PublishSync ran the handler synchronously despite dispatch contention")
+	}
+
+	close(release)
+	unsubA() // barrier: A's dispatch (and the deferred drain of B) has completed
 }
