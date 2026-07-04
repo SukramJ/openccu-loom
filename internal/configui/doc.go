@@ -1,20 +1,23 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// Package configui implements the configuration-UI logic so the
-// openccu-loom REST/WebSocket layer can expose form schemas, edit
-// sessions, and parameter groupings to a frontend.
+// Package configui implements the configuration-UI session logic so
+// the openccu-loom REST/WebSocket layer can expose safe MASTER/LINK
+// paramset editing to a frontend.
 //
 // Sub-systems:
 //
-//   - [Schema] family — FormParameter / FormSection / FormSchema
-//     value types that the FormSchema generator emits.
-//   - [DetermineWidget] — chooses an appropriate UI widget for a
-//     parameter (TOGGLE, SLIDER_WITH_INPUT, NUMBER_INPUT, RADIO_GROUP,
-//     DROPDOWN, TEXT_INPUT, BUTTON, READ_ONLY).
-//   - [Session] — server-side edit session with undo/redo and dirty
-//     tracking, the gateway through which the WebSocket handlers
-//     manage configuration changes safely.
+//   - [Session] / [SessionStore] — server-side edit sessions with
+//     undo/redo, dirty tracking and cross-parameter validation
+//     ([CrossValidationConstraint]), the gateway through which the
+//     WebSocket handlers manage configuration changes safely.
+//   - [ExportConfiguration] / [ImportConfiguration] /
+//     [ApplyConfiguration] — channel-configuration export/import.
+//
+// Rendering schemas (labels, groupings, widgets) are NOT built here:
+// the UI schema served to the SPA is assembled by the central
+// adapter's UISchema service from the device registry and the
+// embedded metadata archives.
 //
 // Each component has a stable wire shape (tagged structs); the JSON
 // emitted from this package is consumed unchanged by the SPA

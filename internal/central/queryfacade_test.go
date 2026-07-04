@@ -230,7 +230,7 @@ func TestGetStatePathEntriesEmptyModel(t *testing.T) {
 // empty slice when the query facade is built with nil model and nil hub.
 func TestGetStatePathEntriesNoModel(t *testing.T) {
 	t.Parallel()
-	q := central.NewQueryFacade("test", nil, nil)
+	q := central.NewQueryFacade("test", nil, nil, nil)
 	entries := q.GetStatePathEntries()
 	if len(entries) != 0 {
 		t.Fatalf("expected 0 entries without model, got %d", len(entries))
@@ -241,7 +241,7 @@ func TestGetStatePathEntriesNoModel(t *testing.T) {
 // included in the result as Topic-only entries.
 func TestGetStatePathEntriesWithHubPaths(t *testing.T) {
 	t.Parallel()
-	q := central.NewQueryFacade("test", nil, nil)
+	q := central.NewQueryFacade("test", nil, nil, nil)
 	hub := &fakeHubStatePathProvider{paths: []string{"ccu/test/sysvar/light", "ccu/test/program/turn_on"}}
 	q.SetHubStatePathProvider(hub)
 

@@ -273,7 +273,7 @@ func TestReadableGenericDataPointsNilModel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestQueryFacadeNilHealth(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	if q.HealthSnapshot() != nil {
 		t.Fatal("expected nil snapshot for nil health")
 	}
@@ -283,7 +283,7 @@ func TestQueryFacadeNilHealth(t *testing.T) {
 }
 
 func TestQueryFacadeDevicesNilRegistry(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	if q.Devices() != nil {
 		t.Fatal("expected nil with nil device registry")
 	}
@@ -293,7 +293,7 @@ func TestQueryFacadeDevicesNilRegistry(t *testing.T) {
 }
 
 func TestQueryFacadeGetEventsNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	if q.GetEvents("") != nil {
 		t.Fatal("expected nil with nil model")
 	}
@@ -303,7 +303,7 @@ func TestQueryFacadeGetEventsNilModel(t *testing.T) {
 }
 
 func TestQueryFacadeGetStatePathsNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	paths := q.GetStatePaths(nil)
 	if len(paths) != 0 {
 		t.Fatalf("expected empty, got %v", paths)
@@ -311,7 +311,7 @@ func TestQueryFacadeGetStatePathsNilModel(t *testing.T) {
 }
 
 func TestQueryFacadeGetStatePathEntriesNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	entries := q.GetStatePathEntries()
 	if len(entries) != 0 {
 		t.Fatalf("expected empty entries, got %v", entries)
@@ -319,7 +319,7 @@ func TestQueryFacadeGetStatePathEntriesNilModel(t *testing.T) {
 }
 
 func TestQueryFacadeGetInstallModeNoProvider(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	_, err := q.GetInstallMode("HmIP-RF")
 	if err == nil {
 		t.Fatal("expected error when no install mode provider")
@@ -327,7 +327,7 @@ func TestQueryFacadeGetInstallModeNoProvider(t *testing.T) {
 }
 
 func TestQueryFacadeGetInstallModeByIDNoProvider(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	_, ok := q.GetInstallModeByID("HmIP-RF")
 	if ok {
 		t.Fatal("expected false when no install mode provider")
@@ -408,7 +408,7 @@ func TestResolveDeviceNameUnknownAddressReturnsAddress(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestQueryFacadeGetParametersNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	params := q.GetParameters("VALUES", 0)
 	if params != nil {
 		t.Fatal("expected nil with nil model")
@@ -416,7 +416,7 @@ func TestQueryFacadeGetParametersNilModel(t *testing.T) {
 }
 
 func TestQueryFacadeGetUnIgnoreCandidatesNilModel(t *testing.T) {
-	q := NewQueryFacade("test", nil, nil)
+	q := NewQueryFacade("test", nil, nil, nil)
 	candidates := q.GetUnIgnoreCandidates("MASTER")
 	if candidates != nil {
 		t.Fatal("expected nil with nil model")

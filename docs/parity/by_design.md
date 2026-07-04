@@ -809,6 +809,31 @@ Consequence: a number of WS commands from the reference protocol are **not imple
 
 ---
 
+## Removed Unwired Subsystems (2026-07-04 cleanup)
+
+The full-repo wiring audit removed several subsystems that were built
+(and tested) but never reached production wiring. The knowledge is
+preserved here; the code lives in Git history (branch
+`claude/wiring-audit-cleanup`, pre-removal commits).
+
+| Removed | What it was | Why removed / where the live twin is |
+|---|---|---|
+| `internal/configui` generator half (`generator.go`, `grouping.go`, `labels.go`, `widget.go`, `step.go`, `link_param_metadata.go`, `easymode/` tree) | Port of the aiohomematic-config form-schema pipeline: FormSchema generation, parameter grouping, label resolution, widget classification, easymode use-case pipelines | Superseded by `internal/central/adapter/uischema_adapter.go` (UISchemaAdapter), which assembles the SPA's rendering schema from the device registry + embedded metadata archives and serves both REST and the `paramset.form_schema` WS command. Only the session/export half of configui is live. |
+| `internal/north/matter/cluster/core/power_source.go` | PowerSource (0x002F) cluster server, core-package variant | Duplicate of the production `measurement.PowerSourceServer` (mounted via the measurement cluster factory); schema parity for PowerSource is held by the measurement package's parity tests. |
+| `internal/central/statemachine/client.go` + `connection_state.go` | Second port of the client state machine (diverged transition table) + a connection-stage tracker | The live machine is `internal/client/state_machine.go`, embedded in InterfaceClient (now the single source of lifecycle truth). The orphan's one improvement — STOPPING reachable from every non-terminal state — was adopted into the live table before removal. |
+| `internal/central/events/batch.go` | Event-batching helper on the internal bus | No consumer ever existed; north-bound batching needs are covered by the MQTT coalescer and the WS replay buffer. |
+| `internal/central/adapter/schedule_facade.go` | Facade layer over ScheduleQueryAdapter | REST and WS consume `ScheduleQueryAdapter` directly; the facade added a layer without callers. |
+| `internal/central/registry/central.go` (CentralRegistry) | Name→Central lookup with `Central any` | Superseded by the typed `internal/central.Registry`, which is what every northbound adapter uses. |
+| `NewQueryFacade` 3-arg wrapper | Model-less query-facade constructor | Folded into a single 4-arg `NewQueryFacade`; the model-less variant only served tests. |
+
+Related (removed in the same cleanup, documented in CHANGELOG): the
+publisher-less bus-metric funnel (`Emit*` + metric event types +
+`SubscribeObserver`), six sourceless `hmevent` types, and the
+scheduler-event wrapper that duplicated the job instrumentation in
+`internal/central/jobs.go`.
+
+---
+
 ## Matter / matter.js Divergences
 
 ### BD-Matter-TLVPermissive — responder TLV decode is more permissive than chip

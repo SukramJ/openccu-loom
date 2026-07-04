@@ -22,7 +22,9 @@
 //   - GeneralDiagnostics                  0x0033 — root endpoint only
 //   - DiagnosticLogs                      0x0032 — root endpoint only
 //   - OTASoftwareUpdateRequestor          0x0029 — root endpoint (stub)
-//   - PowerSource                         0x002F — bridged endpoints with battery DP
+//
+// PowerSource (0x002F) for bridged battery endpoints lives in the
+// measurement package (measurement.PowerSourceServer), not here.
 //
 // All revisions match Matter 1.5.1. Updates require synchronised
 // changes in the model-layer revision constants under

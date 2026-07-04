@@ -65,13 +65,7 @@ type QueryFacade struct {
 // request if the dependency graph evolves.
 //
 // loom:reachable:reason="used by REST/WS handler wiring in daemon.go to expose the per-central query surface"
-func NewQueryFacade(name string, devices *registry.DeviceRegistry, h *health.Tracker) *QueryFacade {
-	return &QueryFacade{name: name, devices: devices, health: h}
-}
-
-// newQueryFacadeWithModel constructs a full facade with model registry
-// access needed for channel / DP lookups.
-func newQueryFacadeWithModel(name string, devices *registry.DeviceRegistry, model *registry.ModelRegistry, h *health.Tracker) *QueryFacade {
+func NewQueryFacade(name string, devices *registry.DeviceRegistry, model *registry.ModelRegistry, h *health.Tracker) *QueryFacade {
 	return &QueryFacade{name: name, devices: devices, model: model, health: h}
 }
 

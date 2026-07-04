@@ -6,6 +6,19 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Superseded duplicate subsystems removed.** The unwired
+  aiohomematic-config form-schema port (configui generator/grouping/
+  labels/widget half plus the easymode use-case tree — the live UI
+  schema comes from the central adapter's UISchema service), the
+  duplicate core-package PowerSource cluster (production uses the
+  measurement package's server), the schedule facade layer, the event
+  bus batching helper, the untyped CentralRegistry and the model-less
+  query-facade constructor are gone. Rationale and pointers to the
+  live twins are catalogued in `docs/parity/by_design.md` ("Removed
+  Unwired Subsystems").
+
 ### Fixed
 
 - **Client lifecycle state has a single source of truth.** The interface

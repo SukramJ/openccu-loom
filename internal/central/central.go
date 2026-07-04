@@ -403,7 +403,7 @@ func (u *Unit) DB() *sql.DB { return u.cfg.DB }
 // adapters consume. The facade is built fresh on each call so the
 // caller sees the current set of sub-components.
 func (u *Unit) QueryFacade() *QueryFacade {
-	return newQueryFacadeWithModel(u.cfg.Name, u.DeviceRegistry, u.ModelRegistry, u.Health)
+	return NewQueryFacade(u.cfg.Name, u.DeviceRegistry, u.ModelRegistry, u.Health)
 }
 
 // Available reports whether the central is currently operational. Returns
