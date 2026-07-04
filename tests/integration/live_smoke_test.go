@@ -26,14 +26,13 @@
 // # Scope
 //
 // The suite boots the openccu-loom pipeline against the live CCU over
-// the HmIP-RF interface (XML-RPC, port 2010) and verifies the fix-wave
-// invariants:
+// the HmIP-RF interface (XML-RPC, port 2010) and verifies:
 //
-// - : ProductGroup populated on every device (classification).
-// - : SchemaVersion >= 1 on the majority of devices.
-// - : Lock devices expose ERROR / ERROR_JAMMED data points.
-// - : MQTT Discovery payloads for switch / lock use state_on="true"
-// and value_template with `| lower`.
+//   - ProductGroup populated on every device (classification).
+//   - SchemaVersion >= 1 on the majority of devices.
+//   - Lock devices expose ERROR / ERROR_JAMMED data points.
+//   - MQTT Discovery payloads for switch / lock use state_on="true"
+//     and value_template with `| lower`.
 //
 // No writes are performed; the tests are read-only.
 package integration
@@ -42,7 +41,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -117,7 +115,7 @@ func buildLivePipeline(t *testing.T, env liveCCUEnv) *central.Unit {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logger := slog.New(slog.DiscardHandler)
 	if err := pipeline.IngestFromBackend(ctx, "HmIP-RF", hmenum.InterfaceHmIPRF, backend, nil, nil, logger); err != nil {
 		t.Fatalf("IngestFromBackend: %v", err)
 	}
@@ -198,7 +196,7 @@ func liveXMLRPCToGo(v xmlrpc.Value) any {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestLive_DeviceList — basic ingest sanity (W1 baseline)
+// TestLive_DeviceList — basic ingest sanity
 // ─────────────────────────────────────────────────────────────────────────────
 
 // TestLive_DeviceList verifies that IngestFromBackend against the live CCU
@@ -228,7 +226,7 @@ func TestLive_DeviceList(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestLive_DeviceClassification — : ProductGroup populated
+// TestLive_DeviceClassification — ProductGroup populated
 // ─────────────────────────────────────────────────────────────────────────────
 
 // TestLive_DeviceClassification checks that every device received from the
@@ -256,7 +254,7 @@ func TestLive_DeviceClassification(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestLive_DeviceVersion — : SchemaVersion populated on most devices
+// TestLive_DeviceVersion — SchemaVersion populated on most devices
 // ─────────────────────────────────────────────────────────────────────────────
 
 // TestLive_DeviceVersion asserts that at least 50 % of devices have a
@@ -285,7 +283,7 @@ func TestLive_DeviceVersion(t *testing.T) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestLive_LockERRORDPCreated — : lock error DPs exist
+// TestLive_LockERRORDPCreated — lock error DPs exist
 // ─────────────────────────────────────────────────────────────────────────────
 
 // lockModelPrefixes is the set of device model prefixes that must expose an
@@ -327,7 +325,7 @@ func TestLive_LockERRORDPCreated(t *testing.T) {
 	}
 
 	if len(lockDevices) == 0 {
-		t.Skip("no lock devices (HM-Sec-Key/Win, HmIP-DLD/DLP) in live inventory — skipping W6-A pin")
+		t.Skip("no lock devices (HM-Sec-Key/Win, HmIP-DLD/DLP) in live inventory — skipping lock-DP pin")
 	}
 
 	t.Logf("found %d lock device(s)", len(lockDevices))
@@ -350,15 +348,15 @@ func TestLive_LockERRORDPCreated(t *testing.T) {
 	}
 
 	if len(missingError) > 0 {
-		t.Errorf("W6-A regression: %d lock device(s) missing ERROR/ERROR_JAMMED DP: %v",
+		t.Errorf("%d lock device(s) missing ERROR/ERROR_JAMMED DP: %v",
 			len(missingError), missingError)
 	} else {
-		t.Logf("W6-A OK: all %d lock device(s) have ERROR/ERROR_JAMMED DP", len(lockDevices))
+		t.Logf("all %d lock device(s) have ERROR/ERROR_JAMMED DP", len(lockDevices))
 	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TestLive_DiscoverySnapshot — : switch/lock discovery payload shape
+// TestLive_DiscoverySnapshot — switch/lock discovery payload shape
 // ─────────────────────────────────────────────────────────────────────────────
 
 // liveDiscoveryRecorder captures homeassistant/.../config publishes.
@@ -370,7 +368,7 @@ func newLiveDiscoveryRecorder() *liveDiscoveryRecorder {
 	return &liveDiscoveryRecorder{byTopic: make(map[string][]byte, 512)}
 }
 
-func (r *liveDiscoveryRecorder) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool) error {
+func (r *liveDiscoveryRecorder) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	if !strings.HasPrefix(topic, "homeassistant/") || !strings.HasSuffix(topic, "/config") {
 		return nil
 	}
@@ -402,35 +400,6 @@ func (r *liveDiscoveryRecorder) payloads() map[string][]map[string]any {
 	return out
 }
 
-// liveDriveChannelDPs drives every DP on ch through the bridge so Discovery
-// payloads are captured. It is a simplified version of driveChannelDPs from
-// discovery_snapshot_test.go (integration tag), without the snapshot-schema
-// encoding. It produces the same MQTT publish side-effects.
-func liveDriveChannelDPs(ctx context.Context, bridge *mqtt.Bridge, d *device.Device, ch *device.Channel) {
-	common := mqtt.Event{
-		Central:        "live-ccu",
-		Interface:      string(d.Interface),
-		DeviceAddress:  d.Address,
-		DeviceName:     d.Name,
-		Model:          d.Model,
-		ChannelNo:      ch.Number,
-		ChannelAddress: ch.Address,
-		ChannelType:    ch.Type,
-		Channel:        ch,
-		Device:         d,
-	}
-	for _, dp := range ch.DataPoints() {
-		desc := dp.ParameterData()
-		ev := common
-		ev.Parameter = string(dp.Parameter())
-		ev.Paramset = hmenum.ParamsetKeyValues
-		ev.Writable = desc.IsWritable()
-		ev.ValueList = append([]string(nil), desc.ValueList...)
-		ev.WireType = desc.Type
-		_ = bridge.PublishState(ctx, ev)
-	}
-}
-
 // TestLive_DiscoverySnapshot drives every device through the MQTT bridge with
 // HA-Discovery enabled and verifies that:
 // - Switch entities have state_on = "true" (lowercase, not "True").
@@ -454,7 +423,6 @@ func TestLive_DiscoverySnapshot(t *testing.T) {
 		CentralName:        "live-ccu",
 		RawEnabled:         false,
 		HADiscoveryEnabled: true,
-		PayloadFormat:      mqtt.PayloadFormatJSON,
 	}
 	bridge := mqtt.NewBridge(bridgeCfg, rec)
 
@@ -466,7 +434,7 @@ func TestLive_DiscoverySnapshot(t *testing.T) {
 			if ch == nil {
 				continue
 			}
-			liveDriveChannelDPs(ctx, bridge, d, ch)
+			driveChannelDPs(ctx, bridge, "live-ccu", d, ch)
 		}
 	}
 
@@ -486,12 +454,12 @@ func TestLive_DiscoverySnapshot(t *testing.T) {
 	for i, body := range switchPayloads {
 		if stateOn, ok := body["state_on"].(string); ok {
 			if stateOn != "true" {
-				t.Errorf("W6-B regression: switch[%d] state_on=%q want \"true\"", i, stateOn)
+				t.Errorf("switch[%d] state_on=%q want \"true\"", i, stateOn)
 			}
 		}
 		if vt, ok := body["value_template"].(string); ok {
 			if !strings.Contains(vt, "| lower") {
-				t.Errorf("W6-B regression: switch[%d] value_template=%q missing '| lower'", i, vt)
+				t.Errorf("switch[%d] value_template=%q missing '| lower'", i, vt)
 			}
 		}
 	}
@@ -500,7 +468,7 @@ func TestLive_DiscoverySnapshot(t *testing.T) {
 	for i, body := range lockPayloads {
 		if vt, ok := body["value_template"].(string); ok {
 			if !strings.Contains(vt, "| lower") {
-				t.Errorf("W6-B regression: lock[%d] value_template=%q missing '| lower'", i, vt)
+				t.Errorf("lock[%d] value_template=%q missing '| lower'", i, vt)
 			}
 		}
 	}
