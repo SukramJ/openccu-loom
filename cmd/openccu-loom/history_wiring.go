@@ -31,7 +31,7 @@ func wireHistoryStore(cfg *config.Config, logger *slog.Logger) *sqlite.Measureme
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn := "file:" + filepath.Join(dataDir, "history.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn := sqlite.FileDSN(filepath.Join(dataDir, "history.db"))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	db, err := sqlite.OpenHistory(ctx, dsn)

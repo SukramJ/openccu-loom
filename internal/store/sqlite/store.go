@@ -76,22 +76,23 @@ func Open(ctx context.Context, dsn string) (*sql.DB, error) {
 	return db, nil
 }
 
-// migrateMu serialises [Migrate] calls. The goose v3 legacy API writes
-// two package-level globals that are explicitly documented "not safe for
-// concurrent use": the dialect store (written by [goose.SetDialect]) and
-// the base filesystem (written by [goose.SetBaseFS]). Both are read on
-// every [goose.UpContext] call before the per-database lock inside goose
-// takes effect. A per-store or per-DB mutex would not protect these
-// package-level writes when two goroutines concurrently open distinct
-// databases, so the mutex must be package-level here to cover all callers
-// in this package.
+// migrateMu serialises [Migrate] calls within a single process. The goose v3
+// legacy API writes two package-level globals that are explicitly documented
+// "not safe for concurrent use": the dialect store (written by
+// [goose.SetDialect]) and the base filesystem (written by [goose.SetBaseFS]).
+// Both are read on every [goose.UpContext] call before the per-database lock
+// inside goose takes effect. A per-store or per-DB mutex would not protect
+// these package-level writes when two goroutines concurrently open distinct
+// databases, so the mutex must be package-level here to cover all callers in
+// this package.
 //
-// Production opens a single database at daemon boot, so the lock is
-// uncontended in normal operation. Tests that open databases concurrently
-// (race detector enabled) are the only callers that pay a serialisation
-// cost. The lock is held only across the goose calls; the caller's
-// connection-pool config and the sqlite busy_timeout handle in-database
-// concurrency separately.
+// migrateMu is intra-process only. Cross-process coexistence — two daemons, or
+// hmcli and the daemon, opening the same data directory — is guarded
+// separately by the advisory file lock in [withMigrationLock]; without it both
+// openers could run a pending migration and the second would abort on a
+// duplicate-column error. The lock is held only across the goose calls; the
+// caller's connection-pool config and the sqlite busy_timeout handle
+// in-database concurrency separately.
 var migrateMu sync.Mutex
 
 // Migrate applies every migration. Safe to call against an already-
@@ -99,17 +100,19 @@ var migrateMu sync.Mutex
 func Migrate(ctx context.Context, db *sql.DB) error {
 	migrateMu.Lock()
 	defer migrateMu.Unlock()
-	goose.SetBaseFS(migrationsFS)
-	if err := goose.SetDialect(string(goose.DialectSQLite3)); err != nil {
-		return fmt.Errorf("sqlite: set dialect: %w", err)
-	}
-	if err := goose.UpContext(ctx, db, "migrations"); err != nil {
-		// goose returns a sentinel for "nothing to do" only on some
-		// paths; treat a nil error as success and anything else as
-		// fatal.
-		return fmt.Errorf("sqlite: migrate: %w", err)
-	}
-	return nil
+	return withMigrationLock(ctx, db, func() error {
+		goose.SetBaseFS(migrationsFS)
+		if err := goose.SetDialect(string(goose.DialectSQLite3)); err != nil {
+			return fmt.Errorf("sqlite: set dialect: %w", err)
+		}
+		if err := goose.UpContext(ctx, db, "migrations"); err != nil {
+			// goose returns a sentinel for "nothing to do" only on some
+			// paths; treat a nil error as success and anything else as
+			// fatal.
+			return fmt.Errorf("sqlite: migrate: %w", err)
+		}
+		return nil
+	})
 }
 
 // applyPragmas sets the SPECIFICATION §13.2 recommended pragma set.

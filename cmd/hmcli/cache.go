@@ -286,7 +286,7 @@ func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (d
 	}
 
 	if dbOverride != "" {
-		dsn = "file:" + dbOverride + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+		dsn = sqlite.FileDSN(dbOverride)
 		return dsn, cfg, nil
 	}
 
@@ -294,7 +294,7 @@ func resolveOfflineDSN(kind cachereset.ScopeKind, cfgPath, dbOverride string) (d
 	if dataDir == "" {
 		dataDir = "./var"
 	}
-	dsn = "file:" + filepath.Join(dataDir, "openccu-loom.db") + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(2000)"
+	dsn = sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
 	return dsn, cfg, nil
 }
 
