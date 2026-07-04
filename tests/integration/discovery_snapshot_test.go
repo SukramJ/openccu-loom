@@ -303,7 +303,7 @@ func newDiscoveryRecorder() *discoveryRecorder {
 // for both raw-plane and Discovery topics; raw-plane is suppressed by
 // BridgeConfig.RawEnabled = false in the test, so in practice this
 // only sees Discovery topics — but we filter explicitly for safety.
-func (r *discoveryRecorder) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool) error {
+func (r *discoveryRecorder) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	if !strings.HasPrefix(topic, "homeassistant/") {
 		return nil
 	}

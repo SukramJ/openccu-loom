@@ -234,64 +234,64 @@ func (c *CommandSubscriber) Start(ctx context.Context) error {
 	// the subscriber MUST register the 8-segment shape — without it
 	// HA's `payload_on=true` to a Custom-DP switch arrives at the
 	// broker but never reaches the daemon.
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", QoS1, c.handleDataPoint); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/+/set", QoS1, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint bucket-aware: %w", err)
 	}
 	// Legacy 7-segment shape (no bucket infix) — still emitted by
 	// some hand-built tools and by the legacy alias mirror on the
 	// raw plane. Keep it active so existing automations don't break.
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", QoS1, c.handleDataPoint); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/+/set", QoS1, LegacyHandler(c.handleDataPoint)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe datapoint legacy: %w", err)
 	}
 	// Canonical (ADR 0011): {base}/{central}/hub/sysvars/{name}/set.
-	if err := c.sub.Subscribe(ctx, base+"/+/hub/sysvars/+/set", QoS1, c.handleSysvar); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/sysvars/+/set", QoS1, LegacyHandler(c.handleSysvar)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_sysvar: %w", err)
 	}
 	// Canonical (ADR 0011): {base}/{central}/hub/programs/{id}/trigger.
-	if err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", QoS1, c.handleProgram); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/programs/+/trigger", QoS1, LegacyHandler(c.handleProgram)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_program: %w", err)
 	}
 	// Per-interface install-mode activation button:
 	// {base}/{central}/hub/install_mode/{iface}/set — HA publishes the
 	// press token; the handler activates pairing on the named interface.
-	if err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", QoS1, c.handleInstallMode); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/hub/install_mode/+/set", QoS1, LegacyHandler(c.handleInstallMode)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe hub_install_mode: %w", err)
 	}
 	// {base}/{central}/devices/{device}/cdps/{name}/{operation}/invoke
 	// MQTT wildcards cannot span /; use +/+/+/+/+/+/+/invoke to catch all.
-	if err := c.sub.Subscribe(ctx, base+"/+/devices/+/cdps/+/+/invoke", QoS1, c.handleCDPInvoke); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/devices/+/cdps/+/+/invoke", QoS1, LegacyHandler(c.handleCDPInvoke)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe cdp_invoke: %w", err)
 	}
 	// Canonical ADR-0011 per-service-method form:
 	// {base}/{central}/{interface}/{address}/{channel}/custom/{kind}/set/{method}
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", QoS1, c.handleServiceMethod); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/custom/+/set/+", QoS1, LegacyHandler(c.handleServiceMethod)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe service_method: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/week_profile/set
 	// — the active-profile selector for climate channels (paired with
 	// the discovery built by [DefaultDiscoveryBuilder.BuildWeekProfileDiscovery]).
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/week_profile/set", QoS1, c.handleWeekProfile); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/week_profile/set", QoS1, LegacyHandler(c.handleWeekProfile)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe week_profile: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/combined/{kind}/set
 	// — combined-DP writes (Timer SetDuration etc.). Paired with the
 	// discovery built by [DefaultDiscoveryBuilder.BuildCombinedTimerDiscovery].
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/combined/+/set", QoS1, c.handleCombinedDP); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/combined/+/set", QoS1, LegacyHandler(c.handleCombinedDP)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe combined_dp: %w", err)
 	}
 	// {base}/{central}/{interface}/{address}/{channel}/schedule/{key}/set
 	// — schedule-channel-switch writes (ScheduleChannelSwitch TurnOn/Off).
 	// Paired with discovery from [DefaultDiscoveryBuilder.BuildScheduleSwitchDiscovery].
-	if err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", QoS1, c.handleScheduleSwitch); err != nil {
+	if _, err := c.sub.Subscribe(ctx, base+"/+/+/+/+/schedule/+/set", QoS1, LegacyHandler(c.handleScheduleSwitch)); err != nil {
 		c.incSubscribeFailures()
 		return fmt.Errorf("subscribe schedule_switch: %w", err)
 	}

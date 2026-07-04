@@ -22,7 +22,7 @@ import (
 
 type benchPublisher struct{}
 
-func (benchPublisher) Publish(_ context.Context, _ string, _ []byte, _ mqtt.QoS, _ bool) error {
+func (benchPublisher) Publish(_ context.Context, _ string, _ []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	return nil
 }
 

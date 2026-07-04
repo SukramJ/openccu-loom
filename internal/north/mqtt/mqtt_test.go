@@ -63,7 +63,7 @@ type publishRecord struct {
 	retain  bool
 }
 
-func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool) error {
+func (m *mockPublisher) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	if m.err != nil {
 		return m.err
 	}

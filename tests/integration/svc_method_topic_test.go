@@ -134,19 +134,19 @@ func newInprocessPubSub() *inprocessPubSub {
 	}
 }
 
-func (p *inprocessPubSub) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool) error {
+func (p *inprocessPubSub) Publish(_ context.Context, topic string, payload []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	for filter, cb := range p.subs {
 		if matchesFilter(filter, topic) {
-			cb(topic, payload, false)
+			cb(&mqtt.Message{Topic: topic, Payload: payload, Retain: false})
 			p.dispatched <- struct{}{}
 		}
 	}
 	return nil
 }
 
-func (p *inprocessPubSub) Subscribe(_ context.Context, filter string, _ mqtt.QoS, cb mqtt.MessageHandler) error {
+func (p *inprocessPubSub) Subscribe(_ context.Context, filter string, _ mqtt.QoS, cb mqtt.MessageHandler, _ ...mqtt.SubscribeOption) (mqtt.SubscribeResult, error) {
 	p.subs[filter] = cb
-	return nil
+	return mqtt.SubscribeResult{}, nil
 }
 
 func (p *inprocessPubSub) Unsubscribe(_ context.Context, filter string) error {

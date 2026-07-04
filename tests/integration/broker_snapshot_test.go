@@ -133,10 +133,10 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 
 	// --- subscriber BEFORE publishing so retained messages are not missed --
 	subClient := mqtt.NewTCPClient(mqtt.TCPConfig{
-		BrokerURL:    broker.URL(),
-		ClientID:     "broker-snap-sub",
-		KeepAlive:    30 * time.Second,
-		CleanSession: true,
+		BrokerURL:  broker.URL(),
+		ClientID:   "broker-snap-sub",
+		KeepAlive:  30 * time.Second,
+		CleanStart: true,
 	})
 	if err := subClient.Connect(ctx); err != nil {
 		t.Fatalf("subscriber connect: %v", err)
@@ -148,7 +148,7 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 	ready := make(chan struct{})
 	var readyOnce sync.Once
 
-	if err := subClient.Subscribe(ctx, "homeassistant/#", mqtt.QoS1, func(topic string, payload []byte, _ bool) {
+	if _, err := subClient.Subscribe(ctx, "homeassistant/#", mqtt.QoS1, mqtt.LegacyHandler(func(topic string, payload []byte, _ bool) {
 		if !strings.HasSuffix(topic, "/config") {
 			return
 		}
@@ -160,7 +160,7 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 		}
 		capMu.Unlock()
 		readyOnce.Do(func() { close(ready) })
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("subscribe homeassistant/#: %v", err)
 	}
 	// Allow SUBACK to land before publishing.
@@ -168,10 +168,10 @@ func TestBrokerSnapshotDiff(t *testing.T) {
 
 	// --- publish via bridge -----------------------------------------------
 	pubClient := mqtt.NewTCPClient(mqtt.TCPConfig{
-		BrokerURL:    broker.URL(),
-		ClientID:     "broker-snap-pub",
-		KeepAlive:    30 * time.Second,
-		CleanSession: true,
+		BrokerURL:  broker.URL(),
+		ClientID:   "broker-snap-pub",
+		KeepAlive:  30 * time.Second,
+		CleanStart: true,
 	})
 	if err := pubClient.Connect(ctx); err != nil {
 		t.Fatalf("publisher connect: %v", err)

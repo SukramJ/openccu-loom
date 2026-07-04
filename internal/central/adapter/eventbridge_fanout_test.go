@@ -32,7 +32,7 @@ func newSlowPublisher() *slowPublisher {
 	return &slowPublisher{entered: make(chan struct{}), release: make(chan struct{})}
 }
 
-func (s *slowPublisher) Publish(ctx context.Context, _ string, _ []byte, _ mqtt.QoS, _ bool) error {
+func (s *slowPublisher) Publish(ctx context.Context, _ string, _ []byte, _ mqtt.QoS, _ bool, _ ...mqtt.PublishOption) error {
 	s.once.Do(func() { close(s.entered) })
 	select {
 	case <-s.release:

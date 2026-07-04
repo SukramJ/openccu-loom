@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **MQTT transport upgraded to go-mqtt v1.0.0 (MQTT 5.0 by default).**
+  The bridge now speaks MQTT 5.0 on the wire; brokers without v5
+  support are pinned via the new expert setting
+  `north.mqtt.protocol_version: "3.1.1"` (there is no silent
+  downgrade — a v5 connect against a v3-only broker fails with a
+  named error). Subscribes now block until the broker's SUBACK, so a
+  rejected subscription surfaces as an error instead of being
+  silently logged, and the last-will message is configured through
+  the new `Will` shape.
+
 - **Dead-code guard is enforced, not advisory.** A new CI ratchet
   (`.github/workflows/reachability.yml`) regenerates the reachability
   inventory on every PR and fails when the number of

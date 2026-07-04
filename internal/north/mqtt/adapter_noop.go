@@ -32,7 +32,7 @@ func NewNoopClient() *NoopClient {
 }
 
 // Publish implements [Publisher].
-func (c *NoopClient) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool) error {
+func (c *NoopClient) Publish(_ context.Context, topic string, payload []byte, qos QoS, retain bool, _ ...PublishOption) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.published = append(c.published, Publication{Topic: topic, Payload: append([]byte(nil), payload...), QoS: qos, Retain: retain})
@@ -40,11 +40,11 @@ func (c *NoopClient) Publish(_ context.Context, topic string, payload []byte, qo
 }
 
 // Subscribe implements [Subscriber].
-func (c *NoopClient) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler) error {
+func (c *NoopClient) Subscribe(_ context.Context, filter string, _ QoS, handler MessageHandler, _ ...SubscribeOption) (SubscribeResult, error) {
 	c.mu.Lock()
 	c.subscribers[filter] = handler
 	c.mu.Unlock()
-	return nil
+	return SubscribeResult{}, nil
 }
 
 // Unsubscribe implements [Subscriber].
@@ -85,6 +85,6 @@ func (c *NoopClient) deliverInbound(filter, topic string, payload []byte, retain
 	if !ok || handler == nil {
 		return false
 	}
-	handler(topic, payload, retained)
+	handler(&Message{Topic: topic, Payload: payload, Retain: retained})
 	return true
 }

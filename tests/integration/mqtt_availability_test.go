@@ -74,7 +74,7 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 
 	// --- subscriber BEFORE publishing so retained messages are not missed -
 	subClient := mqtt.NewTCPClient(mqtt.TCPConfig{
-		BrokerURL: mb.URL(), ClientID: "avail-sub", KeepAlive: 30 * time.Second, CleanSession: true,
+		BrokerURL: mb.URL(), ClientID: "avail-sub", KeepAlive: 30 * time.Second, CleanStart: true,
 	})
 	if err := subClient.Connect(ctx); err != nil {
 		t.Fatalf("subscriber connect: %v", err)
@@ -83,20 +83,20 @@ func TestMQTTAvailabilityAgainstRealBroker(t *testing.T) {
 
 	var mu sync.Mutex
 	captured := make(map[string][]byte) // topic → last payload
-	if err := subClient.Subscribe(ctx, "gh/#", mqtt.QoS1, func(topic string, payload []byte, _ bool) {
+	if _, err := subClient.Subscribe(ctx, "gh/#", mqtt.QoS1, mqtt.LegacyHandler(func(topic string, payload []byte, _ bool) {
 		cp := make([]byte, len(payload))
 		copy(cp, payload)
 		mu.Lock()
 		captured[topic] = cp
 		mu.Unlock()
-	}); err != nil {
+	})); err != nil {
 		t.Fatalf("subscribe gh/#: %v", err)
 	}
 	time.Sleep(150 * time.Millisecond) // let SUBACK land
 
 	// --- production bridge + EventBridge boot path ------------------------
 	pubClient := mqtt.NewTCPClient(mqtt.TCPConfig{
-		BrokerURL: mb.URL(), ClientID: "avail-pub", KeepAlive: 30 * time.Second, CleanSession: true,
+		BrokerURL: mb.URL(), ClientID: "avail-pub", KeepAlive: 30 * time.Second, CleanStart: true,
 	})
 	if err := pubClient.Connect(ctx); err != nil {
 		t.Fatalf("publisher connect: %v", err)

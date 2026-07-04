@@ -23,12 +23,24 @@ type (
 	// Client is the combined Publisher+Subscriber role the Bridge uses.
 	Client = gomqtt.Client
 	// MessageHandler is invoked for every message a subscription
-	// receives. The retained flag carries the PUBLISH retain bit so a
+	// receives. Message.Retain carries the PUBLISH retain bit so a
 	// side-effecting handler can drop the retained replay the broker
 	// re-delivers on every (re)connect — without it a stale
 	// `mosquitto_pub -r` command would be re-applied to the CCU on every
 	// daemon start.
 	MessageHandler = gomqtt.MessageHandler
+	// Message is the inbound PUBLISH surface handed to MessageHandler.
+	Message = gomqtt.Message
+	// SubscribeResult carries the SUBACK outcome (granted QoS, reason).
+	SubscribeResult = gomqtt.SubscribeResult
+	// Will is the CONNECT last-will configuration.
+	Will = gomqtt.Will
+	// ProtocolVersion selects the MQTT dialect (zero value = 5.0).
+	ProtocolVersion = gomqtt.ProtocolVersion
+	// PublishOption tunes a single Publish call.
+	PublishOption = gomqtt.PublishOption
+	// SubscribeOption tunes a single Subscribe call.
+	SubscribeOption = gomqtt.SubscribeOption
 	// Connector is the connect/disconnect contract the Lifecycle drives.
 	Connector = gomqtt.Connector
 	// TCPClient is the pure-Go MQTT 3.1.1 client.
@@ -47,6 +59,18 @@ const (
 	QoS1 = gomqtt.QoS1
 	QoS2 = gomqtt.QoS2
 )
+
+// Protocol dialects.
+const (
+	ProtocolV50  = gomqtt.ProtocolV50
+	ProtocolV311 = gomqtt.ProtocolV311
+)
+
+// LegacyHandler adapts the pre-v1 (topic, payload, retained) handler
+// shape to a [MessageHandler].
+func LegacyHandler(fn func(topic string, payload []byte, retained bool)) MessageHandler {
+	return gomqtt.LegacyHandler(fn)
+}
 
 // NewTCPClient constructs a broker-backed MQTT client.
 func NewTCPClient(cfg TCPConfig) *TCPClient { return gomqtt.NewTCPClient(cfg) }
