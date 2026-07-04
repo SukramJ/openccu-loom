@@ -9,6 +9,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -155,3 +157,61 @@ func isMemoryDSN(ctx context.Context, db *sql.DB) bool {
 // ErrMigrationFailed is returned when goose fails mid-way. Callers can
 // use [errors.Is] to detect it.
 var ErrMigrationFailed = errors.New("sqlite: migration failed")
+
+// SchemaVersion returns the highest applied goose migration version recorded
+// in db, i.e. the on-disk schema generation. Zero means no migrations have
+// been recorded yet. Used by the backup tooling to stamp a backup with the
+// schema it was produced against.
+func SchemaVersion(ctx context.Context, db *sql.DB) (int64, error) {
+	var v sql.NullInt64
+	err := db.QueryRowContext(ctx,
+		"SELECT MAX(version_id) FROM goose_db_version WHERE is_applied = 1").Scan(&v)
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: schema version: %w", err)
+	}
+	return v.Int64, nil
+}
+
+// SchemaVersionOfFile opens the SQLite file at path read-only and returns its
+// schema version. It does not run migrations, so an archived database is read
+// exactly as stamped. A path with no goose_db_version table (not a
+// OpenCCU-Loom database) surfaces the query error.
+func SchemaVersionOfFile(ctx context.Context, path string) (int64, error) {
+	db, err := sql.Open(DriverName, path+"?mode=ro")
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: open %q: %w", path, err)
+	}
+	defer func() { _ = db.Close() }()
+	return SchemaVersion(ctx, db)
+}
+
+// MaxKnownMigration returns the highest migration version embedded in this
+// binary. It is the newest schema this binary can operate; a backup stamped
+// with a higher schema version was produced by a newer daemon and cannot be
+// safely restored into this one without an explicit override.
+func MaxKnownMigration() (int64, error) {
+	entries, err := migrationsFS.ReadDir("migrations")
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: read migrations: %w", err)
+	}
+	var maxV int64
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".sql") {
+			continue
+		}
+		// goose filename convention: <version>_<name>.sql.
+		idx := strings.IndexByte(name, '_')
+		if idx <= 0 {
+			continue
+		}
+		v, perr := strconv.ParseInt(name[:idx], 10, 64)
+		if perr != nil {
+			continue
+		}
+		if v > maxV {
+			maxV = v
+		}
+	}
+	return maxV, nil
+}
