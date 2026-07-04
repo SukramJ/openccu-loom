@@ -76,15 +76,10 @@ func seedCentralHealthAndMetrics(reg *central.Registry, cfg *config.Config, audi
 				func() float64 { return float64(scheduler.TotalFailures()) })
 		}
 
-		// Wire a per-central metrics aggregator. The Observer subscribes to
-		// the central's EventBus so metric events published by clients and
-		// coordinators are automatically funnelled into the snapshot.
-		// All providers are wired with the components owned by this central;
-		// nil providers are safe — Aggregator degrades to zero-value sections.
+		// Wire a per-central metrics aggregator. All providers are wired
+		// with the components owned by this central; nil providers are
+		// safe — Aggregator degrades to zero-value sections.
 		obs := metrics.NewObserver()
-		unsubMetrics := metricswiring.SubscribeObserver(u.EventBus, obs)
-		_ = unsubMetrics // lifetime matches the central; detach on shutdown is best-effort
-
 		agg := metrics.NewAggregator(
 			u.Name(), obs,
 			metrics.WithClientProvider(metricswiring.NewClientProvider(u.MetricsClients)),
@@ -92,6 +87,8 @@ func seedCentralHealthAndMetrics(reg *central.Registry, cfg *config.Config, audi
 			metrics.WithRecoveryProvider(metricswiring.NewRecoveryProvider(u.Recovery)),
 			metrics.WithEventBus(metricswiring.NewEventBusProvider(u.EventBus)),
 			metrics.WithHealthTracker(metricswiring.NewHealthProvider(u.Health, u.Recovery)),
+			metrics.WithDeviceProvider(metricswiring.NewDeviceProvider(u.ModelRegistry)),
+			metrics.WithHubManager(metricswiring.NewHubProvider(u.Hub)),
 		)
 		u.SetAggregator(agg)
 	}

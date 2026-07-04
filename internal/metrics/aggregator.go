@@ -198,15 +198,11 @@ func WithClientProvider(p ClientForMetrics) AggregatorOption {
 }
 
 // WithDeviceProvider wires the device metrics provider.
-//
-// loom:reachable:reason="passed to NewAggregator in daemon.go alongside WithClientProvider and other metric options"
 func WithDeviceProvider(p DeviceForMetrics) AggregatorOption {
 	return func(a *Aggregator) { a.deviceProvider = p }
 }
 
 // WithHubManager wires the hub data point manager.
-//
-// loom:reachable:reason="passed to NewAggregator in daemon.go for hub data point metrics aggregation"
 func WithHubManager(p HubDataPointManagerForMetrics) AggregatorOption {
 	return func(a *Aggregator) { a.hubManager = p }
 }

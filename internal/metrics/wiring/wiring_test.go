@@ -10,11 +10,12 @@ import (
 
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
-	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
@@ -24,80 +25,59 @@ func (f *wiringFakeCaller) Call(_ context.Context, _ string, _ []any) (any, erro
 	return nil, f.err
 }
 
-func TestSubscribeObserverFanOutsAllMetricEvents(t *testing.T) {
+// newModelFixture returns a ModelRegistry holding one device with one
+// real channel (plus the implicit root pseudo-channel) and no data
+// points.
+func newModelFixture(t *testing.T) *registry.ModelRegistry {
+	t.Helper()
+	reg := registry.NewModelRegistry()
+	dev := device.New(device.Config{
+		InterfaceID: "HmIP-RF",
+		Interface:   hmenum.InterfaceHmIPRF,
+		Address:     "VCU0000001",
+		Model:       "HmIP-SW-TEST",
+	})
+	dev.AddChannel("VCU0000001:1", 1, "SWITCH", hmenum.ParamsetKeyValues)
+	reg.Put(dev)
+	return reg
+}
+
+func TestDeviceProviderReportsModelCounts(t *testing.T) {
 	t.Parallel()
 
-	bus := events.NewBus()
-	obs := metrics.NewObserver()
-
-	cancel := SubscribeObserver(bus, obs)
-	defer cancel()
-
-	events.Publish(bus, hmevent.LatencyMetricEvent{
-		MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "lat.k"},
-		DurationMs:  10.0,
-	})
-	events.Publish(bus, hmevent.CounterMetricEvent{
-		MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "ctr.k"},
-		Delta:       7,
-	})
-	events.Publish(bus, hmevent.GaugeMetricEvent{
-		MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "gauge.k"},
-		Value:       42,
-	})
-	events.Publish(bus, hmevent.HealthMetricEvent{
-		MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "health.k"},
-		Healthy:     true,
-	})
-
-	if got, ok := obs.GetLatency("lat.k"); !ok || got.Count != 1 {
-		t.Errorf("latency snapshot=%+v ok=%v", got, ok)
+	p := NewDeviceProvider(newModelFixture(t))
+	devs := p.Devices()
+	if len(devs) != 1 {
+		t.Fatalf("Devices() len=%d, want 1", len(devs))
 	}
-	if got := obs.GetCounter("ctr.k"); got != 7 {
-		t.Errorf("counter=%d, want 7", got)
+	d := devs[0]
+	if got := d.ChannelCount(); got < 1 {
+		t.Errorf("ChannelCount()=%d, want >=1", got)
 	}
-	if got := obs.GetGauge("gauge.k"); got != 42 {
-		t.Errorf("gauge=%f, want 42", got)
+	g, cu, ca := d.DataPointCounts()
+	if g != 0 || cu != 0 || ca != 0 {
+		t.Errorf("DataPointCounts()=(%d,%d,%d), want all 0 for an empty device", g, cu, ca)
 	}
-	if got := obs.GetGauge("health.k"); got != 1 {
-		t.Errorf("health gauge=%f, want 1", got)
+	if got := d.DataPointsByCategory(); len(got) != 0 {
+		t.Errorf("DataPointsByCategory()=%v, want empty for a device without attachables", got)
 	}
 }
 
-func TestSubscribeObserverCancelDetachesAll(t *testing.T) {
+func TestDeviceProviderNilRegistryIsSafe(t *testing.T) {
 	t.Parallel()
-
-	bus := events.NewBus()
-	obs := metrics.NewObserver()
-
-	cancel := SubscribeObserver(bus, obs)
-	cancel()
-	cancel() // idempotent.
-
-	events.Publish(bus, hmevent.CounterMetricEvent{
-		MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "post.cancel"},
-		Delta:       5,
-	})
-	if got := obs.GetCounter("post.cancel"); got != 0 {
-		t.Errorf("counter=%d after cancel, want 0", got)
-	}
-	if got := bus.TotalSubscriptionCount(); got != 0 {
-		t.Errorf("subscriptions remaining after cancel: %d", got)
+	if got := NewDeviceProvider(nil).Devices(); got != nil {
+		t.Errorf("nil registry Devices()=%v, want nil", got)
 	}
 }
 
-func TestSubscribeObserverNilBusOrObserverIsNoop(t *testing.T) {
+func TestHubProviderNilCoordinatorIsSafe(t *testing.T) {
 	t.Parallel()
-
-	if got := SubscribeObserver(nil, metrics.NewObserver()); got == nil {
-		t.Fatal("nil bus -> got nil cancel func")
-	} else {
-		got() // no panic
+	p := NewHubProvider(nil)
+	if got := p.ProgramCount(); got != 0 {
+		t.Errorf("ProgramCount()=%d, want 0", got)
 	}
-	if got := SubscribeObserver(events.NewBus(), nil); got == nil {
-		t.Fatal("nil observer -> got nil cancel func")
-	} else {
-		got() // no panic
+	if got := p.SysvarCount(); got != 0 {
+		t.Errorf("SysvarCount()=%d, want 0", got)
 	}
 }
 
@@ -106,13 +86,10 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 
 	const centralName = "ccu-roundtrip"
 
-	// 1. EventBus + observer — fed by SubscribeObserver.
 	bus := events.NewBus()
 	obs := metrics.NewObserver()
-	cancel := SubscribeObserver(bus, obs)
-	defer cancel()
 
-	// 2. Client provider.
+	// Client provider.
 	cp := client.NewMetricsClientProvider(centralName)
 	ic, err := client.New(client.Config{
 		CentralName: centralName, Interface: hmenum.InterfaceHmIPRF,
@@ -127,7 +104,7 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 		_, _ = ic.Call(context.Background(), "ping", nil, hmenum.CommandPriorityLow, "")
 	}
 
-	// 3. Cache provider.
+	// Cache provider.
 	cc := coordinators.NewCacheCoordinator()
 	key := hmtypes.DataPointKey{
 		InterfaceID:    "HmIP-RF",
@@ -139,7 +116,7 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	cc.Set(key, hmtypes.BoolValue(true), "src")
 	_, _ = cc.Get(key) // hit.
 
-	// 4. Recovery provider.
+	// Recovery provider.
 	rc := coordinators.NewConnectionRecoveryCoordinator(centralName, bus)
 	pipeline := []coordinators.Pipeline{
 		{Stage: hmenum.RecoveryStageDetecting, Run: func(_ context.Context) error {
@@ -148,17 +125,9 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	}
 	_ = rc.Run(context.Background(), "iface", pipeline)
 
-	// 5. Health provider.
+	// Health provider.
 	tr := health.NewTracker()
 	tr.Record("hmip-rf", health.Sample{Healthy: true})
-
-	// Bus stats — publish a few telemetry counters.
-	for range 3 {
-		events.Publish(bus, hmevent.CounterMetricEvent{
-			MetricEvent: hmevent.MetricEvent{Base: hmevent.NewBase(), MetricKey: "k"},
-			Delta:       1,
-		})
-	}
 
 	agg := metrics.NewAggregator(
 		centralName, obs,
@@ -167,6 +136,8 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 		metrics.WithRecoveryProvider(NewRecoveryProvider(rc)),
 		metrics.WithEventBus(NewEventBusProvider(bus)),
 		metrics.WithHealthTracker(NewHealthProvider(tr, rc)),
+		metrics.WithDeviceProvider(NewDeviceProvider(newModelFixture(t))),
+		metrics.WithHubManager(NewHubProvider(nil)),
 	)
 
 	snap := agg.Snapshot(context.Background())
@@ -200,10 +171,15 @@ func TestAggregatorRoundtripWithAllProvidersWired(t *testing.T) {
 	if snap.Health.ReconnectAttempts == 0 {
 		t.Error("health.reconnectAttempts=0; want recovery rollup to contribute")
 	}
-	if snap.Events.TotalSubscriptions == 0 {
-		t.Error("events.totalSubscriptions==0; the observer wiring should register subscriptions")
+	// Model section: fed by the device provider wired above.
+	if snap.Model.DevicesTotal != 1 {
+		t.Errorf("model.devices_total=%d, want 1", snap.Model.DevicesTotal)
 	}
-	if got := snap.Events.EventsByType["metric.counter"]; got < 3 {
-		t.Errorf("events.metric.counter=%d, want >=3", got)
+	if snap.Model.ChannelsTotal < 1 {
+		t.Errorf("model.channels_total=%d, want >=1", snap.Model.ChannelsTotal)
+	}
+	if snap.Model.ProgramsTotal != 0 || snap.Model.SysvarsTotal != 0 {
+		t.Errorf("model programs/sysvars=(%d,%d), want (0,0) with a nil hub provider",
+			snap.Model.ProgramsTotal, snap.Model.SysvarsTotal)
 	}
 }

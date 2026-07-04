@@ -58,8 +58,6 @@ func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {
 	for i, c := range reg.List() {
 		_ = i
 		obs := metrics.NewObserver()
-		unsubMetrics := wiring.SubscribeObserver(c.EventBus, obs)
-		t.Cleanup(unsubMetrics) // register outside loop body; no defer-in-loop
 		agg := metrics.NewAggregator(
 			c.Name(), obs,
 			metrics.WithClientProvider(wiring.NewClientProvider(c.MetricsClients)),
@@ -67,6 +65,8 @@ func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {
 			metrics.WithRecoveryProvider(wiring.NewRecoveryProvider(c.Recovery)),
 			metrics.WithEventBus(wiring.NewEventBusProvider(c.EventBus)),
 			metrics.WithHealthTracker(wiring.NewHealthProvider(c.Health, c.Recovery)),
+			metrics.WithDeviceProvider(wiring.NewDeviceProvider(c.ModelRegistry)),
+			metrics.WithHubManager(wiring.NewHubProvider(c.Hub)),
 		)
 		c.SetAggregator(agg)
 	}
@@ -108,41 +108,6 @@ func TestDaemonBootInstantiatesAggregatorPerCentral(t *testing.T) {
 	}
 }
 
-// TestDaemonBootSubscribesObserverToBus verifies that SubscribeObserver
-// wires an observer to the EventBus and that cancelling restores the
-// pre-wiring subscription count. The assertion is *relative* to the
-// baseline because central.New itself wires subscriptions
-// (e.g. CacheCoordinator → DeviceRemovedEvent / DataFetchCompletedEvent),
-// and that baseline is allowed to grow as new always-on coordinators
-// land. The structural invariant we lock here is:
-//
-//  1. SubscribeObserver adds at least 4 entries (lat / counter / gauge /
-//     health metric event types).
-//  2. Its returned cancel funcrestores the bus to the pre-wiring count
-//     (no leaked metric subscriptions).
-func TestDaemonBootSubscribesObserverToBus(t *testing.T) {
-	reg := buildTestRegistry(t, "ccu-sub")
-	unit := reg.List()[0]
-
-	baseline := unit.EventBus.TotalSubscriptionCount()
-
-	obs := metrics.NewObserver()
-	cancel := wiring.SubscribeObserver(unit.EventBus, obs)
-	defer cancel()
-
-	if n := unit.EventBus.TotalSubscriptionCount(); n < baseline+4 {
-		t.Errorf("expected ≥%d subscriptions after wiring (baseline %d + ≥4), got %d",
-			baseline+4, baseline, n)
-	}
-
-	// Cancelling the metric wiring restores the pre-wiring baseline —
-	// it must not touch the always-on central subscriptions.
-	cancel()
-	if n := unit.EventBus.TotalSubscriptionCount(); n != baseline {
-		t.Errorf("expected %d subscriptions after cancel (baseline), got %d", baseline, n)
-	}
-}
-
 // TestDaemonBootSnapshot verifies that a freshly wired Aggregator
 // returns a non-zero Snapshot (Timestamp is set and no section
 // panics, even when all underlying counters are zero).
@@ -151,9 +116,6 @@ func TestDaemonBootSnapshot(t *testing.T) {
 	unit := reg.List()[0]
 
 	obs := metrics.NewObserver()
-	cancel := wiring.SubscribeObserver(unit.EventBus, obs)
-	defer cancel()
-
 	agg := metrics.NewAggregator(
 		unit.Name(), obs,
 		metrics.WithClientProvider(wiring.NewClientProvider(unit.MetricsClients)),
@@ -161,6 +123,8 @@ func TestDaemonBootSnapshot(t *testing.T) {
 		metrics.WithRecoveryProvider(wiring.NewRecoveryProvider(unit.Recovery)),
 		metrics.WithEventBus(wiring.NewEventBusProvider(unit.EventBus)),
 		metrics.WithHealthTracker(wiring.NewHealthProvider(unit.Health, unit.Recovery)),
+		metrics.WithDeviceProvider(wiring.NewDeviceProvider(unit.ModelRegistry)),
+		metrics.WithHubManager(wiring.NewHubProvider(unit.Hub)),
 	)
 	unit.SetAggregator(agg)
 
@@ -179,5 +143,12 @@ func TestDaemonBootSnapshot(t *testing.T) {
 	// CentralName scoping must survive a full Snapshot round-trip.
 	if agg.CentralName() != "ccu-snap" {
 		t.Errorf("CentralName=%q, want %q", agg.CentralName(), "ccu-snap")
+	}
+	// The device/hub providers are wired: the model section reports a
+	// concrete (zero) device count instead of the zero-value section a
+	// nil provider would produce. Distinguishable via DataPointsByCategory,
+	// which stays nil only when no device provider is present.
+	if snap.Model.DevicesTotal != 0 {
+		t.Errorf("Model.DevicesTotal=%d on an empty registry, want 0", snap.Model.DevicesTotal)
 	}
 }

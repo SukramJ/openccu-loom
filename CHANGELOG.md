@@ -8,6 +8,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Metrics: the diagnostics snapshot's model section is populated.** The
+  aggregator's device and hub providers existed but were never passed in
+  `daemon` wiring, so `model.devices_total`, channel/data-point counts and
+  program/sysvar totals silently stayed at zero. Both providers are now
+  wired per central. The parallel bus-event metric funnel
+  (`EmitLatency`/`EmitCounter`/`EmitGauge`/`EmitHealth` plus the four
+  metric event types and `SubscribeObserver`) had subscribers but no
+  publisher anywhere in production and was removed — the direct provider
+  path is the single metrics pipeline.
+
 - **Auth: `north.rest.auth.basic_enabled` / `bearer_enabled` now actually
   gate their schemes.** Both flags existed in the config (and the SPA
   editor) but were never evaluated — Basic auth was active whenever users

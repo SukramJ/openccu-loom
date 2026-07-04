@@ -17,14 +17,13 @@
 package wiring
 
 import (
-	"sync"
-
 	"github.com/SukramJ/openccu-loom/internal/central/coordinators"
 	"github.com/SukramJ/openccu-loom/internal/central/events"
+	"github.com/SukramJ/openccu-loom/internal/central/registry"
 	"github.com/SukramJ/openccu-loom/internal/client"
 	"github.com/SukramJ/openccu-loom/internal/health"
 	"github.com/SukramJ/openccu-loom/internal/metrics"
-	"github.com/SukramJ/openccu-loom/pkg/hmevent"
+	"github.com/SukramJ/openccu-loom/internal/model/device"
 )
 
 // ClientProvider adapts a *client.MetricsClientProvider to the
@@ -268,68 +267,103 @@ func (p *HealthProvider) HealthSummary() metrics.HealthSummary {
 	return out
 }
 
-// SubscribeObserver wires `observer` to receive every metric event
-// published on `bus`. The returned cancel func detaches every
-// subscription; calling it more than once is safe.
-//
-// Subscriptions cover all four metric event types: latency, counter,
-// gauge and health. Health events translate to a 0/1 gauge so the
-// metrics aggregator can surface them without a dedicated map.
-//
-// Multi-CCU safe: pass the bus owned by the [Unit] whose
-// metrics this observer aggregates. Two centrals on the same daemon
-// each call SubscribeObserver(bus_a, observer_a) and
-// SubscribeObserver(bus_b, observer_b) — no shared state.
-func SubscribeObserver(bus *events.Bus, observer *metrics.Observer) func() {
-	if bus == nil || observer == nil {
-		return func() {}
-	}
-	unsubLat := events.Subscribe(bus, func(e hmevent.LatencyMetricEvent) {
-		observer.ObserveLatency(e.MetricKey, e.DurationMs)
-	})
-	unsubCount := events.Subscribe(bus, func(e hmevent.CounterMetricEvent) {
-		observer.ObserveCounter(e.MetricKey, e.Delta)
-	})
-	unsubGauge := events.Subscribe(bus, func(e hmevent.GaugeMetricEvent) {
-		observer.ObserveGauge(e.MetricKey, e.Value)
-	})
-	unsubHealth := events.Subscribe(bus, func(e hmevent.HealthMetricEvent) {
-		// Encode health as a binary gauge so downstream consumers can
-		// query it through the same `GetGauge` surface used for
-		// numeric gauges. 1 = healthy, 0 = unhealthy.
-		var v float64
-		if e.Healthy {
-			v = 1
-		}
-		observer.ObserveGauge(e.MetricKey, v)
-	})
-	once := newOnce()
-	return func() {
-		once.Do(func() {
-			unsubLat()
-			unsubCount()
-			unsubGauge()
-			unsubHealth()
-		})
-	}
+// DeviceProvider adapts a central's ModelRegistry to
+// [metrics.DeviceForMetrics] so the aggregator's model section can
+// report device / channel / data-point counts.
+type DeviceProvider struct {
+	reg *registry.ModelRegistry
 }
 
-// once wraps sync.Once so newOnce can return a *once with a method
-// that closes over the cancel funcs. We use sync.Once to make the
-// returned cancel idempotent under repeated calls.
-type once struct{ inner sync.Once }
+// NewDeviceProvider wraps reg. A nil registry is safe and yields no
+// devices (the aggregator degrades to a zero-value model section).
+func NewDeviceProvider(reg *registry.ModelRegistry) *DeviceProvider {
+	return &DeviceProvider{reg: reg}
+}
 
-func newOnce() *once { return &once{} }
+// Devices implements [metrics.DeviceForMetrics].
+func (p *DeviceProvider) Devices() []metrics.DeviceMetrics {
+	if p == nil || p.reg == nil {
+		return nil
+	}
+	devs := p.reg.List()
+	out := make([]metrics.DeviceMetrics, 0, len(devs))
+	for _, d := range devs {
+		out = append(out, deviceMetrics{d: d})
+	}
+	return out
+}
 
-// Do executes fn at most once across all goroutines.
-func (o *once) Do(fn func()) { o.inner.Do(fn) }
+// deviceMetrics adapts one model device to [metrics.DeviceMetrics].
+type deviceMetrics struct {
+	d *device.Device
+}
+
+// Available implements [metrics.DeviceMetrics].
+func (m deviceMetrics) Available() bool { return m.d.Available() }
+
+// ChannelCount implements [metrics.DeviceMetrics].
+func (m deviceMetrics) ChannelCount() int { return len(m.d.Channels()) }
+
+// DataPointCounts implements [metrics.DeviceMetrics].
+func (m deviceMetrics) DataPointCounts() (generic, custom, calculated int) {
+	return len(m.d.AllDataPoints()), len(m.d.CustomDataPoints()), len(m.d.CalculatedDataPoints())
+}
+
+// DataPointsByCategory implements [metrics.DeviceMetrics]. Categories
+// exist only on attachables satisfying [device.CategorisedDataPoint]
+// (custom / calculated); generic wire-level data points carry no
+// category on the model surface and are covered by DataPointCounts.
+func (m deviceMetrics) DataPointsByCategory() map[string]int {
+	out := make(map[string]int)
+	count := func(dps []device.AttachableDataPoint) {
+		for _, dp := range dps {
+			if cdp, ok := dp.(device.CategorisedDataPoint); ok {
+				out[string(cdp.Category())]++
+			}
+		}
+	}
+	count(m.d.CustomDataPoints())
+	count(m.d.CalculatedDataPoints())
+	return out
+}
+
+// HubProvider adapts the HubCoordinator to
+// [metrics.HubDataPointManagerForMetrics] so the aggregator's model
+// section can report CCU program / system-variable counts.
+type HubProvider struct {
+	hub *coordinators.HubCoordinator
+}
+
+// NewHubProvider wraps h. A nil coordinator is safe and yields zero
+// counts.
+func NewHubProvider(h *coordinators.HubCoordinator) *HubProvider {
+	return &HubProvider{hub: h}
+}
+
+// ProgramCount implements [metrics.HubDataPointManagerForMetrics].
+func (p *HubProvider) ProgramCount() int {
+	if p == nil || p.hub == nil {
+		return 0
+	}
+	return len(p.hub.ProgramDataPoints())
+}
+
+// SysvarCount implements [metrics.HubDataPointManagerForMetrics].
+func (p *HubProvider) SysvarCount() int {
+	if p == nil || p.hub == nil {
+		return 0
+	}
+	return len(p.hub.Sysvars())
+}
 
 // Compile-time assertions: every wiring adapter implements the
 // matching metrics provider protocol.
 var (
-	_ metrics.ClientForMetrics           = (*ClientProvider)(nil)
-	_ metrics.CacheProviderForMetrics    = (*CacheProvider)(nil)
-	_ metrics.RecoveryProviderForMetrics = (*RecoveryProvider)(nil)
-	_ metrics.EventBusForMetrics         = (*EventBusProvider)(nil)
-	_ metrics.HealthTrackerForMetrics    = (*HealthProvider)(nil)
+	_ metrics.ClientForMetrics              = (*ClientProvider)(nil)
+	_ metrics.CacheProviderForMetrics       = (*CacheProvider)(nil)
+	_ metrics.RecoveryProviderForMetrics    = (*RecoveryProvider)(nil)
+	_ metrics.EventBusForMetrics            = (*EventBusProvider)(nil)
+	_ metrics.HealthTrackerForMetrics       = (*HealthProvider)(nil)
+	_ metrics.DeviceForMetrics              = (*DeviceProvider)(nil)
+	_ metrics.HubDataPointManagerForMetrics = (*HubProvider)(nil)
 )
