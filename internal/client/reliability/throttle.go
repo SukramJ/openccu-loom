@@ -241,6 +241,14 @@ func (t *CommandThrottle) acquireFor(ctx context.Context, prio hmenum.CommandPri
 		if w.purged {
 			return ErrSuperseded
 		}
+		if w.closedOut {
+			// Woken by Close(): unlike wakeNextLocked, Close does NOT
+			// reserve an inFlight permit for the drained waiter, so we
+			// must return WITHOUT running the release path below.
+			// Releasing a permit we were never handed would underflow
+			// the permit accounting and steal a live caller's slot.
+			return ErrThrottleClosed
+		}
 		// We hold the inFlight permit reserved by wakeNextLocked, but
 		// we have not yet honoured the rate limits. Re-check the burst
 		// window and inter-command delay so a flood of simultaneous
@@ -476,6 +484,12 @@ func (t *CommandThrottle) Close() {
 	for t.waiters.Len() > 0 {
 		w := mustPopWaiter(&t.waiters)
 		t.suspended++
+		// Flag the drained waiter so its wake path in acquireFor returns
+		// ErrThrottleClosed without calling releaseAdmittedSlot — Close
+		// pops the waiter without reserving an inFlight permit for it, so
+		// the wake path must not release one (mirrors how Purge flags
+		// waiters with purged).
+		w.closedOut = true
 		close(w.ready)
 	}
 	t.mu.Unlock()
@@ -678,6 +692,11 @@ type waiter struct {
 	// goroutine in Acquire reads it after select to surface
 	// [ErrSuperseded].
 	purged bool
+	// closedOut is set to true when Close() drained this queued waiter.
+	// Unlike a wakeNextLocked wake, Close reserves no inFlight permit, so
+	// the wake path reads this after select and returns [ErrThrottleClosed]
+	// without releasing an unheld slot.
+	closedOut bool
 }
 
 type waiterHeap []*waiter

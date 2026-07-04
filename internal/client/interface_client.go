@@ -363,14 +363,22 @@ func (c *InterfaceClient) Call(
 
 	execute := func(ctx context.Context) (any, error) {
 		c.executedRequests.Add(1)
-		if err := throttle.Acquire(ctx, priority); err != nil {
-			return nil, err
-		}
-		defer throttle.Release()
 
 		var result any
+		// Check the circuit BEFORE acquiring a throttle permit: an OPEN
+		// breaker sheds the call immediately (ErrCircuitBreakerOpen) instead
+		// of parking the caller in the throttle queue behind other doomed
+		// work. The permit is then acquired per wire-attempt INSIDE the retry
+		// loop and released (via defer) before each backoff sleep, so a
+		// command that is backing off — e.g. a CCU DUTY_CYCLE fault parking a
+		// write for tens of seconds — does not hold the pool permit hostage
+		// while unrelated reads/writes wait.
 		err := c.cfg.Circuit.Do(ctx, method, func(ctx context.Context) error {
 			return c.cfg.Retrier.Do(ctx, func(ctx context.Context, _ int) error {
+				if err := throttle.Acquire(ctx, priority); err != nil {
+					return err
+				}
+				defer throttle.Release()
 				v, err := c.cfg.Caller.Call(ctx, method, params)
 				if err != nil {
 					return err

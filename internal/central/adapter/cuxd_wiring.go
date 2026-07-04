@@ -110,16 +110,15 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 			Initial: relCfg.CommandRetryInitialDelay,
 		})
 	}
-	if relCfg.CommandThrottleInterCommandDelay > 0 {
-		icCfg.Throttle = reliability.NewThrottle(reliability.ThrottleConfig{
-			InterCommandDelay: relCfg.CommandThrottleInterCommandDelay,
-		})
-	}
+	// Independent per-RPC-class throttle pools (read / write / control) so a
+	// backing-off write does not block reads or liveness pings behind one
+	// permit. See [perClassThrottlePools].
+	icCfg.ReadThrottle, icCfg.WriteThrottle, icCfg.ControlThrottle = perClassThrottlePools(relCfg.CommandThrottleInterCommandDelay)
 	ic, err := client.New(icCfg)
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
-	bcaller := client.NewBackendCaller(ic, 0)
+	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backends.KindCUxD, backends.FactoryInput{
 		BINRPC:    bcaller,
