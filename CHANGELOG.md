@@ -8,6 +8,22 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Reliability observability is actually wired.** The hooks connecting
+  the per-client reliability primitives to the bus and the incident
+  store existed but were never installed: circuit-breaker transitions
+  now publish `CircuitBreakerStateChangedEvent` (the signal connection
+  recovery, health tracking and the diagnostics event tap already
+  subscribed to, but which never fired) and record incidents; ping/pong
+  mismatches and exhausted retry chains are recorded as incidents;
+  coalesced requests surface in the diagnostics event stream. Six event
+  types that had neither publisher nor consumer were removed
+  (`FirmwareStateChanged`, `HealthRecorded`, `DataPointsCreated`,
+  `ConnectionStageChanged` and the internal `AlarmMessage`/
+  `ServiceMessage` duplicates of the hub WS frames), along with a
+  diagnostics subscriber waiting on the never-published
+  `DataPointStatusChangedEvent` and the redundant scheduler event
+  wrapper that duplicated the job instrumentation in `jobs.go`.
+
 - **Metrics: the diagnostics snapshot's model section is populated.** The
   aggregator's device and hub providers existed but were never passed in
   `daemon` wiring, so `model.devices_total`, channel/data-point counts and

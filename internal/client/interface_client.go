@@ -489,6 +489,22 @@ func (c *InterfaceClient) PingPong() *reliability.PingPongTracker {
 	return c.cfg.PingPong
 }
 
+// Circuit exposes the circuit breaker guarding this client's calls so
+// callers can install observability hooks (e.g.
+// [reliability.WireCircuitBus]) after construction. The returned
+// pointer is stable for the lifetime of the client.
+func (c *InterfaceClient) Circuit() *reliability.CircuitBreaker {
+	return c.cfg.Circuit
+}
+
+// Coalescer exposes the request coalescer deduplicating identical
+// concurrent reads so callers can install observability hooks (e.g.
+// [reliability.WireCoalesceBus]) after construction. The returned
+// pointer is stable for the lifetime of the client.
+func (c *InterfaceClient) Coalescer() *reliability.Coalescer {
+	return c.cfg.Coalescer
+}
+
 // SetPublishHook installs the threshold-crossing callback on the
 // underlying PingPongTracker. Mirrors
 // [reliability.PingPongTracker.SetPublishHook] — delegates to keep

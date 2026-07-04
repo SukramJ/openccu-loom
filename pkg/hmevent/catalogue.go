@@ -24,7 +24,6 @@ const (
 	EventTypeClientStateChanged        EventType = "client.state_changed"
 	EventTypeDataPointValueChanged     EventType = "datapoint.value_changed"
 	EventTypeDataPointOptimisticRolled EventType = "datapoint.optimistic_rolled_back"
-	EventTypeDataPointStatusChanged    EventType = "datapoint.status_changed"
 	// EventTypeDataPointSourceChanged fires when a wire data point's
 	// lifecycle source token transitions (cache → live, live → stale,
 	// stale → live). The value itself does not change with the
@@ -40,7 +39,6 @@ const (
 	EventTypeDeviceCreated               EventType = "device.created"
 	EventTypeDeviceRemoved               EventType = "device.removed"
 	EventTypeDeviceTrigger               EventType = "device.trigger"
-	EventTypeFirmwareStateChanged        EventType = "device.firmware_state_changed"
 	EventTypeLinkPeerChanged             EventType = "link.peer_changed"
 	EventTypeConnectionLost              EventType = "connection.lost"
 	EventTypeCircuitBreakerTripped       EventType = "client.circuit_breaker_tripped"
@@ -52,7 +50,6 @@ const (
 	EventTypeRecoveryStageChanged        EventType = "recovery.stage_changed"
 	EventTypeRecoveryCompleted           EventType = "recovery.completed"
 	EventTypeRecoveryFailed              EventType = "recovery.failed"
-	EventTypeHealthRecorded              EventType = "health.recorded"
 	EventTypeProgramExecuted             EventType = "hub.program_executed"
 	EventTypeSysvarChanged               EventType = "hub.sysvar_changed"
 	EventTypeInstallModeChanged          EventType = "hub.install_mode_changed"
@@ -95,9 +92,6 @@ const (
 	// from a CCU callback, before cache write.
 	EventTypeDataPointValueReceived EventType = "datapoint.value_received"
 
-	// EventTypeConnectionStageChanged fires as reconnection stages advance.
-	EventTypeConnectionStageChanged EventType = "connection.stage_changed"
-
 	// EventTypeConnectionHealthChanged fires when a connection transitions
 	// between healthy and unhealthy.
 	EventTypeConnectionHealthChanged EventType = "connection.health_changed"
@@ -109,10 +103,6 @@ const (
 	// EventTypeRecoveryAttempted fires after each per-interface recovery
 	// attempt (success or failure).
 	EventTypeRecoveryAttempted EventType = "recovery.attempted"
-
-	// EventTypeDataPointsCreated fires when new data points are attached to
-	// the domain model after device discovery.
-	EventTypeDataPointsCreated EventType = "datapoint.batch_created"
 
 	// EventTypeWeekProfileChanged fires when a week-profile schedule is
 	// saved or loaded through [weekprofile.Profile.publish]. MQTT subscribers
@@ -275,18 +265,6 @@ func (DataPointOptimisticRolledBackEvent) Type() EventType {
 	return EventTypeDataPointOptimisticRolled
 }
 
-// DataPointStatusChangedEvent fires when the paired *_STATUS parameter
-// of a data point changes.
-type DataPointStatusChangedEvent struct {
-	Base
-	Key  hmtypes.DataPointKey
-	From hmenum.ParameterStatus
-	To   hmenum.ParameterStatus
-}
-
-// Type implements Event.
-func (DataPointStatusChangedEvent) Type() EventType { return EventTypeDataPointStatusChanged }
-
 // ---------- Devices ----------
 
 // DeviceCreatedEvent fires when the registry observes a new device.
@@ -328,18 +306,6 @@ type DeviceTriggerEvent struct {
 
 // Type implements Event.
 func (DeviceTriggerEvent) Type() EventType { return EventTypeDeviceTrigger }
-
-// FirmwareStateChangedEvent fires when a device's firmware state flips.
-type FirmwareStateChangedEvent struct {
-	Base
-	CentralName string
-	Address     string
-	From        hmenum.DeviceFirmwareState
-	To          hmenum.DeviceFirmwareState
-}
-
-// Type implements Event.
-func (FirmwareStateChangedEvent) Type() EventType { return EventTypeFirmwareStateChanged }
 
 // LinkPeerChangedEvent fires when a device's link peers change.
 type LinkPeerChangedEvent struct {
@@ -438,19 +404,6 @@ type RecoveryFailedEvent struct {
 func (RecoveryFailedEvent) Type() EventType { return EventTypeRecoveryFailed }
 
 // ---------- Health / hub ----------
-
-// HealthRecordedEvent fires whenever the health tracker takes a sample.
-type HealthRecordedEvent struct {
-	Base
-	CentralName string
-	InterfaceID string
-	Component   string
-	Healthy     bool
-	Note        string
-}
-
-// Type implements Event.
-func (HealthRecordedEvent) Type() EventType { return EventTypeHealthRecorded }
 
 // ProgramExecutedEvent fires when a CCU program runs.
 type ProgramExecutedEvent struct {
@@ -594,33 +547,6 @@ type IncidentRecordedEvent struct {
 
 // Type implements Event.
 func (IncidentRecordedEvent) Type() EventType { return EventTypeIncidentRecorded }
-
-// AlarmMessageEvent fires when the CCU emits a new alarm.
-type AlarmMessageEvent struct {
-	Base
-	CentralName string
-	ID          string
-	Name        string
-	Description string
-	Severity    hmenum.IncidentSeverity
-}
-
-// Type implements Event.
-func (AlarmMessageEvent) Type() EventType { return EventTypeAlarmMessage }
-
-// ServiceMessageEvent fires when the CCU emits a new service message.
-type ServiceMessageEvent struct {
-	Base
-	CentralName string
-	ID          string
-	Name        string
-	Address     string
-	MessageType hmenum.ServiceMessageType
-	Quittable   bool
-}
-
-// Type implements Event.
-func (ServiceMessageEvent) Type() EventType { return EventTypeServiceMessage }
 
 // ConnectivityChangedEvent fires whenever per-interface reachability
 // flips. The reconciliation job emits one for every interface whose
@@ -784,21 +710,6 @@ type DataPointValueReceivedEvent struct {
 // Type implements Event.
 func (DataPointValueReceivedEvent) Type() EventType { return EventTypeDataPointValueReceived }
 
-// ConnectionStageChangedEvent fires when a reconnection attempt advances from
-// one connection stage to the next. Allows dashboards to show granular
-// progress (TCP available → RPC available → warmup → established).
-type ConnectionStageChangedEvent struct {
-	Base
-	CentralName               string
-	InterfaceID               string
-	Stage                     hmenum.ConnectionStage
-	PreviousStage             hmenum.ConnectionStage
-	DurationInPreviousStageMs float64
-}
-
-// Type implements Event.
-func (ConnectionStageChangedEvent) Type() EventType { return EventTypeConnectionStageChanged }
-
 // ConnectionHealthChangedEvent fires when the health status of a client
 // connection changes (goes healthy or becomes unhealthy).
 type ConnectionHealthChangedEvent struct {
@@ -844,20 +755,6 @@ type RecoveryAttemptedEvent struct {
 
 // Type implements Event.
 func (RecoveryAttemptedEvent) Type() EventType { return EventTypeRecoveryAttempted }
-
-// DataPointsCreatedEvent fires when a batch of data points has been created
-// and attached to the domain model, typically after a device discovery pass
-// or config reload. North-bound adapters use this to register new entities.
-type DataPointsCreatedEvent struct {
-	Base
-	CentralName string
-	InterfaceID string
-	// Count is the number of newly created data points.
-	Count int
-}
-
-// Type implements Event.
-func (DataPointsCreatedEvent) Type() EventType { return EventTypeDataPointsCreated }
 
 // IntegrationIssue represents a structured diagnostic problem that requires
 // operator attention (ping-pong mismatch, fetch failure, incomplete device

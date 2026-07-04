@@ -24,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
-	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
@@ -600,16 +599,13 @@ func wireInterface(
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
 	}
-	// L10/L11: operator-supplied reliability overrides. Both fields
-	// default to openccu-loom's Go-idiomatic values when zero; setting
-	// A positive duration pins behaviour. See
-	// `example.config.yaml` (reliability: section) for the Python
-	// reference values.
-	if relCfg.CommandRetryInitialDelay > 0 {
-		icCfg.Retrier = reliability.NewRetrier(reliability.RetryConfig{
-			Initial: relCfg.CommandRetryInitialDelay,
-		})
-	}
+	// Operator-supplied reliability overrides default to
+	// openccu-loom's Go-idiomatic values when zero; a positive
+	// duration pins behaviour. See `example.config.yaml`
+	// (reliability: section) for the reference values. The retrier is
+	// always built here (not defaulted inside client.New) so its
+	// exhausted-chain incident sink is installed from the start.
+	icCfg.Retrier = newClientRetrier(unit, wireID, relCfg.CommandRetryInitialDelay)
 	// Wire independent per-RPC-class throttle pools (read / write / control)
 	// instead of a single shared pool, so a backing-off write does not block
 	// reads or liveness pings behind one permit. Each pool bounds its waiter
@@ -620,6 +616,7 @@ func wireInterface(
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
+	wireClientReliability(unit, ic, wireID)
 	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backendKind, backends.FactoryInput{

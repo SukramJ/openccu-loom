@@ -317,18 +317,6 @@ func TestBroadcastEvents_HaveEmptyEventKey(t *testing.T) {
 			t.Fatalf("expected empty EventKey for SystemStatusChangedEvent, got %q", got)
 		}
 	})
-	t.Run("DataPointsCreatedEvent", func(t *testing.T) {
-		t.Parallel()
-		e := hmevent.DataPointsCreatedEvent{
-			Base:        hmevent.NewBase(),
-			CentralName: "ccu-main",
-			InterfaceID: "ccu-main-HmIP-RF",
-			Count:       10,
-		}
-		if got := e.EventKey(); got != "" {
-			t.Fatalf("expected empty EventKey for DataPointsCreatedEvent, got %q", got)
-		}
-	})
 }
 
 // ---------------------------------------------------------------------------
