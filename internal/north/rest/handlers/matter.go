@@ -130,7 +130,7 @@ var ErrCommissioningInProgress = errors.New("matter: commissioning window alread
 // the CCU snapshot is in the topology, and Apple's MTREndpointInfo
 // would cache an empty Descriptor.PartsList on EP 0 (mapper bails on
 // `MTREndpointInfo.mm:209-265`). Surfaces as 503 with a Retry-After.
-var ErrBridgeTopologyNotReady = errors.New("matter: bridge topology has no bridged endpoints yet — wait for matter.bridge.initial_load.done")
+var ErrBridgeTopologyNotReady = errors.New("matter: no bridged endpoints yet — either the CCU device load has not finished (retry shortly; the bridge reassembles automatically once devices are loaded) or no devices are enabled for Matter exposure")
 
 // MatterCommissioningWindow opens a Matter commissioning window via
 // the bridge. When publisher is non-nil the handler emits

@@ -6,6 +6,17 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Matter: bridge could not be commissioned after a restart even with devices
+  exposed.** The bridge topology is assembled at daemon start, before the CCU
+  device load finishes, so it was empty of bridged endpoints — and the
+  commissioning window (correctly) refuses to open an empty bridge — until an
+  operator toggled a device exposure to force a rebuild. The bridge now
+  reassembles automatically once each central's initial device load completes
+  (`CentralSouthboundReadyEvent`), so persisted exposures take effect on their
+  own. The 503 error text no longer references a signal that was never emitted.
+
 ### Security
 
 - **Northbound auth hardening from a code-vs-code security audit.** A deep audit
