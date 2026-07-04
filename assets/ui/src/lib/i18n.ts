@@ -1066,8 +1066,6 @@ const EN: Catalog = {
   "channel.snapshot_downloaded": "Snapshot downloaded.",
   "channel.session_lock_other":
     "Another session currently holds the edit lock for this view. Saves may fail until the lock expires.",
-  "channel.lock_lost":
-    "Your edit lock was lost. Re-open the editor to acquire it again before saving.",
   "channel.take_over": "Take over",
   "channel.lock_lost": "Edit lock lost",
   "channel.lock_lost_detail":
@@ -3042,8 +3040,6 @@ const DE: Catalog = {
   "channel.snapshot_downloaded": "Snapshot heruntergeladen.",
   "channel.session_lock_other":
     "Dieser Editor wird gerade von einer anderen Sitzung bearbeitet. Speichern kann scheitern, bis die Sperre abläuft.",
-  "channel.lock_lost":
-    "Die Bearbeitungssperre ist verloren gegangen. Öffnen Sie den Editor erneut, um sie vor dem Speichern wieder zu erhalten.",
   "channel.take_over": "Bearbeitung übernehmen",
   "channel.lock_lost": "Bearbeitungssperre verloren",
   "channel.lock_lost_detail":
