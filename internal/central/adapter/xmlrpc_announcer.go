@@ -10,17 +10,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 )
 
-// StaticCallbackBaseURL returns a func() string that always yields the
-// fixed base URL provided at construction time. It is the backward-compat
-// path used in daemon.go when the callback port does not change between
-// reconnects (fixed-port mode). Dynamic-port mode builds a provider that
-// calls the server's effective-port accessor on every invocation instead.
-//
-// loom:reachable:reason="used in daemon.go WireDeps.CallbackBaseURL assembly for fixed-port mode"
-func StaticCallbackBaseURL(base string) func() string {
-	return func() string { return base }
-}
-
 // xmlrpcAnnouncer speaks the CCU `init(url, interface_id)` method on
 // the southbound XML-RPC endpoint. It is the glue between the daemon's
 // callback server and the backend's [backends.Announcer] contract.

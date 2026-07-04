@@ -136,27 +136,6 @@ func TestReconnectorReadvertisesCallbackURLAfterPortChange(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// TestStaticCallbackBaseURLProvider
-//
-// StaticCallbackBaseURL wraps a fixed string; every call returns the
-// same value. This is the backward-compat path used in daemon.go.
-// ---------------------------------------------------------------------------
-
-func TestStaticCallbackBaseURLProvider(t *testing.T) {
-	t.Parallel()
-
-	const base = "http://192.168.1.20:8120"
-	provider := StaticCallbackBaseURL(base)
-
-	for i := range 5 {
-		got := provider()
-		if got != base {
-			t.Fatalf("call %d: provider returned %q, want %q", i, got, base)
-		}
-	}
-}
-
-// ---------------------------------------------------------------------------
 // TestCallbackURLProviderNilSkipsInit
 //
 // When callbackURLProvider is nil, wireInterface must not call

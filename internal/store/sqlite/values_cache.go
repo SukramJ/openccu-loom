@@ -575,7 +575,7 @@ func (s *ValuesCacheStore) GCDeadRows(
 // build the alive set with this helper so the format stays in sync
 // with the scan comparison.
 //
-// loom:reachable:reason="called by GC callers building the alive-set before invoking GCDeadRows; exported so coordinator code can construct keys without importing internal format"
+// loom:reachable:reason="key encoder paired with GCDeadRows so alive-set construction stays in sync with the scan comparison; the GC job is not production-wired yet — callers are integration tests"
 func AliveKey(centralName, interfaceID, channelAddress, parameterName string) string {
 	return centralName + "|" + interfaceID + "|" + channelAddress + "|" + parameterName
 }

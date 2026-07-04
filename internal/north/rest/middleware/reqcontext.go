@@ -15,8 +15,8 @@ import (
 // ReqContext installs a [reqctx.RequestContext] for every HTTP request after
 // [RequestID] has run. Downstream code (REST handler, domain core, CCU
 // transport) inherits the request id, the operation tag (`METHOD path`), and
-// the start timestamp. The [hmlog.RequestContextFilter] picks these fields up
-// automatically and emits them as structured slog attributes.
+// the start timestamp. The [reqctx.ContextHandler] in the logging chain picks
+// these fields up automatically and emits them as structured slog attributes.
 //
 // CentralName and InterfaceID are intentionally NOT filled here — at the
 // outer middleware position chi has not yet resolved URL parameters, so

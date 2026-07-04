@@ -5,9 +5,9 @@
 
 // whitelist_audit: Iterates all loom:reachable:reason="..." annotations in the
 // repository and classifies each annotated item as either PRODUCTIVE (has at
-// least one production caller outside its own definition file and outside test
-// files) or MASKED (zero production callers — the annotation hides genuine
-// dead code).
+// least one production call site outside test files — cross-file, or in the
+// same file outside the symbol's own declaration) or MASKED (zero production
+// callers — the annotation hides genuine dead code).
 //
 // Output: docs/parity/loom-reachable-audit.md
 //
@@ -202,8 +202,11 @@ func extractWhitelistComment(f *ast.File, fset *token.FileSet, decl ast.Decl) (s
 }
 
 // findProductionCallers runs a word-boundary grep for the identifier across
-// cmd/, internal/, and pkg/, excluding the definition file and all test files.
-// Returns the list of matching file paths (repo-root-relative).
+// cmd/, internal/, and pkg/, excluding the definition file and all test files,
+// then additionally scans the definition file itself for call sites outside
+// the symbol's own declaration (a production function in the same file is a
+// production caller too). Returns the list of matching file paths
+// (repo-root-relative); a same-file hit is marked "(same file)".
 func findProductionCallers(repoRoot string, item annotatedItem) []string {
 	cmd := exec.Command(
 		"grep",
@@ -229,7 +232,48 @@ func findProductionCallers(repoRoot string, item annotatedItem) []string {
 		}
 		callers = append(callers, line)
 	}
+	if hasSameFileProductionCaller(repoRoot, item) {
+		callers = append(callers, item.File+" (same file)")
+	}
 	return callers
+}
+
+// hasSameFileProductionCaller reports whether the definition file itself
+// references the identifier outside the annotated symbol's own declaration.
+// Comment mentions do not count (only real AST identifiers), and test files
+// never count as production call sites.
+func hasSameFileProductionCaller(repoRoot string, item annotatedItem) bool {
+	if strings.HasSuffix(item.File, "_test.go") {
+		return false
+	}
+	path := filepath.Join(repoRoot, item.File)
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	if err != nil {
+		return false
+	}
+	for _, decl := range f.Decls {
+		// Skip the annotated declaration itself — a recursive call or the
+		// defining identifier must not count as an external call site.
+		if fset.Position(decl.Pos()).Line == item.Line {
+			continue
+		}
+		found := false
+		ast.Inspect(decl, func(n ast.Node) bool {
+			if found {
+				return false
+			}
+			if id, ok := n.(*ast.Ident); ok && id.Name == item.Identifier {
+				found = true
+				return false
+			}
+			return true
+		})
+		if found {
+			return true
+		}
+	}
+	return false
 }
 
 // writeReport writes the audit results to a Markdown file.
@@ -259,7 +303,8 @@ func writeReport(path string, results []classifiedItem) error {
 		len(results), len(productive), len(masked))
 
 	fmt.Fprintf(f, "## MASKED — Annotation hides genuine dead code (%d items)\n\n", len(masked))
-	fmt.Fprintf(f, "These items have zero production callers outside their definition file.\n")
+	fmt.Fprintf(f, "These items have zero production call sites (cross-file, or same-file\n")
+	fmt.Fprintf(f, "outside the symbol's own declaration).\n")
 	fmt.Fprintf(f, "**Action required:** either wire them into a real production call site, or\n")
 	fmt.Fprintf(f, "document them as intentional dead code in `docs/parity/by_design.md`.\n")
 	fmt.Fprintf(f, "A `loom:reachable` annotation alone is not sufficient justification.\n\n")

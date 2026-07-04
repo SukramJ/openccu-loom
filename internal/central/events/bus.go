@@ -71,7 +71,7 @@ func WithKey(key string) HandlerOption {
 // shows up in [Bus.HandlerStats]. Useful for diagnostics. When unset
 // the bus falls back to a generated id.
 //
-// loom:reachable:reason="called by north-bound adapters and diagnostic tooling to annotate subscriptions"
+// loom:reachable:reason="sole setter for the handler name surfaced by Bus.HandlerStats; retained as a diagnostics seam — test-only callers today"
 func WithName(name string) HandlerOption {
 	return func(o *handlerOptions) { o.name = name }
 }
@@ -82,7 +82,7 @@ func WithName(name string) HandlerOption {
 // or reloads. Internal coordinators (recovery, health, events) should
 // NOT use this option.
 //
-// loom:reachable:reason="called by MQTT and REST adapters to tag external subscriptions for grouped teardown"
+// loom:reachable:reason="sole setter for the external flag consumed by Bus.ClearExternalSubscriptions during central teardown; no production subscriber passes it yet"
 func WithExternal() HandlerOption {
 	return func(o *handlerOptions) { o.external = true }
 }

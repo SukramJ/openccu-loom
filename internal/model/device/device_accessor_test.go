@@ -274,49 +274,6 @@ func TestSubscribeToFirmwareUpdatedUnsubscribe(t *testing.T) {
 	}
 }
 
-// ─── CheckChannelIsOnlyPrimaryChannel ─────────────────────────────────
-
-// TestCheckChannelIsOnlyPrimaryChannelTrue verifies the function returns true
-// when the channel is the primary channel AND the device has a single channel.
-func TestCheckChannelIsOnlyPrimaryChannelTrue(t *testing.T) {
-	t.Parallel()
-
-	// Single-channel device: currentChannelNo == primaryChannelNo and no multiple channels.
-	if !CheckChannelIsOnlyPrimaryChannel(1, 1, false) {
-		t.Fatal("expected true when primary matches current and device has one channel")
-	}
-}
-
-// TestCheckChannelIsOnlyPrimaryChannelFalseMultipleChannels verifies false
-// when the device has multiple channels (even if primary matches current).
-func TestCheckChannelIsOnlyPrimaryChannelFalseMultipleChannels(t *testing.T) {
-	t.Parallel()
-
-	if CheckChannelIsOnlyPrimaryChannel(1, 1, true) {
-		t.Fatal("expected false when device has multiple channels")
-	}
-}
-
-// TestCheckChannelIsOnlyPrimaryChannelFalseWhenNotPrimary verifies false when
-// currentChannelNo != primaryChannelNo.
-func TestCheckChannelIsOnlyPrimaryChannelFalseWhenNotPrimary(t *testing.T) {
-	t.Parallel()
-
-	if CheckChannelIsOnlyPrimaryChannel(2, 1, false) {
-		t.Fatal("expected false when current channel is not the primary channel")
-	}
-}
-
-// TestCheckChannelIsOnlyPrimaryChannelFalseWhenBothMultiAndNotPrimary verifies
-// that both conditions being false yields false.
-func TestCheckChannelIsOnlyPrimaryChannelFalseWhenBothMultiAndNotPrimary(t *testing.T) {
-	t.Parallel()
-
-	if CheckChannelIsOnlyPrimaryChannel(3, 1, true) {
-		t.Fatal("expected false when both conditions fail")
-	}
-}
-
 // ─── Channel.FullName ─────────────────────────────────────────────────
 
 // TestChannelFullNameWithDeviceName verifies that FullName prepends the device

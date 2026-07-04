@@ -951,23 +951,3 @@ func sortKeys(keys []hmtypes.DataPointKey) {
 		return keys[i].Parameter < keys[j].Parameter
 	})
 }
-
-// ─── CheckChannelIsOnlyPrimaryChannel ─────────────────────────────────
-
-// CheckChannelIsOnlyPrimaryChannel reports whether the given channel is the
-// sole primary channel of its device, i.e. it is the primary channel AND the
-// device does not expose multiple real channels. Custom-DP naming uses this
-// flag to decide whether to suppress the channel-number suffix in generated
-// entity names.
-//
-// Logic: return primary_channel == current_channel_no and device_has_multiple_channels is False.
-//
-// Pass -1 for primaryChannelNo or currentChannelNo to represent "not set".
-//
-// loom:reachable:reason="called by MQTT entity-description builder to determine whether the channel-number suffix can be omitted"
-func CheckChannelIsOnlyPrimaryChannel(currentChannelNo, primaryChannelNo int, deviceHasMultipleChannels bool) bool {
-	if deviceHasMultipleChannels {
-		return false
-	}
-	return primaryChannelNo == currentChannelNo
-}

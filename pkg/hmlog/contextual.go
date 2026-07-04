@@ -4,8 +4,6 @@
 // Package hmlog provides a contextual logger wrapper that enriches
 // [log/slog] output with request-scoped fields.
 //
-// The pattern mirrors
-// RequestContextFilter / get_contextual_logger().
 // A [ContextualLogger] decorates a base *[slog.Logger] with a fixed
 // set of attributes that are prepended to every log record, so that
 // log lines emitted deep in a call-stack automatically carry the

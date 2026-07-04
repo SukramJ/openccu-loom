@@ -69,7 +69,7 @@ type CcuBackend struct {
 // omits the interface-type parameter and cannot dispatch SetInstallMode
 // correctly for HmIP-RF interfaces.
 //
-// loom:reachable:reason="used in tests and legacy call sites that do not need interface-type dispatch; production wiring uses NewCcuBackendForInterface"
+// loom:reachable:reason="test convenience constructor without interface-type dispatch; production wiring always uses NewCcuBackendForInterface"
 func NewCcuBackend(xml, json Caller, ann Announcer) *CcuBackend {
 	return &CcuBackend{xml: xml, json: json, ann: ann}
 }
