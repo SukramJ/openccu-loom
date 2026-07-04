@@ -69,14 +69,8 @@ a `401` is `openccu-loom`.
 
 A successful login (form `POST /login`, or the SPA's
 `POST /api/v1/auth/login`) issues a server-side session and drops the
-session cookie:
-
-```yaml
-north:
-  rest:
-    auth:
-      session_enabled: true
-```
+session cookie. Session resolution is always installed — it is the
+SPA's core login mechanism and has no config gate.
 
 - Cookie name: `openccu_loom_session`, `HttpOnly`, `SameSite=Lax`.
 - Lifetime: 12 hours (server-side TTL; expired sessions are evicted on

@@ -4,9 +4,14 @@
 package main
 
 import (
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
+	"github.com/SukramJ/openccu-loom/internal/auth"
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
 )
 
 func TestFirstRunNeedsSetup(t *testing.T) {
@@ -76,4 +81,76 @@ func TestFirstRunNeedsSetup(t *testing.T) {
 			}
 		})
 	}
+}
+
+// resolveWithHeaders runs one request through the store's restResolve
+// chain and reports whether an Identity was attached to the context.
+func resolveWithHeaders(t *testing.T, st authStores, decorate func(*http.Request)) bool {
+	t.Helper()
+	var got bool
+	h := st.restResolve(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		_, got = auth.IdentityFrom(r.Context())
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/probe", http.NoBody)
+	decorate(req)
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	return got
+}
+
+func TestBuildAuthStores_SchemeGates(t *testing.T) {
+	t.Parallel()
+	off := false
+	base := func() *config.Config {
+		cfg := config.Default()
+		cfg.North.REST.Auth.Users = map[string]string{"admin": "secret"}
+		cfg.North.REST.Auth.Tokens = map[string]string{"tok-1": "admin"}
+		return cfg
+	}
+	logger := slog.New(slog.DiscardHandler)
+
+	t.Run("defaults resolve basic and bearer", func(t *testing.T) {
+		t.Parallel()
+		st := buildAuthStores(base(), ws.NewHub(), nil, logger)
+		if !resolveWithHeaders(t, st, func(r *http.Request) { r.SetBasicAuth("admin", "secret") }) {
+			t.Fatal("basic auth must resolve when the gate is default-on")
+		}
+		if !resolveWithHeaders(t, st, func(r *http.Request) { r.Header.Set("Authorization", "Bearer tok-1") }) {
+			t.Fatal("bearer must resolve when the gate is default-on")
+		}
+	})
+
+	t.Run("basic disabled rejects basic, keeps bearer and sessions", func(t *testing.T) {
+		t.Parallel()
+		cfg := base()
+		cfg.North.REST.Auth.BasicEnabled = &off
+		st := buildAuthStores(cfg, ws.NewHub(), nil, logger)
+		if resolveWithHeaders(t, st, func(r *http.Request) { r.SetBasicAuth("admin", "secret") }) {
+			t.Fatal("basic auth must NOT resolve when disabled")
+		}
+		if !resolveWithHeaders(t, st, func(r *http.Request) { r.Header.Set("Authorization", "Bearer tok-1") }) {
+			t.Fatal("bearer must stay usable when only basic is disabled")
+		}
+		sess, err := st.sessions.Issue(auth.Identity{Subject: "admin", Role: auth.RoleAdmin})
+		if err != nil {
+			t.Fatalf("issue session: %v", err)
+		}
+		if !resolveWithHeaders(t, st, func(r *http.Request) {
+			r.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: sess.ID})
+		}) {
+			t.Fatal("session login must keep working with basic disabled")
+		}
+	})
+
+	t.Run("bearer disabled rejects bearer, keeps basic", func(t *testing.T) {
+		t.Parallel()
+		cfg := base()
+		cfg.North.REST.Auth.BearerEnabled = &off
+		st := buildAuthStores(cfg, ws.NewHub(), nil, logger)
+		if resolveWithHeaders(t, st, func(r *http.Request) { r.Header.Set("Authorization", "Bearer tok-1") }) {
+			t.Fatal("bearer must NOT resolve when disabled")
+		}
+		if !resolveWithHeaders(t, st, func(r *http.Request) { r.SetBasicAuth("admin", "secret") }) {
+			t.Fatal("basic must stay usable when only bearer is disabled")
+		}
+	})
 }

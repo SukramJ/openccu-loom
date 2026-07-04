@@ -70,9 +70,25 @@ func buildAuthStores(cfg *config.Config, wsHub *ws.Hub, sessionPersist auth.Sess
 		users.Put(name, hashed, auth.RoleAdmin)
 	}
 	tokens := auth.NewMemoryTokenStore(buildTokenMap(cfg))
-	wsHub.SetTokenStore(tokens)
 	sessions := buildSessionStore(sessionPersist, logger)
-	authMw := auth.NewMiddleware(users, tokens)
+
+	// The middleware only receives the stores whose scheme gate is on:
+	// a nil store disables that scheme (see [auth.NewMiddleware]). The
+	// concrete stores stay in authStores regardless — the SPA login and
+	// the user/token admin endpoints work on them independently of the
+	// header-based schemes.
+	var mwUsers auth.UserStore
+	if cfg.North.REST.Auth.BasicAuthEnabled() {
+		mwUsers = users
+	}
+	var mwTokens auth.TokenStore
+	if cfg.North.REST.Auth.BearerAuthEnabled() {
+		mwTokens = tokens
+		// WS upgrades authenticate via the same Bearer tokens; the hub
+		// only learns the store when the scheme is on.
+		wsHub.SetTokenStore(tokens)
+	}
+	authMw := auth.NewMiddleware(mwUsers, mwTokens)
 
 	sessionResolve := auth.SessionMiddleware(sessions)
 	restResolve := func(next http.Handler) http.Handler {

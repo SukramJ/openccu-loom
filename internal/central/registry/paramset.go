@@ -25,6 +25,18 @@ type addrParamCacheKey struct {
 	parameter     string
 }
 
+// ParamsetSink mirrors registry mutations into a persistence backend
+// so paramset descriptions survive a daemon restart. Implementations
+// must be safe for concurrent use; they run synchronously on the
+// mutating goroutine, outside the registry lock, and must treat
+// persistence as best-effort.
+type ParamsetSink interface {
+	// PutParamset persists the normalised (and patched) paramset.
+	PutParamset(iface hmenum.Interface, channelAddress string, psKey hmenum.ParamsetKey, ps hmproto.Paramset)
+	// DeleteChannelParamsets removes every persisted paramset of the channel.
+	DeleteChannelParamsets(iface hmenum.Interface, channelAddress string)
+}
+
 // ParamsetRegistry caches paramset descriptions per channel/key.
 //
 // Add() applies normalisation + patches at ingestion time.
@@ -33,6 +45,7 @@ type addrParamCacheKey struct {
 type ParamsetRegistry struct {
 	mu    sync.RWMutex
 	items map[ParamsetKey]hmproto.Paramset
+	sink  ParamsetSink
 
 	// patchRegistry applies device-specific corrections at ingestion.
 	// When nil the old normalise-only path is used (backward compat).
@@ -42,6 +55,16 @@ type ParamsetRegistry struct {
 	// numbers that contain the parameter. Used by IsInMultipleChannels.
 	// secondary index field.
 	addressParamCache map[addrParamCacheKey]map[int]struct{}
+}
+
+// SetSink installs the persistence sink; nil detaches it. Install the
+// sink AFTER hydrating the registry from the persistent store —
+// loading through Put with an attached sink would write every row
+// straight back.
+func (r *ParamsetRegistry) SetSink(s ParamsetSink) {
+	r.mu.Lock()
+	r.sink = s
+	r.mu.Unlock()
 }
 
 // NewParamsetRegistry returns an empty registry without a patch registry.
@@ -86,7 +109,11 @@ func (r *ParamsetRegistry) Add(iface hmenum.Interface, channelAddress string, ps
 	r.mu.Lock()
 	r.items[key] = normalised
 	r.addAddressParamCacheLocked(channelAddress, normalised)
+	sink := r.sink
 	r.mu.Unlock()
+	if sink != nil {
+		sink.PutParamset(iface, channelAddress, psKey, normalised)
+	}
 }
 
 // Put stores ps under the composite key. Paramset is normalised before
@@ -97,7 +124,11 @@ func (r *ParamsetRegistry) Put(iface hmenum.Interface, channelAddress string, ps
 	r.mu.Lock()
 	r.items[ParamsetKey{Interface: iface, ChannelAddress: channelAddress, ParamsetKey: psKey}] = normalised
 	r.addAddressParamCacheLocked(channelAddress, normalised)
+	sink := r.sink
 	r.mu.Unlock()
+	if sink != nil {
+		sink.PutParamset(iface, channelAddress, psKey, normalised)
+	}
 }
 
 // Get returns the paramset and reports whether it exists.
@@ -247,7 +278,6 @@ func (r *ParamsetRegistry) Delete(iface hmenum.Interface, channelAddress string,
 // cleans up the secondary index entries for that channel.
 func (r *ParamsetRegistry) DeleteChannel(iface hmenum.Interface, channelAddress string) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	for k := range r.items {
 		if k.Interface == iface && k.ChannelAddress == channelAddress {
 			delete(r.items, k)
@@ -264,6 +294,11 @@ func (r *ParamsetRegistry) DeleteChannel(iface hmenum.Interface, channelAddress 
 				}
 			}
 		}
+	}
+	sink := r.sink
+	r.mu.Unlock()
+	if sink != nil {
+		sink.DeleteChannelParamsets(iface, channelAddress)
 	}
 }
 

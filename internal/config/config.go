@@ -1041,15 +1041,33 @@ func (m NorthMQTT) EffectiveRetainCleanupWindow() time.Duration {
 }
 
 // AuthConfig collects auth-related switches.
+//
+// BasicEnabled / BearerEnabled are tri-state policy gates for the two
+// header-based schemes: nil defaults to enabled, an explicit false
+// rejects the scheme even when credentials are configured. A scheme is
+// therefore active iff its gate is on AND matching credentials exist.
+// Session-cookie resolution has no gate — it is the SPA's core login
+// mechanism and always installed.
 type AuthConfig struct {
-	BasicEnabled   bool              `yaml:"basic_enabled" json:"basic_enabled" cfg:"basic"`
-	BearerEnabled  bool              `yaml:"bearer_enabled" json:"bearer_enabled" cfg:"basic"`
-	SessionEnabled bool              `yaml:"session_enabled" json:"session_enabled" cfg:"basic"`
-	Users          map[string]string `yaml:"users" json:"users" cfg:"secret"`   // username → bcrypt hash (MVP: plaintext)
-	Tokens         map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
-	OIDC           OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
-	CCU            CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
-	HAIngress      HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+	BasicEnabled  *bool             `yaml:"basic_enabled,omitempty" json:"basic_enabled,omitempty" cfg:"basic"`
+	BearerEnabled *bool             `yaml:"bearer_enabled,omitempty" json:"bearer_enabled,omitempty" cfg:"basic"`
+	Users         map[string]string `yaml:"users" json:"users" cfg:"secret"`   // username → bcrypt hash (MVP: plaintext)
+	Tokens        map[string]string `yaml:"tokens" json:"tokens" cfg:"secret"` // token → role
+	OIDC          OIDCConfig        `yaml:"oidc" json:"oidc" cfg:"basic"`
+	CCU           CCUAuthConfig     `yaml:"ccu" json:"ccu" cfg:"basic"`
+	HAIngress     HAIngressConfig   `yaml:"ha_ingress" json:"ha_ingress" cfg:"basic"`
+}
+
+// BasicAuthEnabled resolves the tri-state Basic gate: nil defaults to
+// enabled so existing configs keep working unchanged.
+func (a AuthConfig) BasicAuthEnabled() bool {
+	return a.BasicEnabled == nil || *a.BasicEnabled
+}
+
+// BearerAuthEnabled resolves the tri-state Bearer gate: nil defaults
+// to enabled so existing configs keep working unchanged.
+func (a AuthConfig) BearerAuthEnabled() bool {
+	return a.BearerEnabled == nil || *a.BearerEnabled
 }
 
 // HAIngressConfig opts into trusting Home Assistant Ingress: when the daemon

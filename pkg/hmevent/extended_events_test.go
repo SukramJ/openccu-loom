@@ -2,9 +2,9 @@
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
 // extended_events_test.go covers additional event types:
-// DataPointValueReceivedEvent, ConnectionStageChangedEvent,
+// DataPointValueReceivedEvent,
 // ConnectionHealthChangedEvent, CacheInvalidatedEvent,
-// RecoveryAttemptedEvent, DataPointsCreatedEvent,
+// RecoveryAttemptedEvent,
 // IntegrationIssue.
 
 package hmevent_test
@@ -28,24 +28,6 @@ func TestDataPointValueReceivedEventType(t *testing.T) {
 	}
 	if e.Type() != hmevent.EventTypeDataPointValueReceived {
 		t.Fatalf("wrong event type: %s", e.Type())
-	}
-}
-
-func TestConnectionStageChangedEventType(t *testing.T) {
-	t.Parallel()
-	e := hmevent.ConnectionStageChangedEvent{
-		Base:                      hmevent.NewBase(),
-		CentralName:               "ccu1",
-		InterfaceID:               "ccu1-HmIP-RF",
-		Stage:                     hmenum.ConnectionStageEstablished,
-		PreviousStage:             hmenum.ConnectionStageWarmup,
-		DurationInPreviousStageMs: 120.5,
-	}
-	if e.Type() != hmevent.EventTypeConnectionStageChanged {
-		t.Fatalf("wrong event type: %s", e.Type())
-	}
-	if e.Stage != hmenum.ConnectionStageEstablished {
-		t.Fatalf("wrong stage: %v", e.Stage)
 	}
 }
 
@@ -96,19 +78,6 @@ func TestRecoveryAttemptedEventType(t *testing.T) {
 	}
 	if e.AttemptNumber != 2 {
 		t.Fatalf("wrong attempt number: %d", e.AttemptNumber)
-	}
-}
-
-func TestDataPointsCreatedEventType(t *testing.T) {
-	t.Parallel()
-	e := hmevent.DataPointsCreatedEvent{
-		Base:        hmevent.NewBase(),
-		CentralName: "ccu1",
-		InterfaceID: "ccu1-HmIP-RF",
-		Count:       42,
-	}
-	if e.Type() != hmevent.EventTypeDataPointsCreated {
-		t.Fatalf("wrong event type: %s", e.Type())
 	}
 }
 

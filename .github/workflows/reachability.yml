@@ -1,0 +1,48 @@
+name: reachability
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: reachability-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26.4"
+
+jobs:
+  # Ratchet: the number of production-unreachable exports must never
+  # grow past the checked-in baseline. New dead exports either get a
+  # loom:reachable:reason annotation (with a TRUE reason), get wired,
+  # or get removed — then `make reachability` refreshes the baseline
+  # in docs/parity/ as part of the same PR.
+  ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Read checked-in baseline
+        run: |
+          BASE=$(python3 -c "import json; print(json.load(open('docs/parity/dead-code-production-only.json'))['summary']['unreachable'])")
+          echo "BASELINE=$BASE" >> "$GITHUB_ENV"
+          echo "baseline: $BASE production-unreachable exports"
+      - name: Regenerate inventory
+        run: go run ./script/reachability
+      - name: Compare against baseline
+        run: |
+          CUR=$(python3 -c "import json; print(json.load(open('docs/parity/dead-code-production-only.json'))['summary']['unreachable'])")
+          echo "current: $CUR production-unreachable exports (baseline: $BASELINE)"
+          if [ "$CUR" -gt "$BASELINE" ]; then
+            echo "::error::Dead-code ratchet violated: $CUR production-unreachable exports exceed the checked-in baseline of $BASELINE."
+            echo "::error::Wire, remove, or annotate (loom:reachable:reason=\"...\" — with a reason that is actually true) the new exports, then refresh the baseline via 'make reachability' and commit docs/parity/dead-code-*."
+            exit 1
+          fi

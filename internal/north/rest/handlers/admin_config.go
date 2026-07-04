@@ -108,6 +108,8 @@ var consumerDefaults = map[string]any{
 	"north.ui.enabled":                true,
 	"north.discovery.mdns.enabled":    true,
 	"north.rest.openapi_validate":     true,
+	"north.rest.auth.basic_enabled":   true,
+	"north.rest.auth.bearer_enabled":  true,
 	"north.rest.auth.oidc.role_claim": "role",
 	// CCU metadata archives — paths the embedded extracts fall back
 	// to when the FS-side bundle is absent.

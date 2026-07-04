@@ -279,3 +279,38 @@ func TestStateMachineSetPublisherNilRemovesHook(t *testing.T) {
 		t.Error("publisher fired after being removed with nil")
 	}
 }
+
+// TestClientStateMachineStoppingReachableFromEveryLiveState locks the
+// shutdown contract: a graceful stop must be a VALID transition from
+// every non-terminal state, so Close/teardown paths never depend on
+// force. STOPPED stays terminal.
+func TestClientStateMachineStoppingReachableFromEveryLiveState(t *testing.T) {
+	t.Parallel()
+	live := []hmenum.ClientState{
+		hmenum.ClientStateCreated,
+		hmenum.ClientStateInitializing,
+		hmenum.ClientStateInitialized,
+		hmenum.ClientStateConnecting,
+		hmenum.ClientStateConnected,
+		hmenum.ClientStateDisconnected,
+		hmenum.ClientStateReconnecting,
+		hmenum.ClientStateFailed,
+	}
+	for _, from := range live {
+		sm := NewClientStateMachine()
+		// Force into the source state, then require a NON-forced stop.
+		if err := sm.TransitionTo(from, "arrange", true, hmenum.FailureReasonNone); err != nil {
+			t.Fatalf("arrange %s: %v", from, err)
+		}
+		if !sm.CanTransitionTo(hmenum.ClientStateStopping) {
+			t.Errorf("STOPPING not reachable from %s", from)
+		}
+	}
+	sm := NewClientStateMachine()
+	if err := sm.TransitionTo(hmenum.ClientStateStopped, "arrange", true, hmenum.FailureReasonNone); err != nil {
+		t.Fatalf("arrange stopped: %v", err)
+	}
+	if sm.CanTransitionTo(hmenum.ClientStateStopping) {
+		t.Error("STOPPED must stay terminal")
+	}
+}

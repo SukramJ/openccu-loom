@@ -37,10 +37,28 @@ func loadTranslations(cfg *config.Config, logger *slog.Logger) *ccudata.Translat
 	return t
 }
 
-// loadEasymode decodes the embedded easymode archive; errors are
-// logged and return an empty struct so the UI schema adapter sees a
-// non-nil value and falls through to "no groups".
-func loadEasymode(logger *slog.Logger) *ccudata.Easymode {
+// loadEasymode decodes the easymode archive: a configured
+// ccu_data.easymode_path wins (same override contract as the
+// translations archive, see ADR 0003), otherwise the embedded archive
+// is used. Errors are logged and return an empty struct so the UI
+// schema adapter sees a non-nil value and falls through to "no groups".
+func loadEasymode(cfg *config.Config, logger *slog.Logger) *ccudata.Easymode {
+	if path := cfg.CCUData.EasymodePath; path != "" {
+		em, err := ccudata.LoadEasymode(path)
+		if err != nil {
+			logger.Warn("ccudata.easymode.load",
+				slog.String("path", path),
+				slog.String("err", err.Error()))
+		} else {
+			logger.Info("ccudata.easymode.ok",
+				slog.String("source", "file"),
+				slog.String("path", path),
+				slog.Int("channels", len(em.ChannelMetadata)),
+				slog.Int("presets", len(em.OptionPresets)),
+				slog.Int("cross_rules", len(em.CrossValidations.Rules)))
+			return em
+		}
+	}
 	em, err := ccudata.LoadEasymodeEmbedded()
 	if err != nil {
 		logger.Warn("ccudata.easymode.embedded", slog.String("err", err.Error()))

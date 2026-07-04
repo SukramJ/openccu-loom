@@ -6,6 +6,98 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Dead-code guard is enforced, not advisory.** A new CI ratchet
+  (`.github/workflows/reachability.yml`) regenerates the reachability
+  inventory on every PR and fails when the number of
+  production-unreachable exports grows past the checked-in baseline.
+  `loom:reachable` whitelist claims are now audited mechanically
+  (`script/reachability/whitelist_audit.go` →
+  `docs/parity/loom-reachable-audit.md`) — several annotations claimed
+  wiring that never existed. The generic SQLite `PersistentCache`
+  wrapper (superseded by the direct descriptor-persistence sinks) was
+  removed, and the historical dead-code classification carries an
+  addendum marking which of its verdicts the cleanup executed or
+  disproved.
+
+- **Superseded duplicate subsystems removed.** The unwired
+  aiohomematic-config form-schema port (configui generator/grouping/
+  labels/widget half plus the easymode use-case tree — the live UI
+  schema comes from the central adapter's UISchema service), the
+  duplicate core-package PowerSource cluster (production uses the
+  measurement package's server), the schedule facade layer, the event
+  bus batching helper, the untyped CentralRegistry and the model-less
+  query-facade constructor are gone. Rationale and pointers to the
+  live twins are catalogued in `docs/parity/by_design.md` ("Removed
+  Unwired Subsystems").
+
+### Fixed
+
+- **Client lifecycle state has a single source of truth.** The interface
+  client kept its state twice: a raw field (feeding `ClientState()`,
+  `WaitForState` and all predicates) plus the validated state machine —
+  and `Close()` only updated the raw field, leaving the machine claiming
+  CONNECTED on a stopped client. The machine is now authoritative: reads
+  and predicates consult it, `Close()`/`SetState` route through it, and
+  its transition listener wakes `WaitForState` waiters (armed before the
+  state check, closing a lost-wakeup window). Graceful STOPPING is now a
+  valid transition from every non-terminal state, so shutdown paths no
+  longer depend on forced transitions. A second, never-instantiated
+  client state machine (with a silently diverged transition table) and
+  the unused ConnectionState tracker were removed.
+
+- **Warm boot: device and paramset descriptions are actually persisted.**
+  `docs/caching.md` promised that descriptors survive a restart, the
+  `devices`/`paramsets` tables and their stores existed, and the boot path
+  (`CheckAndCreateDevicesFromCache`) was written to consume the cache — but
+  the glue between the in-memory registries and SQLite was never wired, so
+  the tables stayed empty forever and every boot re-pulled all descriptions
+  from the CCU. Each central's registries are now hydrated from SQLite
+  before its bring-up starts and mirror every later mutation back
+  (normalised + patched, with content hashes for change detection). The
+  ADR-0042 cache-clear now also clears the persisted descriptor rows —
+  previously its `Devices`/`Paramsets` clearer slots were silently nil.
+
+- **Reliability observability is actually wired.** The hooks connecting
+  the per-client reliability primitives to the bus and the incident
+  store existed but were never installed: circuit-breaker transitions
+  now publish `CircuitBreakerStateChangedEvent` (the signal connection
+  recovery, health tracking and the diagnostics event tap already
+  subscribed to, but which never fired) and record incidents; ping/pong
+  mismatches and exhausted retry chains are recorded as incidents;
+  coalesced requests surface in the diagnostics event stream. Six event
+  types that had neither publisher nor consumer were removed
+  (`FirmwareStateChanged`, `HealthRecorded`, `DataPointsCreated`,
+  `ConnectionStageChanged` and the internal `AlarmMessage`/
+  `ServiceMessage` duplicates of the hub WS frames), along with a
+  diagnostics subscriber waiting on the never-published
+  `DataPointStatusChangedEvent` and the redundant scheduler event
+  wrapper that duplicated the job instrumentation in `jobs.go`.
+
+- **Metrics: the diagnostics snapshot's model section is populated.** The
+  aggregator's device and hub providers existed but were never passed in
+  `daemon` wiring, so `model.devices_total`, channel/data-point counts and
+  program/sysvar totals silently stayed at zero. Both providers are now
+  wired per central. The parallel bus-event metric funnel
+  (`EmitLatency`/`EmitCounter`/`EmitGauge`/`EmitHealth` plus the four
+  metric event types and `SubscribeObserver`) had subscribers but no
+  publisher anywhere in production and was removed — the direct provider
+  path is the single metrics pipeline.
+
+- **Auth: `north.rest.auth.basic_enabled` / `bearer_enabled` now actually
+  gate their schemes.** Both flags existed in the config (and the SPA
+  editor) but were never evaluated — Basic auth was active whenever users
+  were configured, Bearer whenever tokens existed. They are now tri-state
+  gates (omit → enabled, explicit `false` rejects the scheme even with
+  credentials configured), so what the config claims is what the daemon
+  does. The never-evaluated `session_enabled` flag was removed: session
+  cookies are the SPA's core login mechanism and are always on.
+- **CCU data: `ccu_data.easymode_path` override is honored.** The
+  documented file override (ADR 0003) was silently ignored — the easymode
+  archive always loaded from the embedded bundle. It now follows the same
+  file-first/embedded-fallback contract as `translations_path`.
+
 ## [0.25.0] — 2026-07-04
 
 ### Fixed

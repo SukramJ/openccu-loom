@@ -584,6 +584,90 @@ func TestParamsetStoreSizeAndHasInterfaceID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ParamsetStore.ListByCentral
+// ---------------------------------------------------------------------------
+
+// TestParamsetStoreListByCentral verifies that ListByCentral scopes rows to
+// the requested central, returns them ordered by interface_id, then
+// channel_address, then paramset_key, and skips rows whose schema_version
+// has fallen behind [ParamsetCacheSchemaVersion] (the boot-time hydration
+// path must never resurrect a stale cache entry).
+func TestParamsetStoreListByCentral(t *testing.T) {
+	db := openTestDB(t, "list_by_central.db")
+	s := NewParamsetStore(db)
+	ctx := context.Background()
+
+	upsert := func(centralName, iface, chAddr string, psKey hmenum.ParamsetKey) {
+		t.Helper()
+		if err := s.Upsert(ctx, ParamsetRecord{
+			CentralName:    centralName,
+			InterfaceID:    iface,
+			ChannelAddress: chAddr,
+			ParamsetKey:    psKey,
+			Hash:           "h-" + centralName + "-" + iface + "-" + chAddr + "-" + string(psKey),
+			Paramset:       hmproto.Paramset{"X": {Type: hmenum.ParameterTypeBool}},
+		}); err != nil {
+			t.Fatalf("upsert %s/%s/%s/%s: %v", centralName, iface, chAddr, psKey, err)
+		}
+	}
+
+	// Two interfaces for the central under test.
+	upsert("ccu1", "HmIP-RF", "AAA:1", hmenum.ParamsetKeyValues)
+	upsert("ccu1", "HmIP-RF", "AAA:1", hmenum.ParamsetKeyMaster)
+	upsert("ccu1", "BidCos-RF", "BBB:1", hmenum.ParamsetKeyValues)
+	// A foreign central — must never leak into ccu1's result.
+	upsert("ccu2", "HmIP-RF", "ZZZ:1", hmenum.ParamsetKeyValues)
+
+	recs, err := s.ListByCentral(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("ListByCentral: %v", err)
+	}
+	if len(recs) != 3 {
+		t.Fatalf("len=%d want 3, got %+v", len(recs), recs)
+	}
+	for _, r := range recs {
+		if r.CentralName != "ccu1" {
+			t.Fatalf("foreign central row leaked into ListByCentral: %+v", r)
+		}
+	}
+	// Deterministic order: interface_id ("BidCos-RF" < "HmIP-RF"), then
+	// channel_address, then paramset_key ("MASTER" < "VALUES").
+	if recs[0].InterfaceID != "BidCos-RF" || recs[0].ChannelAddress != "BBB:1" {
+		t.Errorf("recs[0]=%+v want BidCos-RF/BBB:1 first", recs[0])
+	}
+	if recs[1].InterfaceID != "HmIP-RF" || recs[1].ParamsetKey != hmenum.ParamsetKeyMaster {
+		t.Errorf("recs[1]=%+v want HmIP-RF/MASTER (MASTER sorts before VALUES)", recs[1])
+	}
+	if recs[2].InterfaceID != "HmIP-RF" || recs[2].ParamsetKey != hmenum.ParamsetKeyValues {
+		t.Errorf("recs[2]=%+v want HmIP-RF/VALUES last", recs[2])
+	}
+
+	// Downgrade one row's schema_version directly, bypassing Upsert (which
+	// always writes the current version) to simulate a stale on-disk row
+	// left behind by an older binary.
+	if _, err := db.ExecContext(
+		ctx,
+		`UPDATE paramsets SET schema_version = 0 WHERE central_name = 'ccu1' AND channel_address = 'AAA:1' AND paramset_key = ?`,
+		string(hmenum.ParamsetKeyValues),
+	); err != nil {
+		t.Fatalf("downgrade schema_version: %v", err)
+	}
+
+	recs2, err := s.ListByCentral(ctx, "ccu1")
+	if err != nil {
+		t.Fatalf("ListByCentral after downgrade: %v", err)
+	}
+	if len(recs2) != 2 {
+		t.Fatalf("len=%d after downgrade, want 2, got %+v", len(recs2), recs2)
+	}
+	for _, r := range recs2 {
+		if r.ChannelAddress == "AAA:1" && r.ParamsetKey == hmenum.ParamsetKeyValues {
+			t.Fatalf("downgraded row must be excluded from ListByCentral, got %+v", r)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
 // ParamsetStore.ClearForInterface
 // ---------------------------------------------------------------------------
 

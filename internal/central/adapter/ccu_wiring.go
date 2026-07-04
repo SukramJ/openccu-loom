@@ -24,7 +24,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
-	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/xmlrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/i18n"
@@ -143,6 +142,13 @@ type WireDeps struct {
 	// central by serial regardless of its host. Best-effort: errors are the
 	// callee's concern and must not fail the bring-up.
 	PersistSerial func(ctx context.Context, centralName, serial string)
+
+	// Descriptors, when populated, enables the persistent
+	// device-description + paramset-description caches: each central's
+	// registries are hydrated from SQLite before its bring-up starts
+	// (see [WireDescriptorPersistence]) and mirror every later mutation
+	// back. The zero value disables the feature.
+	Descriptors DescriptorStores
 }
 
 // WireCentrals performs the full southbound bootstrap: per central it
@@ -192,6 +198,17 @@ func WireCentrals(
 		if !ok {
 			logger.Warn("wire.central.not_registered", slog.String("central", cc.Name))
 			continue
+		}
+		// Hydrate the descriptor registries from SQLite and attach the
+		// persistence sinks BEFORE the gated bring-up starts, so
+		// CheckAndCreateDevicesFromCache sees the cached descriptions
+		// and the live pull's registry writes are mirrored to disk.
+		if deps.Descriptors.enabled() {
+			devN, psN := WireDescriptorPersistence(ctx, unit, deps.Descriptors, logger)
+			logger.Info("wire.descriptors.hydrated",
+				slog.String("central", cc.Name),
+				slog.Int("devices", devN),
+				slog.Int("paramsets", psN))
 		}
 		//nolint:contextcheck // buildAndStart→start runs the gated bring-up on the handle's teardown-bounded parent ctx, not the short-lived wiring ctx
 		mgr.add(mgr.buildAndStart(cc, unit))
@@ -600,16 +617,13 @@ func wireInterface(
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
 	}
-	// L10/L11: operator-supplied reliability overrides. Both fields
-	// default to openccu-loom's Go-idiomatic values when zero; setting
-	// A positive duration pins behaviour. See
-	// `example.config.yaml` (reliability: section) for the Python
-	// reference values.
-	if relCfg.CommandRetryInitialDelay > 0 {
-		icCfg.Retrier = reliability.NewRetrier(reliability.RetryConfig{
-			Initial: relCfg.CommandRetryInitialDelay,
-		})
-	}
+	// Operator-supplied reliability overrides default to
+	// openccu-loom's Go-idiomatic values when zero; a positive
+	// duration pins behaviour. See `example.config.yaml`
+	// (reliability: section) for the reference values. The retrier is
+	// always built here (not defaulted inside client.New) so its
+	// exhausted-chain incident sink is installed from the start.
+	icCfg.Retrier = newClientRetrier(unit, wireID, relCfg.CommandRetryInitialDelay)
 	// Wire independent per-RPC-class throttle pools (read / write / control)
 	// instead of a single shared pool, so a backing-off write does not block
 	// reads or liveness pings behind one permit. Each pool bounds its waiter
@@ -620,6 +634,7 @@ func wireInterface(
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
+	wireClientReliability(unit, ic, wireID)
 	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backendKind, backends.FactoryInput{

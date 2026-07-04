@@ -16,7 +16,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
 	"github.com/SukramJ/openccu-loom/internal/client/observer"
 	"github.com/SukramJ/openccu-loom/internal/client/rega"
-	"github.com/SukramJ/openccu-loom/internal/client/reliability"
 	"github.com/SukramJ/openccu-loom/internal/client/transport/binrpc"
 	"github.com/SukramJ/openccu-loom/internal/config"
 	"github.com/SukramJ/openccu-loom/internal/store/session"
@@ -105,11 +104,10 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 		Logger:              logger.With(slog.String("interface", wireID)),
 		SessionRecorderHook: sessionHook,
 	}
-	if relCfg.CommandRetryInitialDelay > 0 {
-		icCfg.Retrier = reliability.NewRetrier(reliability.RetryConfig{
-			Initial: relCfg.CommandRetryInitialDelay,
-		})
-	}
+	// The retrier is always built here (not defaulted inside
+	// client.New) so its exhausted-chain incident sink is installed
+	// from the start.
+	icCfg.Retrier = newClientRetrier(unit, wireID, relCfg.CommandRetryInitialDelay) //nolint:contextcheck // incident hooks are fire-and-forget and outlive the wiring ctx by design
 	// Independent per-RPC-class throttle pools (read / write / control) so a
 	// backing-off write does not block reads or liveness pings behind one
 	// permit. See [perClassThrottlePools].
@@ -118,6 +116,7 @@ func wireCUxDInterface( //nolint:funlen // composition/wiring: long sequential s
 	if err != nil {
 		return nil, fmt.Errorf("interface client: %w", err)
 	}
+	wireClientReliability(unit, ic, wireID) //nolint:contextcheck // incident hooks are fire-and-forget and outlive the wiring ctx by design
 	bcaller := client.NewBackendCaller(ic, hmenum.CommandPriorityLow)
 
 	backend, err := backends.FactoryWithKind(iface, backends.KindCUxD, backends.FactoryInput{

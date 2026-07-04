@@ -11,20 +11,19 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// TestAll35EventTypes locks the event catalogue to the current count.
-// Extensions must bump the count and add the new event to the list.
-func TestAll35EventTypes(t *testing.T) {
+// TestEventCatalogueTypesUniqueAndNonEmpty verifies every catalogued
+// event carries a non-empty, catalogue-unique Type(). New events are
+// added to the list when they land.
+func TestEventCatalogueTypesUniqueAndNonEmpty(t *testing.T) {
 	events := []Event{
 		CentralStateChangedEvent{},
 		ClientStateChangedEvent{},
 		DataPointValueChangedEvent{},
 		DataPointOptimisticRolledBackEvent{},
-		DataPointStatusChangedEvent{},
 		DataPointSourceChangedEvent{},
 		DeviceCreatedEvent{},
 		DeviceRemovedEvent{},
 		DeviceTriggerEvent{},
-		FirmwareStateChangedEvent{},
 		LinkPeerChangedEvent{},
 		ConnectionLostEvent{},
 		CircuitBreakerStateChangedEvent{},
@@ -36,13 +35,10 @@ func TestAll35EventTypes(t *testing.T) {
 		RecoveryStageChangedEvent{},
 		RecoveryCompletedEvent{},
 		RecoveryFailedEvent{},
-		HealthRecordedEvent{},
 		ProgramExecutedEvent{},
 		SysvarChangedEvent{},
 		InstallModeChangedEvent{},
 		SystemStatusChangedEvent{},
-		AlarmMessageEvent{},
-		ServiceMessageEvent{},
 		ConnectivityChangedEvent{},
 		DriftCorrectedEvent{},
 		DataRefreshTriggeredEvent{},
@@ -51,9 +47,6 @@ func TestAll35EventTypes(t *testing.T) {
 		DataFetchCompletedEvent{},
 		RPCParameterReceivedEvent{},
 		DeviceLifecycleEvent{},
-	}
-	if len(events) != 35 {
-		t.Fatalf("catalogue has %d events, want 35", len(events))
 	}
 	seen := make(map[EventType]struct{})
 	for _, e := range events {

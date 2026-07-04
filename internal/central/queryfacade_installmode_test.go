@@ -27,7 +27,7 @@ func TestQueryFacadeGetInstallModeByID(t *testing.T) {
 	im := hub.NewInstallMode("HmIP-RF", nil)
 	im.OnState(true, 45*time.Second)
 
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 	facade.SetInstallModeProvider(&fakeInstallModeProvider{dps: []*hub.InstallMode{im}})
 
 	remaining, ok := facade.GetInstallModeByID("HmIP-RF")
@@ -45,7 +45,7 @@ func TestQueryFacadeGetInstallModeByIDNotFound(t *testing.T) {
 	im := hub.NewInstallMode("HmIP-RF", nil)
 	im.OnState(true, 30*time.Second)
 
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 	facade.SetInstallModeProvider(&fakeInstallModeProvider{dps: []*hub.InstallMode{im}})
 
 	_, ok := facade.GetInstallModeByID("BidCos-RF")
@@ -57,7 +57,7 @@ func TestQueryFacadeGetInstallModeByIDNotFound(t *testing.T) {
 // TestQueryFacadeGetInstallModeByIDNoProvider verifies that GetInstallModeByID
 // returns (0, false) when no provider is wired.
 func TestQueryFacadeGetInstallModeByIDNoProvider(t *testing.T) {
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 
 	_, ok := facade.GetInstallModeByID("HmIP-RF")
 	if ok {
@@ -74,7 +74,7 @@ func TestQueryFacadeGetInstallMode(t *testing.T) {
 	im := hub.NewInstallMode("HmIP-RF", nil)
 	im.OnState(true, 45*time.Second)
 
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 	facade.SetInstallModeProvider(&fakeInstallModeProvider{dps: []*hub.InstallMode{im}})
 
 	info, err := facade.GetInstallMode(hmenum.InterfaceHmIPRF)
@@ -98,7 +98,7 @@ func TestQueryFacadeGetInstallModeInactive(t *testing.T) {
 	im := hub.NewInstallMode("HmIP-RF", nil)
 	im.OnState(false, 0)
 
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 	facade.SetInstallModeProvider(&fakeInstallModeProvider{dps: []*hub.InstallMode{im}})
 
 	info, err := facade.GetInstallMode(hmenum.InterfaceHmIPRF)
@@ -116,7 +116,7 @@ func TestQueryFacadeGetInstallModeUnknownInterface(t *testing.T) {
 	im := hub.NewInstallMode("HmIP-RF", nil)
 	im.OnState(true, 30*time.Second)
 
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 	facade.SetInstallModeProvider(&fakeInstallModeProvider{dps: []*hub.InstallMode{im}})
 
 	_, err := facade.GetInstallMode(hmenum.InterfaceBidCosRF)
@@ -128,7 +128,7 @@ func TestQueryFacadeGetInstallModeUnknownInterface(t *testing.T) {
 // TestQueryFacadeGetInstallModeNoProvider verifies that GetInstallMode
 // returns an error when no provider is wired.
 func TestQueryFacadeGetInstallModeNoProvider(t *testing.T) {
-	facade := central.NewQueryFacade("test", nil, nil)
+	facade := central.NewQueryFacade("test", nil, nil, nil)
 
 	_, err := facade.GetInstallMode(hmenum.InterfaceHmIPRF)
 	if err == nil {

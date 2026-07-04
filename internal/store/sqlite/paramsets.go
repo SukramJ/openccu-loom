@@ -271,6 +271,35 @@ FROM paramsets WHERE central_name = ? AND interface_id = ? AND channel_address =
 	return rec, nil
 }
 
+// ListByCentral returns every paramset record persisted for central
+// whose on-disk format matches [ParamsetCacheSchemaVersion]. Used by
+// the boot-time registry hydration; stale-versioned rows are skipped
+// (the bootstrap wipe pass removes them).
+func (s *ParamsetStore) ListByCentral(ctx context.Context, centralName string) ([]ParamsetRecord, error) {
+	const q = `
+SELECT interface_id, channel_address, paramset_key, hash, paramset_json
+FROM paramsets WHERE central_name = ? AND schema_version = ? ORDER BY interface_id, channel_address, paramset_key`
+	rows, err := s.db.QueryContext(ctx, q, centralName, ParamsetCacheSchemaVersion)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite: list paramsets: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ParamsetRecord
+	for rows.Next() {
+		rec := ParamsetRecord{CentralName: centralName}
+		var psKey, raw string
+		if err := rows.Scan(&rec.InterfaceID, &rec.ChannelAddress, &psKey, &rec.Hash, &raw); err != nil {
+			return nil, fmt.Errorf("sqlite: scan paramset: %w", err)
+		}
+		rec.ParamsetKey = hmenum.ParamsetKey(psKey)
+		if err := json.Unmarshal([]byte(raw), &rec.Paramset); err != nil {
+			return nil, fmt.Errorf("sqlite: unmarshal paramset: %w", err)
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}
+
 // Size returns the total number of paramset records stored for central.
 func (s *ParamsetStore) Size(ctx context.Context, centralName string) (int, error) {
 	var n int

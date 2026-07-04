@@ -37,7 +37,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/hub"
 	"github.com/SukramJ/openccu-loom/internal/model/schedule"
 	"github.com/SukramJ/openccu-loom/internal/model/weekprofile"
-	"github.com/SukramJ/openccu-loom/internal/scheduler"
 	"github.com/SukramJ/openccu-loom/internal/store/linkprofile"
 	"github.com/SukramJ/openccu-loom/pkg/hmapi"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -8850,49 +8849,7 @@ func TestSimplifyWeekday_ContiguousMerge(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// WireSchedulerEvents — OnComplete err != nil path (line 44-46)
 // ---------------------------------------------------------------------------
-
-// TestWireSchedulerEvents_OnCompleteWithError exercises the err != nil
-// branch at line 44-46 in WireSchedulerEvents.
-func TestWireSchedulerEvents_OnCompleteWithError(t *testing.T) {
-	t.Parallel()
-	bus := events.NewBus()
-	job := scheduler.Job{
-		Name: "test-job",
-	}
-	wired := WireSchedulerEvents("ccu-test", bus, []scheduler.Job{job})
-	if len(wired) != 1 {
-		t.Fatalf("expected 1 wired job, got %d", len(wired))
-	}
-	// Call OnComplete with a non-nil error — exercises line 44-46.
-	wired[0].OnComplete("test-job", 42, false, errors.New("job failed"))
-}
-
-// TestWireSchedulerEvents_OnCompleteNoError exercises the nil err path
-// in OnComplete and the OnStart hook with a pre-existing OnStart callback.
-func TestWireSchedulerEvents_OnStartWithExistingHook(t *testing.T) {
-	t.Parallel()
-	bus := events.NewBus()
-	hookCalled := false
-	job := scheduler.Job{
-		Name: "test-job2",
-		OnStart: func(_ string) {
-			hookCalled = true
-		},
-		OnComplete: func(_ string, _ int64, _ bool, _ error) {},
-	}
-	wired := WireSchedulerEvents("ccu-test2", bus, []scheduler.Job{job})
-	if len(wired) != 1 {
-		t.Fatalf("expected 1 wired job, got %d", len(wired))
-	}
-	wired[0].OnStart("test-job2")
-	if !hookCalled {
-		t.Error("expected original OnStart hook to be called")
-	}
-	// OnComplete with no error.
-	wired[0].OnComplete("test-job2", 100, true, nil)
-}
 
 // ---------------------------------------------------------------------------
 // RecoveryReconnector — c.Recovery == nil (line 38-40)

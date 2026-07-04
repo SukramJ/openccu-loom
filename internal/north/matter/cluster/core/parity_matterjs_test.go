@@ -280,17 +280,6 @@ func parityCases() []parityCase {
 			},
 		},
 		{
-			jsID:          powersrcClusterID, // 0x002F
-			codeClusterID: powersrcClusterID,
-			codeRevision:  powersrcClusterRevision,
-			// BatChargeLevel (0x000E), BatReplacementNeeded (0x000F) and
-			// BatReplaceability (0x0010) have conformance "BAT" — feature-conditional.
-			// Only Status, Order, Description and EndpointList carry conformance "M".
-			codeAttrIDs: []uint32{
-				powersrcAttrStatus, powersrcAttrOrder, powersrcAttrDescription, powersrcAttrEndpointList,
-			},
-		},
-		{
 			jsID:          otaRequestorClusterID, // 0x002A — matter.js HEAD ota-software-update-requestor.element.ts:20
 			codeClusterID: otaRequestorClusterID,
 			codeRevision:  otaRequestorClusterRevision,

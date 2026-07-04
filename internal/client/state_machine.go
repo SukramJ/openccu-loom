@@ -25,6 +25,10 @@ var ErrInvalidStateTransition = errors.New("client: invalid state transition")
 // Key design decisions:
 //   - CREATED → INITIALIZING only: forces the full init path before any
 //     connect attempt.
+//   - STOPPING is reachable from EVERY non-terminal state: a graceful
+//     shutdown must never depend on force, no matter where the client
+//     is in its lifecycle (a client stuck in CONNECTING or FAILED is
+//     stopped just like a CONNECTED one).
 //   - STOPPED is terminal: once stopped the client is finished and cannot
 //     be restarted in-place. Callers that need a fresh start must
 //     construct a new InterfaceClient.
@@ -34,15 +38,15 @@ var ErrInvalidStateTransition = errors.New("client: invalid state transition")
 //   - FAILED allows retry via INITIALIZING / CONNECTING / RECONNECTING /
 //     DISCONNECTED without re-creating the client.
 var validTransitions = map[hmenum.ClientState][]hmenum.ClientState{
-	// CREATED → INITIALIZING only (strict start-up gate).
-	hmenum.ClientStateCreated: {hmenum.ClientStateInitializing},
+	// CREATED → INITIALIZING only (strict start-up gate), or STOPPING.
+	hmenum.ClientStateCreated: {hmenum.ClientStateInitializing, hmenum.ClientStateStopping},
 	// INITIALIZING → INITIALIZED on success; → FAILED when metadata loading fails.
-	hmenum.ClientStateInitializing: {hmenum.ClientStateInitialized, hmenum.ClientStateFailed},
+	hmenum.ClientStateInitializing: {hmenum.ClientStateInitialized, hmenum.ClientStateFailed, hmenum.ClientStateStopping},
 	// INITIALIZED → CONNECTING (normal) or DISCONNECTED (recovery reset; allows
 	// the recovery coordinator to reset an initialised-but-never-connected client).
-	hmenum.ClientStateInitialized: {hmenum.ClientStateConnecting, hmenum.ClientStateDisconnected},
+	hmenum.ClientStateInitialized: {hmenum.ClientStateConnecting, hmenum.ClientStateDisconnected, hmenum.ClientStateStopping},
 	// CONNECTING → CONNECTED on success; → FAILED when the connect attempt fails.
-	hmenum.ClientStateConnecting: {hmenum.ClientStateConnected, hmenum.ClientStateFailed},
+	hmenum.ClientStateConnecting: {hmenum.ClientStateConnected, hmenum.ClientStateFailed, hmenum.ClientStateStopping},
 	// CONNECTED → DISCONNECTED (link lost), RECONNECTING (auto-reconnect), or
 	// STOPPING (graceful shutdown).
 	hmenum.ClientStateConnected: {hmenum.ClientStateDisconnected, hmenum.ClientStateReconnecting, hmenum.ClientStateStopping},
@@ -51,14 +55,14 @@ var validTransitions = map[hmenum.ClientState][]hmenum.ClientState{
 	hmenum.ClientStateDisconnected: {hmenum.ClientStateReconnecting, hmenum.ClientStateConnecting, hmenum.ClientStateStopping, hmenum.ClientStateDisconnected},
 	// RECONNECTING → CONNECTED (success), DISCONNECTED (gave up), FAILED
 	// (permanent failure), or CONNECTING (retry).
-	hmenum.ClientStateReconnecting: {hmenum.ClientStateConnecting, hmenum.ClientStateConnected, hmenum.ClientStateDisconnected, hmenum.ClientStateFailed},
+	hmenum.ClientStateReconnecting: {hmenum.ClientStateConnecting, hmenum.ClientStateConnected, hmenum.ClientStateDisconnected, hmenum.ClientStateFailed, hmenum.ClientStateStopping},
 	// STOPPING → STOPPED (one-way, graceful shutdown).
 	hmenum.ClientStateStopping: {hmenum.ClientStateStopped},
 	// STOPPED is terminal — no outgoing transitions.
 	hmenum.ClientStateStopped: {},
 	// FAILED → INITIALIZING (retry init), CONNECTING (retry connect),
 	// RECONNECTING (auto-reconnect), DISCONNECTED (graceful deinit shutdown).
-	hmenum.ClientStateFailed: {hmenum.ClientStateInitializing, hmenum.ClientStateConnecting, hmenum.ClientStateReconnecting, hmenum.ClientStateDisconnected},
+	hmenum.ClientStateFailed: {hmenum.ClientStateInitializing, hmenum.ClientStateConnecting, hmenum.ClientStateReconnecting, hmenum.ClientStateDisconnected, hmenum.ClientStateStopping},
 }
 
 // StateChangedPublisher is the function signature used to publish a

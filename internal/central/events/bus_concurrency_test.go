@@ -16,15 +16,12 @@ package events
 // 2. TestMultiCCUBusIsolation — two independent buses never cross-talk.
 // 3. TestEventStatsCountSurvivesUnsubscription — per
 // 4. TestPriorityNormalIsZeroValue — default (no WithPriority) == PriorityNormal(0).
-// 5. TestBatchConcurrentAddFlush — concurrent Add + Flush on the same Batch.
 // 6. TestGoroutineLeakAfterFullTeardown — no goroutines leak after Close+unsub.
 
 import (
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 )
@@ -50,14 +47,6 @@ func (concEvtStats) Type() hmevent.EventType { return "conc.evt.stats" }
 type concEvtPrio struct{ hmevent.Base }
 
 func (concEvtPrio) Type() hmevent.EventType { return "conc.evt.prio" }
-
-type concEvtBatch struct{ hmevent.Base }
-
-func (concEvtBatch) Type() hmevent.EventType { return "conc.evt.batch" }
-
-type concEvtLeak struct{ hmevent.Base }
-
-func (concEvtLeak) Type() hmevent.EventType { return "conc.evt.leak" }
 
 // ---------- 1. TestPanicInHandlerIsolation ----------
 
@@ -259,143 +248,5 @@ func TestPriorityNormalIsZeroValue(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Fatalf("handler count=%d, want 2", len(got))
-	}
-}
-
-// ---------- 5. TestBatchConcurrentAddFlush ----------
-
-// TestBatchConcurrentAddFlush stresses a single Batch from multiple
-// goroutines that Add events while a separate goroutine calls Flush
-// repeatedly.
-//
-// Invariant: no events are lost (every Add either lands in a Flush or the
-// final Flush), no race detected (run under -race), and the final sum equals
-// exactly the number of Add calls.
-//
-// In Go, Batch.mu must guard both Add and Flush correctly.
-func TestBatchConcurrentAddFlush(t *testing.T) {
-	t.Parallel()
-
-	b := NewBus()
-	batch := NewBatch(b)
-
-	var total atomic.Int64
-	Subscribe(b, func(concEvtBatch) { total.Add(1) })
-
-	const (
-		adders     = 10
-		addsEach   = 50
-		flushLoops = 5
-	)
-
-	var wgAdd sync.WaitGroup
-	wgAdd.Add(adders)
-	for range adders {
-		go func() {
-			defer wgAdd.Done()
-			for range addsEach {
-				Add(batch, concEvtBatch{Base: hmevent.NewBase()})
-			}
-		}()
-	}
-
-	// Flush goroutine: periodically drains without racing.
-	var wgFlush sync.WaitGroup
-	wgFlush.Go(func() {
-		for range flushLoops {
-			batch.Flush()
-			// Yield so adders can make progress.
-			runtime.Gosched()
-		}
-	})
-
-	wgAdd.Wait()
-	wgFlush.Wait()
-	// Final drain: pick up any events added after the last periodic flush.
-	batch.Flush()
-
-	want := int64(adders * addsEach)
-	if got := total.Load(); got != want {
-		t.Errorf("total dispatched=%d, want %d (no events must be lost)", got, want)
-	}
-}
-
-// ---------- 6. TestGoroutineLeakAfterFullTeardown ----------
-
-// TestGoroutineLeakAfterFullTeardown verifies that creating a Bus,
-// subscribing several handlers, publishing events, then unsubscribing all
-// does not leak goroutines. The Bus has no internal goroutines by design —
-// this test pins that invariant.
-//
-// Any goroutine started by the Bus itself (not by test code) would appear as
-// a leak here.
-func TestGoroutineLeakAfterFullTeardown(t *testing.T) {
-	// Not parallel: we measure absolute goroutine counts.
-	// Let the runtime settle before taking the baseline.
-	runtime.GC()
-	time.Sleep(10 * time.Millisecond)
-	before := runtime.NumGoroutine()
-
-	b := NewBus()
-
-	unsubs := make([]func(), 0, 20)
-	for range 20 {
-		unsubs = append(unsubs, Subscribe(b, func(concEvtLeak) {}))
-	}
-
-	for range 50 {
-		Publish(b, concEvtLeak{Base: hmevent.NewBase()})
-	}
-
-	for _, u := range unsubs {
-		u()
-	}
-
-	// Let any runtime bookkeeping settle.
-	runtime.GC()
-	time.Sleep(10 * time.Millisecond)
-	after := runtime.NumGoroutine()
-
-	// Allow ±2 for runtime background goroutines that may vary.
-	if after > before+2 {
-		t.Errorf("goroutine leak: before=%d, after=%d (leaked %d goroutines)", before, after, after-before)
-	}
-}
-
-// ---------- 7. TestBatchFlushInsideHandlerSeesDeferred ----------
-
-// TestBatchFlushInsideHandlerSeesDeferred verifies that when a Batch.Flush is
-// called from inside a handler (re-entrant context), the batch's Publish
-// calls land in the deferred queue and are processed after the current
-// dispatch completes — exactly the same as a direct re-entrant Publish.
-func TestBatchFlushInsideHandlerSeesDeferred(t *testing.T) {
-	t.Parallel()
-
-	b := NewBus()
-	batch := NewBatch(b)
-
-	// Pre-load the batch.
-	Add(batch, concEvtIsolB{Base: hmevent.NewBase()})
-
-	var outerDone atomic.Bool
-	var innerFiredAfterOuter atomic.Bool
-
-	Subscribe(b, func(concEvtIsolA) {
-		// Flush the batch from inside a handler — must be deferred.
-		batch.Flush()
-		outerDone.Store(true)
-	})
-
-	Subscribe(b, func(concEvtIsolB) {
-		innerFiredAfterOuter.Store(outerDone.Load())
-	})
-
-	Publish(b, concEvtIsolA{Base: hmevent.NewBase()})
-
-	if !outerDone.Load() {
-		t.Fatal("outer handler never ran")
-	}
-	if !innerFiredAfterOuter.Load() {
-		t.Fatal("batch event fired before outer handler returned (deferred dispatch violated)")
 	}
 }

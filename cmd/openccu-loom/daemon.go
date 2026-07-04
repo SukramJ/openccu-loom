@@ -349,6 +349,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 		visReg:                  visReg,
 		masterValuesStore:       masterValuesStore,
 		valuesCacheStore:        valuesCacheStore,
+		descriptorStores:        si.descriptorStores,
 		sqCentrals:              sqCentrals,
 		historyStore:            historyStore,
 		healthTracker:           healthTracker,
@@ -367,7 +368,7 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// Cache-reset service (ADR 0042) — drives POST /admin/cache/clear.
 	// Nil when south-bound never came up (no re-init manager); the route
 	// then stays unmounted.
-	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, sb.bringUpManager, auditBuf, logger)
+	cacheResetSvc := buildCacheResetService(cfg, reg, valuesCacheStore, masterValuesStore, si.descriptorStores, sb.bringUpManager, auditBuf, logger)
 
 	// Live CCU adopt: the orchestrator
 	// that lets POST/DELETE /admin/centrals bring a CCU's southbound + model

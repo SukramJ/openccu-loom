@@ -102,7 +102,7 @@ func subscribeCuratedEvents(bus *events.Bus, typeFilter []string, emit func(hmap
 	unsubs = append(
 		unsubs,
 		events.Subscribe(bus, func(e hmevent.DataPointValueChangedEvent) { send("DataPointValueChanged", e) }),
-		events.Subscribe(bus, func(e hmevent.DataPointStatusChangedEvent) { send("DataPointStatusChanged", e) }),
+		events.Subscribe(bus, func(e hmevent.RequestCoalescedEvent) { send("RequestCoalesced", e) }),
 		events.Subscribe(bus, func(e hmevent.DeviceTriggerEvent) { send("DeviceTrigger", e) }),
 		events.Subscribe(bus, func(e hmevent.CentralStateChangedEvent) { send("CentralStateChanged", e) }),
 		events.Subscribe(bus, func(e hmevent.ClientStateChangedEvent) { send("ClientStateChanged", e) }),

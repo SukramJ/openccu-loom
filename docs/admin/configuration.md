@@ -246,9 +246,8 @@ Authentication lives under `north.rest.auth`:
 
 | Key | Type | Default | Env | Secret? |
 |---|---|---|---|---|
-| `north.rest.auth.basic_enabled` | bool | `false` | — | no |
-| `north.rest.auth.bearer_enabled` | bool | `false` | — | no |
-| `north.rest.auth.session_enabled` | bool | `false` | — | no |
+| `north.rest.auth.basic_enabled` | bool (tri-state) | `true` | — | no |
+| `north.rest.auth.bearer_enabled` | bool (tri-state) | `true` | — | no |
 | `north.rest.auth.users` | map (subject→hash) | — | — | **yes** |
 | `north.rest.auth.tokens` | map (token→role) | — | — | **yes** |
 | `north.rest.auth.oidc.enabled` | bool | `false` | — | no |

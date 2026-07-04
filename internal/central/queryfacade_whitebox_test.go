@@ -127,7 +127,7 @@ func buildQFWithDevice(d *device.Device) *QueryFacade {
 	mr := registry.NewModelRegistry()
 	mr.Put(d)
 	dr := registry.NewDeviceRegistry()
-	qf := newQueryFacadeWithModel("test", dr, mr, nil)
+	qf := NewQueryFacade("test", dr, mr, nil)
 	return qf
 }
 
@@ -326,7 +326,7 @@ func TestGetStatePaths_WithPathDP(t *testing.T) {
 }
 
 func TestGetStatePaths_WithHub(t *testing.T) {
-	qf := newQueryFacadeWithModel("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
+	qf := NewQueryFacade("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
 	qf.SetHubStatePathProvider(&stubHubStatePaths{paths: []string{"hm/hub/sysvar1"}})
 
 	paths := qf.GetStatePaths(nil)
@@ -380,7 +380,7 @@ func TestGetStatePathEntries_WithPathDP(t *testing.T) {
 }
 
 func TestGetStatePathEntries_WithHub(t *testing.T) {
-	qf := newQueryFacadeWithModel("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
+	qf := NewQueryFacade("test", registry.NewDeviceRegistry(), registry.NewModelRegistry(), nil)
 	qf.SetHubStatePathProvider(&stubHubStatePaths{paths: []string{"hm/sysvar/X"}})
 
 	entries := qf.GetStatePathEntries()
