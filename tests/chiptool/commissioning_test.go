@@ -42,7 +42,7 @@ func TestCommissioning_Attestation_ValidatesWithoutBypass(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	out, err := ctl.PairFullVerifyAttestation(ctx, t, "127.0.0.1", b.MatterPort())
+	out, err := ctl.PairFullVerifyAttestation(ctx, t, harness.PairTargetHost, b.MatterPort())
 	if err != nil {
 		t.Fatalf("pair with attestation verification: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCommissioning_SecondFabric_AfterWindow(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	out, err := ctl.PairFullWithPasscode(ctx, t, "127.0.0.1", b.MatterPort(), openResp.Passcode)
+	out, err := ctl.PairFullWithPasscode(ctx, t, harness.PairTargetHost, b.MatterPort(), openResp.Passcode)
 	if err != nil {
 		t.Fatalf("pair: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestCommissioning_WrongPasscode_Fails(t *testing.T) {
 		"pairing", "already-discovered",
 		harness.FormatNodeID(ctl.NodeID),
 		"11111111", // wrong passcode
-		"127.0.0.1", fmt.Sprintf("%d", b.MatterPort()),
+		harness.PairTargetHost, fmt.Sprintf("%d", b.MatterPort()),
 		"--bypass-attestation-verifier", "true",
 		"--pase-only", "true",
 	)

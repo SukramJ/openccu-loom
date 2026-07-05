@@ -144,7 +144,7 @@ func TestLifecycle_BootidRotation_UniqueIDChanges(t *testing.T) {
 	ctl := harness.NewController(t, chipBin, 0x3000)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	out, err := ctl.PairFull(ctx, t, "127.0.0.1", b.MatterPort())
+	out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
 	if err != nil {
 		t.Fatalf("commission rotate-bridge: %v\n%s", err, out)
 	}

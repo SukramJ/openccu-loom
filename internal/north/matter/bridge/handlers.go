@@ -405,35 +405,22 @@ func (a *PaseAdapter) computePaseContextLocked() ([]byte, error) {
 // (throw UnexpectedDataError on incorrect key confirmation) → :94-95
 // (catch → #pairingErrors++).
 func (a *PaseAdapter) ProcessPake3(payload []byte) (opcode uint8, respPayload []byte, err error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	v := a.verifier
-	if v == nil {
-		return 0, nil, errors.New("bridge: PaseAdapter Pake3 without preceding Pake1")
-	}
-	cA, err := spake2.DecodePake3(payload)
+	cb, sharedSecret, peerSessionID, err := a.consumePake3(payload)
 	if err != nil {
-		// Clear the verifier — a retry after any Pake3 rejection MUST
-		// start fresh from Pake1 — and surface the decode error so
-		// handlePase emits the single StatusReport(FAILURE) and counts
-		// the attempt toward the brute-force cap.
-		a.verifier = nil
-		return 0, nil, fmt.Errorf("bridge: Pake3 decode: %w", err)
-	}
-	if err := v.ProcessPake3(cA); err != nil {
-		// Clear the verifier so the next Pake1 re-starts cleanly, and
-		// surface the confirmation error (spake2.ErrConfirmationFailed
-		// for a wrong-passcode cA that does not match the verifier's
-		// expected hAY) so handlePase emits the single
-		// StatusReport(FAILURE) and increments the brute-force counter.
-		a.verifier = nil
 		return 0, nil, err
 	}
-	sharedSecret := v.SharedSecret()
-	peerSessionID := a.peerSessionID
-	a.verifier = nil
-	if a.onEstablished != nil {
-		if err := a.onEstablished(sharedSecret, peerSessionID); err != nil {
+	// The pickup callback runs OUTSIDE a.mu: the daemon's production
+	// callback calls back into adapter getters (PeerMRPParams), and a
+	// non-reentrant mutex held across the callback self-deadlocks the
+	// PASE receive goroutine — the commissioner then never receives
+	// the closing StatusReport and times out after Pake3. Mirrors
+	// matter.js packages/protocol/src/session/pase/PaseServer.ts
+	// :151-157, where the pickup reads initiator session params after
+	// verification with no lock held. Running unlocked is safe: the
+	// verifier state was already torn down under the lock, and the
+	// SC router's single-active-PASE claim serialises handshakes.
+	if cb != nil {
+		if err := cb(sharedSecret, peerSessionID); err != nil {
 			return 0, nil, fmt.Errorf("bridge: PASE session pickup: %w", err)
 		}
 	}
@@ -448,6 +435,41 @@ func (a *PaseAdapter) ProcessPake3(payload []byte) (opcode uint8, respPayload []
 		nil,
 	)
 	return mrp.SCOpcodeStatusReport, body, nil
+}
+
+// consumePake3 decodes + verifies the commissioner's cA under a.mu
+// and tears down the per-handshake verifier state either way. It
+// returns the pickup callback plus its inputs so [ProcessPake3] can
+// fire the callback after the lock is released.
+func (a *PaseAdapter) consumePake3(payload []byte) (cb PaseSessionEstablished, sharedSecret []byte, peerSessionID uint16, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	v := a.verifier
+	if v == nil {
+		return nil, nil, 0, errors.New("bridge: PaseAdapter Pake3 without preceding Pake1")
+	}
+	cA, err := spake2.DecodePake3(payload)
+	if err != nil {
+		// Clear the verifier — a retry after any Pake3 rejection MUST
+		// start fresh from Pake1 — and surface the decode error so
+		// handlePase emits the single StatusReport(FAILURE) and counts
+		// the attempt toward the brute-force cap.
+		a.verifier = nil
+		return nil, nil, 0, fmt.Errorf("bridge: Pake3 decode: %w", err)
+	}
+	if err := v.ProcessPake3(cA); err != nil {
+		// Clear the verifier so the next Pake1 re-starts cleanly, and
+		// surface the confirmation error (spake2.ErrConfirmationFailed
+		// for a wrong-passcode cA that does not match the verifier's
+		// expected hAY) so handlePase emits the single
+		// StatusReport(FAILURE) and increments the brute-force counter.
+		a.verifier = nil
+		return nil, nil, 0, err
+	}
+	sharedSecret = v.SharedSecret()
+	peerSessionID = a.peerSessionID
+	a.verifier = nil
+	return a.onEstablished, sharedSecret, peerSessionID, nil
 }
 
 // CaseAdapter wraps a [sigma.Responder] in the [CaseHandler] port.

@@ -1,0 +1,156 @@
+name: chiptool
+
+# chip-tool (the CSA reference commissioner) cannot run on macOS hosts
+# in a container — Docker Desktop does not support host networking.
+# GitHub's Linux runners do, and the Go suite under tests/chiptool/
+# needs no multicast at all (it pairs via `pairing already-discovered`
+# on loopback), so this workflow is where the chip-tool layers run.
+#
+# Two jobs:
+#   - chiptool: the Go capability suite (`make chiptool-test`) against
+#     a runner-native chip-tool binary extracted from the pinned
+#     connectedhomeip/chip-cert-bins image.
+#   - matter-smoke: the compose PASE smoke (`make matter-smoke`),
+#     identical to a local Linux run.
+#
+# Both jobs run on arm64 runners (free for public repositories):
+# Docker Hub's connectedhomeip/chip-cert-bins publishes arm64-only
+# manifests — every recent tag lacks a linux/amd64 image — so an
+# amd64 runner cannot pull it and QEMU emulation is too slow for the
+# PASE crypto handshake.
+#
+# Not a per-PR gate: chip-tool runs are slow (the Go suite alone
+# budgets up to 10 min). Nightly + `needs-chiptool` label + manual.
+
+on:
+  schedule:
+    # Offset from the 02:17 nightly fuzz so the two heavy suites do
+    # not compete for runner capacity at the same minute.
+    - cron: "47 3 * * *"
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chiptool-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: "0"
+  GO_VERSION: "1.26.4"
+
+jobs:
+  chiptool:
+    name: chip-tool capability suite
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Single source of truth for the chip-tool build is the pin in
+      # compose/matter-smoke.yml — the suite and the compose smoke can
+      # never drift onto different chip-tool builds.
+      - name: resolve chip-tool pin
+        id: pin
+        run: |
+          pin=$(sed -n 's|.*image: connectedhomeip/chip-cert-bins:\([0-9a-f]\{40\}\).*|\1|p' compose/matter-smoke.yml)
+          if [ -z "$pin" ]; then
+            echo "::error::chip-cert-bins pin not found in compose/matter-smoke.yml"
+            exit 1
+          fi
+          echo "pin=$pin" >> "$GITHUB_OUTPUT"
+
+      - name: cache chip-tool binary
+        id: chiptool-cache
+        uses: actions/cache@v5.0.5
+        with:
+          path: ~/.cache/chiptool-bin
+          key: chiptool-bin-${{ steps.pin.outputs.pin }}
+
+      # ~2.5 GiB compressed image — pulled only on cache miss, i.e.
+      # once per pin bump. The binary lives at /root/apps/chip-tool
+      # (/root/chip-tool is a symlink; docker cp the real file).
+      - name: extract chip-tool from chip-cert-bins
+        if: steps.chiptool-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/.cache/chiptool-bin"
+          docker create --name chip-cert-bins "connectedhomeip/chip-cert-bins:${{ steps.pin.outputs.pin }}"
+          docker cp chip-cert-bins:/root/apps/chip-tool "$HOME/.cache/chiptool-bin/chip-tool"
+          docker rm chip-cert-bins
+          chmod +x "$HOME/.cache/chiptool-bin/chip-tool"
+
+      # chip-tool links dynamically against the host dbus/avahi/glib
+      # stack, plus pcsclite for the NFC-commissioning variant the
+      # chip-cert-bins image builds (chip-tool-...-nfc-commission).
+      # The -dev package names are release-stable (the runtime t64
+      # names are not) and each pulls in the runtime library; this
+      # mirrors the dependency list the chip-cert-bins image installs
+      # for itself. avahi-daemon must RUN, not just be present:
+      # commissioning pairs via `pairing already-discovered`, but the
+      # final FindOperationalForStayActive stage resolves the bridge's
+      # operational `_matter._tcp` record through avahi and dies with
+      # "Incorrect state" when no daemon answers on the bus.
+      - name: install chip-tool runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libavahi-client-dev libdbus-1-dev libglib2.0-dev \
+            libevent-dev libssl-dev libpcsclite-dev avahi-daemon
+          sudo systemctl start avahi-daemon
+          systemctl is-active dbus avahi-daemon
+
+      # Fail fast with a readable diagnostic instead of letting the
+      # suite skip (missing binary) or die on an obscure loader error.
+      - name: chip-tool sanity
+        run: |
+          bin="$HOME/.cache/chiptool-bin/chip-tool"
+          if ldd "$bin" | grep "not found"; then
+            echo "::error::chip-tool has unresolved shared libraries (see ldd output above)"
+            exit 1
+          fi
+          ("$bin" || true) 2>&1 | head -n 5
+          ("$bin" || true) 2>&1 | grep -qi "usage" \
+            || { echo "::error::chip-tool did not print its usage banner"; exit 1; }
+
+      # OPENCCU_LOOM_CHIPTOOL_BIN pins the binary location so the
+      # harness never silently skips on a PATH miss (see
+      # tests/chiptool/harness/skip.go). The daemon builds with an
+      # empty spa_dist — the suite drives REST + Matter UDP, not the SPA.
+      - name: chip-tool capability suite
+        run: OPENCCU_LOOM_CHIPTOOL_BIN="$HOME/.cache/chiptool-bin/chip-tool" make chiptool-test
+
+  matter-smoke:
+    name: matter-smoke (compose PASE)
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # No host avahi/dbus setup: the compose stack runs dbus +
+      # avahi-daemon inside the chip-tool container (see
+      # compose/matter-smoke.yml), so the smoke is hermetic.
+      - name: matter-smoke
+        run: make matter-smoke
+
+      - name: upload chip-tool log
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: matter-smoke-log
+          path: tmp/matter-smoke.log
+          if-no-files-found: ignore

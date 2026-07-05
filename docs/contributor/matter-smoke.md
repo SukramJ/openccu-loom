@@ -23,13 +23,17 @@ this smoke when you need an external commissioner's verdict.
 
 - **Linux host.** Matter discovery rides on UDP/IPv6 multicast; Docker
   Desktop on macOS / Windows does not bridge multicast into containers.
-  On macOS, run the smoke from a Linux VM (UTM, Multipass, Lima).
+  On macOS, run the smoke from a Linux VM (UTM, Multipass, Lima) — or
+  push the branch and let the `chiptool` CI workflow run it on a Linux
+  runner (see [CI](#ci) below).
 - Docker Engine ≥ 24 with the Compose plugin.
-- Avahi enabled on the host with `use-ipv6=yes` in
-  `/etc/avahi/avahi-daemon.conf`. Restart `avahi-daemon` if a previous
-  smoke left stale entries.
 - IPv6 enabled on the host network interface (`sysctl
   net.ipv6.conf.all.disable_ipv6 == 0`).
+
+No host avahi/dbus setup is needed: the chip-tool container runs its
+own `dbus-daemon` + `avahi-daemon` (chip-tool's platform-mdns build
+hard-requires the bus at init, even for `pairing already-discovered`).
+A host avahi may coexist; both stacks answer multicast independently.
 
 ---
 
@@ -47,14 +51,49 @@ The target:
    after the first run).
 3. Brings both services up under host networking.
 4. Execs `chip-tool pairing already-discovered 0x1234 20202021
-   127.0.0.1 5540 --pase-only true --bypass-attestation-verifier
-   true` and tees the output to `tmp/matter-smoke.log`.
+   ::1 5540 --pase-only true --bypass-attestation-verifier
+   true` and tees the output to `tmp/matter-smoke.log`. The target is
+   the IPv6 loopback because the `chip-cert-bins` chip-tool is an
+   ipv6only build that rejects IPv4 literals.
 5. Greps for `Pairing Success` and tears the stack down.
 
 A failed run prints the last 80 OpenCCU-Loom log lines and leaves the
 chip-tool log at `tmp/matter-smoke.log` for inspection. Use
 `make matter-smoke-down` to clean up if a run was interrupted before
 the teardown step.
+
+---
+
+## CI
+
+The `chiptool` workflow (`.github/workflows/chiptool.yml`) runs both
+chip-tool layers on `ubuntu-24.04-arm` runners (free for public
+repositories). GitHub's Linux runners support host networking and
+loopback UDP, so neither the Docker Desktop multicast limitation nor
+the macOS container gap applies there. arm64 is not a choice but a
+constraint: Docker Hub's `connectedhomeip/chip-cert-bins` publishes
+arm64-only manifests — every recent tag lacks a `linux/amd64` image —
+so an amd64 runner cannot pull the image at all:
+
+- **chip-tool capability suite** (`make chiptool-test`) — the Go suite
+  under `tests/chiptool/` against a runner-native chip-tool binary.
+  CI extracts `/root/apps/chip-tool` from the pinned
+  `connectedhomeip/chip-cert-bins` image (the pin is read from
+  `compose/matter-smoke.yml`, so both layers always use the same
+  chip-tool build) and caches the extracted binary keyed on the pin —
+  the ~2.5 GiB image pull happens only after a pin bump. The binary
+  location is passed via `OPENCCU_LOOM_CHIPTOOL_BIN` so the harness
+  never silently skips on a PATH miss.
+- **matter-smoke** (`make matter-smoke`) — the compose PASE smoke,
+  identical to a local Linux run. On failure the chip-tool log is
+  uploaded as the `matter-smoke-log` workflow artifact.
+
+Triggers: nightly (03:47 UTC), the `needs-chiptool` PR label, and
+manual `workflow_dispatch`. It is deliberately not a per-PR gate —
+chip-tool runs are slow (the Go suite alone budgets up to 10 min).
+The opt-in mDNS discovery test (`OPENCCU_LOOM_CHIPTOOL_MDNS=1`) stays
+disabled in CI; multicast on shared runners is the flakiness the
+suite's loopback design avoids.
 
 ---
 
@@ -89,6 +128,9 @@ upstream `connectedhomeip` master at build time. To bump:
 
 1. Look up the current latest tag:
    `curl -s "https://hub.docker.com/v2/repositories/connectedhomeip/chip-cert-bins/tags?page_size=5" | jq -r '.results[].name'`.
+   Note the platform constraint: recent tags ship `linux/arm64`
+   manifests only (no amd64), so the smoke needs an arm64 Linux host —
+   an Apple-Silicon VM locally, `ubuntu-24.04-arm` in CI.
 2. Cross-check that the SHA exists in
    `https://github.com/project-chip/connectedhomeip/commits/master`
    and that no spec-breaking changes landed between the old and new
@@ -162,9 +204,13 @@ silently — see ADR 0012 §Risks #4.
 
 - **`No such network: host` on macOS** — Docker Desktop. Use a Linux
   VM; this smoke cannot run on macOS hosts directly.
-- **chip-tool times out at "Discovering devices"** — host avahi
-  is not advertising, or IPv6 is disabled. Verify with
-  `avahi-browse -art | grep _matter`.
+- **chip-tool dies at init with `CHIP Error 0x000000AD: Open file
+  failed` (DnssdImpl)** — the in-container dbus/avahi did not come up;
+  check `docker compose -f compose/matter-smoke.yml logs chip-tool`.
+- **chip-tool times out at "Discovering devices"** — mDNS advertising
+  is not reaching the resolver, or IPv6 is disabled. Verify from
+  inside the chip-tool container with
+  `docker compose -f compose/matter-smoke.yml exec chip-tool avahi-browse -art | grep _matter`.
 - **`Pairing Success` missing but no error** — the smoke may be
   matching the wrong commissioning attempt. Check
   `tmp/matter-smoke.log` for the actual `chip-tool` exit message.

@@ -55,8 +55,10 @@ go.work.sum
 # Generated sources (committed separately when stable)
 *_generated.go.bak
 
-# Local state directories (dev / integration runs)
-/var/
+# Local state directories (dev / integration runs). Unanchored var/:
+# test runs also drop state dirs next to the package under test
+# (e.g. cmd/openccu-loom/var/); no tracked file lives in any var/.
+var/
 /state/
 *.db
 *.db-wal

@@ -6,6 +6,53 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **chip-tool CI workflow.** `.github/workflows/chiptool.yml` runs the
+  chip-tool capability suite (`make chiptool-test`) and the compose
+  PASE smoke (`make matter-smoke`) on Linux runners — nightly, on the
+  `needs-chiptool` PR label, and via manual dispatch. The chip-tool
+  binary is extracted from the `connectedhomeip/chip-cert-bins` image
+  pinned in `compose/matter-smoke.yml` and cached keyed on that pin,
+  so both layers always exercise the same chip-tool build. This closes
+  the gap that chip-tool cannot run on macOS developer hosts (Docker
+  Desktop does not support host networking).
+
+### Fixed
+
+- **Matter commissioning deadlock — new pairings have been broken
+  since 0.23.0 (critical).** `PaseAdapter.ProcessPake3` invoked the
+  session-pickup callback while holding the adapter mutex; the
+  daemon's pickup callback calls back into the adapter
+  (`PeerMRPParams`, added in the 0.23.0 behaviour-parity wave), so
+  every successful PASE handshake self-deadlocked the receive
+  goroutine after Pake3. The commissioner never received the closing
+  `SESSION_ESTABLISHMENT_SUCCESS` StatusReport and timed out —
+  observed uniformly with chip-tool, and affecting every controller
+  (Apple Home / Google Home / Home Assistant) attempting a NEW
+  commissioning on 0.23.0–0.26.0; already-commissioned fabrics
+  resuming over CASE were unaffected. The callback now runs outside
+  the lock (verifier state is torn down under the lock first),
+  mirroring matter.js `PaseServer.ts`, which reads initiator session
+  params post-verify with no lock held. Found by the new chip-tool CI
+  workflow on its first real run — the exact gap it was built to
+  close (the suite cannot run on macOS developer hosts). Regression
+  test: `TestPaseAdapter_OnEstablishedRunsOutsideAdapterLock`.
+- **From-source Docker build.** The SPA build stage in `Dockerfile`
+  now copies `assets/ui/.npmrc` (`legacy-peer-deps=true`) next to the
+  package manifests — without it npm 11 fails `npm ci` on the
+  `typescript@^6` vs `openapi-typescript` peer range, breaking
+  `docker build .` (and with it the compose matter-smoke stack) even
+  though every non-container `npm ci` path worked.
+- **`make matter-smoke` chip-tool invocation.** The compose exec now
+  calls `/root/chip-tool` by absolute path — the `chip-cert-bins`
+  image ships its binaries as `/root` symlinks without putting them on
+  `PATH`, so the previous bare `chip-tool` invocation could never
+  resolve. The target also waits for the daemon's `matter.bridge.up`
+  log marker before pairing instead of racing the container
+  healthcheck (which only proves the binary execs, not that the Matter
+  UDP listener is bound).
+
 ## [0.26.0] — 2026-07-04
 
 ### Changed
