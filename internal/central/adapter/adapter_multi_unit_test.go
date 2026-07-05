@@ -12727,7 +12727,9 @@ func TestHubJSONRPCWriter_SetProgramEnabled_Success(t *testing.T) {
 
 func TestHubJSONRPCWriter_SetSysvar_Success(t *testing.T) {
 	t.Parallel()
-	srv := newBoost6JSONRPCServerAlwaysOK(t, "")
+	// The string-typed Rega script echoes the written value on success;
+	// an empty result would (correctly) count as a declined write.
+	srv := newBoost6JSONRPCServerAlwaysOK(t, "hello")
 	defer srv.Close()
 
 	jc := newBoost6JSONRPCClient(t, srv.URL)

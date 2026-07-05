@@ -31,10 +31,18 @@ type sysvarMockServer struct {
 	createFlt  atomic.Int32
 	deleteCnt  atomic.Int32
 	regaCnt    atomic.Int32
+	setBool    atomic.Int32
+	setFloat   atomic.Int32
 
 	lastCreate atomic.Pointer[map[string]any]
+	lastSet    atomic.Pointer[map[string]any]
 	lastDelete atomic.Pointer[string]
 	lastRega   atomic.Pointer[string]
+
+	// regaResult is what ReGa.runScript returns as result; the string-only
+	// set_system_variable script emits the written value on success and
+	// nothing when it declines.
+	regaResult atomic.Value
 }
 
 func newSysvarMock(t *testing.T) *sysvarMockServer {
@@ -72,11 +80,23 @@ func newSysvarMock(t *testing.T) *sysvarMockServer {
 			name, _ := env.Params["name"].(string)
 			m.lastDelete.Store(&name)
 			_, _ = w.Write([]byte(`{"result":true}`))
+		case "SysVar.setBool":
+			m.setBool.Add(1)
+			cp := copyMap(env.Params)
+			m.lastSet.Store(&cp)
+			_, _ = w.Write([]byte(`{"result":true}`))
+		case "SysVar.setFloat":
+			m.setFloat.Add(1)
+			cp := copyMap(env.Params)
+			m.lastSet.Store(&cp)
+			_, _ = w.Write([]byte(`{"result":true}`))
 		case "ReGa.runScript":
 			m.regaCnt.Add(1)
 			script, _ := env.Params["script"].(string)
 			m.lastRega.Store(&script)
-			_, _ = w.Write([]byte(`{"result":""}`))
+			res, _ := m.regaResult.Load().(string)
+			payload, _ := json.Marshal(map[string]any{"result": res})
+			_, _ = w.Write(payload)
 		default:
 			http.Error(w, "unknown method "+env.Method, http.StatusNotFound)
 		}
@@ -190,6 +210,113 @@ func TestCreateSysvarIntegerFallsBackToRega(t *testing.T) {
 	body := m.lastRega.Load()
 	if body == nil || !strings.Contains(*body, `"INTEGER"`) {
 		t.Fatalf("rega body missing INTEGER type marker: %v", body)
+	}
+}
+
+// SetSysvar dispatch: the set_system_variable Rega script writes
+// string-typed variables ONLY (its `ValueTypeStr() == "String"` guard
+// silently declines everything else with empty output), so non-string
+// values must use the CCU's native typed JSON-RPC methods.
+
+func TestSetSysvarEnumIndexUsesSetFloat(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	// A LIST sysvar (e.g. "Aus;Niedrig;Normal;Hoch") writes its
+	// zero-based index; the string-only Rega script would drop it.
+	if err := w.SetSysvar(context.Background(), "Belueftungsanlage_Stufe", 2); err != nil {
+		t.Fatalf("SetSysvar: %v", err)
+	}
+	if got := m.setFloat.Load(); got != 1 {
+		t.Fatalf("expected 1 setFloat call, got %d", got)
+	}
+	if got := m.regaCnt.Load(); got != 0 {
+		t.Fatalf("Rega path must not run for numeric sysvar writes, got %d", got)
+	}
+	p := m.lastSet.Load()
+	if p == nil || (*p)["name"] != "Belueftungsanlage_Stufe" || (*p)["value"] != float64(2) {
+		t.Fatalf("set params = %v", p)
+	}
+}
+
+func TestSetSysvarFloatUsesSetFloat(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.SetSysvar(context.Background(), "Aussentemperatur", 21.5); err != nil {
+		t.Fatalf("SetSysvar: %v", err)
+	}
+	if got := m.setFloat.Load(); got != 1 {
+		t.Fatalf("expected 1 setFloat call, got %d", got)
+	}
+	p := m.lastSet.Load()
+	if p == nil || (*p)["value"] != 21.5 {
+		t.Fatalf("set params = %v", p)
+	}
+}
+
+func TestSetSysvarBoolUsesSetBool(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.SetSysvar(context.Background(), "Anwesenheit", true); err != nil {
+		t.Fatalf("SetSysvar: %v", err)
+	}
+	if got := m.setBool.Load(); got != 1 {
+		t.Fatalf("expected 1 setBool call, got %d", got)
+	}
+	if got := m.regaCnt.Load(); got != 0 {
+		t.Fatalf("Rega path must not run for bool sysvar writes, got %d", got)
+	}
+	p := m.lastSet.Load()
+	// The CCU wire method takes the bool as integer 0/1.
+	if p == nil || (*p)["value"] != float64(1) {
+		t.Fatalf("set params = %v", p)
+	}
+}
+
+func TestSetSysvarStringUsesRega(t *testing.T) {
+	m := newSysvarMock(t)
+	m.regaResult.Store("Fenster offen")
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.SetSysvar(context.Background(), "Statustext", "Fenster offen"); err != nil {
+		t.Fatalf("SetSysvar: %v", err)
+	}
+	if got := m.regaCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Rega call for string sysvar, got %d", got)
+	}
+	if got := m.setBool.Load() + m.setFloat.Load(); got != 0 {
+		t.Fatalf("typed JSON-RPC path must not run for strings, got %d", got)
+	}
+	body := m.lastRega.Load()
+	if body == nil || !strings.Contains(*body, "Fenster offen") || !strings.Contains(*body, "Statustext") {
+		t.Fatalf("rega body missing substitutions: %v", body)
+	}
+}
+
+func TestSetSysvarStringDeclinedSurfacesError(t *testing.T) {
+	m := newSysvarMock(t)
+	// Default regaResult is empty — the script's decline signal (sysvar
+	// missing or not string-typed).
+	w := newWriterAgainst(t, m.srv.URL)
+
+	if err := w.SetSysvar(context.Background(), "Statustext", "Fenster offen"); err == nil {
+		t.Fatal("a declined string write must surface an error, not a silent no-op")
+	}
+}
+
+func TestSetSysvarEmptyStringAllowed(t *testing.T) {
+	m := newSysvarMock(t)
+	w := newWriterAgainst(t, m.srv.URL)
+
+	// Clearing a string sysvar echoes the empty value — that is not a
+	// decline and must not error.
+	if err := w.SetSysvar(context.Background(), "Statustext", ""); err != nil {
+		t.Fatalf("clearing a string sysvar must succeed, got %v", err)
+	}
+	if got := m.regaCnt.Load(); got != 1 {
+		t.Fatalf("expected 1 Rega call, got %d", got)
 	}
 }
 

@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.2
+
+- **Setting system variables works again for all types.** Writes to
+  list/enum (e.g. `Aus;Niedrig;Normal;Hoch`), number, integer, and
+  boolean system variables were silently dropped — the UI/MQTT reported
+  success but the CCU value never changed; only text variables worked.
+  All types now write correctly, values are converted to the variable's
+  declared type (labels, `on/off`, numeric strings all accepted), and
+  invalid values are rejected with a clear error instead of vanishing.
+
 ## 0.26.1
 
 - **CCU writes no longer break after a CCU reboot or idle session.**
