@@ -20,7 +20,12 @@ services:
     network_mode: host
     volumes:
       - ./fixtures/matter-smoke-cfg.yaml:/etc/openccu-loom/config.yaml:ro
-      - matter-smoke-data:/tmp/openccu-loom-matter-smoke
+    # tmpfs, not a named volume: the distroless image runs as nonroot
+    # (uid 65532) and a named volume is root-owned at first mount, so
+    # SQLite cannot create its database file. tmpfs mounts are 1777 by
+    # default and the smoke never needs persistence across runs.
+    tmpfs:
+      - /tmp/openccu-loom-matter-smoke
     command: ["run", "--config", "/etc/openccu-loom/config.yaml"]
     healthcheck:
       # No HTTP surface in the smoke config — probe the UDP listen
@@ -51,5 +56,4 @@ services:
         condition: service_healthy
 
 volumes:
-  matter-smoke-data:
   chip-tool-storage:
