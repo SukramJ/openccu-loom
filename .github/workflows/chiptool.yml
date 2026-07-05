@@ -91,8 +91,10 @@ jobs:
           chmod +x "$HOME/.cache/chiptool-bin/chip-tool"
 
       # chip-tool links dynamically against the host dbus/avahi/glib
-      # stack. The -dev package names are release-stable (the runtime
-      # t64 names are not) and each pulls in the runtime library; this
+      # stack, plus pcsclite for the NFC-commissioning variant the
+      # chip-cert-bins image builds (chip-tool-...-nfc-commission).
+      # The -dev package names are release-stable (the runtime t64
+      # names are not) and each pulls in the runtime library; this
       # mirrors the dependency list the chip-cert-bins image installs
       # for itself. avahi-daemon does not need to run — the suite uses
       # `pairing already-discovered`, no mDNS discovery.
@@ -101,7 +103,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libavahi-client-dev libdbus-1-dev libglib2.0-dev \
-            libevent-dev libssl-dev
+            libevent-dev libssl-dev libpcsclite-dev
 
       # Fail fast with a readable diagnostic instead of letting the
       # suite skip (missing binary) or die on an obscure loader error.
