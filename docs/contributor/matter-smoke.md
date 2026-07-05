@@ -63,9 +63,13 @@ the teardown step.
 ## CI
 
 The `chiptool` workflow (`.github/workflows/chiptool.yml`) runs both
-chip-tool layers on `ubuntu-latest`. GitHub's Linux runners support
-host networking and loopback UDP, so neither the Docker Desktop
-multicast limitation nor the macOS container gap applies there:
+chip-tool layers on `ubuntu-24.04-arm` runners (free for public
+repositories). GitHub's Linux runners support host networking and
+loopback UDP, so neither the Docker Desktop multicast limitation nor
+the macOS container gap applies there. arm64 is not a choice but a
+constraint: Docker Hub's `connectedhomeip/chip-cert-bins` publishes
+arm64-only manifests — every recent tag lacks a `linux/amd64` image —
+so an amd64 runner cannot pull the image at all:
 
 - **chip-tool capability suite** (`make chiptool-test`) — the Go suite
   under `tests/chiptool/` against a runner-native chip-tool binary.
@@ -120,6 +124,9 @@ upstream `connectedhomeip` master at build time. To bump:
 
 1. Look up the current latest tag:
    `curl -s "https://hub.docker.com/v2/repositories/connectedhomeip/chip-cert-bins/tags?page_size=5" | jq -r '.results[].name'`.
+   Note the platform constraint: recent tags ship `linux/arm64`
+   manifests only (no amd64), so the smoke needs an arm64 Linux host —
+   an Apple-Silicon VM locally, `ubuntu-24.04-arm` in CI.
 2. Cross-check that the SHA exists in
    `https://github.com/project-chip/connectedhomeip/commits/master`
    and that no spec-breaking changes landed between the old and new

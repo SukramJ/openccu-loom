@@ -13,6 +13,12 @@ name: chiptool
 #   - matter-smoke: the compose PASE smoke (`make matter-smoke`),
 #     identical to a local Linux run.
 #
+# Both jobs run on arm64 runners (free for public repositories):
+# Docker Hub's connectedhomeip/chip-cert-bins publishes arm64-only
+# manifests — every recent tag lacks a linux/amd64 image — so an
+# amd64 runner cannot pull it and QEMU emulation is too slow for the
+# PASE crypto handshake.
+#
 # Not a per-PR gate: chip-tool runs are slow (the Go suite alone
 # budgets up to 10 min). Nightly + `needs-chiptool` label + manual.
 
@@ -43,7 +49,7 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -123,7 +129,7 @@ jobs:
       github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       contains(github.event.pull_request.labels.*.name, 'needs-chiptool')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
