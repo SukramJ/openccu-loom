@@ -4,6 +4,27 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.6] — 2026-07-05
+
+### Fixed
+
+- **Matter pairing: subtype query replies were dropped by strict mDNS
+  stacks — commissioners across an mDNS reflector never got the
+  answer.** The subtype responder's reply to a
+  `_L<disc>._sub._matterc._udp` PTR query echoed the query's question
+  section and ID (miekg/dns `SetReply` semantics). RFC 6762 §6 forbids
+  questions in multicast responses (§18.1 requires ID 0); Avahi-class
+  stacks — including the reflectors that bridge mDNS between subnets —
+  validate and silently drop such packets. Field capture showed the
+  full chain: query received (`query_seen`), reply sent (`write4_ok`),
+  nothing arriving in the querier's subnet, while grandcat/zeroconf's
+  primary-type replies (which null the question section) passed the
+  same reflector. The reply now clears the question section and forces
+  ID 0, mirroring grandcat/zeroconf `server.go` and the RFC. With
+  0.26.5's announcements this completes both cache-fill paths a
+  commissioner can take: unsolicited announcement AND live
+  query/response.
+
 ## [0.26.5] — 2026-07-05
 
 ### Fixed

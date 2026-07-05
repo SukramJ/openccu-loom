@@ -467,6 +467,17 @@ func (r *SubtypeResponder) buildReply(buf []byte) ([]byte, bool) {
 	resp := new(dns.Msg)
 	resp.SetReply(msg)
 	resp.Authoritative = true
+	// RFC 6762 §6: "Multicast DNS responses MUST NOT contain any
+	// questions", and §18.1 requires ID 0 in multicast responses.
+	// SetReply copies both from the query; strict mDNS stacks (Avahi,
+	// including the reflectors that bridge mDNS across subnets) DROP
+	// responses that violate this — the reply then leaves the host
+	// (write4_ok) but never reaches the commissioner, which reports
+	// "device not found" on a subtype browse the responder did answer.
+	// Mirrors grandcat/zeroconf server.go:321 (`resp.Question = nil`
+	// with the same RFC citation).
+	resp.Question = nil
+	resp.Id = 0
 	resp.Answer = answers
 	out, err := resp.Pack()
 	if err != nil {

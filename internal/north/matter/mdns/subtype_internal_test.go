@@ -187,6 +187,9 @@ func TestBuildReply_MatchingPTR_ReturnsReply(t *testing.T) {
 
 	msg := new(dns.Msg)
 	msg.SetQuestion(qname, dns.TypePTR)
+	// Non-zero query ID: the multicast reply must still carry ID 0 per
+	// RFC 6762 §18.1 (legacy queries arrive with arbitrary IDs).
+	msg.Id = 0x1234
 	buf, _ := msg.Pack()
 
 	out, ok := r.buildReply(buf)
@@ -204,6 +207,15 @@ func TestBuildReply_MatchingPTR_ReturnsReply(t *testing.T) {
 	}
 	if !resp.Authoritative {
 		t.Error("reply: Authoritative flag not set")
+	}
+	// RFC 6762 §6: a question section in a multicast response makes
+	// strict stacks (Avahi, including subnet reflectors) drop the whole
+	// reply — the commissioner then never sees the subtype answer.
+	if len(resp.Question) != 0 {
+		t.Errorf("reply: question section has %d entries, want 0 (RFC 6762 §6)", len(resp.Question))
+	}
+	if resp.Id != 0 {
+		t.Errorf("reply: Id = 0x%X, want 0 (RFC 6762 §18.1)", resp.Id)
 	}
 	if len(resp.Answer) != 1 {
 		t.Fatalf("reply: len(Answer)=%d, want 1", len(resp.Answer))
