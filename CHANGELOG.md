@@ -6,6 +6,13 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **CI: the Windows test leg no longer gates PRs.** Windows is not a
+  shipped target (goreleaser builds linux only) and the runner was the
+  slowest, flakiest matrix leg; the run moved to the nightly workflow
+  as a non-gating canary for a potential Windows release comeback.
+
 ### Added
 
 - **`centrals[].host` is validated syntactically.** The host must be a

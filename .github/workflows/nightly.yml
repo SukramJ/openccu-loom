@@ -40,6 +40,29 @@ jobs:
       - name: benchmarks
         run: make bench
 
+  test-windows:
+    # Windows is not a shipped target (.goreleaser.yaml builds linux only),
+    # so the Windows test leg gates no PR — it runs here as a nightly
+    # canary that keeps the signal alive for a potential Windows release
+    # comeback (the goreleaser config documents how to re-add the target).
+    name: test (windows-latest)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        # Force bash (Windows runners default to PowerShell, which parses
+        # flag arguments differently from Linux/macOS shells).
+        shell: bash
+        env:
+          CGO_ENABLED: "1"
+        run: go test -race -count=1 ./...
+
   mutation:
     name: mutation (gremlins, core pkgs)
     runs-on: ubuntu-latest
