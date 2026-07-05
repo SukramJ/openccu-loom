@@ -49,8 +49,10 @@ The target:
    after the first run).
 3. Brings both services up under host networking.
 4. Execs `chip-tool pairing already-discovered 0x1234 20202021
-   127.0.0.1 5540 --pase-only true --bypass-attestation-verifier
-   true` and tees the output to `tmp/matter-smoke.log`.
+   ::1 5540 --pase-only true --bypass-attestation-verifier
+   true` and tees the output to `tmp/matter-smoke.log`. The target is
+   the IPv6 loopback because the `chip-cert-bins` chip-tool is an
+   ipv6only build that rejects IPv4 literals.
 5. Greps for `Pairing Success` and tears the stack down.
 
 A failed run prints the last 80 OpenCCU-Loom log lines and leaves the

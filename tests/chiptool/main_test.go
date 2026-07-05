@@ -109,7 +109,7 @@ func requireBridge(t *testing.T) *harness.Bridge {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		out, err := ctl.PairFull(ctx, t, "127.0.0.1", b.MatterPort())
+		out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
 		if err != nil {
 			sharedBridgeErr = fmt.Errorf("commission shared fabric: %w\n%s", err, out)
 			return

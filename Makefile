@@ -254,9 +254,11 @@ matter-smoke: ## run chip-tool PASE smoke against the Matter bridge (Linux host 
 	@# Absolute path: the chip-cert-bins image ships its binaries as
 	@# /root symlinks without putting them on PATH, and docker exec
 	@# does not search the working directory for bare command names.
+	@# ::1 not 127.0.0.1: the chip-cert-bins chip-tool is an ipv6only
+	@# build and rejects IPv4 literals with INVALID_ARGUMENT.
 	@docker compose -f $(MATTER_SMOKE_COMPOSE) exec -T chip-tool \
 		/root/chip-tool pairing already-discovered \
-			0x1234 20202021 127.0.0.1 5540 \
+			0x1234 20202021 ::1 5540 \
 			--bypass-attestation-verifier true \
 			--pase-only true \
 		2>&1 | tee $(MATTER_SMOKE_LOG)
