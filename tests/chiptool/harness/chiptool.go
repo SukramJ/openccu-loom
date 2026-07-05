@@ -42,6 +42,16 @@ const ChipDefaultDiscriminator = 0xF00
 // address the bridge (node ID = bridge), not the controller.
 const SharedFabricNodeID = 0x1234
 
+// PairTargetHost is the loopback address tests hand to chip-tool's
+// `pairing already-discovered`. IPv6 deliberately: the CSA
+// chip-cert-bins builds are ipv6only (INET_CONFIG_ENABLE_IPV4=0) and
+// reject IPv4 literals during argument parsing with
+// CHIP_ERROR_INVALID_ARGUMENT (0x2F), while every chip-tool build —
+// snap or cert-bins — accepts the v6 loopback. The bridge binds
+// dual-stack ([::], prefer_ipv4=false in the harness config), so ::1
+// always reaches it.
+const PairTargetHost = "::1"
+
 // Controller is a chip-tool commissioner identity bound to an
 // on-disk KVS directory. Each test that needs an isolated fabric
 // owns one Controller; the shared post-commissioning controller
@@ -209,7 +219,8 @@ func (c *Controller) RunWithTimeout(parent context.Context, t *testing.T, timeou
 // `pairing already-discovered` flow. Returns the captured output
 // so tests can also assert on the success marker.
 //
-//   - addr  → bridge IP (typically 127.0.0.1)
+//   - addr  → bridge IP (use [PairTargetHost]; ipv6only chip-tool
+//     builds reject IPv4 literals)
 //   - port  → bridge UDP port (read out of /api/v1/matter/status)
 //
 // The flow used here matches docs/contributor/matter-smoke.md §3

@@ -207,6 +207,17 @@ func TestMRPAckAdapter_DischargeIsSessionScoped(t *testing.T) {
 // Matter §4.13.4.
 func paseRoundTrip(t *testing.T, a *PaseAdapter) (opcode uint8, body []byte, err error) {
 	t.Helper()
+	pake3 := paseHandshakeToPake3(t, a)
+	return a.ProcessPake3(pake3)
+}
+
+// paseHandshakeToPake3 drives PBKDFParam → Pake1 → Pake2 against the
+// adapter and returns the encoded Pake3 the commissioner would send
+// next. Split out of [paseRoundTrip] so tests that must invoke
+// ProcessPake3 from their own goroutine (deadlock detection) keep all
+// t.Fatalf calls on the test goroutine.
+func paseHandshakeToPake3(t *testing.T, a *PaseAdapter) []byte {
+	t.Helper()
 	const (
 		passcode   = uint32(20202021)
 		iterations = 1000
@@ -265,8 +276,7 @@ func paseRoundTrip(t *testing.T, a *PaseAdapter) (opcode uint8, body []byte, err
 		t.Fatalf("prover.ProcessPake2: %v", err)
 	}
 
-	opcode, body, err = a.ProcessPake3(spake2.EncodePake3(cA))
-	return opcode, body, err
+	return spake2.EncodePake3(cA)
 }
 
 // buildTestPBKDFParamRequest assembles a minimal PBKDFParamRequest
@@ -347,6 +357,58 @@ func TestPaseAdapter_CallbackInvokedOnSuccess(t *testing.T) {
 	cbMu.Unlock()
 	if secretLen != spake2.SharedSecretSize {
 		t.Fatalf("callback sharedSecret length = %d, want %d", secretLen, spake2.SharedSecretSize)
+	}
+}
+
+// TestPaseAdapter_OnEstablishedRunsOutsideAdapterLock — the daemon's
+// production pickup callback reads adapter state (PeerMRPParams)
+// while handling OnSessionEstablished, so the callback MUST run
+// outside the adapter mutex. Invoked under a.mu it self-deadlocks
+// the PASE receive goroutine: the commissioner never receives the
+// closing SESSION_ESTABLISHMENT_SUCCESS StatusReport and times out
+// after Pake3 with only a standalone ack on the wire. Mirrors
+// matter.js packages/protocol/src/session/pase/PaseServer.ts:151-157
+// — the pickup reads the initiator's session params post-verify with
+// no adapter lock held.
+func TestPaseAdapter_OnEstablishedRunsOutsideAdapterLock(t *testing.T) {
+	t.Parallel()
+	a := newPaseAdapterWithVerifier(t)
+
+	var gotParams atomic.Bool
+	a.SetOnSessionEstablished(func(_ []byte, _ uint16) error {
+		// Calling back into the adapter is what the daemon's
+		// production callback does; it must not deadlock.
+		_ = a.PeerMRPParams()
+		gotParams.Store(true)
+		return nil
+	})
+
+	pake3 := paseHandshakeToPake3(t, a)
+
+	type result struct {
+		opcode uint8
+		body   []byte
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		op, body, err := a.ProcessPake3(pake3)
+		done <- result{op, body, err}
+	}()
+
+	select {
+	case r := <-done:
+		if r.err != nil {
+			t.Fatalf("ProcessPake3: %v", r.err)
+		}
+		if r.opcode != mrp.SCOpcodeStatusReport || len(r.body) == 0 {
+			t.Fatalf("ProcessPake3 returned opcode=0x%X body=%d bytes, want StatusReport", r.opcode, len(r.body))
+		}
+		if !gotParams.Load() {
+			t.Fatal("callback did not run")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("ProcessPake3 deadlocked: OnSessionEstablished ran under the adapter mutex")
 	}
 }
 

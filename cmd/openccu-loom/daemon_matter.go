@@ -2488,6 +2488,12 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 		ActiveThresholdTimeMs:  &thresh,
 	})
 	paseAdapter.SetOnSessionEstablished(func(sharedSecret []byte, peerSessionID uint16) error {
+		// Pickup marker: this fires after a successful Pake3
+		// verification but before the session is registered. Paired
+		// with the closing session_established log it brackets the
+		// pickup so a stall inside is attributable from the log alone.
+		logger.Debug("matter.bridge.pase.session_pickup",
+			slog.Int("peer_session_id", int(peerSessionID)))
 		// PASE pre-dates the operational fabric; both node ids ride
 		// as the bridge-allocated PASE-temporary values per Matter
 		// §4.13.2 (random ephemerals). Use 0/0 here.
@@ -2499,6 +2505,8 @@ func buildPaseAdapterFromContext(vc *spake2.VerifierContext, salt []byte, iterat
 			mgr.ReleaseID(sessID)
 			return err
 		}
+		logger.Debug("matter.bridge.pase.session_open_ok",
+			slog.Int("session_id", int(entry.SessionID)))
 		// Honour the commissioner's InitiatorMRPParams (tag 5) so
 		// outbound retransmissions on the PASE session use the peer's
 		// advertised intervals. Mirrors matter.js PaseServer.ts:155-157

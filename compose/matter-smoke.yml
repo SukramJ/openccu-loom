@@ -20,7 +20,12 @@ services:
     network_mode: host
     volumes:
       - ./fixtures/matter-smoke-cfg.yaml:/etc/openccu-loom/config.yaml:ro
-      - matter-smoke-data:/tmp/openccu-loom-matter-smoke
+    # tmpfs, not a named volume: the distroless image runs as nonroot
+    # (uid 65532) and a named volume is root-owned at first mount, so
+    # SQLite cannot create its database file. tmpfs mounts are 1777 by
+    # default and the smoke never needs persistence across runs.
+    tmpfs:
+      - /tmp/openccu-loom-matter-smoke
     command: ["run", "--config", "/etc/openccu-loom/config.yaml"]
     healthcheck:
       # No HTTP surface in the smoke config — probe the UDP listen
@@ -35,21 +40,24 @@ services:
   chip-tool:
     image: connectedhomeip/chip-cert-bins:6feac778f196483b6355d35fc529f183b293b71f
     network_mode: host
-    # Matter mDNS lookup goes through the host's avahi-daemon when
-    # available. Mounting the system bus lets chip-tool's discovery
-    # backend resolve `_matter._tcp.local` via the host resolver
-    # instead of doing its own SRV browse.
     volumes:
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
       - chip-tool-storage:/root/.chip
-    # Idle entrypoint — the Makefile target execs the actual chip-tool
-    # invocation via `docker compose exec`. Keeps storage persistent
-    # across multiple commissioning attempts in a single smoke run.
-    entrypoint: ["sleep", "infinity"]
+    # chip-tool's platform-mdns build hard-requires a reachable dbus +
+    # avahi stack at init (avahi_client_new runs before any command,
+    # even `pairing already-discovered`). Run both INSIDE the container
+    # (the image ships them via avahi-utils → avahi-daemon → dbus)
+    # instead of mounting the host bus — hermetic, no host avahi
+    # prerequisite, works identically on any Linux host / CI runner.
+    # The trailing sleep keeps the container idle; the Makefile target
+    # execs the actual chip-tool invocation via `docker compose exec`,
+    # with storage persistent across commissioning attempts in a run.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - mkdir -p /run/dbus && dbus-daemon --system --fork && avahi-daemon --daemonize --no-chroot && sleep infinity
     depends_on:
       openccu-loom:
         condition: service_healthy
 
 volumes:
-  matter-smoke-data:
   chip-tool-storage:
