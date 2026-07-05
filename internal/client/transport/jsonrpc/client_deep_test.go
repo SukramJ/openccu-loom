@@ -111,6 +111,10 @@ func TestJSONRPCRenewExtendsSession(t *testing.T) {
 	if err := c.Login(context.Background()); err != nil {
 		t.Fatalf("Login: %v", err)
 	}
+	// Age the freshness stamp so Renew performs a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 	if err := c.Renew(context.Background()); err != nil {
 		t.Fatalf("Renew: %v", err)
 	}
@@ -911,6 +915,10 @@ func TestRenewSkipsWhenRecentlyRefreshed(t *testing.T) {
 	if err := c.Login(context.Background()); err != nil {
 		t.Fatalf("Login: %v", err)
 	}
+	// Login stamps freshness; age it so the first Renew is a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 
 	// First Renew — must hit the server.
 	if err := c.Renew(context.Background()); err != nil {
@@ -950,6 +958,10 @@ func TestRenewIssuedAfterSessionAgeExpiry(t *testing.T) {
 	if err := c.Login(context.Background()); err != nil {
 		t.Fatalf("Login: %v", err)
 	}
+	// Login stamps freshness; age it so the first Renew is a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 
 	// First Renew populates lastSessionRefresh.
 	if err := c.Renew(context.Background()); err != nil {
@@ -987,6 +999,10 @@ func TestRenewCallOnceError(t *testing.T) {
 	if err := c.Login(context.Background()); err != nil {
 		t.Fatalf("Login: %v", err)
 	}
+	// Login stamps freshness; age it so Renew is a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 	if err := c.Renew(context.Background()); err == nil {
 		t.Fatal("expected error when Session.renew returns 500")
 	}
