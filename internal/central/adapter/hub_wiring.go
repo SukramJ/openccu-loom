@@ -1302,15 +1302,32 @@ func (w *hubJSONRPCWriter) SetProgramEnabled(ctx context.Context, id string, ena
 	return err
 }
 
-// SetSysvar writes the sysvar via the Rega script. CCU JSON-RPC
-// SysVar.set has inconsistent type coercion across firmwares; the
-// Rega path matches the CCU WebUI.
+// SetSysvar writes the sysvar with per-type wire dispatch, mirroring
+// the reference JSON-RPC client: bool → SysVar.setBool, numeric values
+// (including enum/list indices) → SysVar.setFloat, and only strings go
+// through the Rega script. The script's own guard writes string-typed
+// variables ONLY and emits nothing when it declines (sysvar missing or
+// not string-typed) — routing a non-string value through it silently
+// drops the write, and a decline must surface as an error, not as a
+// silent no-op.
 func (w *hubJSONRPCWriter) SetSysvar(ctx context.Context, name string, value any) error {
-	_, err := w.rega.Run(ctx, hmenum.RegaScriptSetSystemVariable, map[string]string{
+	s, isString := value.(string)
+	if !isString {
+		return w.json.SetSystemVariable(ctx, name, value)
+	}
+	out, err := w.rega.Run(ctx, hmenum.RegaScriptSetSystemVariable, map[string]string{
 		"name":  name,
-		"value": fmt.Sprint(value),
+		"value": s,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// Success echoes the written value; clearing to "" legitimately
+	// echoes empty and must not count as a decline.
+	if out == "" && s != "" {
+		return fmt.Errorf("sysvar %q: rega write declined (missing or not string-typed)", name)
+	}
+	return nil
 }
 
 // CreateSysvar provisions a new sysvar.

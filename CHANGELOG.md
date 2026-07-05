@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Non-string sysvar writes were silently dropped.** Every sysvar
+  write went through the `set_system_variable` Rega script, whose own
+  guard writes string-typed variables ONLY and emits nothing when it
+  declines — so writes to LIST/ENUM (e.g. `Aus;Niedrig;Normal;Hoch`),
+  FLOAT, INTEGER, and BOOL variables reported success without changing
+  anything on the CCU (reads were unaffected). Writes now dispatch by
+  type like the reference client: bool → `SysVar.setBool`, numeric
+  values including enum/list indices → `SysVar.setFloat`, and only
+  strings use the Rega script — whose decline (missing or non-string
+  sysvar) now surfaces as an error instead of a silent no-op.
+
 ## [0.26.1] — 2026-07-05
 
 ### Added
