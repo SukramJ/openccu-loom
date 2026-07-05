@@ -20,6 +20,24 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Matter commissioning deadlock — new pairings have been broken
+  since 0.23.0 (critical).** `PaseAdapter.ProcessPake3` invoked the
+  session-pickup callback while holding the adapter mutex; the
+  daemon's pickup callback calls back into the adapter
+  (`PeerMRPParams`, added in the 0.23.0 behaviour-parity wave), so
+  every successful PASE handshake self-deadlocked the receive
+  goroutine after Pake3. The commissioner never received the closing
+  `SESSION_ESTABLISHMENT_SUCCESS` StatusReport and timed out —
+  observed uniformly with chip-tool, and affecting every controller
+  (Apple Home / Google Home / Home Assistant) attempting a NEW
+  commissioning on 0.23.0–0.26.0; already-commissioned fabrics
+  resuming over CASE were unaffected. The callback now runs outside
+  the lock (verifier state is torn down under the lock first),
+  mirroring matter.js `PaseServer.ts`, which reads initiator session
+  params post-verify with no lock held. Found by the new chip-tool CI
+  workflow on its first real run — the exact gap it was built to
+  close (the suite cannot run on macOS developer hosts). Regression
+  test: `TestPaseAdapter_OnEstablishedRunsOutsideAdapterLock`.
 - **From-source Docker build.** The SPA build stage in `Dockerfile`
   now copies `assets/ui/.npmrc` (`legacy-peer-deps=true`) next to the
   package manifests — without it npm 11 fails `npm ci` on the

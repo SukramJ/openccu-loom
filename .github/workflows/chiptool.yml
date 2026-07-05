@@ -150,6 +150,16 @@ jobs:
       - name: matter-smoke
         run: make matter-smoke
 
+      # chip-tool's platform-mdns build hard-requires a reachable
+      # dbus socket at init (avahi_client_new with NO_FAIL still
+      # needs the bus). Surface the host-side state when the smoke
+      # fails so a broken socket mount is attributable from the log.
+      - name: dbus/avahi diagnostics
+        if: failure()
+        run: |
+          ls -la /run/dbus/ /var/run/dbus/ 2>&1 || true
+          systemctl is-active dbus avahi-daemon || true
+
       - name: upload chip-tool log
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
