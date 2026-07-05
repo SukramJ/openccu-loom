@@ -85,9 +85,12 @@ func bridgeSessionParameters() *sigma.SessionParameters {
 // framework itself.
 func buildMatterAdvertiser(mc config.NorthMatter, logger *slog.Logger) mdns.Advertiser {
 	switch mc.MDNSAdvertise {
-	case "", "noop":
+	case "noop":
+		// Explicit opt-out only. A commissioner can never discover a
+		// bridge that does not advertise, so "quiet" must be a conscious
+		// choice, not the unset default.
 		return mdns.NewNoop()
-	case "zeroconf":
+	case "", "zeroconf":
 		z := mdns.NewZeroconf()
 		// Side-car responder so service-subtype browses
 		// (`_L<long>._sub`, `_S<short>._sub`, `_V<vid>._sub`,
@@ -151,19 +154,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	store := matterstore.New(db)
 
-	mc := cfg.North.Matter
-	if mc.VendorID == 0 {
-		mc.VendorID = 0xFFF1
-	}
-	if mc.ProductID == 0 {
-		mc.ProductID = 0x8000
-	}
-	if mc.NodeLabel == "" {
-		mc.NodeLabel = "openccu-loom"
-	}
-	if mc.Discriminator == 0 {
-		mc.Discriminator = 0xF00
-	}
+	// Single defaulting point: the SAME defaulted view feeds the bridge
+	// core here and the opener / advertisement / REST setup-payload in
+	// wireMatterRuntime + mountRESTRouter. See config.NorthMatter.WithDefaults.
+	mc := cfg.North.Matter.WithDefaults()
 	if mc.DevRotateUniqueIDs {
 		// Dev-mode: rotate every bridged endpoint's UniqueID at boot so
 		// pair iteration cycles (chip-tool brief T11, Apple HMHome cache
@@ -2793,6 +2787,12 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
 	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, labels, logger); bundle != nil {
+		// Defaulted view of the Matter config — the identical view
+		// startMatterBridge fed the bridge core. The opener, the mDNS
+		// advertisement, and the status reader below MUST consume the
+		// same values; mixing raw and defaulted fields used to publish
+		// discriminator 0 while the bridge core held the 0xF00 default.
+		mcfg := cfg.North.Matter.WithDefaults()
 		mb := bundle.bridge
 		mfs := bundle.store
 		teardown = bundle.stop
@@ -2936,8 +2936,8 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// configured per-exchange provider; otherwise it re-arms the configured
 		// singleton adapter (bundle.configuredPase, nil → noop between windows).
 		var verifierConfiguredFactory func() *matterbridge.PaseAdapter
-		if cfg.North.Matter.Commissioning.ConcurrentPairings {
-			cmCopy := cfg.North.Matter.Commissioning
+		if mcfg.Commissioning.ConcurrentPairings {
+			cmCopy := mcfg.Commissioning
 			opMgrLocal := bundle.opMgr
 			opCredsLocal := bundle.opCreds
 			gcLocal := bundle.rootRefs.GeneralCommissioning
@@ -2956,10 +2956,10 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		))
 		opener := matterbridge.NewCommissioningWindowOpener(
 			window,
-			cfg.North.Matter.Discriminator,
-			cfg.North.Matter.Commissioning.Passcode,
-			cfg.North.Matter.VendorID,
-			cfg.North.Matter.ProductID,
+			mcfg.Discriminator,
+			mcfg.Commissioning.Passcode,
+			mcfg.VendorID,
+			mcfg.ProductID,
 		)
 		// Matter §4.3.1.5 requires a random 64-bit hex Instance Name on
 		// every commissionable record. A fixed/zero value lets Apple
@@ -2976,10 +2976,10 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// without an extra persistence slot. LifetimeCounter stays at 0
 		// in 0.1.0; future iterations bump it on fabric-change events.
 		rotatingUniqueID := mdns.DeriveUniqueIDFromIdentity(
-			cfg.North.Matter.VendorID,
-			cfg.North.Matter.ProductID,
-			rotatingSerialPart(cfg.North.Matter.VendorID, cfg.North.Matter.ProductID, cfg.North.Matter.NodeLabel),
-			cfg.North.Matter.NodeLabel,
+			mcfg.VendorID,
+			mcfg.ProductID,
+			rotatingSerialPart(mcfg.VendorID, mcfg.ProductID, mcfg.NodeLabel),
+			mcfg.NodeLabel,
 		)
 		rotatingID := mdns.GenerateRotatingID(rotatingUniqueID, 0)
 
@@ -2988,10 +2988,10 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 			bridge: mb,
 			advert: matterbridge.CommissioningAdvertisement{
 				InstanceID:        instanceID,
-				Discriminator:     cfg.North.Matter.Discriminator,
-				VendorID:          cfg.North.Matter.VendorID,
-				ProductID:         cfg.North.Matter.ProductID,
-				NodeLabel:         cfg.North.Matter.NodeLabel,
+				Discriminator:     mcfg.Discriminator,
+				VendorID:          mcfg.VendorID,
+				ProductID:         mcfg.ProductID,
+				NodeLabel:         mcfg.NodeLabel,
 				RotatingID:        rotatingID,
 				CommissioningMode: 1, // §4.3.1.4 CM=1: open commissioning window
 				// DT TXT-Record advertises the *primary* device-type
@@ -3019,9 +3019,9 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		//nolint:contextcheck // the returned hook fires asynchronously on a window state change; there is no caller ctx to thread, so the mDNS announce/withdraw use context.Background()
 		window.SetTransitionHook(matterWindowTransitionHook(mb, window, matterbridge.CommissioningAdvertisement{
 			InstanceID:        instanceID,
-			VendorID:          cfg.North.Matter.VendorID,
-			ProductID:         cfg.North.Matter.ProductID,
-			NodeLabel:         cfg.North.Matter.NodeLabel,
+			VendorID:          mcfg.VendorID,
+			ProductID:         mcfg.ProductID,
+			NodeLabel:         mcfg.NodeLabel,
 			RotatingID:        rotatingID,
 			CommissioningMode: 2, // §4.3.1.4 CM=2: enhanced commissioning window
 			DeviceTypeID:      0x0016,
@@ -3033,13 +3033,13 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		// duration. Works with both `concurrent_pairings=false`
 		// (singleton swap) and `concurrent_pairings=true` (per-exchange
 		// PaseAdapter factory installed for the window).
-		if cfg.North.Matter.Commissioning.EphemeralWindow {
+		if mcfg.Commissioning.EphemeralWindow {
 			var configuredFactory func() *matterbridge.PaseAdapter
-			if cfg.North.Matter.Commissioning.ConcurrentPairings {
+			if mcfg.Commissioning.ConcurrentPairings {
 				// Capture the operator's configured per-exchange factory
 				// so the Restore closure can re-install it after the
 				// ephemeral window closes.
-				cmCopy := cfg.North.Matter.Commissioning
+				cmCopy := mcfg.Commissioning
 				opMgrLocal := bundle.opMgr
 				opCredsLocal := bundle.opCreds
 				gcLocal := bundle.rootRefs.GeneralCommissioning
@@ -3053,11 +3053,11 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 					return a
 				}
 			}
-			ephem := newMatterEphemeralProvider(mb, cfg.North.Matter.Commissioning, bundle.opMgr, bundle.opCreds, bundle.configuredPase, configuredFactory, logger)
+			ephem := newMatterEphemeralProvider(mb, mcfg.Commissioning, bundle.opMgr, bundle.opCreds, bundle.configuredPase, configuredFactory, logger)
 			opener.SetEphemeralProvider(ephem)
 			logger.Info("matter.bridge.pase.ephemeral_armed",
 				slog.Bool("configured_fallback", bundle.configuredPase != nil),
-				slog.Bool("concurrent_pairings", cfg.North.Matter.Commissioning.ConcurrentPairings))
+				slog.Bool("concurrent_pairings", mcfg.Commissioning.ConcurrentPairings))
 		}
 		// Wire the Reassemble → WS event emit pipeline so the SPA's
 		// allowlist save flow gets a `matter.endpoint_assembled`
@@ -3110,12 +3110,12 @@ func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Reg
 		mb.SetOnFabricAdded(wiring.pub.publishFabricAdded)
 		mb.SetOnFabricRemoved(wiring.pub.publishFabricRemoved)
 		wiring.statusReader = &matterStatusReaderAdapter{
-			enabled: cfg.North.Matter.Enabled,
+			enabled: mcfg.Enabled,
 			bridge:  mb,
 			store:   mfs,
 			window:  window,
 			cfg: &matterStatusConfig{
-				advertising: cfg.North.Matter.MDNSAdvertise == "zeroconf",
+				advertising: mcfg.MDNSAdvertise == "zeroconf",
 			},
 		}
 		if healthTracker != nil {

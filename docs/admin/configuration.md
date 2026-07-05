@@ -312,7 +312,7 @@ The native-Go Matter bridge. Disabled by default; opt-in.
 | `north.matter.product_id` | uint16 | `0x8000` | — | no |
 | `north.matter.node_label` | string | `openccu-loom` | — | no |
 | `north.matter.discriminator` | uint16 | `0xF00` | — | no |
-| `north.matter.mdns_advertise` | string | `noop` | — | no |
+| `north.matter.mdns_advertise` | string | `zeroconf` | — | no |
 | `north.matter.commissioning.passcode` | uint32 | — | — | **yes** |
 | `north.matter.commissioning.salt` | string | — | — | **yes** |
 | `north.matter.commissioning.iterations` | int | `1000` | — | no |

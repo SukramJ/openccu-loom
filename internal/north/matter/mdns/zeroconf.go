@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/grandcat/zeroconf"
+
+	"github.com/SukramJ/openccu-loom/internal/netutil"
 )
 
 // Zeroconf is an [Advertiser] backed by github.com/grandcat/zeroconf.
@@ -89,14 +91,61 @@ func (z *Zeroconf) AttachSubtypeResponder(r *SubtypeResponder) {
 	z.mu.Unlock()
 }
 
+// hostIface is the testable shape of one network interface: its name,
+// the flags the filter consults, and its unicast IPs. Decoupled from
+// net.Interface so filterPrimaryHostIPs can be unit-tested without
+// real interfaces.
+type hostIface struct {
+	name         string
+	up           bool
+	multicast    bool
+	loopback     bool
+	pointToPoint bool
+	ips          []net.IP
+}
+
 // primaryHostIPs returns the curated host-IP list the Matter mDNS
-// records should publish: the routable IPv4 + globally-routable IPv6
-// addresses from every non-loopback, non-tunnel, multicast-capable
-// interface that is currently UP. Apple iOS Matter daemon iterates the
-// published address list during resolve and aborts on unreachable
-// addresses before trying the next — grandcat/zeroconf defaulted to
-// emitting every IP on every interface (loopback, link-local
-// duplicates, tunnels), which made pairing silently time out.
+// records should publish (see filterPrimaryHostIPs for the policy).
+func primaryHostIPs() []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	infos := make([]hostIface, 0, len(ifaces))
+	for _, ifi := range ifaces {
+		info := hostIface{
+			name:         ifi.Name,
+			up:           ifi.Flags&net.FlagUp != 0,
+			multicast:    ifi.Flags&net.FlagMulticast != 0,
+			loopback:     ifi.Flags&net.FlagLoopback != 0,
+			pointToPoint: ifi.Flags&net.FlagPointToPoint != 0,
+		}
+		addrs, aerr := ifi.Addrs()
+		if aerr != nil {
+			continue
+		}
+		for _, a := range addrs {
+			if ipn, ok := a.(*net.IPNet); ok {
+				info.ips = append(info.ips, ipn.IP)
+			}
+		}
+		infos = append(infos, info)
+	}
+	return filterPrimaryHostIPs(infos)
+}
+
+// filterPrimaryHostIPs applies the advertise policy: the routable IPv4 +
+// globally-routable IPv6 addresses from every non-loopback, non-tunnel,
+// multicast-capable interface that is currently UP — excluding container /
+// virtualisation bridges by interface name. Apple iOS Matter daemon
+// iterates the published address list during resolve and aborts on
+// unreachable addresses before trying the next — grandcat/zeroconf
+// defaulted to emitting every IP on every interface (loopback, link-local
+// duplicates, tunnels), which made pairing silently time out. Container
+// bridges (docker0, hassio, br-<hex>, veth*, …) pass the flag checks —
+// they are UP and multicast-capable — but their addresses are unroutable
+// from LAN peers, so they are dropped by [netutil.IsVirtualInterfaceName],
+// the same filter the client-discovery advertiser applies.
 //
 // Collecting from all valid NICs (multi-homed hosts have multiple
 // physical or VLAN interfaces) ensures the bridge is reachable from
@@ -105,33 +154,20 @@ func (z *Zeroconf) AttachSubtypeResponder(r *SubtypeResponder) {
 // Returns string form (RegisterProxy expects strings). IPv4 addresses
 // are listed before IPv6 so commissioners that prefer IPv4 don't pay
 // the cost of an IPv6 timeout first.
-func primaryHostIPs() []string {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
+func filterPrimaryHostIPs(ifaces []hostIface) []string {
 	seen := make(map[string]struct{})
 	var v4s, v6s []string
 	for _, ifi := range ifaces {
-		if ifi.Flags&net.FlagUp == 0 {
+		if !ifi.up || !ifi.multicast || ifi.loopback || ifi.pointToPoint {
 			continue
 		}
-		if ifi.Flags&net.FlagMulticast == 0 {
+		if netutil.IsVirtualInterfaceName(ifi.name) {
 			continue
 		}
-		if ifi.Flags&net.FlagLoopback != 0 || ifi.Flags&net.FlagPointToPoint != 0 {
-			continue
-		}
-		addrs, aerr := ifi.Addrs()
-		if aerr != nil {
-			continue
-		}
-		for _, a := range addrs {
-			ipn, ok := a.(*net.IPNet)
-			if !ok || ipn.IP.IsLoopback() {
+		for _, ip := range ifi.ips {
+			if ip == nil || ip.IsLoopback() {
 				continue
 			}
-			ip := ipn.IP
 			s := ip.String()
 			if _, dup := seen[s]; dup {
 				continue
@@ -149,8 +185,7 @@ func primaryHostIPs() []string {
 			}
 		}
 	}
-	v4s = append(v4s, v6s...)
-	return v4s
+	return append(v4s, v6s...)
 }
 
 // Publish implements [Advertiser]. Each publish call registers a

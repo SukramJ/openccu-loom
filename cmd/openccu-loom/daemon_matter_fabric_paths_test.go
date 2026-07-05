@@ -136,6 +136,7 @@ func TestMatterCommissioningOpenerAdapter_Announce_WithBridge(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-ann", Host: "127.0.0.1"}}

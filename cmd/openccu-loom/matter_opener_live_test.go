@@ -22,6 +22,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_LiveOpener(t *
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
@@ -94,6 +95,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_TopologyNotRea
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-empty", Host: "127.0.0.1"}}
@@ -132,6 +134,7 @@ func TestMatterCommissioningOpenerAdapter_OpenCommissioningWindow_AlreadyOpen(t 
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000

@@ -32,6 +32,11 @@ func RestartRequiredDiff(boot, eff *Config) []string {
 	add(boot.Callback.PortRange != eff.Callback.PortRange, "callback.port_range")
 	add(boot.North.Matter.Enabled != eff.North.Matter.Enabled, "north.matter.enabled")
 	add(boot.North.Matter.Listen != eff.North.Matter.Listen, "north.matter.listen")
+	// The advertiser is built once in the bridge bring-up; switching
+	// between zeroconf and noop (or from the unset default) only takes
+	// effect on the next boot. Compare the defaulted views so unset → the
+	// explicit default value does not flag a phantom restart.
+	add(boot.North.Matter.WithDefaults().MDNSAdvertise != eff.North.Matter.WithDefaults().MDNSAdvertise, "north.matter.mdns_advertise")
 	add(boot.North.MCP.Enabled != eff.North.MCP.Enabled, "north.mcp.enabled")
 	add(boot.North.MCP.AllowWrites != eff.North.MCP.AllowWrites, "north.mcp.allow_writes")
 	add(boot.North.MCP.Path != eff.North.MCP.Path, "north.mcp.path")

@@ -171,6 +171,7 @@ func TestDaemonServe_WithMatterAndDataDir(t *testing.T) {
 	cfg.North.REST.Enabled = new(false)
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
@@ -206,6 +207,7 @@ func TestDaemonServe_WithCASEConfigured(t *testing.T) {
 	cfg.North.REST.Enabled = new(false)
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.CASE.NodeID = 42
 	cfg.North.Matter.CASE.FabricID = 1
@@ -649,6 +651,7 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
@@ -781,6 +784,7 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000

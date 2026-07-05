@@ -264,12 +264,18 @@ func mountRESTServer(ctx context.Context, cfg *config.Config, logger *slog.Logge
 		// the configured PASE acceptor; ephemeral verifier
 		// generation is a post-0.1.0 follow-up).
 		MatterFabricStore: d.matter.fabricStore,
-		MatterCommissioning: handlers.MatterCommissioning{
-			Discriminator: cfg.North.Matter.Discriminator,
-			Passcode:      cfg.North.Matter.Commissioning.Passcode,
-			VendorID:      cfg.North.Matter.VendorID,
-			ProductID:     cfg.North.Matter.ProductID,
-		},
+		// WithDefaults keeps the setup payload aligned with the bridge
+		// runtime: QR / manual code must carry the SAME discriminator the
+		// mDNS record advertises, or commissioners filter the bridge out.
+		MatterCommissioning: func() handlers.MatterCommissioning {
+			mcfg := cfg.North.Matter.WithDefaults()
+			return handlers.MatterCommissioning{
+				Discriminator: mcfg.Discriminator,
+				Passcode:      mcfg.Commissioning.Passcode,
+				VendorID:      mcfg.VendorID,
+				ProductID:     mcfg.ProductID,
+			}
+		}(),
 		MatterCommissioningOpener: d.matter.opener,
 		MatterStatusReader:        d.matter.statusReader,
 		MatterFabricRevoker:       d.matter.fabricRevoker,
