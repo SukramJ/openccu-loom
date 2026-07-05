@@ -9,6 +9,8 @@ package mdns
 import (
 	"context"
 	"log/slog"
+	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -29,6 +31,101 @@ func TestPrimaryHostIPs_ReturnsNonNilSlice(t *testing.T) {
 		if ip == "" {
 			t.Error("primaryHostIPs returned empty string IP")
 		}
+	}
+}
+
+// ---- filterPrimaryHostIPs ----
+
+// TestFilterPrimaryHostIPs verifies the advertise policy documented on
+// filterPrimaryHostIPs: container/virtualisation bridges are dropped by
+// name, down/non-multicast/loopback/point-to-point interfaces are dropped
+// by flag, IPv4 sorts before IPv6, duplicates are deduplicated, and
+// link-local addresses (both families) are excluded while global IPv6
+// survives.
+func TestFilterPrimaryHostIPs(t *testing.T) {
+	t.Parallel()
+	ip := net.ParseIP
+
+	tests := []struct {
+		name   string
+		ifaces []hostIface
+		want   []string
+	}{
+		{
+			name: "container bridges dropped, real LAN interface kept",
+			ifaces: []hostIface{
+				{name: "docker0", up: true, multicast: true, ips: []net.IP{ip("172.17.0.1")}},
+				{name: "hassio", up: true, multicast: true, ips: []net.IP{ip("172.30.32.1")}},
+				{name: "br-1a2b3c4d", up: true, multicast: true, ips: []net.IP{ip("172.18.0.1")}},
+				{name: "eth0", up: true, multicast: true, ips: []net.IP{ip("192.168.1.10")}},
+			},
+			want: []string{"192.168.1.10"},
+		},
+		{
+			name: "down interface dropped",
+			ifaces: []hostIface{
+				{name: "eth0", up: false, multicast: true, ips: []net.IP{ip("192.168.1.10")}},
+			},
+			want: nil,
+		},
+		{
+			name: "non-multicast interface dropped",
+			ifaces: []hostIface{
+				{name: "eth0", up: true, multicast: false, ips: []net.IP{ip("192.168.1.10")}},
+			},
+			want: nil,
+		},
+		{
+			name: "loopback interface dropped",
+			ifaces: []hostIface{
+				{name: "lo", up: true, multicast: true, loopback: true, ips: []net.IP{ip("127.0.0.1")}},
+			},
+			want: nil,
+		},
+		{
+			name: "point-to-point interface dropped",
+			ifaces: []hostIface{
+				{name: "tun0", up: true, multicast: true, pointToPoint: true, ips: []net.IP{ip("10.8.0.2")}},
+			},
+			want: nil,
+		},
+		{
+			name: "IPv4 sorted before IPv6",
+			ifaces: []hostIface{
+				{name: "eth0", up: true, multicast: true, ips: []net.IP{ip("2001:db8::1"), ip("192.168.1.10")}},
+			},
+			want: []string{"192.168.1.10", "2001:db8::1"},
+		},
+		{
+			name: "duplicate IPs across interfaces are deduplicated",
+			ifaces: []hostIface{
+				{name: "eth0", up: true, multicast: true, ips: []net.IP{ip("192.168.1.10")}},
+				{name: "eth0:1", up: true, multicast: true, ips: []net.IP{ip("192.168.1.10")}},
+			},
+			want: []string{"192.168.1.10"},
+		},
+		{
+			name: "IPv4 and IPv6 link-local dropped, global IPv6 kept",
+			ifaces: []hostIface{
+				{name: "eth0", up: true, multicast: true, ips: []net.IP{
+					ip("169.254.1.1"),
+					ip("fe80::1"),
+					ip("192.168.1.10"),
+					ip("2001:db8::1"),
+				}},
+			},
+			want: []string{"192.168.1.10", "2001:db8::1"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := filterPrimaryHostIPs(tc.ifaces)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("filterPrimaryHostIPs() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

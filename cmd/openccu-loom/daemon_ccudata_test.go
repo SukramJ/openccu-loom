@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/config"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 )
 
 // ── loadTranslations ──────────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ func TestLoadProfiles_Embedded_ReturnsNonNil(t *testing.T) {
 
 // ── buildMatterAdvertiser ─────────────────────────────────────────────────────
 
-func TestBuildMatterAdvertiser_EmptyValue_ReturnsNoop(t *testing.T) {
+func TestBuildMatterAdvertiser_EmptyValue_ReturnsZeroconf(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
@@ -129,6 +130,12 @@ func TestBuildMatterAdvertiser_EmptyValue_ReturnsNoop(t *testing.T) {
 	got := buildMatterAdvertiser(mc, logger)
 	if got == nil {
 		t.Fatal("expected non-nil advertiser for empty MDNSAdvertise")
+	}
+	if _, ok := got.(*mdns.Noop); ok {
+		t.Fatal("expected the unset default to resolve to the zeroconf advertiser, not noop")
+	}
+	if _, ok := got.(*mdns.Zeroconf); !ok {
+		t.Fatalf("expected *mdns.Zeroconf for empty MDNSAdvertise, got %T", got)
 	}
 }
 
@@ -138,8 +145,8 @@ func TestBuildMatterAdvertiser_NoopValue_ReturnsNoop(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&buf, nil))
 	mc := config.NorthMatter{MDNSAdvertise: "noop"}
 	got := buildMatterAdvertiser(mc, logger)
-	if got == nil {
-		t.Fatal("expected non-nil advertiser for noop MDNSAdvertise")
+	if _, ok := got.(*mdns.Noop); !ok {
+		t.Fatalf("expected *mdns.Noop for explicit noop MDNSAdvertise, got %T", got)
 	}
 }
 
@@ -149,8 +156,8 @@ func TestBuildMatterAdvertiser_UnknownValue_FallsBackToNoop(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	mc := config.NorthMatter{MDNSAdvertise: "invalid-backend"}
 	got := buildMatterAdvertiser(mc, logger)
-	if got == nil {
-		t.Fatal("expected non-nil fallback advertiser")
+	if _, ok := got.(*mdns.Noop); !ok {
+		t.Fatalf("expected *mdns.Noop fallback for an unknown MDNSAdvertise value, got %T", got)
 	}
 	// Should log a warning about the unknown value.
 	if !bytes.Contains(buf.Bytes(), []byte("matter.bridge.mdns.unknown")) {

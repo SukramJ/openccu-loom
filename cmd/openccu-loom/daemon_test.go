@@ -128,6 +128,7 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
@@ -160,6 +161,7 @@ func TestStartMatterBridge_PASEDisabledByDefault(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	// Commissioning.Passcode intentionally left at zero — PASE stays noop.
@@ -190,6 +192,7 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.North.Matter.Commissioning.Passcode = 20202021
@@ -315,6 +318,7 @@ func TestStartMatterBridge_CASEArmedByDefault(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	// CASE.NodeID intentionally left at zero — provider must still arm.
@@ -347,6 +351,7 @@ func TestStartMatterBridge_CASEArmedWhenConfigured(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.North.Matter.CASE.NodeID = 42

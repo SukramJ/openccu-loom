@@ -551,7 +551,7 @@ const EN: Catalog = {
   "config.help.north.matter.prefer_ipv4":
     "Force the Matter UDP socket to bind IPv4-only. Default false opens an IPv6 dual-stack socket that also accepts IPv4 traffic — the standard choice.",
   "config.help.north.matter.mdns_advertise":
-    "mDNS advertiser implementation. `zeroconf` publishes the operational + commissionable records via grandcat/zeroconf; `noop` keeps the records in-memory only (tests).",
+    "mDNS advertiser implementation. Unset defaults to `zeroconf`, which publishes the operational + commissionable records on the network — required for pairing by QR code. `noop` keeps the records in-memory only (tests / out-of-band discovery); commissioners cannot discover the bridge in that mode.",
   "config.help.north.matter.dev_rotate_unique_ids":
     "Development-only: mix a per-boot 16-byte random salt into every bridged endpoint's Matter UniqueID. Apple Home / Google Home need a STABLE UniqueID across restarts to recognise accessories — leave this off in production.",
   "config.help.north.matter.commissioning.passcode":
@@ -2527,7 +2527,7 @@ const DE: Catalog = {
   "config.help.north.matter.prefer_ipv4":
     "Erzwingt IPv4-only auf dem Matter-UDP-Socket. Default aus = IPv6-Dual-Stack-Socket, der auch IPv4 akzeptiert (Standardwahl).",
   "config.help.north.matter.mdns_advertise":
-    "mDNS-Advertiser-Implementierung. `zeroconf` veröffentlicht operational + commissionable Records via grandcat/zeroconf; `noop` bleibt nur in-memory (Tests).",
+    "mDNS-Advertiser-Implementierung. Ohne Wert gilt `zeroconf`: operational + commissionable Records werden im Netz veröffentlicht — Voraussetzung für das Koppeln per QR-Code. `noop` hält die Records nur in-memory (Tests / Out-of-band-Discovery); Commissioner finden die Bridge dann nicht.",
   "config.help.north.matter.dev_rotate_unique_ids":
     "Nur für Entwicklung: mischt einen pro-Boot 16-Byte-Random-Salt in die Matter UniqueID jedes Bridged-Endpoints. Apple Home / Google Home brauchen eine STABILE UniqueID über Restarts hinweg, um Geräte wiederzuerkennen — in Produktion AUS lassen.",
   "config.help.north.matter.commissioning.passcode":

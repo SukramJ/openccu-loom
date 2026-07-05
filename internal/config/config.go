@@ -603,14 +603,19 @@ type NorthMatter struct {
 	Discriminator uint16 `yaml:"discriminator" json:"discriminator" cfg:"expert"`
 
 	// MDNSAdvertise selects the mDNS advertiser implementation:
-	//   - "" or "noop": in-memory only, no multicast traffic. Fine for
-	//     unit tests and when discovery is handled out-of-band.
+	//   - "" (unset): defaults to "zeroconf" — commissioners can only
+	//     discover the bridge when its records are actually on the
+	//     network, so the enabled bridge advertises by default.
 	//   - "zeroconf": multicast `_matter._tcp` + `_matterc._udp` records
-	//     so chip-tool's `pairing` finds the bridge by service-type
-	//     instead of needing an explicit IP/port. The commissionable
-	//     record is published with `_L<long>` / `_S<short>` /
-	//     `_V<vendor>` subtypes whenever a commissioning window is
-	//     open and withdrawn on close.
+	//     so commissioners (Apple Home, Google Home, chip-tool) find the
+	//     bridge by service-type instead of needing an explicit IP/port.
+	//     The commissionable record is published with `_L<long>` /
+	//     `_S<short>` / `_V<vendor>` subtypes whenever a commissioning
+	//     window is open and withdrawn on close.
+	//   - "noop": explicit opt-out — in-memory only, no multicast
+	//     traffic. Fine for unit tests and when discovery is handled
+	//     out-of-band. Commissioning by QR scan CANNOT work in this
+	//     mode; commissioners never see the bridge.
 	MDNSAdvertise string `yaml:"mdns_advertise" json:"mdns_advertise" cfg:"expert"`
 
 	// Commissioning configures the PASE acceptor. When Passcode is
@@ -668,6 +673,44 @@ type NorthMatter struct {
 // should be mounted on the Root endpoint. Default (unset) is false.
 func (m NorthMatter) TimeSyncEnabled() bool {
 	return m.EnableTimeSync != nil && *m.EnableTimeSync
+}
+
+// WithDefaults returns a copy of m with every documented zero-value
+// default applied. This is the single defaulting point for the Matter
+// runtime: the bridge core, the commissioning-window opener, the mDNS
+// advertisement, and the REST setup-payload endpoint must all consume
+// the SAME defaulted view. Defaulting only a subset used to split the
+// bridge identity: the bridge core saw discriminator 0xF00 while the
+// QR code, manual code, and mDNS TXT record carried the raw 0 —
+// commissioners then filtered for the wrong discriminator.
+//
+// The persisted config is never mutated — operators keep seeing (and
+// saving) their own values; unset fields stay unset on disk.
+func (m NorthMatter) WithDefaults() NorthMatter {
+	out := m
+	if out.VendorID == 0 {
+		out.VendorID = 0xFFF1
+	}
+	if out.ProductID == 0 {
+		out.ProductID = 0x8000
+	}
+	if out.NodeLabel == "" {
+		out.NodeLabel = "openccu-loom"
+	}
+	if out.Discriminator == 0 {
+		out.Discriminator = 0xF00
+	}
+	if out.MDNSAdvertise == "" {
+		// An enabled bridge that never advertises is undiscoverable —
+		// operators read "Matter enabled + passcode set" as pairable, so
+		// the default must put records on the network. "noop" remains an
+		// explicit opt-out for hermetic tests / out-of-band discovery.
+		out.MDNSAdvertise = "zeroconf"
+	}
+	if out.Commissioning.Iterations == 0 {
+		out.Commissioning.Iterations = 1000
+	}
+	return out
 }
 
 // NorthMatterAttestation carries vendor-supplied attestation

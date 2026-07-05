@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.4
+
+- **Matter pairing works out of the box now.** The bridge previously
+  did NOT announce itself on the network unless the expert setting
+  `north.matter.mdns_advertise: zeroconf` was set manually — phones and
+  hubs reported "device not found" after scanning the QR code. The
+  bridge now advertises by default when Matter is enabled.
+- **Correct pairing code with default settings.** With no discriminator
+  configured, the QR / manual pairing code and the network announcement
+  used a wrong placeholder value; they now use the documented default
+  consistently.
+- **More reliable pairing on the add-on.** The Matter network
+  announcement no longer includes internal container addresses
+  (Docker / Supervisor networks), which could stall pairing while the
+  phone tried unreachable addresses.
+
 ## 0.26.3
 
 - **CCU address is validated on save.** The configured CCU host must be

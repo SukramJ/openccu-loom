@@ -301,6 +301,7 @@ func TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode(t *testing.T)
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.Commissioning.ConcurrentPairings = true
 	cfg.DataDir = t.TempDir()
@@ -362,6 +363,7 @@ func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) 
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}

@@ -20,6 +20,7 @@ func TestDaemonServe_WithMatterEnabled(t *testing.T) {
 	cfg.North.REST.Enabled = new(false)
 	cfg.North.UI.Enabled = new(false)
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000

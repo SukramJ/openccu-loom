@@ -143,6 +143,55 @@ func TestRestartRequiredDiff_SingleFieldChange(t *testing.T) {
 	}
 }
 
+// TestRestartRequiredDiff_MatterMDNSAdvertise verifies that the comparison
+// runs against the WithDefaults() view: an explicit boot-time value that
+// differs from the effective value surfaces the path, but a boot-time unset
+// value that resolves to the same default as the effective side does not —
+// switching the advertiser is restart-required, applying the documented
+// default is not a phantom restart.
+func TestRestartRequiredDiff_MatterMDNSAdvertise(t *testing.T) {
+	t.Parallel()
+
+	t.Run("explicit_noop_vs_defaulted_zeroconf_differs", func(t *testing.T) {
+		t.Parallel()
+		boot := baseConfig()
+		boot.North.Matter.MDNSAdvertise = "noop"
+		eff := clone(boot)
+		eff.North.Matter.MDNSAdvertise = "zeroconf"
+
+		got := RestartRequiredDiff(boot, eff)
+		if !slices.Contains(got, "north.matter.mdns_advertise") {
+			t.Errorf("expected \"north.matter.mdns_advertise\" in diff %v", got)
+		}
+	})
+
+	t.Run("unset_vs_explicit_default_is_not_a_diff", func(t *testing.T) {
+		t.Parallel()
+		boot := baseConfig()
+		boot.North.Matter.MDNSAdvertise = ""
+		eff := clone(boot)
+		eff.North.Matter.MDNSAdvertise = "zeroconf"
+
+		got := RestartRequiredDiff(boot, eff)
+		if slices.Contains(got, "north.matter.mdns_advertise") {
+			t.Errorf("unset defaults to the same value as explicit \"zeroconf\": unexpected \"north.matter.mdns_advertise\" in diff %v", got)
+		}
+	})
+
+	t.Run("both_unset_is_not_a_diff", func(t *testing.T) {
+		t.Parallel()
+		boot := baseConfig()
+		boot.North.Matter.MDNSAdvertise = ""
+		eff := clone(boot)
+		eff.North.Matter.MDNSAdvertise = ""
+
+		got := RestartRequiredDiff(boot, eff)
+		if slices.Contains(got, "north.matter.mdns_advertise") {
+			t.Errorf("both unset: unexpected \"north.matter.mdns_advertise\" in diff %v", got)
+		}
+	})
+}
+
 // TestRestartRequiredDiff_CentralsAdded verifies that a pure addition —
 // every boot-time central is unchanged, plus a new one appears in eff —
 // is a live orchestrator operation and does NOT surface "centrals".

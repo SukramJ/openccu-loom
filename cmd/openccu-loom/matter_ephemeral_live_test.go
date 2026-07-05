@@ -19,6 +19,7 @@ func TestMatterEphemeralProvider_GenerateAndInstall_LiveBridge(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
@@ -68,6 +69,7 @@ func TestMatterEphemeralProvider_GenerateAndInstall_DefaultIterations(t *testing
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}
@@ -110,6 +112,7 @@ func TestMatterEphemeralProvider_GenerateAndInstall_TwiceSingletonMode(t *testin
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01", Host: "127.0.0.1"}}

@@ -4,6 +4,46 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.4] — 2026-07-05
+
+### Fixed
+
+- **Matter pairing failed out of the box: the bridge never advertised
+  itself.** `north.matter.mdns_advertise` defaulted to the in-memory
+  `noop` advertiser, so an enabled bridge with a configured passcode
+  published **no** `_matterc._udp` records — commissioners (iPhone /
+  Home Assistant app, Apple Home, Google Home) reported "device not
+  found" after scanning a perfectly valid QR code. The default is now
+  `zeroconf`; `noop` remains available as an explicit opt-out for
+  hermetic tests and out-of-band discovery. Switching the value still
+  requires a daemon restart, which the config-change surface now
+  reports.
+- **Commissioner-visible surfaces used the raw (un-defaulted)
+  discriminator.** The commissioning-window opener, the mDNS
+  advertisement, and `GET /api/v1/matter/setup-payload` read
+  `north.matter.discriminator` directly, so an unset value produced QR /
+  manual codes and mDNS TXT records carrying discriminator 0 while the
+  bridge core applied the documented 0xF00 default. All Matter config
+  consumers now share one defaulting point
+  (`config.NorthMatter.WithDefaults`), covering vendor/product ID, node
+  label, discriminator, advertiser selection, and PBKDF iterations (the
+  startup log also showed the raw `iterations: 0` instead of the
+  effective 1000).
+- **Matter mDNS records no longer advertise container-bridge
+  addresses.** The commissionable/operational A/AAAA records included
+  IPs from `docker0` / `hassio` / `br-<hex>` / `veth*` interfaces on
+  host-network deployments (e.g. the Home Assistant add-on); iOS
+  iterates the advertised address list and times out on unroutable
+  addresses during resolve. The Matter advertiser now applies the same
+  virtual-interface filter as the client-discovery mDNS.
+- **Misleading "commissioning_published" log under the noop
+  advertiser.** With `mdns_advertise: noop` the bridge logged
+  `matter.mdns.commissioning_published` although nothing left the
+  process; it now logs an explicit
+  `matter.mdns.commissioning_not_advertised` warning (and the
+  operational-record counterpart `matter.mdns.fabric_not_advertised`)
+  naming the config remedy.
+
 ## [0.26.3] — 2026-07-05
 
 ### Changed

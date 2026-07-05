@@ -82,6 +82,7 @@ func TestRestartPendingProvider_PendingOnMatterEnabled(t *testing.T) {
 	boot := bootConfig()
 	eff := *boot
 	eff.North.Matter.Enabled = true // differs from boot (false)
+	eff.North.Matter.MDNSAdvertise = "noop"
 	svc := &fakeConfigAdminService{result: &configstore.EffectiveResult{Config: &eff}}
 
 	p := newRestartPendingProvider(boot, svc)

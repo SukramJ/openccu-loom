@@ -79,6 +79,7 @@ func TestAnnouncePersistedFabric_EmptyStore_IsNoop(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = t.TempDir()
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-01"}}

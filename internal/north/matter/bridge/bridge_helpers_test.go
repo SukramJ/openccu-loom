@@ -6,15 +6,21 @@ package bridge
 // White-box tests for miscellaneous unexported helpers:
 // udpPort, signalStatusResponseRX, protocolHeaderSize, securityFlagsByte,
 // AttachExposureChecker (nil-safe), AnnounceFabric / AnnounceCommissioning /
-// WithdrawCommissioning (noop-advertiser paths), MatterEmitEvent alias.
+// WithdrawCommissioning (noop-advertiser paths and the noop-vs-real
+// advertiser log-level distinction), MatterEmitEvent alias.
 // Lives in package bridge to access unexported symbols.
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/im"
+	"github.com/SukramJ/openccu-loom/internal/north/matter/mdns"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/udp"
@@ -289,6 +295,176 @@ func TestAnnounceAndWithdrawCommissioning_RoundTrip(t *testing.T) {
 	// Withdraw should be idempotent and not panic.
 	b.WithdrawCommissioning(ctx)
 	b.WithdrawCommissioning(ctx) // second call: no-op
+}
+
+// ─── noop-vs-real advertiser log-level distinction ───────────────────────────
+//
+// AnnounceCommissioning / AnnounceFabric log at WARN with a
+// "*_not_advertised" message when the wired advertiser is the in-memory
+// [mdns.Noop] (Publish succeeds without ever putting a record on the
+// network — an operator reading an INFO "published" line would then chase
+// a commissioning failure that has an obvious, already-known cause). A
+// real advertiser keeps the original INFO "*_published" line.
+
+// fakeAdvertiser is a minimal non-Noop [mdns.Advertiser] used to verify
+// that the "published" log path is taken whenever the wired advertiser is
+// not [mdns.Noop] — regardless of whether it actually reaches the network.
+type fakeAdvertiser struct {
+	mu    sync.Mutex
+	items map[string]mdns.Service
+}
+
+func newFakeAdvertiser() *fakeAdvertiser {
+	return &fakeAdvertiser{items: make(map[string]mdns.Service)}
+}
+
+func (f *fakeAdvertiser) Publish(_ context.Context, svc mdns.Service) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.items[svc.InstanceName+"|"+svc.ServiceType] = svc
+	return nil
+}
+
+func (f *fakeAdvertiser) Withdraw(_ context.Context, instanceName, serviceType string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.items, instanceName+"|"+serviceType)
+	return nil
+}
+
+func (f *fakeAdvertiser) Active() []mdns.Service {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]mdns.Service, 0, len(f.items))
+	for k := range f.items {
+		out = append(out, f.items[k])
+	}
+	return out
+}
+
+func (f *fakeAdvertiser) Close() error { return nil }
+
+// newBridgeWithAdvertiser constructs a Bridge wired to advertiser and a
+// logger writing to buf, without starting the UDP listener —
+// AnnounceFabric/AnnounceCommissioning only touch the advertiser and the
+// logger, not the started runtime.
+func newBridgeWithAdvertiser(t *testing.T, advertiser mdns.Advertiser, buf *bytes.Buffer) *Bridge {
+	t.Helper()
+	logger := slog.New(slog.NewTextHandler(buf, nil))
+	b, err := New(
+		NewFakeStore(),
+		wbEmptySnapshotter,
+		advertiser,
+		Config{
+			Listen:    ":0",
+			VendorID:  0x1234,
+			ProductID: 0x5678,
+			NodeLabel: "log-test",
+		},
+		logger,
+	)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return b
+}
+
+// TestAnnounceCommissioning_NoopAdvertiser_LogsNotAdvertised verifies that
+// a Noop advertiser produces the WARN "commissioning_not_advertised" line
+// and never the INFO "commissioning_published" line.
+func TestAnnounceCommissioning_NoopAdvertiser_LogsNotAdvertised(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	b := newBridgeWithAdvertiser(t, mdns.NewNoop(), &buf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := b.AnnounceCommissioning(ctx, CommissioningAdvertisement{
+		Discriminator: 0xABC,
+		VendorID:      0x1234,
+		ProductID:     0x5678,
+		NodeLabel:     "test",
+	}); err != nil {
+		t.Fatalf("AnnounceCommissioning: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "matter.mdns.commissioning_not_advertised") {
+		t.Errorf("expected commissioning_not_advertised in log output, got: %s", out)
+	}
+	if strings.Contains(out, "matter.mdns.commissioning_published") {
+		t.Errorf("noop advertiser must not log commissioning_published, got: %s", out)
+	}
+}
+
+// TestAnnounceCommissioning_RealAdvertiser_LogsPublished verifies that a
+// non-Noop advertiser produces the INFO "commissioning_published" line and
+// never the WARN "commissioning_not_advertised" line.
+func TestAnnounceCommissioning_RealAdvertiser_LogsPublished(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	b := newBridgeWithAdvertiser(t, newFakeAdvertiser(), &buf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := b.AnnounceCommissioning(ctx, CommissioningAdvertisement{
+		Discriminator: 0xABC,
+		VendorID:      0x1234,
+		ProductID:     0x5678,
+		NodeLabel:     "test",
+	}); err != nil {
+		t.Fatalf("AnnounceCommissioning: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "matter.mdns.commissioning_published") {
+		t.Errorf("expected commissioning_published in log output, got: %s", out)
+	}
+	if strings.Contains(out, "matter.mdns.commissioning_not_advertised") {
+		t.Errorf("real advertiser must not log commissioning_not_advertised, got: %s", out)
+	}
+}
+
+// TestAnnounceFabric_NoopAdvertiser_LogsNotAdvertised verifies that a Noop
+// advertiser produces the WARN "fabric_not_advertised" line and never the
+// INFO "fabric_published" line.
+func TestAnnounceFabric_NoopAdvertiser_LogsNotAdvertised(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	b := newBridgeWithAdvertiser(t, mdns.NewNoop(), &buf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	b.AnnounceFabric(ctx, [8]byte{0x01}, 0xDEAD)
+
+	out := buf.String()
+	if !strings.Contains(out, "matter.mdns.fabric_not_advertised") {
+		t.Errorf("expected fabric_not_advertised in log output, got: %s", out)
+	}
+	if strings.Contains(out, "matter.mdns.fabric_published") {
+		t.Errorf("noop advertiser must not log fabric_published, got: %s", out)
+	}
+}
+
+// TestAnnounceFabric_RealAdvertiser_LogsPublished verifies that a non-Noop
+// advertiser produces the INFO "fabric_published" line and never the WARN
+// "fabric_not_advertised" line.
+func TestAnnounceFabric_RealAdvertiser_LogsPublished(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	b := newBridgeWithAdvertiser(t, newFakeAdvertiser(), &buf)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	b.AnnounceFabric(ctx, [8]byte{0x01}, 0xDEAD)
+
+	out := buf.String()
+	if !strings.Contains(out, "matter.mdns.fabric_published") {
+		t.Errorf("expected fabric_published in log output, got: %s", out)
+	}
+	if strings.Contains(out, "matter.mdns.fabric_not_advertised") {
+		t.Errorf("real advertiser must not log fabric_not_advertised, got: %s", out)
+	}
 }
 
 // ─── MatterEmitEvent alias ───────────────────────────────────────────────────

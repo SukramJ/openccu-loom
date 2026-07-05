@@ -1206,6 +1206,12 @@ func (b *Bridge) AnnounceFabric(ctx context.Context, compressedFabricID [8]byte,
 			slog.String("err", err.Error()))
 		return
 	}
+	if b.advertiserIsNoop() {
+		b.logger.Warn("matter.mdns.fabric_not_advertised",
+			slog.String("instance", svc.InstanceName),
+			slog.String("hint", "mdns_advertise=noop suppresses the operational record — controllers cannot resolve the bridge after commissioning"))
+		return
+	}
 	b.logger.Info("matter.mdns.fabric_published",
 		slog.String("instance", svc.InstanceName))
 }
@@ -1307,11 +1313,31 @@ func (b *Bridge) AnnounceCommissioning(ctx context.Context, params Commissioning
 	b.mu.Lock()
 	b.commissioningInstanceName = svc.InstanceName
 	b.mu.Unlock()
+	// The noop advertiser accepts every Publish without emitting a
+	// single multicast packet. Logging "published" then sends an
+	// operator hunting network problems while the record never left the
+	// process — commissioners report "device not found" against a QR
+	// code that is perfectly valid. Say what actually happened.
+	if b.advertiserIsNoop() {
+		b.logger.Warn("matter.mdns.commissioning_not_advertised",
+			slog.String("instance", svc.InstanceName),
+			slog.Int("discriminator", int(params.Discriminator)),
+			slog.String("hint", "mdns_advertise=noop suppresses the commissionable record — commissioners cannot discover the bridge; set north.matter.mdns_advertise=zeroconf (or leave it unset) for pairing"))
+		return nil
+	}
 	b.logger.Info("matter.mdns.commissioning_published",
 		slog.String("instance", svc.InstanceName),
 		slog.String("host", svc.HostName),
 		slog.Int("discriminator", int(params.Discriminator)))
 	return nil
+}
+
+// advertiserIsNoop reports whether the wired advertiser is the
+// in-memory noop implementation — i.e. Publish calls succeed without
+// putting any record on the network.
+func (b *Bridge) advertiserIsNoop() bool {
+	_, ok := b.advertiser.(*mdns.Noop)
+	return ok
 }
 
 // WithdrawCommissioning withdraws the most recent

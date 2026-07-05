@@ -50,6 +50,7 @@ func TestStartMatterBridge_DevRotateUniqueIDs_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.DevRotateUniqueIDs = true
 	cfg.DataDir = t.TempDir()
@@ -72,6 +73,7 @@ func TestStartMatterBridge_ConcurrentPairings_Armed(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.Commissioning.Passcode = 20202021
 	cfg.North.Matter.Commissioning.ConcurrentPairings = true
@@ -95,6 +97,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	// Use /proc/nonexistent as DataDir so the SQLite open fails.
 	cfg.DataDir = "/proc/nonexistent_db_dir_9z"
@@ -137,6 +140,7 @@ func TestStartMatterBridge_EphemeralWindow_ConcurrentPairings(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.Commissioning.Passcode = 20202021
 	cfg.North.Matter.Commissioning.EphemeralWindow = true
@@ -161,6 +165,7 @@ func TestStartMatterBridge_EphemeralWindow_Singleton(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.Commissioning.Passcode = 20202021
 	cfg.North.Matter.Commissioning.EphemeralWindow = true
@@ -185,6 +190,7 @@ func TestStartMatterBridge_DefaultDataDir_NotEmpty(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.DataDir = "" // should use "./var" internally — will likely fail db open in test env
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-defdir", Host: "127.0.0.1"}}
@@ -207,6 +213,7 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
@@ -260,6 +267,7 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
@@ -616,6 +624,7 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
+	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
 	cfg.North.Matter.VendorID = 0xFFF1
 	cfg.North.Matter.ProductID = 0x8000
