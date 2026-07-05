@@ -254,6 +254,11 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 		strings.Join(ips, ","), strings.Join(svc.Subtypes, ","))
 	if _, alive := z.servers[key]; alive && z.published[key] == fp {
 		z.items[key] = svc
+		// The record set is unchanged, but this is the periodic
+		// re-announce path: refresh the subtype PTRs in peer caches.
+		// A bare unsolicited announcement never flaps caches the way
+		// the goodbye + re-register cycle (avoided above) would.
+		z.announceSubtypes()
 		return nil
 	}
 	z.shutdownByKeyLocked(key)
@@ -301,7 +306,28 @@ func (z *Zeroconf) Publish(_ context.Context, svc Service) error {
 		}
 	}
 	z.subFQDNs[key] = subFQDNs
+	z.announceSubtypes()
 	return nil
+}
+
+// announceSubtypes multicasts the registered subtype PTRs as an
+// unsolicited response, twice with a one-second gap per RFC 6762 §8.3.
+// Commissioners resolve the browse-by-discriminator filter
+// (`_L<disc>._sub._matterc._udp`) from their mDNS cache, which only the
+// announcement fills — grandcat/zeroconf announces the primary record
+// set but knows nothing about the side-car's subtype PTRs, so without
+// this the peer cache holds a resolvable instance that no subtype
+// browse ever surfaces ("device not found" on a valid QR code). The
+// second transmission runs detached so Publish stays non-blocking;
+// Announce snapshots the mapping table per call, so a subtype withdrawn
+// in the gap is simply absent from the repeat.
+func (z *Zeroconf) announceSubtypes() {
+	r := z.responder
+	if r == nil {
+		return
+	}
+	r.Announce()
+	time.AfterFunc(time.Second, r.Announce)
 }
 
 // shutdownByKeyLocked tears down the primary server identified by
