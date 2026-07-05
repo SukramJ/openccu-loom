@@ -496,6 +496,13 @@ func (b *Bridge) handlePase(
 	stage string,
 	process func([]byte) (uint8, []byte, error),
 ) error {
+	// Entry marker BEFORE the handler runs: a stage log with no
+	// follow-up (no reply, no pase_err) pins a stall inside the
+	// handler itself rather than in the dispatch or send path.
+	b.logger.Debug("matter.rx.sc.pase",
+		slog.String("stage", stage),
+		slog.String("src", srcString(src)),
+		slog.Int("exchange_id", int(proto.ExchangeID)))
 	respOpcode, respPayload, err := process(payload)
 	if err != nil {
 		// Missing-handler is a routine pre-PASE-wiring condition
