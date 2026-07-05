@@ -96,14 +96,19 @@ jobs:
       # The -dev package names are release-stable (the runtime t64
       # names are not) and each pulls in the runtime library; this
       # mirrors the dependency list the chip-cert-bins image installs
-      # for itself. avahi-daemon does not need to run — the suite uses
-      # `pairing already-discovered`, no mDNS discovery.
+      # for itself. avahi-daemon must RUN, not just be present:
+      # commissioning pairs via `pairing already-discovered`, but the
+      # final FindOperationalForStayActive stage resolves the bridge's
+      # operational `_matter._tcp` record through avahi and dies with
+      # "Incorrect state" when no daemon answers on the bus.
       - name: install chip-tool runtime libraries
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libavahi-client-dev libdbus-1-dev libglib2.0-dev \
-            libevent-dev libssl-dev libpcsclite-dev
+            libevent-dev libssl-dev libpcsclite-dev avahi-daemon
+          sudo systemctl start avahi-daemon
+          systemctl is-active dbus avahi-daemon
 
       # Fail fast with a readable diagnostic instead of letting the
       # suite skip (missing binary) or die on an obscure loader error.
@@ -136,29 +141,11 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      # The smoke's documented prerequisite (docs/contributor/
-      # matter-smoke.md). The PASE pairing itself is
-      # `already-discovered` on loopback, but chip-tool's discovery
-      # backend probes the host dbus/avahi socket the compose file
-      # mounts into the container.
-      - name: start avahi
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends avahi-daemon avahi-utils
-          sudo systemctl start avahi-daemon
-
+      # No host avahi/dbus setup: the compose stack runs dbus +
+      # avahi-daemon inside the chip-tool container (see
+      # compose/matter-smoke.yml), so the smoke is hermetic.
       - name: matter-smoke
         run: make matter-smoke
-
-      # chip-tool's platform-mdns build hard-requires a reachable
-      # dbus socket at init (avahi_client_new with NO_FAIL still
-      # needs the bus). Surface the host-side state when the smoke
-      # fails so a broken socket mount is attributable from the log.
-      - name: dbus/avahi diagnostics
-        if: failure()
-        run: |
-          ls -la /run/dbus/ /var/run/dbus/ 2>&1 || true
-          systemctl is-active dbus avahi-daemon || true
 
       - name: upload chip-tool log
         if: failure()

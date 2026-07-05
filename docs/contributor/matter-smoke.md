@@ -27,11 +27,13 @@ this smoke when you need an external commissioner's verdict.
   push the branch and let the `chiptool` CI workflow run it on a Linux
   runner (see [CI](#ci) below).
 - Docker Engine ≥ 24 with the Compose plugin.
-- Avahi enabled on the host with `use-ipv6=yes` in
-  `/etc/avahi/avahi-daemon.conf`. Restart `avahi-daemon` if a previous
-  smoke left stale entries.
 - IPv6 enabled on the host network interface (`sysctl
   net.ipv6.conf.all.disable_ipv6 == 0`).
+
+No host avahi/dbus setup is needed: the chip-tool container runs its
+own `dbus-daemon` + `avahi-daemon` (chip-tool's platform-mdns build
+hard-requires the bus at init, even for `pairing already-discovered`).
+A host avahi may coexist; both stacks answer multicast independently.
 
 ---
 
@@ -202,9 +204,13 @@ silently — see ADR 0012 §Risks #4.
 
 - **`No such network: host` on macOS** — Docker Desktop. Use a Linux
   VM; this smoke cannot run on macOS hosts directly.
-- **chip-tool times out at "Discovering devices"** — host avahi
-  is not advertising, or IPv6 is disabled. Verify with
-  `avahi-browse -art | grep _matter`.
+- **chip-tool dies at init with `CHIP Error 0x000000AD: Open file
+  failed` (DnssdImpl)** — the in-container dbus/avahi did not come up;
+  check `docker compose -f compose/matter-smoke.yml logs chip-tool`.
+- **chip-tool times out at "Discovering devices"** — mDNS advertising
+  is not reaching the resolver, or IPv6 is disabled. Verify from
+  inside the chip-tool container with
+  `docker compose -f compose/matter-smoke.yml exec chip-tool avahi-browse -art | grep _matter`.
 - **`Pairing Success` missing but no error** — the smoke may be
   matching the wrong commissioning attempt. Check
   `tmp/matter-smoke.log` for the actual `chip-tool` exit message.
