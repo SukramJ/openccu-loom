@@ -4,6 +4,21 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`centrals[].host` is validated syntactically.** The host must be a
+  bare hostname or IP literal (IPv4, bare or bracketed IPv6, FQDN with
+  optional trailing dot; underscores tolerated for nonstandard LAN
+  names). Values carrying a scheme, path, query, fragment, credentials,
+  or an embedded port are rejected at config load — the value is
+  interpolated into every south-bound URL (XML-RPC / JSON-RPC
+  endpoints, the CCU readiness probe), so malformed shapes would
+  silently reshape those URLs. Also closes the CodeQL
+  `go/request-forgery` findings at that trust boundary. The TCP port
+  keeps its own config field.
+
 ## [0.26.2] — 2026-07-05
 
 ### Fixed
