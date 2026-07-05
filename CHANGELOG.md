@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.26.2] — 2026-07-05
 
 ### Fixed
 
@@ -18,6 +18,16 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   values including enum/list indices → `SysVar.setFloat`, and only
   strings use the Rega script — whose decline (missing or non-string
   sysvar) now surfaces as an error instead of a silent no-op.
+- **Sysvar writes normalise the payload to the declared type.** The
+  wire value now derives from the sysvar's descriptor type instead of
+  the caller's payload shape (mirrors the reference `parse_sys_var`):
+  LOGIC/ALARM accept bool, 0/1, and the usual string forms
+  (`true/on/yes/1`, `false/off/no/0`); FLOAT/NUMBER and INTEGER accept
+  numeric strings; STRING stringifies scalars; LIST resolves labels to
+  their zero-based index. Mismatches (unknown enum label, fractional
+  value for INTEGER, non-numeric string) are rejected with a clear
+  error instead of silently picking the wrong wire method. The full
+  type × payload matrix is locked by table tests.
 
 ## [0.26.1] — 2026-07-05
 
