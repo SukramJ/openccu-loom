@@ -4,7 +4,7 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.26.1] — 2026-07-05
 
 ### Added
 
@@ -20,6 +20,20 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Expired CCU JSON-RPC sessions broke sysvar/program writes until
+  restart.** The CCU reports an invalid or expired session as HTTP 200
+  + JSON-RPC error 400 ("access denied"), not as an HTTP auth status —
+  but the client only re-logged-in on HTTP 401/403, and no production
+  path called `Renew`, so after a session lapse (ReGa restart, CCU
+  reboot, inactivity timeout) every JSON-RPC operation failed
+  permanently with `access denied ("ADMIN" needed 0)` — surfaced e.g.
+  as REST 502 on `PUT /sysvars/{name}` — even though the configured
+  CCU account had admin rights. The client now maintains the session
+  on both layers: proactively (login-or-renew ahead of every call,
+  bounded by the existing 90 s freshness guard) and reactively (on
+  error 400 it invalidates the session, re-logs-in, and retries once).
+  A genuine privilege mismatch still fails with 400 on the fresh
+  session and propagates as before.
 - **Matter commissioning deadlock — new pairings have been broken
   since 0.23.0 (critical).** `PaseAdapter.ProcessPake3` invoked the
   session-pickup callback while holding the adapter mutex; the

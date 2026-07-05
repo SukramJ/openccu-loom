@@ -197,9 +197,12 @@ func TestClientRetriesOn401AfterReLogin(t *testing.T) {
 	defer srv.Close()
 
 	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
-	// Prime the client with an expired session without hitting Session.login.
+	// Prime the client with an expired session without hitting
+	// Session.login; mark it recently refreshed so the proactive renew
+	// is skipped and the reactive HTTP-401 path is exercised.
 	c.mu.Lock()
 	c.sessionID = "old"
+	c.lastSessionRefresh = time.Now()
 	c.mu.Unlock()
 
 	if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
@@ -210,6 +213,201 @@ func TestClientRetriesOn401AfterReLogin(t *testing.T) {
 	}
 	if c.SessionID() != "new" {
 		t.Fatalf("client did not refresh session, got %q", c.SessionID())
+	}
+}
+
+// accessDenied is the CCU's session-invalid / privilege-mismatch reply:
+// HTTP 200 with a JSON-RPC error object, code 400. An expired session and
+// an under-privileged user are indistinguishable on the wire.
+func accessDenied() response {
+	return response{Error: &wireError{Code: 400, Message: "access denied", Data: `"ADMIN" needed 0`}}
+}
+
+func TestClientReloginOnJSONRPCAccessDenied(t *testing.T) {
+	var workCalls, loginCalls atomic.Int32
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(envelope) any {
+			loginCalls.Add(1)
+			return okResult("new")
+		},
+		"Work": func(env envelope) any {
+			workCalls.Add(1)
+			if env.Params[sessionParamKey] != "new" {
+				return accessDenied()
+			}
+			return okResult(true)
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	// Prime an expired session; mark it recently refreshed so the
+	// proactive renew is skipped and the reactive path is exercised.
+	c.mu.Lock()
+	c.sessionID = "old"
+	c.lastSessionRefresh = time.Now()
+	c.mu.Unlock()
+
+	if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
+		t.Fatalf("Call must self-heal an expired session, got %v", err)
+	}
+	if workCalls.Load() != 2 {
+		t.Fatalf("Work attempts=%d, want 2 (fail + retry)", workCalls.Load())
+	}
+	if loginCalls.Load() != 1 {
+		t.Fatalf("login attempts=%d, want 1", loginCalls.Load())
+	}
+	if c.SessionID() != "new" {
+		t.Fatalf("session=%q, want new", c.SessionID())
+	}
+}
+
+func TestClientAccessDeniedPersistsAfterRelogin(t *testing.T) {
+	var workCalls, loginCalls atomic.Int32
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(envelope) any {
+			loginCalls.Add(1)
+			return okResult("fresh")
+		},
+		// Genuine privilege mismatch: denied regardless of session.
+		"Work": func(envelope) any {
+			workCalls.Add(1)
+			return accessDenied()
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	c.mu.Lock()
+	c.sessionID = "sess"
+	c.lastSessionRefresh = time.Now()
+	c.mu.Unlock()
+
+	err := c.Call(context.Background(), "Work", nil, nil)
+	if !errors.Is(err, hmerr.ErrPermissionDenied) {
+		t.Fatalf("got %v, want ErrPermissionDenied", err)
+	}
+	if workCalls.Load() != 2 {
+		t.Fatalf("Work attempts=%d, want exactly 2 (no retry loop)", workCalls.Load())
+	}
+	if loginCalls.Load() != 1 {
+		t.Fatalf("login attempts=%d, want exactly 1", loginCalls.Load())
+	}
+	if c.SessionID() != "fresh" {
+		t.Fatalf("the freshly obtained session must stay cached, got %q", c.SessionID())
+	}
+}
+
+func TestClientAccessDeniedUnauthenticatedNoRelogin(t *testing.T) {
+	var loginCalls atomic.Int32
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(envelope) any {
+			loginCalls.Add(1)
+			return okResult("x")
+		},
+		"Work": func(envelope) any { return accessDenied() },
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL}) // no credentials configured
+	err := c.Call(context.Background(), "Work", nil, nil)
+	if !errors.Is(err, hmerr.ErrPermissionDenied) {
+		t.Fatalf("got %v, want ErrPermissionDenied", err)
+	}
+	if loginCalls.Load() != 0 {
+		t.Fatalf("unauthenticated client must not attempt Session.login, saw %d", loginCalls.Load())
+	}
+}
+
+func TestClientCallRenewsStaleSessionProactively(t *testing.T) {
+	var renewSeen atomic.Value
+	var workSeen atomic.Value
+	var workCalls atomic.Int32
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.renew": func(env envelope) any {
+			renewSeen.Store(env.Params[sessionParamKey])
+			return okResult("sess-2")
+		},
+		"Work": func(env envelope) any {
+			workCalls.Add(1)
+			workSeen.Store(env.Params[sessionParamKey])
+			if env.Params[sessionParamKey] != "sess-2" {
+				return accessDenied()
+			}
+			return okResult(true)
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	// Session exists but its freshness window has long lapsed.
+	c.mu.Lock()
+	c.sessionID = "sess-1"
+	c.mu.Unlock()
+
+	if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if renewSeen.Load() != "sess-1" {
+		t.Fatalf("renew saw %v, want sess-1", renewSeen.Load())
+	}
+	if workSeen.Load() != "sess-2" {
+		t.Fatalf("Work saw %v, want the renewed sess-2", workSeen.Load())
+	}
+	if workCalls.Load() != 1 {
+		t.Fatalf("Work attempts=%d, want 1 (renewed up front, no retry)", workCalls.Load())
+	}
+}
+
+func TestClientCallFallsBackToLoginWhenRenewRejected(t *testing.T) {
+	var workSeen atomic.Value
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.renew": func(envelope) any { return okResult("") }, // CCU dropped the session
+		"Session.login": func(envelope) any { return okResult("fresh") },
+		"Work": func(env envelope) any {
+			workSeen.Store(env.Params[sessionParamKey])
+			if env.Params[sessionParamKey] != "fresh" {
+				return accessDenied()
+			}
+			return okResult(true)
+		},
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	c.mu.Lock()
+	c.sessionID = "dead"
+	c.mu.Unlock()
+
+	if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if workSeen.Load() != "fresh" {
+		t.Fatalf("Work saw %v, want the fresh login session", workSeen.Load())
+	}
+}
+
+func TestClientCallSkipsRenewRightAfterLogin(t *testing.T) {
+	var renewCalls atomic.Int32
+	srv := newTestServer(t, map[string]func(envelope) any{
+		"Session.login": func(envelope) any { return okResult("sess-1") },
+		"Session.renew": func(envelope) any {
+			renewCalls.Add(1)
+			return okResult("sess-1")
+		},
+		"Work": func(envelope) any { return okResult(true) },
+	})
+	defer srv.Close()
+
+	c, _ := New(Config{Endpoint: srv.URL, Username: "u", Password: "p"})
+	if err := c.Login(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Call(context.Background(), "Work", nil, nil); err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if renewCalls.Load() != 0 {
+		t.Fatalf("a just-logged-in session must not be renewed again, saw %d renew calls", renewCalls.Load())
 	}
 }
 
@@ -307,6 +505,10 @@ func TestClientRenewExtendsSession(t *testing.T) {
 	if c.SessionID() != "sess-1" {
 		t.Fatalf("post-login session=%q", c.SessionID())
 	}
+	// Age the freshness stamp so Renew performs a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 	if err := c.Renew(context.Background()); err != nil {
 		t.Fatalf("Renew: %v", err)
 	}
@@ -348,6 +550,10 @@ func TestClientRenewEmptyResponseInvalidatesSession(t *testing.T) {
 	if err := c.Login(context.Background()); err != nil {
 		t.Fatal(err)
 	}
+	// Age the freshness stamp so Renew performs a real round-trip.
+	c.mu.Lock()
+	c.lastSessionRefresh = time.Time{}
+	c.mu.Unlock()
 	if err := c.Renew(context.Background()); err == nil {
 		t.Fatal("empty renew response must surface as auth failure")
 	}

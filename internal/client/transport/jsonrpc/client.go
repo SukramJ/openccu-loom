@@ -84,6 +84,11 @@ const loginMaxBackoff = 60 * time.Second
 // was renewed within this many seconds, Renew skips the HTTP round-trip.
 const jsonSessionAge = 90 * time.Second
 
+// ccuAccessDeniedCode is the JSON-RPC error code the CCU returns (under
+// HTTP 200) both for an invalid/expired session and for a privilege
+// mismatch, e.g. `access denied ("ADMIN" needed 0)`.
+const ccuAccessDeniedCode = 400
+
 // Client is a CCU JSON-RPC client. Safe for concurrent use.
 type Client struct {
 	cfg        Config
@@ -168,15 +173,26 @@ type wireError struct {
 }
 
 // Call invokes method with params and decodes the JSON result into out
-// (if non-nil). Session injection, 401 retry, and error mapping run here.
+// (if non-nil). Session injection, session upkeep, auth retry, and error
+// mapping run here.
 //
-// On an expired session the client transparently re-logs in and retries
-// the call once; a second failure is surfaced as [hmerr.ErrAuthFailure].
+// Session upkeep is two-layered. Proactively, every Call runs
+// [Client.loginOrRenew] so the session never idles into the CCU's
+// inactivity timeout. Reactively, an expired session that still slips
+// through (CCU reboot, ReGa restart) is detected on the reply — the CCU
+// signals it as HTTP 200 + JSON-RPC error 400 "access denied", not as an
+// HTTP auth status — and the client transparently re-logs in and retries
+// the call once. A 400 that persists after a fresh login is a genuine
+// privilege mismatch and is surfaced as [hmerr.ErrPermissionDenied].
 func (c *Client) Call(ctx context.Context, method string, params map[string]any, out any) error {
 	if err := c.acquire(ctx); err != nil {
 		return err
 	}
 	defer c.release()
+
+	if err := c.loginOrRenew(ctx); err != nil {
+		return err
+	}
 
 	info := interfaces.RequestInfo{
 		Protocol: "json-rpc",
@@ -250,6 +266,17 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	}
 
 	if parsed.Error != nil {
+		// The CCU reports an invalid/expired session as HTTP 200 + error
+		// code 400 ("access denied") — indistinguishable on the wire from
+		// a privilege mismatch. Re-login and retry once: an expired
+		// session self-heals, a genuine privilege mismatch fails again
+		// with 400 on the fresh session and propagates below.
+		if parsed.Error.Code == ccuAccessDeniedCode && allowRetry && c.cfg.Username != "" {
+			c.invalidateSession()
+			if loginErr := c.Login(ctx); loginErr == nil {
+				return c.callOnce(ctx, method, params, out, false)
+			}
+		}
 		return c.wrap(method, &hmerr.JSONRPCError{
 			Code:    parsed.Error.Code,
 			Message: parsed.Error.Message,
@@ -322,9 +349,11 @@ func (c *Client) Login(ctx context.Context) error {
 		return c.wrap("Session.login", hmerr.ErrAuthFailure)
 	}
 
-	// Success: store session and reset failure counters.
+	// Success: store session and reset failure counters. The freshness
+	// stamp lets the next Call skip an immediate Session.renew round-trip.
 	c.mu.Lock()
 	c.sessionID = session
+	c.lastSessionRefresh = time.Now()
 	c.failedLoginAttempts = 0
 	c.currentBackoff = 0
 	c.mu.Unlock()
@@ -382,6 +411,31 @@ func (c *Client) Renew(ctx context.Context) error {
 	c.lastSessionRefresh = time.Now()
 	c.mu.Unlock()
 	c.logger.Debug("jsonrpc session renewed", slog.String("host", c.host))
+	return nil
+}
+
+// loginOrRenew keeps the CCU session usable ahead of a call: with no
+// cached session it logs in; with one it renews (subject to the
+// [jsonSessionAge] freshness guard) and falls back to a fresh login when
+// the CCU rejects the renewal. Mirrors the Python reference client's
+// login-or-renew ladder that runs before every request. No-op in
+// unauthenticated mode.
+func (c *Client) loginOrRenew(ctx context.Context) error {
+	if c.cfg.Username == "" {
+		return nil
+	}
+	c.mu.Lock()
+	session := c.sessionID
+	c.mu.Unlock()
+	if session == "" {
+		return c.Login(ctx)
+	}
+	if err := c.Renew(ctx); err != nil {
+		// The CCU dropped the session (reboot, inactivity timeout) or the
+		// renewal round-trip failed — a fresh login either recovers the
+		// auth plane or surfaces the real connectivity problem.
+		return c.Login(ctx)
+	}
 	return nil
 }
 

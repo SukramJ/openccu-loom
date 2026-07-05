@@ -1,5 +1,21 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.1
+
+- **CCU writes no longer break after a CCU reboot or idle session.**
+  When the CCU dropped the login session (reboot, ReGa restart,
+  inactivity), setting system variables or running programs failed
+  permanently with `access denied ("ADMIN" needed 0)` until the add-on
+  was restarted. The bridge now keeps the CCU session alive and
+  automatically logs in again when the CCU rejects a stale session.
+- **Matter: new pairings work again (broken since 0.23.0).** A
+  deadlock in the commissioning handshake made every NEW pairing time
+  out (Apple Home / Google Home / Home Assistant alike);
+  already-paired setups were unaffected. If pairing failed for you,
+  retry after this update.
+- Internal: chip-tool commissioning suite now runs in CI; from-source
+  Docker build repaired.
+
 ## 0.26.0
 
 - **MQTT 5.0 by default + circuit breaker.** The MQTT transport was
