@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1471,6 +1473,9 @@ func (c *Config) Validate() error {
 		if cc.Host == "" {
 			return fmt.Errorf("config: centrals[%d].host: required", i)
 		}
+		if err := validateCentralHost(i, cc.Host); err != nil {
+			return err
+		}
 		if cc.Port < 0 || cc.Port > 65535 {
 			return fmt.Errorf("config: centrals[%d].port: out of range 0-65535: %d", i, cc.Port)
 		}
@@ -1496,6 +1501,46 @@ func (c *Config) Validate() error {
 		h.Retention = HistoryRetentionFloor
 	}
 	return validateMQTT(&c.North.MQTT)
+}
+
+// centralHostLabel matches one DNS label. Underscores are tolerated —
+// nonstandard, but common on home LANs — and hyphens must stay inside
+// the label.
+var centralHostLabel = regexp.MustCompile(`^[a-zA-Z0-9_]([a-zA-Z0-9_-]*[a-zA-Z0-9_])?$`)
+
+// validateCentralHost enforces that centrals[].host is a bare hostname
+// or IP literal. The value is interpolated into every south-bound URL
+// (XML-RPC / JSON-RPC endpoints, the CCU readiness probe), so a scheme,
+// path, query, fragment, credentials, or an embedded port must be
+// rejected at this trust boundary rather than silently reshaping those
+// URLs. The TCP port has its own config field.
+func validateCentralHost(idx int, host string) error {
+	// IP literal, bare or bracketed (IPv6 URL form).
+	candidate := host
+	if strings.HasPrefix(candidate, "[") && strings.HasSuffix(candidate, "]") {
+		candidate = candidate[1 : len(candidate)-1]
+	}
+	if net.ParseIP(candidate) != nil {
+		return nil
+	}
+	// Hostname / FQDN (trailing dot allowed).
+	trimmed := strings.TrimSuffix(host, ".")
+	if trimmed != "" && len(host) <= 253 {
+		ok := true
+		for _, label := range strings.Split(trimmed, ".") {
+			if !centralHostLabel.MatchString(label) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return nil
+		}
+	}
+	return fmt.Errorf(
+		"config: centrals[%d].host %q: must be a bare hostname or IP address (no scheme, path, port, or credentials)",
+		idx, host,
+	)
 }
 
 // validatePublicURL checks north.rest.public_url when set. Empty is

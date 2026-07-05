@@ -1,5 +1,13 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.3
+
+- **CCU address is validated on save.** The configured CCU host must be
+  a plain hostname or IP address; values containing a scheme, path, or
+  an embedded port are rejected with a clear message instead of causing
+  confusing connection errors later. Existing valid configurations are
+  unaffected.
+
 ## 0.26.2
 
 - **Setting system variables works again for all types.** Writes to
