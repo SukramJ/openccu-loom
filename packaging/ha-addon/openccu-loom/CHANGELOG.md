@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.6
+
+- **Matter pairing: fixes "device not found" in networks with an mDNS
+  repeater (multiple subnets/VLANs).** The bridge's answer to the
+  phone's device search used a packet format that strict network
+  equipment silently discards, so the search reply never reached the
+  phone. The answer now follows the mDNS standard exactly and passes
+  through repeaters. Together with the 0.26.5 fix, both discovery
+  paths (proactive announcement and live query) now work.
+
 ## 0.26.5
 
 - **Matter pairing: phones now actually find the bridge.** Apple/Google
