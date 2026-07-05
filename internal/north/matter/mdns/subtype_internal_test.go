@@ -426,3 +426,80 @@ func TestMatchAnswers_ZeroQuestions(t *testing.T) {
 		t.Errorf("matchAnswers(empty): expected nil, got %v", got)
 	}
 }
+
+// ---- packSubtypePTRs ----
+
+// TestPackSubtypePTRs_AnnouncementShape verifies the unsolicited
+// announcement is a spec-shaped mDNS response: ID 0, QR + AA set, an
+// EMPTY question section (RFC 6762 §6), and one PTR answer per mapping
+// carrying the shared subtype TTL. Commissioners fill their browse
+// cache from exactly this packet — a malformed shape silently degrades
+// to "device not found" on the subtype-filtered browse.
+func TestPackSubtypePTRs_AnnouncementShape(t *testing.T) {
+	t.Parallel()
+	out, err := packSubtypePTRs(map[string]string{
+		"_l3840._sub._matterc._udp.local.": "AABBCCDDEEFF0102._matterc._udp.local.",
+		"_cm._sub._matterc._udp.local.":    "AABBCCDDEEFF0102._matterc._udp.local.",
+	}, subtypePTRTTL)
+	if err != nil {
+		t.Fatalf("packSubtypePTRs: %v", err)
+	}
+	msg := new(dns.Msg)
+	if err := msg.Unpack(out); err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if !msg.Response || !msg.Authoritative {
+		t.Errorf("QR/AA = %v/%v, want true/true", msg.Response, msg.Authoritative)
+	}
+	if msg.Id != 0 {
+		t.Errorf("Id = %d, want 0 (mDNS multicast response)", msg.Id)
+	}
+	if len(msg.Question) != 0 {
+		t.Errorf("question section has %d entries, want 0 (RFC 6762 §6)", len(msg.Question))
+	}
+	if len(msg.Answer) != 2 {
+		t.Fatalf("answers = %d, want 2", len(msg.Answer))
+	}
+	for _, rr := range msg.Answer {
+		ptr, ok := rr.(*dns.PTR)
+		if !ok {
+			t.Fatalf("answer %T, want *dns.PTR", rr)
+		}
+		if ptr.Hdr.Ttl != subtypePTRTTL {
+			t.Errorf("TTL = %d, want %d", ptr.Hdr.Ttl, subtypePTRTTL)
+		}
+		if ptr.Ptr != "AABBCCDDEEFF0102._matterc._udp.local." {
+			t.Errorf("target = %q, want the primary instance FQDN", ptr.Ptr)
+		}
+	}
+}
+
+// TestPackSubtypePTRs_GoodbyeTTLZero verifies the withdraw path emits
+// TTL=0 records so peer caches evict the subtype PTR immediately when
+// the commissioning window closes.
+func TestPackSubtypePTRs_GoodbyeTTLZero(t *testing.T) {
+	t.Parallel()
+	out, err := packSubtypePTRs(map[string]string{
+		"_l3840._sub._matterc._udp.local.": "AABBCCDDEEFF0102._matterc._udp.local.",
+	}, 0)
+	if err != nil {
+		t.Fatalf("packSubtypePTRs: %v", err)
+	}
+	msg := new(dns.Msg)
+	if err := msg.Unpack(out); err != nil {
+		t.Fatalf("Unpack: %v", err)
+	}
+	if len(msg.Answer) != 1 || msg.Answer[0].Header().Ttl != 0 {
+		t.Errorf("want exactly one TTL=0 goodbye answer, got %v", msg.Answer)
+	}
+}
+
+// TestSubtypeResponder_AnnounceEmptyMappings verifies Announce is a
+// safe no-op when nothing is registered (nil receiver and empty table).
+func TestSubtypeResponder_AnnounceEmptyMappings(t *testing.T) {
+	t.Parallel()
+	var nilResponder *SubtypeResponder
+	nilResponder.Announce() // must not panic
+	r := &SubtypeResponder{logger: slog.Default(), mappings: map[string]string{}}
+	r.Announce() // empty table: no packet, no panic
+}

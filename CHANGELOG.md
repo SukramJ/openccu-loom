@@ -4,6 +4,34 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.5] — 2026-07-05
+
+### Fixed
+
+- **Matter pairing: commissioners never saw the discriminator-filter
+  record — "device not found" despite a valid, resolvable bridge.**
+  Apple's commissioning browse filters by the QR code's discriminator
+  via the `_L<disc>._sub._matterc._udp` mDNS subtype and satisfies that
+  browse from the peer's mDNS cache. The primary instance record lands
+  in caches through register-time announcements, but the side-car
+  subtype responder was purely reactive: it never announced its PTRs
+  and thus relied on a live subtype query reaching its socket — which
+  the field capture showed does not happen for commissioner browses.
+  The responder now multicasts every registered subtype PTR as an
+  unsolicited RFC 6762 §8.3 announcement (twice, one second apart, on
+  every multicast-capable interface, both address families) when a
+  commissioning window opens, refreshes them on the periodic
+  re-announce, and emits TTL=0 goodbyes when the window closes.
+  Verified end-to-end: a subtype-filtered browse
+  (`dns-sd -B _matterc._udp,_L3840`) that returned nothing now
+  surfaces the bridge instance immediately.
+- The subtype PTR TTL now matches the primary record's 3200 s (was
+  120 s) so the filter record no longer expires from commissioner
+  caches while the instance it points at is still valid.
+- Inbound subtype queries are traced at debug level
+  (`matter.mdns.subtype.query_seen`) so field diagnosis can tell
+  "query never arrived" from "query arrived but was not answered".
+
 ## [0.26.4] — 2026-07-05
 
 ### Fixed

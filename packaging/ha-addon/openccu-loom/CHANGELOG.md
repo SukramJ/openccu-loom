@@ -1,5 +1,15 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.26.5
+
+- **Matter pairing: phones now actually find the bridge.** Apple/Google
+  phones search for a Matter device using a filter derived from the QR
+  code. The bridge answered general discovery but never proactively
+  announced the filter entry the phone looks for, so pairing kept
+  failing with "device not found" even after the 0.26.4 fixes. The
+  bridge now announces the filter records when the pairing window
+  opens and retracts them when it closes.
+
 ## 0.26.4
 
 - **Matter pairing works out of the box now.** The bridge previously

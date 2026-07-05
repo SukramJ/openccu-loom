@@ -18,6 +18,12 @@ import (
 	"golang.org/x/net/ipv6"
 )
 
+// subtypePTRTTL matches grandcat/zeroconf's default record TTL (3200 s)
+// so the subtype PTR lives exactly as long as the primary instance PTR
+// it points at — a shorter subtype TTL would let the filter record
+// expire from commissioner caches while the instance is still valid.
+const subtypePTRTTL = 3200
+
 // SubtypeResponder is a side-car mDNS responder that serves PTR
 // queries for service subtypes (`_<sub>._sub.<service>.local.`) with
 // a PTR record pointing at the primary instance — the form Apple Home
@@ -102,15 +108,127 @@ func (r *SubtypeResponder) AddSubtype(subType, primaryFQDN string) {
 	r.mu.Unlock()
 }
 
-// RemoveSubtype drops a previously registered mapping.
+// RemoveSubtype drops a previously registered mapping and multicasts a
+// goodbye (TTL=0) for the record so caches evict it immediately — the
+// counterpart to the [SubtypeResponder.Announce] fill. Without the
+// goodbye a withdrawn commissioning window stays browsable for the
+// remaining record TTL.
 func (r *SubtypeResponder) RemoveSubtype(subType string) {
 	if r == nil || subType == "" {
 		return
 	}
 	q := strings.ToLower(ensureTrailingDot(subType))
 	r.mu.Lock()
+	target, known := r.mappings[q]
 	delete(r.mappings, q)
 	r.mu.Unlock()
+	if known {
+		r.multicastPTRs(map[string]string{q: target}, 0)
+	}
+}
+
+// Announce proactively multicasts every registered subtype PTR as an
+// unsolicited response — the RFC 6762 §8.3 announcement. Commissioners
+// do not usually query for a subtype they have never seen: Apple's
+// browse-by-long-discriminator (`_L<disc>._sub._matterc._udp`) is
+// satisfied from the peer's mDNS cache, which the primary record fills
+// via grandcat/zeroconf's own register-time announcements. Without
+// announcing the subtype PTRs alongside, the cache holds the primary
+// instance but not the `_L*` filter record and the commissioner reports
+// "device not found" although the bridge is resolvable. Mirrors
+// matter.js packages/protocol/src/mdns/MdnsServer.ts announce(), which
+// broadcasts the full record set (subtypes included) per announcement.
+//
+// The spec asks for at least two transmissions one second apart; the
+// caller schedules the repeats (see [Zeroconf.announceSubtypes]) so this
+// method stays synchronous and single-shot.
+func (r *SubtypeResponder) Announce() {
+	if r == nil {
+		return
+	}
+	r.mu.RLock()
+	snapshot := make(map[string]string, len(r.mappings))
+	for q, target := range r.mappings {
+		snapshot[q] = target
+	}
+	r.mu.RUnlock()
+	if len(snapshot) == 0 {
+		return
+	}
+	r.multicastPTRs(snapshot, subtypePTRTTL)
+}
+
+// multicastPTRs packs the given qname→target PTR set into one
+// unsolicited mDNS response and fans it out over every
+// multicast-capable interface on both address families. ttl 0 turns
+// the packet into a goodbye.
+func (r *SubtypeResponder) multicastPTRs(ptrs map[string]string, ttl uint32) {
+	out, err := packSubtypePTRs(ptrs, ttl)
+	if err != nil {
+		r.logger.Debug("matter.mdns.subtype.announce_pack_err", slog.String("err", err.Error()))
+		return
+	}
+	if r.pc4 != nil {
+		r.fanOutV4(out, &net.UDPAddr{IP: net.IPv4(224, 0, 0, 251), Port: 5353})
+	}
+	if r.pc6 != nil {
+		r.fanOutV6(out, &net.UDPAddr{IP: net.ParseIP("ff02::fb"), Port: 5353})
+	}
+}
+
+// packSubtypePTRs builds the wire bytes of one unsolicited mDNS
+// response carrying the qname→target PTR set: ID 0, QR+AA set, empty
+// question section per RFC 6762 §6 ("Multicast DNS responses MUST NOT
+// contain any questions"). Split from the send path so the packet
+// shape is unit-testable without sockets.
+func packSubtypePTRs(ptrs map[string]string, ttl uint32) ([]byte, error) {
+	resp := new(dns.Msg)
+	resp.Response = true
+	resp.Authoritative = true
+	for q, target := range ptrs {
+		resp.Answer = append(resp.Answer, &dns.PTR{
+			Hdr: dns.RR_Header{
+				Name:   q,
+				Rrtype: dns.TypePTR,
+				Class:  dns.ClassINET,
+				Ttl:    ttl,
+			},
+			Ptr: target,
+		})
+	}
+	return resp.Pack()
+}
+
+// fanOutV4 / fanOutV6 send one packet on EVERY multicast-capable
+// interface. Distinct from writeMulticastV4/V6, which reply on the
+// single interface a query arrived on — an announcement has no inbound
+// interface and must reach every attached network.
+func (r *SubtypeResponder) fanOutV4(out []byte, dst *net.UDPAddr) {
+	sent := 0
+	for _, ifi := range listMulticastInterfaces() {
+		ocm := &ipv4.ControlMessage{IfIndex: ifi.Index}
+		if _, werr := r.pc4.WriteTo(out, ocm, dst); werr == nil {
+			sent++
+		}
+	}
+	if sent == 0 {
+		r.logger.Debug("matter.mdns.subtype.announce4_drop",
+			slog.String("reason", "no multicast-capable interface accepted the announcement"))
+	}
+}
+
+func (r *SubtypeResponder) fanOutV6(out []byte, dst *net.UDPAddr) {
+	sent := 0
+	for _, ifi := range listMulticastInterfaces() {
+		ocm := &ipv6.ControlMessage{IfIndex: ifi.Index}
+		if _, werr := r.pc6.WriteTo(out, ocm, dst); werr == nil {
+			sent++
+		}
+	}
+	if sent == 0 {
+		r.logger.Debug("matter.mdns.subtype.announce6_drop",
+			slog.String("reason", "no multicast-capable interface accepted the announcement"))
+	}
 }
 
 // Start begins the receive loops. Idempotent — repeated calls are no-ops.
@@ -185,7 +303,7 @@ func (r *SubtypeResponder) serveV4(ctx context.Context) {
 			r.logger.Debug("matter.mdns.subtype.read4_err", slog.String("err", err.Error()))
 			return
 		}
-		r.handleV4(buf[:n], cm, src)
+		r.handleV4(ctx, buf[:n], cm, src)
 	}
 }
 
@@ -207,11 +325,12 @@ func (r *SubtypeResponder) serveV6(ctx context.Context) {
 			r.logger.Debug("matter.mdns.subtype.read6_err", slog.String("err", err.Error()))
 			return
 		}
-		r.handleV6(buf[:n], cm, src)
+		r.handleV6(ctx, buf[:n], cm, src)
 	}
 }
 
-func (r *SubtypeResponder) handleV4(buf []byte, cm *ipv4.ControlMessage, src net.Addr) {
+func (r *SubtypeResponder) handleV4(ctx context.Context, buf []byte, cm *ipv4.ControlMessage, src net.Addr) {
+	r.traceInbound(ctx, "v4", buf, src)
 	out, ok := r.buildReply(buf)
 	if !ok || r.pc4 == nil {
 		return
@@ -221,7 +340,8 @@ func (r *SubtypeResponder) handleV4(buf []byte, cm *ipv4.ControlMessage, src net
 	_ = src
 }
 
-func (r *SubtypeResponder) handleV6(buf []byte, cm *ipv6.ControlMessage, src net.Addr) {
+func (r *SubtypeResponder) handleV6(ctx context.Context, buf []byte, cm *ipv6.ControlMessage, src net.Addr) {
+	r.traceInbound(ctx, "v6", buf, src)
 	out, ok := r.buildReply(buf)
 	if !ok || r.pc6 == nil {
 		return
@@ -301,6 +421,32 @@ func (r *SubtypeResponder) writeMulticastV6(out []byte, cm *ipv6.ControlMessage,
 	}
 }
 
+// traceInbound logs every inbound mDNS QUERY that carries a `._sub.`
+// question at debug level — the one packet class this responder exists
+// to answer. Responses and non-subtype queries stay unlogged so the
+// debug stream is not flooded by ambient mDNS chatter; the trace is
+// what distinguishes "query never reached the socket" from "query
+// arrived but the mapping lookup declined" when subtype discovery
+// fails in the field.
+func (r *SubtypeResponder) traceInbound(ctx context.Context, proto string, buf []byte, src net.Addr) {
+	if !r.logger.Enabled(ctx, slog.LevelDebug) {
+		return
+	}
+	msg := new(dns.Msg)
+	if err := msg.Unpack(buf); err != nil || msg.Response {
+		return
+	}
+	for _, q := range msg.Question {
+		if strings.Contains(strings.ToLower(q.Name), "._sub.") {
+			r.logger.Debug("matter.mdns.subtype.query_seen",
+				slog.String("proto", proto),
+				slog.String("qname", q.Name),
+				slog.Int("qtype", int(q.Qtype)),
+				slog.String("src", src.String()))
+		}
+	}
+}
+
 // buildReply parses an inbound mDNS packet, extracts PTR questions
 // that match a registered subtype mapping, and returns the packed
 // response bytes. (false, nil) means "no answer to send" — either the
@@ -352,7 +498,7 @@ func (r *SubtypeResponder) matchAnswers(qs []dns.Question) []dns.RR {
 				Name:   q.Name,
 				Rrtype: dns.TypePTR,
 				Class:  dns.ClassINET,
-				Ttl:    120,
+				Ttl:    subtypePTRTTL,
 			},
 			Ptr: target,
 		})

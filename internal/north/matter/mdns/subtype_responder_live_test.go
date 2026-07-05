@@ -295,14 +295,14 @@ func TestHandleV4_NoMatch_NilSend(t *testing.T) {
 	// No mappings → buildReply returns false → handleV4 returns early.
 	buf := buildQueryBytes(t, "_unknown._sub._matterc._udp.local.", dns.TypePTR)
 	// cm nil is fine — writeMulticastV4 is never reached.
-	r.handleV4(buf, nil, nil)
+	r.handleV4(context.Background(), buf, nil, nil)
 }
 
 // TestHandleV6_NoMatch_NilSend mirrors the v6 case.
 func TestHandleV6_NoMatch_NilSend(t *testing.T) {
 	r := newTestResponder()
 	buf := buildQueryBytes(t, "_unknown._sub._matterc._udp.local.", dns.TypePTR)
-	r.handleV6(buf, nil, nil)
+	r.handleV6(context.Background(), buf, nil, nil)
 }
 
 // TestHandleV4_Match_WriteMulticast sends a PTR query packet directly to
@@ -335,13 +335,13 @@ func TestHandleV4_Match_WriteMulticast(t *testing.T) {
 
 	// Call with a nil cm — exercises the "fan-out across all multicast
 	// interfaces" branch of writeMulticastV4 (cm==nil → tried=false).
-	r.handleV4(buf, nil, nil)
+	r.handleV4(context.Background(), buf, nil, nil)
 
 	// Exercise the "cm with IfIndex" branch using the real loopback index.
 	lo, lerr := net.InterfaceByName("lo")
 	if lerr == nil {
 		cm := &ipv4.ControlMessage{IfIndex: lo.Index}
-		r.handleV4(buf, cm, nil)
+		r.handleV4(context.Background(), buf, cm, nil)
 	}
 }
 
@@ -366,13 +366,13 @@ func TestHandleV6_Match_WriteMulticast(t *testing.T) {
 	buf := buildQueryBytes(t, qname, dns.TypePTR)
 
 	// nil cm → fan-out branch.
-	r.handleV6(buf, nil, nil)
+	r.handleV6(context.Background(), buf, nil, nil)
 
 	// cm with IfIndex → prefer-iface branch.
 	lo, lerr := net.InterfaceByName("lo")
 	if lerr == nil {
 		cm := &ipv6.ControlMessage{IfIndex: lo.Index}
-		r.handleV6(buf, cm, nil)
+		r.handleV6(context.Background(), buf, cm, nil)
 	}
 }
 
