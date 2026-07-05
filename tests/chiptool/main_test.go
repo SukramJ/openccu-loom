@@ -109,12 +109,18 @@ func requireBridge(t *testing.T) *harness.Bridge {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
-		out, err := ctl.PairFull(ctx, t, "127.0.0.1", b.MatterPort())
+		out, err := ctl.PairFull(ctx, t, harness.PairTargetHost, b.MatterPort())
 		if err != nil {
+			// Dump the daemon's own log ONCE (not per test — the
+			// shared error is repeated by every t.Fatalf) so a CI
+			// failure shows the bridge-side view of the handshake,
+			// not just chip-tool's.
+			dumpDaemonLog(b)
 			sharedBridgeErr = fmt.Errorf("commission shared fabric: %w\n%s", err, out)
 			return
 		}
 		if !harness.PairingSuccess(out) {
+			dumpDaemonLog(b)
 			sharedBridgeErr = fmt.Errorf("shared-fabric pairing did not report success:\n%s", out)
 			return
 		}
@@ -128,4 +134,15 @@ func requireBridge(t *testing.T) *harness.Bridge {
 		t.Skip("shared bridge not initialised — chip-tool missing or daemon failed to start")
 	}
 	return sharedBridge
+}
+
+// dumpDaemonLog writes the daemon's captured stdout + stderr to the
+// test binary's stderr. Called from the shared bring-up failure paths
+// where no per-test t.Logf exists yet and the daemon-side view is the
+// only way to attribute a silent handshake stall.
+func dumpDaemonLog(b *harness.Bridge) {
+	fmt.Fprintf(os.Stderr, "chiptool: shared commissioning failed — daemon stdout follows\n%s\n", b.Stdout())
+	if se := b.Stderr(); se != "" {
+		fmt.Fprintf(os.Stderr, "chiptool: daemon stderr follows\n%s\n", se)
+	}
 }
