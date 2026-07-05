@@ -20,6 +20,12 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **From-source Docker build.** The SPA build stage in `Dockerfile`
+  now copies `assets/ui/.npmrc` (`legacy-peer-deps=true`) next to the
+  package manifests — without it npm 11 fails `npm ci` on the
+  `typescript@^6` vs `openapi-typescript` peer range, breaking
+  `docker build .` (and with it the compose matter-smoke stack) even
+  though every non-container `npm ci` path worked.
 - **`make matter-smoke` chip-tool invocation.** The compose exec now
   calls `/root/chip-tool` by absolute path — the `chip-cert-bins`
   image ships its binaries as `/root` symlinks without putting them on

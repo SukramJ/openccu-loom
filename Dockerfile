@@ -16,7 +16,9 @@
 # /src/assets/ui lands the bundle at /src/internal/north/ui/spa_dist.
 FROM --platform=$BUILDPLATFORM node:24-alpine AS spa
 WORKDIR /src/assets/ui
-COPY assets/ui/package.json assets/ui/package-lock.json ./
+# .npmrc must ride along (legacy-peer-deps=true): without it npm 11
+# fails `npm ci` on the typescript@^6 vs openapi-typescript peer range.
+COPY assets/ui/package.json assets/ui/package-lock.json assets/ui/.npmrc ./
 RUN npm ci
 COPY assets/ui/ ./
 RUN npm run build
