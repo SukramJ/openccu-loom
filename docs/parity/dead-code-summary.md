@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: eec4550
-HEAD: eec4550
+Generated: bdb7042
+HEAD: bdb7042
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24002 |
+| Total Exported | 24035 |
 | Reachable | 3788 |
-| Whitelisted | 17337 |
+| Whitelisted | 17370 |
 | **Unreachable** | **2877** |
 
 ## Top-20 Packages by Dead Code
