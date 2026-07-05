@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -414,10 +415,16 @@ func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 	return set
 }
 
-// toWire renders v as a bare Go value the writer can serialise.
-// Validation beyond the type tag is intentionally minimal — the CCU
-// itself rejects out-of-range values, and range bounds are not
-// exposed on the sysvar descriptor.
+// toWire renders v as a bare Go value the writer can serialise. The
+// declared sysvar type — not the caller's payload shape — decides the
+// Go type handed to the writer, because the writer's wire dispatch
+// keys on that type (bool → SysVar.setBool, numeric → SysVar.setFloat,
+// string → the string-only Rega script): an un-normalised value picks
+// the wrong wire method and the CCU drops or rejects the write.
+// Mirrors Python `support.parse_sys_var` (support/__init__.py:116-126),
+// which fixes the raw value to the declared HubValueType up front.
+// Range validation stays minimal — the CCU itself rejects out-of-range
+// values, and range bounds are not exposed on the sysvar descriptor.
 //
 // HubValueTypeList carries a symmetry constraint: the publish path
 // renders the integer CCU index as a label string (see
@@ -427,13 +434,30 @@ func (s *Sysvar) MQTTTopics(base, centralName string) payload.MQTTTopicSet {
 // `setSystemVariable` call silently fails. Mirrors Python
 // `SysvarDpSelect.send_variable` (model/hub/select.py:34-42).
 func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
-	if s.ValueType == hmenum.HubValueTypeList && len(s.ValueList) > 0 {
-		if idx, ok := s.resolveListIndex(v); ok {
-			return idx, nil
-		}
-		return nil, fmt.Errorf("sysvar %q: value %s not in value list", s.Name, v.AsString())
+	if v.Kind == hmtypes.ValueKindNone {
+		return nil, fmt.Errorf("sysvar %q: cannot write NoneValue", s.Name)
 	}
-	switch v.Kind {
+	switch s.ValueType { //nolint:exhaustive // unknown/absent descriptor types fall through to the kind passthrough
+	case hmenum.HubValueTypeList:
+		if len(s.ValueList) > 0 {
+			if idx, ok := s.resolveListIndex(v); ok {
+				return idx, nil
+			}
+			return nil, fmt.Errorf("sysvar %q: value %s not in value list", s.Name, v.AsString())
+		}
+		// No labels on the descriptor: the write still needs a numeric index.
+		return s.intToWire(v)
+	case hmenum.HubValueTypeLogic, hmenum.HubValueTypeAlarm:
+		return s.boolToWire(v)
+	case hmenum.HubValueTypeFloat, hmenum.HubValueTypeNumber:
+		return s.floatToWire(v)
+	case hmenum.HubValueTypeInteger:
+		return s.intToWire(v)
+	case hmenum.HubValueTypeString:
+		return s.stringToWire(v)
+	}
+	// Unknown or absent descriptor type: pass the caller's kind through.
+	switch v.Kind { //nolint:exhaustive // ValueKindNone rejected above
 	case hmtypes.ValueKindBool:
 		return v.Bool, nil
 	case hmtypes.ValueKindInt:
@@ -444,10 +468,90 @@ func (s *Sysvar) toWire(v hmtypes.ParamValue) (any, error) {
 		return v.String, nil
 	case hmtypes.ValueKindList:
 		return v.List, nil
-	case hmtypes.ValueKindNone:
-		return nil, fmt.Errorf("sysvar %q: cannot write NoneValue", s.Name)
 	}
 	return nil, fmt.Errorf("sysvar %q: unsupported value kind %s", s.Name, v.Kind)
+}
+
+// boolToWire coerces v to the bool a LOGIC/ALARM sysvar writes. String
+// forms cover what MQTT command payloads and HA templates emit; an
+// unrecognised token is an error rather than a silent false — flipping
+// an alarm variable off on a typo would mask real alerts.
+func (s *Sysvar) boolToWire(v hmtypes.ParamValue) (any, error) {
+	switch v.Kind { //nolint:exhaustive // remaining kinds fall through to the error below
+	case hmtypes.ValueKindBool:
+		return v.Bool, nil
+	case hmtypes.ValueKindInt:
+		switch v.Int {
+		case 0:
+			return false, nil
+		case 1:
+			return true, nil
+		}
+	case hmtypes.ValueKindFloat:
+		switch v.Float {
+		case 0:
+			return false, nil
+		case 1:
+			return true, nil
+		}
+	case hmtypes.ValueKindString:
+		switch strings.ToLower(v.String) {
+		case "true", "t", "yes", "y", "on", "1":
+			return true, nil
+		case "false", "f", "no", "n", "off", "0":
+			return false, nil
+		}
+	}
+	return nil, fmt.Errorf("sysvar %q: value %s is not a boolean", s.Name, v.AsString())
+}
+
+// floatToWire coerces v to the float64 a FLOAT/NUMBER sysvar writes.
+func (s *Sysvar) floatToWire(v hmtypes.ParamValue) (any, error) {
+	switch v.Kind { //nolint:exhaustive // remaining kinds fall through to the error below
+	case hmtypes.ValueKindFloat:
+		return v.Float, nil
+	case hmtypes.ValueKindInt:
+		return float64(v.Int), nil
+	case hmtypes.ValueKindString:
+		if f, err := strconv.ParseFloat(v.String, 64); err == nil {
+			return f, nil
+		}
+	}
+	return nil, fmt.Errorf("sysvar %q: value %s is not numeric", s.Name, v.AsString())
+}
+
+// intToWire coerces v to the int an INTEGER (or label-less LIST) sysvar
+// writes. Fractional floats are rejected instead of truncated — silently
+// writing 3 for 3.7 hides a caller bug.
+func (s *Sysvar) intToWire(v hmtypes.ParamValue) (any, error) {
+	switch v.Kind { //nolint:exhaustive // remaining kinds fall through to the error below
+	case hmtypes.ValueKindInt:
+		return v.Int, nil
+	case hmtypes.ValueKindFloat:
+		// Same int32 bounding rationale as resolveListIndex: int32's
+		// limits are exactly representable as float64, so the narrowing
+		// below cannot overflow.
+		if v.Float >= math.MinInt32 && v.Float <= math.MaxInt32 && v.Float == math.Trunc(v.Float) {
+			return int(v.Float), nil
+		}
+	case hmtypes.ValueKindString:
+		if n, err := strconv.Atoi(v.String); err == nil {
+			return n, nil
+		}
+	}
+	return nil, fmt.Errorf("sysvar %q: value %s is not an integer", s.Name, v.AsString())
+}
+
+// stringToWire coerces v to the string a STRING sysvar writes; scalar
+// payloads stringify, lists do not.
+func (s *Sysvar) stringToWire(v hmtypes.ParamValue) (any, error) {
+	switch v.Kind { //nolint:exhaustive // remaining kinds fall through to the error below
+	case hmtypes.ValueKindString:
+		return v.String, nil
+	case hmtypes.ValueKindBool, hmtypes.ValueKindInt, hmtypes.ValueKindFloat:
+		return v.AsString(), nil
+	}
+	return nil, fmt.Errorf("sysvar %q: value kind %s cannot write a string sysvar", s.Name, v.Kind)
 }
 
 // resolveListIndex maps a write-side value onto a zero-based index
