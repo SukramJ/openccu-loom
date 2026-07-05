@@ -530,13 +530,19 @@ func (s *Sysvar) intToWire(v hmtypes.ParamValue) (any, error) {
 	case hmtypes.ValueKindFloat:
 		// Same int32 bounding rationale as resolveListIndex: int32's
 		// limits are exactly representable as float64, so the narrowing
-		// below cannot overflow.
+		// below cannot overflow. The redundant-looking integer-level
+		// bounds check keeps the narrowing provably safe for static
+		// analysis (CodeQL go/incorrect-integer-conversion).
 		if v.Float >= math.MinInt32 && v.Float <= math.MaxInt32 && v.Float == math.Trunc(v.Float) {
-			return int(v.Float), nil
+			if i := int64(v.Float); i >= math.MinInt32 && i <= math.MaxInt32 {
+				return int(i), nil
+			}
 		}
 	case hmtypes.ValueKindString:
-		if n, err := strconv.Atoi(v.String); err == nil {
-			return n, nil
+		// bitSize 32 bounds the parse so the int conversion is safe on
+		// 32-bit builds (armv7) too.
+		if n, err := strconv.ParseInt(v.String, 10, 32); err == nil {
+			return int(n), nil
 		}
 	}
 	return nil, fmt.Errorf("sysvar %q: value %s is not an integer", s.Name, v.AsString())
