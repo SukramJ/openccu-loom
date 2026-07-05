@@ -23,7 +23,9 @@ this smoke when you need an external commissioner's verdict.
 
 - **Linux host.** Matter discovery rides on UDP/IPv6 multicast; Docker
   Desktop on macOS / Windows does not bridge multicast into containers.
-  On macOS, run the smoke from a Linux VM (UTM, Multipass, Lima).
+  On macOS, run the smoke from a Linux VM (UTM, Multipass, Lima) — or
+  push the branch and let the `chiptool` CI workflow run it on a Linux
+  runner (see [CI](#ci) below).
 - Docker Engine ≥ 24 with the Compose plugin.
 - Avahi enabled on the host with `use-ipv6=yes` in
   `/etc/avahi/avahi-daemon.conf`. Restart `avahi-daemon` if a previous
@@ -55,6 +57,35 @@ A failed run prints the last 80 OpenCCU-Loom log lines and leaves the
 chip-tool log at `tmp/matter-smoke.log` for inspection. Use
 `make matter-smoke-down` to clean up if a run was interrupted before
 the teardown step.
+
+---
+
+## CI
+
+The `chiptool` workflow (`.github/workflows/chiptool.yml`) runs both
+chip-tool layers on `ubuntu-latest`. GitHub's Linux runners support
+host networking and loopback UDP, so neither the Docker Desktop
+multicast limitation nor the macOS container gap applies there:
+
+- **chip-tool capability suite** (`make chiptool-test`) — the Go suite
+  under `tests/chiptool/` against a runner-native chip-tool binary.
+  CI extracts `/root/apps/chip-tool` from the pinned
+  `connectedhomeip/chip-cert-bins` image (the pin is read from
+  `compose/matter-smoke.yml`, so both layers always use the same
+  chip-tool build) and caches the extracted binary keyed on the pin —
+  the ~2.5 GiB image pull happens only after a pin bump. The binary
+  location is passed via `OPENCCU_LOOM_CHIPTOOL_BIN` so the harness
+  never silently skips on a PATH miss.
+- **matter-smoke** (`make matter-smoke`) — the compose PASE smoke,
+  identical to a local Linux run. On failure the chip-tool log is
+  uploaded as the `matter-smoke-log` workflow artifact.
+
+Triggers: nightly (03:47 UTC), the `needs-chiptool` PR label, and
+manual `workflow_dispatch`. It is deliberately not a per-PR gate —
+chip-tool runs are slow (the Go suite alone budgets up to 10 min).
+The opt-in mDNS discovery test (`OPENCCU_LOOM_CHIPTOOL_MDNS=1`) stays
+disabled in CI; multicast on shared runners is the flakiness the
+suite's loopback design avoids.
 
 ---
 

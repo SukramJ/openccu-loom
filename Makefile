@@ -239,9 +239,23 @@ matter-smoke: ## run chip-tool PASE smoke against the Matter bridge (Linux host 
 	@mkdir -p tmp
 	@echo "→ bringing up openccu-loom + chip-tool"
 	docker compose -f $(MATTER_SMOKE_COMPOSE) up -d --build --wait
+	@echo "→ waiting for the Matter bridge listener (matter.bridge.up marker)"
+	@ok=0; for i in $$(seq 1 30); do \
+		if docker compose -f $(MATTER_SMOKE_COMPOSE) logs openccu-loom 2>/dev/null | grep -q "matter.bridge.up"; then ok=1; break; fi; \
+		sleep 2; \
+	done; \
+	if [ "$$ok" -ne 1 ]; then \
+		echo "FAIL: Matter bridge did not log matter.bridge.up within 60s"; \
+		docker compose -f $(MATTER_SMOKE_COMPOSE) logs openccu-loom | tail -80; \
+		docker compose -f $(MATTER_SMOKE_COMPOSE) down -v; \
+		exit 1; \
+	fi
 	@echo "→ executing chip-tool pairing already-discovered (PASE)"
+	@# Absolute path: the chip-cert-bins image ships its binaries as
+	@# /root symlinks without putting them on PATH, and docker exec
+	@# does not search the working directory for bare command names.
 	@docker compose -f $(MATTER_SMOKE_COMPOSE) exec -T chip-tool \
-		chip-tool pairing already-discovered \
+		/root/chip-tool pairing already-discovered \
 			0x1234 20202021 127.0.0.1 5540 \
 			--bypass-attestation-verifier true \
 			--pase-only true \

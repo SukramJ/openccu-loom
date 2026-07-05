@@ -6,6 +6,29 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **chip-tool CI workflow.** `.github/workflows/chiptool.yml` runs the
+  chip-tool capability suite (`make chiptool-test`) and the compose
+  PASE smoke (`make matter-smoke`) on Linux runners — nightly, on the
+  `needs-chiptool` PR label, and via manual dispatch. The chip-tool
+  binary is extracted from the `connectedhomeip/chip-cert-bins` image
+  pinned in `compose/matter-smoke.yml` and cached keyed on that pin,
+  so both layers always exercise the same chip-tool build. This closes
+  the gap that chip-tool cannot run on macOS developer hosts (Docker
+  Desktop does not support host networking).
+
+### Fixed
+
+- **`make matter-smoke` chip-tool invocation.** The compose exec now
+  calls `/root/chip-tool` by absolute path — the `chip-cert-bins`
+  image ships its binaries as `/root` symlinks without putting them on
+  `PATH`, so the previous bare `chip-tool` invocation could never
+  resolve. The target also waits for the daemon's `matter.bridge.up`
+  log marker before pairing instead of racing the container
+  healthcheck (which only proves the binary execs, not that the Matter
+  UDP listener is bound).
+
 ## [0.26.0] — 2026-07-04
 
 ### Changed
