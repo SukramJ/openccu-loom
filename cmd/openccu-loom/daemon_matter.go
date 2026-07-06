@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	gosql "database/sql"
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
@@ -19,7 +20,6 @@ import (
 	"log/slog"
 	"math/big"
 	"os"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
@@ -52,7 +52,6 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/mrp"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/handlers"
 	"github.com/SukramJ/openccu-loom/internal/north/rest/ws"
-	sqlitestore "github.com/SukramJ/openccu-loom/internal/store/sqlite"
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmevent"
 	"github.com/SukramJ/openccu-loom/pkg/interfaces"
@@ -134,21 +133,17 @@ type matterBridgeBundle struct {
 	rootRefs       rootClusterRefs           // typed handles for daemon-side lifecycle wiring
 }
 
-func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger) *matterBridgeBundle { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
+// db is the shared <DataDir>/openccu-loom.db handle opened once by
+// [openLoomDB] in the composition root; startMatterBridge never opens or
+// closes it — a nil db degrades the bridge to disabled (same as a
+// disabled cfg.North.Matter.Enabled), and every early-return path below
+// leaves the handle untouched for the caller to keep using.
+func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger) *matterBridgeBundle { //nolint:gocognit,gocyclo,funlen // composition/wiring: long sequential setup
 	if cfg == nil || !cfg.North.Matter.Enabled {
 		return nil
 	}
-
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
-	dbCtx, dbCancel := context.WithTimeout(ctx, 10*time.Second)
-	defer dbCancel()
-	db, err := sqlitestore.Open(dbCtx, dsn)
-	if err != nil {
-		logger.Warn("matter.bridge.db_open", slog.String("dsn", dsn), slog.String("err", err.Error()))
+	if db == nil {
+		logger.Warn("matter.bridge.db_unavailable", slog.String("hint", "shared openccu-loom.db handle is nil; Matter bridge disabled"))
 		return nil
 	}
 
@@ -195,7 +190,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 	}, logger)
 	if err != nil {
 		logger.Warn("matter.bridge.new", slog.String("err", err.Error()))
-		_ = db.Close()
 		return nil
 	}
 
@@ -206,7 +200,6 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 
 	if err := bridge.Start(ctx); err != nil {
 		logger.Warn("matter.bridge.start", slog.String("err", err.Error()))
-		_ = db.Close()
 		return nil
 	}
 	// mDNS Re-Announce-Loop: grandcat/zeroconf only Probe+Announce on
@@ -475,7 +468,7 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if err != nil {
 			return 0, false
 		}
-		return entry.FabricIndex, true
+		return entry.FabricIndex(), true
 	}).WithSubjectResolver(func(id uint16) (uint64, []uint32, bool) {
 		// Resolves (peerNodeID, peerCATs) for the IM dispatcher's
 		// per-subject ACL gate (Matter §9.10.5.6). Apple Home Multi-
@@ -918,10 +911,10 @@ func startMatterBridge(ctx context.Context, cfg *config.Config, reg *central.Reg
 		if err := bridge.Stop(stopCtx); err != nil {
 			logger.Warn("matter.bridge.stop", slog.String("err", err.Error()))
 		}
-		// Stop the subscription engine goroutine before closing the
-		// DB so the Reporter never observes a torn-down store.
+		// Stop the subscription engine goroutine. The DB handle itself is
+		// shared (owned by the composition root, see openLoomDB) and is
+		// closed by its opener, not here.
 		subMgr.Stop()
-		_ = db.Close()
 	}
 	return &matterBridgeBundle{
 		bridge:         bridge,
@@ -2784,9 +2777,9 @@ func runMatterReassemble(ctx context.Context, reassemble func(context.Context) e
 // matterWiring + nil closers + a no-op teardown when the bridge is off.
 //
 //nolint:gocognit,funlen,gocyclo // composition/wiring: long sequential Matter bridge setup
-func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
+func wireMatterRuntime(ctx context.Context, cfg *config.Config, reg *central.Registry, db *gosql.DB, healthTracker *health.Tracker, labels device.ParameterTranslator, logger *slog.Logger, wsHub *ws.Hub) (wiring matterWiring, closers []func(), teardown func()) {
 	teardown = func() {}
-	if bundle := startMatterBridge(ctx, cfg, reg, healthTracker, labels, logger); bundle != nil {
+	if bundle := startMatterBridge(ctx, cfg, reg, db, healthTracker, labels, logger); bundle != nil {
 		// Defaulted view of the Matter config — the identical view
 		// startMatterBridge fed the bridge core. The opener, the mDNS
 		// advertisement, and the status reader below MUST consume the

@@ -441,7 +441,8 @@ func TestMatterEphemeralProvider_Singleton_BuildAndInstall_DoesNotPanic(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

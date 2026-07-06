@@ -60,7 +60,8 @@ func TestStartMatterBridge_DevRotateUniqueIDs_DoesNotPanic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -84,33 +85,37 @@ func TestStartMatterBridge_ConcurrentPairings_Armed(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
 }
 
-// ── startMatterBridge: db-open failure path ───────────────────────────────────
+// ── startMatterBridge: shared-db-unavailable path ─────────────────────────────
 
-func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
+// TestStartMatterBridge_NilDB_ReturnsNil verifies that startMatterBridge
+// degrades to disabled when the shared *sql.DB handle is nil — the state the
+// composition root is in when openLoomDB's open failed (bad DataDir, locked
+// file, …). startMatterBridge itself no longer opens a DB, so this replaces
+// the old "bad DataDir → internal open fails" scenario.
+func TestStartMatterBridge_NilDB_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
-	// Use /proc/nonexistent as DataDir so the SQLite open fails.
-	cfg.DataDir = "/proc/nonexistent_db_dir_9z"
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-fail", Host: "127.0.0.1"}}
 
 	reg := buildTestRegistry(t, "ccu-fail")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		bundle.stop()
-		t.Error("expected nil bundle when DB open fails")
+		t.Error("expected nil bundle when the shared db handle is nil")
 	}
 }
 
@@ -118,7 +123,7 @@ func TestStartMatterBridge_DBOpenFails_ReturnsNil(t *testing.T) {
 
 func TestStartMatterBridge_NilCfg_ReturnsNil(t *testing.T) {
 	t.Parallel()
-	bundle := startMatterBridge(context.Background(), nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), nil, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil for nil cfg")
 	}
@@ -128,7 +133,7 @@ func TestStartMatterBridge_Disabled_ReturnsNil(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = false
-	bundle := startMatterBridge(context.Background(), cfg, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	bundle := startMatterBridge(context.Background(), cfg, nil, nil, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle != nil {
 		t.Error("expected nil when matter disabled")
 	}
@@ -152,7 +157,8 @@ func TestStartMatterBridge_EphemeralWindow_ConcurrentPairings(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -177,34 +183,40 @@ func TestStartMatterBridge_EphemeralWindow_Singleton(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
 	t.Cleanup(bundle.stop)
 }
 
-// ── startMatterBridge: default DataDir ("" → "./var") ────────────────────────
+// ── startMatterBridge: empty DataDir no longer resolved here ─────────────────
 
-func TestStartMatterBridge_DefaultDataDir_NotEmpty(t *testing.T) {
+// TestStartMatterBridge_EmptyDataDir_StillStartsWithSharedDB verifies that an
+// empty cfg.DataDir has no bearing on startMatterBridge anymore — the
+// "" → "./var" fallback now lives entirely in [openLoomDB] (see
+// daemon_boot_test.go), and startMatterBridge only cares about the db handle
+// it is given.
+func TestStartMatterBridge_EmptyDataDir_StillStartsWithSharedDB(t *testing.T) {
 	t.Parallel()
 	cfg := config.Default()
 	cfg.North.Matter.Enabled = true
 	cfg.North.Matter.MDNSAdvertise = "noop"
 	cfg.North.Matter.Listen = ":0"
-	cfg.DataDir = "" // should use "./var" internally — will likely fail db open in test env
+	cfg.DataDir = "" // irrelevant now — db is supplied directly, not opened here
 	cfg.Centrals = []config.CentralConfig{{Name: "ccu-defdir", Host: "127.0.0.1"}}
 
 	reg := buildTestRegistry(t, "ccu-defdir")
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	// May succeed or fail (depends on ./var writeability in test sandbox).
-	// Either way must not panic.
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
-	if bundle != nil {
-		t.Cleanup(bundle.stop)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	if bundle == nil {
+		t.Fatal("expected non-nil bundle — DataDir is no longer consulted by startMatterBridge")
 	}
+	t.Cleanup(bundle.stop)
 }
 
 // ── buildRootClusters: with non-nil store (OpCreds + AccessControl + GKM) ────
@@ -225,7 +237,8 @@ func TestBuildRootClusters_WithStore_BuildsFullSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -279,7 +292,8 @@ func TestBuildRootClusters_OnFabricInstalledExtra_Registered(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -636,7 +650,8 @@ func TestBuildPaseAdapterFromCreds_WithOpCreds_Builds(t *testing.T) {
 	innerCtx, cancel := context.WithCancel(ctx)
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(innerCtx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(innerCtx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -1076,14 +1091,11 @@ func TestDeriveOperationalIPK_ValidInput_NonZero(t *testing.T) {
 
 func TestWireIncidentRecorder_CentralWithCache_SetsRecorder(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-incident")
 	logger := slog.New(slog.DiscardHandler)
 
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	// No assertion needed — no panic is the goal.
 }

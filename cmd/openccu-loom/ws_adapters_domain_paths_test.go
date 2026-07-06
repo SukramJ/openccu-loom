@@ -311,7 +311,8 @@ func TestMatterEphemeralProvider_GenerateAndInstall_ConcurrentMode(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping concurrent mode test")
 	}
@@ -372,7 +373,8 @@ func TestMatterFabricRevokerAdapter_LiveStore_RevokeMissingFabric(t *testing.T) 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start; skipping RevokeFabric live test")
 	}
@@ -544,15 +546,12 @@ func TestVisibilityAdapter_UnIgnoreCandidates_NilQueryFacade(t *testing.T) {
 // buildTestRegistry creates Units with a Cache coordinator.
 func TestWireIncidentRecorder_WithRegistryContainingCache_DoesNotPanic(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	// Use a central that was registered via buildTestRegistry — it includes
 	// a CacheCoordinator which has a SetIncidentRecorder method.
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 	// If the Cache field is non-nil and SetIncidentRecorder is called, must not panic.
 }
@@ -617,13 +616,10 @@ func TestApplyVisibilityUnIgnore_OverlappingPatterns(t *testing.T) {
 // buildTestRegistry creates Units that have a Recorder set.
 func TestWireSessionRecorderPersistence_WithCentralHavingRecorder(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-01")
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
