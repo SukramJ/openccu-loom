@@ -319,7 +319,7 @@ func (r *Recorder) PeekTS(rpcType RPCType, method string, params any) (time.Time
 
 // GetLatestResponseByParams returns the most recent non-expired response for
 // (rpcType, method) whose frozen params string contains the given params
-// Substring. It mirrors
+// substring. It mirrors the Python reference implementation's
 // SessionRecorder.get_latest_response_by_params (session.py).
 // Returns (nil, false) when no matching entry exists.
 func (r *Recorder) GetLatestResponseByParams(rpcType RPCType, method, paramsSubstr string) (any, bool) {

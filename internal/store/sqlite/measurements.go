@@ -358,12 +358,24 @@ type EnergyRow struct {
 	Count          int64
 }
 
-// energyTierSelectSQL reads one persisted rollup tier (measurements_hourly
-// or measurements_daily) directly: each row is already one (channel,
-// parameter, bucket) aggregate over the requested [from, to) window.
-const energyTierSelectSQL = `
+// energyTierHourlySelectSQL and energyTierDailySelectSQL each read one
+// persisted rollup tier directly: every row is already one (channel,
+// parameter, bucket) aggregate over the requested [from, to) window. Kept
+// as two fixed statements (rather than one templated with the table name)
+// so the query text is never assembled from a caller-supplied string.
+const energyTierHourlySelectSQL = `
     SELECT channel_address, parameter, bucket_ts, sum, min, max, first, last, count
-      FROM %s
+      FROM measurements_hourly
+     WHERE central_name = ?
+       AND parameter IN (?, ?, ?)
+       AND bucket_ts >= ?
+       AND bucket_ts < ?
+       AND (? = '' OR channel_address = ? OR channel_address LIKE ?)
+`
+
+const energyTierDailySelectSQL = `
+    SELECT channel_address, parameter, bucket_ts, sum, min, max, first, last, count
+      FROM measurements_daily
      WHERE central_name = ?
        AND parameter IN (?, ?, ?)
        AND bucket_ts >= ?
@@ -463,20 +475,22 @@ func scanEnergyRows(rows *sql.Rows) ([]EnergyRow, error) {
 	return out, nil
 }
 
-// readEnergyTier reads persisted tier rows for [fromMs, toMs). An empty or
-// inverted range yields no rows (nil) without touching the database.
+// readEnergyTier reads persisted tier rows for [fromMs, toMs) using the given
+// fixed tier query (one of energyTierHourlySelectSQL / energyTierDailySelectSQL).
+// tierName only labels errors. An empty or inverted range yields no rows
+// (nil) without touching the database.
 func (s *MeasurementStore) readEnergyTier(
-	ctx context.Context, table, central, deviceAddr string, fromMs, toMs int64,
+	ctx context.Context, query, tierName, central, deviceAddr string, fromMs, toMs int64,
 ) ([]EnergyRow, error) {
 	if toMs <= fromMs {
 		return nil, nil
 	}
 	prefix := deviceAddr + ":%"
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(energyTierSelectSQL, table),
+	rows, err := s.db.QueryContext(ctx, query,
 		central, energyParameters[0], energyParameters[1], energyParameters[2],
 		fromMs, toMs, deviceAddr, deviceAddr, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("measurements.readEnergyTier %s: %w", table, err)
+		return nil, fmt.Errorf("measurements.readEnergyTier %s: %w", tierName, err)
 	}
 	return scanEnergyRows(rows)
 }
@@ -575,7 +589,7 @@ func (s *MeasurementStore) queryEnergyHour(
 	if err != nil {
 		return nil, err
 	}
-	tier, err := s.readEnergyTier(ctx, "measurements_hourly", central, deviceAddr, fromMs, min(toMs, hourlyWM))
+	tier, err := s.readEnergyTier(ctx, energyTierHourlySelectSQL, "measurements_hourly", central, deviceAddr, fromMs, min(toMs, hourlyWM))
 	if err != nil {
 		return nil, err
 	}
@@ -600,7 +614,7 @@ func (s *MeasurementStore) queryEnergyDay(
 	if err != nil {
 		return nil, err
 	}
-	tier, err := s.readEnergyTier(ctx, "measurements_daily", central, deviceAddr, fromMs, min(toMs, dailyWM))
+	tier, err := s.readEnergyTier(ctx, energyTierDailySelectSQL, "measurements_daily", central, deviceAddr, fromMs, min(toMs, dailyWM))
 	if err != nil {
 		return nil, err
 	}

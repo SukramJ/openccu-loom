@@ -4,6 +4,7 @@
 package hmtypes
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
@@ -35,6 +36,48 @@ func TestNewDataPointKeyValidates(t *testing.T) {
 	}
 }
 
+// TestNewDataPointKeyValidationErrorsAreDistinguishableSentinels verifies
+// each validation failure of NewDataPointKey returns its own sentinel error,
+// distinguishable via errors.Is — not four indistinguishable anonymous
+// errors.New values.
+func TestNewDataPointKeyValidationErrorsAreDistinguishableSentinels(t *testing.T) {
+	_, err := NewDataPointKey("", "ABC:1", hmenum.ParamsetKeyValues, "LEVEL")
+	if !errors.Is(err, ErrDataPointKeyInterfaceIDRequired) {
+		t.Errorf("empty interface: got %v, want ErrDataPointKeyInterfaceIDRequired", err)
+	}
+
+	_, err = NewDataPointKey("iface", "", hmenum.ParamsetKeyValues, "LEVEL")
+	if !errors.Is(err, ErrDataPointKeyChannelAddressRequired) {
+		t.Errorf("empty channel: got %v, want ErrDataPointKeyChannelAddressRequired", err)
+	}
+
+	_, err = NewDataPointKey("iface", "ABC:1", "", "LEVEL")
+	if !errors.Is(err, ErrDataPointKeyParamsetKeyRequired) {
+		t.Errorf("empty paramset: got %v, want ErrDataPointKeyParamsetKeyRequired", err)
+	}
+
+	_, err = NewDataPointKey("iface", "ABC:1", hmenum.ParamsetKeyValues, "")
+	if !errors.Is(err, ErrDataPointKeyParameterRequired) {
+		t.Errorf("empty parameter: got %v, want ErrDataPointKeyParameterRequired", err)
+	}
+
+	// The four sentinels must be pairwise distinct so errors.Is can tell
+	// them apart.
+	sentinels := []error{
+		ErrDataPointKeyInterfaceIDRequired,
+		ErrDataPointKeyChannelAddressRequired,
+		ErrDataPointKeyParamsetKeyRequired,
+		ErrDataPointKeyParameterRequired,
+	}
+	for i, a := range sentinels {
+		for j, b := range sentinels {
+			if i != j && errors.Is(a, b) {
+				t.Errorf("sentinel %d (%v) must not match sentinel %d (%v)", i, a, j, b)
+			}
+		}
+	}
+}
+
 func TestDataPointKeyDeviceAddressAndChannel(t *testing.T) {
 	k := DataPointKey{InterfaceID: "iface", ChannelAddress: "ABC:5", ParamsetKey: hmenum.ParamsetKeyValues, Parameter: "LEVEL"}
 	if k.DeviceAddress() != "ABC" {
@@ -54,6 +97,32 @@ func TestDataPointKeyChannelNoRejectsGarbage(t *testing.T) {
 	k = DataPointKey{ChannelAddress: "ABC"}
 	if _, ok := k.ChannelNo(); ok {
 		t.Error("missing channel should be rejected")
+	}
+}
+
+// TestDataPointKeyChannelNoMatchesPackageHelper proves DataPointKey.ChannelNo
+// and the package-level ChannelNo helper agree on every edge case: no
+// channel suffix, a non-numeric suffix, and a negative number. The method
+// delegates to the helper, but this locks the two entry points to
+// identical behaviour going forward.
+func TestDataPointKeyChannelNoMatchesPackageHelper(t *testing.T) {
+	cases := []string{
+		"ABC:1",   // present
+		"ABC",     // no channel suffix
+		"ABC:",    // empty suffix
+		"ABC:x",   // non-numeric
+		"ABC:-1",  // negative
+		"ABC:007", // leading zeros
+		"",        // empty address
+	}
+	for _, addr := range cases {
+		wantN, wantOK := ChannelNo(addr)
+		k := DataPointKey{ChannelAddress: addr}
+		gotN, gotOK := k.ChannelNo()
+		if gotOK != wantOK || (wantOK && gotN != wantN) {
+			t.Errorf("ChannelAddress=%q: DataPointKey.ChannelNo()=(%d,%v), package ChannelNo()=(%d,%v)",
+				addr, gotN, gotOK, wantN, wantOK)
+		}
 	}
 }
 

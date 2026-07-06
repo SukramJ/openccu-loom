@@ -27,19 +27,29 @@ type DataPointKey struct {
 	Parameter      string
 }
 
+// Sentinel errors returned by [NewDataPointKey] validation, one per
+// required field, so callers can distinguish the failure with errors.Is
+// instead of matching on message text.
+var (
+	ErrDataPointKeyInterfaceIDRequired    = errors.New("hmtypes: DataPointKey.InterfaceID is required")
+	ErrDataPointKeyChannelAddressRequired = errors.New("hmtypes: DataPointKey.ChannelAddress is required")
+	ErrDataPointKeyParamsetKeyRequired    = errors.New("hmtypes: DataPointKey.ParamsetKey is required")
+	ErrDataPointKeyParameterRequired      = errors.New("hmtypes: DataPointKey.Parameter is required")
+)
+
 // NewDataPointKey constructs a key and validates its components.
 func NewDataPointKey(interfaceID, channelAddress string, paramsetKey hmenum.ParamsetKey, parameter string) (DataPointKey, error) {
 	if interfaceID == "" {
-		return DataPointKey{}, errors.New("hmtypes: DataPointKey.InterfaceID is required")
+		return DataPointKey{}, ErrDataPointKeyInterfaceIDRequired
 	}
 	if channelAddress == "" {
-		return DataPointKey{}, errors.New("hmtypes: DataPointKey.ChannelAddress is required")
+		return DataPointKey{}, ErrDataPointKeyChannelAddressRequired
 	}
 	if paramsetKey == "" {
-		return DataPointKey{}, errors.New("hmtypes: DataPointKey.ParamsetKey is required")
+		return DataPointKey{}, ErrDataPointKeyParamsetKeyRequired
 	}
 	if parameter == "" {
-		return DataPointKey{}, errors.New("hmtypes: DataPointKey.Parameter is required")
+		return DataPointKey{}, ErrDataPointKeyParameterRequired
 	}
 	return DataPointKey{
 		InterfaceID:    interfaceID,
@@ -60,20 +70,10 @@ func (k DataPointKey) DeviceAddress() string {
 }
 
 // ChannelNo returns the numeric channel number or ok=false if the
-// address doesn't look like "<addr>:<n>".
+// address doesn't look like "<addr>:<n>". Delegates to the package-level
+// [ChannelNo] helper so both entry points share one parsing rule.
 func (k DataPointKey) ChannelNo() (int, bool) {
-	i := strings.IndexByte(k.ChannelAddress, ':')
-	if i < 0 || i == len(k.ChannelAddress)-1 {
-		return 0, false
-	}
-	var n int
-	for _, c := range k.ChannelAddress[i+1:] {
-		if c < '0' || c > '9' {
-			return 0, false
-		}
-		n = n*10 + int(c-'0')
-	}
-	return n, true
+	return ChannelNo(k.ChannelAddress)
 }
 
 // String returns a stable, human-readable form suitable for logs.

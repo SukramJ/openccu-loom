@@ -43,6 +43,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"math"
 	"slices"
 	"sync"
@@ -113,6 +114,17 @@ func (p Profile) FixedParams() map[string]float64 {
 		}
 	}
 	return out
+}
+
+// cloneProfile returns a deep-enough copy of p: the Name, Description and
+// Params maps are cloned so a caller mutating the returned Profile cannot
+// reach into the store's cached copy (the cache holds the only slice
+// backing these profiles, shared across every lookup).
+func cloneProfile(p Profile) Profile {
+	p.Name = maps.Clone(p.Name)
+	p.Description = maps.Clone(p.Description)
+	p.Params = maps.Clone(p.Params)
+	return p
 }
 
 func localised(m map[string]string, locale string) string {
@@ -190,7 +202,9 @@ func (s *Store) GetLinkProfiles(_ context.Context, receiverChannelType, senderCh
 	}
 	_ = locale // names are stored in their locale maps; callers use LocalisedName
 	out := make([]Profile, len(profs))
-	copy(out, profs)
+	for i, p := range profs {
+		out[i] = cloneProfile(p)
+	}
 	return out, nil
 }
 
@@ -210,7 +224,7 @@ func (s *Store) GetProfileByID(receiverChannelType, senderChannelType string, id
 	}
 	for _, p := range profs {
 		if p.ID == id {
-			return p, true
+			return cloneProfile(p), true
 		}
 	}
 	return Profile{}, false

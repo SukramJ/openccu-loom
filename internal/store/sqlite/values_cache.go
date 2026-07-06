@@ -520,13 +520,13 @@ func (s *ValuesCacheStore) GCDeadRows(
 	if err != nil {
 		return GCResult{}, fmt.Errorf("values_cache.GCDeadRows scan: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	type tuple struct{ centralName, iface, channel, param string }
 	var dead []tuple
 	scanned := 0
 	for rows.Next() {
 		var t tuple
 		if err := rows.Scan(&t.centralName, &t.iface, &t.channel, &t.param); err != nil {
-			_ = rows.Close()
 			return GCResult{}, fmt.Errorf("values_cache.GCDeadRows row: %w", err)
 		}
 		scanned++
@@ -535,7 +535,6 @@ func (s *ValuesCacheStore) GCDeadRows(
 			dead = append(dead, t)
 		}
 	}
-	_ = rows.Close()
 	if err := rows.Err(); err != nil {
 		return GCResult{Scanned: scanned}, fmt.Errorf("values_cache.GCDeadRows iter: %w", err)
 	}

@@ -87,7 +87,7 @@ type ValueWriter interface {
 // for every data-point value change. The returned unsubscribe function
 // removes the handler. Calling unsubscribe more than once is safe.
 //
-// (api.py). The Python implementation returns a token that is
+// Mirrors api.py. The Python implementation returns a token that is
 // passed to unsubscribe(); Go uses the closure pattern instead.
 type UpdateSubscriber interface {
 	SubscribeToDataPointUpdates(
@@ -276,7 +276,7 @@ func (a *HomematicAPI) WriteValue(ctx context.Context, centralName, channelAddre
 // implements [UpdateSubscriber]. Returns a combined unsubscribe
 // function that removes the handler from every subscribed central.
 //
-// (api.py).
+// Mirrors api.py.
 func (a *HomematicAPI) SubscribeToUpdates(
 	handler func(centralName, channelAddress, parameterName string, value any),
 ) (unsubscribe func()) {
