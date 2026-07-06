@@ -120,6 +120,55 @@ func TestAsyncSinkDropsWhenSaturated(t *testing.T) {
 	}
 }
 
+// TestAsyncSinkCloserWaitsForInFlightSink guards the same join
+// guarantee [NewDurableSink]'s closer already provides: once the
+// closer returns, the background goroutine has fully exited, so no
+// sink() call can still be running or about to start. Without this
+// join a caller that tears down the sink's dependencies right after
+// closer() returns can race an in-flight sink() invocation.
+func TestAsyncSinkCloserWaitsForInFlightSink(t *testing.T) {
+	t.Parallel()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var done atomic.Bool
+	sink := func(_ context.Context, _ Entry) error {
+		close(started)
+		<-release
+		done.Store(true)
+		return nil
+	}
+	enqueue, closer := AsyncSink(sink, 4, nil)
+	if err := enqueue(context.Background(), Entry{Action: ActionParamsetWrite}); err != nil {
+		t.Fatalf("enqueue err=%v", err)
+	}
+	<-started // the worker goroutine now runs sink(), blocked on release.
+
+	closerReturned := make(chan struct{})
+	go func() {
+		closer()
+		close(closerReturned)
+	}()
+
+	// closer() must not return while the sink call it is racing against
+	// is still in flight.
+	select {
+	case <-closerReturned:
+		t.Fatal("closer returned before the in-flight sink call completed")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release) // let the blocked sink call finish.
+
+	select {
+	case <-closerReturned:
+	case <-time.After(time.Second):
+		t.Fatal("closer did not return after the sink call completed")
+	}
+	if !done.Load() {
+		t.Fatal("expected the sink call to have completed before closer returned")
+	}
+}
+
 func TestAsyncSinkNilSinkReturnsNil(t *testing.T) {
 	t.Parallel()
 	enqueue, closer := AsyncSink(nil, 1, nil)

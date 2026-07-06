@@ -534,11 +534,12 @@ func (b *Bridge) AnnounceOnline(ctx context.Context) error {
 // raw plane and — when enabled — emits the corresponding HA
 // Discovery config (idempotent per topic).
 //
-// When LegacyAlias is enabled the same payload is mirrored under
-// The The mirror is best-effort: a
-// publish error on the legacy topic is logged but does not roll
-// back the primary publish, because the legacy tree is by definition
-// secondary.
+// When LegacyAlias is enabled the same payload is mirrored under the
+// older flat topology built by [LegacyTopicBuilder]
+// (`{base}/device/status/{address}/{address}_{channel}_{parameter}`).
+// The mirror is best-effort: a publish error on the legacy topic is
+// swallowed rather than propagated, because the legacy tree is
+// secondary to the canonical PerDPState publish.
 func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	// Visibility gate: skip the entire publish (raw + discovery) when the
 	// parameter is not allowed. Returns nil — a not-visible parameter is not
@@ -552,10 +553,9 @@ func (b *Bridge) PublishState(ctx context.Context, ev Event) error {
 	// [EventBridge.publishSlotState] / [Bridge.PublishSlotState],
 	// which owns the canonical `<addr>/<ch>/<bucket>/<param>` shape
 	// and emits the full PerDPState envelope. PublishState here only
-	// Handles the legacy_alias mirror
-	// and the HA-Discovery payload publish. The custom-DP slot
-	// publish (`<addr>/<ch>/custom/<kind>`) is owned by
-	// [EventBridge.publishCustomDPState] — not this method.
+	// handles the legacy-alias mirror and the HA-Discovery payload
+	// publish. The custom-DP slot publish (`<addr>/<ch>/custom/<kind>`)
+	// is owned by [EventBridge.publishCustomDPState] — not this method.
 	if b.cfg.RawEnabled && b.legacy != nil {
 		payloadBytes, err := b.renderStatePayload(ev)
 		if err != nil {

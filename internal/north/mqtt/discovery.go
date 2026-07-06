@@ -397,11 +397,11 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// diagnostics.
 	body["json_attributes_topic"] = d.TopicBuilder.ParameterConfig(central, ev.Interface, ev.DeviceAddress, ev.ChannelNo, bucket, ev.Parameter)
 	body["json_attributes_template"] = "{{ value_json | tojson }}"
-	// Device_class — Quantity-based resolution mirrors
-	// (deviceModel, parameter, unit) → Quantity → HA device_class.
+	// device_class — Quantity-based resolution walks the
+	// (deviceModel, parameter, unit) → Quantity → HA device_class chain.
 	// Falls back to the legacy parameter-name table when no Quantity
-	// classification applies (rare but covers a few non-AHM-table
-	// device-classes like "duration").
+	// classification applies (rare but covers a few device classes not
+	// covered by the Quantity table, like "duration").
 	if dc := componentDeviceClass(comp, ev.Model, ev.Parameter, ev.descUnit()); dc != "" {
 		body["device_class"] = dc
 	} else if dc, ok := deviceClassFor(ev.Parameter); ok {
@@ -422,7 +422,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// state_class — only applies to sensor entities. The
 	// ValueBehavior→state_class mapping is authoritative; the legacy
 	// parameter-name fallback fills the gaps for parameters not yet in
-	// the AHM metadata table.
+	// the Quantity metadata table.
 	if comp == HAComponentSensor {
 		if cls := resolveSensorStateClass(ev.Model, ev.Parameter, ev.descUnit()); cls != "" {
 			body["state_class"] = cls
@@ -437,7 +437,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 	// vs. the HA-native integration.
 
 	// MqttEntityDescription overrides — applied after the Quantity-based resolution
-	// so the per-parameter/device table takes precedence over the AHM-derived defaults.
+	// so the per-parameter/device table takes precedence over the Quantity-derived defaults.
 	if desc := EntityDescriptionFor(comp, ev.Model, ev.Parameter); desc != (MqttEntityDescription{}) {
 		if desc.EntityCategory != "" {
 			body["entity_category"] = desc.EntityCategory
@@ -621,9 +621,10 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 		// inactivity even though the device is perfectly reachable. This
 		// mirrors the binary_sensor branch above.
 		body["force_update"] = true
-		// L6 — apply data_point.multiplier so HA receives the same scaled
-		// Value would emit (`sensor.py:161-169`
-		// `:201`: `new_value = self._data_point.value * self._multiplier`).
+		// Apply data_point.multiplier so HA receives the same scaled
+		// value the Python reference implementation's HA integration
+		// would emit (`sensor.py:161-169`, `:201`:
+		// `new_value = self._data_point.value * self._multiplier`).
 		// Without this template Energy/Power readings would be off by
 		// the unit factor when the CCU firmware reports the raw count.
 		applyMultiplierSensor(ev, body)
@@ -644,7 +645,7 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 					body["max"] = *mx
 				}
 			}
-			// Step
+			// step: mirrors the Python reference implementation's
 			// `_attr_native_step = 1.0 if hmtype==INTEGER else 0.01 *
 			// multiplier` (`number.py:235`). The wire ParameterData
 			// carries Type=INTEGER for discrete parameters; default to
@@ -657,15 +658,15 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 					body["step"] = 0.01
 				}
 			}
-			// L6 — scale `min`/`max`/`step` by `data_point.multiplier`
+			// Scale `min`/`max`/`step` by `data_point.multiplier`
 			// and invert the scaling on writes (`value / multiplier`).
 			// Run AFTER the seed above so the scaling actually has values
 			// to multiply.
 			applyMultiplierNumber(ev, body, stateTopic, commandTopic)
-			// Unit_of_measurement
-			// `data_point.unit` when the EntityDescription doesn't
-			// override (`number.py:236-237`). Mirror that here so wire
-			// units like "s" / "%" / "°C" propagate to HA.
+			// unit_of_measurement defaults to the Python reference
+			// implementation's `data_point.unit` when the EntityDescription
+			// doesn't override (`number.py:236-237`). Mirror that here so
+			// wire units like "s" / "%" / "°C" propagate to HA.
 			if _, has := body["unit_of_measurement"]; !has {
 				if cleaned := generic.CleanupUnit(hmenum.Parameter(ev.Parameter), ev.descUnit()); cleaned != "" {
 					body["unit_of_measurement"] = cleaned
@@ -708,9 +709,9 @@ func (d *DefaultDiscoveryBuilder) Build(ev Event) (component, nodeID, objectID s
 			body["entity_category"] = EntityCategoryConfig
 		}
 	case HAComponentButton:
-		// Payload_press="PRESS" mirrors
-		// button.py — without it HA sends an empty string on every
-		// button press, which the CCU rejects.
+		// payload_press="PRESS" mirrors the Python reference
+		// implementation's button.py — without it HA sends an empty
+		// string on every button press, which the CCU rejects.
 		body["command_topic"] = commandTopic
 		body["payload_press"] = "PRESS"
 	case HAComponentText:
@@ -828,7 +829,7 @@ func discoveryNodeID(centralName, deviceAddress string) string {
 // reports a non-trivial multiplier for ev.Parameter. The emitted Jinja
 // template multiplies the wire scalar (raw or value_json.value,
 // depending on PayloadFormat) by the multiplier, mirroring the math
-// Does in `sensor.py:201`.
+// the Python reference implementation's `sensor.py:201` does.
 func applyMultiplierSensor(ev Event, body map[string]any) {
 	r, ok := ev.Channel.(channelMultiplierReader)
 	if !ok {
@@ -891,7 +892,7 @@ func formatMultiplier(m float64) string {
 
 // pressEventTypesFor returns the HA `event_types` list for a button-press
 // parameter. HA's `event` platform requires the full list of possible event
-// Types upfront.
+// types upfront.
 //
 // Mapping mirrors
 // `ChannelEventGroup` device_trigger_event_type groupings:
@@ -1090,9 +1091,9 @@ func deviceDescriptor(ev Event, hubURL string, subDevices bool) map[string]any {
 		"manufacturer": "eQ-3",
 	}
 	// Stamp via_device so HA renders this device as a child of the
-	// OpenCCU-Loom central — same hierarchy as
-	// (`generic_entity.py:142`) and
-	// (`platforms/generic_entity.py:118`). A device without
+	// OpenCCU-Loom central — same hierarchy as the Python reference
+	// implementation's `generic_entity.py:142` and
+	// `platforms/generic_entity.py:118`. A device without
 	// via_device floats at the top level, mixed with the central
 	// itself — confusing in the HA Devices view.
 	if ev.Central != "" {

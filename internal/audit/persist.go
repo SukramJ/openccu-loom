@@ -300,8 +300,10 @@ func AsyncSink(sink SinkFunc, capacity int, logger *slog.Logger) (SinkFunc, func
 	}
 	ch := make(chan Entry, capacity)
 	stop := make(chan struct{})
+	done := make(chan struct{})
 	var dropOnce sync.Once
 	go func() {
+		defer close(done)
 		for {
 			select {
 			case <-stop:
@@ -329,6 +331,9 @@ func AsyncSink(sink SinkFunc, capacity int, logger *slog.Logger) (SinkFunc, func
 		}
 		return nil
 	}
-	closer := func() { close(stop) }
+	closer := func() {
+		close(stop)
+		<-done
+	}
 	return enqueue, closer
 }
