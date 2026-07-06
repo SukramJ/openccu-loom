@@ -25,8 +25,8 @@ type DefinitionExporter interface {
 func definitionExportHandler(svc DefinitionExporter) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args deviceAddrArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Address == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "address required")

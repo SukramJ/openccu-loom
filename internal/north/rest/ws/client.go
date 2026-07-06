@@ -45,11 +45,24 @@ type client struct {
 	// snapshot catalogue instead.
 	classify bool
 
-	writeMu sync.Mutex
-
+	// out carries domain events (topic broadcasts) to the writer
+	// goroutine; ctrl carries every other outbound frame (subscribe/
+	// unsubscribe ACKs, pong replies, reauth results, replay markers,
+	// `call` command results). writePump is the single reader of both
+	// channels and therefore the connection's only writer — see
+	// writePump's doc comment for why that removes the need for a
+	// write mutex.
 	out    chan Event
+	ctrl   chan wireMsg
 	closed chan struct{}
 	once   sync.Once
+}
+
+// wireMsg is one pre-serialised control-plane frame queued for the
+// writer goroutine via [client.ctrl].
+type wireMsg struct {
+	op      byte
+	payload []byte
 }
 
 func newClient(conn net.Conn, br *bufio.Reader, bw *bufio.Writer, hub *Hub, logger *slog.Logger) *client {
@@ -60,6 +73,7 @@ func newClient(conn net.Conn, br *bufio.Reader, bw *bufio.Writer, hub *Hub, logg
 		hub:    hub,
 		logger: logger,
 		out:    make(chan Event, clientBufferSize),
+		ctrl:   make(chan wireMsg, clientBufferSize),
 		closed: make(chan struct{}),
 	}
 }
@@ -138,6 +152,20 @@ func (c *client) enqueue(ev Event) {
 	}
 }
 
+// enqueueCtrl queues a pre-serialised control-plane frame for the writer
+// goroutine. Never blocks: a full queue means the client is not draining
+// fast enough, and — mirroring [client.enqueue]'s policy for domain
+// events — the connection is closed rather than left to stall the
+// caller (typically readPump) for up to the write deadline.
+func (c *client) enqueueCtrl(op byte, payload []byte) {
+	select {
+	case c.ctrl <- wireMsg{op: op, payload: payload}:
+	default:
+		c.logger.Warn("ws.backpressure", slog.String("kind", "control"))
+		c.close()
+	}
+}
+
 // replayFrom delivers buffered events with Seq > since that match
 // the client's current subscriptions, then sends a control-frame
 // acknowledgement: `{op: "replay_done", seq: lastSeq}` when the
@@ -161,15 +189,16 @@ func (c *client) replayFrom(since uint64) {
 	c.sendOp(outboundOp{Op: "replay_done", Seq: last})
 }
 
-// sendOp marshals a control-frame envelope and writes it directly
-// to the wire. Failures are silent — the read/write pump will close
-// the client on the next read deadline if the connection is dead.
+// sendOp marshals a control-frame envelope and queues it for the
+// writer goroutine. Marshal failures are silent (nothing to send);
+// a dead connection surfaces via the writer goroutine's own close on
+// the next physical write failure.
 func (c *client) sendOp(op outboundOp) {
 	buf, err := json.Marshal(op)
 	if err != nil {
 		return
 	}
-	_ = c.writeFrame(opText, buf)
+	c.enqueueCtrl(opText, buf)
 }
 
 // reauth handles the in-band {op:"reauth", token:"..."} frame.
@@ -308,14 +337,34 @@ func (c *client) readPump() {
 				c.handleCommand(msg)
 			}
 		case opPing:
-			_ = c.writeFrame(opPong, f.payload)
+			c.enqueueCtrl(opPong, f.payload)
 		case opClose:
 			return
 		}
 	}
 }
 
-// writePump dispatches enqueued events plus heartbeats.
+// writePump is the connection's single writer goroutine. It is the only
+// code path that touches c.bw / c.conn for writes — every other goroutine
+// (readPump, handleCommand, reauth, the hub's broadcast fan-out) hands
+// its outbound frame to one of two channels instead of writing directly:
+//
+//   - c.out — domain events (topic broadcasts), kept as its own channel
+//     so [client.enqueue]'s backpressure policy (close on a full 1000-
+//     event buffer) stays scoped to the high-frequency broadcast path.
+//   - c.ctrl — everything else (subscribe/unsubscribe ACKs, pong
+//     replies, reauth results, replay markers, `call` command results),
+//     queued via [client.enqueueCtrl] with the same backpressure policy.
+//
+// Because exactly one goroutine ever calls rawWrite, frames can never
+// interleave on the wire and no write mutex is needed. This also means
+// readPump never blocks on a slow consumer: previously it wrote
+// synchronously (10s deadline) while holding a shared write mutex, so a
+// stalled TCP peer could pause the read loop — and therefore ping/pong
+// liveness and inbound `call` dispatch — for up to that deadline on every
+// frame. Queuing decouples the two: a slow writer now only delays its own
+// physical writes, and a truly stuck peer is caught by the backpressure
+// close instead of stalling reads.
 func (c *client) writePump() {
 	defer c.close()
 	ticker := time.NewTicker(pingInterval)
@@ -350,27 +399,32 @@ func (c *client) writePump() {
 			if err != nil {
 				continue
 			}
-			if err := c.writeFrame(opText, buf); err != nil {
+			if err := c.rawWrite(opText, buf); err != nil {
+				return
+			}
+		case msg := <-c.ctrl:
+			if err := c.rawWrite(msg.op, msg.payload); err != nil {
 				return
 			}
 		case <-ticker.C:
 			buf, _ := json.Marshal(outboundOp{Op: "ping"})
-			if err := c.writeFrame(opText, buf); err != nil {
+			if err := c.rawWrite(opText, buf); err != nil {
 				return
 			}
 		}
 	}
 }
 
-// writeFrame is the single serialization point for the connection's
-// write half. readPump (pong, ACKs) and writePump (events, heartbeats)
-// share the same bufio.Writer; without the mutex their bytes can
-// interleave and produce malformed frames.
-func (c *client) writeFrame(op byte, payload []byte) error {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
+// rawWrite is the single physical write to the connection. Called only
+// from writePump — see its doc comment for why that makes a write mutex
+// unnecessary.
+func (c *client) rawWrite(op byte, payload []byte) error {
 	_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	return writeFrame(c.bw, op, payload)
+	if err := writeFrame(c.bw, op, payload); err != nil {
+		c.logger.Debug("ws.write.failed", slog.String("err", err.Error()))
+		return err
+	}
+	return nil
 }
 
 // sendAck confirms a subscribe / unsubscribe operation. The topics
@@ -384,20 +438,21 @@ func (c *client) sendAck(op string, topics []string) {
 	if err != nil {
 		return
 	}
-	_ = c.writeFrame(opText, buf)
+	c.enqueueCtrl(opText, buf)
 }
 
 // handleCommand dispatches an inbound `call` frame through the hub's
-// router and writes the result back to the client. A frame without
+// router and queues the result for the writer goroutine. A frame without
 // an `id` is rejected with a `bad_request` error so callers know to
 // supply a correlation id; a frame without a `command` field gets the
 // same treatment.
 //
 // The dispatch uses a short context derived from the connection — the
-// caller cannot wait forever for a slow handler, and writing the
-// response respects the regular write deadline. Errors during the
-// response write tear the connection down; the readPump's defer
-// `c.close` handles that.
+// caller cannot wait forever for a slow handler. Queuing the response
+// (rather than writing it inline) keeps a slow consumer from stalling
+// readPump for the write deadline; a physical write failure surfaces
+// later, in writePump, which tears the connection down via its own
+// `defer c.close`.
 func (c *client) handleCommand(msg inboundMessage) {
 	resp := outboundResult{Op: "result", ID: msg.ID}
 	switch {
@@ -430,9 +485,7 @@ func (c *client) handleCommand(msg inboundMessage) {
 		c.logger.Warn("ws.command.marshal", slog.String("err", err.Error()))
 		return
 	}
-	if err := c.writeFrame(opText, buf); err != nil {
-		c.logger.Warn("ws.command.write", slog.String("err", err.Error()))
-	}
+	c.enqueueCtrl(opText, buf)
 }
 
 // commandTimeout caps how long a single command may run. Mirrors the

@@ -148,7 +148,7 @@ func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 		return
 	}
 	if cfg.SignalQuality != nil {
-		// V8-M1: ccu.get_signal_quality — RSSI + reachability per device.
+		// ccu.get_signal_quality — RSSI + reachability per device.
 		router.Register("ccu.get_signal_quality", ccuGetSignalQualityHandler(cfg.SignalQuality))
 	}
 	if cfg.RSSIInfo != nil {
@@ -156,11 +156,11 @@ func RegisterMissingCommands(router *Router, cfg MissingCommandsConfig) {
 		router.Register("ccu.get_rssi_info", ccuGetRSSIInfoHandler(cfg.RSSIInfo))
 	}
 	if cfg.ScheduleDevices != nil {
-		// V8-M2: schedules.list_devices — devices that expose a week-profile.
+		// schedules.list_devices — devices that expose a week-profile.
 		router.Register("schedules.list_devices", schedulesListDevicesHandler(cfg.ScheduleDevices))
 	}
 	if cfg.HubData != nil {
-		// V8-M3: ccu.get_hub_data — service/alarm message counts.
+		// ccu.get_hub_data — service/alarm message counts.
 		router.Register("ccu.get_hub_data", ccuGetHubDataHandler(cfg.HubData))
 	}
 	// system.user_permissions reads from ctx; provider gives the CCU model.
