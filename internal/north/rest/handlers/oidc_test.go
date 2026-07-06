@@ -168,22 +168,25 @@ func TestNewOIDCDeps_InitialisesStateMap(t *testing.T) {
 func TestOIDCDeps_PutAndConsumeState_RoundTrip(t *testing.T) {
 	t.Parallel()
 	d := NewOIDCDeps(nil, nil, nil)
-	key, err := d.putState("verifier-abc")
+	key, err := d.putState("verifier-abc", "nonce-abc")
 	if err != nil {
 		t.Fatalf("putState: %v", err)
 	}
 	if key == "" {
 		t.Fatal("key must not be empty")
 	}
-	got, ok := d.consumeState(key)
+	got, nonce, ok := d.consumeState(key)
 	if !ok {
 		t.Fatal("consumeState must find the just-stored state")
 	}
 	if got != "verifier-abc" {
 		t.Fatalf("verifier = %q, want verifier-abc", got)
 	}
+	if nonce != "nonce-abc" {
+		t.Fatalf("nonce = %q, want nonce-abc", nonce)
+	}
 	// State is one-shot — second consume must fail.
-	if _, ok := d.consumeState(key); ok {
+	if _, _, ok := d.consumeState(key); ok {
 		t.Fatal("state must be consumed exactly once")
 	}
 }
@@ -191,7 +194,7 @@ func TestOIDCDeps_PutAndConsumeState_RoundTrip(t *testing.T) {
 func TestOIDCDeps_ConsumeState_Unknown(t *testing.T) {
 	t.Parallel()
 	d := NewOIDCDeps(nil, nil, nil)
-	if _, ok := d.consumeState("never-stored"); ok {
+	if _, _, ok := d.consumeState("never-stored"); ok {
 		t.Fatal("unknown state must not match")
 	}
 }
@@ -201,10 +204,10 @@ func TestOIDCDeps_ConsumeState_ExpiredAfterTTL(t *testing.T) {
 	d := NewOIDCDeps(nil, nil, nil)
 	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	d.now = func() time.Time { return fakeNow }
-	key, _ := d.putState("v")
+	key, _ := d.putState("v", "n")
 	// Advance the clock past oidcStateTTL.
 	d.now = func() time.Time { return fakeNow.Add(oidcStateTTL + time.Second) }
-	if _, ok := d.consumeState(key); ok {
+	if _, _, ok := d.consumeState(key); ok {
 		t.Fatal("expired state must not match")
 	}
 }
@@ -291,6 +294,41 @@ func TestOIDCStart_SetsStateCookieMatchingRedirectState(t *testing.T) {
 	}
 }
 
+// TestOIDCStart_RedirectCarriesNonceBoundToState verifies that the IdP
+// redirect URL carries a fresh OIDC nonce (OIDC Core §3.1.2.1) and that
+// the same nonce is bound server-side to the pending flow, so the
+// callback can hand it to VerifyIDToken as expectedNonce. Without this
+// a captured ID token could be replayed into a different session.
+func TestOIDCStart_RedirectCarriesNonceBoundToState(t *testing.T) {
+	t.Parallel()
+	client := newTestOIDCClient(t)
+	d := NewOIDCDeps(client, nil, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oidc/start", http.NoBody)
+	w := httptest.NewRecorder()
+	OIDCStart(d).ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303, got %d body=%s", w.Code, w.Body.String())
+	}
+	loc, err := url.Parse(w.Header().Get("Location"))
+	if err != nil {
+		t.Fatalf("parse Location: %v", err)
+	}
+	nonce := loc.Query().Get("nonce")
+	if nonce == "" {
+		t.Fatal("expected a non-empty nonce in the redirect URL")
+	}
+	state := loc.Query().Get("state")
+	_, storedNonce, ok := d.consumeState(state)
+	if !ok {
+		t.Fatal("state minted by OIDCStart must be consumable")
+	}
+	if storedNonce != nonce {
+		t.Fatalf("stored nonce %q must equal the redirect nonce %q", storedNonce, nonce)
+	}
+}
+
 // --- OIDCCallback state-cookie binding ---
 
 // TestOIDCCallback_MatchingStateCookie_ProceedsPastStateCheck verifies
@@ -303,7 +341,7 @@ func TestOIDCCallback_MatchingStateCookie_ProceedsPastStateCheck(t *testing.T) {
 	client := newTestOIDCClient(t)
 	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
 
-	state, err := d.putState("verifier-1")
+	state, err := d.putState("verifier-1", "nonce-1")
 	if err != nil {
 		t.Fatalf("putState: %v", err)
 	}
@@ -330,7 +368,7 @@ func TestOIDCCallback_MissingStateCookie_RedirectsBadState(t *testing.T) {
 	client := newTestOIDCClient(t)
 	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
 
-	state, err := d.putState("verifier-1")
+	state, err := d.putState("verifier-1", "nonce-1")
 	if err != nil {
 		t.Fatalf("putState: %v", err)
 	}
@@ -356,7 +394,7 @@ func TestOIDCCallback_MismatchedStateCookie_RedirectsBadState(t *testing.T) {
 	client := newTestOIDCClient(t)
 	d := NewOIDCDeps(client, &AuthDeps{Sessions: auth.NewSessionStore()}, nil)
 
-	state, err := d.putState("verifier-1")
+	state, err := d.putState("verifier-1", "nonce-1")
 	if err != nil {
 		t.Fatalf("putState: %v", err)
 	}
@@ -387,7 +425,7 @@ func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
 	fakeNow := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 	d.now = func() time.Time { return fakeNow }
 
-	firstKey, err := d.putState("v1")
+	firstKey, err := d.putState("v1", "n1")
 	if err != nil {
 		t.Fatalf("putState: %v", err)
 	}
@@ -395,7 +433,7 @@ func TestOIDCDeps_PutState_SweepsExpiredEntries(t *testing.T) {
 	// Advance the clock past the TTL and insert a second state; this must
 	// trigger the sweep that removes the first (now-expired) entry.
 	d.now = func() time.Time { return fakeNow.Add(oidcStateTTL + time.Second) }
-	if _, err := d.putState("v2"); err != nil {
+	if _, err := d.putState("v2", "n2"); err != nil {
 		t.Fatalf("putState: %v", err)
 	}
 

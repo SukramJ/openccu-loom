@@ -142,3 +142,51 @@ func TestVerifyIDTokenRejectsForeignSignature(t *testing.T) {
 		t.Fatal("token signed by a foreign key must be rejected")
 	}
 }
+
+// TestVerifyIDTokenAcceptsMatchingNonce proves that supplying the
+// expected nonce accepts a token whose "nonce" claim matches it
+// (OIDC Core §3.1.2.1 / §3.1.3.7 step 11).
+func TestVerifyIDTokenAcceptsMatchingNonce(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": "openccu-loom", "exp": now + 3600,
+		"nonce": "expected-nonce",
+	})
+	if _, err := client.VerifyIDToken(context.Background(), tok, "expected-nonce"); err != nil {
+		t.Fatalf("matching nonce must be accepted: %v", err)
+	}
+}
+
+// TestVerifyIDTokenRejectsNonceMismatch covers a captured ID token
+// replayed into a session that expects a different nonce: the IdP
+// returned a nonce claim, but it does not equal the value the caller
+// bound to its pending-auth session.
+func TestVerifyIDTokenRejectsNonceMismatch(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": "openccu-loom", "exp": now + 3600,
+		"nonce": "attacker-nonce",
+	})
+	_, err := client.VerifyIDToken(context.Background(), tok, "expected-nonce")
+	if err == nil || !strings.Contains(err.Error(), "nonce") {
+		t.Fatalf("expected nonce mismatch rejection, got %v", err)
+	}
+}
+
+// TestVerifyIDTokenRejectsMissingNonceClaim covers an IdP that omits
+// the nonce claim entirely even though the authentication request
+// carried one — OIDC Core §3.1.3.7 step 11 requires the claim to be
+// present and to match when a nonce was sent.
+func TestVerifyIDTokenRejectsMissingNonceClaim(t *testing.T) {
+	client, priv, kid, issuer := newVerifyClient(t)
+	now := time.Now().Unix()
+	tok := signJWT(t, priv, kid, map[string]any{
+		"iss": issuer, "sub": "alice", "aud": "openccu-loom", "exp": now + 3600,
+	})
+	_, err := client.VerifyIDToken(context.Background(), tok, "expected-nonce")
+	if err == nil || !strings.Contains(err.Error(), "nonce") {
+		t.Fatalf("expected missing-nonce rejection, got %v", err)
+	}
+}
