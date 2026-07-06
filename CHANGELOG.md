@@ -4,6 +4,65 @@ All notable changes to OpenCCU-Loom are recorded in this file.
 The project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+
+- **REST: idempotency replay cache no longer leaks responses across
+  users.** The cache key now includes the authenticated subject (the
+  middleware runs after auth resolution), so two users sharing an
+  `Idempotency-Key` value can no longer receive each other's cached
+  responses. Concurrent requests with the same key are serialized: the
+  second in-flight duplicate is rejected with `409 Conflict` instead of
+  executing the mutation twice.
+- **REST: request bodies are size-capped everywhere.** The OpenAPI
+  validator and the token-create endpoint read bodies through
+  `http.MaxBytesReader` (1 MiB) instead of unbounded buffering;
+  oversized bodies now return `413` (previously `400` or unbounded
+  memory use). Firmware/backup downloads from the CCU are capped as
+  well.
+- **OIDC: the login flow now mints a per-flow `nonce`** (OIDC Core
+  §3.1.2.1), binds it to the pending state server-side, and rejects ID
+  tokens whose `nonce` claim is missing or mismatching — a captured ID
+  token can no longer be replayed into a different session.
+- **REST: 5xx responses no longer echo internal error strings.**
+  Server-side failures log the real error and return a generic detail;
+  attachment filenames in `Content-Disposition` headers are escaped via
+  `mime.FormatMediaType`.
+
+### Fixed
+
+- Data races: `InterfaceClient.GetVersion` vs `SetVersion`; the Matter
+  secure-session `closed` flag (now atomic); the Matter fabric-index
+  read in the session resolver (now lock-guarded).
+- Device coordinator: `DeviceCreated` events are published outside the
+  coordinator lock (a subscriber calling back into the coordinator
+  could deadlock); the paramset-consistency check goroutine now has
+  panic recovery and a stop path that `Stop()` waits for.
+- XML-RPC decoder: nested payloads are depth-limited (mirrors the
+  BIN-RPC decoder), closing a stack-exhaustion vector on the callback
+  listener.
+- Config: invalid numeric values in `OPENCCU_LOOM_*` environment
+  overrides now fail the boot with the variable name instead of being
+  silently ignored.
+- Payload parameter parsing rejects trailing garbage (`"42xyz"` was
+  accepted as `42` via `fmt.Sscanf`; now `strconv`).
+- Background firmware-data refresh after a device update surfaces its
+  error instead of discarding it silently; the async audit sink's
+  closer now waits for the worker to drain.
+- WebSocket: every registered command must be classified read-only or
+  mutating (contract-enforced), so a forgotten role entry can no longer
+  expose a mutating command to viewers; writes go through a single
+  writer goroutine per connection.
+
+### Changed
+
+- Internal deduplication: shared XML-RPC backend helpers (CCU / CUxD /
+  Homegear), one SQLite handle passed through the daemon wiring instead
+  of four independent opens, shared REST rate-limiter store, shared
+  MQTT topic builder; repo-wide cleanup of truncated provenance
+  comments.
+
 ## [0.26.6] — 2026-07-05
 
 ### Fixed
