@@ -554,6 +554,31 @@ func TestCcuBackendDownloadFirmwareNoTransport(t *testing.T) {
 	}
 }
 
+// TestCcuBackendDownloadFirmwareRejectsOversizedResponse verifies that a
+// response body larger than maxDownloadResponseSize is rejected with an
+// error rather than being read to completion. Not parallel: it temporarily
+// lowers the package-level limit that other tests rely on at its
+// production default.
+func TestCcuBackendDownloadFirmwareRejectsOversizedResponse(t *testing.T) {
+	original := maxDownloadResponseSize
+	maxDownloadResponseSize = 4
+	defer func() { maxDownloadResponseSize = original }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("this response body is over the test limit"))
+	}))
+	defer srv.Close()
+
+	b := NewCcuBackend(&fakeCaller{}, nil, nil)
+	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "s" })
+
+	err := b.DownloadFirmware(context.Background(), "https://example.com/fw.tar")
+	if err == nil {
+		t.Fatal("expected error for oversized response body, got nil")
+	}
+}
+
 // TestCcuBackendDownloadFirmwareCCUError verifies that a non-200 HTTP response
 // from the CCU is surfaced as an error.
 func TestCcuBackendDownloadFirmwareCCUError(t *testing.T) {

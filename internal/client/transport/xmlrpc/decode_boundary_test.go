@@ -8,6 +8,43 @@ import (
 	"testing"
 )
 
+// nestedArrayValue builds an XML fragment of n nested <array><data>...
+// levels around a scalar leaf, used to probe the decoder's recursion
+// depth limit.
+func nestedArrayValue(n int) string {
+	var open, closeStr strings.Builder
+	for range n {
+		open.WriteString("<value><array><data>")
+		closeStr.WriteString("</data></array></value>")
+	}
+	return open.String() + "<value><i4>1</i4></value>" + closeStr.String()
+}
+
+// TestDecodeValueRejectsExcessiveNesting verifies that a deeply nested
+// <array> payload is rejected with an error rather than recursing
+// without bound and crashing the process. Mirrors the depth guard in
+// transport/binrpc/decode.go's readValue.
+func TestDecodeValueRejectsExcessiveNesting(t *testing.T) {
+	t.Parallel()
+
+	raw := nestedArrayValue(maxDecodeDepth + 50)
+	_, err := decodeValueFromString(t, raw)
+	if err == nil {
+		t.Fatal("deeply nested array payload must be rejected, got nil error")
+	}
+}
+
+// TestDecodeValueAllowsModerateNesting verifies that realistic nesting
+// depths (well under the limit) still decode successfully.
+func TestDecodeValueAllowsModerateNesting(t *testing.T) {
+	t.Parallel()
+
+	raw := nestedArrayValue(4)
+	if _, err := decodeValueFromString(t, raw); err != nil {
+		t.Fatalf("moderate nesting depth 4 must decode, got error: %v", err)
+	}
+}
+
 // TestDecodeParamsUnexpectedClosingTag exercises the "unexpected </"
 // error in decodeParams when the closing tag doesn't match the start.
 func TestDecodeParamsUnexpectedClosingTag(t *testing.T) {

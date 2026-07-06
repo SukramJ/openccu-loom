@@ -163,95 +163,29 @@ func (b *CcuBackend) Ping(ctx context.Context, interfaceID string) error {
 
 // ListDevices implements Operations.
 func (b *CcuBackend) ListDevices(ctx context.Context) ([]hmproto.DeviceDescription, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "listDevices")
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.ListDevices: unexpected type %T", raw)
-	}
-	out := make([]hmproto.DeviceDescription, 0, len(list))
-	for i, entry := range list {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("ccu.ListDevices[%d]: not a struct", i)
-		}
-		dd, err := toDeviceDescription(m)
-		if err != nil {
-			return nil, fmt.Errorf("ccu.ListDevices[%d]: %w", i, err)
-		}
-		out = append(out, dd)
-	}
-	return out, nil
+	return listDevicesViaCaller(ctx, b.xml, "ccu")
 }
 
 // GetParamsetDescription implements Operations.
 func (b *CcuBackend) GetParamsetDescription(
 	ctx context.Context, address string, key hmenum.ParamsetKey,
 ) (map[string]hmproto.ParameterData, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamsetDescription", address, string(key))
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetParamsetDescription: unexpected type %T", raw)
-	}
-	out := make(map[string]hmproto.ParameterData, len(outer))
-	for param, inner := range outer {
-		m, ok := inner.(map[string]any)
-		if !ok {
-			continue
-		}
-		pd, err := toParameterData(m)
-		if err != nil {
-			return nil, fmt.Errorf("ccu.GetParamsetDescription[%s]: %w", param, err)
-		}
-		out[param] = pd
-	}
-	return out, nil
+	return getParamsetDescriptionViaCaller(ctx, b.xml, "ccu", address, key)
 }
 
 // GetParamset implements Operations.
 func (b *CcuBackend) GetParamset(
 	ctx context.Context, address string, key hmenum.ParamsetKey,
 ) (map[string]any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.xml.Call(ctx, "getParamset", address, string(key))
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("ccu.GetParamset: unexpected type %T", raw)
-	}
-	return m, nil
+	return getParamsetViaCaller(ctx, b.xml, "ccu", address, key)
 }
 
 // PutParamset implements Operations. When rxMode is non-empty it is
-// Appended as a 4th wire argument (
-// with rx_mode suffix).
+// appended as a 4th wire argument.
 func (b *CcuBackend) PutParamset(
 	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode,
 ) error {
-	if b.xml == nil {
-		return ErrNotWired
-	}
-	if rxMode != hmenum.CommandRxModeUnset {
-		_, err := b.xml.Call(ctx, "putParamset", address, string(key), values, string(rxMode))
-		return err
-	}
-	_, err := b.xml.Call(ctx, "putParamset", address, string(key), values)
-	return err
+	return putParamsetViaCaller(ctx, b.xml, address, key, values, rxMode, true)
 }
 
 // SetValue implements Operations. Priority is advisory and dropped
@@ -260,25 +194,14 @@ func (b *CcuBackend) PutParamset(
 func (b *CcuBackend) SetValue(
 	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	if b.xml == nil {
-		return ErrNotWired
-	}
-	if rxMode != hmenum.CommandRxModeUnset {
-		_, err := b.xml.Call(ctx, "setValue", address, string(parameter), value, string(rxMode))
-		return err
-	}
-	_, err := b.xml.Call(ctx, "setValue", address, string(parameter), value)
-	return err
+	return setValueViaCaller(ctx, b.xml, address, parameter, value, rxMode, true)
 }
 
 // GetValue implements Operations.
 func (b *CcuBackend) GetValue(
 	ctx context.Context, address string, parameter hmenum.Parameter,
 ) (any, error) {
-	if b.xml == nil {
-		return nil, ErrNotWired
-	}
-	return b.xml.Call(ctx, "getValue", address, string(parameter))
+	return getValueViaCaller(ctx, b.xml, address, parameter)
 }
 
 // UpdateFirmware implements Operations. Triggers a firmware update for

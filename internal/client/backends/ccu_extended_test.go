@@ -797,6 +797,36 @@ func TestCcuCreateBackupAndDownloadStatusFailed(t *testing.T) {
 	}
 }
 
+// TestCcuCreateBackupAndDownloadRejectsOversizedResponse verifies that a
+// backup archive larger than maxDownloadResponseSize is rejected with an
+// error instead of being buffered into memory in full. Not parallel: it
+// temporarily lowers the package-level limit, which other tests in this
+// package rely on at its production default.
+func TestCcuCreateBackupAndDownloadRejectsOversizedResponse(t *testing.T) {
+	original := maxDownloadResponseSize
+	maxDownloadResponseSize = 4
+	defer func() { maxDownloadResponseSize = original }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("BACKUP_CONTENT")) // 14 bytes, over the 4-byte test limit
+	}))
+	defer srv.Close()
+
+	runner := &multiScriptRunner{replies: []string{
+		`{"success":true,"status":"running","message":""}`,
+		`{"status":"completed","file":"/tmp/b.sbk","filename":"b.sbk","size":14}`,
+	}}
+
+	b := NewCcuBackend(&fakeCaller{}, &fakeCaller{}, nil)
+	b.SetScriptRunner(runner)
+	b.SetDownloadFirmwareTransport(srv.URL, srv.Client(), func() string { return "testsid" })
+
+	_, err := b.CreateBackupAndDownload(context.Background(), 10, 1)
+	if err == nil {
+		t.Fatal("expected error for oversized backup archive, got nil")
+	}
+}
+
 func TestCcuCreateBackupAndDownloadTimeout(t *testing.T) {
 	t.Parallel()
 	// Status always returns "running" so the loop hits the deadline.

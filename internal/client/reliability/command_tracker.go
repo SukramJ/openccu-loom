@@ -263,7 +263,7 @@ func (t *CommandTracker) enforceSizeLimitLocked() {
 		sort.Slice(ordered, func(i, j int) bool {
 			return ordered[i].ts.Before(ordered[j].ts)
 		})
-		remove := maxInt(1, size/5)
+		remove := max(1, size/5)
 		for _, item := range ordered[:remove] {
 			delete(t.entries, item.key)
 		}
@@ -274,11 +274,4 @@ func (t *CommandTracker) enforceSizeLimitLocked() {
 			slog.Int("size_was", size),
 		)
 	}
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

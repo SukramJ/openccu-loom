@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strings"
 	"sync"
 	"time"
 
@@ -631,7 +632,7 @@ func (r *Retrier) CancelDevice(deviceAddress string) int {
 	}
 	// Normalize to the bare device portion (everything before ':').
 	devOnly := deviceAddress
-	if i := indexByte(deviceAddress, ':'); i > 0 {
+	if i := strings.IndexByte(deviceAddress, ':'); i > 0 {
 		devOnly = deviceAddress[:i]
 	}
 	r.mu.Lock()
@@ -667,17 +668,6 @@ func (r *Retrier) CancelInterface() int {
 	}
 	r.metrics.CancelledRetries += int64(canceled)
 	return canceled
-}
-
-// indexByte is a tiny helper to avoid importing strings just for this
-// one call. Returns the first index of c in s, or -1 if absent.
-func indexByte(s string, c byte) int {
-	for i := range len(s) {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
 }
 
 // ActiveRetryCount reports how many DataPointKey-scoped retry chains

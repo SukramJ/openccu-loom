@@ -245,20 +245,6 @@ func TestCommandTracker_LazyCleanupAfterManyAdds(t *testing.T) {
 	}
 }
 
-// --- maxInt helper ---
-
-func TestMaxIntSelectsLarger(t *testing.T) {
-	if got := maxInt(3, 7); got != 7 {
-		t.Errorf("maxInt(3,7) = %d, want 7", got)
-	}
-	if got := maxInt(9, 2); got != 9 {
-		t.Errorf("maxInt(9,2) = %d, want 9", got)
-	}
-	if got := maxInt(5, 5); got != 5 {
-		t.Errorf("maxInt(5,5) = %d, want 5", got)
-	}
-}
-
 // --- AddOnStateChange: coexists with OnStateChange ---
 
 func TestAddOnStateChange_CoexistsWithOnStateChange(t *testing.T) {

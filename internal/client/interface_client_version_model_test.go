@@ -7,6 +7,7 @@ package client
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/client/backends"
@@ -67,6 +68,28 @@ func TestSetVersionOverwritesPrevious(t *testing.T) {
 	if got := c.GetVersion(); got != "3.79.5" {
 		t.Errorf("GetVersion() after overwrite = %q; want %q", got, "3.79.5")
 	}
+}
+
+func TestGetVersionConcurrentWithSetVersionDoesNotRace(t *testing.T) {
+	c := newVersionModelClient(t, "0.0.0", backends.KindCCU)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for range 1000 {
+			c.SetVersion("1.2.3")
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 1000 {
+			_ = c.GetVersion()
+		}
+	}()
+
+	wg.Wait()
 }
 
 // ---------------------------------------------------------------------------

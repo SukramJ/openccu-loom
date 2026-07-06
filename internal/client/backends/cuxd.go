@@ -5,7 +5,6 @@ package backends
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 	"github.com/SukramJ/openccu-loom/pkg/hmproto"
@@ -61,112 +60,44 @@ func (b *CuxdBackend) Ping(ctx context.Context, interfaceID string) error {
 
 // ListDevices implements Operations.
 func (b *CuxdBackend) ListDevices(ctx context.Context) ([]hmproto.DeviceDescription, error) {
-	if b.bin == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.bin.Call(ctx, "listDevices")
-	if err != nil {
-		return nil, err
-	}
-	list, ok := raw.([]any)
-	if !ok {
-		return nil, fmt.Errorf("cuxd.ListDevices: unexpected type %T", raw)
-	}
-	out := make([]hmproto.DeviceDescription, 0, len(list))
-	for i, entry := range list {
-		m, ok := entry.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("cuxd.ListDevices[%d]: not a struct", i)
-		}
-		dd, err := toDeviceDescription(m)
-		if err != nil {
-			return nil, fmt.Errorf("cuxd.ListDevices[%d]: %w", i, err)
-		}
-		out = append(out, dd)
-	}
-	return out, nil
+	return listDevicesViaCaller(ctx, b.bin, "cuxd")
 }
 
 // GetParamsetDescription implements Operations.
 func (b *CuxdBackend) GetParamsetDescription(
 	ctx context.Context, address string, key hmenum.ParamsetKey,
 ) (map[string]hmproto.ParameterData, error) {
-	if b.bin == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.bin.Call(ctx, "getParamsetDescription", address, string(key))
-	if err != nil {
-		return nil, err
-	}
-	outer, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("cuxd.GetParamsetDescription: unexpected type %T", raw)
-	}
-	out := make(map[string]hmproto.ParameterData, len(outer))
-	for param, inner := range outer {
-		m, ok := inner.(map[string]any)
-		if !ok {
-			continue
-		}
-		pd, err := toParameterData(m)
-		if err != nil {
-			return nil, fmt.Errorf("cuxd.GetParamsetDescription[%s]: %w", param, err)
-		}
-		out[param] = pd
-	}
-	return out, nil
+	return getParamsetDescriptionViaCaller(ctx, b.bin, "cuxd", address, key)
 }
 
 // GetParamset implements Operations.
 func (b *CuxdBackend) GetParamset(
 	ctx context.Context, address string, key hmenum.ParamsetKey,
 ) (map[string]any, error) {
-	if b.bin == nil {
-		return nil, ErrNotWired
-	}
-	raw, err := b.bin.Call(ctx, "getParamset", address, string(key))
-	if err != nil {
-		return nil, err
-	}
-	m, ok := raw.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("cuxd.GetParamset: unexpected type %T", raw)
-	}
-	return m, nil
+	return getParamsetViaCaller(ctx, b.bin, "cuxd", address, key)
 }
 
-// PutParamset implements Operations. rxMode is silently ignored
+// PutParamset implements Operations. rxMode is silently ignored —
 // BIN-RPC has no rx_mode argument slot.
 func (b *CuxdBackend) PutParamset(
-	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, _ hmenum.CommandRxMode,
+	ctx context.Context, address string, key hmenum.ParamsetKey, values map[string]any, rxMode hmenum.CommandRxMode,
 ) error {
-	if b.bin == nil {
-		return ErrNotWired
-	}
-	_, err := b.bin.Call(ctx, "putParamset", address, string(key), values)
-	return err
+	return putParamsetViaCaller(ctx, b.bin, address, key, values, rxMode, false)
 }
 
-// SetValue implements Operations. rxMode is silently ignored
+// SetValue implements Operations. rxMode is silently ignored —
 // BIN-RPC has no rx_mode argument slot.
 func (b *CuxdBackend) SetValue(
-	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, _ hmenum.CommandRxMode,
+	ctx context.Context, address string, parameter hmenum.Parameter, value any, _ hmenum.CommandPriority, rxMode hmenum.CommandRxMode,
 ) error {
-	if b.bin == nil {
-		return ErrNotWired
-	}
-	_, err := b.bin.Call(ctx, "setValue", address, string(parameter), value)
-	return err
+	return setValueViaCaller(ctx, b.bin, address, parameter, value, rxMode, false)
 }
 
 // GetValue implements Operations.
 func (b *CuxdBackend) GetValue(
 	ctx context.Context, address string, parameter hmenum.Parameter,
 ) (any, error) {
-	if b.bin == nil {
-		return nil, ErrNotWired
-	}
-	return b.bin.Call(ctx, "getValue", address, string(parameter))
+	return getValueViaCaller(ctx, b.bin, address, parameter)
 }
 
 // UpdateFirmware implements Operations. CUxD virtual devices are

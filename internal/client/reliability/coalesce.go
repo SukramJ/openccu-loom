@@ -157,7 +157,7 @@ func (c *Coalescer) Do(ctx context.Context, key string, fn func(ctx context.Cont
 //
 // Typical use: call Clear during InterfaceClient.Close so pending
 // coalescer calls don't hang indefinitely after the transport is gone.
-// (client/request_coalescer.py:119-130, C14).
+// Mirrors the Python reference implementation's `client/request_coalescer.py:119-130`.
 func (c *Coalescer) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
