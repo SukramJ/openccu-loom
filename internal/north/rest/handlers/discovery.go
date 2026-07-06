@@ -128,8 +128,7 @@ func IgnoreDiscoveredCCU(d *DiscoveryDeps) http.HandlerFunc {
 			}
 		}
 		if err := d.Ignore.Add(r.Context(), entry); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Ignore failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Ignore failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -152,8 +151,7 @@ func UnignoreDiscoveredCCU(d *DiscoveryDeps) http.HandlerFunc {
 		}
 		removed, err := d.Ignore.Remove(r.Context(), serial)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Un-ignore failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Un-ignore failed", err)
 			return
 		}
 		if !removed {

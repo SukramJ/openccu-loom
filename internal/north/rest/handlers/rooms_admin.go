@@ -55,8 +55,7 @@ func writeGroupError(w http.ResponseWriter, r *http.Request, err error) {
 		problem.Write(w, http.StatusBadRequest,
 			problem.New(problem.TypeValidation, r, "Central name required", err.Error()))
 	default:
-		problem.Write(w, http.StatusBadGateway,
-			problem.New(problem.TypeUpstreamUnavailable, r, "CCU write failed", err.Error()))
+		writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "CCU write failed", err)
 	}
 }
 
@@ -81,7 +80,7 @@ func CreateRoom(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc {
 		}
 		var body createGroupRequest
 		if err := DecodeJSON(r, &body); err != nil || body.Name == "" {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "name is required", ""))
 			return
 		}
@@ -106,7 +105,7 @@ func RenameRoom(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc {
 		name := chi.URLParam(r, "name")
 		var body renameGroupRequest
 		if err := DecodeJSON(r, &body); err != nil || body.NewName == "" {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "new_name is required", ""))
 			return
 		}
@@ -147,7 +146,7 @@ func CreateFunction(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc 
 		}
 		var body createGroupRequest
 		if err := DecodeJSON(r, &body); err != nil || body.Name == "" {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "name is required", ""))
 			return
 		}
@@ -172,7 +171,7 @@ func RenameFunction(svc RoomFunctionAdmin, rec audit.Recorder) http.HandlerFunc 
 		name := chi.URLParam(r, "name")
 		var body renameGroupRequest
 		if err := DecodeJSON(r, &body); err != nil || body.NewName == "" {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "new_name is required", ""))
 			return
 		}

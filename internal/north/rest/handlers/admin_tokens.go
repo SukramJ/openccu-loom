@@ -68,7 +68,7 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createTokenRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -94,8 +94,7 @@ func CreateTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			ExpiresAt: expiresAt,
 		})
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Token creation failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Token creation failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())
@@ -133,8 +132,7 @@ func DeleteTokenAdmin(svc TokenAdminService, rec audit.Recorder) http.HandlerFun
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Token deletion failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Token deletion failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())
@@ -155,8 +153,7 @@ func ListTokensV2(svc TokenAdminService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := svc.List(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Token list failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Token list failed", err)
 			return
 		}
 		out := make([]tokenListEntry, 0, len(rows))

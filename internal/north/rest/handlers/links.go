@@ -72,7 +72,7 @@ func AddLink(svc LinksService) http.HandlerFunc {
 		}
 		var req AddLinkRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -82,8 +82,7 @@ func AddLink(svc LinksService) http.HandlerFunc {
 			return
 		}
 		if err := svc.AddLink(r.Context(), req.SenderAddress, req.ReceiverAddress, req.Name, req.Description); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Add link failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Add link failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -106,8 +105,7 @@ func RemoveLink(svc LinksService) http.HandlerFunc {
 			return
 		}
 		if err := svc.RemoveLink(r.Context(), sender, receiver); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Remove link failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Remove link failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

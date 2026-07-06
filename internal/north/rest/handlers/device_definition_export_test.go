@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,12 +70,37 @@ func TestExportDeviceDefinition_Success_Returns200WithHeaders(t *testing.T) {
 	if ct := w.Header().Get("Content-Type"); ct != "application/zip" {
 		t.Errorf("Content-Type = %q, want application/zip", ct)
 	}
-	wantDisp := `attachment; filename="HmIP-PS.zip"`
+	wantDisp := `attachment; filename=HmIP-PS.zip`
 	if cd := w.Header().Get("Content-Disposition"); cd != wantDisp {
 		t.Errorf("Content-Disposition = %q, want %q", cd, wantDisp)
 	}
 	if !bytes.Equal(w.Body.Bytes(), zipPayload) {
 		t.Errorf("body = %q, want %q", w.Body.Bytes(), zipPayload)
+	}
+}
+
+// TestExportDeviceDefinition_ModelWithQuoteIsEscapedInContentDisposition
+// verifies that a device model string containing a double quote
+// cannot break out of the filename parameter and inject extra
+// Content-Disposition directives.
+func TestExportDeviceDefinition_ModelWithQuoteIsEscapedInContentDisposition(t *testing.T) {
+	t.Parallel()
+	zipPayload := []byte("ARCHIVEBYTES")
+	trickyModel := `evil"; filename="pwned.sh`
+	svc := &stubDefinitionExportService{model: trickyModel, zip: zipPayload}
+	req := httptest.NewRequest(http.MethodGet, "/devices/DEV001/export-definition", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
+	w := httptest.NewRecorder()
+	ExportDeviceDefinition(svc).ServeHTTP(w, req)
+
+	cd := w.Header().Get("Content-Disposition")
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("Content-Disposition is not parseable: %q: %v", cd, err)
+	}
+	wantFilename := trickyModel + ".zip"
+	if params["filename"] != wantFilename {
+		t.Errorf("filename param = %q, want %q (header: %q)", params["filename"], wantFilename, cd)
 	}
 }
 
@@ -138,7 +164,7 @@ func TestExportDeviceDefinition_ChiRouterIntegration(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("chi router: expected 200, got %d body=%s", w.Code, w.Body.String())
 	}
-	wantDisp := `attachment; filename="HmIP-WTH-2.zip"`
+	wantDisp := `attachment; filename=HmIP-WTH-2.zip`
 	if cd := w.Header().Get("Content-Disposition"); cd != wantDisp {
 		t.Errorf("Content-Disposition = %q, want %q", cd, wantDisp)
 	}

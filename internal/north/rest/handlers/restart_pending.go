@@ -40,8 +40,7 @@ func GetRestartPending(p RestartPendingProvider) http.HandlerFunc {
 		}
 		pending, fields, err := p.Pending(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Restart-pending check failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Restart-pending check failed", err)
 			return
 		}
 		if fields == nil {

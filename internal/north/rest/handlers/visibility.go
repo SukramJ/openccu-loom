@@ -99,7 +99,7 @@ func ListVisibilityUnIgnore(centrals VisibilityCentralLister, store VisibilityUn
 		for _, name := range centrals.Names() {
 			entries, err := store.List(r.Context(), name)
 			if err != nil {
-				problem.Write(w, http.StatusInternalServerError, problem.New(problem.TypeInternal, r, "Visibility error", "list un-ignore: "+err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Visibility error: list un-ignore", err)
 				return
 			}
 			rows := make([]UnIgnoreEntryDTO, 0, len(entries))
@@ -141,7 +141,7 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 		}
 		var req UnIgnoreUpdateRequestDTO
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest, problem.New(problem.TypeBadRequest, r, "Bad request", "decode request body: "+err.Error()))
+			problem.Write(w, DecodeJSONStatus(err), problem.New(problem.TypeBadRequest, r, "Bad request", "decode request body: "+err.Error()))
 			return
 		}
 		req.CentralName = strings.TrimSpace(req.CentralName)
@@ -180,20 +180,20 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 		// Compute diff vs. current persisted state for the audit entry.
 		before, err := store.Patterns(r.Context(), req.CentralName)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError, problem.New(problem.TypeInternal, r, "Visibility error", "read current un-ignore: "+err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Visibility error: read current un-ignore", err)
 			return
 		}
 		added, removed := diffPatterns(before, valid)
 
 		user := identitySubject(r.Context())
 		if err := store.Replace(r.Context(), req.CentralName, valid, user); err != nil {
-			problem.Write(w, http.StatusInternalServerError, problem.New(problem.TypeInternal, r, "Visibility error", "persist un-ignore: "+err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Visibility error: persist un-ignore", err)
 			return
 		}
 
 		affected, loaderErrs, err := loader.LoadUnIgnore(req.CentralName, valid)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError, problem.New(problem.TypeInternal, r, "Visibility error", "apply un-ignore: "+err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Visibility error: apply un-ignore", err)
 			return
 		}
 		parseErrors = append(parseErrors, loaderErrs...)
@@ -220,7 +220,7 @@ func UpdateVisibilityUnIgnore( //nolint:funlen // single-purpose visibility upda
 		// Read back so the response surfaces updated_at + updated_by.
 		entries, err := store.List(r.Context(), req.CentralName)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError, problem.New(problem.TypeInternal, r, "Visibility error", "read-back un-ignore: "+err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Visibility error: read-back un-ignore", err)
 			return
 		}
 		respPatterns := make([]UnIgnoreEntryDTO, 0, len(entries))

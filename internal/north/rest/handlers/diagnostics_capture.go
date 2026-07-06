@@ -44,7 +44,7 @@ func StartCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 		var req CaptureStartRequest
 		if r.ContentLength > 0 {
 			if err := DecodeJSON(r, &req); err != nil {
-				problem.Write(w, http.StatusBadRequest,
+				problem.Write(w, DecodeJSONStatus(err),
 					problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 				return
 			}
@@ -68,8 +68,7 @@ func StartCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 				problem.Write(w, http.StatusBadRequest,
 					problem.New(problem.TypeBadRequest, r, "duration exceeds 30-minute cap", ""))
 			default:
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "capture start failed", err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "capture start failed", err)
 			}
 			return
 		}
@@ -103,8 +102,7 @@ func StopCapture(svc CaptureService, rec audit.Recorder) http.HandlerFunc {
 				problem.Write(w, http.StatusNotFound,
 					problem.New(problem.TypeNotFound, r, "capture id not found", id))
 			default:
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "capture stop failed", err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "capture stop failed", err)
 			}
 			return
 		}
@@ -167,13 +165,12 @@ func DownloadCapture(svc CaptureService) http.HandlerFunc {
 				problem.Write(w, http.StatusConflict,
 					problem.New(problem.TypeConflict, r, "capture still running", ""))
 			default:
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "capture archive unavailable", err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "capture archive unavailable", err)
 			}
 			return
 		}
 		w.Header().Set("Content-Type", "application/gzip")
-		w.Header().Set("Content-Disposition", `attachment; filename="`+id+`.tar.gz"`)
+		w.Header().Set("Content-Disposition", ContentDispositionAttachment(id+".tar.gz"))
 		// data is a gzip-wrapped tar produced by the diagnostics
 		// manager; never reflects user-controlled HTML. The gosec
 		// XSS warning is a false positive on a binary download.

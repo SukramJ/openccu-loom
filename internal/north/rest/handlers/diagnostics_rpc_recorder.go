@@ -44,7 +44,7 @@ func StartRPCRecording(svc RPCRecorderService, rec audit.Recorder) http.HandlerF
 		var req RPCRecordingStartRequest
 		if r.ContentLength > 0 {
 			if err := DecodeJSON(r, &req); err != nil {
-				problem.Write(w, http.StatusBadRequest,
+				problem.Write(w, DecodeJSONStatus(err),
 					problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 				return
 			}
@@ -67,7 +67,7 @@ func StopRPCRecording(svc RPCRecorderService, rec audit.Recorder) http.HandlerFu
 		var req RPCRecordingStartRequest
 		if r.ContentLength > 0 {
 			if err := DecodeJSON(r, &req); err != nil {
-				problem.Write(w, http.StatusBadRequest,
+				problem.Write(w, DecodeJSONStatus(err),
 					problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 				return
 			}

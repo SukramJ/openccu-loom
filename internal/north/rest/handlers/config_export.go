@@ -103,8 +103,7 @@ func ExportChannelConfig(svc ConfigExportService, meta ChannelInfoReader) http.H
 			Reader:         &configExportAdapter{svc: svc, centralName: centralName},
 		})
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Export failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Export failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, cfg)
@@ -170,8 +169,7 @@ func ImportChannelConfig(svc ConfigExportService) http.HandlerFunc {
 
 		writer := &configExportAdapter{svc: svc, centralName: cfg.CentralName}
 		if err := configui.ApplyConfiguration(r.Context(), cfg, writer); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Apply failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Apply failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

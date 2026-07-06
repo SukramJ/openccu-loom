@@ -43,8 +43,7 @@ func ReloadDevice(svc ReloaderService) http.HandlerFunc {
 			return
 		}
 		if err := svc.ReloadDeviceConfig(r.Context(), addr); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Device reload failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Device reload failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)
@@ -70,8 +69,7 @@ func ReloadChannel(svc ReloaderService) http.HandlerFunc {
 		}
 		channelAddress := addr + ":" + channel
 		if err := svc.ReloadChannelConfig(r.Context(), channelAddress); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Channel reload failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Channel reload failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusOK)

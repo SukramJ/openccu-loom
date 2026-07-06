@@ -49,7 +49,7 @@ func ClearCache(svc CacheResetService) http.HandlerFunc {
 		}
 		var req ClearCacheRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}

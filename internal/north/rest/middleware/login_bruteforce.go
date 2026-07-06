@@ -4,11 +4,9 @@
 package middleware
 
 import (
-	"math"
 	"net"
 	"net/http"
 	"strconv"
-	"sync"
 	"time"
 
 	"golang.org/x/time/rate"
@@ -35,58 +33,25 @@ const (
 // protection. Keyed by client IP with idle eviction so a source rotating
 // through addresses cannot grow the table without bound.
 type LoginRateLimiter struct {
-	limit rate.Limit
-	burst int
-
-	mu      sync.Mutex
-	buckets map[string]*loginIPBucket
-}
-
-type loginIPBucket struct {
-	lim     *rate.Limiter
-	lastUse time.Time
+	store *keyedLimiterStore
 }
 
 // NewLoginRateLimiter builds a limiter allowing loginRatePerSec sustained
 // requests per IP with a small burst.
 func NewLoginRateLimiter() *LoginRateLimiter {
 	return &LoginRateLimiter{
-		limit:   rate.Limit(loginRatePerSec),
-		burst:   loginRateBurst,
-		buckets: make(map[string]*loginIPBucket),
+		store: newKeyedLimiterStore(rate.Limit(loginRatePerSec), loginRateBurst, loginLimiterCap, loginLimiterIdle),
 	}
 }
 
 // allow reports whether a request from ip may proceed, and — when denied —
 // the integer seconds the caller should wait before a token frees up.
 func (l *LoginRateLimiter) allow(ip string) (ok bool, retryAfter int) {
-	now := time.Now()
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	b, found := l.buckets[ip]
-	if !found {
-		if len(l.buckets) > loginLimiterCap {
-			for k, e := range l.buckets {
-				if now.Sub(e.lastUse) > loginLimiterIdle {
-					delete(l.buckets, k)
-				}
-			}
-		}
-		b = &loginIPBucket{lim: rate.NewLimiter(l.limit, l.burst)}
-		l.buckets[ip] = b
-	}
-	b.lastUse = now
-	if b.lim.Allow() {
+	lim := l.store.get(ip)
+	if lim.Allow() {
 		return true, 0
 	}
-	res := b.lim.Reserve()
-	d := res.Delay()
-	res.Cancel()
-	secs := int(math.Ceil(d.Seconds()))
-	if secs < 1 {
-		secs = 1
-	}
-	return false, secs
+	return false, retryAfterSeconds(lim)
 }
 
 // Middleware wraps next with the per-IP limiter. On overflow it writes an

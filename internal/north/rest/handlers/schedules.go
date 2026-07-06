@@ -103,7 +103,7 @@ func PutSchedule(svc ScheduleService) http.HandlerFunc {
 		}
 		var body ClimateSchedule
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -146,7 +146,7 @@ func PutScheduleAuto(svc ScheduleService) http.HandlerFunc {
 		addr := chi.URLParam(r, "addr")
 		var body ClimateSchedule
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -169,7 +169,7 @@ func PostActiveProfileAuto(svc ScheduleService) http.HandlerFunc {
 		addr := chi.URLParam(r, "addr")
 		var body SetActiveProfileRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -199,7 +199,7 @@ func PostActiveProfile(svc ScheduleService) http.HandlerFunc {
 		}
 		var body SetActiveProfileRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -224,7 +224,7 @@ func PostCopySchedule(svc ScheduleService) http.HandlerFunc {
 		addr := chi.URLParam(r, "addr")
 		var body CopyScheduleRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -260,7 +260,7 @@ func PostCopyProfile(svc ScheduleService) http.HandlerFunc {
 		}
 		var body CopyProfileRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -307,10 +307,8 @@ func writeScheduleError(w http.ResponseWriter, r *http.Request, err error) {
 	// the value-write handler (devices.go) and return 502 — never 500
 	// (TestRESTMutationWalker treats a mutation 500 as a bug).
 	if problem.IsUpstreamUnavailable(err) {
-		problem.Write(w, http.StatusBadGateway,
-			problem.New(problem.TypeUpstreamUnavailable, r, "Upstream temporarily unavailable", err.Error()))
+		writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Upstream temporarily unavailable", err)
 		return
 	}
-	problem.Write(w, http.StatusBadGateway,
-		problem.New(problem.TypeUpstreamUnavailable, r, "Schedule request failed", err.Error()))
+	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Schedule request failed", err)
 }

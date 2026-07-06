@@ -114,7 +114,7 @@ func Setup(s *SetupService) http.HandlerFunc {
 		}
 		var req setupRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -125,8 +125,7 @@ func Setup(s *SetupService) http.HandlerFunc {
 		}
 		if err := finalizeSetup(r.Context(), s, &req); err != nil {
 			slog.ErrorContext(r.Context(), "setup.finalize.fail", slog.String("err", err.Error()))
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Setup finalization failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Setup finalization failed", err)
 			return
 		}
 		slog.InfoContext(r.Context(), "setup.complete", slog.String("subject", req.Admin.Username))

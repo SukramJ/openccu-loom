@@ -10,7 +10,11 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"mime"
 	"net/http"
+
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
 
 // maxRequestBodyBytes is the ceiling applied to every JSON request
@@ -27,6 +31,45 @@ const maxRequestBodyBytes = 1 << 20 // 1 MiB
 func IsBodyTooLargeError(err error) bool {
 	var mbe *http.MaxBytesError
 	return errors.As(err, &mbe)
+}
+
+// DecodeJSONStatus maps a [DecodeJSON] error to the HTTP status a
+// handler should report: 413 when the body exceeded
+// [maxRequestBodyBytes] ([IsBodyTooLargeError]), 400 for every other
+// decode failure (malformed JSON, unknown field, validation-only nil
+// error). Handlers pass this instead of a hard-coded
+// http.StatusBadRequest so an oversized payload is reported as a
+// memory-safety rejection rather than a generic client error.
+func DecodeJSONStatus(err error) int {
+	if IsBodyTooLargeError(err) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
+}
+
+// writeServerError logs the real failure via slog.Default() (never
+// surfaced to the caller) and writes a problem+json body carrying
+// only the static title as detail. Every 5xx problem response must go
+// through this helper instead of embedding err.Error() directly:
+// driver-specific SQL text, filesystem paths, and internal stack
+// context are operator-only diagnostics, not something an
+// unauthenticated or lower-privileged caller should see. 4xx
+// validation failures are unaffected — those details stay put.
+func writeServerError(w http.ResponseWriter, r *http.Request, status int, pType problem.Type, title string, err error) {
+	slog.Default().ErrorContext(r.Context(), title, "error", err, "method", r.Method, "path", r.URL.Path)
+	problem.Write(w, status, problem.New(pType, r, title, ""))
+}
+
+// ContentDispositionAttachment builds a `Content-Disposition:
+// attachment; filename=...` header value for filename via
+// [mime.FormatMediaType]. Handlers that stream a download must use
+// this instead of hand-splicing the filename into the header string:
+// an unescaped quote or semicolon in filename (backup/capture ids and
+// device models ultimately trace back to CCU- or caller-influenced
+// data) would let the value break out of the filename parameter and
+// inject additional Content-Disposition directives.
+func ContentDispositionAttachment(filename string) string {
+	return mime.FormatMediaType("attachment", map[string]string{"filename": filename})
 }
 
 // JSON renders v as JSON with an explicit status code.

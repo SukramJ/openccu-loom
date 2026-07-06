@@ -24,8 +24,7 @@ func DeleteDevice(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		if err := admin.UnpairDevice(r.Context(), chi.URLParam(r, "addr")); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Unpair failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Unpair failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -50,7 +49,7 @@ func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 		}
 		var req DevicePatchRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -62,22 +61,19 @@ func PatchDevice(admin DeviceAdmin) http.HandlerFunc {
 		addr := chi.URLParam(r, "addr")
 		if req.Name != nil {
 			if err := admin.RenameDevice(r.Context(), addr, *req.Name); err != nil {
-				problem.Write(w, http.StatusBadGateway,
-					problem.New(problem.TypeUpstreamUnavailable, r, "Rename failed", err.Error()))
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Rename failed", err)
 				return
 			}
 		}
 		if req.Rooms != nil {
 			if err := admin.SetRooms(r.Context(), addr, *req.Rooms); err != nil {
-				problem.Write(w, http.StatusBadGateway,
-					problem.New(problem.TypeUpstreamUnavailable, r, "Room assignment failed", err.Error()))
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Room assignment failed", err)
 				return
 			}
 		}
 		if req.Functions != nil {
 			if err := admin.SetFunctions(r.Context(), addr, *req.Functions); err != nil {
-				problem.Write(w, http.StatusBadGateway,
-					problem.New(problem.TypeUpstreamUnavailable, r, "Function assignment failed", err.Error()))
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Function assignment failed", err)
 				return
 			}
 		}
@@ -96,8 +92,7 @@ func UpdateDeviceFirmware(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		if err := admin.UpdateFirmware(r.Context(), chi.URLParam(r, "addr")); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Firmware update failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Firmware update failed", err)
 			return
 		}
 		JSON(w, http.StatusAccepted, map[string]string{"status": "scheduled"})
@@ -113,8 +108,7 @@ func AcceptInboxDevice(admin DeviceAdmin) http.HandlerFunc {
 			return
 		}
 		if err := admin.AcceptInboxDevice(r.Context(), chi.URLParam(r, "addr")); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Accept failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Accept failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

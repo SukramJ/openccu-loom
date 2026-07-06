@@ -74,11 +74,9 @@ type DeviceSummary struct {
 	// delivers reliable CONFIG_PENDING events on MASTER writes — the
 	// SPA then waits for the true→false transition before refreshing
 	// MASTER (HmIP-RF, which serves both RF and Wired devices). On
-	// the others (BidCos-*,
-	// VirtualDevices, CUxD) CONFIG_PENDING is either silent or
-	// unreliable; the SPA falls back to a save-path reload (mirrors
-	// Sourced from
-	// `hmenum.Interface.PushesConfigPending`.
+	// the others (BidCos-*, VirtualDevices, CUxD) CONFIG_PENDING is
+	// either silent or unreliable; the SPA falls back to a save-path
+	// reload. Sourced from `hmenum.Interface.PushesConfigPending`.
 	MasterPushesConfigPending bool `json:"master_pushes_config_pending"`
 
 	// HasSubDevices mirrors [device.Device.HasSubDevices] so SPA / WS
@@ -305,8 +303,7 @@ func RefreshDevices(svc RefreshDevicesService) http.HandlerFunc {
 			return
 		}
 		if err := svc.RefreshDevices(r.Context()); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Refresh failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Refresh failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -708,7 +705,7 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 		}
 		var req SetValueRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -738,12 +735,10 @@ func PutDataPointValue(idx DeviceIndex, _ DataPointWriter) http.HandlerFunc {
 				return
 			}
 			if problem.IsUpstreamUnavailable(err) {
-				problem.Write(w, http.StatusBadGateway,
-					problem.New(problem.TypeUpstreamUnavailable, r, "Upstream temporarily unavailable", err.Error()))
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Upstream temporarily unavailable", err)
 				return
 			}
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Set failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Set failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

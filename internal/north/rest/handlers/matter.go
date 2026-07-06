@@ -61,16 +61,12 @@ func MatterSetupPayload(c MatterCommissioning) http.HandlerFunc {
 			DiscoveryCaps: setup.DiscoveryOnIP,
 		})
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to encode setup payload", err.Error()))
+			writeServerError(w, req, http.StatusInternalServerError, problem.TypeInternal, "Failed to encode setup payload", err)
 			return
 		}
 		manual, err := setup.ManualCode(c.Discriminator, c.Passcode)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to encode manual code", err.Error()))
+			writeServerError(w, req, http.StatusInternalServerError, problem.TypeInternal, "Failed to encode manual code", err)
 			return
 		}
 		JSON(w, http.StatusOK, MatterSetupPayloadResponse{
@@ -151,7 +147,7 @@ func MatterCommissioningWindow(opener MatterCommissioningOpener, publisher Matte
 		}
 		var body MatterCommissioningWindowRequest
 		if err := DecodeJSON(req, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, req,
 					"Invalid request body", err.Error()))
 			return

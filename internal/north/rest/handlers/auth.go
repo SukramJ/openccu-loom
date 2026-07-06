@@ -6,7 +6,6 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -133,8 +132,8 @@ func CreateToken(d *AuthDeps) http.HandlerFunc {
 			return
 		}
 		var req CreateTokenRequest
-		if err := decodeJSONBody(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+		if err := DecodeJSON(r, &req); err != nil {
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid body", err.Error()))
 			return
 		}
@@ -153,8 +152,7 @@ func CreateToken(d *AuthDeps) http.HandlerFunc {
 		}
 		token, err := generateBearerToken()
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Token generation failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Token generation failed", err)
 			return
 		}
 		id := d.Tokens.Put(token, auth.Identity{Subject: req.Subject, Role: role, Scheme: auth.SchemeBearer})
@@ -238,15 +236,6 @@ func generateBearerToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf[:]), nil
 }
 
-// decodeJSONBody decodes r.Body into out with the standard
-// disallow-unknown-fields stance the rest of the surface uses.
-func decodeJSONBody(r *http.Request, out any) error {
-	defer func() { _ = r.Body.Close() }()
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	return dec.Decode(out)
-}
-
 // meResponse describes the currently-authenticated identity.
 type meResponse struct {
 	Subject string `json:"subject"`
@@ -275,7 +264,7 @@ func Login(d *AuthDeps) http.HandlerFunc {
 		}
 		var req loginRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -287,8 +276,7 @@ func Login(d *AuthDeps) http.HandlerFunc {
 		}
 		sess, err := d.Sessions.Issue(id) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Session issue failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Session issue failed", err)
 			return
 		}
 		auth.WriteSessionCookie(w, sess, d.Secure)

@@ -46,8 +46,7 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Section read failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section read failed", err)
 			return
 		}
 
@@ -57,8 +56,7 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		// path == section → whole-section reset (same as DELETE section).
 		if rel == "" {
 			if derr := svc.DeleteSection(r.Context(), section); derr != nil && !errors.Is(derr, sqlite.ErrSectionNotFound) {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Section delete failed", derr.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section delete failed", derr)
 				return
 			}
 			recordFieldReset(rec, actor, path)
@@ -69,8 +67,7 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		var obj map[string]any
 		if len(row.ValueJSON) > 0 {
 			if uerr := json.Unmarshal(row.ValueJSON, &obj); uerr != nil {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Stored section is not an object", uerr.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Stored section is not an object", uerr)
 				return
 			}
 		}
@@ -82,20 +79,17 @@ func ResetConfigField(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 
 		if len(obj) == 0 {
 			if derr := svc.DeleteSection(r.Context(), section); derr != nil && !errors.Is(derr, sqlite.ErrSectionNotFound) {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Section delete failed", derr.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section delete failed", derr)
 				return
 			}
 		} else {
 			next, merr := json.Marshal(obj)
 			if merr != nil {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Section encode failed", merr.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section encode failed", merr)
 				return
 			}
 			if _, perr := svc.PutSection(r.Context(), section, next, actor); perr != nil {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Section write failed", perr.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section write failed", perr)
 				return
 			}
 		}

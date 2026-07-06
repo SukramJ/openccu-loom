@@ -36,7 +36,7 @@ func PostUIEvent() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req UIEventRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}

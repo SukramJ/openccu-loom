@@ -43,6 +43,15 @@ type OpenAPIValidator struct {
 	failOpen bool
 }
 
+// openAPIBodyLimit caps the request body the validator buffers before
+// handing it to openapi3filter. Mirrors the handlers package's
+// DecodeJSON ceiling (`maxRequestBodyBytes` in
+// internal/north/rest/handlers/write.go) — this middleware runs
+// ahead of every handler, so without its own limit an oversized POST
+// would be read into memory in full here before the per-handler
+// limit ever gets a chance to reject it.
+const openAPIBodyLimit = 1 << 20 // 1 MiB
+
 // OpenAPIValidatorConfig parametrises [NewOpenAPIValidator].
 type OpenAPIValidatorConfig struct {
 	// Spec is the YAML/JSON-encoded OpenAPI 3.1 document. Required.
@@ -116,12 +125,21 @@ func (v *OpenAPIValidator) Middleware() func(http.Handler) http.Handler {
 			}
 
 			// The validator may consume the body; restore it for the
-			// downstream handler via a tee buffer.
+			// downstream handler via a tee buffer. The read is capped by
+			// [openAPIBodyLimit] so an oversized POST cannot be buffered
+			// into memory in full at this pre-handler stage.
 			var bodyCopy []byte
 			validatorReq := r
 			if r.Body != nil && r.ContentLength > 0 {
-				buf, readErr := io.ReadAll(r.Body)
-				if readErr == nil {
+				buf, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, openAPIBodyLimit))
+				if readErr != nil {
+					var mbe *http.MaxBytesError
+					if errors.As(readErr, &mbe) {
+						problem.Write(w, http.StatusRequestEntityTooLarge,
+							problem.New(problem.TypeValidation, r, "Request body too large", readErr.Error()))
+						return
+					}
+				} else {
 					bodyCopy = buf
 					vr := r.Clone(r.Context())
 					vr.Body = io.NopCloser(bytes.NewReader(buf))

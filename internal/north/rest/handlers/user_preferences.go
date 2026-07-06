@@ -68,8 +68,7 @@ func GetPreference(svc UserPreferencesService) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Preference read failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Preference read failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, preferenceResponse{Key: key, Value: json.RawMessage(value)})
@@ -107,8 +106,7 @@ func PutPreference(svc UserPreferencesService) http.HandlerFunc {
 			return
 		}
 		if err := svc.Set(r.Context(), subject, key, string(body)); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Preference write failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Preference write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -130,8 +128,7 @@ func DeletePreference(svc UserPreferencesService) http.HandlerFunc {
 		}
 		key := chi.URLParam(r, "key")
 		if err := svc.Delete(r.Context(), subject, key); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Preference delete failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Preference delete failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

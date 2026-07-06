@@ -69,8 +69,7 @@ func GetValuesCacheStats(svc ValuesCacheService) http.HandlerFunc {
 		}
 		stats, err := svc.Stats(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "stats failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "stats failed", err)
 			return
 		}
 		metrics := svc.Metrics()
@@ -97,8 +96,7 @@ func ResetValuesCacheGlobal(svc ValuesCacheService) http.HandlerFunc {
 			return
 		}
 		if err := svc.DeleteAll(r.Context()); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "reset failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "reset failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -129,8 +127,7 @@ func ResetValuesCacheDevice(svc ValuesCacheService, lookup DeviceLookup) http.Ha
 			return
 		}
 		if err := svc.DeleteDevice(r.Context(), centralName, iface, addr); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "reset failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "reset failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)

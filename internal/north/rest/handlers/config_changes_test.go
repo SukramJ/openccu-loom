@@ -79,8 +79,10 @@ func TestGetConfigChanges_NilFromProvider_Returns200WithEmptyArray(t *testing.T)
 }
 
 // TestGetConfigChanges_ProviderError_Returns500 verifies that when the
-// provider returns an error the handler responds with HTTP 500 and a body
-// containing the error message.
+// provider returns an error the handler responds with HTTP 500 and a
+// generic problem body — the real error text is logged (see
+// [writeServerError]), never echoed to the caller, so a driver-specific
+// message like "db failure" cannot leak through this 5xx response.
 func TestGetConfigChanges_ProviderError_Returns500(t *testing.T) {
 	t.Parallel()
 	p := &stubChangesProvider{err: errors.New("db failure")}
@@ -92,8 +94,11 @@ func TestGetConfigChanges_ProviderError_Returns500(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "db failure") {
-		t.Errorf("expected error message in body, got %s", w.Body.String())
+	if strings.Contains(w.Body.String(), "db failure") {
+		t.Errorf("5xx body must not echo the underlying error text, got %s", w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "Config-changes check failed") {
+		t.Errorf("expected the generic title in body, got %s", w.Body.String())
 	}
 }
 

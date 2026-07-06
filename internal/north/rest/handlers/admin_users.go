@@ -105,7 +105,7 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body createUserRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -132,8 +132,7 @@ func CreateUser(svc UserAdminService, rec audit.Recorder) http.HandlerFunc {
 			return
 		}
 		if err := svc.Put(r.Context(), body.Username, body.Password, body.Role); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "User creation failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User creation failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())
@@ -168,8 +167,7 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 		// Verify the user exists before attempting an update.
 		users, err := svc.List(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "User list failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User list failed", err)
 			return
 		}
 		found := false
@@ -187,7 +185,7 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 
 		var body updateUserRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -203,8 +201,7 @@ func UpdateUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 			return
 		}
 		if err := svc.Put(r.Context(), subject, body.Password, body.Role); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "User update failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User update failed", err)
 			return
 		}
 		if revoker != nil {
@@ -247,8 +244,7 @@ func DeleteUser(svc UserAdminService, rec audit.Recorder, revoker SessionRevoker
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "User deletion failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User deletion failed", err)
 			return
 		}
 		if revoker != nil {
@@ -280,8 +276,7 @@ func ListUsersV2(svc UserAdminService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := svc.List(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "User list failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "User list failed", err)
 			return
 		}
 		out := make([]userListEntry, 0, len(rows))

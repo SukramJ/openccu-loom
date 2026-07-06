@@ -37,8 +37,7 @@ func GetConfigChanges(p ConfigChangesProvider) http.HandlerFunc {
 		}
 		fields, err := p.Changes(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Config-changes check failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Config-changes check failed", err)
 			return
 		}
 		if fields == nil {

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -218,6 +219,32 @@ func TestDownloadBackup_HappyPath(t *testing.T) {
 	}
 	if !bytes.Contains(w.Body.Bytes(), []byte("SBKDATA")) {
 		t.Fatalf("body does not contain stream data")
+	}
+}
+
+// TestDownloadBackup_IDWithQuoteIsEscapedInContentDisposition verifies
+// that a backup id containing a double quote cannot break out of the
+// filename parameter and inject extra Content-Disposition directives
+// — the header must stay parseable, and the parsed filename value
+// must round-trip the id verbatim (quote included) rather than being
+// silently truncated at the injected quote.
+func TestDownloadBackup_IDWithQuoteIsEscapedInContentDisposition(t *testing.T) {
+	t.Parallel()
+	trickyID := `evil"; filename="pwned.sh`
+	svc := &stubBackupService{streamData: "SBKDATA"}
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/backups/x/download", http.NoBody)
+	req = req.WithContext(chiContext(req, map[string]string{"id": trickyID}))
+	w := httptest.NewRecorder()
+	DownloadBackup(svc).ServeHTTP(w, req)
+
+	cd := w.Header().Get("Content-Disposition")
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("Content-Disposition is not parseable: %q: %v", cd, err)
+	}
+	wantFilename := trickyID + ".sbk"
+	if params["filename"] != wantFilename {
+		t.Errorf("filename param = %q, want %q (header: %q)", params["filename"], wantFilename, cd)
 	}
 }
 

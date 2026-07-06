@@ -111,8 +111,7 @@ func UISchemaHandler(svc UISchemaService) http.HandlerFunc {
 					problem.New(problem.TypeNotFound, r, "Channel not found", addr+"/"+noStr))
 				return
 			}
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "UI schema failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "UI schema failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, schema)

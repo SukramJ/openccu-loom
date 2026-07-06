@@ -5,10 +5,13 @@ package handlers
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/SukramJ/openccu-loom/internal/north/rest/problem"
 )
 
 // TestDecodeJSONRejectsOversizedBody verifies that DecodeJSON refuses request
@@ -76,10 +79,12 @@ func TestDecodeJSONDisallowsUnknownFields(t *testing.T) {
 	}
 }
 
-// TestHandlerOversizedBodyReturns400 verifies that a handler which calls
-// DecodeJSON maps an oversized body to an HTTP 400 response via its existing
-// error path (links.AddLink as a representative handler).
-func TestHandlerOversizedBodyReturns400(t *testing.T) {
+// TestHandlerOversizedBodyReturns413 verifies that a handler which calls
+// DecodeJSON maps an oversized body to an HTTP 413 response (a distinct
+// memory-safety rejection, not the generic 400 a malformed-but-small body
+// gets) via its existing error path (links.AddLink as a representative
+// handler).
+func TestHandlerOversizedBodyReturns413(t *testing.T) {
 	t.Parallel()
 	svc := &stubLinksService{}
 	// Build a body whose raw size exceeds the 1 MiB limit.
@@ -90,8 +95,69 @@ func TestHandlerOversizedBodyReturns400(t *testing.T) {
 	req = req.WithContext(chiContext(req, map[string]string{"addr": "DEV001"}))
 	w := httptest.NewRecorder()
 	AddLink(svc).ServeHTTP(w, req)
-	// 400 because the handler maps DecodeJSON errors to bad_request.
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("oversized body should produce 400, got %d body=%s", w.Code, w.Body.String())
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized body should produce 413, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestDecodeJSONStatusMapsErrorKinds locks in the status-selection
+// contract [DecodeJSONStatus] gives handlers: 413 only for the
+// MaxBytesReader case, 400 for every other decode failure including a
+// nil error (the rooms/functions handlers OR a validation check into
+// the same branch).
+func TestDecodeJSONStatusMapsErrorKinds(t *testing.T) {
+	t.Parallel()
+	oversize := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
+	body := append([]byte(`{"data":"`), oversize...)
+	body = append(body, []byte(`"}`)...)
+	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
+	var v map[string]any
+	tooLargeErr := DecodeJSON(req, &v)
+
+	badReq := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("NOT JSON"))
+	var v2 map[string]any
+	badJSONErr := DecodeJSON(badReq, &v2)
+
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{"too large", tooLargeErr, http.StatusRequestEntityTooLarge},
+		{"malformed JSON", badJSONErr, http.StatusBadRequest},
+		{"nil (validation-only failure)", nil, http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := DecodeJSONStatus(tc.err); got != tc.want {
+				t.Errorf("DecodeJSONStatus(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestWriteServerErrorOmitsRawErrorFromBody verifies the info-leak fix
+// for every 5xx problem+json response: [writeServerError] must not put
+// err's text into the response body (only the static title), so a
+// driver-specific or filesystem-path-carrying error string never
+// reaches a caller — regardless of their privilege level.
+func TestWriteServerErrorOmitsRawErrorFromBody(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodGet, "/", http.NoBody)
+	w := httptest.NewRecorder()
+
+	sensitive := errors.New("sqlite: open /var/lib/openccu-loom/secret-path.db: permission denied")
+	writeServerError(w, req, http.StatusInternalServerError, problem.TypeInternal, "Widget query failed", sensitive)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "secret-path.db") || strings.Contains(body, "permission denied") {
+		t.Errorf("response body leaked the underlying error text: %s", body)
+	}
+	if !strings.Contains(body, "Widget query failed") {
+		t.Errorf("expected the generic title in the body, got %s", body)
 	}
 }
