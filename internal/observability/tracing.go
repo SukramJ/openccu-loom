@@ -11,9 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/uuid"
-
 	"github.com/SukramJ/openccu-loom/internal/clock"
+	"github.com/SukramJ/openccu-loom/internal/reqctx"
 )
 
 // SpanExporter receives finished spans. Implementations MUST NOT block —
@@ -217,12 +216,19 @@ func StartSpan(ctx context.Context, name string, attrs map[string]any) (*Span, c
 		traceID = parent.TraceID
 		parentID = parent.SpanID
 	} else {
-		traceID = uuid.NewString()
+		// 128-bit random ID (W3C Trace Context shape, [reqctx.NewTraceID])
+		// rather than a UUID: a UUID's version/variant nibbles carry no
+		// entropy, and truncating one (as SpanID used to) shrinks the
+		// collision-resistant space further still.
+		traceID = reqctx.NewTraceID()
 	}
 	sp := &Span{
-		Name:         name,
-		TraceID:      traceID,
-		SpanID:       uuid.NewString()[:8],
+		Name:    name,
+		TraceID: traceID,
+		// 64-bit random ID, matching [reqctx.NewSpanID] — a truncated-UUID
+		// span id only carried 32 bits of entropy, making birthday-bound
+		// collisions likely after tens of thousands of spans.
+		SpanID:       reqctx.NewSpanID(),
 		ParentSpanID: parentID,
 		StartedAt:    now(),
 	}

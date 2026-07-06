@@ -34,7 +34,12 @@ import (
 // matching JWKS at /jwks.
 type MockOP interface {
 	IssuerURL() string
-	IssueAuthCode(sub, role string) string
+	// IssueAuthCode mints an auth code. nonce is the value from the
+	// daemon's authorize redirect; a real OP MUST echo it into the ID
+	// token's nonce claim (OIDC Core §3.1.3.7 step 11), and the daemon
+	// rejects tokens where it is missing or mismatching. Pass "" only
+	// to simulate a non-conforming OP.
+	IssueAuthCode(sub, role, nonce string) string
 	Stop() error
 }
 
@@ -72,6 +77,7 @@ func startMockOP(t *testing.T) MockOP {
 type codeEntry struct {
 	subject string
 	role    string
+	nonce   string
 	created time.Time
 }
 
@@ -103,7 +109,9 @@ func (o *mockOP) Stop() error {
 //
 // The role parameter populates the "role" claim of the issued
 // ID token; pass "admin" / "operator" / "" (viewer fallback).
-func (o *mockOP) IssueAuthCode(sub, role string) string {
+// nonce is echoed into the ID token's nonce claim when non-empty,
+// mirroring a conforming OP.
+func (o *mockOP) IssueAuthCode(sub, role, nonce string) string {
 	if sub == "" {
 		sub = "harness-user"
 	}
@@ -113,7 +121,7 @@ func (o *mockOP) IssueAuthCode(sub, role string) string {
 	}
 	code := base64.RawURLEncoding.EncodeToString(codeBytes)
 	o.mu.Lock()
-	o.codes[code] = codeEntry{subject: sub, role: role, created: time.Now()}
+	o.codes[code] = codeEntry{subject: sub, role: role, nonce: nonce, created: time.Now()}
 	o.mu.Unlock()
 	return code
 }
@@ -166,7 +174,7 @@ func (o *mockOP) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing redirect_uri", http.StatusBadRequest)
 		return
 	}
-	code := o.IssueAuthCode("harness-user", "admin")
+	code := o.IssueAuthCode("harness-user", "admin", q.Get("nonce"))
 	target := redirect + "?code=" + code + "&state=" + state
 	http.Redirect(w, r, target, http.StatusFound)
 }
@@ -206,6 +214,12 @@ func (o *mockOP) handleToken(w http.ResponseWriter, r *http.Request) {
 		"name":  entry.subject,
 		"email": entry.subject + "@harness.local",
 		"role":  entry.role,
+	}
+	// A conforming OP echoes the authorize request's nonce into the ID
+	// token (OIDC Core §3.1.3.7 step 11); the daemon rejects the token
+	// otherwise.
+	if entry.nonce != "" {
+		claims["nonce"] = entry.nonce
 	}
 	idToken := o.signJWT(claims)
 

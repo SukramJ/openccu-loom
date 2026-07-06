@@ -32,8 +32,8 @@ type Event struct {
 	ReceivedAt     time.Time
 }
 
-// isDeviceErrorParam reports whether p matches a device-error prefix. via a
-// tuple prefix-search. (M27a — v8 §4)
+// isDeviceErrorParam reports whether p matches a device-error prefix via a
+// tuple prefix-search.
 func isDeviceErrorParam(p hmenum.Parameter) bool {
 	s := string(p)
 	for _, pfx := range errorPrefixes {
@@ -282,7 +282,7 @@ var impulseParams = map[hmenum.Parameter]struct{}{
 // errorPrefixes holds the string prefixes that identify device-error
 // parameters. openccu-loom previously used an exact-match set (`errorParams`)
 // which missed parameters like `ERROR_OVERHEAT`, `ERROR_REDUCED`, and other
-// CCU-model-specific error suffixes. (M27a — v8 §4)
+// CCU-model-specific error suffixes.
 //
 // Legacy exact-match entries (`ERROR`, `SENSOR_ERROR`) are preserved as
 // prefixes so they continue to match without a trailing underscore.

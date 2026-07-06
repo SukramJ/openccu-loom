@@ -237,8 +237,7 @@ func GetEffectiveConfig(svc ConfigAdminService) http.HandlerFunc {
 		}
 		res, err := svc.Effective(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Effective config failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Effective config failed", err)
 			return
 		}
 		masked := maskSecrets(res.Config)
@@ -437,8 +436,7 @@ func GetConfigSection(svc ConfigAdminService) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Section load failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section load failed", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -466,7 +464,7 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		}
 		var raw json.RawMessage
 		if err := DecodeJSON(r, &raw); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -518,8 +516,7 @@ func PutConfigSection(svc ConfigAdminService, rec audit.Recorder) http.HandlerFu
 		updatedBy := identityFromCtx(r.Context())
 		row, err := svc.PutSection(r.Context(), section, raw, updatedBy)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Section save failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section save failed", err)
 			return
 		}
 		if rec != nil {
@@ -578,8 +575,7 @@ func DeleteConfigSection(svc ConfigAdminService, rec audit.Recorder) http.Handle
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Section delete failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Section delete failed", err)
 			return
 		}
 		if rec != nil {

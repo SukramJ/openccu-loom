@@ -12,7 +12,7 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // eliminates separator-ambiguity (model names that contain '|') and avoids
 // a heap allocation per lookup after warm-up.
 //
-// Python equivalent:.py:IgnoreCacheKey
+// Mirrors the Python reference implementation's IgnoreCacheKey.
 type ignoreCacheKey struct {
 	model       string
 	channelType string
@@ -23,11 +23,11 @@ type ignoreCacheKey struct {
 
 // unIgnoreCacheKey is the composite key for
 // [ParameterDecider.IsUnIgnored] lookups. The extra customOnly dimension
-// Custom_only field, which
+// mirrors the Python reference implementation's custom_only field, which
 // distinguishes lookups that should consider only user-provided rules from
 // lookups that include built-in device rules.
 //
-// Python equivalent:.py:UnIgnoreCacheKey
+// Mirrors the Python reference implementation's UnIgnoreCacheKey.
 type unIgnoreCacheKey struct {
 	model       string
 	channelType string

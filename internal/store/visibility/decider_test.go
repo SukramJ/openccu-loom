@@ -63,6 +63,44 @@ func TestDeciderLenResetsAfterLoadUnIgnore(t *testing.T) {
 	}
 }
 
+// TestDeciderCacheBounded verifies that the memoisation cache never grows
+// past maxCacheEntries: once the bound is hit, the next distinct query
+// clears the cache before memoising its own result, rather than growing
+// forever.
+func TestDeciderCacheBounded(t *testing.T) {
+	// Not t.Parallel(): mutates the package-level maxCacheEntries var.
+	orig := maxCacheEntries
+	maxCacheEntries = 4
+	defer func() { maxCacheEntries = orig }()
+
+	d := NewParameterDecider(nil)
+
+	// Fill exactly up to the bound with distinct entries.
+	for i := range maxCacheEntries {
+		p := hmenum.Parameter("BOUND_P" + string(rune('A'+i)))
+		_ = d.IsParameterIgnored("HmIP-STH", "CH", channelNoUnknown, hmenum.ParamsetKeyValues, p)
+	}
+	if got := d.Len(); got != maxCacheEntries {
+		t.Fatalf("Len()=%d after filling to bound, want %d", got, maxCacheEntries)
+	}
+
+	// One more distinct entry must not push the cache past the bound.
+	_ = d.IsParameterIgnored("HmIP-STH", "CH", channelNoUnknown, hmenum.ParamsetKeyValues, hmenum.Parameter("BOUND_OVERFLOW"))
+	if got := d.Len(); got > maxCacheEntries {
+		t.Fatalf("Len()=%d after overflow entry, want <= %d", got, maxCacheEntries)
+	}
+
+	// Repeating the process for many more distinct entries must never
+	// exceed the bound.
+	for i := range 50 {
+		p := hmenum.Parameter("BOUND_MANY" + string(rune('A'+(i%26))) + string(rune('0'+(i/26))))
+		_ = d.IsParameterIgnored("HmIP-STH", "CH", channelNoUnknown, hmenum.ParamsetKeyValues, p)
+		if got := d.Len(); got > maxCacheEntries {
+			t.Fatalf("Len()=%d exceeded bound %d during sustained churn", got, maxCacheEntries)
+		}
+	}
+}
+
 // TestDeciderLenRaceSafe exercises Len() and IsParameterIgnored concurrently
 // to prove there is no data race under the -race detector.
 func TestDeciderLenRaceSafe(t *testing.T) {

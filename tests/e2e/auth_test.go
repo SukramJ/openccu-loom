@@ -174,10 +174,16 @@ func TestAuthOIDC(t *testing.T) {
 	if state == "" {
 		t.Fatalf("/oidc/start: redirect carries no `state`")
 	}
+	nonce := authorizeURL.Query().Get("nonce")
+	if nonce == "" {
+		t.Fatalf("/oidc/start: redirect carries no `nonce` (OIDC Core §3.1.2.1)")
+	}
 
 	// Step 2: skip the user-agent step. Mint an auth code directly
-	// from MockOP — the test acts as the IdP-side redirect would.
-	code := h.OP().IssueAuthCode("e2e-admin", "admin")
+	// from MockOP — the test acts as the IdP-side redirect would. The
+	// nonce must reach the OP so it can echo it into the ID token; the
+	// daemon rejects tokens with a missing or mismatching nonce claim.
+	code := h.OP().IssueAuthCode("e2e-admin", "admin", nonce)
 
 	// Step 3: GET /api/v1/auth/oidc/callback?code=...&state=...
 	// The daemon exchanges the code (calling MockOP /token), parses

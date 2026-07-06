@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"sort"
 	"strings"
 	"sync"
@@ -48,6 +49,17 @@ func (p Profile) LocalisedName(locale string) string {
 // back to "en" then to the first available entry.
 func (p Profile) LocalisedDescription(locale string) string {
 	return localised(p.Description, locale)
+}
+
+// cloneProfile returns a copy of p whose Name, Description and Params maps
+// are cloned rather than shared with the store's cached copy — otherwise a
+// caller mutating a returned Profile would corrupt every future lookup for
+// the same device/channel type.
+func cloneProfile(p Profile) Profile {
+	p.Name = maps.Clone(p.Name)
+	p.Description = maps.Clone(p.Description)
+	p.Params = maps.Clone(p.Params)
+	return p
 }
 
 func localised(m map[string]string, locale string) string {
@@ -143,7 +155,9 @@ func (s *Store) Profiles(deviceType, channelType string) ([]Profile, error) {
 		return nil, fmt.Errorf("%w: %s/%s", ErrNotFound, deviceType, channelType)
 	}
 	out := make([]Profile, len(profiles))
-	copy(out, profiles)
+	for i, p := range profiles {
+		out[i] = cloneProfile(p)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out, nil
 }

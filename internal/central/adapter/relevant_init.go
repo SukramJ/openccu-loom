@@ -12,12 +12,13 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmtypes"
 )
 
-// RelevantInitParameters mirrors
-// These three Channel-0 parameters
-// drive the daemon's availability tracking; if fetch_all_device_data
-// fails to include them, the daemon would default to "reachable" until
-// the first push event ever arrives. Loading them explicitly during
-// bootstrap closes that gap.
+// RelevantInitParameters lists the Channel-0 parameters that must be
+// loaded during bootstrap regardless of what the initial device-data
+// fetch returns. These three Channel-0 parameters drive the daemon's
+// availability tracking; if fetch_all_device_data fails to include
+// them, the daemon would default to "reachable" until the first push
+// event ever arrives. Loading them explicitly during bootstrap closes
+// that gap.
 var relevantInitParameters = []hmenum.Parameter{
 	hmenum.ParameterConfigPending,
 	hmenum.ParameterStickyUnreach,

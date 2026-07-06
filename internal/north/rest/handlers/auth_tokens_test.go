@@ -74,6 +74,23 @@ func TestCreateToken_RejectEmptySubject(t *testing.T) {
 	}
 }
 
+// TestCreateToken_OversizedBodyReturns413 verifies that CreateToken
+// caps its request body the same way every other JSON handler does
+// ([DecodeJSON]/[maxRequestBodyBytes]) instead of reading an
+// unbounded body into memory before rejecting it.
+func TestCreateToken_OversizedBodyReturns413(t *testing.T) {
+	t.Parallel()
+	d := newAuthDeps()
+	oversize := bytes.Repeat([]byte("x"), maxRequestBodyBytes+1)
+	body := append([]byte(`{"subject":"`), oversize...)
+	body = append(body, []byte(`","role":"viewer"}`)...)
+	w := httptest.NewRecorder()
+	CreateToken(d).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/auth/tokens", bytes.NewReader(body)))
+	if w.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 for oversized body, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 func TestCreateToken_NilStore503(t *testing.T) {
 	t.Parallel()
 	body, _ := json.Marshal(CreateTokenRequest{Subject: "x", Role: "viewer"})

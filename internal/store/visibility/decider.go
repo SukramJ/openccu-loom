@@ -30,6 +30,16 @@ type ParameterDecider struct {
 	requiredParameters map[hmenum.Parameter]struct{} // VALUES-only whitelist
 }
 
+// maxCacheEntries bounds the memoisation cache so an ever-growing set of
+// distinct (model, channelType, channelNo, paramset, parameter) tuples
+// cannot grow it without limit. When the bound is reached the whole cache
+// is cleared before the new entry is inserted — simpler than an eviction
+// policy, and no less correct since the cache is a pure memoisation layer
+// with no external freshness requirement. [ParameterDecider.Len] exposes
+// the current size so callers can monitor how often this happens.
+// Declared as a var (not a const) so tests can shrink it temporarily.
+var maxCacheEntries = 50_000
+
 // NewParameterDecider returns a decider backed by `rules`. Pass nil
 // to use the built-in defaults from [NewRules].
 func NewParameterDecider(rules *Rules) *ParameterDecider {
@@ -131,6 +141,9 @@ func (d *ParameterDecider) IsParameterIgnored(model, channelType string, channel
 	ignored := d.computeIgnored(model, channelNo, paramset, p)
 
 	d.mu.Lock()
+	if len(d.cacheVal) >= maxCacheEntries {
+		d.cacheVal = make(map[ignoreCacheKey]bool)
+	}
 	d.cacheVal[key] = ignored
 	d.mu.Unlock()
 	return ignored

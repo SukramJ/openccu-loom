@@ -50,9 +50,8 @@ func init() {
 // capabilities/climate.py — exported so north-bound adapters and tests can
 // reference them by name rather than reconstructing the struct literal.
 
-// BasicClimateCapabilities mirrors
-// minimal thermostat with heat/off only, no profiles, no boost, no away.
-// Mirrors capabilities/climate.py:38.
+// BasicClimateCapabilities describes a minimal thermostat with heat/off
+// only, no profiles, no boost, no away. Mirrors capabilities/climate.py:38.
 var BasicClimateCapabilities = custom.ClimateCapabilities{
 	SupportsHeat:    true,
 	SupportsOff:     true,
@@ -62,9 +61,8 @@ var BasicClimateCapabilities = custom.ClimateCapabilities{
 	TemperatureUnit: "°C",
 }
 
-// IPThermostatCapabilities mirrors
-// full mode set, profile support, away and boost, 5–30 °C range, 0.5 °C step.
-// Mirrors capabilities/climate.py:39.
+// IPThermostatCapabilities describes the full mode set: profile support,
+// away and boost, 5–30 °C range, 0.5 °C step. Mirrors capabilities/climate.py:39.
 var IPThermostatCapabilities = custom.ClimateCapabilities{
 	SupportsAuto:    true,
 	SupportsHeat:    true,
@@ -79,8 +77,8 @@ var IPThermostatCapabilities = custom.ClimateCapabilities{
 	TemperatureUnit: "°C",
 }
 
-// RFThermostatCapabilities mirrors
-// heat, away, profile support, boost, COMFORT and ECO presets, 4.5–30.5 °C.
+// RFThermostatCapabilities describes heat, away, profile support, boost,
+// COMFORT and ECO presets, 4.5–30.5 °C.
 var RFThermostatCapabilities = custom.ClimateCapabilities{
 	SupportsAuto:    true,
 	SupportsHeat:    true,
@@ -106,9 +104,8 @@ var BASIC_CLIMATE_CAPABILITIES = BasicClimateCapabilities //nolint:revive // Pyt
 // IP_THERMOSTAT_CAPABILITIES is the Python-parity alias for [IPThermostatCapabilities].
 var IP_THERMOSTAT_CAPABILITIES = IPThermostatCapabilities //nolint:revive // Python-exact name required for parity
 
-// IpCapabilities mirrors
-// Full mode set
-// profile support, away and boost, 5–30 °C range, 0.5 °C step.
+// ipCapabilities is the unexported counterpart of [IPThermostatCapabilities]:
+// full mode set, profile support, away and boost, 5–30 °C range, 0.5 °C step.
 var ipCapabilities = custom.ClimateCapabilities{
 	SupportsAuto:    true,
 	SupportsHeat:    true,
@@ -123,12 +120,11 @@ var ipCapabilities = custom.ClimateCapabilities{
 	TemperatureUnit: "°C",
 }
 
-// RfCapabilities mirrors
-// heat and away, profile support, boost, 4.5–30.5 °C. RF thermostats
-// also expose the COMFORT and ECO preset profiles which are not
-// Available on IP thermostats.
-// (climate.py:514) and `_PROFILES` set on `CustomDpRfThermostat`
-// (climate.py:531-538).
+// rfCapabilities describes heat and away, profile support, boost,
+// 4.5–30.5 °C. RF thermostats also expose the COMFORT and ECO preset
+// profiles which are not available on IP thermostats. Mirrors the
+// profile-support flag (climate.py:514) and the `_PROFILES` set on
+// `CustomDpRfThermostat` (climate.py:531-538).
 var rfCapabilities = custom.ClimateCapabilities{
 	SupportsAuto:    true,
 	SupportsHeat:    true,
@@ -145,12 +141,12 @@ var rfCapabilities = custom.ClimateCapabilities{
 	TemperatureUnit: "°C",
 }
 
-// SimpleRfCapabilities mirrors
-// Simple RF thermostats (HM-CC-TC, ZEL_STG_RM_FWT) do not expose an
-// Explicit OFF mode — only AUTO and MANU. Temperature
-// bounds 6.0..30.0 mirror the MASTER-paramset TEMPERATUR_COMFORT_VALUE
-// weekly-schedule descriptor range; the SimpleRF wire family has no
-// SET_TEMPERATURE DP whose descriptor would otherwise drive these.
+// simpleRfCapabilities describes simple RF thermostats (HM-CC-TC,
+// ZEL_STG_RM_FWT) which do not expose an explicit OFF mode — only AUTO
+// and MANU. Temperature bounds 6.0..30.0 mirror the MASTER-paramset
+// TEMPERATUR_COMFORT_VALUE weekly-schedule descriptor range; the
+// SimpleRF wire family has no SET_TEMPERATURE DP whose descriptor
+// would otherwise drive these.
 var simpleRfCapabilities = custom.ClimateCapabilities{
 	SupportsAuto:    false,
 	SupportsHeat:    true,

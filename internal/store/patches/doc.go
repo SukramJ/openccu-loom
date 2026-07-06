@@ -3,7 +3,7 @@
 
 // Package patches applies paramset overrides that correct CCU bugs.
 //
-// The MVP ships the patches ported
+// The MVP ships three patches:
 //   - `HM-ES-PMSw1-Pl` energy-counter unit fixes
 //   - `HmIP-RGBW` saturation/hue bounds
 //   - generic "operations bit" corrections where the CCU omits WRITE

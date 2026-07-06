@@ -75,8 +75,7 @@ func GetHistory(svc HistoryService) http.HandlerFunc {
 		}
 		buckets, err := svc.Query(r.Context(), q)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "History query failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "History query failed", err)
 			return
 		}
 		if buckets == nil {

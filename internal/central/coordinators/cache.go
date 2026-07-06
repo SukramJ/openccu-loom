@@ -447,15 +447,15 @@ func (c *CacheCoordinator) SetCentralName(name string) {
 }
 
 // SetDataCacheInitializationComplete marks data-cache initialization as
-// Complete, enabling normal cache expiration behaviour..
-// this suppresses premature getValue calls during the startup phase
-// when device creation takes longer than MAX_CACHE_AGE. In Go the
-// cache has no TTL/expiry logic, so this is a semantic marker that
+// complete, enabling normal cache expiration behaviour. In the Python
+// reference implementation this suppresses premature getValue calls during
+// the startup phase when device creation takes longer than MAX_CACHE_AGE. In
+// Go the cache has no TTL/expiry logic, so this is a semantic marker that
 // the caller may observe to gate post-startup operations. The method
 // is safe to call multiple times; subsequent calls are no-ops.
 //
-// `CacheCoordinator.set_data_cache_initialization_complete`
-// (`central/coordinators/cache.py:403`). P2.
+// Mirrors `CacheCoordinator.set_data_cache_initialization_complete`
+// (`central/coordinators/cache.py:403`).
 func (c *CacheCoordinator) SetDataCacheInitializationComplete() {
 	c.mu.Lock()
 	if !c.initializationComplete {

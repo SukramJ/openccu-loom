@@ -119,7 +119,7 @@ func TestReportSubscription_EmptyPathsSetsSuppressResponse(t *testing.T) {
 	}
 
 	const subID uint32 = 4242
-	b.subTargets.Store(subID, subTarget{
+	b.routing.subTargets.Store(subID, subTarget{
 		src:                 peerAddr,
 		hasPeerSourceNodeID: true,
 		peerSourceNodeID:    peerNodeID,

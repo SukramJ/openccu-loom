@@ -6,8 +6,8 @@ package main
 // daemon_coverage5_test.go — targeted coverage for remaining gaps:
 //   - buildOpenAPIValidator: success path (valid spec file)
 //   - autodetectCallbackHost: Dial failure path (invalid host)
-//   - wireIncidentRecorder: empty DataDir path + nil Cache guard
-//   - wireSessionRecorderPersistence: empty DataDir path + nil Recorder guard
+//   - wireIncidentRecorder: nil Cache guard
+//   - wireSessionRecorderPersistence: nil Recorder guard
 //   - buildCaseAdapter: nil store → ephemeral path
 //   - buildBackupAdapter: un-creatable directory → Warn path
 
@@ -79,31 +79,18 @@ func TestEgressHostToward_InvalidHost_ReturnsEmpty(t *testing.T) {
 	}
 }
 
-// ── wireIncidentRecorder: empty DataDir branch ────────────────────────────────
-
-// TestWireIncidentRecorder_EmptyDataDir_DoesNotPanic exercises the
-// `dataDir = "./var"` fallback branch. Uses sequential (not parallel) because
-// it touches the relative path "./var".
-func TestWireIncidentRecorder_EmptyDataDir_DoesNotPanic(t *testing.T) {
-	cfg := config.Default()
-	cfg.DataDir = "" // triggers the `dataDir = "./var"` branch
-
-	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
-	t.Cleanup(closer)
-}
-
 // ── wireIncidentRecorder: nil Cache guard ─────────────────────────────────────
+//
+// The dataDir/DSN fallback branch these tests used to exercise directly on
+// wireIncidentRecorder / wireSessionRecorderPersistence now lives solely in
+// [openLoomDB] (see daemon_boot_test.go) — both functions take the shared
+// *sql.DB as a parameter and no longer resolve a path themselves.
 
 // TestWireIncidentRecorder_NilCache_ContinueBranch exercises the
 // "if c == nil || c.Cache == nil { continue }" defensive branch.
 func TestWireIncidentRecorder_NilCache_ContinueBranch(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 
 	cu, err := central.New(central.Config{Name: "ccu-null-cache"})
 	if err != nil {
@@ -117,28 +104,8 @@ func TestWireIncidentRecorder_NilCache_ContinueBranch(t *testing.T) {
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
-}
-
-// ── wireSessionRecorderPersistence: empty DataDir branch ─────────────────────
-
-// TestWireSessionRecorderPersistence_EmptyDataDir_DoesNotPanic exercises
-// the `dataDir = "./var"` fallback branch.
-func TestWireSessionRecorderPersistence_EmptyDataDir_DoesNotPanic(t *testing.T) {
-	cfg := config.Default()
-	cfg.DataDir = "" // triggers the fallback branch
-
-	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
-	if closer != nil {
-		closer()
-	}
 }
 
 // ── wireSessionRecorderPersistence: nil Recorder guard ───────────────────────
@@ -147,8 +114,7 @@ func TestWireSessionRecorderPersistence_EmptyDataDir_DoesNotPanic(t *testing.T) 
 // "if c == nil || c.Recorder == nil { continue }" branch.
 func TestWireSessionRecorderPersistence_NilRecorder_ContinueBranch(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 
 	cu, err := central.New(central.Config{Name: "ccu-null-rec"})
 	if err != nil {
@@ -162,68 +128,10 @@ func TestWireSessionRecorderPersistence_NilRecorder_ContinueBranch(t *testing.T)
 	}
 
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer != nil {
 		closer()
 	}
-}
-
-// ── wireSessionRecorderPersistence: DB-open error path ───────────────────────
-
-// TestWireSessionRecorderPersistence_DBOpenError_ReturnsNoop exercises the
-// "session.recorder.persist.disabled" warn path when sqlite.Open fails.
-// We set DataDir to a path whose sub-path openccu-loom.db can't be created
-// because the parent path is an existing file (not a dir).
-func TestWireSessionRecorderPersistence_DBOpenError_ReturnsNoop(t *testing.T) {
-	t.Parallel()
-	tmp := t.TempDir()
-	// Create a regular file where the "database directory" would be needed.
-	// filepath.Join(tmp, "openccu-loom.db") would be the DB path, but we make
-	// the parent path (tmp itself) contain a file named "openccu-loom.db" that
-	// is actually a directory—actually we make DataDir point to a sub-path of
-	// a file, which is impossible to use as a directory.
-	blockFile := filepath.Join(tmp, "not-a-dir")
-	if err := os.WriteFile(blockFile, []byte("block"), 0o600); err != nil {
-		t.Fatalf("os.WriteFile: %v", err)
-	}
-	// Set DataDir to a path that goes through the file — impossible directory.
-	cfg := config.Default()
-	cfg.DataDir = blockFile // DataDir=file → file:file/openccu-loom.db fails
-
-	reg := buildTestRegistry(t, "ccu-01")
-	var logBuf strings.Builder
-	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
-
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
-	// Whether it opens or warns, it must not panic.
-	if closer != nil {
-		closer()
-	}
-}
-
-// TestWireIncidentRecorder_DBOpenError_DoesNotPanic exercises the
-// "incident.recorder.disabled" warn path when sqlite.Open fails.
-func TestWireIncidentRecorder_DBOpenError_DoesNotPanic(t *testing.T) {
-	t.Parallel()
-	tmp := t.TempDir()
-	blockFile := filepath.Join(tmp, "not-a-dir")
-	if err := os.WriteFile(blockFile, []byte("block"), 0o600); err != nil {
-		t.Fatalf("os.WriteFile: %v", err)
-	}
-	cfg := config.Default()
-	cfg.DataDir = blockFile // triggers DB-open error
-
-	reg := buildTestRegistry(t, "ccu-01")
-	logger := slog.New(slog.DiscardHandler)
-
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
-	t.Cleanup(closer)
 }
 
 // ── buildCaseAdapter: nil store → ephemeral path ──────────────────────────────

@@ -394,8 +394,8 @@ type deviceAddrArgs struct {
 func devicesGetHandler(q DeviceQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args deviceAddrArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Address == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "address required")
@@ -432,8 +432,8 @@ func (a paramsetArgs) sessionKey() configui.SessionKey {
 func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args paramsetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -449,8 +449,8 @@ func paramsetDescriptionHandler(q DeviceQuery) CommandHandler {
 func paramsetGetHandler(q DeviceQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args paramsetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -487,8 +487,8 @@ func programsListHandler(q HubQuery) CommandHandler {
 func programsExecuteHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args programIDArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
@@ -513,8 +513,8 @@ func sysvarsListHandler(q HubQuery) CommandHandler {
 func sysvarsSetHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args sysvarSetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Name == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "name required")
@@ -536,10 +536,8 @@ func sysvarsFetchHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args sysvarsFetchArgs
 		// Args are optional — an empty/absent body refreshes all centrals.
-		if len(raw) > 0 {
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
-			}
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if err := q.FetchSystemVariables(ctx, args.CentralName); err != nil {
 			return nil, NewCommandError(CommandErrorInternal, "fetch_sysvars: "+err.Error())
@@ -567,8 +565,8 @@ func alarmMessagesListHandler(q HubQuery) CommandHandler {
 func alarmMessagesAckHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args messageIDArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
@@ -593,8 +591,8 @@ func serviceMessagesListHandler(q HubQuery) CommandHandler {
 func serviceMessagesAckHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args messageIDArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "id required")
@@ -630,8 +628,8 @@ func installModeStatusHandler(q HubQuery) CommandHandler {
 func installModeEnableHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args installModeEnableArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.InterfaceID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
@@ -649,8 +647,8 @@ func installModeEnableHandler(q HubQuery) CommandHandler {
 func installModeDisableHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args installModeIfaceArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.InterfaceID == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "interface_id required")
@@ -719,8 +717,8 @@ func inboxListHandler(q HubQuery) CommandHandler {
 func inboxAcceptHandler(q HubQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args inboxAcceptArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -753,8 +751,8 @@ type linkRemoveArgs struct {
 func linksListHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linksDeviceArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -770,8 +768,8 @@ func linksListHandler(q LinkQuery) CommandHandler {
 func linksAddHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkAddArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Sender == "" || args.Receiver == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
@@ -786,8 +784,8 @@ func linksAddHandler(q LinkQuery) CommandHandler {
 func linksRemoveHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkRemoveArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Sender == "" || args.Receiver == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "sender and receiver required")
@@ -802,8 +800,8 @@ func linksRemoveHandler(q LinkQuery) CommandHandler {
 func linksLinkableChannelsHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linksDeviceArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -834,8 +832,8 @@ type linkPutParamsetArgs struct {
 func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkParamsetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Address == "" || args.PeerAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "address and peer_address required")
@@ -855,8 +853,8 @@ func linksGetParamsetHandler(q LinkQuery) CommandHandler {
 func linksPutParamsetHandler(q LinkQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args linkPutParamsetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Address == "" || args.PeerAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "address and peer_address required")
@@ -904,8 +902,8 @@ func registerScheduleCommands(router *Router, q ScheduleQuery) {
 func schedulesClimateGetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleChannelArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -921,8 +919,8 @@ func schedulesClimateGetHandler(q ScheduleQuery) CommandHandler {
 func schedulesClimateSetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleClimateSetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -940,8 +938,8 @@ func schedulesClimateSetHandler(q ScheduleQuery) CommandHandler {
 func schedulesActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleActiveProfileArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -976,8 +974,8 @@ type scheduleDeviceActiveProfileArgs struct {
 func schedulesDeviceGetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleDeviceArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -993,8 +991,8 @@ func schedulesDeviceGetHandler(q ScheduleQuery) CommandHandler {
 func schedulesDeviceSetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleDeviceSetArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -1012,8 +1010,8 @@ func schedulesDeviceSetHandler(q ScheduleQuery) CommandHandler {
 func schedulesDeviceActiveProfileSetHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleDeviceActiveProfileArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -1048,8 +1046,8 @@ type scheduleClimateCopyProfileArgs struct {
 func schedulesCopyHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleCopyArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.SourceDeviceAddress == "" || args.TargetDeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_device_address and target_device_address required")
@@ -1068,8 +1066,8 @@ func schedulesCopyHandler(q ScheduleQuery) CommandHandler {
 func schedulesClimateCopyProfileHandler(q ScheduleQuery) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args scheduleClimateCopyProfileArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.SourceChannelAddress == "" || args.TargetChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "source_channel_address and target_channel_address required")
@@ -1112,8 +1110,8 @@ func (a sessionOpenArgs) key() configui.SessionKey {
 func sessionOpenHandler(store *configui.SessionStore, backend SessionBackend) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args sessionOpenArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.ChannelAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "channel_address required")
@@ -1163,8 +1161,8 @@ func (a sessionMutateArgs) key() configui.SessionKey {
 func sessionSetHandler(store *configui.SessionStore) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var args sessionMutateArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.Parameter == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "parameter required")
@@ -1181,8 +1179,8 @@ func sessionSetHandler(store *configui.SessionStore) CommandHandler {
 func sessionStackHandler(store *configui.SessionStore, undo bool) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var args sessionMutateArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		s := store.Get(args.key())
 		if s == nil {
@@ -1203,8 +1201,8 @@ func sessionStackHandler(store *configui.SessionStore, undo bool) CommandHandler
 func sessionDiscardHandler(store *configui.SessionStore) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var args sessionMutateArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		key := args.key()
 		s := store.Get(key)
@@ -1220,8 +1218,8 @@ func sessionDiscardHandler(store *configui.SessionStore) CommandHandler {
 func sessionChangesHandler(store *configui.SessionStore) CommandHandler {
 	return func(_ context.Context, raw json.RawMessage) (any, error) {
 		var args sessionMutateArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		s := store.Get(args.key())
 		if s == nil {
@@ -1251,8 +1249,8 @@ func sessionChangesHandler(store *configui.SessionStore) CommandHandler {
 func sessionSaveHandler(store *configui.SessionStore, backend SessionBackend, cp ConstraintProvider, cl *audit.ChangeLog) CommandHandler {
 	return func(ctx context.Context, raw json.RawMessage) (any, error) {
 		var args sessionMutateArgs
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		key := args.key()
 		s := store.Get(key)
@@ -1341,8 +1339,8 @@ func reloadDeviceConfigHandler(r DeviceReloader) CommandHandler {
 		var args struct {
 			DeviceAddress string `json:"device_address"`
 		}
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		if args.DeviceAddress == "" {
 			return nil, NewCommandError(CommandErrorBadRequest, "device_address required")
@@ -1369,8 +1367,8 @@ func reloadChannelConfigHandler(r ChannelReloader) CommandHandler {
 			ChannelAddress string `json:"channel_address"`
 			Address        string `json:"address"`
 		}
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
+		if err := decodeOrEmpty(raw, &args); err != nil {
+			return nil, err
 		}
 		channelAddress := args.ChannelAddress
 		if channelAddress == "" {

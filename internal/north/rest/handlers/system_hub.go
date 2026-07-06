@@ -72,8 +72,7 @@ func PostSystemUpdateInstall(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		if err := h.Update.Install(r.Context()); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "System update failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "System update failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -190,7 +189,7 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 		}
 		var req InstallModeInterfaceRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -223,8 +222,7 @@ func PostInstallModeInterface(idx HubIndex) http.HandlerFunc {
 					err = dp.Disable(r.Context())
 				}
 				if err != nil {
-					problem.Write(w, http.StatusBadGateway,
-						problem.New(problem.TypeUpstreamUnavailable, r, "Install mode write failed", err.Error()))
+					writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Install mode write failed", err)
 					return
 				}
 				w.WriteHeader(http.StatusAccepted)

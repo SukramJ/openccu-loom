@@ -17,6 +17,46 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/auth"
 )
 
+// TestAuthURLIncludesSuppliedNonce proves the nonce round-trips into
+// the authorization request when the caller supplies one — the
+// pending-auth session binds it so [Client.VerifyIDToken] can later
+// check the ID token echoes the same value (OIDC Core §3.1.2.1).
+func TestAuthURLIncludesSuppliedNonce(t *testing.T) {
+	c := &Client{
+		cfg:       Config{ClientID: "openccu-loom", RedirectURL: "http://localhost/cb", Scopes: []string{"openid"}},
+		providers: &Providers{AuthorizationEndpoint: "http://idp.example/auth"},
+	}
+	pkce, _ := NewPKCEPair()
+	u := c.AuthURL("state-xyz", pkce, "nonce-abc")
+	parsed, err := url.Parse(u)
+	if err != nil {
+		t.Fatalf("parse auth URL: %v", err)
+	}
+	if got := parsed.Query().Get("nonce"); got != "nonce-abc" {
+		t.Fatalf("nonce = %q, want %q", got, "nonce-abc")
+	}
+}
+
+// TestNewNonceIsRandomAndNonEmpty guards against a degenerate nonce
+// generator that would make the anti-replay check trivially
+// bypassable.
+func TestNewNonceIsRandomAndNonEmpty(t *testing.T) {
+	a, err := NewNonce()
+	if err != nil {
+		t.Fatalf("NewNonce: %v", err)
+	}
+	b, err := NewNonce()
+	if err != nil {
+		t.Fatalf("NewNonce: %v", err)
+	}
+	if a == "" || b == "" {
+		t.Fatal("nonce must not be empty")
+	}
+	if a == b {
+		t.Fatal("two consecutive nonces must not collide")
+	}
+}
+
 func TestPKCEPair(t *testing.T) {
 	p, err := NewPKCEPair()
 	if err != nil {
@@ -87,6 +127,9 @@ func TestClientAuthURLAndExchange(t *testing.T) {
 	parsed, _ := url.Parse(u)
 	if parsed.Query().Get("client_id") != "openccu-loom" || parsed.Query().Get("state") != "state-xyz" {
 		t.Fatalf("auth URL: %s", u)
+	}
+	if parsed.Query().Get("nonce") != "" {
+		t.Fatalf("auth URL must omit nonce when none was supplied: %s", u)
 	}
 
 	tok, err := c.Exchange(context.Background(), "abc", pkce.Verifier)

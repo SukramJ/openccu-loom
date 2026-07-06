@@ -88,6 +88,43 @@ func TestStoreChannelTypesIncludeKey(t *testing.T) {
 	}
 }
 
+// TestProfilesMutatingResultDoesNotAffectCache verifies that the
+// Name/Description/Params maps of a Profile returned by Profiles/Profile
+// are independent copies: mutating them must not corrupt the store's
+// cached data used by later lookups.
+func TestProfilesMutatingResultDoesNotAffectCache(t *testing.T) {
+	s := New()
+
+	profiles1, err := s.Profiles("BLIND", "")
+	if err != nil {
+		t.Fatalf("Profiles(BLIND, '') err = %v", err)
+	}
+	if len(profiles1) == 0 || len(profiles1[0].Name) == 0 {
+		t.Fatal("expected at least one profile with a non-empty Name map")
+	}
+	for k := range profiles1[0].Name {
+		profiles1[0].Name[k] = "MUTATED"
+	}
+	for k := range profiles1[0].Params {
+		profiles1[0].Params[k] = ParamConstraint{ConstraintType: "MUTATED"}
+	}
+
+	profiles2, err := s.Profiles("BLIND", "")
+	if err != nil {
+		t.Fatalf("second Profiles(BLIND, '') err = %v", err)
+	}
+	for k, v := range profiles2[0].Name {
+		if v == "MUTATED" {
+			t.Fatalf("cache corrupted: Name[%q] leaked mutation from prior caller", k)
+		}
+	}
+	for k, c := range profiles2[0].Params {
+		if c.ConstraintType == "MUTATED" {
+			t.Fatalf("cache corrupted: Params[%q] leaked mutation from prior caller", k)
+		}
+	}
+}
+
 func TestStoreCaching(t *testing.T) {
 	s := New()
 	if _, err := s.Profiles("BLIND", ""); err != nil {

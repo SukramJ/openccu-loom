@@ -316,7 +316,7 @@ func (c *HSColor) SendDefault(
 }
 
 // IsRefreshed reports whether both HUE and SATURATION have been observed from
-// the CCU at least once. Implements M18.
+// the CCU at least once. Satisfies the custom.AggregateDataPoint contract.
 func (c *HSColor) IsRefreshed() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -325,7 +325,7 @@ func (c *HSColor) IsRefreshed() bool {
 
 // StateUncertain reports whether the combined colour value is held
 // optimistically. HSColor has no optimistic tracker of its own.
-// Returns false always. Implements M18.
+// Returns false always. Satisfies the custom.AggregateDataPoint contract.
 func (c *HSColor) StateUncertain() bool { return false }
 
 // toInt32 converts an arbitrary CCU wire value to int32. Handles the types a

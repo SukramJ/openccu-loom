@@ -4,6 +4,7 @@
 package config
 
 import (
+	"math"
 	"slices"
 	"testing"
 )
@@ -76,6 +77,28 @@ func TestChangedFields(t *testing.T) {
 		got := ChangedFields(&Config{}, nil)
 		if len(got) != 0 {
 			t.Errorf("expected nil/empty result for nil eff, got %v", got)
+		}
+	})
+
+	// TestChangedFields/marshal_failure_does_not_hide_real_changes guards
+	// against configTree's marshal error being swallowed into a bare nil
+	// tree. When both sides fail to marshal (json.Marshal errors on NaN)
+	// the naive "nil tree on both sides" comparison makes every path look
+	// equal (nil == nil), silently hiding an unrelated, genuine change
+	// (Locale here) from the operator-facing changes/restart-pending
+	// surfaces. The fix must widen the result to a fail-safe "everything
+	// changed" instead.
+	t.Run("marshal_failure_does_not_hide_real_changes", func(t *testing.T) {
+		t.Parallel()
+		boot := &Config{}
+		boot.North.REST.RateLimit.RequestsPerSecond = math.NaN()
+		eff := &Config{}
+		eff.North.REST.RateLimit.RequestsPerSecond = math.NaN()
+		eff.Locale = "de" // a real change that must not be hidden
+
+		got := ChangedFields(boot, eff)
+		if len(got) == 0 {
+			t.Fatal("expected a fail-safe non-empty result when the config tree cannot be marshalled, got empty (real Locale change was hidden)")
 		}
 	})
 }

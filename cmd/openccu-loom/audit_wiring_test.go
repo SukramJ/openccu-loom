@@ -51,11 +51,15 @@ func TestBuildBackupAdapter_EmptyDataDir_FallsBackToVar(t *testing.T) {
 }
 
 // ── wireSessionRecorderPersistence ───────────────────────────────────────────
+//
+// wireSessionRecorderPersistence now receives the shared *sql.DB handle
+// (opened once by openLoomDB in the composition root) instead of opening its
+// own — see openLoomDB_test.go / daemon_boot_test.go for the open-path tests.
 
-func TestWireSessionRecorderPersistence_NilConfig_ReturnsNoop(t *testing.T) {
+func TestWireSessionRecorderPersistence_NilDB_ReturnsNoop(t *testing.T) {
 	t.Parallel()
 	closer := wireSessionRecorderPersistence(nil, central.NewRegistry(), slog.Default())
-	// Must not panic; nil config → early return noop func.
+	// Must not panic; nil db → early return noop func.
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
@@ -64,33 +68,35 @@ func TestWireSessionRecorderPersistence_NilConfig_ReturnsNoop(t *testing.T) {
 
 func TestWireSessionRecorderPersistence_NilRegistry_ReturnsNoop(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
-	closer := wireSessionRecorderPersistence(cfg, nil, slog.Default())
+	db := openTestLoomDB(t)
+	closer := wireSessionRecorderPersistence(db, nil, slog.Default())
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
 	closer()
 }
 
-func TestWireSessionRecorderPersistence_ValidDir_ReturnsCloser(t *testing.T) {
+func TestWireSessionRecorderPersistence_ValidDB_ReturnsCloser(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
 	closer() // must not panic
+
+	// The shared handle is owned by the caller that opened it — the
+	// wiring's own teardown must not have closed it.
+	if err := db.Ping(); err != nil {
+		t.Fatalf("shared db closed by wireSessionRecorderPersistence teardown: %v", err)
+	}
 }
 
 // ── wireIncidentRecorder ──────────────────────────────────────────────────────
 
-func TestWireIncidentRecorder_NilConfig_IsNoop(t *testing.T) {
+func TestWireIncidentRecorder_NilDB_IsNoop(t *testing.T) {
 	t.Parallel()
 	// Must not panic.
 	_, closer := wireIncidentRecorder(nil, central.NewRegistry(), slog.Default())
@@ -99,73 +105,61 @@ func TestWireIncidentRecorder_NilConfig_IsNoop(t *testing.T) {
 
 func TestWireIncidentRecorder_NilRegistry_IsNoop(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
-	_, closer := wireIncidentRecorder(cfg, nil, slog.Default())
+	db := openTestLoomDB(t)
+	_, closer := wireIncidentRecorder(db, nil, slog.Default())
 	t.Cleanup(closer)
 }
 
-func TestWireIncidentRecorder_ValidConfig_DoesNotPanic(t *testing.T) {
+func TestWireIncidentRecorder_ValidDB_DoesNotPanic(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := central.NewRegistry()
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	store, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
-}
+	if store == nil {
+		t.Fatal("expected non-nil incident store for a valid shared db")
+	}
 
-// ── wireAuditPersistence ──────────────────────────────────────────────────────
-
-func TestWireAuditPersistence_NilConfig_ReturnsBuf(t *testing.T) {
-	t.Parallel()
-	buf := audit.NewBuffer(16)
-	got := wireAuditPersistence(nil, buf, slog.Default())
-	// nil config → returns the buf unchanged.
-	if got == nil {
-		t.Fatal("expected non-nil recorder")
+	closer()
+	// The shared handle is owned by the caller that opened it — the
+	// wiring's own teardown must not have closed it.
+	if err := db.Ping(); err != nil {
+		t.Fatalf("shared db closed by wireIncidentRecorder teardown: %v", err)
 	}
 }
 
-func TestWireAuditPersistence_NilBuf_ReturnsBuf(t *testing.T) {
+// ── wireAuditPersistenceWithDB ────────────────────────────────────────────────
+
+func TestWireAuditPersistenceWithDB_NilDB_ReturnsBuf(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
-	got := wireAuditPersistence(cfg, nil, slog.Default())
+	buf := audit.NewBuffer(16)
+	got, stats := wireAuditPersistenceWithDB(nil, buf, slog.Default())
+	// nil db → returns the buf unchanged.
+	if got == nil {
+		t.Fatal("expected non-nil recorder")
+	}
+	if stats != nil {
+		t.Fatal("expected nil durable-sink stats when db is nil")
+	}
+}
+
+func TestWireAuditPersistenceWithDB_NilBuf_ReturnsBuf(t *testing.T) {
+	t.Parallel()
+	got, _ := wireAuditPersistenceWithDB(nil, nil, slog.Default())
 	// nil buf → returns nil (the function returns buf which is nil).
 	_ = got
 }
 
-func TestWireAuditPersistence_ValidConfig_ReturnsPersistedRecorder(t *testing.T) {
+func TestWireAuditPersistenceWithDB_ValidDB_ReturnsPersistedRecorder(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	buf := audit.NewBuffer(16)
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	got, db, _ := wireAuditPersistenceWithDB(cfg, buf, logger)
-	gooseMigrateMu.Unlock()
-	if db != nil {
-		t.Cleanup(func() { _ = db.Close() })
-	}
+	got, _ := wireAuditPersistenceWithDB(db, buf, logger)
 	if got == nil {
 		t.Fatal("expected non-nil recorder")
 	}
 	// The result must accept a Record call without panicking.
 	got.Record(audit.Entry{User: "test", Parameter: "key"})
-}
-
-func TestWireAuditPersistence_EmptyDataDir_FallsBack(t *testing.T) {
-	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = ""
-	buf := audit.NewBuffer(16)
-	logger := slog.New(slog.DiscardHandler)
-	got := wireAuditPersistence(cfg, buf, logger)
-	// ./var likely does not exist in test; degrades to buf.
-	if got == nil {
-		t.Fatal("expected non-nil fallback")
-	}
 }

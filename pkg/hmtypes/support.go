@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (C) 2026 OpenCCU-Loom authors.
 
-// Support utilities ported
+// Support utilities ported from the Python reference implementation.
 // Each function is annotated with its Python source location.
 
 package hmtypes
@@ -27,15 +27,16 @@ import (
 var ErrPortRangeInvalid = errors.New("hmtypes: invalid port range")
 
 // MaxCacheAge is the default maximum age for cached values, mirroring
-// Py:308).
+// the Python reference implementation's MAX_CACHE_AGE constant (const.py:308).
 const MaxCacheAge = 10 * time.Second
 
 // InitTime is the zero-value sentinel for "never updated", mirroring
-// 01.1970 00:00:00, const.py:288).
+// the Python reference implementation's INIT_DATETIME sentinel
+// (01.1970 00:00:00, const.py:288).
 var InitTime = time.Unix(0, 0).UTC()
 
-// Hostname and IP validation patterns — mirrors py
-// HOSTNAME_PATTERN, IPV4_PATTERN, IPV6_PATTERN.
+// Hostname and IP validation patterns — mirror the Python reference
+// implementation's HOSTNAME_PATTERN, IPV4_PATTERN, IPV6_PATTERN constants.
 //
 // Note: Go's RE2 does not support PCRE lookaheads / lookbehinds, so the
 // hostname pattern is implemented as a programmatic validator instead of
@@ -46,7 +47,8 @@ var (
 	)
 	ipv6Pattern = regexp.MustCompile(`^\[?[0-9a-fA-F:]+\]?$`)
 
-	// HTMLTAG_PATTERN.
+	// htmlTagPattern strips HTML tags and entities, mirroring the Python
+	// reference implementation's HTMLTAG_PATTERN.
 	htmlTagPattern = regexp.MustCompile(`<.*?>|&([a-z0-9]+|#\d{1,6}|#x[0-9a-f]{1,6});`)
 
 	// hostnameLabel validates a single DNS label (1-63 chars, alnum + hyphen,

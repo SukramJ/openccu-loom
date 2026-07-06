@@ -4,11 +4,13 @@
 package auth
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 
@@ -154,11 +156,7 @@ func (s *MemoryTokenStore) List() []TokenSummary {
 	for id, entry := range s.tokens {
 		out = append(out, TokenSummary{ID: id, Fingerprint: entry.fingerprint, Subject: entry.identity.Subject, Role: entry.identity.Role})
 	}
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1].Subject > out[j].Subject; j-- {
-			out[j], out[j-1] = out[j-1], out[j]
-		}
-	}
+	slices.SortFunc(out, func(a, b TokenSummary) int { return cmp.Compare(a.Subject, b.Subject) })
 	return out
 }
 
@@ -292,12 +290,7 @@ func (s *MemoryUserStore) List() []UserSummary {
 	for u, r := range s.users {
 		out = append(out, UserSummary{Username: u, Role: r.role})
 	}
-	// stable order
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1].Username > out[j].Username; j-- {
-			out[j], out[j-1] = out[j-1], out[j]
-		}
-	}
+	slices.SortFunc(out, func(a, b UserSummary) int { return cmp.Compare(a.Username, b.Username) })
 	return out
 }
 

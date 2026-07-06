@@ -618,14 +618,15 @@ func (c *Channel) OperationMode() string {
 }
 
 // readChannelOperationModeFrom unwraps a [ParameterDataPoint]'s raw
-// value into a string. CCU firmwares disagree on the wire format
+// value into a string. CCU firmwares disagree on the wire format —
 // some send the enum label ("KEY_BEHAVIOR"), some the enum index
 // (1). The latter is resolved through the descriptor's VALUE_LIST so
-// Callers always see the canonical label
-// `channel.operation_mode` which routes the observed value through
-// `data_point.value`. Returns the empty string when no value has
-// Been observed yet
-// descriptor's DEFAULT here, and neither do we.
+// callers always see the canonical label. Mirrors the Python
+// reference implementation's `channel.operation_mode` which routes
+// the observed value through `data_point.value`. Returns the empty
+// string when no value has been observed yet — the Python reference
+// implementation does not fall back to the descriptor's DEFAULT here,
+// and neither do we.
 func readChannelOperationModeFrom(dp ParameterDataPoint) string {
 	if dp == nil {
 		return ""

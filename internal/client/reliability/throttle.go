@@ -364,9 +364,9 @@ func (t *CommandThrottle) waitForBurstSlot(ctx context.Context, prio hmenum.Comm
 			waited = true
 			t.mu.Lock()
 			t.waitedForBurstSlot++
-			// HIGH-priority Acquires die hier blockieren werden als
-			// "burst-downgraded" gezählt — Parity zu
-			// HIGH→LOW-Downgrade-Metrik (command_throttle.py:243).
+			// HIGH-priority Acquires that block here are counted as
+			// "burst-downgraded" — mirrors the HIGH→LOW downgrade
+			// metric (command_throttle.py:243).
 			if prio == hmenum.CommandPriorityHigh {
 				t.burstDowngradedCount++
 			}

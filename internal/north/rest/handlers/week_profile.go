@@ -188,13 +188,12 @@ func PutWeekProfileChannelLock(idx DeviceIndex) http.HandlerFunc {
 		}
 		var req ChannelLockRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
 		if err := wp.SetScheduleEnabled(r.Context(), key, req.Enabled, hmenum.CommandPriorityHigh); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Channel lock write failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Channel lock write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

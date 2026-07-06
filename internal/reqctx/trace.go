@@ -33,6 +33,11 @@ const traceFlagSampled = "01"
 func NewTraceID() string {
 	for {
 		var b [16]byte
+		// crypto/rand.Read only errors when the OS entropy source is
+		// unavailable, a condition this loop could not recover from either
+		// way. A failed read leaves b at its zero value, which the
+		// all-zero check below already retries, so there is nothing more
+		// useful to do with the error here.
 		_, _ = rand.Read(b[:])
 		id := hex.EncodeToString(b[:])
 		if id != "00000000000000000000000000000000" {
@@ -47,6 +52,8 @@ func NewTraceID() string {
 func NewSpanID() string {
 	for {
 		var b [8]byte
+		// See the matching comment in [NewTraceID]: a failed read leaves b
+		// zeroed, which the all-zero check below already retries.
 		_, _ = rand.Read(b[:])
 		id := hex.EncodeToString(b[:])
 		if id != "0000000000000000" {

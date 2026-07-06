@@ -302,7 +302,6 @@ func (c *EventCoordinator) AddDataPointSubscriptionForKey(dpk hmtypes.DataPointK
 // Clear releases all data-point event subscriptions registered via
 // [AddDataPointSubscription] and resets per-interface event timestamps. Call
 // on shutdown or when tearing down a central to prevent leaked subscriptions.
-// P2.
 func (c *EventCoordinator) Clear() {
 	c.mu.Lock()
 	unsubs := c.dpUnsubs
@@ -324,7 +323,7 @@ func (c *EventCoordinator) Clear() {
 // GetLastEventSeenForInterface returns the wall-clock time of the most recent
 // callback observed for interfaceID, plus an observed flag. In Go, time.Time
 // carries both wall and monotonic readings, so the same timestamp serves both
-// purposes. P2.
+// purposes.
 func (c *EventCoordinator) GetLastEventSeenForInterface(interfaceID string) (time.Time, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -336,7 +335,7 @@ func (c *EventCoordinator) GetLastEventSeenForInterface(interfaceID string) (tim
 // subtype [hmenum.DeviceLifecycleSubtypeDelayed] for the given device
 // addresses. This signals to north-bound adapters that device creation was
 // started but not yet completed (e.g. due to pending acceptance in
-// installation mode). P2.
+// installation mode).
 func (c *EventCoordinator) EmitDevicesDelayedEvent(interfaceID string, deviceAddresses []string) {
 	if len(deviceAddresses) == 0 {
 		return

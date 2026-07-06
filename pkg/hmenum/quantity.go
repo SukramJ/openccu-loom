@@ -65,10 +65,10 @@ const (
 	QuantityRestart  Quantity = "restart"
 	QuantityUpdate   Quantity = "update"
 
-	// openccu-loom-specific quantities used outside the AHM table —
-	// kept for backwards compatibility with existing UI/labelling code
-	// that consults Quantity directly. Not driven by the AHM
-	// metadata tables.
+	// openccu-loom-specific quantities used outside the sensor-metadata
+	// table above — kept for backwards compatibility with existing
+	// UI/labelling code that consults Quantity directly. Not driven by
+	// the sensor-metadata tables.
 	QuantityDistance      Quantity = "distance"
 	QuantitySpeed         Quantity = "speed"
 	QuantityWindDirection Quantity = "wind_direction"

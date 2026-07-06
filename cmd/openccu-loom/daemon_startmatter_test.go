@@ -37,7 +37,8 @@ func TestStartMatterBridge_EphemeralWindow(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with ephemeral window enabled")
 	}
@@ -68,7 +69,8 @@ func TestStartMatterBridge_EphemeralWindowConcurrent(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with concurrent ephemeral window enabled")
 	}
@@ -92,7 +94,8 @@ func TestStartMatterBridge_DevRotateUniqueIDs(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle with DevRotateUniqueIDs")
 	}
@@ -105,7 +108,7 @@ func TestStartMatterBridge_NilConfig_ReturnsNil(t *testing.T) {
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
 	logger := slog.New(slog.DiscardHandler)
-	if got := startMatterBridge(ctx, nil, reg, health.NewTracker(), nil, logger); got != nil {
+	if got := startMatterBridge(ctx, nil, reg, nil, health.NewTracker(), nil, logger); got != nil {
 		t.Error("expected nil for nil config")
 		got.stop()
 	}
@@ -138,7 +141,8 @@ func TestAnnouncePersistedFabric_WithFabric_CallsAnnounceFabric(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -178,7 +182,8 @@ func TestAnnouncePersistedFabric_InvalidRootKey_LogsAndContinues(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}

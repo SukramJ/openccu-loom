@@ -55,12 +55,11 @@ func ExportDeviceDefinition(svc DeviceDefinitionExportService) http.HandlerFunc 
 					problem.New(problem.TypeNotFound, r, "Device not found", addr))
 				return
 			}
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Device definition export failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Device definition export failed", err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", `attachment; filename="`+model+`.zip"`)
+		w.Header().Set("Content-Disposition", ContentDispositionAttachment(model+".zip"))
 		_, _ = w.Write(archive)
 	}
 }

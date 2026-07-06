@@ -315,7 +315,7 @@ type GroupState struct {
 
 // GroupValue returns true when every member in the group is on (AllOn),
 // and false otherwise (including the empty-group case). This is the
-// Unified single-bool view mirrors
+// unified single-bool view that mirrors
 // GroupStateMixin.group_value (model/custom/mixins.py:group_value):
 //
 //	return self._dp_group_state.value

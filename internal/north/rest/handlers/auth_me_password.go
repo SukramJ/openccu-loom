@@ -60,7 +60,7 @@ func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder, revoker Sess
 
 		var body changeOwnPasswordRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -88,8 +88,7 @@ func ChangeOwnPassword(svc SelfPasswordService, rec audit.Recorder, revoker Sess
 		}
 
 		if err := svc.Put(r.Context(), ident.Subject, body.NewPassword, verified.Role); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Password change failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Password change failed", err)
 			return
 		}
 		if revoker != nil {

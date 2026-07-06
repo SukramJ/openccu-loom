@@ -243,7 +243,7 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 // LinkableChannels walks every device in the central registry and
 // returns the channels that are valid peers for the source channel.
 //
-// # The heuristic mirrors
+// The heuristic:
 //
 // - Skip the source channel itself.
 // - Only consider channels that belong to an interface capable of
@@ -254,11 +254,11 @@ func (d *LinksDomain) PutLinkParamset(ctx context.Context, channelAddress, peerA
 // - For "receiver" role, return channels that can **emit** a link
 // (sender-type channels).
 //
-// The full role classification in
-// `link_peer_source_categories` / `link_peer_target_categories` sets
-// that are derived from the receiver-profile catalogue. We shortcut
-// with a simpler check for 0.1.0: presence of a LINK paramset peer
-// list on the channel. Refine later when we port the category data.
+// The full role classification uses the `link_peer_source_categories` /
+// `link_peer_target_categories` sets that are derived from the
+// receiver-profile catalogue. We shortcut with a simpler check for
+// 0.1.0: presence of a LINK paramset peer list on the channel. Refine
+// later when we port the category data.
 func (d *LinksDomain) LinkableChannels(
 	ctx context.Context,
 	interfaceID, sourceChannelAddress, role, locale string,

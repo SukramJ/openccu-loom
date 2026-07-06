@@ -204,6 +204,76 @@ func TestGetProfileByID_UnknownReceiver(t *testing.T) {
 	}
 }
 
+// TestGetProfileByID_MutatingResultDoesNotAffectCache verifies that the
+// Name/Description/Params maps of a Profile returned by GetProfileByID are
+// independent copies: mutating them must not corrupt the store's cached
+// data used by later lookups.
+func TestGetProfileByID_MutatingResultDoesNotAffectCache(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+
+	p1, ok := s.GetProfileByID("DIMMER", "KEY", 1)
+	if !ok {
+		t.Fatal("GetProfileByID(DIMMER, KEY, 1): expected found=true")
+	}
+	if len(p1.Name) == 0 {
+		t.Fatal("expected profile 1 to have a non-empty Name map")
+	}
+
+	// Mutate the returned maps as an incautious caller might.
+	for k := range p1.Name {
+		p1.Name[k] = "MUTATED"
+	}
+	if p1.Params != nil {
+		for k := range p1.Params {
+			p1.Params[k] = linkprofile.ParamConstraint{ConstraintType: "MUTATED"}
+		}
+	}
+
+	p2, ok := s.GetProfileByID("DIMMER", "KEY", 1)
+	if !ok {
+		t.Fatal("second GetProfileByID(DIMMER, KEY, 1): expected found=true")
+	}
+	for k, v := range p2.Name {
+		if v == "MUTATED" {
+			t.Fatalf("cache corrupted: Name[%q] leaked mutation from prior caller", k)
+		}
+	}
+	for k, c := range p2.Params {
+		if c.ConstraintType == "MUTATED" {
+			t.Fatalf("cache corrupted: Params[%q] leaked mutation from prior caller", k)
+		}
+	}
+}
+
+// TestGetLinkProfiles_MutatingResultDoesNotAffectCache verifies the same
+// isolation for the slice returned by GetLinkProfiles.
+func TestGetLinkProfiles_MutatingResultDoesNotAffectCache(t *testing.T) {
+	t.Parallel()
+	s := linkprofile.New()
+
+	got1, err := s.GetLinkProfiles(context.Background(), "DIMMER", "KEY", "en")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got1) == 0 || len(got1[0].Name) == 0 {
+		t.Fatal("expected at least one profile with a non-empty Name map")
+	}
+	for k := range got1[0].Name {
+		got1[0].Name[k] = "MUTATED"
+	}
+
+	got2, err := s.GetLinkProfiles(context.Background(), "DIMMER", "KEY", "en")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for k, v := range got2[0].Name {
+		if v == "MUTATED" {
+			t.Fatalf("cache corrupted: Name[%q] leaked mutation from prior caller", k)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // TestLinkProfile
 // ---------------------------------------------------------------------------

@@ -200,7 +200,7 @@ func (s Stats) SuccessRate() float64 {
 // The journal is preserved — clearing the state is not the same as
 // clearing the history.
 //
-// (store/dynamic/ping_pong.py:107, C19).
+// Mirrors the Python reference implementation's `store/dynamic/ping_pong.py:107`.
 func (t *PingPongTracker) Clear() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -510,8 +510,9 @@ func (t *PingPongTracker) RetryReconcilePong(token string) {
 //
 // The fn parameter is the scheduling function (e.g. a wrapper around
 // time.AfterFunc). Passing nil disables scheduling — the entry will
-// Simply expire via TTL. This mirrors
-// _schedule_unknown_pong_retry (store/dynamic/ping_pong.py:387).
+// simply expire via TTL. This mirrors the Python reference
+// implementation's _schedule_unknown_pong_retry
+// (store/dynamic/ping_pong.py:387).
 func (t *PingPongTracker) ScheduleUnknownPongRetry(token string, delay time.Duration, schedule func(token string, delay time.Duration, retry func(string))) {
 	if schedule == nil {
 		return

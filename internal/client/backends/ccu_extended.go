@@ -22,6 +22,30 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// maxDownloadResponseSize bounds how much of a firmware image or backup
+// archive response body downloadBackup/DownloadFirmware will buffer.
+// Without a limit, a misbehaving proxy or compromised CCU could stream an
+// unbounded response and exhaust process memory. 512 MiB is generous for
+// both a firmware image and a full CCU backup (real-world archives run to
+// a few tens of MB) while still bounding worst-case memory use. Declared
+// as a var rather than a const so tests can lower it to exercise the
+// overflow path without generating a multi-hundred-MB fixture.
+var maxDownloadResponseSize int64 = 512 * 1024 * 1024
+
+// readLimitedResponse reads r up to limit+1 bytes and returns an error if
+// the body exceeds limit, instead of buffering an unbounded amount of
+// memory for a response of unknown size.
+func readLimitedResponse(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("response exceeds %d byte limit", limit)
+	}
+	return data, nil
+}
+
 // --- install mode -------------------------------------------------------
 
 // GetInstallMode implements Operations. Returns the remaining seconds
@@ -589,7 +613,7 @@ func (b *CcuBackend) downloadBackup(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: CCU returned HTTP %d", resp.StatusCode)
 	}
 
-	content, err := io.ReadAll(resp.Body)
+	content, err := readLimitedResponse(resp.Body, maxDownloadResponseSize)
 	if err != nil {
 		return nil, fmt.Errorf("ccu.CreateBackupAndDownload: read archive: %w", err)
 	}
@@ -841,7 +865,9 @@ func (b *CcuBackend) DownloadFirmware(ctx context.Context, firmwareURL string) e
 		return fmt.Errorf("ccu.DownloadFirmware: post: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(io.Discard, resp.Body)
+	if _, err := readLimitedResponse(resp.Body, maxDownloadResponseSize); err != nil {
+		return fmt.Errorf("ccu.DownloadFirmware: read response: %w", err)
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("ccu.DownloadFirmware: CCU returned HTTP %d", resp.StatusCode)

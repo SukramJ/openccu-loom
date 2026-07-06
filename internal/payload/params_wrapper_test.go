@@ -112,6 +112,16 @@ func TestParamFloat64InvalidKind(t *testing.T) {
 	}
 }
 
+// TestParamFloat64TrailingGarbage verifies that a numeric string followed by
+// non-numeric trailing characters is rejected rather than silently truncated
+// (fmt.Sscanf stops at the first unparsable rune and reports no error).
+func TestParamFloat64TrailingGarbage(t *testing.T) {
+	_, err := ParamFloat64(map[string]any{"k": "42xyz"}, "k")
+	if !errors.Is(err, ErrServiceInvalidParam) {
+		t.Fatalf("want ErrServiceInvalidParam for trailing garbage, got %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ParamInt32
 // ---------------------------------------------------------------------------
@@ -171,6 +181,16 @@ func TestParamInt32InvalidString(t *testing.T) {
 	_, err := ParamInt32(map[string]any{"k": "abc"}, "k")
 	if !errors.Is(err, ErrServiceInvalidParam) {
 		t.Fatalf("want ErrServiceInvalidParam for bad string, got %v", err)
+	}
+}
+
+// TestParamInt32TrailingGarbage verifies that a numeric string followed by
+// non-numeric trailing characters is rejected rather than silently truncated
+// (fmt.Sscanf stops at the first unparsable rune and reports no error).
+func TestParamInt32TrailingGarbage(t *testing.T) {
+	_, err := ParamInt32(map[string]any{"k": "42xyz"}, "k")
+	if !errors.Is(err, ErrServiceInvalidParam) {
+		t.Fatalf("want ErrServiceInvalidParam for trailing garbage, got %v", err)
 	}
 }
 

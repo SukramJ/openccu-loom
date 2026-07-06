@@ -262,7 +262,8 @@ func (l *LevelCombined) OnUpdate(fn func(old, next LevelComposite)) func() {
 }
 
 // IsRefreshed reports whether both LEVEL and LEVEL_2 inputs have been
-// observed from the CCU at least once. Implements M18.
+// observed from the CCU at least once. Satisfies the custom.AggregateDataPoint
+// contract.
 func (l *LevelCombined) IsRefreshed() bool {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
@@ -271,7 +272,7 @@ func (l *LevelCombined) IsRefreshed() bool {
 
 // StateUncertain reports whether the composite position is held
 // optimistically. LevelCombined has no optimistic tracker.
-// Returns false always. Implements M18.
+// Returns false always. Satisfies the custom.AggregateDataPoint contract.
 func (l *LevelCombined) StateUncertain() bool { return false }
 
 func (l *LevelCombined) snapshotLocked() (LevelComposite, bool) {

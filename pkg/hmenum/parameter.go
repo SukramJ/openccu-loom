@@ -271,7 +271,6 @@ func hasStatusSuffix(s string) bool {
 
 // OptionalParameters is the set of wire-level parameter names that the CCU
 // may legitimately omit or send as an empty value even for numeric types.
-// (M14 — v8 §4)
 //
 // Consumers use [Parameter.IsOptional] to decide whether a missing empty wire
 // value should be silently dropped (true) or treated as a decode error
@@ -313,7 +312,7 @@ func (p Parameter) IsOptional() bool {
 }
 
 // ignoreOnInitialLoadExact is the exact-match set for parameters that should
-// not be fetched on initial device load. (M15 — v8 §4)
+// not be fetched on initial device load.
 var ignoreOnInitialLoadExact = map[Parameter]struct{}{
 	ParameterDutyCycle:        {},
 	ParameterDutycycle:        {},
@@ -327,11 +326,9 @@ var ignoreOnInitialLoadExact = map[Parameter]struct{}{
 // wakes battery-powered devices unnecessarily and may exceed duty-cycle
 // limits.
 //
-// Exact membership in the `_IGNORE_ON_INITIAL_LOAD_PARAMETERS` set. 2.
-// Parameter name starts with `"ERROR_"` or `"RSSI_"`. 3. Parameter name ends
-// with `"_ERROR"`.
-//
-// (M15 — v8 §4)
+// Matches when: 1. the parameter is an exact member of
+// ignoreOnInitialLoadExact. 2. the parameter name starts with `"ERROR_"` or
+// `"RSSI_"`. 3. the parameter name ends with `"_ERROR"`.
 func (p Parameter) IgnoreOnInitialLoad() bool {
 	if _, ok := ignoreOnInitialLoadExact[p]; ok {
 		return true

@@ -33,8 +33,7 @@ func GetCentralLinksStatus(svc CentralLinksService) http.HandlerFunc {
 		}
 		st, err := svc.CentralLinksStatus(chi.URLParam(r, "addr"))
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Central links status failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Central links status failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, st)
@@ -84,6 +83,5 @@ func centralLinksError(w http.ResponseWriter, r *http.Request, err error) {
 			problem.New(problem.TypeValidation, r, "Central links unsupported", err.Error()))
 		return
 	}
-	problem.Write(w, http.StatusBadGateway,
-		problem.New(problem.TypeUpstreamUnavailable, r, "Central links failed", err.Error()))
+	writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Central links failed", err)
 }

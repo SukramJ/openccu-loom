@@ -4,8 +4,11 @@
 package device
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,11 +28,12 @@ func (s *stubUpdater) UpdateFirmware(_ context.Context, _ string) error {
 
 type stubRefresher struct {
 	called atomic.Int32
+	err    error
 }
 
 func (s *stubRefresher) RefreshFirmwareData(_ context.Context, _ string) error {
 	s.called.Add(1)
-	return nil
+	return s.err
 }
 
 func TestNewUpdateAutoCreatedForUpdatable(t *testing.T) {
@@ -69,6 +73,46 @@ func TestUpdateAttachAndStart(t *testing.T) {
 	}
 	if refresh.called.Load() != 2 {
 		t.Fatalf("refresher called=%d", refresh.called.Load())
+	}
+}
+
+// TestUpdateStartLogsRefreshFirmwareDataError verifies that an error
+// returned by the background refresh worker's RefreshFirmwareData call is
+// surfaced via slog instead of being silently discarded.
+//
+// Intentionally NOT t.Parallel(): the test mutates slog.Default() globally.
+func TestUpdateStartLogsRefreshFirmwareDataError(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})
+	logger := slog.New(handler)
+	old := slog.Default()
+	slog.SetDefault(logger)
+	defer slog.SetDefault(old)
+
+	d := newTestDevice(t)
+	boom := errors.New("refresh boom")
+	refresh := &stubRefresher{err: boom}
+	d.AttachUpdate(&stubUpdater{}, refresh)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	done, err := d.Update().Start(ctx, []time.Duration{10 * time.Millisecond})
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("refresh worker never finished")
+	}
+
+	logOutput := buf.String()
+	if !strings.Contains(logOutput, "refresh boom") {
+		t.Errorf("slog output missing the refresher error: %q", logOutput)
+	}
+	if !strings.Contains(logOutput, d.Address) {
+		t.Errorf("slog output missing the device address: %q", logOutput)
 	}
 }
 

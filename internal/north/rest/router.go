@@ -254,7 +254,10 @@ type Deps struct {
 	RequireAdmin func(http.Handler) http.Handler
 	CORS         *middleware.CORSConfig
 	Idempotent   bool
-	ReadTimeout  time.Duration
+	// WriteTimeout bounds every request via [middleware.Timeout] (a
+	// context deadline the handler chain observes), not the raw
+	// [http.Server.WriteTimeout] — [NewServer] takes only the handler,
+	// so the TCP-level timeouts are fixed constants in server.go.
 	WriteTimeout time.Duration
 	// CentralName is the scope this REST router is bound to. When set,
 	// every request enriches its [reqctx.RequestContext] with the name
@@ -432,11 +435,15 @@ func NewRouter(d Deps) *chi.Mux { //nolint:gocognit,gocyclo,funlen // compositio
 	if d.CORS != nil {
 		r.Use(middleware.CORS(*d.CORS))
 	}
-	if d.Idempotent {
-		r.Use(middleware.Idempotency())
-	}
 	if d.AuthResolve != nil {
 		r.Use(d.AuthResolve)
+	}
+	if d.Idempotent {
+		// Mounted after AuthResolve so the cache key can incorporate the
+		// resolved identity (see middleware.Idempotency doc comment) —
+		// otherwise two different users sharing an Idempotency-Key value
+		// on the same method+path would replay each other's response.
+		r.Use(middleware.Idempotency())
 	}
 	if d.CSRFEnabled {
 		r.Use(auth.CSRFMiddleware(d.CSRFSecure))

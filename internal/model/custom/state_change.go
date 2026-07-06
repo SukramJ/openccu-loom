@@ -41,9 +41,10 @@ const (
 )
 
 // StateChangeArgs is a map of [StateChangeArg] keys to arbitrary values.
-// It mirrors.py:38) as
-// a Go map — the type system is weaker than TypedDict but the map can be
-// passed around uniformly without requiring per-type override signatures.
+// It mirrors the Python reference implementation's `StateChangeArg`
+// TypedDict (data_point.py:38) as a Go map — the type system is weaker
+// than TypedDict but the map can be passed around uniformly without
+// requiring per-type override signatures.
 //
 // Usage:
 //

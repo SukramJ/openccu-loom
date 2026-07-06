@@ -141,7 +141,7 @@ func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	// cap so the next get() sweeps idle entries. Backdate every
 	// existing entry past rateLimitIdleTTL so they all qualify for
 	// eviction.
-	store := newLimiterStore(rate.Limit(10), 30)
+	store := newKeyedLimiterStore(rate.Limit(10), 30, rateLimitStoreCap, rateLimitIdleTTL)
 	for i := range 257 {
 		key := "id-" + strconv.Itoa(i)
 		store.get(key)
@@ -149,7 +149,7 @@ func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	// Backdate all stored entries so the next get's GC sweep evicts
 	// them. Direct field access works inside the package.
 	store.mu.Lock()
-	for _, e := range store.limiters {
+	for _, e := range store.buckets {
 		e.lastUse = time.Now().Add(-2 * rateLimitIdleTTL)
 	}
 	store.mu.Unlock()
@@ -159,7 +159,7 @@ func TestLimiterStore_IdleEvictionGCs(t *testing.T) {
 	store.get("fresh")
 
 	store.mu.Lock()
-	size := len(store.limiters)
+	size := len(store.buckets)
 	store.mu.Unlock()
 	if size > 5 {
 		t.Fatalf("expected GC to evict idle entries; map size = %d", size)

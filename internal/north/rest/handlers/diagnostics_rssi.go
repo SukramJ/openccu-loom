@@ -32,8 +32,7 @@ func DiagnosticsRSSI(svc RSSIMatrixService) http.HandlerFunc {
 		}
 		matrix, err := svc.RSSIInfo(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "RSSI query failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "RSSI query failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, matrix)

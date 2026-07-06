@@ -64,8 +64,7 @@ func GetParamset(svc ParamsetService) http.HandlerFunc {
 		}
 		values, err := svc.GetParamset(r.Context(), addr, key)
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Paramset read failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset read failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, values)
@@ -104,7 +103,7 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 		}
 		values := map[string]any{}
 		if err := DecodeJSON(r, &values); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -114,8 +113,7 @@ func PutParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc {
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
 				return
 			}
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Paramset write failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Paramset write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -139,8 +137,7 @@ func GetLinkParamset(svc ParamsetService) http.HandlerFunc {
 		}
 		values, err := svc.GetLinkParamset(r.Context(), addr, peer)
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Link paramset read failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset read failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, values)
@@ -173,7 +170,7 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 		}
 		values := map[string]any{}
 		if err := DecodeJSON(r, &values); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -183,8 +180,7 @@ func PutLinkParamset(svc ParamsetService, locks *EditSessions) http.HandlerFunc 
 					problem.New(problem.TypeForbidden, r, "Parameter hidden", err.Error()))
 				return
 			}
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Link paramset write failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Link paramset write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

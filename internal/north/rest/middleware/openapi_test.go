@@ -4,6 +4,7 @@
 package middleware
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -28,6 +29,15 @@ paths:
       responses:
         "200":
           description: ok
+    post:
+      operationId: createDevice
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "201":
+          description: created
   /devices/{addr}:
     get:
       operationId: getDevice
@@ -105,7 +115,9 @@ func TestOpenAPIValidatorRejectsBadMethod(t *testing.T) {
 		t.Fatal("handler must not be invoked")
 	}))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices", http.NoBody)
+	// /devices/{addr} only defines GET in minimalSpec (unlike /devices,
+	// which also defines POST for the body-size test below).
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices/ABC1234567", http.NoBody)
 	rr := httptest.NewRecorder()
 	mw.ServeHTTP(rr, req)
 
@@ -137,4 +149,28 @@ func TestOpenAPIValidatorFailOpenLetsThroughUnknownPaths(t *testing.T) {
 		t.Fatal("FailOpen mode should let unknown paths through")
 	}
 	_ = rr
+}
+
+// TestOpenAPIValidatorRejectsOversizedBody verifies that a request
+// body larger than [openAPIBodyLimit] is rejected with 413 before the
+// validator buffers it in full via io.ReadAll — otherwise an
+// unauthenticated, unbounded POST could pin a goroutine allocating
+// unlimited heap ahead of any handler-level size cap.
+func TestOpenAPIValidatorRejectsOversizedBody(t *testing.T) {
+	v := newValidatorOrFail(t)
+	mw := v.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("handler must not be invoked for an oversized body")
+	}))
+
+	oversize := bytes.Repeat([]byte("x"), openAPIBodyLimit+1)
+	body := append([]byte(`{"data":"`), oversize...)
+	body = append(body, []byte(`"}`)...)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/devices", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	mw.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status=%d want 413, body=%s", rr.Code, rr.Body.String())
+	}
 }

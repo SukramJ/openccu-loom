@@ -53,6 +53,28 @@ func resolveHubForMutation(idx HubIndex, centralName string) *hub.Hub {
 	return nil
 }
 
+// requireMutationHub resolves the hub a mutating request targets and
+// writes the standard problem response when it cannot: a nil idx
+// means "no hub wired" (503 service_unready); an idx that cannot
+// resolve to exactly one hub for the `central` query parameter means
+// the request is ambiguous across multiple CCUs (400 bad_request).
+// Callers check ok and return immediately when it is false — the
+// response has already been written.
+func requireMutationHub(w http.ResponseWriter, r *http.Request, idx HubIndex) (*hub.Hub, bool) {
+	if idx == nil {
+		problem.Write(w, http.StatusServiceUnavailable,
+			problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
+		return nil, false
+	}
+	h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
+	if h == nil {
+		problem.Write(w, http.StatusBadRequest,
+			problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		return nil, false
+	}
+	return h, true
+}
+
 // resolveHubForRead picks the hub for a read-only request that identifies the
 // resource by name. When `centralName` is supplied it is used directly.
 // When absent and the named resource exists on exactly one central, that
@@ -336,15 +358,8 @@ type ProgramSetEnabledRequest struct {
 // SetProgramEnabled toggles the program's enabled flag on the CCU.
 func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		id := chi.URLParam(r, "id")
@@ -356,13 +371,12 @@ func SetProgramEnabled(idx HubIndex) http.HandlerFunc {
 		}
 		var req ProgramSetEnabledRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
 		if err := p.SetEnabled(r.Context(), req.Active); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Set enabled failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Set enabled failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -384,20 +398,13 @@ type SysvarCreateRequest struct {
 // entry up on the next periodic sync.
 func CreateSysvar(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		var req SysvarCreateRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -408,8 +415,7 @@ func CreateSysvar(idx HubIndex) http.HandlerFunc {
 		}
 		if err := h.CreateSysvarRemote(r.Context(),
 			req.Name, req.ValueType, req.Unit, req.Min, req.Max, req.ValueList); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar create failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar create failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -432,21 +438,14 @@ type SysvarPatchRequest struct {
 // `update_system_variable` script.
 func PatchSysvar(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		name := chi.URLParam(r, "name")
 		var req SysvarPatchRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -470,8 +469,7 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 		if err := h.UpdateSysvarRemote(
 			r.Context(), name, unit, vmin, vmax, desc, valueList,
 		); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar update failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar update failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -482,21 +480,13 @@ func PatchSysvar(idx HubIndex) http.HandlerFunc {
 // mirror once the call lands.
 func DeleteSysvar(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		name := chi.URLParam(r, "name")
 		if err := h.DeleteSysvarRemote(r.Context(), name); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar delete failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar delete failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -516,8 +506,7 @@ func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
 		}
 		central := r.URL.Query().Get("central")
 		if err := svc.FetchSystemVariables(r.Context(), central); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar fetch failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar fetch failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -527,15 +516,8 @@ func FetchSysvars(svc SysvarRefreshService) http.HandlerFunc {
 // ExecuteProgram triggers a CCU program.
 func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		id := chi.URLParam(r, "id")
@@ -546,8 +528,7 @@ func ExecuteProgram(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		if err := p.Execute(r.Context()); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Execute failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -622,15 +603,8 @@ func GetSysvar(idx HubIndex) http.HandlerFunc {
 // `?central=` query parameter.
 func PutSysvar(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		name := chi.URLParam(r, "name")
@@ -642,7 +616,7 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 		}
 		var req SysvarSetRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -653,8 +627,7 @@ func PutSysvar(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		if err := s.Set(r.Context(), v); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Sysvar write failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Sysvar write failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -816,21 +789,13 @@ func ListServiceMessages(idx HubIndex) http.HandlerFunc {
 // central named by the `?central=` query parameter.
 func AckAlarmMessage(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		id := chi.URLParam(r, "id")
 		if err := h.Messages.Acknowledge(r.Context(), id); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Acknowledge failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Acknowledge failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -841,21 +806,13 @@ func AckAlarmMessage(idx HubIndex) http.HandlerFunc {
 // central named by the `?central=` query parameter.
 func AckServiceMessage(idx HubIndex) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if idx == nil {
-			problem.Write(w, http.StatusServiceUnavailable,
-				problem.New(problem.TypeServiceUnready, r, "Hub unavailable", "no hub wired"))
-			return
-		}
-		h := resolveHubForMutation(idx, r.URL.Query().Get("central"))
-		if h == nil {
-			problem.Write(w, http.StatusBadRequest,
-				problem.New(problem.TypeBadRequest, r, "central required (multiple CCUs)", ""))
+		h, ok := requireMutationHub(w, r, idx)
+		if !ok {
 			return
 		}
 		id := chi.URLParam(r, "id")
 		if err := h.ServiceMessages.Acknowledge(r.Context(), id); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Acknowledge failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Acknowledge failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -908,8 +865,7 @@ func ReconnectInterface(idx InterfaceIndex) http.HandlerFunc {
 			return
 		}
 		if err := idx.Reconnect(r.Context(), chi.URLParam(r, "id")); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Reconnect failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Reconnect failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

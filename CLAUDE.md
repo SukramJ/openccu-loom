@@ -1186,7 +1186,10 @@ Non-negotiable rules for how the assistant works with the user:
 ### Don'ts
 
 - ❌ No `interface{}` / `any` without a justifying comment.
-- ❌ No `panic()` outside `main()` or test helpers.
+- ❌ No `panic()` outside `main()` or test helpers. Exception:
+  conventional `Must*` constructors and documented `// invariant:`
+  panics for programmer-error invariants that are not reachable via
+  input (analogous to `regexp.MustCompile`).
 - ❌ No MIT / Apache / BSD headers.
 - ❌ No CGo dependencies.
 - ❌ No direct commits to `main`.

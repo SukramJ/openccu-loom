@@ -52,7 +52,7 @@ func TestSessionConcurrentAccess(t *testing.T) {
 				case 5:
 					_ = s.Redo()
 				case 6:
-					_ = s.ApplyPreset(map[string]any{"P3": j % 1000})
+					s.ApplyPreset(map[string]any{"P3": j % 1000})
 				case 7:
 					_ = s.Changes()
 				}

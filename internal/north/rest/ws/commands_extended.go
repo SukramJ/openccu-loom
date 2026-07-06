@@ -712,7 +712,7 @@ func incidentsClearHandler(c IncidentClearer) CommandHandler {
 
 // incidentsListHandler implements `incidents.list` and its alias
 // `incidents.get`. Returns the full incident list from the store.
-// Mirrors Python `ws_get_incidents` — closes parity-audit gap L12.
+// Mirrors the Python reference `ws_get_incidents` WebSocket command.
 //
 // Request: {} (no params required).
 // Response: { "incidents": [ ... ] }
@@ -905,12 +905,19 @@ func recordingStatusHandler(r SessionRecorder) CommandHandler {
 	}
 }
 
+// decodeOrEmpty unmarshals raw into into, treating an empty or literal-null
+// raw as a no-op (into keeps its zero value) rather than a decode error —
+// many commands accept an omitted args object as "use defaults". A genuine
+// unmarshal failure returns a *CommandError tagged CommandErrorBadRequest so
+// Router.Dispatch surfaces it as a client-input error rather than falling
+// through to the generic CommandErrorInternal it applies to any other
+// error type.
 func decodeOrEmpty(raw json.RawMessage, into any) error {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}
 	if err := json.Unmarshal(raw, into); err != nil {
-		return fmt.Errorf("ws: invalid params: %w", err)
+		return NewCommandError(CommandErrorBadRequest, "invalid args: "+err.Error())
 	}
 	return nil
 }

@@ -91,7 +91,7 @@ func TestSignalStatusResponseRX_ClosesChannel(t *testing.T) {
 		exch = uint16(42)
 	)
 	ch := make(chan struct{})
-	b.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
+	b.routing.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
 	b.signalStatusResponseRX(sess, exch)
 	// The channel should be closed.
 	select {
@@ -101,7 +101,7 @@ func TestSignalStatusResponseRX_ClosesChannel(t *testing.T) {
 		t.Error("signalStatusResponseRX did not close the registered channel")
 	}
 	// Entry should be deleted from the map.
-	if _, loaded := b.statusResponseWaits.Load(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}); loaded {
+	if _, loaded := b.routing.statusResponseWaits.Load(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}); loaded {
 		t.Error("signalStatusResponseRX should have deleted the map entry")
 	}
 }
@@ -115,7 +115,7 @@ func TestSignalStatusResponseRX_IdempotentOnClosedChannel(t *testing.T) {
 	)
 	ch := make(chan struct{})
 	close(ch) // already closed
-	b.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
+	b.routing.statusResponseWaits.Store(mrp.ExchangeKey{SessionID: sess, ExchangeID: exch}, ch)
 	// Must not panic despite closed channel.
 	b.signalStatusResponseRX(sess, exch)
 }

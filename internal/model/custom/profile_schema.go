@@ -21,9 +21,9 @@ import (
 // the sentinel; the rebase algorithm preserves it verbatim).
 const AnyChannelOffset = math.MinInt32
 
-// FieldMapping mirrors
-// It pairs a
-// [hmenum.Parameter] with explicit visibility forcing.
+// FieldMapping mirrors the Python reference implementation's field
+// mapping. It pairs a [hmenum.Parameter] with explicit visibility
+// forcing.
 //
 // IsVisible semantics:
 //   - nil     → no forcing (the data point inherits its default visibility)

@@ -2334,6 +2334,28 @@ func TestExtendedDecodeOrEmptyNilRaw(t *testing.T) {
 	}
 }
 
+// TestExtendedDecodeOrEmptyMalformedJSONIsBadRequest asserts that malformed
+// (non-empty, invalid) JSON decodes to a *CommandError with
+// CommandErrorBadRequest — the same code the hand-rolled
+// `json.Unmarshal(raw, &args)` boilerplate returns. Command handlers switching
+// from that boilerplate to decodeOrEmpty must not silently downgrade a
+// malformed-input rejection to CommandErrorInternal (the generic fallback
+// Router.Dispatch applies to any non-CommandError).
+func TestExtendedDecodeOrEmptyMalformedJSONIsBadRequest(t *testing.T) {
+	var p struct{ X int }
+	err := decodeOrEmpty(json.RawMessage(`{"x":`), &p)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+	ce, ok := errors.AsType[*CommandError](err)
+	if !ok {
+		t.Fatalf("error type = %T, want *CommandError", err)
+	}
+	if ce.Code != CommandErrorBadRequest {
+		t.Fatalf("code = %q, want %q", ce.Code, CommandErrorBadRequest)
+	}
+}
+
 // --- commands_missing.go + custom_data_points.go error coverage via direct
 //     dispatch. These register handlers with error-returning stubs directly
 //     onto a fresh Router to exercise the remaining if err != nil branches.

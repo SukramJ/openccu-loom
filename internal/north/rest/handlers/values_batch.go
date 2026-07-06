@@ -64,7 +64,7 @@ func ValuesBatch(idx DeviceIndex, labels ParameterLabeler, vis filter.Visibility
 		}
 		var req ValuesBatchRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON body", err.Error()))
 			return
 		}

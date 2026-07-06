@@ -39,7 +39,12 @@ type OIDCDeps struct {
 
 type oidcState struct {
 	verifier string
-	created  time.Time
+	// nonce is the OIDC Core §3.1.2.1 replay-protection value minted by
+	// OIDCStart; the callback passes it to VerifyIDToken as
+	// expectedNonce so a captured ID token cannot be replayed into a
+	// different flow.
+	nonce   string
+	created time.Time
 }
 
 const oidcStateTTL = 5 * time.Minute
@@ -62,7 +67,7 @@ func NewOIDCDeps(client *oidc.Client, authDeps *AuthDeps, logger *slog.Logger) *
 	}
 }
 
-func (d *OIDCDeps) putState(verifier string) (string, error) {
+func (d *OIDCDeps) putState(verifier, nonce string) (string, error) {
 	key, err := randomKey()
 	if err != nil {
 		return "", err
@@ -77,23 +82,23 @@ func (d *OIDCDeps) putState(verifier string) (string, error) {
 			delete(d.states, k)
 		}
 	}
-	d.states[key] = oidcState{verifier: verifier, created: now}
+	d.states[key] = oidcState{verifier: verifier, nonce: nonce, created: now}
 	d.mu.Unlock()
 	return key, nil
 }
 
-func (d *OIDCDeps) consumeState(state string) (string, bool) {
+func (d *OIDCDeps) consumeState(state string) (verifier, nonce string, ok bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	e, ok := d.states[state]
-	if !ok {
-		return "", false
+	e, found := d.states[state]
+	if !found {
+		return "", "", false
 	}
 	delete(d.states, state)
 	if d.now().Sub(e.created) > oidcStateTTL {
-		return "", false
+		return "", "", false
 	}
-	return e.verifier, true
+	return e.verifier, e.nonce, true
 }
 
 // OIDCStart mints a fresh PKCE pair, stores the verifier, and
@@ -107,16 +112,24 @@ func OIDCStart(d *OIDCDeps) http.HandlerFunc {
 		}
 		pkce, err := oidc.NewPKCEPair()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			d.logServerError("oidc.pkce_generate", err)
+			http.Error(w, "OIDC start failed", http.StatusInternalServerError)
 			return
 		}
-		state, err := d.putState(pkce.Verifier)
+		nonce, err := oidc.NewNonce()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			d.logServerError("oidc.nonce_generate", err)
+			http.Error(w, "OIDC start failed", http.StatusInternalServerError)
+			return
+		}
+		state, err := d.putState(pkce.Verifier, nonce)
+		if err != nil {
+			d.logServerError("oidc.state_store", err)
+			http.Error(w, "OIDC start failed", http.StatusInternalServerError)
 			return
 		}
 		writeOIDCStateCookie(w, state, d.secureCookie())
-		http.Redirect(w, r, d.Client.AuthURL(state, pkce), http.StatusSeeOther)
+		http.Redirect(w, r, d.Client.AuthURL(state, pkce, nonce), http.StatusSeeOther)
 	}
 }
 
@@ -150,7 +163,7 @@ func OIDCCallback(d *OIDCDeps) http.HandlerFunc {
 			oidcRedirectError(w, r, "bad_state", d.SPARedirectURL)
 			return
 		}
-		verifier, ok := d.consumeState(state)
+		verifier, nonce, ok := d.consumeState(state)
 		if !ok {
 			oidcRedirectError(w, r, "bad_state", d.SPARedirectURL)
 			return
@@ -165,7 +178,7 @@ func OIDCCallback(d *OIDCDeps) http.HandlerFunc {
 			oidcRedirectError(w, r, "exchange_failed", d.SPARedirectURL)
 			return
 		}
-		claims, err := d.Client.VerifyIDToken(ctx, tokens.IDToken)
+		claims, err := d.Client.VerifyIDToken(ctx, tokens.IDToken, nonce)
 		if err != nil {
 			if d.Logger != nil {
 				d.Logger.Warn("oidc.id_token_invalid", slog.String("err", err.Error()))
@@ -176,7 +189,8 @@ func OIDCCallback(d *OIDCDeps) http.HandlerFunc {
 		identity := d.Client.IdentityFrom(claims)
 		sess, err := d.Auth.Sessions.Issue(identity) //nolint:contextcheck // session persist detaches from the request ctx by design (best-effort durability); see ADR 0041
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			d.logServerError("oidc.session_issue", err)
+			http.Error(w, "OIDC session issue failed", http.StatusInternalServerError)
 			return
 		}
 		auth.WriteSessionCookie(w, sess, d.Auth.Secure)
@@ -228,6 +242,19 @@ func isSafeRelativeTarget(target string) bool {
 // Secure flag, mirroring the session cookie's runtime TLS binding.
 func (d *OIDCDeps) secureCookie() bool {
 	return d != nil && d.Auth != nil && d.Auth.Secure
+}
+
+// logServerError records a 500-class OIDC failure via the configured
+// logger (falling back to slog.Default() when none is wired) so the
+// operator-facing http.Error body can stay a generic message instead
+// of echoing err's text — the underlying error may carry IdP-internal
+// detail that should not reach the browser.
+func (d *OIDCDeps) logServerError(msg string, err error) {
+	logger := slog.Default()
+	if d != nil && d.Logger != nil {
+		logger = d.Logger
+	}
+	logger.Error(msg, slog.String("err", err.Error()))
 }
 
 // writeOIDCStateCookie sets the short-lived, HttpOnly state cookie that

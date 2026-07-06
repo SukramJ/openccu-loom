@@ -50,8 +50,7 @@ func ListCentrals(svc CentralAdminService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rows, err := svc.List(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Central list failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central list failed", err)
 			return
 		}
 		masked := make([]sqlite.CentralRow, 0, len(rows))
@@ -79,8 +78,7 @@ func GetCentral(svc CentralAdminService) http.HandlerFunc {
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Central lookup failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central lookup failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, maskCentralRow(row))
@@ -93,7 +91,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		var row sqlite.CentralRow
 		if err := DecodeJSON(r, &row); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -113,8 +111,7 @@ func CreateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			row.PasswordPlain = ""
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Central creation failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central creation failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())
@@ -141,7 +138,7 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		}
 		var row sqlite.CentralRow
 		if err := DecodeJSON(r, &row); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -159,15 +156,13 @@ func UpdateCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 		if row.PasswordPlain == maskSentinel {
 			existing, err := svc.Get(r.Context(), name)
 			if err != nil && !errors.Is(err, sqlite.ErrCentralNotFound) {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Central lookup failed", err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central lookup failed", err)
 				return
 			}
 			row.PasswordPlain = existing.PasswordPlain
 		}
 		if err := svc.Put(r.Context(), row); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Central update failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central update failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())
@@ -199,8 +194,7 @@ func DeleteCentral(svc CentralAdminService, rec audit.Recorder) http.HandlerFunc
 			return
 		}
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Central deletion failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Central deletion failed", err)
 			return
 		}
 		actor := identityFromCtx(r.Context())

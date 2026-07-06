@@ -93,16 +93,14 @@ var SimpleLightCapabilities = custom.LightCapabilities{
 	Dimmable: true,
 }
 
-// DimmerCapabilities mirrors
-// brightness + ramp-time transition.
+// DimmerCapabilities describes brightness + ramp-time transition.
 // Mirrors capabilities/light.py:55.
 var DimmerCapabilities = custom.LightCapabilities{
 	Dimmable:   true,
 	Transition: true,
 }
 
-// ColorLightCapabilities mirrors
-// brightness + transition + HSV colour.
+// ColorLightCapabilities describes brightness + transition + HSV colour.
 // Mirrors capabilities/light.py:60.
 var ColorLightCapabilities = custom.LightCapabilities{
 	Dimmable:      true,
@@ -110,26 +108,23 @@ var ColorLightCapabilities = custom.LightCapabilities{
 	SupportsColor: true,
 }
 
-// ColorTempLightCapabilities mirrors
-// brightness + transition + colour temperature.
-// Mirrors capabilities/light.py:66.
+// ColorTempLightCapabilities describes brightness + transition +
+// colour temperature. Mirrors capabilities/light.py:66.
 var ColorTempLightCapabilities = custom.LightCapabilities{
 	Dimmable:          true,
 	Transition:        true,
 	SupportsColorTemp: true,
 }
 
-// FixedColorLightCapabilities mirrors
-// brightness + transition (fixed colour — no hs_color/color_temp).
-// Mirrors capabilities/light.py:72.
+// FixedColorLightCapabilities describes brightness + transition (fixed
+// colour — no hs_color/color_temp). Mirrors capabilities/light.py:72.
 var FixedColorLightCapabilities = custom.LightCapabilities{
 	Dimmable:   true,
 	Transition: true,
 }
 
-// RGBWLightCapabilities mirrors
-// brightness + transition (colour/colour-temp/effects are dynamic via has_*).
-// Mirrors capabilities/light.py:81.
+// RGBWLightCapabilities describes brightness + transition (colour /
+// colour-temp / effects are dynamic via has_*). Mirrors capabilities/light.py:81.
 var RGBWLightCapabilities = custom.LightCapabilities{
 	Dimmable:   true,
 	Transition: true,

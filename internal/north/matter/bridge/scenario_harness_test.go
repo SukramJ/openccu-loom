@@ -258,7 +258,7 @@ func newScenarioHarness(t *testing.T, s *scenario) *scenarioHarness {
 		if err != nil {
 			t.Fatalf("scenario: subscribe[%d]: %v", i, err)
 		}
-		br.subTargets.Store(sub.ID, subTarget{
+		br.routing.subTargets.Store(sub.ID, subTarget{
 			src:                 peerAddr,
 			hasPeerSourceNodeID: true,
 			peerSourceNodeID:    scenarioPeerNodeID,

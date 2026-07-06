@@ -40,15 +40,13 @@ func init() {
 // capabilities/lock.py — exported so north-bound adapters and tests can
 // reference them by name rather than reconstructing the struct literal.
 
-// IPLockCaps mirrors
-// Mirrors capabilities/lock.py:40.
+// IPLockCaps mirrors capabilities/lock.py:40.
 var IPLockCaps = custom.LockCapabilities{SupportsOpen: true}
 
-// ButtonLockCaps mirrors
-// Mirrors capabilities/lock.py:41.
+// ButtonLockCaps mirrors capabilities/lock.py:41.
 var ButtonLockCaps = custom.LockCapabilities{SupportsOpen: false}
 
-// SmartDoorLockCaps mirrors
+// SmartDoorLockCaps describes a smart door lock that supports OPEN
 // (open=true). Defined here for parity completeness; no DeviceProfile
 // constructor currently registers this variant — add one when a smart-door-
 // lock profile is generated. Mirrors capabilities/lock.py:42.
@@ -66,13 +64,13 @@ var BUTTON_LOCK_CAPABILITIES = ButtonLockCaps //nolint:revive // Python-exact na
 // SMART_DOOR_LOCK_CAPABILITIES is the Python-parity alias for [SmartDoorLockCaps].
 var SMART_DOOR_LOCK_CAPABILITIES = SmartDoorLockCaps //nolint:revive // Python-exact name required for parity
 
-// IpLockCapabilities mirrors
+// ipLockCapabilities describes an IP lock whose OPEN action is
 // supported via LOCK_TARGET_LEVEL=2.
 var ipLockCapabilities = custom.LockCapabilities{
 	SupportsOpen: true,
 }
 
-// RfLockCapabilities mirrors
+// rfLockCapabilities describes an RF lock whose OPEN action is
 // supported via the OPEN parameter.
 var rfLockCapabilities = custom.LockCapabilities{
 	SupportsOpen: true,

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -252,6 +253,33 @@ func TestDownloadCapture_StoppedCapture_Returns200WithGzip(t *testing.T) {
 	}
 	if !bytes.Equal(w.Body.Bytes(), fakeGzip) {
 		t.Errorf("body mismatch: got %d bytes, want %d bytes", w.Body.Len(), len(fakeGzip))
+	}
+}
+
+// TestDownloadCapture_IDWithQuoteIsEscapedInContentDisposition verifies
+// that a capture id containing a double quote (arriving percent-encoded
+// in the URL path segment) cannot break out of the filename parameter
+// and inject extra Content-Disposition directives.
+func TestDownloadCapture_IDWithQuoteIsEscapedInContentDisposition(t *testing.T) {
+	t.Parallel()
+	fakeGzip := []byte("\x1f\x8b\x08\x00somefakedata")
+	svc := &fakeCaptureService{archiveData: fakeGzip}
+	r := newCaptureRouter(svc)
+	req := httptest.NewRequest(http.MethodGet, `/api/v1/diagnostics/capture/evil%22foo/download`, http.NoBody)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	cd := w.Header().Get("Content-Disposition")
+	_, params, err := mime.ParseMediaType(cd)
+	if err != nil {
+		t.Fatalf("Content-Disposition is not parseable: %q: %v", cd, err)
+	}
+	wantFilename := `evil"foo.tar.gz`
+	if params["filename"] != wantFilename {
+		t.Errorf("filename param = %q, want %q (header: %q)", params["filename"], wantFilename, cd)
 	}
 }
 

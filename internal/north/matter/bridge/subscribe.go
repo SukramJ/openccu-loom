@@ -63,7 +63,7 @@ const perChunkStatusRespTimeout = 500 * time.Millisecond
 // [Bridge.SubscriptionReporter] callback the daemon plumbs into
 // [subscription.NewManager]; that callback re-reads the cached
 // values and ships a fresh ReportData over the original commissioner
-// session, looked up via [Bridge.subTargets] (populated here on
+// session, looked up via [exchangeRouting.subTargets] (populated here on
 // successful Subscribe).
 //
 // Pass nil to revert to noop (Subscribe replies with empty
@@ -177,7 +177,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 	if sub == nil || len(events) == 0 {
 		return
 	}
-	raw, ok := b.subTargets.Load(sub.ID)
+	raw, ok := b.routing.subTargets.Load(sub.ID)
 	if !ok {
 		return
 	}
@@ -211,7 +211,7 @@ func (b *Bridge) reportSubscriptionEvents(ctx context.Context, sub *subscription
 	}
 	counter, err := b.sendUnsolicitedIM(target, im.OpcodeReportData, body)
 	if err != nil {
-		b.subTargets.Delete(sub.ID)
+		b.routing.subTargets.Delete(sub.ID)
 		b.logger.Debug("matter.tx.subscribe.event_report",
 			slog.Int("subscription_id", int(sub.ID)),
 			slog.String("err", err.Error()))
@@ -329,7 +329,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 	if dispatcher == nil || sub == nil {
 		return
 	}
-	raw, ok := b.subTargets.Load(sub.ID)
+	raw, ok := b.routing.subTargets.Load(sub.ID)
 	if !ok {
 		return
 	}
@@ -408,7 +408,7 @@ func (b *Bridge) reportSubscription(ctx context.Context, sub *subscription.Subsc
 		// Cap reached — drop the routing target and evict the
 		// subscription from the manager so the engine stops ticking
 		// a dead subscription.
-		b.subTargets.Delete(sub.ID)
+		b.routing.subTargets.Delete(sub.ID)
 		b.subSendErrorCount.Delete(sub.ID)
 		if m := b.subscriptionManagerLocked(); m != nil {
 			_ = m.Close(sub.ID) // ErrNotFound is fine — racing with peer or ACK-pump Close
@@ -449,7 +449,7 @@ func (b *Bridge) closeSubscriptionByCounter(sessionID uint16, counter uint32) {
 	if !ok || subID == 0 {
 		return
 	}
-	b.subTargets.Delete(subID)
+	b.routing.subTargets.Delete(subID)
 	b.subSendErrorCount.Delete(subID)
 	if m := b.subscriptionManagerLocked(); m != nil {
 		_ = m.Close(subID) // ErrNotFound is fine — racing with peer Close
@@ -494,7 +494,7 @@ func (b *Bridge) captureSubTarget(subID uint32, src *net.UDPAddr, requestHdr *me
 	// against the exact identity that opened the subscription.
 	fabricIndex := b.resolveSessionFabric(requestHdr.SessionID)
 	subjectNodeID, subjectCATs := b.resolveSessionSubject(requestHdr.SessionID)
-	b.subTargets.Store(subID, subTarget{
+	b.routing.subTargets.Store(subID, subTarget{
 		src:                 src,
 		hasPeerSourceNodeID: requestHdr.HasSourceNodeID,
 		peerSourceNodeID:    requestHdr.SourceNodeID,

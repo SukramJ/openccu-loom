@@ -142,7 +142,8 @@ func NewManager(cfg Config, reporter Reporter, logger *slog.Logger) *Manager {
 func randomSubscriptionIDStart() uint32 {
 	var b [4]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		// crypto/rand failure at process start is unrecoverable —
+		// invariant: crypto/rand failure at process start is a host-level
+		// entropy-source fault, not reachable via any remote input —
 		// surface as panic so the operator notices, rather than
 		// silently regressing to the predictable starting id that
 		// reproduces the Apple cache-drop symptom.

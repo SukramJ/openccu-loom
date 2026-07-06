@@ -11,12 +11,12 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/model/naming"
 )
 
-// BuildDataPointName is the openccu-loom equivalent of
-// It
-// resolves the per-data-point name quadruple from a (channel,
-// parameter, parameter-translation) triple.
+// BuildDataPointName is the openccu-loom equivalent of the Python
+// reference implementation's data-point naming resolver. It resolves
+// the per-data-point name quadruple from a (channel, parameter,
+// parameter-translation) triple.
 //
-// Resolution steps (mirroring AHM line-by-line):
+// Resolution steps (mirroring the Python reference line-by-line):
 //
 //  1. Compute the channel base name — the operator-assigned channel
 //     name, with `f"{model} {address}"` auto-defaults rejected.
@@ -141,8 +141,8 @@ func baseChannelName(channel *Channel, model, deviceName string) string {
 }
 
 // stripChannelAddressSuffix removes a trailing `:N` channel-number
-// suffix (where N is purely numeric). Mirrors AHM
-// `support.py::_check_channel_name_with_channel_no` + the
+// suffix (where N is purely numeric). Mirrors the Python reference
+// implementation's `support.py::_check_channel_name_with_channel_no` + the
 // `channel_name.split(ADDRESS_SEPARATOR)[0]` truncation.
 func stripChannelAddressSuffix(channelName string) string {
 	idx := strings.LastIndexByte(channelName, ':')

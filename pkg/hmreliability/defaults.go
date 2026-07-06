@@ -3,28 +3,28 @@
 
 // Package hmreliability is the single source of truth for the timing
 // and threshold defaults used by the southbound reliability layer
-// (`internal/client/reliability`). The constants here.
-// `client/_send_request.py` defaults so the two stacks stay
-// behaviourally aligned.
+// (`internal/client/reliability`). The constants mirror the Python
+// reference implementation's `client/_send_request.py` defaults so
+// the two stacks stay behaviourally aligned.
 //
 // Why a public package: the per-component defaults were historically
 // scattered across `circuit.go`, `retry.go`, `throttle.go`, and
-// `pingpong.go`. That made silent drift against
-// and invisible to CI. Centralising them here lets the
-// [TestRecordedReliabilityDefaults] snapshot lock the values; any
-// drift triggers a CI failure that demands an explicit by-design
-// entry (docs/parity/by_design.md) before the change lands.
+// `pingpong.go`. That made silent drift against the Python reference
+// implementation possible and invisible to CI. Centralising them here
+// lets the [TestRecordedReliabilityDefaults] snapshot lock the
+// values; any drift triggers a CI failure that demands an explicit
+// by-design entry (docs/parity/by_design.md) before the change lands.
 //
-// Drift policy: when the advances and a default
-// genuinely changes upstream, update the constant *and* the snapshot
-// In the same commit, with a reference in the
-// commit message.
+// Drift policy: when the Python reference implementation advances and
+// a default genuinely changes upstream, update the constant *and* the
+// snapshot in the same commit, with a reference in the commit
+// message.
 package hmreliability
 
 import "time"
 
-// Circuit-breaker defaults — mirror
-// constructor (`client/connection.py`).
+// Circuit-breaker defaults — mirror the Python reference
+// implementation's `Connection` constructor (`client/connection.py`).
 const (
 	// CircuitFailureThreshold is the number of consecutive errors after which
 	// the breaker trips OPEN.

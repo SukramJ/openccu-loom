@@ -678,7 +678,8 @@ func TestBuildRootClusters_WithVendorAttestation(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -734,13 +735,10 @@ func TestBuildAggregatorClusters_BuildsWithCorrectDeviceType(t *testing.T) {
 // incident recorder is installed on a central's CacheCoordinator.
 func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-inc")
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	_, closer := wireIncidentRecorder(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	_, closer := wireIncidentRecorder(db, reg, logger)
 	t.Cleanup(closer)
 }
 
@@ -748,31 +746,28 @@ func TestWireIncidentRecorder_WithCentralAndDB(t *testing.T) {
 
 func TestWireSessionRecorderPersistence_WithCentral(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	reg := buildTestRegistry(t, "ccu-sess")
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	closer := wireSessionRecorderPersistence(cfg, reg, logger)
-	gooseMigrateMu.Unlock()
+	closer := wireSessionRecorderPersistence(db, reg, logger)
 	if closer == nil {
 		t.Fatal("expected non-nil closer")
 	}
 	closer()
 }
 
-// ── wireAuditPersistence ──────────────────────────────────────────────────────
+// ── wireAuditPersistenceWithDB ────────────────────────────────────────────────
 
-// TestWireAuditPersistence_BadDataDir verifies fallback when DataDir is unusable.
-func TestWireAuditPersistence_BadDataDir(t *testing.T) {
+// TestWireAuditPersistenceWithDB_NilDB verifies the degraded fallback when no
+// shared db handle is available — the state openLoomDB leaves callers in when
+// DataDir is unusable.
+func TestWireAuditPersistenceWithDB_NilDB(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = "/proc/nonexistent_dir_12345"
 	buf := audit.NewBuffer(16)
 	logger := slog.New(slog.DiscardHandler)
-	got := wireAuditPersistence(cfg, buf, logger)
+	got, _ := wireAuditPersistenceWithDB(nil, buf, logger)
 	if got == nil {
-		t.Fatal("expected non-nil fallback recorder when DataDir is unusable")
+		t.Fatal("expected non-nil fallback recorder when db is nil")
 	}
 }
 
@@ -794,7 +789,8 @@ func TestFailSafeArmerAdapter_WithGC(t *testing.T) {
 
 	reg := buildTestRegistry(t, "ccu-01")
 	ctx := t.Context()
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, slog.New(slog.DiscardHandler))
 	if bundle == nil {
 		t.Skip("bridge did not start")
 	}
@@ -912,26 +908,31 @@ func TestBuildBackupAdapter_WithCentral(t *testing.T) {
 	}
 }
 
-// ── wireAuditPersistence — centralised DB path ───────────────────────────────
+// ── wireAuditPersistenceWithDB — shared-handle path ──────────────────────────
 
-// TestWireAuditPersistence_SharedDB opens the same DB path that
-// wireIncidentRecorder/wireSessionRecorder use, verifying the multi-opener path.
-func TestWireAuditPersistence_SharedDB(t *testing.T) {
+// TestWireAuditPersistenceWithDB_SharesHandleWithOtherWiring verifies that the
+// SAME *sql.DB handle can back wireAuditPersistenceWithDB,
+// wireIncidentRecorder and wireSessionRecorderPersistence at once — the
+// composition root's actual usage (one open, three consumers) — instead of
+// each opening its own handle against the same file.
+func TestWireAuditPersistenceWithDB_SharesHandleWithOtherWiring(t *testing.T) {
 	t.Parallel()
-	cfg := config.Default()
-	cfg.DataDir = t.TempDir()
+	db := openTestLoomDB(t)
 	buf := audit.NewBuffer(32)
 	logger := slog.New(slog.DiscardHandler)
-	gooseMigrateMu.Lock()
-	got, db, _ := wireAuditPersistenceWithDB(cfg, buf, logger)
-	gooseMigrateMu.Unlock()
-	if db != nil {
-		t.Cleanup(func() { _ = db.Close() })
-	}
-	if got == nil {
+	reg := buildTestRegistry(t, "ccu-shared")
+
+	rec, _ := wireAuditPersistenceWithDB(db, buf, logger)
+	if rec == nil {
 		t.Fatal("expected non-nil recorder from shared DB")
 	}
-	got.Record(audit.Entry{User: "lifecycle-test", Parameter: "p"})
+	rec.Record(audit.Entry{User: "lifecycle-test", Parameter: "p"})
+
+	_, incidentCloser := wireIncidentRecorder(db, reg, logger)
+	t.Cleanup(incidentCloser)
+
+	sessionCloser := wireSessionRecorderPersistence(db, reg, logger)
+	t.Cleanup(sessionCloser)
 }
 
 // ── buildOpenAPIValidator — valid spec path ───────────────────────────────────

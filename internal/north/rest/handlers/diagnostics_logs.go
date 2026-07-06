@@ -240,7 +240,7 @@ func PutDefaultLogLevel(svc LogDefaultLevelService, rec audit.Recorder) http.Han
 		}
 		var req LogDefaultLevelRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 			return
 		}

@@ -95,6 +95,12 @@ var ErrBadParam = errors.New("custom_dp: bad parameter")
 
 // ReliabilityState is one (central, interface) reliability row. State holds
 // the InterfaceClient's live state payload, marshalled as-is.
+//
+// Use of `any` for State is justified here: the payload shape depends on
+// which reliability sub-state (circuit breaker, retry, throttle, ...) is
+// reporting, so this DTO is a pass-through JSON envelope rather than a
+// typed model — the caller only ever re-serialises it to the REST/WS
+// response, never inspects it in Go.
 type ReliabilityState struct {
 	Central      string `json:"central"`
 	Interface    string `json:"interface"`
@@ -103,6 +109,11 @@ type ReliabilityState struct {
 }
 
 // DiagnosticsEvent is one tapped event-bus record.
+//
+// Use of `any` for Event is justified here: the recorder taps every event
+// type published on the bus (see internal/central/events), whose payload
+// shapes are unrelated Go structs. This DTO exists to relay the already-
+// decoded event to the diagnostics endpoint as-is, not to interpret it.
 type DiagnosticsEvent struct {
 	TS    string `json:"ts"`
 	Type  string `json:"type"`

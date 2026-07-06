@@ -79,6 +79,81 @@ var writeCommandRoles = map[string]auth.Role{
 	"sysvars.set":                         auth.RoleOperator,
 }
 
+// readOnlyCommands is the explicit complement of writeCommandRoles: every
+// registered command that intentionally requires no more than an
+// authenticated (viewer) identity. A command absent from *both* this set
+// and writeCommandRoles is unclassified policy —
+// TestEveryRegisteredWSCommandIsClassified
+// (tests/contract/ws_command_classification_test.go) fails the build in
+// that case instead of letting the command default to viewer-accessible.
+//
+// This pair of maps is the reverse guard against the failure mode
+// writeCommandRoles alone cannot catch: a new mutating command registered
+// without a writeCommandRoles entry silently falls through Dispatch's role
+// gate and becomes callable by any viewer. Every new
+// `router.Register(...)` call site must add its command name to exactly
+// one of these two sets.
+//
+// Not read by Dispatch itself — writeCommandRoles alone still drives the
+// runtime gate, so an entry missing here has no production effect. This
+// set exists purely as the second half of the classification the contract
+// test above cross-checks against the registered-command set extracted
+// from commands_default.go / commands_extended.go / commands_missing.go /
+// custom_data_points.go via go/ast.
+//
+//nolint:unused // consumed by tests/contract via go/ast source parsing, not by Go code in this package — see the comment above.
+var readOnlyCommands = map[string]struct{}{
+	"alarm_messages.list":       {},
+	"backup.status":             {},
+	"calc_dp.get":               {},
+	"calc_dp.list":              {},
+	"ccu.device_statistics":     {},
+	"ccu.get_hub_data":          {},
+	"ccu.get_rssi_info":         {},
+	"ccu.get_signal_quality":    {},
+	"ccu.throttle_stats":        {},
+	"cdp.get":                   {},
+	"cdp.list":                  {},
+	"central.connectivity":      {},
+	"central.info":              {},
+	"central.links_status":      {},
+	"central.system_health":     {},
+	"change_history.list":       {},
+	"config.session.changes":    {},
+	"devices.export_definition": {},
+	"devices.get":               {},
+	"devices.list":              {},
+	"firmware.info":             {},
+	"inbox.list":                {},
+	"incidents.get":             {},
+	"incidents.list":            {},
+	"install_mode.status":       {},
+	"links.get_form_schema":     {},
+	"links.get_paramset":        {},
+	"links.get_profiles":        {},
+	"links.linkable_channels":   {},
+	"links.list":                {},
+	"links.test_profile":        {},
+	"master_profiles.get":       {},
+	"master_profiles.list":      {},
+	"master_profiles.match":     {},
+	"paramset.description":      {},
+	"paramset.determine":        {},
+	"paramset.form_schema":      {},
+	"paramset.get":              {},
+	"programs.list":             {},
+	"recording.status":          {},
+	"schedules.climate.get":     {},
+	"schedules.device.get":      {},
+	"schedules.list_devices":    {},
+	"service_messages.list":     {},
+	"system.commands":           {},
+	"system.health":             {},
+	"system.user_permissions":   {},
+	"sysvars.fetch":             {},
+	"sysvars.list":              {},
+}
+
 // CommandHandler implements one RPC-style WebSocket command. The returned
 // `data` is JSON-encoded into the response envelope under the "data" field;
 // the returned error becomes a `{code, message}` payload in the "error"

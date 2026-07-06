@@ -65,34 +65,17 @@ func buildBackupAdapter(cfg *config.Config, reg *central.Registry, logger *slog.
 	return a.SetStorage(storage)
 }
 
-// wireSessionRecorderPersistence opens (or shares) the SQLite database
-// and connects it to every central's [session.Recorder] so recorded
-// CCU-call sessions survive a daemon restart and can be inspected
-// offline. Returns a shutdown closer that stops every per-central
-// auto-persist ticker; nil safe to call when the wiring degraded
-// (no DB available, no centrals registered).
+// wireSessionRecorderPersistence connects the shared SQLite database handle
+// to every central's [session.Recorder] so recorded CCU-call sessions
+// survive a daemon restart and can be inspected offline. Returns a shutdown
+// closer that stops every per-central auto-persist ticker; nil-safe to call
+// when the wiring degraded (no DB available, no centrals registered).
 //
-// this is the production-replay path that was
-// deferred in the audit. The daemon calls it once after StartAll;
-// without it the recorder works as before (in-memory only).
-func wireSessionRecorderPersistence(cfg *config.Config, reg *central.Registry, logger *slog.Logger) func() {
-	if cfg == nil || reg == nil {
-		return func() {}
-	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
-	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
-	defer cancel()
-	db, err := sqlite.Open(ctx, dsn)
-	if err != nil {
-		logger.Warn(
-			"session.recorder.persist.disabled",
-			slog.String("dsn", dsn),
-			slog.String("err", err.Error()),
-		)
+// db is the shared <DataDir>/openccu-loom.db handle opened once by
+// [openLoomDB] in the composition root; this function never opens or closes
+// it — ownership (and the final Close) stays with the caller that opened it.
+func wireSessionRecorderPersistence(db *gosql.DB, reg *central.Registry, logger *slog.Logger) func() {
+	if db == nil || reg == nil {
 		return func() {}
 	}
 	store := sqlite.NewSessionRecorderStore(db)
@@ -108,49 +91,30 @@ func wireSessionRecorderPersistence(cfg *config.Config, reg *central.Registry, l
 	}
 	logger.Info(
 		"session.recorder.persist.ready",
-		slog.String("dsn", dsn),
 		slog.Int("centrals", len(closers)),
 	)
 	return func() {
 		for _, c := range closers {
 			c()
 		}
-		// Release the DB handle last, after the per-central persistence
-		// closers have flushed. Windows refuses to delete an open SQLite
-		// file at temp-dir cleanup, so a leaked handle fails tests there.
-		_ = db.Close()
 	}
 }
 
 // wireIncidentRecorder constructs a SQLite-backed [reliability.IncidentRecorder]
-// (via [sqlite.IncidentStore]) and installs it on every central's
-// [coordinators.CacheCoordinator] via SetIncidentRecorder.
+// (via [sqlite.IncidentStore]) against the shared database handle and
+// installs it on every central's [coordinators.CacheCoordinator] via
+// SetIncidentRecorder.
 //
-// It returns a teardown func that closes the underlying DB handle; the
-// caller must defer it so the SQLite file is released on shutdown (a
-// leaked handle blocks temp-dir cleanup on Windows). The returned func
-// is never nil — it is a no-op when persistence is disabled.
+// db is the shared <DataDir>/openccu-loom.db handle opened once by
+// [openLoomDB] in the composition root; this function never opens or closes
+// it. The returned teardown is kept for call-site symmetry with the other
+// wireX helpers but is a no-op — the shared handle is closed exactly once,
+// by whoever opened it.
 //
-// Degrades gracefully — if the database cannot be opened the centrals run
-// without incident persistence (the slot remains nil / no-op).
-func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slog.Logger) (store *sqlite.IncidentStore, teardown func()) {
-	if cfg == nil || reg == nil {
-		return nil, func() {}
-	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
-	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
-	defer cancel()
-	db, err := sqlite.Open(ctx, dsn)
-	if err != nil {
-		logger.Warn(
-			"incident.recorder.disabled",
-			slog.String("dsn", dsn),
-			slog.String("err", err.Error()),
-		)
+// Degrades gracefully — when db is nil the centrals run without incident
+// persistence (the slot remains nil / no-op).
+func wireIncidentRecorder(db *gosql.DB, reg *central.Registry, logger *slog.Logger) (store *sqlite.IncidentStore, teardown func()) {
+	if db == nil || reg == nil {
 		return nil, func() {}
 	}
 	store = sqlite.NewIncidentStore(db)
@@ -167,13 +131,12 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 	}
 	logger.Info(
 		"incident.recorder.ready",
-		slog.String("dsn", dsn),
 		slog.Int("centrals", len(reg.List())),
 	)
-	return store, func() { _ = db.Close() }
+	return store, func() {}
 }
 
-// wireAuditPersistence layers SQLite persistence on top of the in-
+// wireAuditPersistenceWithDB layers SQLite persistence on top of the in-
 // memory audit buffer. The result is what the adapter layer hands
 // every domain that records changes.
 //
@@ -184,35 +147,14 @@ func wireIncidentRecorder(cfg *config.Config, reg *central.Registry, logger *slo
 //
 // The persistence sink is wrapped in [audit.AsyncSink] so the producer
 // (paramset / link / schedule writes) never blocks on disk I/O.
-func wireAuditPersistence(cfg *config.Config, buf *audit.Buffer, logger *slog.Logger) audit.Recorder {
-	rec, _, _ := wireAuditPersistenceWithDB(cfg, buf, logger)
-	return rec
-}
-
-// wireAuditPersistenceWithDB is the variant used by callers that also
-// need access to the underlying *sql.DB — currently the diagnostics
-// health probe that pings `SELECT 1` on a fixed cadence. The DB is
-// nil when persistence is disabled (no config, open failure); the
-// caller must check before using.
-func wireAuditPersistenceWithDB(cfg *config.Config, buf *audit.Buffer, logger *slog.Logger) (audit.Recorder, *gosql.DB, *audit.DurableSinkStats) {
-	if cfg == nil || buf == nil {
-		return buf, nil, nil
-	}
-	dataDir := cfg.DataDir
-	if dataDir == "" {
-		dataDir = "./var"
-	}
-	dsn := sqlite.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
-	ctx, cancel := context.WithTimeout(context.Background(), 10_000_000_000) // 10s
-	defer cancel()
-	db, err := sqlite.Open(ctx, dsn)
-	if err != nil {
-		logger.Warn(
-			"audit.persist.disabled",
-			slog.String("dsn", dsn),
-			slog.String("err", err.Error()),
-		)
-		return buf, nil, nil
+//
+// db is the shared <DataDir>/openccu-loom.db handle opened once by
+// [openLoomDB] in the composition root; this function never opens or closes
+// it. A nil db (persistence disabled, or the shared open failed) degrades to
+// the buffered Recorder unchanged, matching the previous no-DB behaviour.
+func wireAuditPersistenceWithDB(db *gosql.DB, buf *audit.Buffer, logger *slog.Logger) (audit.Recorder, *audit.DurableSinkStats) {
+	if db == nil || buf == nil {
+		return buf, nil
 	}
 	store := sqlite.NewAuditStore(db)
 	durableSink, durableStats, _ := audit.NewDurableSink(store.Append, audit.DurableSinkOptions{
@@ -224,5 +166,5 @@ func wireAuditPersistenceWithDB(cfg *config.Config, buf *audit.Buffer, logger *s
 	// global) so concurrent daemon instances — e.g. parallel reload
 	// tests — never race on shared state. The health tracker reads it
 	// per-daemon in daemon.go.
-	return audit.NewPersistedRecorder(buf, durableSink, logger), db, durableStats
+	return audit.NewPersistedRecorder(buf, durableSink, logger), durableStats
 }

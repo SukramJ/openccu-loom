@@ -11,6 +11,33 @@ import (
 	"github.com/SukramJ/openccu-loom/internal/observability"
 )
 
+// isLowerHex reports whether s consists solely of lowercase hex digits.
+func isLowerHex(s string) bool {
+	for _, c := range s {
+		switch {
+		case c >= '0' && c <= '9', c >= 'a' && c <= 'f':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// TestStartSpan_IDsMatchW3CSchema guards against the 32-bit collision
+// risk of a truncated UUID span id: root spans must mint TraceID/SpanID
+// using the same W3C Trace Context shape (128-bit / 64-bit lowercase
+// hex, no dashes) [reqctx.NewTraceID] / [reqctx.NewSpanID] produce, so
+// the whole daemon shares one collision-resistant ID scheme.
+func TestStartSpan_IDsMatchW3CSchema(t *testing.T) {
+	sp, _ := observability.StartSpan(context.Background(), "test_op", nil)
+	if len(sp.TraceID) != 32 || !isLowerHex(sp.TraceID) {
+		t.Errorf("TraceID = %q, want 32 lowercase hex chars", sp.TraceID)
+	}
+	if len(sp.SpanID) != 16 || !isLowerHex(sp.SpanID) {
+		t.Errorf("SpanID = %q, want 16 lowercase hex chars", sp.SpanID)
+	}
+}
+
 func TestStartSpan_RootSpan(t *testing.T) {
 	sp, ctx := observability.StartSpan(context.Background(), "test_op", nil)
 	if sp == nil {

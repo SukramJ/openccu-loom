@@ -23,7 +23,7 @@ import (
 // recovered bytes are not valid UTF-8, the original string is returned
 // unchanged.
 //
-// Python equivalent:.py:fix_xml_rpc_encoding
+// Mirrors the Python reference implementation's fix_xml_rpc_encoding.
 func FixXMLRPCEncoding(text string) string {
 	// Re-encode: each Go rune that fell into the ISO-8859-1 range is mapped
 	// back to a single byte. Characters outside that range cannot have come

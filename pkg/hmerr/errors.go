@@ -166,23 +166,25 @@ func ErrorContext(err error) (Context, bool) {
 	return Context{}, false
 }
 
-// XMLRPCFaultCode names well-known CCU XML-RPC fault codes. Mirrors
-// The constants
-// retryable (transient — duty cycle, unreachable) or permanent
+// XMLRPCFaultCode names well-known CCU XML-RPC fault codes. Mirrors the
+// Python reference implementation's fault-code constants, classifying
+// each as retryable (transient — duty cycle, unreachable) or permanent
 // (paramset rejected, backend offline). Additional codes may be
 // emitted by exotic devices; treat unknown codes as permanent.
 type XMLRPCFaultCode int
 
-// Fault-code constants mirror
-// frozenset (`client/command_retry.py`). All four CCU codes in that set
-// are transient and worth retrying; unknown codes default to permanent.
+// Fault-code constants mirror the Python reference implementation's
+// `_RETRYABLE_FAULT_CODES` frozenset (`client/command_retry.py`). All
+// four CCU codes in that set are transient and worth retrying; unknown
+// codes default to permanent.
 const (
 	// XMLRPCFaultUnreach — device or interface temporarily
 	// unreachable; retry after the regular backoff.
 	XMLRPCFaultUnreach XMLRPCFaultCode = -1
 	// XMLRPCFaultTimeout — backend timed out talking to the device;
-	// Retry. Not part of
-	// transports as a generic timeout fault.
+	// retryable. Not a CCU-native fault code — openccu-loom's own
+	// transports raise it as a generic timeout fault when a call
+	// exceeds its deadline.
 	XMLRPCFaultTimeout XMLRPCFaultCode = -2
 	// XMLRPCFaultDutyCycle — RF duty-cycle exhausted (CCU code
 	// "INSUFFICIENT_DUTYCYCLE"). Retryable after the throttle drains;
@@ -210,10 +212,10 @@ const (
 )
 
 // IsRetryable reports whether c is a transient fault that the
-// Retrier should re-issue. The set mirrors
-// `_RETRYABLE_FAULT_CODES`. Defaults to false for unknown codes
-// being conservative avoids hammering the CCU on permanent failures
-// the operator only saw once.
+// Retrier should re-issue. The set mirrors the Python reference
+// implementation's `_RETRYABLE_FAULT_CODES`. Defaults to false for
+// unknown codes — being conservative avoids hammering the CCU on
+// permanent failures the operator only saw once.
 func (c XMLRPCFaultCode) IsRetryable() bool {
 	switch c {
 	case XMLRPCFaultUnreach,

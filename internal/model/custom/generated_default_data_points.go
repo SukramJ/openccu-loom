@@ -12,11 +12,11 @@ import "github.com/SukramJ/openccu-loom/pkg/hmenum"
 // entries that DefaultDataPoints exposes.
 const GeneratedDefaultDataPointCount = 3
 
-// DefaultDataPoints mirrors
-// Profile authors inherit these
-// generic data points unless [ProfileConfig.IncludeDefaultDataPoints] is
-// false. Tuple keys in the source are expanded so each channel offset
-// is its own map entry.
+// DefaultDataPoints mirrors the Python reference implementation's
+// per-channel-offset default data-point table. Profile authors inherit
+// these generic data points unless
+// [ProfileConfig.IncludeDefaultDataPoints] is false. Tuple keys in the
+// source are expanded so each channel offset is its own map entry.
 var DefaultDataPoints = map[int][]hmenum.Parameter{
 	0: {
 		hmenum.ParameterActualTemperature,

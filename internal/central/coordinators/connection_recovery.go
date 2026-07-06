@@ -869,7 +869,7 @@ func (c *ConnectionRecoveryCoordinator) runInternal(ctx context.Context, interfa
 	// closeOnce guards the done-channel close so a future contributor
 	// cannot accidentally introduce a close-of-closed panic by adding
 	// an extra cleanup path. Today, the defer is the only closer; the
-	// sync.Once makes that invariant defensive — see audit R2.
+	// sync.Once makes that invariant defensive.
 	var closeOnce sync.Once
 	closeDone := func() { closeOnce.Do(func() { close(done) }) }
 

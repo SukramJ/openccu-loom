@@ -179,8 +179,8 @@ func TestManager_AdoptFabricIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenFromSigma: %v", err)
 	}
-	if e.FabricIndex != 0 {
-		t.Fatalf("seed FabricIndex = %d, want 0", e.FabricIndex)
+	if e.FabricIndex() != 0 {
+		t.Fatalf("seed FabricIndex = %d, want 0", e.FabricIndex())
 	}
 
 	if err := m.AdoptFabricIndex(e.SessionID, 7); err != nil {
@@ -191,8 +191,8 @@ func TestManager_AdoptFabricIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get after Adopt: %v", err)
 	}
-	if got.FabricIndex != 7 {
-		t.Errorf("FabricIndex after AdoptFabricIndex = %d, want 7", got.FabricIndex)
+	if got.FabricIndex() != 7 {
+		t.Errorf("FabricIndex after AdoptFabricIndex = %d, want 7", got.FabricIndex())
 	}
 }
 
@@ -219,8 +219,8 @@ func TestManager_AdoptFabricIndex_Idempotent(t *testing.T) {
 		}
 	}
 	got, _ := m.Get(e.SessionID)
-	if got.FabricIndex != 2 {
-		t.Errorf("FabricIndex = %d after idempotent adopts, want 2", got.FabricIndex)
+	if got.FabricIndex() != 2 {
+		t.Errorf("FabricIndex = %d after idempotent adopts, want 2", got.FabricIndex())
 	}
 }
 
@@ -393,8 +393,8 @@ func TestManager_CloseFabric_OnlyAffectsTargetFabric(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get fabric-2 session: %v", err)
 	}
-	if got.FabricIndex != 2 {
-		t.Errorf("FabricIndex = %d, want 2", got.FabricIndex)
+	if got.FabricIndex() != 2 {
+		t.Errorf("FabricIndex = %d, want 2", got.FabricIndex())
 	}
 }
 
@@ -491,8 +491,8 @@ func TestOpenFromPase_AllocatesSessionID(t *testing.T) {
 	if e.SessionID == 0 {
 		t.Fatal("SessionID must be > 0 (0 is reserved for unsecured traffic)")
 	}
-	if e.FabricIndex != 0 {
-		t.Fatalf("FabricIndex = %d, want 0 for PASE session", e.FabricIndex)
+	if e.FabricIndex() != 0 {
+		t.Fatalf("FabricIndex = %d, want 0 for PASE session", e.FabricIndex())
 	}
 	if e.Session == nil {
 		t.Fatal("Session must not be nil")
@@ -1111,8 +1111,8 @@ func TestManager_CloseFabricExcept_PreservesExceptSession(t *testing.T) {
 	// The fabric-2 session must be untouched.
 	if got, err := m.Get(ef2.SessionID); err != nil {
 		t.Errorf("Get(ef2) = %v, want hit — different-fabric session must survive", err)
-	} else if got.FabricIndex != 2 {
-		t.Errorf("ef2.FabricIndex = %d, want 2", got.FabricIndex)
+	} else if got.FabricIndex() != 2 {
+		t.Errorf("ef2.FabricIndex() = %d, want 2", got.FabricIndex())
 	}
 
 	if m.Active() != 2 {
@@ -1140,8 +1140,8 @@ func TestManager_CloseFabricExcept_ZeroExcept_ClosesAll(t *testing.T) {
 	}
 	if got, err := m.Get(ef2.SessionID); err != nil {
 		t.Errorf("Get(ef2) = %v, want hit", err)
-	} else if got.FabricIndex != 2 {
-		t.Errorf("ef2.FabricIndex = %d, want 2", got.FabricIndex)
+	} else if got.FabricIndex() != 2 {
+		t.Errorf("ef2.FabricIndex() = %d, want 2", got.FabricIndex())
 	}
 }
 
@@ -1187,6 +1187,42 @@ func TestManager_ConcurrentOpenCloseGet(t *testing.T) {
 			_ = m.Close(e.SessionID)
 		}(i)
 	}
+	wg.Wait()
+}
+
+// TestEntry_FabricIndex_RaceAgainstAdopt exercises a fabric-resolver
+// closure (the shape used to wire [interfaces.OperationalSessionLookup]
+// in the daemon) reading Entry.FabricIndex concurrently with
+// AdoptFabricIndex rewriting it on the same entry — the sequence a
+// live commissioning flow hits when CommissioningComplete arrives on
+// the PASE session right as another goroutine resolves the fabric for
+// an in-flight IM request. Run with `go test -race`.
+func TestEntry_FabricIndex_RaceAgainstAdopt(t *testing.T) {
+	m, _ := newTestManager()
+	e, err := m.OpenFromSigma(0, 1, 100, testKeys())
+	if err != nil {
+		t.Fatalf("OpenFromSigma: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			entry, gerr := m.Get(e.SessionID)
+			if gerr != nil {
+				continue
+			}
+			_ = entry.FabricIndex()
+			_ = i
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range 500 {
+			_ = m.AdoptFabricIndex(e.SessionID, uint8(i%8+1)) //nolint:gosec // G115: bounded by loop constant
+		}
+	}()
 	wg.Wait()
 }
 
@@ -1290,8 +1326,8 @@ func TestOpenFromPaseWithID_UsesPreallocatedSlot(t *testing.T) {
 	}
 
 	// PASE sessions are pre-fabric: FabricIndex must be 0.
-	if entry.FabricIndex != 0 {
-		t.Fatalf("FabricIndex = %d, want 0 for PASE", entry.FabricIndex)
+	if entry.FabricIndex() != 0 {
+		t.Fatalf("FabricIndex = %d, want 0 for PASE", entry.FabricIndex())
 	}
 
 	// AttestationChallenge must be set (16 bytes from HKDF).

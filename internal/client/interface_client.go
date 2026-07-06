@@ -1039,6 +1039,8 @@ func (c *InterfaceClient) CanTransitionTo(target hmenum.ClientState) bool {
 // during backend detection. For JSON-RPC-only interfaces (CCU-Jack) it is
 // "0". Empty string means the version has not been determined yet.
 func (c *InterfaceClient) GetVersion() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.cfg.Version
 }
 
@@ -1056,8 +1058,8 @@ func (c *InterfaceClient) SetVersion(v string) {
 }
 
 // Model returns the backend model string for this client. This mirrors
-// Model delegated property which reads
-// backend.model (client/interface_client.py:194).
+// the Python reference implementation's InterfaceClient.model
+// delegated property which reads backend.model (client/interface_client.py:194).
 //
 // The returned string matches the backend Kind string:
 // - KindCCU → "ccu"

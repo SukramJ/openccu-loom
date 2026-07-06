@@ -47,15 +47,6 @@ var (
 	ErrAlreadyStarted = errors.New("bridge: already started")
 )
 
-// timedKey is the composite key for [Bridge.timedDeadlines]. Using a
-// (sessionID, exchangeID) pair instead of a bare exchangeID prevents a
-// peer on a different session from consuming a deadline that was
-// registered by another session.
-type timedKey struct {
-	sessionID  uint16
-	exchangeID uint16
-}
-
 // Snapshotter returns the current model snapshots for endpoint
 // topology assembly. Typically wraps the central registry walk:
 //
@@ -199,58 +190,11 @@ type Bridge struct {
 	pumpDone                 chan struct{}
 	started                  bool
 
-	// exchangeSrcs maps an inbound exchange-id to the *net.UDPAddr
-	// that opened it. The ack pump uses this to route synthesised
-	// StandaloneAck datagrams back to the right peer when the
-	// piggyback grace window expires.
-	exchangeSrcs sync.Map
-
-	// timedDeadlines maps a (sessionID, exchangeID) pair to the
-	// wall-clock deadline a TimedRequest established. The follow-up
-	// Write / Invoke (req.TimedRequest=true) must arrive before the
-	// deadline expires; otherwise the IM dispatcher rejects with TIMEOUT
-	// (0x94) per Matter §8.7.
-	//
-	// The key is a struct{sessionID, exchangeID uint16} instead of a bare
-	// exchangeID so a different session cannot consume a deadline that
-	// was registered by another session. Without the session dimension a
-	// rogue or replaying peer could craft a Write/Invoke with a matching
-	// exchangeID from a different session and pass the timed gate
-	// Mirrors chip CASESession.cpp / chip WriteHandler.cpp which always
-	// validate against the session context before checking the timed gate.
-	//
-	// Map is concurrency-safe and pruned on consumption / expiry.
-	timedDeadlines sync.Map // map[timedKey]time.Time
-
-	// subTargets maps an active subscription ID to the routing
-	// metadata the ongoing-report pump needs to ship a fresh
-	// ReportData back to the commissioner: the original UDP src,
-	// the peer's SourceNodeID (echoed as DestNodeID per §4.4.1.2),
-	// the exchange ID, and the operational session ID. Populated by
-	// handleSubscribeRequest after a successful Subscribe; consumed
-	// by [Bridge.reportSubscription] from the manager's reporter
-	// callback.
-	subTargets sync.Map // map[uint32]subTarget
-
-	// statusResponseWaits stages a per-exchange "next IM:StatusResponse"
-	// rendezvous channel for the Subscribe-Initial chunk-streaming
-	// loop. matter.js's
-	// `InteractionMessenger.ts:sendDataReportMessage(_, waitForAck=true)`
-	// blocks on the peer's IM:StatusResponse between every chunk;
-	// Apple's ReadClient (`connectedhomeip/src/app/ReadClient.cpp:541`
-	// → `OnMessageReceived`) emits one per inbound ReportData and
-	// expects the next chunk only after the round-trip closes. Without
-	// this synchronisation openccu-loom burst-fires every chunk and
-	// Apple's state-machine collapses into a path where
-	// `ProcessSubscribeResponse` never fires — verified Run 19 of the
-	// Apple-pair-diagnose cycle (handoff v5).
-	//
-	// Each entry is created in [Bridge.armStatusResponseWait] just
-	// before [Bridge.sendReplyReliable], closed exactly once in
-	// [Bridge.signalStatusResponseRX] (the IM-dispatcher's
-	// StatusResponse branch), and torn down by the caller's
-	// [Bridge.disarmStatusResponseWait] on timeout / completion.
-	statusResponseWaits sync.Map // map[uint16]chan struct{}
+	// routing bundles the exchange-src / timed-deadline / sub-target /
+	// status-response-wait tables the receive, ack-pump, and subscribe
+	// pipelines share. See [exchangeRouting] for the per-table
+	// semantics and lifecycle.
+	routing exchangeRouting
 
 	// outboundReliable bookkeeps reliable outbound messages we sent
 	// (subscription reports today; future command responses

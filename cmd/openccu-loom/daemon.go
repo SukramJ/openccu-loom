@@ -157,15 +157,17 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// SessionRecorder. The recorder itself stays inactive until an
 	// operator activates it via REST/WS — the wiring only ensures that,
 	// when active, captured sessions survive a daemon restart.
-	// production-replay path. Closer is chained into shutdown.
-	if recorderPersistTeardown := wireSessionRecorderPersistence(cfg, reg, logger); recorderPersistTeardown != nil { //nolint:contextcheck // wireSessionRecorderPersistence has no ctx parameter; it creates its own internal context
+	// production-replay path. Closer is chained into shutdown. Shares
+	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
+	if recorderPersistTeardown := wireSessionRecorderPersistence(auditDB, reg, logger); recorderPersistTeardown != nil { //nolint:contextcheck // persist tickers outlive this call; their lifecycle is owned by the returned closer, not the boot ctx
 		defer recorderPersistTeardown()
 	}
 	// Wire SQLite-backed incident recording into every central's
 	// CacheCoordinator. CallbackHandlers reads the recorder lazily from
 	// CacheCoordinator.GetIncidentRecorder(), so no separate handler-level
-	// wiring step is needed. Degrades gracefully when the DB cannot be opened.
-	incidentStore, incidentTeardown := wireIncidentRecorder(cfg, reg, logger) //nolint:contextcheck // wireIncidentRecorder has no ctx parameter; it creates its own internal context
+	// wiring step is needed. Degrades gracefully when auditDB is nil. Shares
+	// auditDB (ov.db) rather than opening its own handle — see openLoomDB.
+	incidentStore, incidentTeardown := wireIncidentRecorder(auditDB, reg, logger)
 	defer incidentTeardown()
 
 	// Seed every central's health tracker (synthetic "started" sample,
@@ -487,7 +489,9 @@ func daemonServeWithDeps(ctx context.Context, cfg *config.Config, stdout, _ io.W
 	// the UDP listener, assemble the endpoint topology, and publish
 	// the operational mDNS record. Failure here never aborts the
 	// daemon — the bridge is best-effort until GA.
-	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, healthTracker, parameterLabels, logger, wsHub)
+	// auditDB (ov.db) is threaded through rather than opened again — see
+	// openLoomDB in daemon_boot.go.
+	matter, matterAvailClosers, matterStop := wireMatterRuntime(ctx, cfg, reg, auditDB, healthTracker, parameterLabels, logger, wsHub)
 	// Matter's ordered teardown is owned by the north-bound registry (it
 	// stops after REST, before the webhook). Only registered when enabled —
 	// a disabled bridge yields a no-op matterStop and is not a surface. The

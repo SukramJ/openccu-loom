@@ -18,8 +18,8 @@ import (
 // descriptor. The [Apply] function mutates the data in place and
 // returns true when it actually changed something.
 //
-// ChannelNo (optional) and Reason fields added to mirror
-// Channel_no + reason fields.
+// ChannelNo (optional) and Reason fields added to mirror the Python
+// reference implementation's channel_no + reason fields.
 type Patch struct {
 	Model     string // "" = any model
 	Parameter hmenum.Parameter

@@ -319,7 +319,7 @@ func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []
 //     ReportData; the SubscribeResponse + ongoing pump are tracked
 //     separately.
 //   - TimedRequest     → StatusResponse(Success); a per-exchange
-//     deadline is stamped into `Bridge.timedDeadlines` and the
+//     deadline is stamped into `exchangeRouting.timedDeadlines` and the
 //     matching follow-up Write/Invoke is gated against it via
 //     `Bridge.checkTimedGate` per Matter §8.7.
 func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHdr *message.Header, proto message.ProtocolHeader, payload []byte) error {
@@ -408,7 +408,7 @@ func (b *Bridge) handleIMOpcode(ctx context.Context, src *net.UDPAddr, requestHd
 // two disagree, which the spec forbids. The inverse half (Timed flag
 // set, no prior TimedRequest) stays NEEDS_TIMED_INTERACTION.
 func (b *Bridge) checkTimedGate(timedFlag bool, sessionID, exchangeID uint16) (im.StatusCode, bool) {
-	raw, ok := b.timedDeadlines.LoadAndDelete(timedKey{sessionID: sessionID, exchangeID: exchangeID})
+	raw, ok := b.routing.timedDeadlines.LoadAndDelete(timedKey{sessionID: sessionID, exchangeID: exchangeID})
 	if !timedFlag {
 		if ok {
 			// A TimedRequest opened a window but this request's Timed flag

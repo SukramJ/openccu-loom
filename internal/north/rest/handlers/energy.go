@@ -110,8 +110,7 @@ func GetEnergy(svc EnergyService) http.HandlerFunc {
 		}
 		resp, err := svc.Energy(r.Context(), q)
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "Energy query failed", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Energy query failed", err)
 			return
 		}
 		if resp.Devices == nil {

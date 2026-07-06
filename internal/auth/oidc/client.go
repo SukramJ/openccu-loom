@@ -5,6 +5,8 @@ package oidc
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,9 +65,30 @@ func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, err
 	}, nil
 }
 
+// NewNonce mints a cryptographically-random OIDC nonce (OIDC Core
+// §3.1.2.1). Callers bind the returned value to the pending-auth
+// session alongside the PKCE verifier + state, pass it to
+// [Client.AuthURL], and pass the same value back into
+// [Client.VerifyIDToken] as expectedNonce so a captured ID token
+// cannot be replayed into a different browser session.
+//
+// loom:reachable:reason="minted by the REST OIDC start handler; the OIDC surface is wired conditionally so the production callgraph does not reach it"
+func NewNonce() (string, error) {
+	var raw [32]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw[:]), nil
+}
+
 // AuthURL returns the redirect target for the browser. state + PKCE
 // verifier are server-side session state; the caller persists them.
-func (c *Client) AuthURL(state string, pkce PKCEPair) string {
+// nonce is optional (variadic so existing callers keep compiling);
+// when supplied it is echoed as the "nonce" authorization parameter
+// and MUST be passed back into [Client.VerifyIDToken] as the
+// expectedNonce so the returned ID token's nonce claim is checked
+// against it.
+func (c *Client) AuthURL(state string, pkce PKCEPair, nonce ...string) string {
 	q := url.Values{}
 	q.Set("response_type", "code")
 	q.Set("client_id", c.cfg.ClientID)
@@ -74,6 +97,9 @@ func (c *Client) AuthURL(state string, pkce PKCEPair) string {
 	q.Set("state", state)
 	q.Set("code_challenge", pkce.Challenge)
 	q.Set("code_challenge_method", pkce.Method)
+	if len(nonce) > 0 && nonce[0] != "" {
+		q.Set("nonce", nonce[0])
+	}
 	return c.providers.AuthorizationEndpoint + "?" + q.Encode()
 }
 
@@ -140,6 +166,7 @@ type IDClaims struct {
 	PreferredUser string   `json:"preferred_username,omitempty"`
 	Role          string   `json:"role,omitempty"`
 	Roles         []any    `json:"roles,omitempty"`
+	Nonce         string   `json:"nonce,omitempty"`
 }
 
 // Audience models the OIDC "aud" claim. The spec allows it to be
@@ -187,7 +214,16 @@ const idTokenLeeway = 2 * time.Minute
 // JWKS, then validates the issuer, audience, and expiry. A token that
 // is unsigned, signed by an unknown key, issued for a different
 // client, or expired is rejected.
-func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string) (*IDClaims, error) {
+//
+// expectedNonce is optional (variadic so existing callers keep
+// compiling). When the caller supplies a non-empty value — the same
+// one it passed to [Client.AuthURL] for this flow — OIDC Core
+// §3.1.3.7 step 11 requires the ID token's "nonce" claim to be
+// present and equal to it; a missing or mismatching claim is
+// rejected. Callers that pass no expectedNonce skip the check, which
+// exists only to keep pre-nonce call sites compiling during rollout
+// and must not be relied on as a long-term opt-out.
+func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string, expectedNonce ...string) (*IDClaims, error) {
 	claims, err := Verify(ctx, rawIDToken, c.jwks)
 	if err != nil {
 		return nil, err
@@ -207,6 +243,9 @@ func (c *Client) VerifyIDToken(ctx context.Context, rawIDToken string) (*IDClaim
 	}
 	if claims.NotBefore != 0 && now.Add(idTokenLeeway).Before(time.Unix(claims.NotBefore, 0)) {
 		return nil, errors.New("oidc: ID token not yet valid")
+	}
+	if len(expectedNonce) > 0 && expectedNonce[0] != "" && claims.Nonce != expectedNonce[0] {
+		return nil, errors.New("oidc: ID token nonce mismatch")
 	}
 	return claims, nil
 }

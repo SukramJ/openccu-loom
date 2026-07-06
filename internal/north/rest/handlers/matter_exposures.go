@@ -178,7 +178,7 @@ func MatterExposeUpdate(store MatterExposureStore, publisher MatterEventPublishe
 		}
 		var body MatterExposureUpdate
 		if err := DecodeJSON(req, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, req,
 					"Invalid request body", err.Error()))
 			return
@@ -253,7 +253,7 @@ func MatterExposeBulk(store MatterExposureStore, publisher MatterEventPublisher,
 		}
 		var body MatterExposureBulkUpdate
 		if err := DecodeJSON(req, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, req,
 					"Invalid request body", err.Error()))
 			return
@@ -387,9 +387,7 @@ func MatterFabricRevoke(revoker MatterFabricRevoker, publisher MatterEventPublis
 			return
 		}
 		if err := revoker.RevokeFabric(req.Context(), idx); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to revoke fabric", err.Error()))
+			writeServerError(w, req, http.StatusInternalServerError, problem.TypeInternal, "Failed to revoke fabric", err)
 			return
 		}
 		publishMatterEvent(req.Context(), publisher,
@@ -420,9 +418,7 @@ func MatterCommissioningClose(closer MatterCommissioningCloser, publisher Matter
 			return
 		}
 		if err := closer.CloseCommissioningWindow(req.Context()); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, req,
-					"Failed to close commissioning window", err.Error()))
+			writeServerError(w, req, http.StatusInternalServerError, problem.TypeInternal, "Failed to close commissioning window", err)
 			return
 		}
 		publishMatterEvent(req.Context(), publisher,

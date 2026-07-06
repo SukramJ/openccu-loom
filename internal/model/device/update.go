@@ -6,6 +6,7 @@ package device
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -280,7 +281,17 @@ func (u *Update) Start(ctx context.Context, refreshDelays []time.Duration) (<-ch
 				return
 			case <-time.After(d):
 			}
-			_ = u.refresher.RefreshFirmwareData(ctx, u.device.Address)
+			if err := u.refresher.RefreshFirmwareData(ctx, u.device.Address); err != nil {
+				// Best-effort refresh: the update itself already succeeded
+				// (UpdateFirmware returned nil above), so a failed re-read
+				// only delays the Firmware snapshot settling — it must not
+				// fail the update. Still, a silently discarded error hides
+				// a CCU-side problem from anyone debugging a stale
+				// firmware state, so it is logged instead of dropped.
+				slog.Warn("device/update: refresh firmware data failed",
+					"address", u.device.Address,
+					"err", err)
+			}
 		}
 	}()
 	return done, nil

@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/SukramJ/openccu-loom/internal/audit"
 	"github.com/SukramJ/openccu-loom/internal/ccudata"
@@ -48,6 +50,40 @@ type auditOverlay struct {
 	secretsAvailable bool
 }
 
+// openLoomDB opens the single shared <DataDir>/openccu-loom.db database used
+// by every persistence-backed subsystem in the composition root (audit,
+// session recorder, incident recorder, Matter bridge). Centralising the open
+// here means those subsystems receive the already-open handle as a parameter
+// instead of each independently resolving the dataDir fallback, building the
+// DSN, and opening the file — four opens racing to migrate the same SQLite
+// file at boot. Returns nil (logged as a warning) when the DB cannot be
+// opened; callers must degrade gracefully on a nil handle.
+//
+// The open runs on its own [context.Background] timeout rather than the
+// caller's ctx: this executes early in the composition root, before the
+// central registry exists, and must not abort mid-migration just because the
+// daemon's lifecycle ctx (which also carries shutdown) happens to already be
+// cancelled — e.g. a signal arriving in the same instant as boot. Every
+// original per-site open this replaces used the same independent timeout.
+func openLoomDB(cfg *config.Config, logger *slog.Logger) *gosql.DB {
+	if cfg == nil {
+		return nil
+	}
+	dataDir := cfg.DataDir
+	if dataDir == "" {
+		dataDir = "./var"
+	}
+	dsn := sqlitestore.FileDSN(filepath.Join(dataDir, "openccu-loom.db"))
+	openCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	db, err := sqlitestore.Open(openCtx, dsn)
+	if err != nil {
+		logger.Warn("loom_db.open_failed", slog.String("dsn", dsn), slog.String("err", err.Error()))
+		return nil
+	}
+	return db
+}
+
 // wireAuditOverlay opens the SQLite-backed audit / config store BEFORE the
 // central registry is built. The DB carries SPA-side live edits (centrals,
 // MQTT section, …) that have to land in cfg before bootstrap.Build snapshots
@@ -67,11 +103,19 @@ func wireAuditOverlay(ctx context.Context, cfg *config.Config, logger *slog.Logg
 	teardown = func() {}
 
 	ov.buf = audit.NewBuffer(500)
-	ov.rec, ov.db, ov.durableStats = wireAuditPersistenceWithDB(cfg, ov.buf, logger) //nolint:contextcheck // wireAuditPersistenceWithDB has no ctx parameter; it creates its own internal context
+	// Open the single shared <DataDir>/openccu-loom.db handle here, before any
+	// downstream wiring. wireAuditPersistenceWithDB, wireSessionRecorderPersistence,
+	// wireIncidentRecorder and startMatterBridge all read/write the same file;
+	// threading this one handle down (instead of each opening its own) avoids
+	// four independent sqlite.Open calls racing to migrate the same database on
+	// every boot. teardown closes it last (LIFO defer in daemonServeWithDeps),
+	// after every downstream user has torn down.
+	ov.db = openLoomDB(cfg, logger) //nolint:contextcheck // deliberately opens on its own timeout, independent of the lifecycle ctx — see openLoomDB doc comment
 	if ov.db != nil {
 		db := ov.db
 		teardown = func() { _ = db.Close() }
 	}
+	ov.rec, ov.durableStats = wireAuditPersistenceWithDB(ov.db, ov.buf, logger) //nolint:contextcheck // the durable sink persists on its own per-write timeout, detached from the boot ctx by design
 	if ov.db != nil {
 		ov.sqUsers = sqlitestore.NewUserStore(ov.db)
 		ov.sqTokens = sqlitestore.NewTokenStore(ov.db)

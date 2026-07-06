@@ -847,7 +847,7 @@ func (c *InterfaceClient) ForcedAvailabilityMode() ForcedAvailability {
 }
 
 // ---------------------------------------------------------------------------
-// UpdateParamsetDescriptions — convenience wrapper (L09)
+// UpdateParamsetDescriptions — convenience wrapper
 // ---------------------------------------------------------------------------
 
 // DeviceDescriptionFinder resolves a device address to its raw device
@@ -877,9 +877,9 @@ type ParamsetDescriptionPersister interface {
 //     `central.save_files(save_paramset_descriptions=True)`).
 //
 // Returns nil silently when the address is not found in the finder — this
-// Py:1284). Mirrors
-// Update_paramset_descriptions
-// (interface_client.py:1280). Closes parity-audit gap L09.
+// matches the Python reference implementation's early-return behavior
+// (interface_client.py:1284). Mirrors `update_paramset_descriptions`
+// (interface_client.py:1280).
 func (c *InterfaceClient) UpdateParamsetDescriptions(
 	ctx context.Context,
 	b backends.Operations,
@@ -947,8 +947,8 @@ func (c *InterfaceClient) GetAllProgramsFiltered(
 }
 
 // containsAnyMarker returns true when s contains at least one marker as
-// A substring. Client-side filter mirrors
-// in json_rpc.py:get_all_programs.
+// a substring. The client-side filter mirrors the substring check in
+// json_rpc.py:get_all_programs.
 func containsAnyMarker(s string, markers []string) bool {
 	for _, m := range markers {
 		if m != "" && containsSubstring(s, m) {

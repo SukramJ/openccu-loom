@@ -30,8 +30,7 @@ func TriggerBackup(svc BackupService) http.HandlerFunc {
 		}
 		id, err := svc.TriggerBackup(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Backup trigger failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup trigger failed", err)
 			return
 		}
 		w.Header().Set("Location", "/api/v1/backups/"+id)
@@ -48,8 +47,7 @@ func ListBackups(svc BackupService) http.HandlerFunc {
 		}
 		list, err := svc.List(r.Context())
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Backup list failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup list failed", err)
 			return
 		}
 		JSON(w, http.StatusOK, list)
@@ -67,8 +65,7 @@ func RestoreBackup(svc BackupService) http.HandlerFunc {
 		id := chi.URLParam(r, "id")
 		jobID, err := svc.Restore(r.Context(), id)
 		if err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Backup restore failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup restore failed", err)
 			return
 		}
 		JSON(w, http.StatusAccepted, map[string]string{"id": jobID})
@@ -85,10 +82,9 @@ func DownloadBackup(svc BackupService) http.HandlerFunc {
 		}
 		id := chi.URLParam(r, "id")
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", `attachment; filename="`+id+`.sbk"`)
+		w.Header().Set("Content-Disposition", ContentDispositionAttachment(id+".sbk"))
 		if err := svc.Stream(r.Context(), id, w); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Backup stream failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Backup stream failed", err)
 		}
 	}
 }

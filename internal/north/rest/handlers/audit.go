@@ -183,8 +183,7 @@ func ListAudit(svc AuditService, idx DeviceIndex) http.HandlerFunc {
 				Offset: f.offset,
 			})
 			if err != nil {
-				problem.Write(w, http.StatusInternalServerError,
-					problem.New(problem.TypeInternal, r, "Audit query failed", err.Error()))
+				writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "Audit query failed", err)
 				return
 			}
 			out = applyAuditPostFilter(entries, f, centralOf)

@@ -246,10 +246,10 @@ func isHmSecWin(ch *device.Channel) bool {
 
 // coverVariantFromModel derives the [CoverVariant] for a channel by
 // examining the device model string. This mirrors the
-// EntityDescriptionRule approach.
-// (entity_helpers/descriptions/covers.py) but applied at data-point
-// construction time so the variant is baked into the Cover instance
-// rather than looked up in the northbound adapter.
+// EntityDescriptionRule approach (entity_helpers/descriptions/covers.py)
+// but applied at data-point construction time so the variant is baked
+// into the Cover instance rather than looked up in the northbound
+// adapter.
 //
 // Mappings (HA device_class → Homematic models):
 //

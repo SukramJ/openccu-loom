@@ -1,15 +1,15 @@
 # Dead-Code Summary
 
-Generated: bdb7042
-HEAD: bdb7042
+Generated: c986d73
+HEAD: c986d73
 
 ## Overview
 
 | Metric | Count |
 |---|---|
-| Total Exported | 24035 |
-| Reachable | 3788 |
-| Whitelisted | 17370 |
+| Total Exported | 24109 |
+| Reachable | 3796 |
+| Whitelisted | 17436 |
 | **Unreachable** | **2877** |
 
 ## Top-20 Packages by Dead Code
@@ -53,18 +53,18 @@ HEAD: bdb7042
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | CSRFToken | internal/auth/csrf.go | 28 |
 | internal/auth | ClearSessionCookie | internal/auth/session.go | 268 |
-| internal/auth | HashPassword | internal/auth/auth.go | 244 |
+| internal/auth | HashPassword | internal/auth/auth.go | 242 |
 | internal/auth | IdentityFrom | internal/auth/middleware.go | 104 |
 | internal/auth | IngressPassthrough | internal/auth/ingress.go | 52 |
-| internal/auth | NewMemoryTokenStore | internal/auth/auth.go | 86 |
-| internal/auth | NewMemoryUserStore | internal/auth/auth.go | 208 |
+| internal/auth | NewMemoryTokenStore | internal/auth/auth.go | 88 |
+| internal/auth | NewMemoryUserStore | internal/auth/auth.go | 206 |
 | internal/auth | NewMiddleware | internal/auth/middleware.go | 29 |
 | internal/auth | NewPersistentSessionStore | internal/auth/session.go | 82 |
 | internal/auth | NewSessionStore | internal/auth/session.go | 72 |
 | internal/auth | SessionMiddleware | internal/auth/session.go | 232 |
 | internal/auth | WriteSessionCookie | internal/auth/session.go | 253 |
 | internal/auth/oidc | Discover | internal/auth/oidc/discovery.go | 27 |
-| internal/auth/oidc | New | internal/auth/oidc/client.go | 41 |
+| internal/auth/oidc | New | internal/auth/oidc/client.go | 43 |
 | internal/auth/oidc | NewPKCEPair | internal/auth/oidc/pkce.go | 23 |
 | internal/auth/oidc | Verify | internal/auth/oidc/jwks.go | 129 |
 | internal/build | IsAddon | internal/build/version.go | 28 |

@@ -64,12 +64,11 @@ const defaultProfileCap = 6
 // device has not been hydrated yet, or the registry is nil), the method
 // returns ([defaultProfileCap], nil) so callers can always write an
 // unconstrained range as a safe fallback rather than blocking the write
-// With an ErrUnknownDevice sentinel. This mirrors
-// behaviour: devices without an explicit profile descriptor are treated
-// as having 6 profiles.
+// with an ErrUnknownDevice sentinel: devices without an explicit profile
+// descriptor are treated as having 6 profiles.
 //
 // Mirrors `schedule_profile_nos` derived from `_dp_active_profile.max`
-// / `_dp_week_program_pointer.max` in py.
+// / `_dp_week_program_pointer.max`.
 func (s *SchedulesDomain) MaxProfilesForDevice(
 	_ context.Context, deviceAddress string,
 ) (int, error) {
@@ -207,7 +206,7 @@ func (s *SchedulesDomain) GetSchedule(
 }
 
 // SetWeekday is a convenience helper that writes a single weekday slice
-// Of a single profile back to the CCU. It mirrors
+// of a single profile back to the CCU. It mirrors
 // `WeekProfile.set_weekday(day, profile_key, days_data)`
 // (`week_profile.py:1231`) — useful when a UI lets the user edit one
 // day in isolation. Internally it loads the full schedule via

@@ -152,7 +152,7 @@ func OpenEditSession(s *EditSessions) http.HandlerFunc {
 		}
 		var req EditSessionOpenRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -183,7 +183,7 @@ func HeartbeatEditSession(s *EditSessions) http.HandlerFunc {
 		}
 		var req EditSessionResponse
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -213,7 +213,7 @@ func ForceCloseEditSession(s *EditSessions) http.HandlerFunc {
 			Key string `json:"key"`
 		}
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -232,7 +232,7 @@ func CloseEditSession(s *EditSessions) http.HandlerFunc {
 		}
 		var req EditSessionResponse
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}

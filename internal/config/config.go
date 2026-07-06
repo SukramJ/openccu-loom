@@ -22,6 +22,17 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
+// orDefault returns *p, or def when p is nil. Shared by the many
+// `cfg:"..."` tri-state `*T` fields in this file whose accessor mirrors
+// "not set → default, explicitly set → honour it" (e.g.
+// [NorthREST.IsEnabled], [CentralBehavior.LightLastBrightnessEnabled]).
+func orDefault[T any](p *T, def T) T {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
 // InterfaceSpec describes one Homematic interface attached to a central.
 // It supports two YAML forms and a mixed form:
 //
@@ -513,10 +524,7 @@ type NorthDiscoverySSDP struct {
 // IsEnabled reports whether SSDP discovery is on, applying the default-true
 // policy when the pointer is nil.
 func (s NorthDiscoverySSDP) IsEnabled() bool {
-	if s.Enabled == nil {
-		return true
-	}
-	return *s.Enabled
+	return orDefault(s.Enabled, true)
 }
 
 // ResolveInterval returns the configured scan interval, defaulting to 60s.
@@ -547,10 +555,7 @@ type NorthDiscoveryMDNS struct {
 // IsEnabled reports whether mDNS advertisement is on, applying the
 // default-true policy when the pointer is nil.
 func (m NorthDiscoveryMDNS) IsEnabled() bool {
-	if m.Enabled == nil {
-		return true
-	}
-	return *m.Enabled
+	return orDefault(m.Enabled, true)
 }
 
 // ResolveInstanceName returns the configured InstanceName or the OS
@@ -974,10 +979,7 @@ type NorthRESTRateLimit struct {
 // setting after applying the nil-default convention. Daemons should
 // read through this helper rather than touching the pointer directly.
 func (n NorthREST) OpenAPIValidateEnabled() bool {
-	if n.OpenAPIValidate == nil {
-		return true
-	}
-	return *n.OpenAPIValidate
+	return orDefault(n.OpenAPIValidate, true)
 }
 
 // ConfigUIURL returns the externally-reachable Config-UI (SPA) URL
@@ -997,10 +999,7 @@ func (n NorthREST) ConfigUIURL() string {
 // nil → true (the default), so an operator only has to set
 // `enabled: false` to opt out.
 func (n NorthREST) IsEnabled() bool {
-	if n.Enabled == nil {
-		return true
-	}
-	return *n.Enabled
+	return orDefault(n.Enabled, true)
 }
 
 // NorthUI configures the HTMX Config UI.
@@ -1016,10 +1015,7 @@ type NorthUI struct {
 
 // IsEnabled reports whether the bootstrap UI should run. nil → true.
 func (n NorthUI) IsEnabled() bool {
-	if n.Enabled == nil {
-		return true
-	}
-	return *n.Enabled
+	return orDefault(n.Enabled, true)
 }
 
 // NorthMQTT configures the MQTT bridge.
@@ -1112,13 +1108,13 @@ type AuthConfig struct {
 // BasicAuthEnabled resolves the tri-state Basic gate: nil defaults to
 // enabled so existing configs keep working unchanged.
 func (a AuthConfig) BasicAuthEnabled() bool {
-	return a.BasicEnabled == nil || *a.BasicEnabled
+	return orDefault(a.BasicEnabled, true)
 }
 
 // BearerAuthEnabled resolves the tri-state Bearer gate: nil defaults
 // to enabled so existing configs keep working unchanged.
 func (a AuthConfig) BearerAuthEnabled() bool {
-	return a.BearerEnabled == nil || *a.BearerEnabled
+	return orDefault(a.BearerEnabled, true)
 }
 
 // HAIngressConfig opts into trusting Home Assistant Ingress: when the daemon
@@ -1314,51 +1310,33 @@ type CentralBehavior struct {
 // LightLastBrightnessEnabled reports the resolved toggle, defaulting
 // to true when unset.
 func (b CentralBehavior) LightLastBrightnessEnabled() bool {
-	if b.LightLastBrightness == nil {
-		return true
-	}
-	return *b.LightLastBrightness
+	return orDefault(b.LightLastBrightness, true)
 }
 
 // UseGroupChannelForCoverStateEnabled reports the resolved toggle,
 // defaulting to true when unset.
 func (b CentralBehavior) UseGroupChannelForCoverStateEnabled() bool {
-	if b.UseGroupChannelForCoverState == nil {
-		return true
-	}
-	return *b.UseGroupChannelForCoverState
+	return orDefault(b.UseGroupChannelForCoverState, true)
 }
 
 // EnableSysvarScanEnabled reports the resolved toggle (default true).
 func (b CentralBehavior) EnableSysvarScanEnabled() bool {
-	if b.EnableSysvarScan == nil {
-		return true
-	}
-	return *b.EnableSysvarScan
+	return orDefault(b.EnableSysvarScan, true)
 }
 
 // EnableProgramScanEnabled reports the resolved toggle (default true).
 func (b CentralBehavior) EnableProgramScanEnabled() bool {
-	if b.EnableProgramScan == nil {
-		return true
-	}
-	return *b.EnableProgramScan
+	return orDefault(b.EnableProgramScan, true)
 }
 
 // IncludeInternalSysvarsEnabled reports the resolved toggle (default true).
 func (b CentralBehavior) IncludeInternalSysvarsEnabled() bool {
-	if b.IncludeInternalSysvars == nil {
-		return true
-	}
-	return *b.IncludeInternalSysvars
+	return orDefault(b.IncludeInternalSysvars, true)
 }
 
 // IncludeInternalProgramsEnabled reports the resolved toggle (default false).
 func (b CentralBehavior) IncludeInternalProgramsEnabled() bool {
-	if b.IncludeInternalPrograms == nil {
-		return false
-	}
-	return *b.IncludeInternalPrograms
+	return orDefault(b.IncludeInternalPrograms, false)
 }
 
 // EnableDeviceFirmwareCheckEnabled reports the resolved toggle. Default
@@ -1366,18 +1344,12 @@ func (b CentralBehavior) IncludeInternalProgramsEnabled() bool {
 // of the box (a deliberate divergence from the reference stack's
 // false default — see docs/parity/by_design.md).
 func (b CentralBehavior) EnableDeviceFirmwareCheckEnabled() bool {
-	if b.EnableDeviceFirmwareCheck == nil {
-		return true
-	}
-	return *b.EnableDeviceFirmwareCheck
+	return orDefault(b.EnableDeviceFirmwareCheck, true)
 }
 
 // DelayNewDeviceCreationEnabled reports the resolved toggle (default false).
 func (b CentralBehavior) DelayNewDeviceCreationEnabled() bool {
-	if b.DelayNewDeviceCreation == nil {
-		return false
-	}
-	return *b.DelayNewDeviceCreation
+	return orDefault(b.DelayNewDeviceCreation, false)
 }
 
 // VisibilityConfig configures per-central visibility overrides. Empty
@@ -1479,10 +1451,7 @@ func (c *Config) ApplyDefaults() { c.applyDefaults() }
 // browser-facing deployments). Callers that need a plain bool use this
 // helper instead of dereferencing the pointer directly.
 func (n *NorthREST) CSRFIsEnabled() bool {
-	if n.CSRFEnabled == nil {
-		return true
-	}
-	return *n.CSRFEnabled
+	return orDefault(n.CSRFEnabled, true)
 }
 
 // Validate returns an error when required invariants are violated.

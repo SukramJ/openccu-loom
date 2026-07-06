@@ -85,7 +85,7 @@ func WebhookInboundValue(writer DataPointWriter) http.HandlerFunc {
 		}
 		var req WebhookValueRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -98,12 +98,10 @@ func WebhookInboundValue(writer DataPointWriter) http.HandlerFunc {
 		if err := writer.SetValue(r.Context(), strings.TrimSpace(req.Address),
 			hmenum.Parameter(strings.TrimSpace(req.Parameter)), req.Value, prio); err != nil {
 			if problem.IsUpstreamUnavailable(err) {
-				problem.Write(w, http.StatusBadGateway,
-					problem.New(problem.TypeUpstreamUnavailable, r, "Upstream temporarily unavailable", err.Error()))
+				writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Upstream temporarily unavailable", err)
 				return
 			}
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Set failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Set failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
@@ -122,7 +120,7 @@ func WebhookInboundProgram(idx HubIndex) http.HandlerFunc {
 		}
 		var req WebhookProgramRequest
 		if err := DecodeJSON(r, &req); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "Invalid JSON", err.Error()))
 			return
 		}
@@ -144,8 +142,7 @@ func WebhookInboundProgram(idx HubIndex) http.HandlerFunc {
 			return
 		}
 		if err := p.Execute(r.Context()); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Execute failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Execute failed", err)
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)

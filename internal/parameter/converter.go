@@ -27,8 +27,8 @@ func IsConvertable(p hmenum.Parameter) bool {
 }
 
 // ToHomematicValue converts a Go value to a Homematic-compatible wire
-// Value. The conversion rules mirror
-// singledispatch (converter.py):
+// value. The conversion rules mirror the Python reference
+// implementation's `to_homematic` singledispatch (converter.py):
 //
 // - bool → int (1 / 0)
 // - float64 → float64 rounded to 6 decimal places

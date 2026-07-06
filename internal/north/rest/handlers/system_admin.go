@@ -51,8 +51,7 @@ func GetStartupCapture(svc StartupCaptureService) http.HandlerFunc {
 		}
 		cfg, err := svc.Load()
 		if err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "load startup capture", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "load startup capture", err)
 			return
 		}
 		JSON(w, http.StatusOK, cfg)
@@ -72,7 +71,7 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 		}
 		var cfg diagnostics.StartupCaptureConfig
 		if err := DecodeJSON(r, &cfg); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeBadRequest, r, "invalid body", err.Error()))
 			return
 		}
@@ -82,8 +81,7 @@ func PutStartupCapture(svc StartupCaptureService, rec audit.Recorder) http.Handl
 			return
 		}
 		if err := svc.Save(cfg); err != nil {
-			problem.Write(w, http.StatusInternalServerError,
-				problem.New(problem.TypeInternal, r, "save startup capture", err.Error()))
+			writeServerError(w, r, http.StatusInternalServerError, problem.TypeInternal, "save startup capture", err)
 			return
 		}
 		if rec != nil {

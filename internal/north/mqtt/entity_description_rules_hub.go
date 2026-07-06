@@ -5,8 +5,8 @@ package mqtt
 
 // hubRulesMaps is a compile-time anchor that prevents the hub entity-description
 // maps from being flagged as unused while they await their consumer in the hub
-// Discovery builder (next milestone). The maps are ported.
-// hub.py and must not be silently dropped.
+// Discovery builder (next milestone). The maps mirror the Python reference
+// implementation's hub.py and must not be silently dropped.
 //
 //nolint:unused // anchor — hub discovery consumer pending; maps must not drop
 var _ = [5]map[string]EntityDescription{

@@ -46,7 +46,7 @@ func PostDeviceInstallMode(svc DeviceInstallModePort, rec audit.Recorder) http.H
 		}
 		var body deviceInstallModeRequest
 		if err := DecodeJSON(r, &body); err != nil {
-			problem.Write(w, http.StatusBadRequest,
+			problem.Write(w, DecodeJSONStatus(err),
 				problem.New(problem.TypeValidation, r, "Invalid request body", err.Error()))
 			return
 		}
@@ -55,8 +55,7 @@ func PostDeviceInstallMode(svc DeviceInstallModePort, rec audit.Recorder) http.H
 			seconds = 60
 		}
 		if err := svc.SetInstallMode(r.Context(), addr, seconds); err != nil {
-			problem.Write(w, http.StatusBadGateway,
-				problem.New(problem.TypeUpstreamUnavailable, r, "Install mode write failed", err.Error()))
+			writeServerError(w, r, http.StatusBadGateway, problem.TypeUpstreamUnavailable, "Install mode write failed", err)
 			return
 		}
 		if rec != nil {

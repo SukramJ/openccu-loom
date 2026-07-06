@@ -476,6 +476,67 @@ func TestRfc3339OrEmpty_NonZeroTime_ReturnsRFC3339(t *testing.T) {
 	}
 }
 
+// --- requireMutationHub ---
+
+// TestRequireMutationHub_NilIndex_Writes503 verifies that a nil
+// HubIndex is reported as "no hub wired" and the helper reports
+// !ok so the caller returns immediately.
+func TestRequireMutationHub_NilIndex_Writes503(t *testing.T) {
+	t.Parallel()
+	req := httptest.NewRequest(http.MethodPut, "/", http.NoBody)
+	w := httptest.NewRecorder()
+
+	h, ok := requireMutationHub(w, req, nil)
+
+	if ok || h != nil {
+		t.Fatalf("expected ok=false, h=nil, got ok=%v h=%v", ok, h)
+	}
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestRequireMutationHub_AmbiguousCentral_Writes400 verifies that a
+// multi-central index without a disambiguating ?central= query
+// parameter is reported as 400, not silently picking one hub.
+func TestRequireMutationHub_AmbiguousCentral_Writes400(t *testing.T) {
+	t.Parallel()
+	idx := &multiHubIndex{hubs: []NamedHub{
+		{Central: "ccu-alpha", Hub: hub.NewHub("ccu-alpha")},
+		{Central: "ccu-beta", Hub: hub.NewHub("ccu-beta")},
+	}}
+	req := httptest.NewRequest(http.MethodPut, "/", http.NoBody)
+	w := httptest.NewRecorder()
+
+	h, ok := requireMutationHub(w, req, idx)
+
+	if ok || h != nil {
+		t.Fatalf("expected ok=false, h=nil, got ok=%v h=%v", ok, h)
+	}
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+// TestRequireMutationHub_ResolvesSingleHub_NoResponseWritten verifies
+// the success path: the hub is returned, ok is true, and nothing was
+// written to w so the calling handler is free to keep processing.
+func TestRequireMutationHub_ResolvesSingleHub_NoResponseWritten(t *testing.T) {
+	t.Parallel()
+	idx, wantHub := newTestHubWithProgram(t)
+	req := httptest.NewRequest(http.MethodPut, "/", http.NoBody)
+	w := httptest.NewRecorder()
+
+	h, ok := requireMutationHub(w, req, idx)
+
+	if !ok || h != wantHub {
+		t.Fatalf("expected ok=true and the resolved hub, got ok=%v h=%v", ok, h)
+	}
+	if w.Code != 0 && w.Code != http.StatusOK {
+		t.Errorf("expected no response written, got status %d body=%s", w.Code, w.Body.String())
+	}
+}
+
 // --- SetProgramEnabled ---
 
 func TestSetProgramEnabled_HubNil_Returns503(t *testing.T) {

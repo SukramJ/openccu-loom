@@ -9,7 +9,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	gosql "database/sql"
 	"log/slog"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -117,7 +119,7 @@ func TestStartMatterBridge_DisabledReturnsNil(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	ctx := t.Context()
 
-	if bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger); bundle != nil {
+	if bundle := startMatterBridge(ctx, cfg, reg, nil, health.NewTracker(), nil, logger); bundle != nil {
 		t.Error("expected nil bundle when Matter is disabled")
 	}
 }
@@ -138,7 +140,8 @@ func TestStartMatterBridge_EnabledReturnsBridge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle when Matter is enabled")
 	}
@@ -173,7 +176,8 @@ func TestStartMatterBridge_PASEDisabledByDefault(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle")
 	}
@@ -204,7 +208,8 @@ func TestStartMatterBridge_CommissioningArmsHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle; PASE adapter construction may have failed — check logs:\n" + buf.String())
 	}
@@ -284,6 +289,28 @@ func containsSubstring(s, sub string) bool {
 // test-fixture concern.
 var gooseMigrateMu sync.Mutex
 
+// openTestLoomDB opens a throwaway SQLite database in a fresh temp
+// directory, mirroring the single shared <DataDir>/openccu-loom.db handle
+// [openLoomDB] opens in production. Tests that exercise
+// wireSessionRecorderPersistence, wireIncidentRecorder,
+// wireAuditPersistenceWithDB or startMatterBridge — all of which now take an
+// already-open *sql.DB instead of opening their own — use this to build that
+// handle. Each call gets its own isolated file; the production duplication
+// this whole refactor guards against only ever applied to the ONE real
+// database a daemon boot opens.
+func openTestLoomDB(t *testing.T) *gosql.DB {
+	t.Helper()
+	dsn := sqlitestore.FileDSN(filepath.Join(t.TempDir(), "openccu-loom.db"))
+	gooseMigrateMu.Lock()
+	db, err := sqlitestore.Open(context.Background(), dsn)
+	gooseMigrateMu.Unlock()
+	if err != nil {
+		t.Fatalf("openTestLoomDB: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
 // buildTestOperationalManager constructs a minimal *operational.Manager backed
 // by an in-memory SQLite store for use in unit tests that exercise
 // buildPaseAdapter. The DB is migrated via sqlitestore.Open so the matter_*
@@ -330,7 +357,8 @@ func TestStartMatterBridge_CASEArmedByDefault(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle")
 	}
@@ -364,7 +392,8 @@ func TestStartMatterBridge_CASEArmedWhenConfigured(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	bundle := startMatterBridge(ctx, cfg, reg, health.NewTracker(), nil, logger)
+	db := openTestLoomDB(t)
+	bundle := startMatterBridge(ctx, cfg, reg, db, health.NewTracker(), nil, logger)
 	if bundle == nil {
 		t.Fatal("expected non-nil bundle; CASE adapter construction may have failed — check logs:\n" + buf.String())
 	}

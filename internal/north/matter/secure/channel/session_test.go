@@ -6,6 +6,7 @@ package channel
 import (
 	"bytes"
 	"errors"
+	"sync"
 	"testing"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
@@ -159,6 +160,33 @@ func TestEncryptOnClosedSessionFails(t *testing.T) {
 	if _, err := alice.Encrypt(&message.Header{}, 0, nil); !errors.Is(err, ErrSessionInactive) {
 		t.Fatalf("err = %v, want ErrSessionInactive", err)
 	}
+}
+
+// TestConcurrentEncryptAndClose exercises the closed flag under
+// concurrent access: one goroutine keeps encrypting while another
+// closes the session, mirroring a live send racing an inbound
+// shutdown signal. Run with `go test -race`.
+func TestConcurrentEncryptAndClose(t *testing.T) {
+	aCfg, _ := aliceBobConfigs()
+	alice, err := New(aCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for range 2000 {
+			var hdr message.Header
+			_, _ = alice.Encrypt(&hdr, 0, []byte("x"))
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		alice.Close()
+	}()
+	wg.Wait()
 }
 
 // TestNewRejectsBadKey passes a non-16-byte key.

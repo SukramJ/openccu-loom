@@ -220,13 +220,10 @@ func (b *TopicBuilder) WeekProfileCommand(centralName, iface, address string, ch
 //	<base>/<central>/<iface>/<addr>/<channel>/combined/<kind>
 func (b *TopicBuilder) CombinedState(centralName, iface, address string, channel int, kind string) string {
 	// The combined-DP topology is local to the bridge layer (the naming
-	// package does not yet carry a helper for it). Construct directly
-	// using the same TopicSafe contract every channel topic uses.
-	return naming.TopicSafe(b.Base) + "/" +
-		naming.TopicSafe(centralName) + "/" +
-		naming.TopicSafe(iface) + "/" +
-		naming.TopicSafe(address) + "/" +
-		intStr(channel) + "/combined/" + naming.TopicSafe(kind)
+	// package does not yet carry a helper for it). Construct via the
+	// shared channelScopedTopic prefix using the same TopicSafe contract
+	// every channel topic uses.
+	return b.channelScopedTopic(centralName, iface, address, channel) + "/combined/" + naming.TopicSafe(kind)
 }
 
 // CombinedCommand returns the subscribed set topic for a combined DP.
@@ -242,11 +239,7 @@ func (b *TopicBuilder) CombinedCommand(centralName, iface, address string, chann
 //
 //	<base>/<central>/<iface>/<addr>/<channel>/schedule/state
 func (b *TopicBuilder) ScheduleEntityState(centralName, iface, address string, channel int) string {
-	return naming.TopicSafe(b.Base) + "/" +
-		naming.TopicSafe(centralName) + "/" +
-		naming.TopicSafe(iface) + "/" +
-		naming.TopicSafe(address) + "/" +
-		intStr(channel) + "/schedule/state"
+	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/state"
 }
 
 // ScheduleEntityAttrs returns the retained json_attributes topic for the
@@ -255,11 +248,7 @@ func (b *TopicBuilder) ScheduleEntityState(centralName, iface, address string, c
 //
 //	<base>/<central>/<iface>/<addr>/<channel>/schedule/attrs
 func (b *TopicBuilder) ScheduleEntityAttrs(centralName, iface, address string, channel int) string {
-	return naming.TopicSafe(b.Base) + "/" +
-		naming.TopicSafe(centralName) + "/" +
-		naming.TopicSafe(iface) + "/" +
-		naming.TopicSafe(address) + "/" +
-		intStr(channel) + "/schedule/attrs"
+	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/attrs"
 }
 
 // ScheduleSwitchState returns the retained boolean state topic for one
@@ -267,11 +256,7 @@ func (b *TopicBuilder) ScheduleEntityAttrs(centralName, iface, address string, c
 //
 //	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/state
 func (b *TopicBuilder) ScheduleSwitchState(centralName, iface, address string, channel int, key string) string {
-	return naming.TopicSafe(b.Base) + "/" +
-		naming.TopicSafe(centralName) + "/" +
-		naming.TopicSafe(iface) + "/" +
-		naming.TopicSafe(address) + "/" +
-		intStr(channel) + "/schedule/" + naming.TopicSafe(key) + "/state"
+	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/" + naming.TopicSafe(key) + "/state"
 }
 
 // ScheduleSwitchCommand returns the subscribed set topic for one
@@ -279,11 +264,18 @@ func (b *TopicBuilder) ScheduleSwitchState(centralName, iface, address string, c
 //
 //	<base>/<central>/<iface>/<addr>/<channel>/schedule/<key>/set
 func (b *TopicBuilder) ScheduleSwitchCommand(centralName, iface, address string, channel int, key string) string {
+	return b.channelScopedTopic(centralName, iface, address, channel) + "/schedule/" + naming.TopicSafe(key) + "/set"
+}
+
+// channelScopedTopic returns the shared "<base>/<central>/<iface>/<addr>/<channel>"
+// prefix used by every bridge-internal channel topic that has no
+// naming.PathData helper yet (combined-DP and schedule topics).
+func (b *TopicBuilder) channelScopedTopic(centralName, iface, address string, channel int) string {
 	return naming.TopicSafe(b.Base) + "/" +
 		naming.TopicSafe(centralName) + "/" +
 		naming.TopicSafe(iface) + "/" +
 		naming.TopicSafe(address) + "/" +
-		intStr(channel) + "/schedule/" + naming.TopicSafe(key) + "/set"
+		intStr(channel)
 }
 
 func intStr(i int) string {

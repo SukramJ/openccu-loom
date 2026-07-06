@@ -491,7 +491,7 @@ func (b *Bridge) dispatchInvokeRequest(ctx context.Context, src *net.UDPAddr, re
 // dispatchTimedRequest handles a decoded TimedRequest.
 // TimedRequest gates a follow-up Write / Invoke against a
 // per-exchange deadline (Matter §8.7). The bridge captures
-// the deadline in `timedDeadlines` so the next Write / Invoke
+// the deadline in `exchangeRouting.timedDeadlines` so the next Write / Invoke
 // on the same exchange can be checked against it; expired
 // or missing-prior-TimedRequest cases are rejected via
 // StatusResponse with the spec-mandated codes.
@@ -499,7 +499,7 @@ func (b *Bridge) dispatchTimedRequest(src *net.UDPAddr, requestHdr *message.Head
 	deadline := time.Now().Add(time.Duration(req.TimeoutMs) * time.Millisecond)
 	// Key on (sessionID, exchangeID) so a different session cannot
 	// consume a deadline registered by another session.
-	b.timedDeadlines.Store(timedKey{sessionID: requestHdr.SessionID, exchangeID: proto.ExchangeID}, deadline)
+	b.routing.timedDeadlines.Store(timedKey{sessionID: requestHdr.SessionID, exchangeID: proto.ExchangeID}, deadline)
 	body, err := EncodeStatusResponse(im.StatusResponse{Status: im.StatusSuccess})
 	if err != nil {
 		debugReplyError(b.logger, "encode_status", src, err)
