@@ -490,16 +490,17 @@ func (u *Unit) Start(ctx context.Context) error {
 //     2. Scheduler
 //     3. ConnectionRecovery coordinator
 //     4. Client coordinator (stops all InterfaceClients)
-//     5. Hub JSON-RPC logout (optional hook)
-//     6. Hub coordinator clear
+//     5. Device coordinator (waits for in-flight consistency-check goroutines)
+//     6. Hub JSON-RPC logout (optional hook)
+//     7. Hub coordinator clear
 //   - [StopTierCoordinator] fires here (clients down, EventBus still live).
-//     7. Cache coordinator unsubscribe + ClearOnStop
-//     8. Event coordinator clear
-//     9. Event-bus external-subscription clear
+//     8. Cache coordinator unsubscribe + ClearOnStop
+//     9. Event coordinator clear
+//     10. Event-bus external-subscription clear
 //
-// 10. Event-bus full subscription clear
-// 11. Recorder-persistence teardown
-// 12. Transition to STOPPED
+// 11. Event-bus full subscription clear
+// 12. Recorder-persistence teardown
+// 13. Transition to STOPPED
 //   - [StopTierExternal] fires last (post-STOPPED, no coordinator dependency).
 func (u *Unit) Stop() {
 	if u.StateMachine.State() == hmenum.CentralStateStopped {
@@ -540,7 +541,13 @@ func (u *Unit) Stop() {
 		}
 	}
 
-	// 5. Hub JSON-RPC logout (optional). A bounded timeout guards against a
+	// 5. Device coordinator — drains any in-flight goroutine spawned by
+	// ScheduleParamsetConsistencyCheck so it cannot outlive the coordinator.
+	if u.Devices != nil {
+		u.Devices.Stop()
+	}
+
+	// 6. Hub JSON-RPC logout (optional). A bounded timeout guards against a
 	// stale connection blocking the entire shutdown sequence.
 	u.services.mu.RLock()
 	logoutFn := u.services.hubLogoutFn
@@ -553,7 +560,7 @@ func (u *Unit) Stop() {
 		}
 	}
 
-	// 6. Hub coordinator clear.
+	// 7. Hub coordinator clear.
 	if u.Hub != nil {
 		u.Hub.Clear()
 	}
@@ -562,24 +569,24 @@ func (u *Unit) Stop() {
 	// still addressable — for bus-bridging adapters' teardown.
 	u.fireStopTier(StopTierCoordinator)
 
-	// 7. Cache coordinator: unsubscribe bus hooks + clear in-memory caches.
+	// 8. Cache coordinator: unsubscribe bus hooks + clear in-memory caches.
 	if u.Cache != nil {
 		u.Cache.UnsubscribeAll()
 		u.Cache.ClearOnStop()
 	}
 
-	// 8. Event coordinator clear.
+	// 9. Event coordinator clear.
 	if u.Events != nil {
 		u.Events.Clear()
 	}
 
-	// 9 + 10. EventBus: clear external subscriptions then all subscriptions.
+	// 10 + 11. EventBus: clear external subscriptions then all subscriptions.
 	if u.EventBus != nil {
 		u.EventBus.ClearExternalSubscriptions()
 		u.EventBus.ClearAllSubscriptions()
 	}
 
-	// 11. Recorder-persistence teardown.
+	// 12. Recorder-persistence teardown.
 	u.recorderPersistMu.Lock()
 	if u.recorderPersistUnsub != nil {
 		u.recorderPersistUnsub()
@@ -587,7 +594,7 @@ func (u *Unit) Stop() {
 	}
 	u.recorderPersistMu.Unlock()
 
-	// 12. Transition.
+	// 13. Transition.
 	_ = u.StateMachine.TransitionTo(hmenum.CentralStateStopped, hmenum.FailureReasonNone)
 
 	// StopTierExternal: pure external cleanup after STOPPED (registry

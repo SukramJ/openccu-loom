@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -47,6 +48,12 @@ type DeviceCoordinator struct {
 	// nameOverrideChecker is optional; when wired, RenameNewDeviceFromOverride
 	// uses it to look up operator-configured device name overrides.
 	nameOverrideChecker DeviceNameOverrideChecker
+
+	// wg tracks background goroutines spawned by
+	// [ScheduleParamsetConsistencyCheck] so [Stop] can wait for them to drain
+	// during central shutdown instead of leaking a goroutine past the
+	// coordinator's lifetime.
+	wg sync.WaitGroup
 }
 
 // NewDeviceCoordinator wires the coordinator.
@@ -81,6 +88,14 @@ func (c *DeviceCoordinator) SetRecorder(rec observability.Recorder) *DeviceCoord
 	}
 	c.recorder = rec
 	return c
+}
+
+// Stop waits for every in-flight background goroutine spawned by
+// [ScheduleParamsetConsistencyCheck] to finish. Call it during central
+// shutdown so a consistency-check run in progress never outlives the
+// coordinator.
+func (c *DeviceCoordinator) Stop() {
+	c.wg.Wait()
 }
 
 // PullReport summarises one InitialPull or RefreshAfterPair run. The
@@ -432,7 +447,7 @@ func (c *DeviceCoordinator) IdentifyChannel(iface hmenum.Interface, text string)
 // DeleteDevice removes a single device and all its child channel addresses.
 // The device is located by its top-level address; child channel addresses are
 // derived from the description registry and combined into one
-// HandleDeleteDevices call. P2.
+// HandleDeleteDevices call.
 func (c *DeviceCoordinator) DeleteDevice(ctx context.Context, iface hmenum.Interface, deviceAddress string) {
 	// Collect device address + all child channel addresses.
 	allDescs := c.descs.All(iface)
@@ -469,13 +484,37 @@ func (c *DeviceCoordinator) HandleDeleteDevices(_ context.Context, iface hmenum.
 // store), so we can create Device objects without issuing a new ListDevices
 // pull to the CCU.
 //
-// Race-condition prevention: the method holds the coordinator mutex during
-// the create pass so a concurrent newDevices callback cannot interleave with
-// it.
+// Concurrency: c.mu serialises this method against itself and against
+// [HandleNewDevices] — the two production entry points that turn a
+// known-but-not-yet-materialised address into a device-registry entry (this
+// method for the cache-based restart path, HandleNewDevices for the live
+// `newDevices` callback). It does NOT cover every device-mutation method on
+// this coordinator: applyPull/[InitialPull]/[RefreshAfterPair],
+// [HandleDeleteDevices], [RefreshDeviceDescriptionsAndCreateMissingDevices],
+// [ReplaceDevice], [ReaddDevice] and [RefreshFirmwareData] all read/write the
+// same [registry.DeviceRegistry] / [registry.DeviceDescriptionRegistry]
+// without taking c.mu (see their own doc comments) and are not used
+// concurrently with this method in production today. The registries
+// themselves are internally thread-safe for individual Get/Put/Remove/Has
+// calls, so no call ever corrupts state; the residual risk of a race between
+// this method and one of the uncovered paths is a benign duplicate
+// [hmevent.DeviceCreatedEvent] for the same address — subscribers must treat
+// the event as at-least-once, not exactly-once.
+//
+// New-device events are collected while c.mu is held and published only
+// after it is released, so a subscriber that calls back into the coordinator
+// (e.g. [RenameNewDeviceFromOverride]) cannot deadlock against this method —
+// [events.Publish] dispatches every handler synchronously on the calling
+// goroutine.
 func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	type newDeviceEntry struct {
+		iface hmenum.Interface
+		addr  string
+		model string
+	}
+	var newlyCreated []newDeviceEntry
 
+	c.mu.Lock()
 	// Walk all interfaces tracked in the description registry.
 	for _, iface := range c.descs.GetInterfaceIDs() {
 		for _, addr := range c.descs.GetAddresses(iface) {
@@ -497,15 +536,20 @@ func (c *DeviceCoordinator) CheckAndCreateDevicesFromCache(ctx context.Context) 
 				Model:     desc.Type,
 			}
 			c.devices.Put(entry)
-			events.Publish(c.bus, hmevent.DeviceCreatedEvent{
-				Base:        hmevent.NewBase(),
-				CentralName: c.centralName,
-				InterfaceID: string(iface),
-				Address:     addr,
-				Model:       desc.Type,
-				Source:      hmenum.SourceOfDeviceCreationCache,
-			})
+			newlyCreated = append(newlyCreated, newDeviceEntry{iface: iface, addr: addr, model: desc.Type})
 		}
+	}
+	c.mu.Unlock()
+
+	for _, nd := range newlyCreated {
+		events.Publish(c.bus, hmevent.DeviceCreatedEvent{
+			Base:        hmevent.NewBase(),
+			CentralName: c.centralName,
+			InterfaceID: string(nd.iface),
+			Address:     nd.addr,
+			Model:       nd.model,
+			Source:      hmenum.SourceOfDeviceCreationCache,
+		})
 	}
 	return nil
 }
@@ -782,8 +826,6 @@ type ParamsetInconsistency struct {
 //
 // Only MASTER paramsets are checked; VALUES are volatile. Only HmIP devices
 // are checked because the stale-files bug is HmIPServer-specific.
-//
-// P1.
 func (c *DeviceCoordinator) CheckParamsetConsistency(
 	ctx context.Context,
 	iface hmenum.Interface,
@@ -875,7 +917,6 @@ func (c *DeviceCoordinator) CheckParamsetConsistency(
 // device with up-to-date descriptions.
 //
 // Non-fatal errors (fetch failure for one address) are logged and skipped.
-// P1.
 func (c *DeviceCoordinator) ReaddDevice(
 	ctx context.Context,
 	fetcher DeviceDescriptionFetcher,
@@ -931,8 +972,6 @@ type LinkPeerFetcher interface {
 //
 // Non-fatal errors (CCU unreachable for one channel) are logged and skipped
 // so a single bad channel does not abort the whole refresh.
-//
-// P1.
 func (c *DeviceCoordinator) RefreshDeviceLinkPeers(
 	ctx context.Context,
 	fetcher LinkPeerFetcher,
@@ -1197,10 +1236,6 @@ type DeviceNameOverrideChecker interface {
 	GetNameOverride(deviceAddress string) (string, bool)
 }
 
-// deviceNameOverrideChecker is the optional override checker.
-// Nil means no override lookup is performed.
-var _ = (*DeviceCoordinator)(nil) // compile-time check
-
 // SetDeviceNameOverrideChecker wires the override-lookup hook. Nil disables
 // the feature (RenameNewDeviceFromOverride becomes a no-op). Returns the
 // receiver for chaining.
@@ -1243,7 +1278,9 @@ func (c *DeviceCoordinator) RenameNewDeviceFromOverride(iface hmenum.Interface, 
 // CheckParamsetConsistency for the given device addresses. The check runs
 // asynchronously so it does not delay device creation for the caller.
 //
-// P1.
+// The goroutine is tracked in c.wg so [Stop] can wait for it to drain during
+// shutdown, and recovers from a panic in the checker or onResult callback so
+// a single misbehaving implementation cannot take down the daemon.
 func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 	ctx context.Context,
 	iface hmenum.Interface,
@@ -1254,7 +1291,17 @@ func (c *DeviceCoordinator) ScheduleParamsetConsistencyCheck(
 	if checker == nil || len(deviceAddresses) == 0 {
 		return
 	}
+	c.wg.Add(1)
 	go func() {
+		defer c.wg.Done()
+		defer func() {
+			if r := recover(); r != nil {
+				c.logger.Error("ScheduleParamsetConsistencyCheck: goroutine panicked",
+					"interface", string(iface),
+					"panic", r,
+					"stack", string(debug.Stack()))
+			}
+		}()
 		inconsistencies, err := c.CheckParamsetConsistency(ctx, iface, deviceAddresses, checker)
 		if err != nil {
 			c.logger.Warn("ScheduleParamsetConsistencyCheck: check failed",

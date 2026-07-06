@@ -308,3 +308,96 @@ func TestScheduleParamsetConsistencyCheckCallbackReceivesResults(t *testing.T) {
 		t.Fatal("timeout waiting for ScheduleParamsetConsistencyCheck callback")
 	}
 }
+
+// ─── Test 10: Stop waits for the in-flight background goroutine ──────────────
+
+// blockingChecker blocks GetParamset until release is closed, letting the
+// test observe that Stop does not return while the goroutine spawned by
+// ScheduleParamsetConsistencyCheck is still running.
+type blockingChecker struct {
+	release chan struct{}
+}
+
+func (b *blockingChecker) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+	<-b.release
+	return map[string]any{}, nil
+}
+
+func TestScheduleParamsetConsistencyCheckStopWaitsForInFlightGoroutine(t *testing.T) {
+	t.Parallel()
+	descs := []hmproto.DeviceDescription{
+		{Address: "HMIP0030", Parent: "", Type: "HmIP-SW"},
+		{Address: "HMIP0030:1", Parent: "HMIP0030", Type: "HmIP-SW"},
+	}
+	ps := hmproto.Paramset{
+		"PP": {Operations: hmenum.OperationsRead},
+	}
+	coord := buildCoordinator(hmenum.InterfaceHmIPRF, descs, map[string]hmproto.Paramset{
+		"HMIP0030:1": ps,
+	})
+	checker := &blockingChecker{release: make(chan struct{})}
+
+	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0030"}, checker, nil)
+
+	stopDone := make(chan struct{})
+	go func() {
+		coord.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+		t.Fatal("Stop returned before the in-flight consistency-check goroutine finished")
+	case <-time.After(200 * time.Millisecond):
+		// Expected: Stop is still blocked on the running goroutine.
+	}
+
+	close(checker.release)
+
+	select {
+	case <-stopDone:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not return after the background goroutine finished")
+	}
+}
+
+// ─── Test 11: a panic in the checker is recovered, not fatal ──────────────────
+
+// panicChecker panics on every GetParamset call, simulating a misbehaving
+// checker implementation.
+type panicChecker struct{}
+
+func (panicChecker) GetParamset(_ context.Context, _ string, _ hmenum.ParamsetKey) (map[string]any, error) {
+	panic("boom")
+}
+
+func TestScheduleParamsetConsistencyCheckRecoversFromPanic(t *testing.T) {
+	t.Parallel()
+	descs := []hmproto.DeviceDescription{
+		{Address: "HMIP0031", Parent: "", Type: "HmIP-SW"},
+		{Address: "HMIP0031:1", Parent: "HMIP0031", Type: "HmIP-SW"},
+	}
+	ps := hmproto.Paramset{
+		"PP": {Operations: hmenum.OperationsRead},
+	}
+	coord := buildCoordinator(hmenum.InterfaceHmIPRF, descs, map[string]hmproto.Paramset{
+		"HMIP0031:1": ps,
+	})
+
+	coord.ScheduleParamsetConsistencyCheck(context.Background(), hmenum.InterfaceHmIPRF, []string{"HMIP0031"}, panicChecker{}, nil)
+
+	// Stop must return promptly: the panic must be recovered inside the
+	// goroutine (not propagate and crash the test binary) and the WaitGroup
+	// must still be released via the deferred Done.
+	done := make(chan struct{})
+	go func() {
+		coord.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop hung after the background goroutine panicked")
+	}
+}

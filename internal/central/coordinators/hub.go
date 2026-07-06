@@ -86,7 +86,7 @@ func NewHubCoordinator(centralName string, bus *events.Bus) *HubCoordinator {
 
 // Clear drops all cached sysvar snapshots and resets the hub model's sysvar
 // and program data points. Call on stop/reconnect to ensure the coordinator
-// does not surface stale hub data to north-bound adapters. P2.
+// does not surface stale hub data to north-bound adapters.
 func (h *HubCoordinator) Clear() {
 	h.mu.Lock()
 	h.sysvars = make(map[string]SysvarSnapshot)

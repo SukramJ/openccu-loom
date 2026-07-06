@@ -158,6 +158,46 @@ func TestCheckAndCreateDevicesFromCacheEmptyRegistryIsNoop(t *testing.T) {
 	}
 }
 
+// TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock pins
+// the invariant that the DeviceCreatedEvent fired for a cache-restored device
+// is published after c.mu is released. events.Publish dispatches every
+// handler synchronously on the calling goroutine, so a subscriber that calls
+// back into the coordinator (as RenameNewDeviceFromOverride does for real
+// callers reacting to device creation) must not block on the same mutex
+// CheckAndCreateDevicesFromCache is still holding.
+func TestCheckAndCreateDevicesFromCacheSubscriberCallingBackDoesNotDeadlock(t *testing.T) {
+	t.Parallel()
+	dc, bus, devs, descs, _ := newDCFull(t)
+
+	descs.Put(hmenum.InterfaceHmIPRF, hmproto.DeviceDescription{
+		Address: "AA",
+		Type:    "HmIP-X",
+	})
+
+	events.Subscribe(bus, func(_ hmevent.DeviceCreatedEvent) {
+		dc.RenameNewDeviceFromOverride(hmenum.InterfaceHmIPRF, "AA", func(string, string) {})
+	})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- dc.CheckAndCreateDevicesFromCache(context.Background())
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("CheckAndCreateDevicesFromCache deadlocked: a DeviceCreatedEvent " +
+			"subscriber calling back into the coordinator must not block on c.mu")
+	}
+
+	if devs.Len() != 1 {
+		t.Fatalf("devs=%d, want 1", devs.Len())
+	}
+}
+
 // ---------------------------------------------------------------------------
 // RefreshDeviceDescriptionsAndCreateMissingDevices
 // ---------------------------------------------------------------------------
