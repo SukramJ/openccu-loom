@@ -3,7 +3,10 @@
 
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestOverlayFromEnv verifies that the curated env-overlay picks up
 // every recognised variable and ignores everything else.
@@ -25,7 +28,9 @@ func TestOverlayFromEnv(t *testing.T) {
 		// Garbage variable — must be ignored.
 		"OPENCCU_LOOM_MADE_UP": "ignored",
 	}.Get
-	cfg.OverlayFromEnv(getenv)
+	if err := cfg.OverlayFromEnv(getenv); err != nil {
+		t.Fatalf("OverlayFromEnv returned unexpected error: %v", err)
+	}
 
 	cases := []struct {
 		name string
@@ -53,27 +58,63 @@ func TestOverlayFromEnv(t *testing.T) {
 }
 
 // TestOverlayFromEnvIgnoresEmptyAndInvalid verifies the no-op paths
-// — empty strings, malformed integers, malformed booleans.
+// — empty strings and malformed booleans stay silent no-ops. Malformed
+// integers are a hard error (see [TestOverlayFromEnvInvalidIntReturnsError]);
+// they are deliberately absent from the getenv map here.
 func TestOverlayFromEnvIgnoresEmptyAndInvalid(t *testing.T) {
 	cfg := Default()
-	cfg.Callback.Port = 8120
 	off := false
 	cfg.North.REST.OpenAPIValidate = &off
 
-	cfg.OverlayFromEnv(mapEnv{
-		"OPENCCU_LOOM_CALLBACK_PORT":         "not-a-number",
+	if err := cfg.OverlayFromEnv(mapEnv{
 		"OPENCCU_LOOM_REST_OPENAPI_VALIDATE": "maybe",
 		"OPENCCU_LOOM_LOCALE":                "   ", // whitespace-only → skip
-	}.Get)
-
-	if cfg.Callback.Port != 8120 {
-		t.Errorf("CallbackPort=%d want 8120 (invalid input must not clobber)", cfg.Callback.Port)
+	}.Get); err != nil {
+		t.Fatalf("OverlayFromEnv returned unexpected error: %v", err)
 	}
+
 	if cfg.North.REST.OpenAPIValidateEnabled() {
 		t.Error("OpenAPIValidate must stay false on garbage input")
 	}
 	if cfg.Locale != "en" {
 		t.Errorf("Locale=%q want en (whitespace-only must be skipped)", cfg.Locale)
+	}
+}
+
+// TestOverlayFromEnvInvalidIntReturnsError verifies that a non-numeric
+// OPENCCU_LOOM_CALLBACK_PORT is reported as an error naming the offending
+// variable instead of being silently dropped — matching the strict-boot
+// philosophy already applied to the env-file loader (see envfile.go).
+func TestOverlayFromEnvInvalidIntReturnsError(t *testing.T) {
+	cfg := Default()
+	cfg.Callback.Port = 8120
+
+	err := cfg.OverlayFromEnv(mapEnv{
+		"OPENCCU_LOOM_CALLBACK_PORT": "abc",
+	}.Get)
+	if err == nil {
+		t.Fatal("want error for non-numeric OPENCCU_LOOM_CALLBACK_PORT, got nil")
+	}
+	if !strings.Contains(err.Error(), "OPENCCU_LOOM_CALLBACK_PORT") {
+		t.Errorf("error %q does not name the offending variable", err.Error())
+	}
+	if cfg.Callback.Port != 8120 {
+		t.Errorf("CallbackPort=%d want 8120 (invalid input must not clobber before erroring)", cfg.Callback.Port)
+	}
+}
+
+// TestOverlayFromEnvInvalidBinPortReturnsError covers the second int field
+// overlaid by [Config.OverlayFromEnv].
+func TestOverlayFromEnvInvalidBinPortReturnsError(t *testing.T) {
+	cfg := Default()
+	err := cfg.OverlayFromEnv(mapEnv{
+		"OPENCCU_LOOM_CALLBACK_BIN_PORT": "not-a-number",
+	}.Get)
+	if err == nil {
+		t.Fatal("want error for non-numeric OPENCCU_LOOM_CALLBACK_BIN_PORT, got nil")
+	}
+	if !strings.Contains(err.Error(), "OPENCCU_LOOM_CALLBACK_BIN_PORT") {
+		t.Errorf("error %q does not name the offending variable", err.Error())
 	}
 }
 

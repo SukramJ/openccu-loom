@@ -112,6 +112,14 @@ func coerceEnum(desc hmproto.ParameterData, raw any) (hmtypes.ParamValue, error)
 
 // ---------- type-narrowing helpers ----------
 
+// asBool's truth table differs on purpose from
+// [github.com/SukramJ/openccu-loom/internal/payload.ParamBool]: this one
+// coerces CCU wire values against a [hmproto.ParameterData] descriptor
+// (case-insensitive, accepts "yes"/"no", no float32/float64 branch since
+// paramset bools arrive as native ints); ParamBool coerces JSON-decoded
+// north-bound service-call bodies (REST/MQTT) and matches what Home
+// Assistant's `payload_on` / `payload_off` MQTT templates commonly send.
+// Different boundaries, different tolerances — keep both, do not unify.
 func asBool(raw any) (bool, error) {
 	switch v := raw.(type) {
 	case bool:

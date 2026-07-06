@@ -208,8 +208,8 @@ func validateValue(desc hmproto.ParameterData, v hmtypes.ParamValue, opts Valida
 // {"ID": "<label>", "VALUE": <number>} objects. A match allows the value
 // to bypass the normal MIN/MAX range check.
 //
-// This mirrors.py and the
-// matchesSpecial function in internal/model/generic/bounds.go.
+// This mirrors the Python reference implementation's SPECIAL handling
+// and the matchesSpecial function in internal/model/generic/bounds.go.
 func isSpecialValue(desc hmproto.ParameterData, fv float64) bool {
 	if len(desc.Special) == 0 {
 		return false

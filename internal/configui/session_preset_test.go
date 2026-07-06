@@ -28,14 +28,11 @@ func makePresetSession() *configui.Session {
 func TestSessionApplyPreset(t *testing.T) {
 	s := makePresetSession()
 
-	errs := s.ApplyPreset(map[string]any{
+	s.ApplyPreset(map[string]any{
 		"LEVEL":   0.8,
 		"ON_TIME": 10.0,
 		"UNKNOWN": "ignored",
 	})
-	if len(errs) != 0 {
-		t.Fatalf("ApplyPreset returned errors: %v", errs)
-	}
 
 	if got := s.CurrentValue("LEVEL"); got != 0.8 {
 		t.Errorf("LEVEL: got %v, want 0.8", got)
@@ -70,14 +67,11 @@ func TestSessionApplyPresetIsUndoable(t *testing.T) {
 }
 
 // TestSessionApplyPresetSkipsUnknown verifies that unknown parameters
-// are silently ignored and do not produce errors.
+// are silently ignored and leave the session clean.
 func TestSessionApplyPresetSkipsUnknown(t *testing.T) {
 	s := makePresetSession()
 
-	errs := s.ApplyPreset(map[string]any{"NO_SUCH_PARAM": 99})
-	if len(errs) != 0 {
-		t.Fatalf("expected no errors for unknown param, got: %v", errs)
-	}
+	s.ApplyPreset(map[string]any{"NO_SUCH_PARAM": 99})
 	if s.IsDirty() {
 		t.Error("session should be clean when only unknown params were in preset")
 	}

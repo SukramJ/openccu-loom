@@ -215,16 +215,17 @@ func (s *Session) ChangedParameters() []ParameterChange {
 // are pushed onto the undo stack individually and are therefore
 // individually undoable.
 //
-// Mirrors the Python SPA preset-application loop in
-// (channel-config.ts): iterate values
-// call session.set per parameter, collect errors but do not roll back
-// already-applied changes. Returns all errors collected during the
-// application.
+// Mirrors the SPA's preset-application loop (channel-config.ts): iterate
+// values, call session.set per parameter, do not roll back already-applied
+// changes on a partial failure.
 //
-// If a key is not present in the session's descriptions it is silently
-// skipped, matching the frontend's best-effort behaviour.
-func (s *Session) ApplyPreset(values map[string]any) []error {
-	var errs []error
+// ApplyPreset has no error return: [Set] never fails (it is a pure map
+// write) and an unknown key is a deliberate, silent skip rather than a
+// validation error — matching the frontend's best-effort behaviour. If a
+// future preset source needs per-key validation (e.g. range-checking a
+// value before it is applied), add that check here and only then
+// reintroduce an error return.
+func (s *Session) ApplyPreset(values map[string]any) {
 	for key, value := range values {
 		s.mu.Lock()
 		_, known := s.descriptions[key]
@@ -234,7 +235,6 @@ func (s *Session) ApplyPreset(values map[string]any) []error {
 		}
 		s.Set(key, value)
 	}
-	return errs
 }
 
 // ResetToDefaults walks every parameter in the session and sets it to its
@@ -486,25 +486,25 @@ func evaluateCross(c CrossValidationConstraint, values map[string]any) string {
 		return 0, false
 	}
 	switch c.Rule {
-	case "gte":
+	case CrossValidationRuleGTE:
 		a, aOK := toFloat(c.ParamA)
 		b, bOK := toFloat(c.ParamB)
 		if aOK && bOK && a < b {
 			return fmt.Sprintf("%s (%v) must be >= %s (%v)", c.ParamA, a, c.ParamB, b)
 		}
-	case "lte":
+	case CrossValidationRuleLTE:
 		a, aOK := toFloat(c.ParamA)
 		b, bOK := toFloat(c.ParamB)
 		if aOK && bOK && a > b {
 			return fmt.Sprintf("%s (%v) must be <= %s (%v)", c.ParamA, a, c.ParamB, b)
 		}
-	case "not_equal":
+	case CrossValidationRuleNotEqual:
 		a, aOK := toFloat(c.ParamA)
 		b, bOK := toFloat(c.ParamB)
 		if aOK && bOK && a == b {
 			return fmt.Sprintf("%s (%v) must differ from %s", c.ParamA, a, c.ParamB)
 		}
-	case "between":
+	case CrossValidationRuleBetween:
 		v, vOK := toFloat(c.Param)
 		mn, mnOK := toFloat(c.MinParam)
 		mx, mxOK := toFloat(c.MaxParam)
@@ -512,6 +512,12 @@ func evaluateCross(c CrossValidationConstraint, values map[string]any) string {
 			return fmt.Sprintf("%s (%v) must be between %s (%v) and %s (%v)",
 				c.Param, v, c.MinParam, mn, c.MaxParam, mx)
 		}
+	default:
+		// An unrecognised rule must not be mistaken for "no violation" —
+		// that would let a typo'd rule name in the embedded metadata
+		// archives silently disable a constraint the operator believes
+		// is being enforced.
+		return fmt.Sprintf("unknown cross-validation rule %q", c.Rule)
 	}
 	return ""
 }

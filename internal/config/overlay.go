@@ -4,6 +4,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -34,7 +35,13 @@ import (
 //   - OPENCCU_LOOM_REST_OPENAPI_VALIDATE     → c.North.REST.OpenAPIValidate (bool)
 //   - OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH    → c.North.REST.OpenAPISpecPath
 //   - OPENCCU_LOOM_MQTT_BROKER_URL           → c.North.MQTT.BrokerURL
-func (c *Config) OverlayFromEnv(getenv func(string) string) {
+//
+// A recognised variable that is present but fails to parse (e.g.
+// OPENCCU_LOOM_CALLBACK_PORT=abc) is reported as an error naming the
+// offending variable rather than being silently dropped — mirroring the
+// strict-boot philosophy of [LoadEnvFile]: a typo must surface at boot,
+// not vanish into a quietly-kept default.
+func (c *Config) OverlayFromEnv(getenv func(string) string) error {
 	if getenv == nil {
 		getenv = os.Getenv
 	}
@@ -44,12 +51,17 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) {
 	overlayString(getenv, "OPENCCU_LOOM_LOG_FORMAT", &c.Logging.Format)
 	overlayString(getenv, "OPENCCU_LOOM_CALLBACK_HOST", &c.Callback.Host)
 	overlayString(getenv, "OPENCCU_LOOM_CALLBACK_PUBLIC_HOST", &c.Callback.PublicHost)
-	overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_PORT", &c.Callback.Port)
-	overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_BIN_PORT", &c.Callback.BinPort)
+	if err := overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_PORT", &c.Callback.Port); err != nil {
+		return err
+	}
+	if err := overlayInt(getenv, "OPENCCU_LOOM_CALLBACK_BIN_PORT", &c.Callback.BinPort); err != nil {
+		return err
+	}
 	overlayString(getenv, "OPENCCU_LOOM_REST_LISTEN", &c.North.REST.Listen)
 	overlayBoolPtr(getenv, "OPENCCU_LOOM_REST_OPENAPI_VALIDATE", &c.North.REST.OpenAPIValidate)
 	overlayString(getenv, "OPENCCU_LOOM_REST_OPENAPI_SPEC_PATH", &c.North.REST.OpenAPISpecPath)
 	overlayString(getenv, "OPENCCU_LOOM_MQTT_BROKER_URL", &c.North.MQTT.BrokerURL)
+	return nil
 }
 
 // DefaultWithEnv returns [Default] with the environment overlay applied.
@@ -62,21 +74,36 @@ func (c *Config) OverlayFromEnv(getenv func(string) string) {
 // container, so every restart/update starts on an empty database and loses the
 // operator's CCUs, users and config. Always go through this constructor for the
 // no-config-file path; never use a bare [Default] there.
+//
+// Panics when a recognised OPENCCU_LOOM_* variable is present but malformed
+// (e.g. OPENCCU_LOOM_CALLBACK_PORT=abc) — this path runs before any config
+// file (and therefore any [Config.Validate] call) exists, so there is no
+// caller in a position to react to a returned error; a fast, loud boot
+// failure beats silently keeping a stale default. Callers that can plumb an
+// error through (e.g. the primary --config path) should prefer
+// [LoadWithEnv], which propagates the same failure as a normal error.
 func DefaultWithEnv() *Config {
 	cfg := Default()
-	cfg.OverlayFromEnv(nil)
+	if err := cfg.OverlayFromEnv(nil); err != nil {
+		panic(fmt.Sprintf("config: DefaultWithEnv: %v", err))
+	}
 	return cfg
 }
 
 // LoadWithEnv combines [Load] + [Config.OverlayFromEnv] in one call.
 // The env layer wins over the YAML; defaults still apply for fields
-// neither YAML nor env populates.
+// neither YAML nor env populates. A malformed recognised env variable
+// (e.g. OPENCCU_LOOM_CALLBACK_PORT=abc) aborts the load with an error
+// naming the offending variable instead of silently keeping the YAML
+// value.
 func LoadWithEnv(path string) (*Config, error) {
 	cfg, err := Load(path)
 	if err != nil {
 		return nil, err
 	}
-	cfg.OverlayFromEnv(nil)
+	if err := cfg.OverlayFromEnv(nil); err != nil {
+		return nil, err
+	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -89,14 +116,21 @@ func overlayString(getenv func(string) string, key string, dst *string) {
 	}
 }
 
-func overlayInt(getenv func(string) string, key string, dst *int) {
+// overlayInt applies the int-valued env override named key onto dst.
+// An unset/empty variable is a no-op; a present-but-unparsable value is
+// reported as an error naming key so a typo surfaces at boot instead of
+// silently leaving dst on its previous value.
+func overlayInt(getenv func(string) string, key string, dst *int) error {
 	v := strings.TrimSpace(getenv(key))
 	if v == "" {
-		return
+		return nil
 	}
-	if n, err := strconv.Atoi(v); err == nil {
-		*dst = n
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fmt.Errorf("config: env %s: invalid integer %q: %w", key, v, err)
 	}
+	*dst = n
+	return nil
 }
 
 // overlayBoolPtr writes into a tri-state

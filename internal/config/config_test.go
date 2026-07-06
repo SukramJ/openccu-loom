@@ -749,3 +749,20 @@ north:
 		t.Fatal("absent keys must stay enabled (default-on)")
 	}
 }
+
+// TestOrDefault verifies the shared nil-pointer-to-default helper backing
+// the many tri-state `*T` config getters (IsEnabled, BasicAuthEnabled,
+// the CentralBehavior toggles, ...).
+func TestOrDefault(t *testing.T) {
+	t.Parallel()
+	if got := orDefault[bool](nil, true); got != true {
+		t.Errorf("nil pointer: got %v, want default true", got)
+	}
+	if got := orDefault[bool](nil, false); got != false {
+		t.Errorf("nil pointer: got %v, want default false", got)
+	}
+	v := false
+	if got := orDefault(&v, true); got != false {
+		t.Errorf("explicit false must win over default true, got %v", got)
+	}
+}
