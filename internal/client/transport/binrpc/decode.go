@@ -170,11 +170,16 @@ func readValue(r *bytesReader, depth int) (xmlrpc.Value, error) {
 		if err := binary.Read(r, binary.BigEndian, &count); err != nil {
 			return nil, err
 		}
-		if int(count) > r.remaining() {
+		// int(count) can wrap negative on 32-bit builds for count > 2^31,
+		// so validate the non-negative domain and bound by the minimum wire
+		// footprint per member before allocating; otherwise make() either
+		// panics (len out of range) or over-allocates ~8x the payload.
+		n := int(count)
+		if n < 0 || n > r.remaining()/minMemberWireBytes {
 			return nil, fmt.Errorf("binrpc: struct member count %d exceeds remaining %d bytes", count, r.remaining())
 		}
-		members := make([]xmlrpc.Member, count)
-		for i := range count {
+		members := make([]xmlrpc.Member, n)
+		for i := range n {
 			name, err := readRawString(r)
 			if err != nil {
 				return nil, fmt.Errorf("binrpc: struct member %d name: %w", i, err)
@@ -195,7 +200,9 @@ func readNValues(r *bytesReader, n, depth int) ([]xmlrpc.Value, error) {
 	if n < 0 {
 		return nil, fmt.Errorf("binrpc: negative value count %d", n)
 	}
-	if n > r.remaining() {
+	// Bound by the minimum wire footprint per value so a crafted count
+	// cannot pre-allocate a slice far larger than the payload can fill.
+	if n > r.remaining()/minValueWireBytes {
 		return nil, fmt.Errorf("binrpc: value count %d exceeds remaining %d bytes", n, r.remaining())
 	}
 	out := make([]xmlrpc.Value, n)
@@ -248,8 +255,11 @@ func (r *bytesReader) readN(n int) ([]byte, error) {
 	if n < 0 {
 		return nil, errors.New("binrpc: negative read length")
 	}
-	if r.off+n > len(r.b) {
-		return nil, fmt.Errorf("binrpc: truncated: need %d bytes, have %d", n, len(r.b)-r.off)
+	// Compare against remaining() rather than r.off+n: on 32-bit builds a
+	// large n (from a truncated uint32 length) can make r.off+n overflow
+	// negative and slip past the bound into an out-of-range slice panic.
+	if n > r.remaining() {
+		return nil, fmt.Errorf("binrpc: truncated: need %d bytes, have %d", n, r.remaining())
 	}
 	out := r.b[r.off : r.off+n]
 	r.off += n

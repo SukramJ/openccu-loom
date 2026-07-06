@@ -29,12 +29,38 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Server-side failures log the real error and return a generic detail;
   attachment filenames in `Content-Disposition` headers are escaped via
   `mime.FormatMediaType`.
+- **REST: `GET /config/effective` no longer leaks array-nested secrets.**
+  The secret-masking walk now descends into arrays, so per-central CCU
+  passwords (`centrals[].password`) are masked to `***` like every other
+  secret — previously they were returned in cleartext to any
+  authenticated reader.
+- **BIN-RPC decoder hardened against malformed length fields.** A struct
+  member / array element count is now validated against the minimum wire
+  size per element before allocating, so a crafted count on the callback
+  listener (`:8129`) can no longer panic `makeslice` (a single packet
+  crashed 32-bit/armv7 builds) or pre-allocate many times the payload
+  size.
+- **Resource caps against unauthenticated floods.** The Matter UDP
+  receive loop bounds concurrent per-datagram dispatch goroutines; the
+  Matter unsecured-PASE duplicate-detection map is bounded per
+  commissioning window (spoofable `SourceNodeID`); each WebSocket
+  connection's subscription set is capped. The CCU JSON-RPC client now
+  size-limits response bodies (configurable; default 128 MiB, generous
+  for bulk `getAllDeviceData` / `listAllDetail` fetches) and the XML-RPC
+  callback HTTP server gained read/write/idle timeouts.
 
 ### Fixed
 
 - Data races: `InterfaceClient.GetVersion` vs `SetVersion`; the Matter
   secure-session `closed` flag (now atomic); the Matter fabric-index
-  read in the session resolver (now lock-guarded).
+  read in the session resolver (now lock-guarded); the command-retry
+  jitter source (a shared `*rand.Rand` used concurrently by per-key
+  retry chains, now mutex-guarded).
+- Connection-recovery coordinator: concurrent recovery triggers for the
+  same interface are now genuinely serialized (the wait re-checks in a
+  loop instead of once, and the active-slot cleanup is ownership-checked)
+  — previously a single completion could release several waiters that
+  then ran duplicate recovery pipelines against one CCU interface.
 - Device coordinator: `DeviceCreated` events are published outside the
   coordinator lock (a subscriber calling back into the coordinator
   could deadlock); the paramset-consistency check goroutine now has

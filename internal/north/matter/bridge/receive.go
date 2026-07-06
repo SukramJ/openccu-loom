@@ -231,6 +231,29 @@ func (b *Bridge) dispatch(ctx context.Context, buf []byte, src *net.UDPAddr) err
 	}
 }
 
+// unsecuredWindow returns the per-source duplicate-detection window for id,
+// creating one on first use. Creation is capped at [maxUnsecuredWindows]: past
+// the cap a new source returns nil and is treated as fresh, so an
+// unauthenticated spoofed-source flood cannot grow unsecuredWindows without
+// bound. The count is best-effort (a concurrent burst may create a few beyond
+// the cap, bounded by the UDP dispatch limit) — the goal is a hard ceiling,
+// not an exact size.
+func (b *Bridge) unsecuredWindow(id uint64) *mrp.Window {
+	if raw, ok := b.unsecuredWindows.Load(id); ok {
+		w, _ := raw.(*mrp.Window)
+		return w
+	}
+	if b.unsecuredWindowCount.Load() >= maxUnsecuredWindows {
+		return nil
+	}
+	raw, loaded := b.unsecuredWindows.LoadOrStore(id, mrp.NewWindow())
+	if !loaded {
+		b.unsecuredWindowCount.Add(1)
+	}
+	w, _ := raw.(*mrp.Window)
+	return w
+}
+
 // decryptIfNeeded returns the plaintext body for the datagram. For
 // SessionID==0 the body is already plaintext. For non-zero SessionID
 // we look up the session and decrypt; misses surface
@@ -250,8 +273,7 @@ func (b *Bridge) decryptIfNeeded(hdr *message.Header, body []byte) (plaintext []
 		// source node id there is nothing stable to key on — treat as fresh
 		// (the handshake handler's own state-replay guard still catches it).
 		if hdr.HasSourceNodeID && hdr.SourceNodeID != 0 {
-			raw, _ := b.unsecuredWindows.LoadOrStore(hdr.SourceNodeID, mrp.NewWindow())
-			if w, ok := raw.(*mrp.Window); ok && !w.Accept(hdr.MessageCounter) {
+			if w := b.unsecuredWindow(hdr.SourceNodeID); w != nil && !w.Accept(hdr.MessageCounter) {
 				return body, true, nil
 			}
 		}

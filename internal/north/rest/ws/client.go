@@ -19,6 +19,14 @@ import (
 // Slow clients overflowing this buffer are closed.
 const clientBufferSize = 1000
 
+// maxTopicsPerClient caps the retained subscription set per connection. Each
+// subscribe frame appends deduped topics with no natural bound, so an
+// authenticated client could otherwise grow the set without limit — exhausting
+// memory and driving the per-event O(n) match cost up for every dispatch. A
+// real client subscribes to a modest set of topics/patterns; 1024 is far above
+// that. Additions past the cap are dropped.
+const maxTopicsPerClient = 1024
+
 // pingInterval is the server-side heartbeat cadence (§16.3: 30s).
 const pingInterval = 30 * time.Second
 
@@ -109,6 +117,11 @@ func (c *client) subscribe(topics []string) {
 		}
 		if _, ok := seen[t]; ok {
 			continue
+		}
+		if len(c.topics) >= maxTopicsPerClient {
+			// Subscription set is full; drop further additions so a client
+			// cannot grow it without bound. Existing subscriptions keep working.
+			break
 		}
 		seen[t] = struct{}{}
 		c.topics = append(c.topics, t)

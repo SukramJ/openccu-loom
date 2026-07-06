@@ -60,7 +60,26 @@ type Config struct {
 	// Host identifies the remote in error [hmerr.Context] and logs.
 	// Defaults to Endpoint when empty.
 	Host string
+
+	// ResponseLimit bounds the response body in bytes. Zero selects
+	// [DefaultResponseLimit]. Operators with very large installations whose
+	// bulk fetch (Interface.getAllDeviceData / Device.listAllDetail) exceeds
+	// the default may raise this.
+	ResponseLimit int64
 }
+
+// DefaultResponseLimit bounds how many bytes we accept from a CCU JSON-RPC
+// response before rejecting it, guarding against an oversized/hostile body
+// exhausting daemon memory. Set far above the xmlrpc transport's 10 MiB
+// because the JSON-RPC-only bulk calls (Interface.getAllDeviceData and
+// Device.listAllDetail) return every current value for every device in one
+// response: on a large installation (thousands of devices) that legitimately
+// runs to tens of MiB, and rejecting it would break the cold-boot value-cache
+// warm-up. 128 MiB comfortably covers any real CCU — which is itself
+// memory-constrained and cannot emit a multi-hundred-MiB body — while still
+// bounding the multi-gigabyte OOM a spoofed/hostile endpoint could stream.
+// Operators with an exceptionally large fleet can raise Config.ResponseLimit.
+const DefaultResponseLimit = 128 * 1024 * 1024
 
 // loginBackoffMultiplier is the exponential factor applied after each failed
 // login attempt.
@@ -97,6 +116,7 @@ type Client struct {
 	logger     *slog.Logger
 	observer   interfaces.TransportObserver
 	host       string
+	limit      int64 // max response body bytes; from cfg.ResponseLimit or default
 
 	mu                 sync.Mutex
 	sessionID          string    // empty when logged out
@@ -137,6 +157,10 @@ func New(cfg Config) (*Client, error) {
 	if host == "" {
 		host = cfg.Endpoint
 	}
+	limit := cfg.ResponseLimit
+	if limit <= 0 {
+		limit = DefaultResponseLimit
+	}
 	return &Client{
 		cfg:        cfg,
 		httpClient: hc,
@@ -144,6 +168,7 @@ func New(cfg Config) (*Client, error) {
 		logger:     logger,
 		observer:   observer,
 		host:       host,
+		limit:      limit,
 	}, nil
 }
 
@@ -235,9 +260,16 @@ func (c *Client) callOnce(ctx context.Context, method string, params map[string]
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, err := io.ReadAll(resp.Body)
+	// Bound the response read so a spoofed/malfunctioning CCU (reached over
+	// plaintext HTTP, or TLS with verification disabled) cannot stream a
+	// multi-gigabyte body into memory and OOM the daemon — the client Timeout
+	// bounds total time, not bytes. Mirrors the xmlrpc client's LimitReader.
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, c.limit+1))
 	if err != nil {
 		return c.wrap(method, fmt.Errorf("read response: %w", err))
+	}
+	if int64(len(raw)) > c.limit {
+		return c.wrap(method, fmt.Errorf("response exceeds limit of %d bytes: %w", c.limit, hmerr.ErrClientException))
 	}
 
 	switch resp.StatusCode {
