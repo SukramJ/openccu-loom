@@ -7,6 +7,8 @@ package configui
 // checks. The zero value and any value outside this set is invalid — see
 // [evaluateCross], which reports an unknown rule as a validation issue
 // instead of silently treating it as "no violation".
+//
+// loom:reachable:reason="type of CrossValidationConstraint.Rule; constructed from embedded metadata and evaluated in session cross-validation, which the production callgraph reaches only via the conditionally wired config UI"
 type CrossValidationRule string
 
 // Recognised [CrossValidationRule] values. Names match the wire strings

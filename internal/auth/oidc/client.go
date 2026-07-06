@@ -71,6 +71,8 @@ func New(ctx context.Context, cfg Config, httpClient *http.Client) (*Client, err
 // [Client.AuthURL], and pass the same value back into
 // [Client.VerifyIDToken] as expectedNonce so a captured ID token
 // cannot be replayed into a different browser session.
+//
+// loom:reachable:reason="minted by the REST OIDC start handler; the OIDC surface is wired conditionally so the production callgraph does not reach it"
 func NewNonce() (string, error) {
 	var raw [32]byte
 	if _, err := rand.Read(raw[:]); err != nil {
