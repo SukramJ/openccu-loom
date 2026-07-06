@@ -68,9 +68,11 @@ func (e *sigmaEncoder) putUint32(tag uint8, v uint32) {
 func (e *sigmaEncoder) bytes() []byte {
 	out, err := e.enc.Bytes()
 	if err != nil {
-		// Bytes only returns an error on encoder mis-use (unbalanced
-		// containers); treat as programmer bug — the caller would be
-		// shipping malformed wire bytes anyway.
+		// invariant: Bytes only returns an error on encoder mis-use
+		// (unbalanced containers) — every open/close call in this file
+		// is authored locally, so an unbalanced container is a caller
+		// bug, not something a remote peer's input can trigger; the
+		// caller would be shipping malformed wire bytes anyway.
 		panic(fmt.Sprintf("sigma: encoder.Bytes: %v", err))
 	}
 	return out

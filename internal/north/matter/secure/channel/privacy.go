@@ -164,7 +164,7 @@ func ApplyPrivacyMask(mask, headerSlice []byte) error {
 func (s *Session) PrivacyKey() ([]byte, error) {
 	s.privacyMu.Lock()
 	defer s.privacyMu.Unlock()
-	if s.closed {
+	if s.closed.Load() {
 		return nil, ErrSessionInactive
 	}
 	if s.privacyKey == nil {
@@ -184,7 +184,7 @@ func (s *Session) PrivacyKey() ([]byte, error) {
 func (s *Session) PeerPrivacyKey() ([]byte, error) {
 	s.privacyMu.Lock()
 	defer s.privacyMu.Unlock()
-	if s.closed {
+	if s.closed.Load() {
 		return nil, ErrSessionInactive
 	}
 	if s.peerPrivacyKey == nil {

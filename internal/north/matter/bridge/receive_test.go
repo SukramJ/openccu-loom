@@ -455,7 +455,7 @@ func TestCheckTimedGate_UntimedRequestNoPriorProceeds(t *testing.T) {
 func TestCheckTimedGate_UntimedRequestWithPriorRejects(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
-	b.timedDeadlines.Store(timedKey{sessionID: 1, exchangeID: 7}, time.Now().Add(10*time.Second))
+	b.routing.timedDeadlines.Store(timedKey{sessionID: 1, exchangeID: 7}, time.Now().Add(10*time.Second))
 	status, gated := b.checkTimedGate(false, 1, 7)
 	if !gated {
 		t.Fatal("untimed/with-prior: gated=false, want true")
@@ -463,7 +463,7 @@ func TestCheckTimedGate_UntimedRequestWithPriorRejects(t *testing.T) {
 	if status != im.StatusTimedRequestMismatch {
 		t.Errorf("status = %v, want StatusTimedRequestMismatch (0xC9)", status)
 	}
-	if _, ok := b.timedDeadlines.Load(timedKey{sessionID: 1, exchangeID: 7}); ok {
+	if _, ok := b.routing.timedDeadlines.Load(timedKey{sessionID: 1, exchangeID: 7}); ok {
 		t.Error("untimed/with-prior: stale deadline still present after rejection")
 	}
 }
@@ -489,7 +489,7 @@ func TestCheckTimedGate_TimedFlagWithoutPriorRejects(t *testing.T) {
 func TestCheckTimedGate_ExpiredDeadlineRejects(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
-	b.timedDeadlines.Store(timedKey{sessionID: 2, exchangeID: 11}, time.Now().Add(-1*time.Millisecond))
+	b.routing.timedDeadlines.Store(timedKey{sessionID: 2, exchangeID: 11}, time.Now().Add(-1*time.Millisecond))
 	status, gated := b.checkTimedGate(true, 2, 11)
 	if !gated {
 		t.Fatal("expired: gated=false, want true")
@@ -497,7 +497,7 @@ func TestCheckTimedGate_ExpiredDeadlineRejects(t *testing.T) {
 	if status != im.StatusTimeout {
 		t.Errorf("status = %v, want StatusTimeout (0x94)", status)
 	}
-	if _, ok := b.timedDeadlines.Load(timedKey{sessionID: 2, exchangeID: 11}); ok {
+	if _, ok := b.routing.timedDeadlines.Load(timedKey{sessionID: 2, exchangeID: 11}); ok {
 		t.Error("expired: stale deadline still present after rejection")
 	}
 }
@@ -509,11 +509,11 @@ func TestCheckTimedGate_ExpiredDeadlineRejects(t *testing.T) {
 func TestCheckTimedGate_ValidDeadlineProceeds(t *testing.T) {
 	t.Parallel()
 	b := &Bridge{}
-	b.timedDeadlines.Store(timedKey{sessionID: 3, exchangeID: 13}, time.Now().Add(10*time.Second))
+	b.routing.timedDeadlines.Store(timedKey{sessionID: 3, exchangeID: 13}, time.Now().Add(10*time.Second))
 	if status, gated := b.checkTimedGate(true, 3, 13); gated {
 		t.Errorf("valid: gated=true, want false (status=%v)", status)
 	}
-	if _, ok := b.timedDeadlines.Load(timedKey{sessionID: 3, exchangeID: 13}); ok {
+	if _, ok := b.routing.timedDeadlines.Load(timedKey{sessionID: 3, exchangeID: 13}); ok {
 		t.Error("valid: deadline still present after consumption")
 	}
 	// Re-check on the same exchange now reads as missing-prior.
@@ -536,7 +536,7 @@ func TestTimedRequest_SessionScopeIsolation(t *testing.T) {
 		exchangeID = uint16(42)
 	)
 	// Register a deadline for session A, exchange 42.
-	b.timedDeadlines.Store(timedKey{sessionID: sessionA, exchangeID: exchangeID}, time.Now().Add(10*time.Second))
+	b.routing.timedDeadlines.Store(timedKey{sessionID: sessionA, exchangeID: exchangeID}, time.Now().Add(10*time.Second))
 
 	// Attempt to consume from session B on the same exchange-ID:
 	// must hit the "no prior TimedRequest" path (NEEDS_TIMED_INTERACTION).
@@ -549,7 +549,7 @@ func TestTimedRequest_SessionScopeIsolation(t *testing.T) {
 	}
 	// Session A's deadline must still be present — session B's miss must not
 	// have cleared it.
-	if _, ok := b.timedDeadlines.Load(timedKey{sessionID: sessionA, exchangeID: exchangeID}); !ok {
+	if _, ok := b.routing.timedDeadlines.Load(timedKey{sessionID: sessionA, exchangeID: exchangeID}); !ok {
 		t.Error("session A's deadline was erroneously consumed by session B's check")
 	}
 	// Session A itself must succeed.
@@ -580,7 +580,7 @@ func TestCaptureSubTarget_StoresMetadata(t *testing.T) {
 	}
 	b.captureSubTarget(99, src, hdr, proto, false)
 
-	raw, ok := b.subTargets.Load(uint32(99))
+	raw, ok := b.routing.subTargets.Load(uint32(99))
 	if !ok {
 		t.Fatal("subTarget for ID 99 not stored")
 	}
@@ -619,7 +619,7 @@ func TestCaptureSubTarget_SkipsZeroOrNil(t *testing.T) {
 	b.captureSubTarget(2, src, nil, proto, false) // nil hdr
 
 	count := 0
-	b.subTargets.Range(func(_, _ any) bool { count++; return true })
+	b.routing.subTargets.Range(func(_, _ any) bool { count++; return true })
 	if count != 0 {
 		t.Errorf("unexpected entries in subTargets: %d", count)
 	}

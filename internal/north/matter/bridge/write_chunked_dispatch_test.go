@@ -6,7 +6,7 @@
 // combines MoreChunkedMessages with SuppressResponse, or with a valid
 // timed window, must be rejected with StatusResponse(InvalidAction)
 // rather than dispatched. This file lives in package bridge so it can
-// call [Bridge.dispatch] directly and seed [Bridge.timedDeadlines],
+// call [Bridge.dispatch] directly and seed [exchangeRouting.timedDeadlines],
 // matching the style of timed_conformance_test.go and
 // reply_reliability_test.go.
 
@@ -146,7 +146,7 @@ func TestDispatchWriteRequest_TimedWithMoreChunked_RejectsInvalidActionAndConsum
 		sessionID  = uint16(0)
 		exchangeID = uint16(1) // buildProtocolHeader fixes ExchangeID at 1.
 	)
-	b.timedDeadlines.Store(timedKey{sessionID: sessionID, exchangeID: exchangeID}, time.Now().Add(10*time.Second))
+	b.routing.timedDeadlines.Store(timedKey{sessionID: sessionID, exchangeID: exchangeID}, time.Now().Add(10*time.Second))
 
 	hdr := buildHeader(sessionID, 41)
 	proto := buildProtocolHeader(im.InteractionModelProtocolID, im.OpcodeWriteRequest)
@@ -162,7 +162,7 @@ func TestDispatchWriteRequest_TimedWithMoreChunked_RejectsInvalidActionAndConsum
 		t.Errorf("StatusResponse status = %v, want StatusInvalidAction (0x80)", status)
 	}
 
-	if _, ok := b.timedDeadlines.Load(timedKey{sessionID: sessionID, exchangeID: exchangeID}); ok {
+	if _, ok := b.routing.timedDeadlines.Load(timedKey{sessionID: sessionID, exchangeID: exchangeID}); ok {
 		t.Error("timed window still present after a timed+chunked write — checkTimedGate must consume it before the chunked check rejects")
 	}
 }

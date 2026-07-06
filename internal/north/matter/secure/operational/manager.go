@@ -101,10 +101,14 @@ type Entry struct {
 	// SessionID is the local 16-bit session identifier carried in
 	// every encrypted Message Header.
 	SessionID uint16
-	// FabricIndex is the fabric this session belongs to. The bridge
+	// fabricIndex is the fabric this session belongs to. The bridge
 	// uses it to scope Read / Write / Invoke against fabric-scoped
-	// attributes (e.g. ACL).
-	FabricIndex uint8
+	// attributes (e.g. ACL). Guarded by mu — [Manager.AdoptFabricIndex]
+	// rewrites it after the entry has already been handed out to
+	// callers (e.g. a fabric-resolver closure captured via
+	// [Manager.Get]), so an unguarded field would race against that
+	// rewrite. Read via [Entry.FabricIndex].
+	fabricIndex uint8
 	// Session encrypts/decrypts messages for this peer.
 	Session *channel.Session
 	// AttestationChallenge is the 16-byte HKDF-derived challenge
@@ -213,6 +217,28 @@ func (e *Entry) LastActivity() time.Time {
 	return t
 }
 
+// FabricIndex returns the fabric this session currently belongs to.
+// Safe to call concurrently with [Manager.AdoptFabricIndex] — callers
+// that resolve a fabric off an [Entry] captured earlier (e.g. via
+// [Manager.Get]) MUST go through this accessor rather than reading a
+// struct field, since AdoptFabricIndex can rewrite the value after the
+// Entry pointer has already been handed out.
+func (e *Entry) FabricIndex() uint8 {
+	e.mu.Lock()
+	v := e.fabricIndex
+	e.mu.Unlock()
+	return v
+}
+
+// setFabricIndex rewrites the fabric this session belongs to. Only
+// [Manager.AdoptFabricIndex] calls this — kept unexported so the
+// rewrite always goes through the manager's documented contract.
+func (e *Entry) setFabricIndex(v uint8) {
+	e.mu.Lock()
+	e.fabricIndex = v
+	e.mu.Unlock()
+}
+
 // Errors.
 var (
 	// ErrSessionExhausted is returned when [1, 0xFFFE] is fully
@@ -294,7 +320,7 @@ func (m *Manager) OpenFromSigma(fabricIndex uint8, localNodeID, peerNodeID uint6
 	}
 	entry := &Entry{
 		SessionID:   id,
-		FabricIndex: fabricIndex,
+		fabricIndex: fabricIndex,
 		Session:     sess,
 	}
 	m.sessions[id] = entry
@@ -374,7 +400,7 @@ func (m *Manager) OpenFromSigmaWithID(id uint16, fabricIndex uint8, localNodeID,
 	// OpenFromPase sets this identically (manager.go:241); CASE must match.
 	entry := &Entry{
 		SessionID:            id,
-		FabricIndex:          fabricIndex,
+		fabricIndex:          fabricIndex,
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), keys.AttestationChallenge[:]...),
 	}
@@ -428,7 +454,7 @@ func (m *Manager) OpenFromPase(localNodeID, peerNodeID uint64, peerSessionID uin
 	}
 	entry := &Entry{
 		SessionID:            id,
-		FabricIndex:          0, // PASE pre-dates the operational fabric
+		fabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
 		isPase:               true,
@@ -470,7 +496,7 @@ func (m *Manager) OpenFromPaseWithID(id uint16, localNodeID, peerNodeID uint64, 
 	}
 	entry := &Entry{
 		SessionID:            id,
-		FabricIndex:          0, // PASE pre-dates the operational fabric
+		fabricIndex:          0, // PASE pre-dates the operational fabric
 		Session:              sess,
 		AttestationChallenge: append([]byte(nil), derived[32:48]...),
 		isPase:               true,
@@ -513,13 +539,13 @@ func (m *Manager) Get(sessionID uint16) (*Entry, error) {
 // Returns [ErrSessionNotFound] when no session matches sessionID.
 // Idempotent: setting the same FabricIndex twice is a no-op.
 func (m *Manager) AdoptFabricIndex(sessionID uint16, newFabricIndex uint8) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
 	entry, ok := m.sessions[sessionID]
+	m.mu.RUnlock()
 	if !ok {
 		return ErrSessionNotFound
 	}
-	entry.FabricIndex = newFabricIndex
+	entry.setFabricIndex(newFabricIndex)
 	return nil
 }
 
@@ -544,7 +570,7 @@ func (m *Manager) CloseFabric(fabricIndex uint8) {
 	m.mu.Lock()
 	victims := make([]*Entry, 0)
 	for id, entry := range m.sessions {
-		if entry.FabricIndex == fabricIndex {
+		if entry.FabricIndex() == fabricIndex {
 			victims = append(victims, entry)
 			delete(m.sessions, id)
 		}
@@ -568,7 +594,7 @@ func (m *Manager) CloseFabricExcept(fabricIndex uint8, exceptSessionID uint16) {
 	m.mu.Lock()
 	victims := make([]*Entry, 0)
 	for id, entry := range m.sessions {
-		if entry.FabricIndex == fabricIndex && id != exceptSessionID {
+		if entry.FabricIndex() == fabricIndex && id != exceptSessionID {
 			victims = append(victims, entry)
 			delete(m.sessions, id)
 		}
@@ -621,7 +647,7 @@ func (m *Manager) ClosePeer(fabricIndex uint8, peerNodeID uint64) int {
 			// authenticate.
 			continue
 		}
-		if entry.FabricIndex == fabricIndex && entry.Session.PeerNodeID() == peerNodeID {
+		if entry.FabricIndex() == fabricIndex && entry.Session.PeerNodeID() == peerNodeID {
 			victims = append(victims, entry)
 			delete(m.sessions, id)
 		}
@@ -650,7 +676,7 @@ func (m *Manager) collectStalePeerSessionsLocked(fabricIndex uint8, peerNodeID u
 		if entry.Session == nil {
 			continue
 		}
-		if entry.FabricIndex == fabricIndex && entry.Session.PeerNodeID() == peerNodeID {
+		if entry.FabricIndex() == fabricIndex && entry.Session.PeerNodeID() == peerNodeID {
 			stale = append(stale, entry)
 			delete(m.sessions, id)
 		}

@@ -141,6 +141,13 @@ func (e *Encoder) PutUintWidth(tag Tag, v uint64, widthBytes int) {
 		e.writeControlAndTag(TypeUnsignedInt8, tag)
 		e.buf = binary.LittleEndian.AppendUint64(e.buf, v)
 	default:
+		// invariant: widthBytes is always a literal constant chosen by
+		// the caller at the call site (every Encoder Put* method in
+		// this package is void-returning and encodes wire-side
+		// schema knowledge, not peer-supplied data) — an unsupported
+		// value can only reach here through a new call site passing
+		// the wrong constant, which is a build-time-discoverable coding
+		// error, not a value that flows in from a remote message.
 		panic(fmt.Sprintf("tlv: PutUintWidth: unsupported widthBytes %d (must be 1, 2, 4, or 8)", widthBytes))
 	}
 }
@@ -471,6 +478,13 @@ func (e *Encoder) writeControlAndTag(t ElementType, tag Tag) {
 	if len(e.containerStack) > 0 &&
 		e.containerStack[len(e.containerStack)-1] == TypeArray &&
 		tag.Kind == TagKindContext {
+		// invariant: both the container nesting (StartArray/EndContainer
+		// calls) and the tag kind passed to every Put* method are chosen
+		// by our own cluster-server encoding code, never by re-emitting
+		// a tag lifted from a decoded remote message — so this only
+		// fires when a caller in this codebase picks ContextTag() for
+		// an element it is writing into an Array, a coding mistake
+		// caught by the parity/encode tests, not a wire-triggerable path.
 		panic(fmt.Sprintf("tlv: context tag inside Array container (tag=%d); use AnonymousTag()", tag.Number))
 	}
 	// Note: chip TLVReader.cpp:822-827 enforces two strictness rules

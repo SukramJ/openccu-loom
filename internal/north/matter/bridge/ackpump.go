@@ -113,7 +113,7 @@ func (b *Bridge) owedInboundAck(src *net.UDPAddr, hdr *message.Header, proto mes
 		// per session, so two controllers sharing an exchange ID must
 		// not overwrite each other's reply route. Mirrors matter.js
 		// ExchangeManager.ts:287 session-scoped exchange resolution.
-		b.exchangeSrcs.Store(mrp.ExchangeKey{SessionID: hdr.SessionID, ExchangeID: proto.ExchangeID}, exchangeReplyTarget{
+		b.routing.exchangeSrcs.Store(mrp.ExchangeKey{SessionID: hdr.SessionID, ExchangeID: proto.ExchangeID}, exchangeReplyTarget{
 			src:                 src,
 			hasPeerSourceNodeID: hdr.HasSourceNodeID,
 			peerSourceNodeID:    hdr.SourceNodeID,
@@ -173,7 +173,7 @@ func (b *Bridge) dischargeOwedAck(sessionID, exchangeID uint16) {
 		return
 	}
 	tracker.Discharge(sessionID, exchangeID)
-	b.exchangeSrcs.Delete(mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID})
+	b.routing.exchangeSrcs.Delete(mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID})
 }
 
 // expediteDuplicateAck rewrites the just-registered obligation for a
@@ -195,7 +195,7 @@ func (b *Bridge) expediteDuplicateAck(sessionID, exchangeID uint16) {
 // IM:StatusResponse arrives on this exchange (Matter §8.6.2). Used by
 // the Subscribe-Initial chunk-streaming loop in [bridge/subscribe.go]
 // to synchronise with Apple's ReadClient between chunks — see
-// [Bridge.statusResponseWaits] for the full rationale. The caller
+// [exchangeRouting.statusResponseWaits] for the full rationale. The caller
 // MUST [Bridge.disarmStatusResponseWait] the same exchange on the
 // exit path so a delayed StatusResponse cannot panic on a closed
 // channel.
@@ -207,7 +207,7 @@ func (b *Bridge) expediteDuplicateAck(sessionID, exchangeID uint16) {
 func (b *Bridge) armStatusResponseWait(sessionID, exchangeID uint16) <-chan struct{} {
 	ch := make(chan struct{})
 	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
-	if prev, loaded := b.statusResponseWaits.Swap(key, ch); loaded {
+	if prev, loaded := b.routing.statusResponseWaits.Swap(key, ch); loaded {
 		// Pathological: caller armed a second waiter on the same
 		// exchange without disarming the first. Close the orphan
 		// channel so a goroutine blocked on it unblocks (interpreting
@@ -227,7 +227,7 @@ func (b *Bridge) armStatusResponseWait(sessionID, exchangeID uint16) <-chan stru
 // closed channel that a goroutine has already abandoned.
 func (b *Bridge) disarmStatusResponseWait(sessionID, exchangeID uint16) {
 	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
-	if v, loaded := b.statusResponseWaits.LoadAndDelete(key); loaded {
+	if v, loaded := b.routing.statusResponseWaits.LoadAndDelete(key); loaded {
 		if ch, ok := v.(chan struct{}); ok {
 			safeClose(ch)
 		}
@@ -241,7 +241,7 @@ func (b *Bridge) disarmStatusResponseWait(sessionID, exchangeID uint16) {
 // wait is registered — no-op.
 func (b *Bridge) signalStatusResponseRX(sessionID, exchangeID uint16) {
 	key := mrp.ExchangeKey{SessionID: sessionID, ExchangeID: exchangeID}
-	if v, loaded := b.statusResponseWaits.LoadAndDelete(key); loaded {
+	if v, loaded := b.routing.statusResponseWaits.LoadAndDelete(key); loaded {
 		if ch, ok := v.(chan struct{}); ok {
 			safeClose(ch)
 		}
@@ -344,7 +344,7 @@ func (b *Bridge) RunAckPumpOnce(now time.Time) int {
 // pipeline didn't run owedInboundAck — either way we can't route the
 // reply, so log and drop.
 func (b *Bridge) emitStandaloneAck(obl mrp.AckObligation) {
-	raw, ok := b.exchangeSrcs.LoadAndDelete(mrp.ExchangeKey{SessionID: obl.SessionID, ExchangeID: obl.ExchangeID})
+	raw, ok := b.routing.exchangeSrcs.LoadAndDelete(mrp.ExchangeKey{SessionID: obl.SessionID, ExchangeID: obl.ExchangeID})
 	if !ok {
 		b.logger.Debug("matter.tx.ack_pump.no_src",
 			slog.Int("exchange_id", int(obl.ExchangeID)),

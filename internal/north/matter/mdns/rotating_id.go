@@ -85,6 +85,11 @@ func GenerateRotatingID(uniqueID []byte, lifetimeCounter uint16) string {
 // empty RI key.
 func MustGenerateRotatingID(uniqueID []byte, lifetimeCounter uint16) string {
 	if len(uniqueID) < RotatingIDUniqueIDLength {
+		// invariant: uniqueID is the daemon's own locally-generated /
+		// persisted commissionable-node identifier, never data parsed
+		// off the wire — a short value here is a caller bug (e.g. a
+		// truncated config seed), not something a remote peer can
+		// trigger.
 		panic(fmt.Sprintf("mdns: uniqueID length %d < %d (min)", len(uniqueID), RotatingIDUniqueIDLength))
 	}
 	return GenerateRotatingID(uniqueID, lifetimeCounter)

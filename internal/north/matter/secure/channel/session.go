@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/SukramJ/openccu-loom/internal/north/matter/secure/aesccm"
 	"github.com/SukramJ/openccu-loom/internal/north/matter/transport/message"
@@ -75,7 +76,12 @@ type Session struct {
 	privacyKey     []byte // outbound (encrypt) privacy key — see Matter §4.4.3.1
 	peerPrivacyKey []byte // inbound (decrypt) privacy key
 
-	closed bool
+	// closed gates Encrypt / Decrypt / the privacy-key accessors after
+	// [Session.Close]. atomic.Bool because Close flips it without
+	// holding privacyMu (the key-zeroing pass takes that lock
+	// separately), so a plain bool read from Encrypt/Decrypt would
+	// race with the Close write.
+	closed atomic.Bool
 }
 
 // Config bundles the session parameters established during PASE /
@@ -172,7 +178,7 @@ type EncryptResult struct {
 // unencrypted unicast (typical), or set the relevant bits per
 // [..]/transport/message.
 func (s *Session) Encrypt(header *message.Header, secFlags uint8, plaintext []byte) (*EncryptResult, error) {
-	if s.closed {
+	if s.closed.Load() {
 		return nil, ErrSessionInactive
 	}
 	// Secure-session counters must never roll over — a wrapped value
@@ -220,7 +226,7 @@ func (s *Session) Encrypt(header *message.Header, secFlags uint8, plaintext []by
 // duplicate's ExchangeID; without that ack the peer keeps
 // retransmitting until the exchange falls over.
 func (s *Session) Decrypt(header *message.Header, secFlags uint8, ciphertext []byte) (plain []byte, duplicate bool, err error) {
-	if s.closed {
+	if s.closed.Load() {
 		return nil, false, ErrSessionInactive
 	}
 	srcNode := header.SourceNodeID
@@ -272,7 +278,7 @@ func (s *Session) PeerCATs() []uint32 {
 // Close zeroises the session keys and prevents further Encrypt /
 // Decrypt calls. Idempotent.
 func (s *Session) Close() {
-	s.closed = true
+	s.closed.Store(true)
 	for i := range s.encKey {
 		s.encKey[i] = 0
 	}

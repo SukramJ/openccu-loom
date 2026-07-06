@@ -323,14 +323,14 @@ func TestSubscription_AutoCloseOnMaxRetries(t *testing.T) {
 	const counter = uint32(99)
 	const subID = uint32(7)
 	b.reportCounterOwner.Store(reportCounterKey(sessionID, counter), subID)
-	b.subTargets.Store(subID, subTarget{})
+	b.routing.subTargets.Store(subID, subTarget{})
 
 	b.closeSubscriptionByCounter(sessionID, counter)
 
 	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionID, counter)); ok {
 		t.Error("counter→subID mapping still present after close")
 	}
-	if _, ok := b.subTargets.Load(subID); ok {
+	if _, ok := b.routing.subTargets.Load(subID); ok {
 		t.Error("subTarget still present after close")
 	}
 }
@@ -352,15 +352,15 @@ func TestCloseSubscriptionByCounter_IsSessionScoped(t *testing.T) {
 
 	b.reportCounterOwner.Store(reportCounterKey(sessionA, sharedCounter), subA)
 	b.reportCounterOwner.Store(reportCounterKey(sessionB, sharedCounter), subB)
-	b.subTargets.Store(subA, subTarget{})
-	b.subTargets.Store(subB, subTarget{})
+	b.routing.subTargets.Store(subA, subTarget{})
+	b.routing.subTargets.Store(subB, subTarget{})
 
 	b.closeSubscriptionByCounter(sessionA, sharedCounter)
 
 	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionA, sharedCounter)); ok {
 		t.Error("session A counter→subID mapping still present after close")
 	}
-	if _, ok := b.subTargets.Load(subA); ok {
+	if _, ok := b.routing.subTargets.Load(subA); ok {
 		t.Error("session A subTarget still present after close")
 	}
 	// Session B's entries — sharing the bare counter value — must
@@ -368,7 +368,7 @@ func TestCloseSubscriptionByCounter_IsSessionScoped(t *testing.T) {
 	if _, ok := b.reportCounterOwner.Load(reportCounterKey(sessionB, sharedCounter)); !ok {
 		t.Error("session B counter→subID mapping was reaped by session A's close")
 	}
-	if _, ok := b.subTargets.Load(subB); !ok {
+	if _, ok := b.routing.subTargets.Load(subB); !ok {
 		t.Error("session B subTarget was reaped by session A's close")
 	}
 }
@@ -557,7 +557,7 @@ func TestSubscription_CloseUnknownCounterNoOp(t *testing.T) {
 	// Must not panic; Pending stays empty.
 	b.closeSubscriptionByCounter(0, uint32(0xDEAD))
 	count := 0
-	b.subTargets.Range(func(_, _ any) bool { count++; return true })
+	b.routing.subTargets.Range(func(_, _ any) bool { count++; return true })
 	if count != 0 {
 		t.Errorf("subTargets unexpectedly populated: %d", count)
 	}
@@ -599,7 +599,7 @@ func TestReport_PeerUnreachable_ClosesSubscriptionWithoutMRP(t *testing.T) {
 
 	// Plant a subTarget whose SessionID (55) is not in the session manager —
 	// sendUnsolicitedIM will return ErrUnsolicitedSessionMissing.
-	b.subTargets.Store(sub.ID, subTarget{
+	b.routing.subTargets.Store(sub.ID, subTarget{
 		src:       &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5540},
 		sessionID: 55,
 	})
@@ -616,7 +616,7 @@ func TestReport_PeerUnreachable_ClosesSubscriptionWithoutMRP(t *testing.T) {
 	}
 
 	// subTarget must be deleted after the cap-exceeding call.
-	if _, ok := b.subTargets.Load(sub.ID); ok {
+	if _, ok := b.routing.subTargets.Load(sub.ID); ok {
 		t.Error("subTarget still present after 3 send failures — should have been deleted")
 	}
 	// Manager must have evicted the subscription.
@@ -656,7 +656,7 @@ func TestReport_PeerUnreachable_RetriesBeforeEviction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Subscribe: %v", err)
 	}
-	b.subTargets.Store(sub.ID, subTarget{
+	b.routing.subTargets.Store(sub.ID, subTarget{
 		src:       &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 5540},
 		sessionID: 55,
 	})
@@ -666,7 +666,7 @@ func TestReport_PeerUnreachable_RetriesBeforeEviction(t *testing.T) {
 
 	// First failure: counter=1, subscription stays alive.
 	b.reportSubscription(context.Background(), sub, paths)
-	if _, ok := b.subTargets.Load(sub.ID); !ok {
+	if _, ok := b.routing.subTargets.Load(sub.ID); !ok {
 		t.Fatal("subscription evicted after 1 send error; want still active (retry-cap is 2)")
 	}
 	if mgr.Active() != 1 {
@@ -675,7 +675,7 @@ func TestReport_PeerUnreachable_RetriesBeforeEviction(t *testing.T) {
 
 	// Second failure: counter=2, subscription stays alive.
 	b.reportSubscription(context.Background(), sub, paths)
-	if _, ok := b.subTargets.Load(sub.ID); !ok {
+	if _, ok := b.routing.subTargets.Load(sub.ID); !ok {
 		t.Fatal("subscription evicted after 2 send errors; want still active (retry-cap is 2)")
 	}
 	if mgr.Active() != 1 {
@@ -684,7 +684,7 @@ func TestReport_PeerUnreachable_RetriesBeforeEviction(t *testing.T) {
 
 	// Third failure: counter=3 exceeds cap → eviction.
 	b.reportSubscription(context.Background(), sub, paths)
-	if _, ok := b.subTargets.Load(sub.ID); ok {
+	if _, ok := b.routing.subTargets.Load(sub.ID); ok {
 		t.Error("subscription not evicted after 3 send errors; want closed")
 	}
 	if mgr.Active() != 0 {

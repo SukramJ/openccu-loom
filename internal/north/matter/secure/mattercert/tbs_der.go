@@ -115,7 +115,12 @@ func buildDN(dn DistinguishedName) []asn1.RawValue {
 		// in a SET container per RFC 5280.
 		raw, err := asn1.Marshal(attr)
 		if err != nil {
-			// Should never happen for our well-formed inputs.
+			// invariant: buildDN only ever encodes the bridge's own
+			// locally-formatted hex identifiers (Matter node/fabric IDs,
+			// CATs) into a fixed rdnAttribute shape — never a value
+			// parsed from a peer's wire bytes — so a marshal failure
+			// here can only be a code defect (e.g. a bad OID/type
+			// pairing), not remote-triggerable.
 			panic(fmt.Sprintf("matter cert: buildDN attr marshal: %v", err))
 		}
 		set := asn1.RawValue{
@@ -126,10 +131,16 @@ func buildDN(dn DistinguishedName) []asn1.RawValue {
 		}
 		setBytes, err := asn1.Marshal(set)
 		if err != nil {
+			// invariant: same reasoning as the attr marshal above — set
+			// wraps bytes we just produced ourselves.
 			panic(fmt.Sprintf("matter cert: buildDN set marshal: %v", err))
 		}
 		var setRaw asn1.RawValue
 		if _, err := asn1.Unmarshal(setBytes, &setRaw); err != nil {
+			// invariant: re-unmarshalling bytes this function marshalled
+			// two lines above; a failure here means asn1.Marshal itself
+			// produced non-round-trippable output, not a remote input
+			// problem.
 			panic(fmt.Sprintf("matter cert: buildDN set re-unmarshal: %v", err))
 		}
 		rdns = append(rdns, setRaw)

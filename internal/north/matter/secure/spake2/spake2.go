@@ -98,6 +98,11 @@ var (
 )
 
 func init() {
+	// invariant: matterMHex / matterNHex are the Matter spec's fixed
+	// PAKE M/N constants, checked-in source literals — never derived
+	// from remote input. A decode failure here can only be a typo in
+	// this file, caught at process start on every boot, long before
+	// any PASE handshake reaches the wire.
 	var err error
 	if mPoint, err = unmarshalUncompressed(matterMHex); err != nil {
 		panic(fmt.Sprintf("spake2: invalid M constant: %v", err))
@@ -537,6 +542,13 @@ func deriveKeys(context, idA, idB, x, y, z, v []byte, w0 *big.Int) (kcA, kcB, ke
 	// HKDF-Expand(PRK, info, L=32) — equivalent to chip-tool's KDF.
 	confKeys, err := hkdf.Key(sha256.New, ka, nil, "ConfirmationKeys", 32)
 	if err != nil {
+		// invariant: hkdf.Key only errors when the requested output
+		// length exceeds the hash's expansion limit (255 * 32 bytes for
+		// SHA-256) — the L=32 here is a fixed literal, so this can only
+		// fail on a code change to that constant, never on peer-
+		// supplied PAKE parameters (ka is always a fixed 16-byte slice
+		// of our own SHA-256 transcript hash regardless of what the
+		// peer sent).
 		panic(fmt.Sprintf("spake2: hkdf.Key: %v", err))
 	}
 	kcA = make([]byte, 16)

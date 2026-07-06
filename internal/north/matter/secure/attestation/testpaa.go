@@ -143,6 +143,11 @@ var TestCMSSignerSKID = mustHex("62fa823359acfaa9963e1cfa140addf504f37160")
 func mustHex(s string) []byte {
 	b, err := hex.DecodeString(s)
 	if err != nil {
+		// invariant: every call site passes a checked-in string literal
+		// (package-level var initializers only); the argument is never
+		// derived from remote input, so a decode failure here is a
+		// typo caught at process start, not something a peer can
+		// trigger.
 		panic("attestation: malformed hex literal: " + err.Error())
 	}
 	return b
@@ -162,11 +167,19 @@ func mustECDSAKey(privHex, pubHex string) *ecdsa.PrivateKey {
 	if pubHex != "" {
 		pub := mustHex(pubHex)
 		if len(pub) != 65 || pub[0] != 0x04 {
+			// invariant: pubHex is a checked-in CSA Test PAA fixture
+			// literal (see callers below), never remote input — a
+			// malformed point here is a transcription error in this
+			// file, caught at init on every boot.
 			panic("attestation: malformed uncompressed P-256 point")
 		}
 		wantX := new(big.Int).SetBytes(pub[1:33])
 		wantY := new(big.Int).SetBytes(pub[33:])
 		if gx.Cmp(wantX) != 0 || gy.Cmp(wantY) != 0 {
+			// invariant: both operands derive from checked-in literals
+			// (privHex → gx/gy via ScalarBaseMult, pubHex → wantX/wantY)
+			// — a mismatch is a copy-paste error between the two
+			// documented fixture values, not a runtime/remote condition.
 			panic("attestation: P-256 public key does not match private scalar")
 		}
 	}
