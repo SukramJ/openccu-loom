@@ -7,11 +7,11 @@
 // schedule.
 //
 // This is the Go port of the key non-infrastructure parts of
-// `WeekProfileDataPoint` and `ClimateWeekProfileDataPoint` from
-// The HA-
-// and BaseDataPoint-specific wiring (unique_id, publish_data_point_updated_event,
-// channels, event bus, etc.) is intentionally omitted here — those concerns
-// live in the north/rest and central layers. What remains is the
+// `WeekProfileDataPoint` and `ClimateWeekProfileDataPoint` from the
+// Python reference implementation. The HA- and BaseDataPoint-specific
+// wiring (unique_id, publish_data_point_updated_event, channels, event
+// bus, etc.) is intentionally omitted here — those concerns live in
+// the north/rest and central layers. What remains is the
 // schedule-domain logic: metadata, active-entry counting, schedule-enabled
 // state management, and profile-pointer tracking.
 

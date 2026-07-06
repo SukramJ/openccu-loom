@@ -6,6 +6,7 @@ package payload
 import (
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 // ErrServiceMissingParam is returned by the Param* decoders when a
@@ -21,6 +22,13 @@ var ErrServiceInvalidParam = errors.New("payload: service param has invalid type
 // coerced to true / false to match what HA's MQTT layer typically
 // sends through `payload_on` / `payload_off` templates; common string
 // spellings ("true" / "false" / "on" / "off") are also accepted.
+//
+// Its truth table is deliberately narrower/wider in different ways than
+// internal/parameter's CCU-side `asBool` (case-sensitive spelling list vs.
+// case-insensitive + "yes"/"no"): the two coerce different boundaries
+// (north-bound service-call JSON here vs. CCU wire values there against a
+// parameter descriptor) and are not meant to converge — see the comment on
+// `asBool` in internal/parameter/coerce.go for the other side.
 func ParamBool(params map[string]any, key string) (bool, error) {
 	raw, ok := params[key]
 	if !ok {
@@ -65,8 +73,9 @@ func ParamFloat64(params map[string]any, key string) (float64, error) {
 	case int64:
 		return float64(v), nil
 	case string:
-		var f float64
-		if _, err := fmt.Sscanf(v, "%f", &f); err == nil {
+		// strconv.ParseFloat (unlike fmt.Sscanf) rejects trailing
+		// garbage such as "42xyz" instead of silently truncating it.
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
 			return f, nil
 		}
 	}
@@ -101,9 +110,10 @@ func ParamInt32(params map[string]any, key string) (int32, error) {
 		}
 		return int32(v), nil
 	case string:
-		var n int32
-		if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
-			return n, nil
+		// strconv.ParseInt (unlike fmt.Sscanf) rejects trailing
+		// garbage such as "42xyz" instead of silently truncating it.
+		if n, err := strconv.ParseInt(v, 10, 32); err == nil {
+			return int32(n), nil
 		}
 	}
 	return 0, fmt.Errorf("%w: %q", ErrServiceInvalidParam, key)

@@ -194,7 +194,7 @@ func (w *WeekProfile) Set(
 }
 
 // IsRefreshed reports whether the WeekProfile has received at least one
-// schedule snapshot. Implements M18.
+// schedule snapshot. Satisfies the custom.AggregateDataPoint contract.
 func (w *WeekProfile) IsRefreshed() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -202,7 +202,8 @@ func (w *WeekProfile) IsRefreshed() bool {
 }
 
 // StateUncertain reports whether the schedule is held optimistically.
-// WeekProfile has no optimistic tracker. Returns false always. Implements M18.
+// WeekProfile has no optimistic tracker. Returns false always. Satisfies
+// the custom.AggregateDataPoint contract.
 func (w *WeekProfile) StateUncertain() bool { return false }
 
 // IsReadable returns false. WeekProfile is a write-only combined DP

@@ -141,8 +141,8 @@ func (p *Program) LastExecution() (time.Time, bool) {
 // execution as an RFC 3339 string, or an empty string when no
 // execution has been recorded yet. This is the consistent string
 // representation expected by north-bound adapters (MQTT / REST / WS)
-// And mirrors
-// ProgramDpSwitch (hub/switch.py) which returns an ISO-format string.
+// and mirrors ProgramDpSwitch (hub/switch.py) which returns an
+// ISO-format string.
 func (p *Program) LastExecuteTimeString() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

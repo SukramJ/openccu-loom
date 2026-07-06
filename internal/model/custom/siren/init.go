@@ -74,9 +74,8 @@ var SMOKE_SENSOR_SIREN_CAPABILITIES = SmokeSensorSirenCaps //nolint:revive // Py
 // SOUND_PLAYER_CAPABILITIES is the Python-parity alias for [SoundPlayerCaps].
 var SOUND_PLAYER_CAPABILITIES = SoundPlayerCaps //nolint:revive // Python-exact name required for parity
 
-// IpSirenCapabilities mirrors
-// Acoustic alarm
-// optical alarm, and configurable duration.
+// ipSirenCapabilities describes acoustic alarm, optical alarm, and
+// configurable duration support.
 var ipSirenCapabilities = custom.SirenCapabilities{
 	SupportsAcoustic: true,
 	SupportsOptical:  true,

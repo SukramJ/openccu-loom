@@ -10,8 +10,9 @@ import (
 	"sync"
 )
 
-// Kind enumerates the payload categories. It mirrors
-// `Kind` enum; the wire-level names match the sibling projects.
+// Kind enumerates the payload categories. It mirrors the Python
+// reference implementation's `Kind` enum; the wire-level names match
+// the sibling projects.
 type Kind string
 
 // Kind values.
@@ -28,7 +29,8 @@ type Options struct {
 	UseAltNames bool
 
 	// IncludeZero retains zero-valued fields. Default (false) omits
-	// Them — matches.
+	// them, matching the Python reference implementation's default
+	// omit-zero behavior.
 	IncludeZero bool
 }
 
@@ -39,6 +41,15 @@ func For(obj any, k Kind) map[string]any {
 }
 
 // ForWith is [For] with explicit options.
+//
+// Read-only contract: values in the returned map are the field's live
+// `any`-boxed value, not a deep copy. A field holding a map, slice, or
+// pointer hands back a reference to the same backing storage obj owns.
+// Callers must treat the returned map (and any composite value inside it)
+// as read-only; mutating a nested map/slice mutates obj's field too. A
+// deep copy is deliberately not taken here — payload extraction happens on
+// every state publish, and obj's underlying data points are not shaped in
+// a way that this call site would ever mutate them afterward.
 func ForWith(obj any, k Kind, opts Options) map[string]any {
 	if obj == nil {
 		return map[string]any{}
@@ -114,8 +125,8 @@ func collectFields(t reflect.Type, prefix []int, out *typeDesc) {
 		idx := append(append([]int(nil), prefix...), i)
 
 		// Embedded structs recurse. Tagged embedded fields are
-		// Treated as their own entry — matching
-		// treatment of wrapper classes.
+		// treated as their own entry — matching the Python reference
+		// implementation's treatment of wrapper classes.
 		if f.Anonymous && f.Tag.Get("payload") == "" {
 			if f.Type.Kind() == reflect.Struct {
 				collectFields(f.Type, idx, out)

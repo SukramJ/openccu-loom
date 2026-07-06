@@ -767,7 +767,7 @@ func (d *DataPoint[T]) IsCurrentValueInRange() bool {
 // 2. Unconfirmed value (if [WriteUnconfirmedValue] was called)
 // 3. CCU-confirmed value
 //
-// This mirrors.py:807)
+// This mirrors the Python reference implementation's data_point.py:807:
 //
 //	return self._unconfirmed_value if self._unconfirmed_refreshed_at >
 //	 self._refreshed_at else self._current_value
@@ -1228,8 +1228,8 @@ func (d *DataPoint[T]) PendingSends() int {
 // source. Used by calculated/derived sensors that read auxiliary
 // parameters not normally surfaced.
 //
-// Naming note (M22 — v8 §4): the method was formerly
-// Called ForceToSensor, which clashed confusingly
+// Naming note: the method was formerly called ForceToSensor, which
+// clashed confusingly with the Python reference implementation's
 // `force_to_sensor()` (data_point.py:1074) — that method sets the
 // categorical `_is_forced_sensor=True` flag; the Go equivalent is
 // [datapoint.BaseDataPointFields.MarkForcedSensor]. The rename makes

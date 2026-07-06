@@ -16,15 +16,28 @@ import (
 var globalScalarArgsMu sync.RWMutex
 
 // globalScalarArgs is the package-level aggregate of method→scalar-arg-key
-// mappings. It is populated by [ServiceRegistry.RegisterServiceWithArg] at
-// construction time (i.e. program startup) so concurrent reads during
-// steady-state operation are always lock-free from the caller's perspective.
+// mappings. Two things write into it, both throughout the whole process
+// lifetime, not just at startup:
 //
-// The map is intentionally global: scalar arg keys are a property of the
-// method name itself (the same key is used by every instance that registers
-// "set_temperature"), so a single package-level table is the correct
-// authoritative source for north-bound adapters that need to resolve the key
-// before they have a concrete Source instance.
+//   - [RegisterGlobalScalarArgKey], called from custom-DP package `init()`
+//     blocks so the key is known before any device of that kind exists.
+//   - [ServiceRegistry.registerServiceWithArg], called every time a device
+//     channel materialises a Source instance (i.e. whenever the CCU
+//     inventory is rescanned or a device is hot-added), which mirrors the
+//     same method→key pairs onto the shared table.
+//
+// Both writers are idempotent in practice — the scalar-arg key is a property
+// of the method name itself (every "set_temperature" registration carries
+// the same "temperature" key), so repeated writes across the process
+// lifetime never change an already-observed value. That is what makes a
+// single shared, mutex-guarded map safe here despite the "no mutable
+// package-level state" rule: there is no safe point at which registration
+// could be closed off (new device kinds can appear for as long as the
+// daemon runs), so freezing after "startup" would reject legitimate
+// runtime device-discovery writes. The map is intentionally global: it is
+// the only way north-bound adapters (MQTT bridge) can resolve the key for
+// a bare-scalar payload by method name alone, before they hold a concrete
+// Source instance.
 var globalScalarArgs = make(map[string]string)
 
 // GlobalScalarArgKey returns the canonical scalar-argument key for the
@@ -100,8 +113,8 @@ type ServiceHandler func(ctx context.Context, params map[string]any,
 //
 // ServiceMethodNames is O(1) after the first call per registry lifetime.
 // The cached slice is rebuilt only when [RegisterService] is called.
-// Mirrors the WeakKeyDictionary-based O(1) cache.
-// decorators.py:321.
+// Mirrors the Python reference implementation's WeakKeyDictionary-based
+// O(1) cache (decorators.py:321).
 type ServiceRegistry struct {
 	mu         sync.RWMutex
 	names      []string
@@ -189,8 +202,10 @@ func (r *ServiceRegistry) registerServiceWithArg(name, scalarArgKey string, h Se
 
 	// Propagate to the package-level aggregate so the MQTT bridge can
 	// resolve the key by method name alone, without a Source instance.
-	// Concurrent writes at startup are safe — registration happens at
-	// construction time before any reads from north-bound adapters.
+	// Concurrent writes are safe for the whole process lifetime: the
+	// scalar-arg key only ever depends on the method name, so repeated
+	// writes across device-discovery cycles are idempotent no-ops after
+	// the first one for a given method.
 	globalScalarArgsMu.Lock()
 	globalScalarArgs[name] = scalarArgKey
 	globalScalarArgsMu.Unlock()

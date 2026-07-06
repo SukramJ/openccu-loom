@@ -211,8 +211,8 @@ func (s *Siren) HADiscoveryPayload(ctx payload.HADiscoveryContext) (component st
 // HADiscoveryPayload returns the HA Siren-platform payload for a
 // SmokeSiren. HmIP-SWSD is *not* a passive sensor — it can be
 // triggered by writing the SMOKE_DETECTOR_COMMAND parameter (mirrors
-// Turn_on / turn_off via
-// _SirenCommand.ON / OFF). HA logs `required key not provided @
+// turn_on / turn_off via _SirenCommand.ON / OFF). HA logs `required
+// key not provided @
 // data['command_topic']` when no command_topic is emitted; the fix
 // is to point command_topic at SMOKE_DETECTOR_COMMAND and mux
 // payload_on / payload_off onto the device's wire enum values.

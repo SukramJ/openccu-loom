@@ -19,10 +19,10 @@ import (
 // has no [ValueLoader] installed yet.
 var ErrNoValueLoader = errors.New("device: no value loader configured")
 
-// Cache TTLs — see also.py:308 (MAX_CACHE_AGE = 10s).
-// Different paramsets have very different change frequencies, so we
-// Pick per-paramset defaults rather than
-// constant.
+// Cache TTLs — see the Python reference implementation's const.py:308
+// (MAX_CACHE_AGE = 10s). Different paramsets have very different
+// change frequencies, so we pick per-paramset defaults rather than a
+// single shared constant.
 const (
 	// valuesCacheTTL is the TTL for VALUES-paramset entries. Zero means
 	// "no expiry" — VALUES are kept fresh by push events from the CCU,

@@ -178,7 +178,7 @@ func (l *SoundPlayerLED) TurnOff(ctx context.Context, w custom.Writer, addr stri
 // TurnOn turns on the LED with optional colour, brightness, flash
 // timing, and repetitions. The parameters are bundled into a single
 // atomic put_paramset when the writer supports it — mirrors
-// Turn_on (light.py:839-880).
+// turn_on (light.py:839-880).
 //
 // Parameter resolution:
 // - LEVEL: cfg.Brightness/255.0, or 1.0 when Brightness==0.

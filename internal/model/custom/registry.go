@@ -25,8 +25,9 @@ import (
 	"github.com/SukramJ/openccu-loom/pkg/hmenum"
 )
 
-// ExtendedDeviceConfig mirrors
-// It carries device-specific overrides that complement a standard ProfileConfig.
+// ExtendedDeviceConfig mirrors the Python reference implementation's
+// extended device configuration. It carries device-specific overrides
+// that complement a standard ProfileConfig.
 type ExtendedDeviceConfig struct {
 	// FixedChannelFields are device-specific overrides on absolute channel
 	// numbers (keyed by channel number, then by Field → Parameter). These

@@ -28,9 +28,9 @@ const (
 	BlindKindIP
 )
 
-// CommandLockTimeout mirrors
-// (cover.py:37) — the maximum time a Blind command waits for an
-// in-flight motion before proceeding without the lock.
+// commandLockTimeout mirrors cover.py:37 — the maximum time a Blind
+// command waits for an in-flight motion before proceeding without the
+// lock.
 const commandLockTimeout = 5 * time.Second
 
 // tiltEpsilon is the smallest tilt-level difference treated as a state
@@ -49,8 +49,8 @@ func tiltChanged(a, b float64) bool {
 // angle, 1.0 = fully open). Both axes can be commanded individually
 // or jointly via the device's COMBINED parameter.
 //
-// Py:284-551) and
-// `CustomDpIpBlind` (cover.py:553-581).
+// Mirrors `CustomDpBlind` (cover.py:284-551) and `CustomDpIpBlind`
+// (cover.py:553-581).
 //
 // Concurrency: Blind serialises every motion command through
 // [commandLock] (channel-based mutex with [commandLockTimeout]) —
@@ -59,7 +59,7 @@ func tiltChanged(a, b float64) bool {
 // also detects the "currently moving" condition: if a non-zero
 // target is staged, the blind is sent a STOP first because the
 // actuator hardware ignores new coordinates while moving (mirrors
-// Py:539).
+// cover.py:539).
 type Blind struct {
 	*Cover
 
