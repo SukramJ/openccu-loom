@@ -358,11 +358,15 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
 
 ## Release
 
-- [ ] **R1 · 0.28.0 release prep** — finalize `CHANGELOG.md` `[0.28.0]` (dated),
+- [x] **R1 · 0.28.0 release prep** — finalize `CHANGELOG.md` `[0.28.0]` (dated),
   mirror to `packaging/ha-addon/openccu-loom/CHANGELOG.md`, bump
   `internal/build/version.go` (0.27.2 → 0.28.0),
   `packaging/ha-addon/openccu-loom/config.yaml`, and `APIVersion`
   (`internal/north/rest/handlers/info.go`, 2.15.0 → 2.16.0 for the new endpoints).
+  `APIVersion` and `assets/openapi.yaml` `info.version` were already at
+  2.16.0 (set by group A2 when it added the master-profiles/incidents/
+  service-message REST endpoints), so no further bump was needed there —
+  verified idempotent.
 - [ ] **R2 · Verify** — `make fmt`, `make lint`, `make test`/`make contract` green;
   record result here. Then push + open the PR. Actual git tag + goreleaser happen
   after PR review/merge onto protected `main` (not part of this branch).

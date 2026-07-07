@@ -1,5 +1,32 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.28.0
+
+- **CCU disable/edit in the Config UI now actually takes effect
+  immediately.** Disabling a connected CCU now really disconnects it
+  right away, and an edit that can't be applied live now tells you a
+  restart is required instead of showing a plain "saved" message.
+- **MQTT reliability fixes.** Command and Home Assistant birth-sync
+  handling no longer risk stalling the MQTT connection under load, and
+  removing a device now also clears its retained MQTT state so it
+  doesn't linger as "available" forever.
+- **Backup and restore are now correct with multiple CCUs.** Backups
+  and restores are matched to the right CCU instead of always using
+  the first one; the Backups page lets you pick which CCU to back up
+  when more than one is configured.
+- **Config UI polish.** Program and system-variable lists no longer
+  silently stop after the first page of results; Settings and the
+  confirmation dialog used for delete/disable actions now behave
+  consistently with the rest of the app (toast messages, keyboard
+  focus handling).
+- **New Diagnostics panel** showing per-CCU connection reliability
+  status and values-cache statistics, with a reset action.
+- **Backup documentation corrected**: the exported archive does not
+  include your encryption key — the guidance now says so clearly, and
+  `backup create` prints a reminder after every run.
+- Various smaller reliability, metrics-accuracy, and internal
+  test-coverage improvements; see the full changelog for details.
+
 ## 0.27.2
 
 - **New "About" page in the web interface.** The sidebar now shows the

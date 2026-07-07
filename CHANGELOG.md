@@ -6,6 +6,8 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-07-07
+
 ### Fixed
 
 - **Disabling or editing an already-live CCU in the Config UI no longer
