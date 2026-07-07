@@ -248,14 +248,27 @@ Legend: `[ ]` open · `[~]` in progress · `[x]` done · `[!]` blocked/partial (
   Wiring `WithQoS(bridge.CommandQoS())` at the daemon composition root
   (`cmd/openccu-loom/mqtt_supervisor.go`) is a follow-up — out of this group's
   file scope.
-- [ ] **A4 · Two different pagination envelopes across list endpoints** (S, low)
+- [!] **A4 · Two different pagination envelopes across list endpoints** (S, low)
   `/devices` returns `{items,page,per_page,total}`; hub lists return a bare array
-  + `X-Total-Count`. Pick one (header form is more common) and align.
-- [ ] **A5 · Path-naming drift: snake_case + colon-action segments** (S, low)
+  + `X-Total-Count`. Deferred: aligning the hub lists onto the `/devices` object
+  envelope (the lower-risk direction) still touches 4 handlers, 4+ SPA
+  `client.ts` callers, every downstream store/component that consumes those
+  arrays, the openapi.yaml response schemas, and an APIVersion bump — too much
+  churn for a cosmetic item in a self-revert-if-unstable group. Documented the
+  divergence as intentional in `assets/openapi.yaml` instead (description note
+  on `/devices`, `/programs`, `/sysvars`, `/alarm-messages`,
+  `/service-messages`) so it reads as a deliberate choice, not undocumented
+  drift.
+- [x] **A5 · Path-naming drift: snake_case + colon-action segments** (S, low)
   `week_profile` (+ children) and `/devices/values:batch` break the kebab-case /
-  plain-segment convention. Rename to `week-profile` and `/devices/values/batch`
-  in openapi.yaml + router.go (+ WS mirror if any). *(cosmetic; skip if it
-  destabilizes tests.)*
+  plain-segment convention. Renamed to `week-profile` and
+  `/devices/values/batch` in openapi.yaml + router.go + handler doc comments +
+  tests (contract path list, new router-level route test, values_batch_test.go
+  request paths) + regenerated `assets/schemas/*.json` / schema digest /
+  SPA `types.generated.ts`. No SPA `client.ts` caller referenced either old
+  path literally, so no runtime SPA change was needed. MQTT topic segments and
+  the `week_profile` unique-ID prefix are a separate naming scheme (not a REST
+  path) and were left untouched.
 - [ ] **U5 · ~20 routes hand-roll native `<select>` instead of the shared primitive** (M, low)
   Migrate the static filter-dropdown usages to `lib/components/ui/Select.svelte`;
   leave genuine native-only cases documented. *(mechanical; isolated commit.)*

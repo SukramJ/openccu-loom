@@ -140,6 +140,15 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `/auth/tokens/v2`, which the Config UI already exclusively uses.
   `docs/admin/auth.md` now documents v2 as the primary surface. Removed
   the dead `listTokens()` v1 client wrapper (unused by the SPA).
+- **REST path cleanup: `week_profile` → `week-profile`, `/devices/
+  values:batch` → `/devices/values/batch`.** Both broke the kebab-case
+  / plain-segment convention used everywhere else in the API. No SPA
+  caller referenced either old path literally, so this is a pure
+  wire-contract rename (openapi.yaml + router). The pagination-envelope
+  divergence between `/devices` (object envelope) and the hub list
+  endpoints (bare array + `X-Total-Count`) is now called out explicitly
+  in `assets/openapi.yaml` as an intentional, independently-consumed
+  split rather than undocumented drift.
 
 ## [0.27.2] — 2026-07-07
 

@@ -79,7 +79,7 @@ func TestOpenAPIDeclaresMVPEndpoints(t *testing.T) {
 		"/sessions/edit/take-over",
 		// backfilled in the operational-maturity sweep so the REST
 		// router can run with `OpenAPIValidate=true` by default.
-		"/devices/{addr}/channels/{no}/week_profile",
+		"/devices/{addr}/channels/{no}/week-profile",
 		"/system/status",
 	}
 	missing := make([]string, 0)

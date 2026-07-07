@@ -51,7 +51,7 @@ type CopyScheduleRequest struct {
 }
 
 // CopyProfileRequest is the body of POST
-// .../channels/{no}/week_profile/copy. The source channel is the path
+// .../channels/{no}/week-profile/copy. The source channel is the path
 // {addr}:{no}; the target channel and the source/target profile indices
 // are named here.
 type CopyProfileRequest struct {
