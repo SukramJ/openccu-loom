@@ -83,8 +83,23 @@ fi
 sync
 echo "Installed ${ADDON_NAME} (${ADDON_BIN})"
 
-# CCU3 / RaspberryMatic need a reboot to finalise add-on registration.
-if [ "$1" = "HM-RASPBERRYMATIC" ] || [ "$1" = "CCU3" ]; then
-  exit 10
+# RaspberryMatic / OpenCCU run this script live via /bin/install_addon
+# and honour the exit code: 0 = installed without reboot, 10 = reboot
+# required. Nothing here needs a boot-time hook (no ReGa patch, no
+# interface registration), so start the daemon in place and hand the
+# new monit config to the running monit instead of rebooting the CCU.
+# monit (active mode) is the supervisor, so a failed inline start is
+# recovered on its next cycle — hence the tolerant `|| true`.
+if [ "$1" = "HM-RASPBERRYMATIC" ]; then
+  ${RCD_DIR}/${ADDON_ID} init 2>/dev/null || true
+  if [ -x /usr/bin/monit ]; then
+    monit reload 2>/dev/null || true
+  fi
+  exit 0
 fi
-exit 0
+
+# Stock CCU3 firmware reboots unconditionally on add-on install and runs
+# this script during the following boot; starting the daemon inline there
+# would collide with the rc.d init that follows later in the same boot.
+# Keep the conventional reboot-request exit code on that path.
+exit 10

@@ -1,5 +1,12 @@
 # Changelog — OpenCCU-Loom HA Add-on
 
+## 0.27.1
+
+- **Maintenance release for the CCU/RaspberryMatic add-on variant.**
+  Installing or updating that add-on no longer restarts the CCU on
+  RaspberryMatic / OpenCCU. No functional changes for the Home
+  Assistant add-on — this release only keeps its version in step.
+
 ## 0.27.0
 
 - **Security and reliability hardening.** This release rolls up the
