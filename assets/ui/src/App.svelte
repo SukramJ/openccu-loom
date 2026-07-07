@@ -30,6 +30,7 @@
   // already pulls AuditLog into the main chunk, so a dynamic import here
   // would be ineffective (and warns at build time).
   import AuditLog from "./routes/AuditLog.svelte";
+  import About from "./routes/About.svelte";
   // Matter is the heaviest route subtree and is opt-in (the bridge
   // defaults to off), so it is code-split via dynamic import — most
   // installs never load its JS. See the {#await} in the router below.
@@ -173,6 +174,7 @@
     | { kind: "matter"; subpath: string }
     | { kind: "visibility" }
     | { kind: "access" }
+    | { kind: "about" }
     | { kind: "unknown" };
 
   const route = $derived.by<Route>(() => {
@@ -194,6 +196,7 @@
     if (path === "/signal") return { kind: "signal" };
     if (path === "/visibility") return { kind: "visibility" };
     if (path === "/access") return { kind: "access" };
+    if (path === "/about") return { kind: "about" };
     if (path === "/matter" || path.startsWith("/matter/")) {
       return { kind: "matter", subpath: path.slice("/matter".length) || "" };
     }
@@ -229,6 +232,7 @@
     route.kind === "overview" ? t("page.title.overview") :
     route.kind === "settings" ? t("page.title.settings") :
     route.kind === "access" ? t("page.title.access") :
+    route.kind === "about" ? t("page.title.about") :
     t("page.title.default")
   }</title>
 </svelte:head>
@@ -365,6 +369,8 @@
           {/await}
         {:else if route.kind === "visibility"}
           <UnIgnoreList />
+        {:else if route.kind === "about"}
+          <About />
         {:else if route.kind === "access"}
           {#if authStore.identity?.role === "admin"}
             <AccessControl />

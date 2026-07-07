@@ -16,7 +16,7 @@ import (
 // external clients must reason about — addition of capabilities is
 // a minor bump, removal or rename of an existing capability or
 // payload field is a major bump.
-const APIVersion = "2.14.0"
+const APIVersion = "2.15.0"
 
 // Capability values surfaced through [InfoResponse.Capabilities].
 // External clients gate functionality on the presence of these
@@ -51,9 +51,14 @@ const (
 
 // InfoResponse is the body of `GET /api/v1/info`.
 type InfoResponse struct {
-	Version      string   `json:"version"`
-	Commit       string   `json:"commit"`
-	BuildDate    string   `json:"build_date"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildDate string `json:"build_date"`
+	// AddonBuild reports whether this binary was built as the
+	// CCU/RaspberryMatic add-on. Support surfaces (the SPA About
+	// page) show it so "where does the daemon run?" is answerable
+	// from a screenshot.
+	AddonBuild   bool     `json:"addon_build"`
 	Uptime       string   `json:"uptime"`
 	StartedAt    string   `json:"started_at"`
 	APIVersion   string   `json:"api_version"`
@@ -89,6 +94,7 @@ func Info(startedAt time.Time, detector CapabilityDetector) http.HandlerFunc {
 			Version:      build.Version,
 			Commit:       build.Commit,
 			BuildDate:    build.BuildDate,
+			AddonBuild:   build.IsAddon(),
 			Uptime:       time.Since(startedAt).Truncate(time.Second).String(),
 			StartedAt:    startedAt.UTC().Format(time.RFC3339),
 			APIVersion:   APIVersion,

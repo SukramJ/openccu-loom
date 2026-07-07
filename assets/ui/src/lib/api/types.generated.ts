@@ -3895,6 +3895,12 @@ export interface components {
             version: string;
             commit: string;
             build_date: string;
+            /**
+             * @description True when this binary was built as the CCU/RaspberryMatic
+             *     add-on (it then runs on the CCU itself). False for the
+             *     standalone binary, Docker image, and HA add-on builds.
+             */
+            addon_build: boolean;
             uptime: string;
             /** Format: date-time */
             started_at: string;

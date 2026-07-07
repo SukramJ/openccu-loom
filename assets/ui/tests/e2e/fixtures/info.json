@@ -1,1 +1,11 @@
-{ "version": "0.2.0", "commit": "abc123", "capabilities": [] }
+{
+  "version": "0.2.0",
+  "commit": "abc123",
+  "build_date": "2026-01-01T00:00:00Z",
+  "addon_build": false,
+  "uptime": "1h2m3s",
+  "started_at": "2026-01-01T00:00:00Z",
+  "api_version": "2.15.0",
+  "schema_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "capabilities": ["rest.v1", "ws.broadcasts.v1", "errors.problem_details.v1"]
+}

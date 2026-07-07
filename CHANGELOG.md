@@ -6,6 +6,23 @@ and adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.2] — 2026-07-07
+
+### Added
+
+- **Config UI: About page (`#/about`).** New "About" entry at the
+  bottom of the sidebar's System cluster, plus a version line in the
+  sidebar footer that links there. The page collects the support
+  answers in one place: daemon version / commit (linked to GitHub) /
+  build date / build variant (standalone vs CCU add-on) / start time
+  and uptime / API version / active capabilities, a card per central
+  (model, CCU firmware, serial, pending CCU update), and the
+  license + project links mirrored from the no-JS `/about` page.
+- **REST: `GET /api/v1/info` now reports `addon_build`** — `true`
+  when the binary was built as the CCU/RaspberryMatic add-on, so
+  clients can tell where the daemon runs. API version 2.15.0
+  (backwards-compatible addition).
+
 ## [0.27.1] — 2026-07-07
 
 ### Fixed

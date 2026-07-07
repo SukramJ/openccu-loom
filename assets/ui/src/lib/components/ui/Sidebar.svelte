@@ -6,6 +6,7 @@
   import { t } from "$lib/i18n";
   import { installModeStore } from "$lib/stores/installMode.svelte";
   import { matterStore } from "$lib/stores/matter.svelte";
+  import { infoStore } from "$lib/stores/info.svelte";
   import { authStore } from "$lib/stores/auth.svelte";
   import {
     prefs,
@@ -24,6 +25,8 @@
     // the Bridges cluster. No polling — the store will refresh on
     // navigation to the Matter route.
     void matterStore.loadStatus();
+    // Daemon version for the footer line; cached for the session.
+    void infoStore.ensure();
   });
   onDestroy(() => installModeStore.release());
 
@@ -54,6 +57,7 @@
     | "matter"
     | "visibility"
     | "access"
+    | "about"
     | "unknown";
 
   type Props = {
@@ -263,6 +267,12 @@
           label: t("nav.settings"),
           matches: ["settings"],
         },
+        {
+          href: "#/about",
+          icon: "mdi:information-outline",
+          label: t("nav.about"),
+          matches: ["about"],
+        },
       ],
     },
   ]);
@@ -417,5 +427,16 @@
         <Icon name="mdi:logout" size={16} />
       </button>
     </div>
+    {#if expanded && infoStore.info}
+      <a
+        href="#/about"
+        onclick={onMobileClose}
+        class="mt-1 block px-1 text-xs hover:underline"
+        style="color: var(--ha-secondary-text-color);"
+        title={t("nav.about")}
+      >
+        v{infoStore.info.version}
+      </a>
+    {/if}
   </div>
 </aside>
